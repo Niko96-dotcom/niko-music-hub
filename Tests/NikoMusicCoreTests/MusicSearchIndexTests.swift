@@ -66,4 +66,45 @@ final class MusicSearchIndexTests: XCTestCase {
 
         XCTAssertTrue(index.search("neon missing").isEmpty)
     }
+
+    func testRanksDisplayTitleMatchesAboveFilenameOnlyMatches() {
+        let titleMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Alpha Prime"),
+            originalFolderName: "Alpha Prime",
+            displayTitle: "Alpha Prime"
+        )
+        let previewOnly = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/Other/Mixdown/alpha prime mix.wav"),
+            fileName: "alpha prime mix.wav",
+            folderRole: .mixdown,
+            modifiedAt: .distantPast,
+            detectedRole: .mainMix
+        )
+        let filenameOnlyMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Other"),
+            originalFolderName: "Other",
+            displayTitle: "Other",
+            previewCandidates: [previewOnly]
+        )
+        let index = MusicSearchIndex(songs: [filenameOnlyMatch, titleMatch])
+
+        XCTAssertEqual(index.search("alpha prime").first?.displayTitle, "Alpha Prime")
+    }
+
+    func testRanksExactTitleTokenAboveFuzzyTitleMatch() {
+        let exact = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Neon Hook"),
+            originalFolderName: "Neon Hook",
+            displayTitle: "Neon Hook"
+        )
+        let fuzzyOnly = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Neohok Band"),
+            originalFolderName: "Neohok Band",
+            displayTitle: "Neohok Band"
+        )
+        let index = MusicSearchIndex(songs: [fuzzyOnly, exact])
+
+        XCTAssertEqual(index.search("neon").first?.displayTitle, "Neon Hook")
+        XCTAssertEqual(index.search("neohok").first?.displayTitle, "Neohok Band")
+    }
 }
