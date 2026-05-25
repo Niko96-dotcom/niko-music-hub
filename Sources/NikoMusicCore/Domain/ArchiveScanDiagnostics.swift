@@ -53,4 +53,31 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
     public func displayRootPaths(homeDirectory: String? = nil) -> [String] {
         rootPaths.map { DiagnosticsPathRedactor.redact($0, homeDirectory: homeDirectory) }
     }
+
+    public func displayGlobalWarnings(homeDirectory: String? = nil) -> [String] {
+        globalWarnings.map {
+            DiagnosticsPathRedactor.redactPathsInText($0, homeDirectory: homeDirectory)
+        }
+    }
+
+    public func displaySkippedEntries(homeDirectory: String? = nil) -> [SkippedScanEntry] {
+        skippedEntries.map { entry in
+            SkippedScanEntry(
+                kind: entry.kind,
+                label: DiagnosticsPathRedactor.redact(entry.label, homeDirectory: homeDirectory),
+                reason: DiagnosticsPathRedactor.redactPathsInText(entry.reason, homeDirectory: homeDirectory)
+            )
+        }
+    }
+
+    public func displaySongWarningSummaries(homeDirectory: String? = nil) -> [SongWarningSummary] {
+        songWarningSummaries.map { summary in
+            SongWarningSummary(
+                displayTitle: summary.displayTitle,
+                warnings: summary.warnings.map {
+                    DiagnosticsPathRedactor.redactPathsInText($0, homeDirectory: homeDirectory)
+                }
+            )
+        }
+    }
 }

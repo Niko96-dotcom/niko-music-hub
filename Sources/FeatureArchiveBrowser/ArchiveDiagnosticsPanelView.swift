@@ -48,19 +48,21 @@ struct ArchiveDiagnosticsPanelView: View {
             diagnosticRow("Songs", value: "\(diagnostics.songCount)")
             diagnosticRow("Song warnings", value: "\(diagnostics.songsWithWarningsCount) (\(diagnostics.totalSongWarningCount) total)")
 
-            if !diagnostics.globalWarnings.isEmpty {
-                ForEach(diagnostics.globalWarnings, id: \.self) { warning in
+            let displayWarnings = diagnostics.displayGlobalWarnings()
+            if !displayWarnings.isEmpty {
+                ForEach(displayWarnings, id: \.self) { warning in
                     Text("⚠ \(warning)")
                         .font(.system(size: 11))
                         .foregroundStyle(ArchiveDesignTokens.accent)
                 }
             }
 
-            if !diagnostics.skippedEntries.isEmpty {
-                Text("Skipped at roots (\(diagnostics.skippedEntries.count))")
+            let displaySkipped = diagnostics.displaySkippedEntries()
+            if !displaySkipped.isEmpty {
+                Text("Skipped at roots (\(displaySkipped.count))")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                ForEach(Array(diagnostics.skippedEntries.enumerated()), id: \.offset) { _, entry in
+                ForEach(Array(displaySkipped.enumerated()), id: \.offset) { _, entry in
                     Text("• \(entry.label) — \(entry.reason)")
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
@@ -68,11 +70,12 @@ struct ArchiveDiagnosticsPanelView: View {
                 }
             }
 
-            if !diagnostics.songWarningSummaries.isEmpty {
+            let displaySongWarnings = diagnostics.displaySongWarningSummaries()
+            if !displaySongWarnings.isEmpty {
                 Text("Songs with warnings")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                ForEach(diagnostics.songWarningSummaries, id: \.displayTitle) { summary in
+                ForEach(displaySongWarnings, id: \.displayTitle) { summary in
                     Text("• \(summary.displayTitle): \(summary.warnings.joined(separator: "; "))")
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
