@@ -283,7 +283,11 @@ struct ArchiveDiagnosticsPanelView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 ForEach(displaySongWarnings, id: \.displayTitle) { summary in
-                    Text("• \(summary.displayTitle): \(summary.warnings.joined(separator: "; "))")
+                    let songWarningLine = ArchiveDiagnosticsSongWarningsPanelContext.panelLine(
+                        displayTitle: summary.displayTitle,
+                        warnings: summary.warnings
+                    )
+                    Text("• \(songWarningLine)")
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                         .lineLimit(3)
