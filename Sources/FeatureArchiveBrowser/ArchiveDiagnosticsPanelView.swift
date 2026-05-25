@@ -266,7 +266,11 @@ struct ArchiveDiagnosticsPanelView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 ForEach(Array(displaySkipped.enumerated()), id: \.offset) { _, entry in
-                    Text("• \(entry.label) — \(entry.reason)")
+                    let skippedLine = ArchiveDiagnosticsSkippedEntriesPanelContext.panelLine(
+                        label: entry.label,
+                        reason: entry.reason
+                    )
+                    Text("• \(skippedLine)")
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                         .lineLimit(2)
