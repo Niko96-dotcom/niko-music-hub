@@ -100,6 +100,55 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         )
     }
 
+    func testRankingLabMainPreviewSummaryMatchesExport() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let summary = try XCTUnwrap(
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongMainPreviewSummary(for: lab)
+        )
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil,
+            selectedSongContext: ArchiveDiagnosticsSelectedSongContext.from(song: lab)
+        )
+        XCTAssertTrue(summary.contains("Lab Song v3 mix.wav"))
+        XCTAssertTrue(
+            ArchiveDiagnosticsPreviewRankingPanelContext.mainPreviewSummaryMatchesExport(
+                in: exportText,
+                summary: summary
+            )
+        )
+    }
+
+    func testRankingLabRankedPreviewLinesMatchExport() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lines = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongRankedPreviewLines(for: lab)
+        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertTrue(lines.contains(where: { $0.contains("[main]") && $0.contains("v3") }))
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil,
+            selectedSongContext: ArchiveDiagnosticsSelectedSongContext.from(song: lab)
+        )
+        XCTAssertTrue(
+            ArchiveDiagnosticsPreviewRankingPanelContext.rankedPreviewLinesMatchExport(
+                in: exportText,
+                lines: lines
+            )
+        )
+    }
+
     func testRankingLabTooShortBreakdownPanelMatchesExport() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])

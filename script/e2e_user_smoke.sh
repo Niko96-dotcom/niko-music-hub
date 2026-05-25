@@ -202,6 +202,41 @@ if ! grep -q "preview_ranking_tiebreak_legend=${PANEL_RANKING_TIEBREAK_LEGEND}" 
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_ranking_main_preview_summary_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab panel main preview summary missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_MAIN_PREVIEW_SUMMARY="$(grep -m1 'diagnostics_panel_ranking_main_preview_summary=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_main_preview_summary=//')"
+if [[ -z "$PANEL_RANKING_MAIN_PREVIEW_SUMMARY" ]]; then
+  echo "E2E failed: ranking lab panel main preview summary missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "main_preview_summary=${PANEL_RANKING_MAIN_PREVIEW_SUMMARY}" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: export main_preview_summary does not match panel summary" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_ranking_preview_rank_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab panel preview rank lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_PREVIEW_RANK_LINES="$(grep -m1 'diagnostics_panel_ranking_preview_rank_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_preview_rank_lines=//')"
+if [[ -z "$PANEL_RANKING_PREVIEW_RANK_LINES" ]]; then
+  echo "E2E failed: ranking lab panel preview rank lines missing from smoke output" >&2
+  exit 1
+fi
+
+while IFS= read -r rank_line; do
+  [[ -z "$rank_line" ]] && continue
+  if ! grep -Fq "preview_rank_line=${rank_line}" "$RANKING_EXPORT_PATH"; then
+    echo "E2E failed: export missing preview_rank_line for panel line: ${rank_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_RANKING_PREVIEW_RANK_LINES// | /$'\n'}")
+
 if ! grep -q "diagnostics_export_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: equal-score tiebreak diagnostics export missing active match marker" >&2
   exit 1

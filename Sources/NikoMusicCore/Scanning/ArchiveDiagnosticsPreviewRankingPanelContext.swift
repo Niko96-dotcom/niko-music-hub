@@ -43,6 +43,29 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
         exportText.contains("preview_ranking_tiebreak_legend=\(tiebreakLegend)")
     }
 
+    /// Selected-song main preview summary (same value as export `main_preview_summary=`).
+    public static func selectedSongMainPreviewSummary(for song: Song?) -> String? {
+        guard let song else { return nil }
+        return PreviewRankingExplainability.mainPreviewSummary(for: song)
+    }
+
+    /// Selected-song ranked preview lines (same values as export `preview_rank_line=`).
+    public static func selectedSongRankedPreviewLines(for song: Song?) -> [String] {
+        guard let song else { return [] }
+        return PreviewRankingExplainability.rankedPreviewLines(for: song)
+    }
+
+    /// True when export text carries the same main preview summary shown in the panel.
+    public static func mainPreviewSummaryMatchesExport(in exportText: String, summary: String) -> Bool {
+        exportText.contains("main_preview_summary=\(summary)")
+    }
+
+    /// True when export text carries every ranked preview line shown in the panel.
+    public static func rankedPreviewLinesMatchExport(in exportText: String, lines: [String]) -> Bool {
+        guard !lines.isEmpty else { return false }
+        return lines.allSatisfy { exportText.contains("preview_rank_line=\($0)") }
+    }
+
     public let tooShortNonMainPreviewCount: Int
     public let songsWithTooShortNonMainPreviews: Int
     public let tooShortSongBreakdowns: [TooShortNonMainSongBreakdown]
