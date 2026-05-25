@@ -27,6 +27,8 @@ final class ArchiveScanDiagnosticsBuilderTests: XCTestCase {
         XCTAssertTrue(
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot && $0.label == "LOOSE_FILE.txt" }
         )
+        XCTAssertGreaterThanOrEqual(diagnostics.previewRankingPanel.tooShortNonMainPreviewCount, 1)
+        XCTAssertNotNil(diagnostics.previewRankingPanel.scanHeaderCallout)
     }
 
     func testBuildIncludesInvalidRootWarning() {
