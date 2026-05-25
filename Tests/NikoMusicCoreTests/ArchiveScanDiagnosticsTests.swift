@@ -21,6 +21,74 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         )
     }
 
+    func testDisplayGlobalWarningsRedactsEmbeddedHomePaths() {
+        let home = "/Users/tester"
+        let embedded = "\(home)/Music/Cubase/Neon Hook/Neon Hook.cpr"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: [],
+            songCount: 1,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["Root is not a directory: \(embedded)"],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(
+            diagnostics.displayGlobalWarnings(homeDirectory: home),
+            ["Root is not a directory: ~/Music/Cubase/Neon Hook/Neon Hook.cpr"]
+        )
+    }
+
+    func testDisplaySkippedEntriesRedactsLabelAndReason() {
+        let home = "/Users/tester"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: [],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(
+                    kind: .invalidRoot,
+                    label: "\(home)/Music/LOOSE.cpr",
+                    reason: "Skipped invalid root at \(home)/Music/LOOSE.cpr"
+                ),
+            ]
+        )
+
+        let display = diagnostics.displaySkippedEntries(homeDirectory: home)
+        XCTAssertEqual(display.count, 1)
+        XCTAssertEqual(display[0].label, "~/Music/LOOSE.cpr")
+        XCTAssertEqual(display[0].reason, "Skipped invalid root at ~/Music/LOOSE.cpr")
+    }
+
+    func testDisplaySongWarningSummariesRedactsEmbeddedPaths() {
+        let home = "/Users/tester"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: [],
+            songCount: 1,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 1,
+            globalWarnings: [],
+            songWarningSummaries: [
+                SongWarningSummary(
+                    displayTitle: "Broken Folder",
+                    warnings: ["Missing mixdown under \(home)/Music/Broken"]
+                ),
+            ],
+            skippedEntries: []
+        )
+
+        let display = diagnostics.displaySongWarningSummaries(homeDirectory: home)
+        XCTAssertEqual(display.count, 1)
+        XCTAssertEqual(display[0].warnings, ["Missing mixdown under ~/Music/Broken"])
+    }
+
     func testSummaryLineDescribesCleanScan() {
         let diagnostics = ArchiveScanDiagnostics(
             scannedAt: Date(timeIntervalSince1970: 1),
