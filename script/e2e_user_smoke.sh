@@ -165,6 +165,27 @@ if ! grep -q "preview_ranking_selected_header=${PANEL_RANKING_SELECTED_HEADER}" 
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_ranking_too_short_breakdown_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab too-short breakdown panel missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_TOO_SHORT_BREAKDOWN="$(grep -m1 'diagnostics_panel_ranking_too_short_breakdown=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_too_short_breakdown=//')"
+if [[ -z "$PANEL_RANKING_TOO_SHORT_BREAKDOWN" ]]; then
+  echo "E2E failed: ranking lab too-short breakdown panel line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: export too_short_song line missing for panel breakdown parity" >&2
+  exit 1
+fi
+
+if ! grep -q "Lab Song short clip.wav" <<<"$PANEL_RANKING_TOO_SHORT_BREAKDOWN"; then
+  echo "E2E failed: panel too-short breakdown does not name exported clip" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: equal-score tiebreak diagnostics export missing active match marker" >&2
   exit 1

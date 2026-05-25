@@ -23,6 +23,14 @@ public struct TooShortNonMainSongBreakdown: Sendable, Equatable, Codable {
         let clips = clipNames.joined(separator: ", ")
         return "\(displayTitle): \(clipCount) too short \(clipWord) — \(clips)"
     }
+
+    /// True when export text contains this breakdown's machine line and the panel line names the same clips.
+    public func panelMatchesExport(in exportText: String) -> Bool {
+        guard exportText.contains(exportLine) else { return false }
+        guard panelDisplayLine.contains(displayTitle) else { return false }
+        guard panelDisplayLine.contains("\(clipCount)") else { return false }
+        return clipNames.allSatisfy { panelDisplayLine.contains($0) }
+    }
 }
 
 /// Operator-facing preview ranking hints for the archive diagnostics panel header.
