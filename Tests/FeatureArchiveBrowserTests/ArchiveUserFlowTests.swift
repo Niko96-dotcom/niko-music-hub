@@ -129,5 +129,7 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.skippedSearchMatchSummary.contains("skipped label"))
         XCTAssertFalse(result.skippedSearchDiagnosticsExportPath.isEmpty)
         XCTAssertTrue(result.skippedSearchDiagnosticsExportContainsMatch)
+        XCTAssertFalse(result.summaryTruncationDiagnosticsExportPath.isEmpty)
+        XCTAssertTrue(result.summaryTruncationDiagnosticsExportContainsTruncation)
     }
 }

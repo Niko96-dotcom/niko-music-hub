@@ -610,6 +610,42 @@ if ! grep -q "root_health_badge=${PANEL_INVALID_ROOT_BADGE}" "$INVALID_ROOT_EXPO
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_summary_truncation_match=true" "$LOG_FILE"; then
+  echo "E2E failed: summary truncation diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+SUMMARY_TRUNCATION_EXPORT_PATH="$(grep -m1 'diagnostics_export_summary_truncation_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_summary_truncation_path=//')"
+if [[ -z "$SUMMARY_TRUNCATION_EXPORT_PATH" || ! -f "$SUMMARY_TRUNCATION_EXPORT_PATH" ]]; then
+  echo "E2E failed: summary truncation diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*Scanned 8 songs" "$SUMMARY_TRUNCATION_EXPORT_PATH"; then
+  echo "E2E failed: summary truncation export missing eight-song scan count" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*and 3 more" "$SUMMARY_TRUNCATION_EXPORT_PATH"; then
+  echo "E2E failed: summary truncation export missing truncated title suffix" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line_song_warning_titles_truncated=true" "$SUMMARY_TRUNCATION_EXPORT_PATH"; then
+  echo "E2E failed: summary truncation export missing truncated=true metadata" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line_song_warning_titles_cap=5" "$SUMMARY_TRUNCATION_EXPORT_PATH"; then
+  echo "E2E failed: summary truncation export missing cap metadata" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line_song_warning_titles_omitted=3" "$SUMMARY_TRUNCATION_EXPORT_PATH"; then
+  echo "E2E failed: summary truncation export missing omitted count metadata" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_panel_support_summary=roots:" "$LOG_FILE"; then
   echo "E2E failed: diagnostics panel support summary missing roots prefix" >&2
   exit 1
