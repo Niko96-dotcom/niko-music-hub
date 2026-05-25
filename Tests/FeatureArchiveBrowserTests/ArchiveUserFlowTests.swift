@@ -40,6 +40,8 @@ final class ArchiveUserFlowTests: XCTestCase {
         }
         XCTAssertTrue(result.searchMatchSummary.contains("neon"))
         XCTAssertTrue(result.searchMatchSummary.contains("hk"))
+        XCTAssertFalse(result.searchDiagnosticsExportPath.isEmpty)
+        XCTAssertTrue(result.searchDiagnosticsExportContainsMatch)
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"))
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("v3"))
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("wav"))
