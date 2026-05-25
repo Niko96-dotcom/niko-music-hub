@@ -75,8 +75,12 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.tiebreakPanelPreviewTiebreakCalloutMatchesExport)
         XCTAssertFalse(result.versionTiebreakLabDiagnosticsExportPath.isEmpty)
         XCTAssertTrue(result.versionTiebreakLabDiagnosticsExportContainsTiebreak)
+        XCTAssertTrue(result.versionTiebreakPanelCallout.contains("Equal score — version v3 beat v2"))
+        XCTAssertTrue(result.versionTiebreakPanelCalloutMatchesExport)
         XCTAssertFalse(result.extensionTiebreakLabDiagnosticsExportPath.isEmpty)
         XCTAssertTrue(result.extensionTiebreakLabDiagnosticsExportContainsTiebreak)
+        XCTAssertTrue(result.extensionTiebreakPanelCallout.contains("Equal score — preferred flac over mp3"))
+        XCTAssertTrue(result.extensionTiebreakPanelCalloutMatchesExport)
         XCTAssertTrue(
             result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") })
         )

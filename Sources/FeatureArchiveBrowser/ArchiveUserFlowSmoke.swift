@@ -29,8 +29,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool
     public let versionTiebreakLabDiagnosticsExportPath: String
     public let versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
+    public let versionTiebreakPanelCallout: String
+    public let versionTiebreakPanelCalloutMatchesExport: Bool
     public let extensionTiebreakLabDiagnosticsExportPath: String
     public let extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
+    public let extensionTiebreakPanelCallout: String
+    public let extensionTiebreakPanelCalloutMatchesExport: Bool
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
     public let warningSearchQuery: String
@@ -119,8 +123,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool,
         versionTiebreakLabDiagnosticsExportPath: String,
         versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
+        versionTiebreakPanelCallout: String,
+        versionTiebreakPanelCalloutMatchesExport: Bool,
         extensionTiebreakLabDiagnosticsExportPath: String,
         extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
+        extensionTiebreakPanelCallout: String,
+        extensionTiebreakPanelCalloutMatchesExport: Bool,
         brokenFolderDisplayWarnings: [String],
         brokenFolderSidecarNotes: String?,
         warningSearchQuery: String,
@@ -207,8 +215,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.tiebreakPanelPreviewTiebreakCalloutMatchesExport = tiebreakPanelPreviewTiebreakCalloutMatchesExport
         self.versionTiebreakLabDiagnosticsExportPath = versionTiebreakLabDiagnosticsExportPath
         self.versionTiebreakLabDiagnosticsExportContainsTiebreak = versionTiebreakLabDiagnosticsExportContainsTiebreak
+        self.versionTiebreakPanelCallout = versionTiebreakPanelCallout
+        self.versionTiebreakPanelCalloutMatchesExport = versionTiebreakPanelCalloutMatchesExport
         self.extensionTiebreakLabDiagnosticsExportPath = extensionTiebreakLabDiagnosticsExportPath
         self.extensionTiebreakLabDiagnosticsExportContainsTiebreak = extensionTiebreakLabDiagnosticsExportContainsTiebreak
+        self.extensionTiebreakPanelCallout = extensionTiebreakPanelCallout
+        self.extensionTiebreakPanelCalloutMatchesExport = extensionTiebreakPanelCalloutMatchesExport
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
         self.warningSearchQuery = warningSearchQuery
@@ -288,9 +300,11 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case versionTiebreakLabNotFound
     case versionTiebreakLabDiagnosticsExportFailed
     case versionTiebreakLabDiagnosticsExportMissingTiebreak
+    case versionTiebreakLabPanelPreviewRankingMismatch
     case extensionTiebreakLabNotFound
     case extensionTiebreakLabDiagnosticsExportFailed
     case extensionTiebreakLabDiagnosticsExportMissingTiebreak
+    case extensionTiebreakLabPanelPreviewRankingMismatch
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
@@ -518,6 +532,20 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.versionTiebreakLabDiagnosticsExportMissingTiebreak
         }
 
+        let panelVersionTiebreakCallout =
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: versionTiebreakLab) ?? ""
+        let exportVersionTiebreakCallout = Self.exportLineValue(
+            prefix: "preview_rank_tiebreak=",
+            in: versionTiebreakLabExportText
+        ) ?? ""
+        let versionTiebreakPanelCalloutMatchesExport =
+            !panelVersionTiebreakCallout.isEmpty
+            && panelVersionTiebreakCallout == exportVersionTiebreakCallout
+            && panelVersionTiebreakCallout.contains("Equal score — version v3 beat v2")
+        guard versionTiebreakPanelCalloutMatchesExport else {
+            throw ArchiveUserFlowSmokeError.versionTiebreakLabPanelPreviewRankingMismatch
+        }
+
         guard let extensionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Extension Tiebreak" }) else {
             throw ArchiveUserFlowSmokeError.extensionTiebreakLabNotFound
         }
@@ -537,6 +565,20 @@ public enum ArchiveUserFlowSmoke {
             && extensionTiebreakLabExportText.contains("Tie Song mix.flac")
         guard exportContainsExtensionTiebreak else {
             throw ArchiveUserFlowSmokeError.extensionTiebreakLabDiagnosticsExportMissingTiebreak
+        }
+
+        let panelExtensionTiebreakCallout =
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: extensionTiebreakLab) ?? ""
+        let exportExtensionTiebreakCallout = Self.exportLineValue(
+            prefix: "preview_rank_tiebreak=",
+            in: extensionTiebreakLabExportText
+        ) ?? ""
+        let extensionTiebreakPanelCalloutMatchesExport =
+            !panelExtensionTiebreakCallout.isEmpty
+            && panelExtensionTiebreakCallout == exportExtensionTiebreakCallout
+            && panelExtensionTiebreakCallout.contains("Equal score — preferred flac over mp3")
+        guard extensionTiebreakPanelCalloutMatchesExport else {
+            throw ArchiveUserFlowSmokeError.extensionTiebreakLabPanelPreviewRankingMismatch
         }
 
         guard let broken = viewModel.songs.first(where: { $0.displayTitle == "Broken Folder Example" }) else {
@@ -789,8 +831,12 @@ public enum ArchiveUserFlowSmoke {
             tiebreakPanelPreviewTiebreakCalloutMatchesExport: durationTiebreakPanelCalloutMatchesExport,
             versionTiebreakLabDiagnosticsExportPath: versionTiebreakLabExportPath,
             versionTiebreakLabDiagnosticsExportContainsTiebreak: exportContainsVersionTiebreak,
+            versionTiebreakPanelCallout: panelVersionTiebreakCallout,
+            versionTiebreakPanelCalloutMatchesExport: versionTiebreakPanelCalloutMatchesExport,
             extensionTiebreakLabDiagnosticsExportPath: extensionTiebreakLabExportPath,
             extensionTiebreakLabDiagnosticsExportContainsTiebreak: exportContainsExtensionTiebreak,
+            extensionTiebreakPanelCallout: panelExtensionTiebreakCallout,
+            extensionTiebreakPanelCalloutMatchesExport: extensionTiebreakPanelCalloutMatchesExport,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
             warningSearchQuery: warningSearchQuery,
