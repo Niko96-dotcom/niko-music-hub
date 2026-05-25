@@ -123,6 +123,45 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
     }
 
+    func testFormattedTextRedactsPathsEmbeddedInWarnings() {
+        let home = "/Users/tester"
+        let fullPath = "\(home)/Music/Cubase/Neon Hook/Neon Hook.cpr"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            rootPaths: [home + "/Music/Cubase"],
+            songCount: 1,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 1,
+            globalWarnings: ["Root is not a directory: \(fullPath)"],
+            songWarningSummaries: [
+                SongWarningSummary(
+                    displayTitle: "Neon Hook",
+                    warnings: ["Latest CPR unreadable: \(fullPath)"]
+                ),
+            ],
+            skippedEntries: []
+        )
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext(
+            displayTitle: "Neon Hook",
+            mainPreviewSummary: nil,
+            rankedPreviewLines: [],
+            cprSummary: "1 version · latest Neon Hook.cpr",
+            warningLines: ["Duplicate CPR path: \(fullPath)"]
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: home,
+            selectedSongContext: selectedContext
+        )
+
+        XCTAssertFalse(text.contains(home))
+        XCTAssertTrue(text.contains("~/Music/Cubase/Neon Hook/Neon Hook.cpr"))
+        XCTAssertTrue(text.contains("global_warning=Root is not a directory: ~/Music/Cubase/Neon Hook/Neon Hook.cpr"))
+        XCTAssertTrue(text.contains("  warning=Latest CPR unreadable: ~/Music/Cubase/Neon Hook/Neon Hook.cpr"))
+        XCTAssertTrue(text.contains("selected_song_warning=Duplicate CPR path: ~/Music/Cubase/Neon Hook/Neon Hook.cpr"))
+    }
+
     func testExportRejectsDestinationInsideArchiveRoot() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot

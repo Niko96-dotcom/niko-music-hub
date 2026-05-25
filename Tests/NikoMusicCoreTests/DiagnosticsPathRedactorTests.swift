@@ -19,4 +19,22 @@ final class DiagnosticsPathRedactorTests: XCTestCase {
             input
         )
     }
+
+    func testRedactPathsInTextReplacesEmbeddedHomePaths() {
+        let home = "/Users/tester"
+        let input = "No CPR at \(home)/Music/Cubase/Broken/Broken.cpr — check folder"
+        XCTAssertEqual(
+            DiagnosticsPathRedactor.redactPathsInText(input, homeDirectory: home),
+            "No CPR at ~/Music/Cubase/Broken/Broken.cpr — check folder"
+        )
+    }
+
+    func testRedactPathsInTextLeavesNonHomePathsUntouched() {
+        let home = "/Users/tester"
+        let input = "External archive at /Volumes/Studio/Song.cpr"
+        XCTAssertEqual(
+            DiagnosticsPathRedactor.redactPathsInText(input, homeDirectory: home),
+            input
+        )
+    }
 }

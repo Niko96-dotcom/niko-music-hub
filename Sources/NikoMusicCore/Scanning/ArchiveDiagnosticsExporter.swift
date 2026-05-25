@@ -53,19 +53,21 @@ public enum ArchiveDiagnosticsExporter {
         }
 
         for warning in diagnostics.globalWarnings {
-            lines.append("global_warning=\(DiagnosticsPathRedactor.redact(warning, homeDirectory: homeDirectory))")
+            lines.append("global_warning=\(DiagnosticsPathRedactor.redactPathsInText(warning, homeDirectory: homeDirectory))")
         }
 
         for summary in diagnostics.songWarningSummaries {
             lines.append("song=\(summary.displayTitle)")
             for warning in summary.warnings {
-                lines.append("  warning=\(warning)")
+                let redacted = DiagnosticsPathRedactor.redactPathsInText(warning, homeDirectory: homeDirectory)
+                lines.append("  warning=\(redacted)")
             }
         }
 
         for entry in diagnostics.skippedEntries {
             let label = DiagnosticsPathRedactor.redact(entry.label, homeDirectory: homeDirectory)
-            lines.append("skipped=\(entry.kind.rawValue) label=\(label) reason=\(entry.reason)")
+            let reason = DiagnosticsPathRedactor.redactPathsInText(entry.reason, homeDirectory: homeDirectory)
+            lines.append("skipped=\(entry.kind.rawValue) label=\(label) reason=\(reason)")
         }
 
         if let searchContext {
@@ -84,7 +86,8 @@ public enum ArchiveDiagnosticsExporter {
             lines.append("selected_song_title=\(selectedSongContext.displayTitle)")
             lines.append("selected_song_cpr=\(selectedSongContext.cprSummary)")
             for warning in selectedSongContext.warningLines {
-                lines.append("selected_song_warning=\(warning)")
+                let redacted = DiagnosticsPathRedactor.redactPathsInText(warning, homeDirectory: homeDirectory)
+                lines.append("selected_song_warning=\(redacted)")
             }
             if let mainPreviewSummary = selectedSongContext.mainPreviewSummary {
                 lines.append("main_preview_summary=\(mainPreviewSummary)")
