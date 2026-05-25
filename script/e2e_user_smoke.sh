@@ -306,6 +306,58 @@ if ! grep -q "diagnostics_panel_matches_export=true" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "healthy_export_omits_root_health_badge=true" "$LOG_FILE"; then
+  echo "E2E failed: healthy fixture export should omit root_health_badge=" >&2
+  exit 1
+fi
+
+if ! grep -q "healthy_panel_root_health_badge_nil=true" "$LOG_FILE"; then
+  echo "E2E failed: healthy fixture panel should not show root health badge" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_invalid_root_badge_match=true" "$LOG_FILE"; then
+  echo "E2E failed: invalid-root diagnostics export missing root_health_badge match" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_invalid_root_badge_matches_export=true" "$LOG_FILE"; then
+  echo "E2E failed: invalid-root panel badge does not match export root_health_badge" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_root_health_badge_id=archive_diagnostics_root_health_badge" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel root health badge accessibility id missing from smoke output" >&2
+  exit 1
+fi
+
+INVALID_ROOT_EXPORT_PATH="$(grep -m1 'diagnostics_export_invalid_root_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_invalid_root_path=//')"
+if [[ -z "$INVALID_ROOT_EXPORT_PATH" || ! -f "$INVALID_ROOT_EXPORT_PATH" ]]; then
+  echo "E2E failed: invalid-root diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "root_health_badge=.*invalid root" "$INVALID_ROOT_EXPORT_PATH"; then
+  echo "E2E failed: invalid-root export missing root_health_badge invalid root signal" >&2
+  exit 1
+fi
+
+if ! grep -q "root_health_badge=.*root warning" "$INVALID_ROOT_EXPORT_PATH"; then
+  echo "E2E failed: invalid-root export missing root_health_badge root warning signal" >&2
+  exit 1
+fi
+
+PANEL_INVALID_ROOT_BADGE="$(grep -m1 'diagnostics_panel_invalid_root_badge=' "$LOG_FILE" | sed 's/.*diagnostics_panel_invalid_root_badge=//')"
+if [[ -z "$PANEL_INVALID_ROOT_BADGE" ]]; then
+  echo "E2E failed: invalid-root panel badge missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "root_health_badge=${PANEL_INVALID_ROOT_BADGE}" "$INVALID_ROOT_EXPORT_PATH"; then
+  echo "E2E failed: export root_health_badge does not match panel badge text" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_panel_support_summary=roots:" "$LOG_FILE"; then
   echo "E2E failed: diagnostics panel support summary missing roots prefix" >&2
   exit 1
@@ -344,6 +396,11 @@ fi
 
 if ! grep -q "summary_line=.*2 skipped at roots" "$SEARCH_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing summary_line skipped count" >&2
+  exit 1
+fi
+
+if grep -q "root_health_badge=" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: healthy fixture export must omit root_health_badge=" >&2
   exit 1
 fi
 
