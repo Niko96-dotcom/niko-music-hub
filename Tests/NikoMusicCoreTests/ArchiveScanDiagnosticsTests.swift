@@ -106,4 +106,25 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
             "Scanned 6 songs · no warnings · nothing skipped at roots"
         )
     }
+
+    func testExportSummaryLineIncludesRedactedRootsAndScanCounts() {
+        let home = "/Users/tester"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["\(home)/Music/Cubase", "/Volumes/Archive"],
+            songCount: 5,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 2,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .nonFolderAtRoot, label: "LOOSE.txt", reason: "Not a song folder")
+            ]
+        )
+
+        XCTAssertEqual(
+            diagnostics.exportSummaryLine(homeDirectory: home),
+            "roots: ~/Music/Cubase, /Volumes/Archive · Scanned 5 songs · 1 song(s) with 2 warning(s) · 1 skipped at roots"
+        )
+    }
 }
