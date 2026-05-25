@@ -203,6 +203,9 @@ public enum ArchiveUserFlowSmoke {
             rankingLabExportText.contains("selected_song_title=Preview Ranking Lab")
             && rankingLabExportText.contains("preview_rank_line=")
             && rankingLabExportText.contains("v3")
+            && rankingLabExportText.contains("preview_ranking_tiebreak_legend=")
+            && rankingLabExportText.contains("preview_ranking_scan_callout=")
+            && rankingLabExportText.contains("preview_ranking_selected_header=")
         guard exportContainsRankingLabMatch else {
             throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
         }

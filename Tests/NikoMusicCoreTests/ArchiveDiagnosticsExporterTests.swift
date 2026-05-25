@@ -66,6 +66,33 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("summary=neon → title; hk → fuzzy title"))
     }
 
+    func testFormattedTextIncludesPreviewRankingPanelContext() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: lab)
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test",
+            selectedSongContext: selectedContext
+        )
+
+        XCTAssertTrue(text.contains("preview_ranking_tiebreak_legend="))
+        XCTAssertTrue(text.contains("role → folder → filename → version"))
+        XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
+        XCTAssertTrue(text.contains("too short preview"))
+        XCTAssertTrue(text.contains("preview_ranking_selected_header="))
+        XCTAssertTrue(text.contains("Main preview:"))
+        XCTAssertTrue(text.contains("skipped too short:"))
+    }
+
     func testFormattedTextIncludesSelectedSongPreviewRanking() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
