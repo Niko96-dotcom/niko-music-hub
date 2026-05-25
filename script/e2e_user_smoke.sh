@@ -82,6 +82,27 @@ if ! grep -q "preview_rank_summary=.*wav" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_ranking_match=true" "$LOG_FILE"; then
+  echo "E2E failed: preview-ranking diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+RANKING_EXPORT_PATH="$(grep -m1 'diagnostics_export_ranking_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_ranking_path=//')"
+if [[ -z "$RANKING_EXPORT_PATH" || ! -f "$RANKING_EXPORT_PATH" ]]; then
+  echo "E2E failed: preview-ranking diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=Preview Ranking Lab" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected Preview Ranking Lab song" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_line=.*v3" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing preview_rank_line v3 signal" >&2
+  exit 1
+fi
+
 if ! grep -q "broken_folder_warnings=.*CPR" "$LOG_FILE"; then
   echo "E2E failed: broken folder display warnings missing CPR signal" >&2
   exit 1

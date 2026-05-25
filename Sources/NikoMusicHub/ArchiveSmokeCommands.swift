@@ -45,6 +45,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] search_matches=\(result.searchMatchCount)")
         print("[niko-music-hub-smoke] search_match_summary=\(result.searchMatchSummary)")
         print("[niko-music-hub-smoke] preview_rank_summary=\(result.rankingLabMainPreviewSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_ranking_path=\(result.rankingLabDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_ranking_match=\(result.rankingLabDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
         print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
         print("[niko-music-hub-smoke] warning_search_query=\(result.warningSearchQuery)")
@@ -82,6 +84,8 @@ enum ArchiveSmokeCommands {
               result.rankingLabMainPreviewSummary.contains("v3"),
               result.rankingLabMainPreviewSummary.contains("wav"),
               result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"),
+              !result.rankingLabDiagnosticsExportPath.isEmpty,
+              result.rankingLabDiagnosticsExportContainsMatch,
               result.selectedTitle == "Neon Hook",
               result.dryRunCPRPath.contains("Neon Hook"),
               result.dryRunCPRPath.hasSuffix(".cpr"),
