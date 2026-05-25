@@ -19,6 +19,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.applySearchFilter()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
         XCTAssertEqual(viewModel.filteredSongs.first?.displayTitle, "Neon Hook")
+        let songID = try XCTUnwrap(viewModel.filteredSongs.first?.id)
+        XCTAssertFalse(viewModel.searchMatchSummaries[songID, default: ""].isEmpty)
     }
 
     func testScanExposesDiagnosticsSummary() async throws {

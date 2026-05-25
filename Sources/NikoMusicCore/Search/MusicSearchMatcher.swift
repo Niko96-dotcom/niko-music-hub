@@ -14,33 +14,41 @@ enum MusicSearchMatcher {
     }
 
     static func matchScore(song: Song, queryTokens: [String]) -> Int {
-        guard !queryTokens.isEmpty else { return 0 }
-        return queryTokens.reduce(0) { $0 + tokenMatchScore($1, for: song) }
+        matchDetails(song: song, queryTokens: queryTokens)
+            .reduce(0) { $0 + $1.score }
     }
 
-    private static func tokenMatchScore(_ token: String, for song: Song) -> Int {
-        guard !token.isEmpty else { return 0 }
+    static func matchDetails(song: Song, queryTokens: [String]) -> [MusicSearchMatchDetail] {
+        guard !queryTokens.isEmpty else { return [] }
+        return queryTokens.compactMap { token in
+            guard let match = bestTokenMatch(token, for: song) else { return nil }
+            return MusicSearchMatchDetail(queryToken: token, kind: match.kind, score: match.score)
+        }
+    }
+
+    private static func bestTokenMatch(_ token: String, for song: Song) -> (kind: MusicSearchMatchKind, score: Int)? {
+        guard !token.isEmpty else { return nil }
 
         let title = normalize(song.displayTitle)
-        if title.hasPrefix(token) { return 120 }
-        if title.contains(token) { return 100 }
+        if title.hasPrefix(token) { return (.titlePrefix, 120) }
+        if title.contains(token) { return (.titleContains, 100) }
 
         let folder = normalize(song.originalFolderName)
-        if folder.contains(token) { return 60 }
+        if folder.contains(token) { return (.folderName, 60) }
 
-        for version in song.projectVersions where normalize(version.fileName).contains(token) {
-            return 40
+        if song.projectVersions.contains(where: { normalize($0.fileName).contains(token) }) {
+            return (.projectVersionFileName, 40)
         }
-        for preview in song.previewCandidates where normalize(preview.fileName).contains(token) {
-            return 40
+        if song.previewCandidates.contains(where: { normalize($0.fileName).contains(token) }) {
+            return (.previewFileName, 40)
         }
 
-        if isSubsequence(token, in: title) { return 15 }
+        if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
 
         let haystack = searchableHaystack(for: song)
-        if isSubsequence(token, in: haystack) { return 5 }
+        if isSubsequence(token, in: haystack) { return (.fuzzyHaystack, 5) }
 
-        return 0
+        return nil
     }
 
     private static func searchableHaystack(for song: Song) -> String {
