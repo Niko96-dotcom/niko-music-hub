@@ -137,6 +137,13 @@ final class ArchiveBrowserViewModel: ObservableObject {
         return ArchiveDiagnosticsSearchContext(query: trimmed, matches: matches)
     }
 
+    func activeSkippedSearchExportContext() -> ArchiveDiagnosticsSkippedSearchContext? {
+        ArchiveDiagnosticsSkippedSearchContext.from(
+            query: searchQuery,
+            results: skippedSearchMatches
+        )
+    }
+
     func exportDiagnostics() throws {
         guard let scanDiagnostics else {
             statusMessage = "Scan the archive before exporting diagnostics."
@@ -153,6 +160,7 @@ final class ArchiveBrowserViewModel: ObservableObject {
             to: destination,
             archiveRoots: roots,
             searchContext: activeSearchExportContext(),
+            skippedSearchContext: activeSkippedSearchExportContext(),
             selectedSongContext: selectedSongExportContext()
         )
         lastDiagnosticsExportPath = destination.path
