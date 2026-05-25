@@ -128,6 +128,44 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         )
     }
 
+    func testSummaryLineSongWarningTitlesTruncationFootnoteWhenTruncated() {
+        let summaries = (1...8).map { index in
+            SongWarningSummary(displayTitle: "Song \(index)", warnings: ["warn \(index)"])
+        }
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 8,
+            songsWithWarningsCount: 8,
+            totalSongWarningCount: 8,
+            globalWarnings: [],
+            songWarningSummaries: summaries,
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(
+            diagnostics.summaryLineSongWarningTitlesTruncationFootnote,
+            "Support summary shows 5 warning song titles; 3 more listed below."
+        )
+    }
+
+    func testSummaryLineSongWarningTitlesTruncationFootnoteNilWhenNotTruncated() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 3,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 1,
+            globalWarnings: [],
+            songWarningSummaries: [
+                SongWarningSummary(displayTitle: "Alpha Song", warnings: ["warn"]),
+            ],
+            skippedEntries: []
+        )
+
+        XCTAssertNil(diagnostics.summaryLineSongWarningTitlesTruncationFootnote)
+    }
+
     func testSummaryLineSongWarningTitlesTruncatedWhenOverCap() {
         let summaries = (1...8).map { index in
             SongWarningSummary(displayTitle: "Song \(index)", warnings: ["warn \(index)"])

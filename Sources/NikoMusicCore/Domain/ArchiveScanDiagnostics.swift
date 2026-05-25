@@ -67,6 +67,14 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         max(0, songWarningSummaries.count - Self.summaryLineMaxSongWarningTitles)
     }
 
+    /// Operator-facing note when `summaryLine` omits warning song titles beyond the cap.
+    public var summaryLineSongWarningTitlesTruncationFootnote: String? {
+        guard summaryLineSongWarningTitlesTruncated else { return nil }
+        let cap = Self.summaryLineMaxSongWarningTitles
+        let omitted = summaryLineSongWarningTitlesOmittedCount
+        return "Support summary shows \(cap) warning song titles; \(omitted) more listed below."
+    }
+
     private var songWarningSummaryClause: String {
         guard totalSongWarningCount > 0 else { return "no warnings" }
         var clause = "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"

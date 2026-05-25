@@ -6,10 +6,17 @@ public struct ArchiveDiagnosticsPanelContext: Sendable, Equatable {
     public let supportSummaryLine: String
     /// Compact scan-health badge for root issues, song warnings, and skipped-at-roots entries; nil when fully clean.
     public let rootHealthBadge: String?
+    /// Footnote when the support summary omits warning song titles beyond the cap; nil when not truncated.
+    public let supportSummaryTruncationFootnote: String?
 
-    public init(supportSummaryLine: String, rootHealthBadge: String? = nil) {
+    public init(
+        supportSummaryLine: String,
+        rootHealthBadge: String? = nil,
+        supportSummaryTruncationFootnote: String? = nil
+    ) {
         self.supportSummaryLine = supportSummaryLine
         self.rootHealthBadge = rootHealthBadge
+        self.supportSummaryTruncationFootnote = supportSummaryTruncationFootnote
     }
 
     public static func from(
@@ -18,7 +25,8 @@ public struct ArchiveDiagnosticsPanelContext: Sendable, Equatable {
     ) -> ArchiveDiagnosticsPanelContext {
         ArchiveDiagnosticsPanelContext(
             supportSummaryLine: diagnostics.exportSummaryLine(homeDirectory: homeDirectory),
-            rootHealthBadge: rootHealthBadge(for: diagnostics)
+            rootHealthBadge: rootHealthBadge(for: diagnostics),
+            supportSummaryTruncationFootnote: diagnostics.summaryLineSongWarningTitlesTruncationFootnote
         )
     }
 

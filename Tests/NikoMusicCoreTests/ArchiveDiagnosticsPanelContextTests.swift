@@ -119,6 +119,31 @@ final class ArchiveDiagnosticsPanelContextTests: XCTestCase {
         )
     }
 
+    func testSupportSummaryTruncationFootnoteOnSummaryTruncationFixture() throws {
+        try CubaseFixtures.ensureGenerated()
+        let roots = [CubaseFixtures.summaryTruncationRoot]
+        let result = try CubaseArchiveScanner().scan(roots: roots)
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(result: result, roots: roots)
+
+        let panel = ArchiveDiagnosticsPanelContext.from(diagnostics)
+
+        XCTAssertEqual(
+            panel.supportSummaryTruncationFootnote,
+            "Support summary shows 5 warning song titles; 3 more listed below."
+        )
+    }
+
+    func testSupportSummaryTruncationFootnoteNilOnHealthyFixture() throws {
+        try CubaseFixtures.ensureGenerated()
+        let roots = [CubaseFixtures.archiveRoot]
+        let result = try CubaseArchiveScanner().scan(roots: roots)
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(result: result, roots: roots)
+
+        let panel = ArchiveDiagnosticsPanelContext.from(diagnostics)
+
+        XCTAssertNil(panel.supportSummaryTruncationFootnote)
+    }
+
     func testSupportSummaryUsesRedactedRoots() {
         let home = "/Users/tester"
         let diagnostics = ArchiveScanDiagnostics(

@@ -42,7 +42,7 @@ When truncation applies, exports also include:
 - `summary_line_song_warning_titles_cap=5`
 - `summary_line_song_warning_titles_omitted=<count>`
 
-`./script/e2e_user_smoke.sh` also scans the eight-song **Summary Warning** truncation lab and asserts the exported `summary_line=` includes `and 3 more` plus the truncation metadata lines above.
+`./script/e2e_user_smoke.sh` also scans the eight-song **Summary Warning** truncation lab and asserts the exported `summary_line=` includes `and 3 more` plus the truncation metadata lines above. The in-app diagnostics panel shows a matching footnote under **Support summary** (`Support summary shows 5 warning song titles; 3 more listed below.`); smoke asserts that text via `diagnostics_panel_summary_truncation_footnote=`.
 
 ## Local gates
 

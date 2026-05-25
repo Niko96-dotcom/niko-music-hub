@@ -14,5 +14,9 @@ final class ArchiveScanDiagnosticsSummaryTruncationFixtureTests: XCTestCase {
         XCTAssertTrue(diagnostics.summaryLine.contains("and 3 more"))
         XCTAssertTrue(diagnostics.summaryLine.contains("Summary Warning 01"))
         XCTAssertFalse(diagnostics.summaryLine.contains("Summary Warning 08"))
+        XCTAssertEqual(
+            diagnostics.summaryLineSongWarningTitlesTruncationFootnote,
+            "Support summary shows 5 warning song titles; 3 more listed below."
+        )
     }
 }
