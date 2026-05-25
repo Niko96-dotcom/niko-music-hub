@@ -1176,63 +1176,42 @@ public enum ArchiveUserFlowSmoke {
             requiredSummarySubstrings: ["fuzzy preview file", "v3", "mx"]
         )
 
-        let skippedSearchQuery = "LOOSE_FILE.txt"
+        let skippedSearchQuery = "lse fle"
         viewModel.searchQuery = skippedSearchQuery
         viewModel.applySearchFilter()
         guard let skippedMatch = viewModel.skippedSearchMatches.first else {
             throw ArchiveUserFlowSmokeError.skippedSearchNoMatch
         }
         guard skippedMatch.entry.label == "LOOSE_FILE.txt",
-              skippedMatch.matchSummary.localizedCaseInsensitiveContains("skipped label") else {
+              skippedMatch.matchSummary.localizedCaseInsensitiveContains("fuzzy skipped label") else {
             throw ArchiveUserFlowSmokeError.skippedSearchMissingExplainability
         }
 
         try viewModel.exportDiagnostics()
-        guard let exportPath = viewModel.lastDiagnosticsExportPath,
-              !exportPath.isEmpty else {
+        guard let skippedSearchExportPath = viewModel.lastDiagnosticsExportPath,
+              !skippedSearchExportPath.isEmpty else {
             throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportFailed
         }
-        let exportText = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
-        let exportContainsSkippedMatch = exportText.contains("skipped_search_match label=LOOSE_FILE.txt")
+        let skippedSearchExportText = try String(
+            contentsOf: URL(fileURLWithPath: skippedSearchExportPath),
+            encoding: .utf8
+        )
+        let exportContainsSkippedMatch = skippedSearchExportText.contains(
+            "skipped_search_match label=LOOSE_FILE.txt"
+        )
         guard exportContainsSkippedMatch else {
             throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportMissingMatch
         }
 
-        guard let skippedSearchPanelContext = viewModel.activeSkippedSearchExportContext() else {
-            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
-        }
-        let panelSkippedSearchQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
-            query: skippedSearchPanelContext.query,
-            matchCount: skippedSearchPanelContext.matches.count
+        let skippedSearchPanel = try Self.activeSkippedSearchPanelParity(
+            viewModel: viewModel,
+            query: skippedSearchQuery,
+            matchCount: viewModel.skippedSearchMatches.count,
+            exportText: skippedSearchExportText,
+            requiredQuerySubstring: "lse fle",
+            requiredMatchLabelSubstring: "LOOSE_FILE.txt",
+            requiredSummarySubstrings: ["fuzzy skipped label"]
         )
-        let panelSkippedSearchMatchLines = skippedSearchPanelContext.matches.map {
-            ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
-                label: $0.label,
-                summary: $0.summary
-            )
-        }
-        let panelSkippedSearchMatchLinesJoined = panelSkippedSearchMatchLines.joined(separator: " | ")
-        let skippedSearchPanelQueryLineMatchesExport =
-            skippedSearchPanelContext.query == skippedSearchQuery
-            && skippedSearchPanelContext.matches.count == viewModel.skippedSearchMatches.count
-            && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
-                in: exportText,
-                query: skippedSearchPanelContext.query,
-                matchCount: skippedSearchPanelContext.matches.count
-            )
-            && panelSkippedSearchQueryLine.contains("LOOSE_FILE.txt")
-            && panelSkippedSearchQueryLine.contains("1 match")
-        let skippedSearchPanelMatchLinesMatchExport =
-            !panelSkippedSearchMatchLines.isEmpty
-            && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
-                in: exportText,
-                matches: skippedSearchPanelContext.matches
-            )
-            && panelSkippedSearchMatchLines.contains(where: { $0.contains("LOOSE_FILE.txt") })
-            && panelSkippedSearchMatchLines.contains(where: { $0.contains("skipped label") })
-        guard skippedSearchPanelQueryLineMatchesExport, skippedSearchPanelMatchLinesMatchExport else {
-            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
-        }
 
         let panelSupportSummary = ArchiveDiagnosticsPanelContext.from(
             diagnostics,
@@ -1409,12 +1388,74 @@ public enum ArchiveUserFlowSmoke {
             summaryTruncationPanelFootnote: summaryTruncationHealth.panelFootnote,
             summaryTruncationPanelFootnoteMatchesDiagnostics:
                 summaryTruncationHealth.panelFootnoteMatchesDiagnostics,
-            skippedSearchDiagnosticsExportPath: exportPath,
+            skippedSearchDiagnosticsExportPath: skippedSearchExportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch,
-            skippedSearchPanelQueryLine: panelSkippedSearchQueryLine,
-            skippedSearchPanelQueryLineMatchesExport: skippedSearchPanelQueryLineMatchesExport,
-            skippedSearchPanelMatchLines: panelSkippedSearchMatchLinesJoined,
-            skippedSearchPanelMatchLinesMatchExport: skippedSearchPanelMatchLinesMatchExport
+            skippedSearchPanelQueryLine: skippedSearchPanel.queryLine,
+            skippedSearchPanelQueryLineMatchesExport: skippedSearchPanel.queryLineMatchesExport,
+            skippedSearchPanelMatchLines: skippedSearchPanel.matchLinesJoined,
+            skippedSearchPanelMatchLinesMatchExport: skippedSearchPanel.matchLinesMatchExport
+        )
+    }
+
+    private struct ActiveSkippedSearchPanelParity: Sendable {
+        let queryLine: String
+        let queryLineMatchesExport: Bool
+        let matchLinesJoined: String
+        let matchLinesMatchExport: Bool
+    }
+
+    @MainActor
+    private static func activeSkippedSearchPanelParity(
+        viewModel: ArchiveBrowserViewModel,
+        query: String,
+        matchCount: Int,
+        exportText: String,
+        requiredQuerySubstring: String,
+        requiredMatchLabelSubstring: String,
+        requiredSummarySubstrings: [String]
+    ) throws -> ActiveSkippedSearchPanelParity {
+        guard let skippedSearchPanelContext = viewModel.activeSkippedSearchExportContext() else {
+            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+        }
+        let panelQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
+            query: skippedSearchPanelContext.query,
+            matchCount: skippedSearchPanelContext.matches.count
+        )
+        let panelMatchLines = skippedSearchPanelContext.matches.map {
+            ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
+                label: $0.label,
+                summary: $0.summary
+            )
+        }
+        let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
+        let queryLineMatchesExport =
+            skippedSearchPanelContext.query == query
+            && skippedSearchPanelContext.matches.count == matchCount
+            && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: exportText,
+                query: skippedSearchPanelContext.query,
+                matchCount: skippedSearchPanelContext.matches.count
+            )
+            && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
+            && panelQueryLine.contains("\(matchCount) match")
+        let matchLinesMatchExport =
+            !panelMatchLines.isEmpty
+            && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
+                in: exportText,
+                matches: skippedSearchPanelContext.matches
+            )
+            && panelMatchLines.contains(where: { $0.contains(requiredMatchLabelSubstring) })
+            && requiredSummarySubstrings.allSatisfy { substring in
+                panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
+            }
+        guard queryLineMatchesExport, matchLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+        }
+        return ActiveSkippedSearchPanelParity(
+            queryLine: panelQueryLine,
+            queryLineMatchesExport: queryLineMatchesExport,
+            matchLinesJoined: panelMatchLinesJoined,
+            matchLinesMatchExport: matchLinesMatchExport
         )
     }
 

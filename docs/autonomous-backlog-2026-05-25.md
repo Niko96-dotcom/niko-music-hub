@@ -1,21 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-63)
+## Picked (music-64)
 
-Extend **Active search** panel/export parity to all remaining fixture fuzzy searches using `activeSearchPanelParity` (warning `project`, notes `nts nly`, folder `brkn fld`, CPR `neohkv2`, preview `ranking lab v3 mx`).
+Prove **fuzzy skipped-entry search** (`lse fle` → `LOOSE_FILE.txt`) with active skipped-search panel/export parity in fixture E2E and smoke.
 
-## Completed (music-63)
+## Completed (music-64)
 
-- `activeSearchPanelParity` wired for warning, notes, folder, CPR, and preview fixture searches
-- Smoke stdout markers: `diagnostics_panel_{warning,notes,folder,cpr,preview}_search_*`
-- E2E `assert_active_search_panel_parity` helper (reuses fuzzy-warning pattern)
-- Unit test: `testFixtureScanWarningSearchPanelMatchesExporter`
-- `docs/user-e2e.md` table of all active-search parity prefixes
+- User-flow smoke uses fuzzy query `lse fle` with `fuzzy skipped label` explainability
+- `activeSkippedSearchPanelParity` helper mirrors song-search parity pattern
+- E2E `assert_active_skipped_search_panel_parity` helper
+- Unit tests: `testFindsLooseFileByFuzzyLabelSubsequence`, `testFixtureFuzzyLooseFileSkippedSearchPanelMatchesExporter`
+- `docs/user-e2e.md` updated for fuzzy skipped search
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-62)
+## Prior (music-63)
 
-Fuzzy scan-warning (`ncpr fnd`) active-search panel/export parity.
+Extend **Active search** panel/export parity to all remaining fixture fuzzy searches using `activeSearchPanelParity` (warning `project`, notes `nts nly`, folder `brkn fld`, CPR `neohkv2`, preview `ranking lab v3 mx`).
 
 ## Next best TODO
 

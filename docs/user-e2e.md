@@ -70,7 +70,7 @@ When a song is selected (fixture flow selects **Broken Folder Example** after sc
 - `diagnostics_panel_selected_song_warning_lines_match=` (panel warnings match export `selected_song_warning=`)
 - `diagnostics_panel_selected_song_notes_line_match=` (panel notes line matches export `selected_song_notes=`)
 
-When a skipped-entry search is active (fixture flow uses **LOOSE_FILE.txt**), the diagnostics panel shows **Active skipped search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_skipped_search` block:
+When a skipped-entry search is active (fixture flow uses fuzzy query **lse fle** → **LOOSE_FILE.txt**), the diagnostics panel shows **Active skipped search** with the query, match count, and per-match explainability lines (`fuzzy skipped label` in summaries). Smoke asserts panel/export parity with the export `active_skipped_search` block:
 
 - `diagnostics_panel_skipped_search_query_line_match=` (panel query line matches export `skipped_search_query=` / `skipped_search_matches=`)
 - `diagnostics_panel_skipped_search_match_lines_match=` (each panel match line matches an export `skipped_search_match label=… kind=… summary=…`)
