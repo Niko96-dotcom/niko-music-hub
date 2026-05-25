@@ -1,10 +1,20 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-40)
+## Picked (music-41)
+
+Mirror `root_health_badge=` in pasteable diagnostics export (parity with panel badge).
+
+## Completed (music-41)
+
+- `ArchiveDiagnosticsExporter.formattedText` emits `root_health_badge=` when `ArchiveDiagnosticsPanelContext.rootHealthBadge(for:)` is non-nil; omitted when healthy
+- Tests: `ArchiveDiagnosticsExporterTests` (healthy fixture omits line; invalid-root scan includes badge text)
+- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-40)
 
 Compact root-health badge in diagnostics panel when `globalWarnings` or invalid roots are present.
 
-## Completed (music-40)
+## Prior completed (music-40)
 
 - `ArchiveDiagnosticsPanelContext.rootHealthBadge(for:)` — nil when healthy; compact counts for invalid roots and global warnings
 - Panel header shows accent capsule badge (accessibility id `archive_diagnostics_root_health_badge`)
@@ -36,7 +46,7 @@ Prove `summary_line=` pasteable scan export in user-flow smoke and E2E (complete
 
 ## Next best TODO
 
-- E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate); optional: assert `archive_diagnostics_root_health_badge` on an invalid-root fixture path
+- User-flow/E2E: assert healthy export omits `root_health_badge=` and add invalid-root smoke path proving `root_health_badge=` + panel badge (`archive_diagnostics_root_health_badge`)
 - Search: collaborator/alias fields per SPEC §10 (needs metadata layer beyond sidecar notes)
 - Preview ranking: equal-score **version/extension** tiebreak in real scan is hard while those signals also bump score — consider decoupling score vs tiebreak in v0.2, or craft offset fixtures if product wants scan proof
-- Archive diagnostics export: mirror `root_health_badge=` in pasteable export for support tickets
+- E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
