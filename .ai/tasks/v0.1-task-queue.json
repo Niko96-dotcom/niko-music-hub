@@ -1,0 +1,463 @@
+{
+  "version": "0.1",
+  "created": "2026-05-25",
+  "critic_reviewed": "2026-05-25",
+  "planner": "composer-2.5",
+  "critic": "composer-2.5",
+  "mission": "Combine OutsideCubaseHub seed with Swift Cubase archive browser as Niko Music Hub",
+  "executor_first_slice": "01-fixtures-and-core-skeleton",
+  "authoritative_order_note": "Task queue executor_order overrides rename-first ordering in docs/niko-music-hub-composer-execution-plan.md Step 4",
+  "gates": {
+    "ci": "./script/ci.sh",
+    "e2e": "./script/e2e_user_smoke.sh",
+    "commit": "green local state only; no push unless asked"
+  },
+  "safety_boundaries": {
+    "read_only_archive_roots": true,
+    "never_modify_music_files": true,
+    "no_locus_paths": [
+      "/Users/nikolaymohr/locus",
+      "/Users/nikolaymohr/.hermes/worktrees/locus-*",
+      "/Users/nikolaymohr/.hermes/workers/locus-*"
+    ],
+    "macbook_read_only": true,
+    "no_electron_in_product": true,
+    "dry_run_open_for_fixtures_and_e2e": true
+  },
+  "non_goals": [
+    "Deep .cpr parsing",
+    "Electron/React/TypeScript runtime",
+    "SQLite migration from Electron app",
+    "File watcher / chokidar",
+    "JSON archive-cache.json persistence",
+    "Smart shelves (Recently Bounced, etc.)",
+    "Chorus/loudness preview start heuristics",
+    "New song creation",
+    "Virtual rename / collaborator metadata layer",
+    "Cloud sync",
+    "GitHub Actions",
+    "Code signing / notarization",
+    "Hermes worker fan-out"
+  ],
+  "critic_patches": [
+    "2026-05-25: slice 01 fixture generator + Second Song + test-quality rules",
+    "2026-05-25: slice 03 ranker scope narrowed to v0.1 subset",
+    "2026-05-25: slice 06 split-two-commits policy",
+    "2026-05-25: slices 07/11 mandatory CLI E2E hook (no pgrep-only)",
+    "2026-05-25: slice 12 write-probe required",
+    "2026-05-25: critic_checklist expanded"
+  ],
+  "slices": [
+    {
+      "id": "01-fixtures-and-core-skeleton",
+      "title": "Cubase fixtures + NikoMusicCore package skeleton",
+      "order": 1,
+      "depends_on": [],
+      "modules": [
+        "Fixtures/CubaseArchive",
+        "Sources/NikoMusicCore",
+        "Package.swift"
+      ],
+      "files_likely_touched": [
+        "script/fixtures/generate_cubase_archive_fixtures.sh",
+        "Fixtures/CubaseArchive/Neon Hook/Neon Hook.cpr",
+        "Fixtures/CubaseArchive/Neon Hook/Mixdown/Neon Hook v3.wav",
+        "Fixtures/CubaseArchive/Second Song/Second Song.cpr",
+        "Fixtures/CubaseArchive/Second Song/Mixdown/Second Song instr.wav",
+        "Fixtures/CubaseArchive/Broken Folder Example/notes.txt",
+        "Sources/NikoMusicCore/Domain/Song.swift",
+        "Sources/NikoMusicCore/Domain/ProjectVersion.swift",
+        "Sources/NikoMusicCore/Domain/PreviewCandidate.swift",
+        "Sources/NikoMusicCore/Domain/MusicRoot.swift",
+        "Sources/NikoMusicCore/Safety/PathSafety.swift",
+        "Sources/NikoMusicCore/Safety/ReadOnlyArchivePolicy.swift",
+        "Package.swift",
+        "Tests/NikoMusicCoreTests/PathSafetyTests.swift"
+      ],
+      "acceptance": [
+        "script/fixtures/generate_cubase_archive_fixtures.sh creates Neon Hook, Second Song (instr vs mix competing previews), and Broken Folder Example",
+        "WAV fixtures are minimal valid audio; CPR fixtures may be zero-byte placeholders with README note (no MacBook real project copy)",
+        "NikoMusicCore target builds with domain types and path safety helpers",
+        "PathSafety rejects paths outside declared roots",
+        "ReadOnlyArchivePolicy write-probe under fixture root fails closed",
+        "New NikoMusicCoreTests must not use String(contentsOf:) source string inspection"
+      ],
+      "tests": [
+        "Tests/NikoMusicCoreTests/PathSafetyTests.swift",
+        "Tests/NikoMusicCoreTests/ReadOnlyArchivePolicyTests.swift"
+      ],
+      "test_quality_rules": [
+        "No source.contains / source file reads in new archive tests",
+        "Assert filesystem and domain outputs only"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add Cubase fixtures and NikoMusicCore skeleton with path safety"
+    },
+    {
+      "id": "02-scanner-and-cpr-detection",
+      "title": "One-folder-one-song scanner and CPR detection",
+      "order": 2,
+      "depends_on": ["01-fixtures-and-core-skeleton"],
+      "modules": ["Sources/NikoMusicCore/Scanning"],
+      "files_likely_touched": [
+        "Sources/NikoMusicCore/Scanning/CubaseArchiveScanner.swift",
+        "Sources/NikoMusicCore/Scanning/CPRVersionDetector.swift",
+        "Sources/NikoMusicCore/Scanning/SongTitleResolver.swift",
+        "Tests/NikoMusicCoreTests/CubaseArchiveScannerTests.swift",
+        "Tests/NikoMusicCoreTests/CPRVersionDetectorTests.swift",
+        "Tests/NikoMusicCoreTests/Fixtures.swift"
+      ],
+      "acceptance": [
+        "Scanning fixture root yields one Song per immediate child folder",
+        "Neon Hook has >=1 CPR; Broken Folder Example produces scan warning, no CPR main",
+        "latestCPR selects max modification date, not filename version number"
+      ],
+      "tests": [
+        "Tests/NikoMusicCoreTests/CubaseArchiveScannerTests.swift",
+        "Tests/NikoMusicCoreTests/CPRVersionDetectorTests.swift"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Implement Cubase archive scanner and CPR version detection"
+    },
+    {
+      "id": "03-preview-detection-and-ranking",
+      "title": "Preview candidate detection and confidence ranking",
+      "order": 3,
+      "depends_on": ["02-scanner-and-cpr-detection"],
+      "modules": ["Sources/NikoMusicCore/Scanning"],
+      "files_likely_touched": [
+        "Sources/NikoMusicCore/Scanning/PreviewCandidateDetector.swift",
+        "Sources/NikoMusicCore/Scanning/PreviewConfidenceRanker.swift",
+        "Tests/NikoMusicCoreTests/PreviewCandidateDetectorTests.swift",
+        "Tests/NikoMusicCoreTests/PreviewConfidenceRankerTests.swift"
+      ],
+      "acceptance": [
+        "Detects wav/mp3/m4a/aiff/flac under Mixdown and song root",
+        "Neon Hook main preview prefers Mixdown full mix over stems/instrumental names",
+        "Second Song prefers full mix filename over instr stem when both exist",
+        "Negative filename tokens demote candidates (v0.1 subset: role + folder + filename + recency only)",
+        "Defer duration parsing, chorus start, and version-number tiebreaks"
+      ],
+      "tests": [
+        "Tests/NikoMusicCoreTests/PreviewCandidateDetectorTests.swift",
+        "Tests/NikoMusicCoreTests/PreviewConfidenceRankerTests.swift"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add preview detection and confidence ranking"
+    },
+    {
+      "id": "04-search-and-opener",
+      "title": "Search index and read-only CPR opener",
+      "order": 4,
+      "depends_on": ["03-preview-detection-and-ranking"],
+      "modules": [
+        "Sources/NikoMusicCore/Search",
+        "Sources/NikoMusicCore/Opening"
+      ],
+      "files_likely_touched": [
+        "Sources/NikoMusicCore/Search/MusicSearchIndex.swift",
+        "Sources/NikoMusicCore/Opening/MusicItemOpener.swift",
+        "Tests/NikoMusicCoreTests/MusicSearchIndexTests.swift",
+        "Tests/NikoMusicCoreTests/MusicItemOpenerTests.swift"
+      ],
+      "acceptance": [
+        "Search finds Neon Hook by title and by mixdown filename",
+        "MusicItemOpener dry-run records path without NSWorkspace.open",
+        "Non-dry-run path uses NSWorkspace (unit-tested via injectable opener port)"
+      ],
+      "tests": [
+        "Tests/NikoMusicCoreTests/MusicSearchIndexTests.swift",
+        "Tests/NikoMusicCoreTests/MusicItemOpenerTests.swift"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add music search index and dry-run-safe CPR opener"
+    },
+    {
+      "id": "05-core-self-test-cli",
+      "title": "NikoMusicCoreSelfTest CLI for fixture and real-root smoke",
+      "order": 5,
+      "depends_on": ["04-search-and-opener"],
+      "modules": ["Sources/NikoMusicCoreSelfTest"],
+      "files_likely_touched": [
+        "Sources/NikoMusicCoreSelfTest/main.swift",
+        "Package.swift",
+        "script/ci.sh"
+      ],
+      "acceptance": [
+        "swift run NikoMusicCoreSelfTest scans default fixture path and prints song/cpr/preview counts",
+        "Flags: --fixture-root, --real-root, --read-only",
+        "script/ci.sh runs self-test when target exists"
+      ],
+      "tests": [
+        "CI runs: swift run NikoMusicCoreSelfTest",
+        "Manual: swift run NikoMusicCoreSelfTest --real-root \"$ARCHIVE\" --read-only"
+      ],
+      "fixture_e2e": "CLI prints Neon Hook in fixture counts",
+      "real_archive_smoke": "Read-only mode prints counts; verifies zero writes under archive root (temp probe file test optional)",
+      "commit_message_hint": "Add NikoMusicCoreSelfTest CLI for fixture and read-only scans"
+    },
+    {
+      "id": "06-rename-to-niko-music-hub",
+      "title": "Rename package, app target, bundle, and Application Support paths",
+      "order": 6,
+      "depends_on": ["05-core-self-test-cli"],
+      "modules": [
+        "Package.swift",
+        "Sources/NikoMusicHub",
+        "script/build_and_run.sh"
+      ],
+      "files_likely_touched": [
+        "Package.swift",
+        "Sources/OutsideCubaseHub → Sources/NikoMusicHub",
+        "Sources/NikoMusicHub/NikoMusicHubApp.swift",
+        "Sources/NikoMusicHub/AppComposition.swift",
+        "script/build_and_run.sh",
+        "script/ci.sh",
+        "AGENTS.md"
+      ],
+      "commit_policy": "split-two-commits",
+      "acceptance": [
+        "Commit A: Package.swift + target/directory rename only; ./script/ci.sh green",
+        "Commit B: Application Support paths, build scripts, bundle id; ./script/ci.sh green again",
+        "swift build produces NikoMusicHub executable",
+        "dist/NikoMusicHub.app builds via build_and_run.sh",
+        "All pre-rename tests pass (same skip list for recorder)",
+        "No drive-by refactors in feature modules"
+      ],
+      "tests": [
+        "./script/ci.sh",
+        "Full swift test with documented skips"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Rename OutsideCubaseHub package and app to Niko Music Hub"
+    },
+    {
+      "id": "07-archive-feature-skeleton",
+      "title": "FeatureArchiveBrowser module and ToolFeature registration",
+      "order": 7,
+      "depends_on": ["06-rename-to-niko-music-hub"],
+      "modules": [
+        "Sources/FeatureArchiveBrowser",
+        "Sources/NikoMusicHub/AppComposition.swift",
+        "Package.swift"
+      ],
+      "files_likely_touched": [
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserFeature.swift",
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift",
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift",
+        "Sources/NikoMusicHub/AppComposition.swift",
+        "Sources/NikoMusicHub/AppShell/AppShellView.swift",
+        "Sources/NikoMusicHub/ArchiveSmokeCommands.swift",
+        "Package.swift",
+        "Tests/FeatureArchiveBrowserTests/ArchiveBrowserFeatureTests.swift",
+        "Tests/AppCoreTests/FeatureRegistryTests.swift"
+      ],
+      "acceptance": [
+        "archive-browser feature registers first in ToolRegistry",
+        "AppShellView default selection is archive-browser (not wav-converter)",
+        "Placeholder view renders without crashing",
+        "ArchiveSmokeCommands exposes env-driven fixture scan/search/open for automation (no UI required)"
+      ],
+      "tests": [
+        "Tests/FeatureArchiveBrowserTests/ArchiveBrowserFeatureTests.swift",
+        "Tests/AppCoreTests/FeatureRegistryTests.swift (extended)"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add archive browser feature skeleton and registry wiring"
+    },
+    {
+      "id": "08-archive-browse-and-search-ui",
+      "title": "Browse list, search, and root selection UI",
+      "order": 8,
+      "depends_on": ["07-archive-feature-skeleton"],
+      "modules": ["Sources/FeatureArchiveBrowser"],
+      "files_likely_touched": [
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift",
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift",
+        "Sources/FeatureArchiveBrowser/ArchiveDesignTokens.swift",
+        "Sources/FeatureArchiveBrowser/RootSelectionView.swift",
+        "Sources/AppCore/Settings/AppSettings.swift",
+        "Sources/AppCore/Settings/UserDefaultsSettingsStore.swift",
+        "Tests/FeatureArchiveBrowserTests/ArchiveBrowserViewModelTests.swift"
+      ],
+      "acceptance": [
+        "User can add/remove scan roots via NSOpenPanel",
+        "Scan button runs CubaseArchiveScanner on selected roots",
+        "Search field filters fixture songs live",
+        "Dark editorial tokens applied (background, surface, accent)"
+      ],
+      "tests": [
+        "Tests/FeatureArchiveBrowserTests/ArchiveBrowserViewModelTests.swift"
+      ],
+      "fixture_e2e": "planned — launch app, select fixture root env, see Neon Hook card",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Implement archive browse, search, and root selection UI"
+    },
+    {
+      "id": "09-song-detail-preview-play",
+      "title": "Song detail, preview playback, CPR version list",
+      "order": 9,
+      "depends_on": ["08-archive-browse-and-search-ui"],
+      "modules": ["Sources/FeatureArchiveBrowser"],
+      "files_likely_touched": [
+        "Sources/FeatureArchiveBrowser/SongDetailView.swift",
+        "Sources/FeatureArchiveBrowser/PreviewPlayerView.swift",
+        "Sources/FeatureArchiveBrowser/SongCardView.swift",
+        "Tests/FeatureArchiveBrowserTests/SongDetailViewModelTests.swift"
+      ],
+      "acceptance": [
+        "Detail shows all CPR versions sorted by date",
+        "Main preview plays via AVPlayer",
+        "Waveform area present (bar or placeholder per DESIGN_SYSTEM)",
+        "Selecting song from list navigates to detail"
+      ],
+      "tests": [
+        "Tests/FeatureArchiveBrowserTests/SongDetailViewModelTests.swift"
+      ],
+      "fixture_e2e": "Neon Hook detail shows preview + CPR filenames",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add song detail view with preview playback"
+    },
+    {
+      "id": "10-open-latest-dry-run",
+      "title": "Open latest CPR with dry-run mode for tests",
+      "order": 10,
+      "depends_on": ["09-song-detail-preview-play"],
+      "modules": [
+        "Sources/FeatureArchiveBrowser",
+        "Sources/NikoMusicCore/Opening"
+      ],
+      "files_likely_touched": [
+        "Sources/FeatureArchiveBrowser/SongDetailView.swift",
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift",
+        "Sources/NikoMusicHub/AppComposition.swift",
+        "Sources/AppCore/Diagnostics/Diagnostics.swift",
+        "Tests/FeatureArchiveBrowserTests/OpenLatestCPRTests.swift"
+      ],
+      "acceptance": [
+        "Open Latest button calls MusicItemOpener",
+        "NIKO_MUSIC_HUB_DRY_RUN_OPEN=1 logs expected Neon Hook.cpr path",
+        "Reveal in Finder action available as secondary"
+      ],
+      "tests": [
+        "Tests/FeatureArchiveBrowserTests/OpenLatestCPRTests.swift"
+      ],
+      "fixture_e2e": "Trigger open; assert dry-run log line matches fixture CPR path",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Wire open latest CPR with dry-run support for automation"
+    },
+    {
+      "id": "11-e2e-user-smoke-script",
+      "title": "Implement e2e_user_smoke.sh fixture launch path",
+      "order": 11,
+      "depends_on": ["10-open-latest-dry-run"],
+      "modules": ["script", "docs"],
+      "files_likely_touched": [
+        "script/e2e_user_smoke.sh",
+        "script/build_and_run.sh",
+        "docs/user-e2e.md"
+      ],
+      "acceptance": [
+        "e2e builds NikoMusicHub.app",
+        "Resets test Application Support directory",
+        "Runs ArchiveSmokeCommands or app --e2e-smoke with NIKO_MUSIC_HUB_FIXTURE_ROOT and NIKO_MUSIC_HUB_DRY_RUN_OPEN=1",
+        "Asserts stdout/log contains Neon Hook and fixture CPR path (dry-run)",
+        "pgrep-only success is forbidden",
+        "osascript/accessibility is optional supplement, not the sole gate",
+        "./script/e2e_user_smoke.sh exits 0"
+      ],
+      "tests": [
+        "./script/e2e_user_smoke.sh"
+      ],
+      "fixture_e2e": "Full user path: launch → fixture root → search Neon Hook → open latest dry-run",
+      "real_archive_smoke": "none",
+      "commit_message_hint": "Add fixture-based user E2E smoke script"
+    },
+    {
+      "id": "12-real-archive-readonly-smoke",
+      "title": "Document and verify real-archive read-only smoke",
+      "order": 12,
+      "depends_on": ["11-e2e-user-smoke-script"],
+      "modules": ["docs", "Sources/NikoMusicCoreSelfTest"],
+      "files_likely_touched": [
+        "docs/user-e2e.md",
+        "Sources/NikoMusicCoreSelfTest/main.swift",
+        "README.md"
+      ],
+      "acceptance": [
+        "docs/user-e2e.md documents real-root command with Niko-provided path placeholder",
+        "Self-test read-only mode completes without writing under scanned root",
+        "ReadOnlyArchivePolicyTests write-probe covers real-root policy semantics",
+        "Manual smoke checklist recorded in docs"
+      ],
+      "tests": [
+        "Tests/NikoMusicCoreTests/ReadOnlyArchivePolicyTests.swift (write-probe)",
+        "Manual: NikoMusicCoreSelfTest --real-root <path> --read-only",
+        "Optional: script/real_archive_smoke.sh wrapper"
+      ],
+      "fixture_e2e": "none",
+      "real_archive_smoke": "Operator runs against real Cubase archive; counts only; zero writes in archive tree",
+      "commit_message_hint": "Document real-archive read-only smoke procedure"
+    },
+    {
+      "id": "13-docs-and-dev-tool-cleanup",
+      "title": "README, user docs, dev-tool default cleanup",
+      "order": 13,
+      "depends_on": ["12-real-archive-readonly-smoke"],
+      "modules": ["docs", "Sources/NikoMusicHub"],
+      "files_likely_touched": [
+        "README.md",
+        "docs/product-scope.md",
+        "docs/architecture.md",
+        "Sources/NikoMusicHub/AppComposition.swift",
+        "Sources/NikoMusicHub/DevTool/DevToolFeature.swift"
+      ],
+      "acceptance": [
+        "README describes build, test, e2e, fixture layout",
+        "Dev tool not default; optional keep for diagnostics",
+        "All gates green: ci.sh + e2e_user_smoke.sh"
+      ],
+      "tests": [
+        "./script/ci.sh",
+        "./script/e2e_user_smoke.sh"
+      ],
+      "fixture_e2e": "full gate",
+      "real_archive_smoke": "documented",
+      "commit_message_hint": "Polish docs and finalize v0.1 dev-tool defaults"
+    }
+  ],
+  "executor_order": [
+    "01-fixtures-and-core-skeleton",
+    "02-scanner-and-cpr-detection",
+    "03-preview-detection-and-ranking",
+    "04-search-and-opener",
+    "05-core-self-test-cli",
+    "06-rename-to-niko-music-hub",
+    "07-archive-feature-skeleton",
+    "08-archive-browse-and-search-ui",
+    "09-song-detail-preview-play",
+    "10-open-latest-dry-run",
+    "11-e2e-user-smoke-script",
+    "12-real-archive-readonly-smoke",
+    "13-docs-and-dev-tool-cleanup"
+  ],
+  "critic_checklist": [
+    "No Electron/React imports in Sources/",
+    "No file writes under Fixtures/ or user archive paths in tests (write-probe must fail closed)",
+    "Fixtures generated via script; no MacBook real CPR/WAV copy",
+    "Rename slice preserves 154-test baseline (two commits in slice 06)",
+    "E2E asserts dry-run log content, not pgrep-only",
+    "ArchiveSmokeCommands or equivalent CLI required before v0.1 done",
+    "New archive tests: no String(contentsOf:) source inspection",
+    "v0.1 ranker subset only; no JSON archive cache",
+    "No LOCUS_* env or locus paths in scripts",
+    "CI skip list for recorder unchanged unless justified",
+    "MacBook read-only; INTERNET executor only"
+  ]
+}
