@@ -248,8 +248,19 @@ struct ArchiveDiagnosticsPanelView: View {
                 }
             }
 
-            diagnosticRow("Songs", value: "\(diagnostics.songCount)")
-            diagnosticRow("Song warnings", value: "\(diagnostics.songsWithWarningsCount) (\(diagnostics.totalSongWarningCount) total)")
+            diagnosticRow(
+                "Songs",
+                value: ArchiveDiagnosticsScanCountsPanelContext.panelSongsValue(
+                    songCount: diagnostics.songCount
+                )
+            )
+            diagnosticRow(
+                "Song warnings",
+                value: ArchiveDiagnosticsScanCountsPanelContext.panelSongWarningsValue(
+                    songsWithWarningsCount: diagnostics.songsWithWarningsCount,
+                    totalSongWarningCount: diagnostics.totalSongWarningCount
+                )
+            )
 
             let displayWarnings = diagnostics.displayGlobalWarnings()
             if !displayWarnings.isEmpty {

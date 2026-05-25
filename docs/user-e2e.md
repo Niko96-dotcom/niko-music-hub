@@ -48,6 +48,8 @@ After the fixture scan, the diagnostics panel lists **Skipped at roots** entries
 
 The **Songs with warnings** section lists each warning song (`Broken Folder Example: No CPR project files found` on the generated fixture). Smoke asserts each panel line matches export `song=` / `warning=` rows via `diagnostics_panel_song_warnings_lines_match=` and `songs_with_warnings=1`.
 
+The **Songs** and **Song warnings** count rows match export `songs=`, `songs_with_warnings=`, and `total_song_warnings=` via `diagnostics_panel_scan_counts_match=` (panel values `diagnostics_panel_scan_counts_songs=` / `diagnostics_panel_scan_counts_song_warnings=`).
+
 When a song search is active (fixture flow uses **neon hk**), the diagnostics panel shows **Active search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_search` block:
 
 - `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)

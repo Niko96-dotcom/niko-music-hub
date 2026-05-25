@@ -165,6 +165,9 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_panel_skipped_entries_lines_match=\(result.fixtureScanSkippedPanelLinesMatchExport)")
         print("[niko-music-hub-smoke] diagnostics_panel_song_warnings_lines=\(result.fixtureScanSongWarningsPanelLines)")
         print("[niko-music-hub-smoke] diagnostics_panel_song_warnings_lines_match=\(result.fixtureScanSongWarningsPanelLinesMatchExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_scan_counts_songs=\(result.fixtureScanCountsPanelSongsValue)")
+        print("[niko-music-hub-smoke] diagnostics_panel_scan_counts_song_warnings=\(result.fixtureScanCountsPanelSongWarningsValue)")
+        print("[niko-music-hub-smoke] diagnostics_panel_scan_counts_match=\(result.fixtureScanCountsPanelMatchExport)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_path=\(result.invalidRootDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_badge_match=\(result.invalidRootExportContainsRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge=\(result.invalidRootPanelRootHealthBadge)")
@@ -374,6 +377,9 @@ enum ArchiveSmokeCommands {
               result.fixtureScanSongWarningsPanelLines.contains("Broken Folder Example"),
               result.fixtureScanSongWarningsPanelLines.contains("No CPR project files found"),
               result.fixtureScanSongWarningsPanelLinesMatchExport,
+              result.fixtureScanCountsPanelSongsValue == "7",
+              result.fixtureScanCountsPanelSongWarningsValue == "1 (1 total)",
+              result.fixtureScanCountsPanelMatchExport,
               !result.invalidRootDiagnosticsExportPath.isEmpty,
               result.invalidRootExportContainsRootHealthBadge,
               !result.invalidRootPanelRootHealthBadge.isEmpty,
