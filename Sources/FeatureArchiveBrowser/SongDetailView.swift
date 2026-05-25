@@ -13,17 +13,27 @@ struct SongDetailView: View {
 
             PreviewPlayerView(url: mainPreviewURL)
 
-            if let mainPreview = mainPreviewCandidate {
+            if let mainSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Main preview: \(mainPreview.fileName)")
-                        .font(.system(size: 12, weight: .medium))
+                    Text("Main preview")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    if !mainPreview.confidenceReasons.isEmpty {
-                        Text(mainPreview.confidenceReasons.joined(separator: " · "))
-                            .font(.system(size: 10))
-                            .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                            .lineLimit(3)
-                    }
+                    Text(mainSummary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(4)
+                }
+            }
+
+            if song.previewCandidates.count > 1 {
+                Text("All previews (ranked)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                ForEach(PreviewRankingExplainability.rankedPreviewLines(for: song), id: \.self) { line in
+                    Text(line)
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(2)
                 }
             }
 

@@ -33,5 +33,8 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.dryRunLogLine?.contains("[dry-run] open CPR:") == true)
         XCTAssertTrue(result.searchMatchSummary.contains("neon"))
         XCTAssertTrue(result.searchMatchSummary.contains("hk"))
+        XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"))
+        XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("v3"))
+        XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("wav"))
     }
 }
