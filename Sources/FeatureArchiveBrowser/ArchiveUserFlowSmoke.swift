@@ -21,6 +21,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabMainPreviewSummary: String
     public let rankingLabDiagnosticsExportPath: String
     public let rankingLabDiagnosticsExportContainsMatch: Bool
+    public let rankingLabPanelScanCallout: String
+    public let rankingLabPanelScanCalloutMatchesExport: Bool
+    public let rankingLabPanelSelectedHeader: String
+    public let rankingLabPanelSelectedHeaderMatchesExport: Bool
     public let tiebreakLabDiagnosticsExportPath: String
     public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
     public let tiebreakPanelPreviewRankingHeader: String
@@ -115,6 +119,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         rankingLabMainPreviewSummary: String,
         rankingLabDiagnosticsExportPath: String,
         rankingLabDiagnosticsExportContainsMatch: Bool,
+        rankingLabPanelScanCallout: String,
+        rankingLabPanelScanCalloutMatchesExport: Bool,
+        rankingLabPanelSelectedHeader: String,
+        rankingLabPanelSelectedHeaderMatchesExport: Bool,
         tiebreakLabDiagnosticsExportPath: String,
         tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
         tiebreakPanelPreviewRankingHeader: String,
@@ -207,6 +215,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
         self.rankingLabDiagnosticsExportPath = rankingLabDiagnosticsExportPath
         self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
+        self.rankingLabPanelScanCallout = rankingLabPanelScanCallout
+        self.rankingLabPanelScanCalloutMatchesExport = rankingLabPanelScanCalloutMatchesExport
+        self.rankingLabPanelSelectedHeader = rankingLabPanelSelectedHeader
+        self.rankingLabPanelSelectedHeaderMatchesExport = rankingLabPanelSelectedHeaderMatchesExport
         self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
         self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
         self.tiebreakPanelPreviewRankingHeader = tiebreakPanelPreviewRankingHeader
@@ -293,6 +305,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case missingRankingLabPreviewSummary
     case rankingLabDiagnosticsExportFailed
     case rankingLabDiagnosticsExportMissingMatch
+    case rankingLabPanelPreviewRankingMismatch
     case tiebreakLabNotFound
     case tiebreakLabDiagnosticsExportFailed
     case tiebreakLabDiagnosticsExportMissingTiebreak
@@ -467,6 +480,30 @@ public enum ArchiveUserFlowSmoke {
             && rankingLabExportText.contains("preview_ranking_selected_header=")
         guard exportContainsRankingLabMatch else {
             throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
+        }
+
+        let panelRankingLabScanCallout = diagnostics.previewRankingPanel.scanHeaderCallout ?? ""
+        let panelRankingLabSelectedHeader =
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: rankingLab) ?? ""
+        let exportRankingLabScanCallout = Self.exportLineValue(
+            prefix: "preview_ranking_scan_callout=",
+            in: rankingLabExportText
+        ) ?? ""
+        let exportRankingLabSelectedHeader = Self.exportLineValue(
+            prefix: "preview_ranking_selected_header=",
+            in: rankingLabExportText
+        ) ?? ""
+        let rankingLabPanelScanCalloutMatchesExport =
+            !panelRankingLabScanCallout.isEmpty
+            && panelRankingLabScanCallout == exportRankingLabScanCallout
+            && panelRankingLabScanCallout.contains("too short")
+        let rankingLabPanelSelectedHeaderMatchesExport =
+            !panelRankingLabSelectedHeader.isEmpty
+            && panelRankingLabSelectedHeader == exportRankingLabSelectedHeader
+            && panelRankingLabSelectedHeader.contains("Lab Song v3 mix.wav")
+        guard rankingLabPanelScanCalloutMatchesExport,
+              rankingLabPanelSelectedHeaderMatchesExport else {
+            throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
         guard let tiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Duration Tiebreak" }) else {
@@ -823,6 +860,10 @@ public enum ArchiveUserFlowSmoke {
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
             rankingLabDiagnosticsExportPath: rankingLabExportPath,
             rankingLabDiagnosticsExportContainsMatch: exportContainsRankingLabMatch,
+            rankingLabPanelScanCallout: panelRankingLabScanCallout,
+            rankingLabPanelScanCalloutMatchesExport: rankingLabPanelScanCalloutMatchesExport,
+            rankingLabPanelSelectedHeader: panelRankingLabSelectedHeader,
+            rankingLabPanelSelectedHeaderMatchesExport: rankingLabPanelSelectedHeaderMatchesExport,
             tiebreakLabDiagnosticsExportPath: tiebreakLabExportPath,
             tiebreakLabDiagnosticsExportContainsTiebreak: exportContainsTiebreak,
             tiebreakPanelPreviewRankingHeader: panelDurationTiebreakHeader,

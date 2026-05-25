@@ -1,20 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-54)
+## Picked (music-55)
 
-Diagnostics panel: prove version and extension preview tiebreak callouts match export (`preview_rank_tiebreak=`) on their fixtures — parity gap after duration tiebreak panel proof in music-53.
+Diagnostics panel: prove Preview Ranking Lab scan callout and selected header match export (`preview_ranking_scan_callout=`, `preview_ranking_selected_header=`) — parity gap after tiebreak panel proofs in music-53/54.
 
-## Completed (music-54)
+## Completed (music-55)
 
-- `ArchiveUserFlowSmoke` panel/export parity for **Equal Score Version Tiebreak** and **Equal Score Extension Tiebreak** callouts
-- Smoke stdout: `diagnostics_panel_version_tiebreak_callout_match=`, `diagnostics_panel_extension_tiebreak_callout_match=`
-- E2E asserts panel callout text equals export `preview_rank_tiebreak=` on both fixtures
-- `docs/user-e2e.md` documents version/extension tiebreak parity markers
+- `ArchiveUserFlowSmoke` panel/export parity for **Preview Ranking Lab** scan callout and selected header
+- Smoke stdout: `diagnostics_panel_ranking_scan_callout_match=`, `diagnostics_panel_ranking_selected_header_match=`
+- E2E asserts panel strings equal export `preview_ranking_scan_callout=` and `preview_ranking_selected_header=`
+- Unit test: scan header callout matches exporter line
+- `docs/user-e2e.md` documents ranking-lab parity markers
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-53)
+## Prior (music-54)
 
-Diagnostics panel: dedicated preview tiebreak callout when a song is selected (export `preview_rank_tiebreak=` parity) and user-flow/E2E proof that panel selected header + callout match export on the duration tiebreak fixture.
+Diagnostics panel: prove version and extension preview tiebreak callouts match export (`preview_rank_tiebreak=`) on their fixtures — parity gap after duration tiebreak panel proof in music-53.
 
 ## Next best TODO
 
