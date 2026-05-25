@@ -47,6 +47,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] preview_rank_summary=\(result.rankingLabMainPreviewSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_ranking_path=\(result.rankingLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_ranking_match=\(result.rankingLabDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_scan_callout=\(result.rankingLabPanelScanCallout)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_scan_callout_match=\(result.rankingLabPanelScanCalloutMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_selected_header=\(result.rankingLabPanelSelectedHeader)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_selected_header_match=\(result.rankingLabPanelSelectedHeaderMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_path=\(result.tiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_match=\(result.tiebreakLabDiagnosticsExportContainsTiebreak)")
         print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_header=\(result.tiebreakPanelPreviewRankingHeader)")
@@ -146,6 +150,12 @@ enum ArchiveSmokeCommands {
               result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"),
               !result.rankingLabDiagnosticsExportPath.isEmpty,
               result.rankingLabDiagnosticsExportContainsMatch,
+              !result.rankingLabPanelScanCallout.isEmpty,
+              result.rankingLabPanelScanCallout.contains("too short"),
+              result.rankingLabPanelScanCalloutMatchesExport,
+              !result.rankingLabPanelSelectedHeader.isEmpty,
+              result.rankingLabPanelSelectedHeader.contains("Lab Song v3 mix.wav"),
+              result.rankingLabPanelSelectedHeaderMatchesExport,
               !result.tiebreakLabDiagnosticsExportPath.isEmpty,
               result.tiebreakLabDiagnosticsExportContainsTiebreak,
               !result.tiebreakPanelPreviewRankingHeader.isEmpty,

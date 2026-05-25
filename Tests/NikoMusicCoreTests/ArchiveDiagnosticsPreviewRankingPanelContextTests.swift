@@ -20,6 +20,21 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         XCTAssertTrue(context.scanHeaderCallout?.contains("too short") == true)
     }
 
+    func testScanHeaderCalloutMatchesExporterLine() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let callout = try XCTUnwrap(diagnostics.previewRankingPanel.scanHeaderCallout)
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil
+        )
+        XCTAssertTrue(exportText.contains("preview_ranking_scan_callout=\(callout)"))
+    }
+
     func testSelectedSongHeaderForRankingLab() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])

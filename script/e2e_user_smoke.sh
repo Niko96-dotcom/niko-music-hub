@@ -133,6 +133,38 @@ if ! grep -q "preview_ranking_selected_header=" "$RANKING_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_ranking_scan_callout_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab panel scan callout missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_SCAN_CALLOUT="$(grep -m1 'diagnostics_panel_ranking_scan_callout=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_scan_callout=//')"
+if [[ -z "$PANEL_RANKING_SCAN_CALLOUT" ]]; then
+  echo "E2E failed: ranking lab panel scan callout missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_ranking_scan_callout=${PANEL_RANKING_SCAN_CALLOUT}" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: export preview_ranking_scan_callout does not match panel callout" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_ranking_selected_header_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab panel selected header missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_SELECTED_HEADER="$(grep -m1 'diagnostics_panel_ranking_selected_header=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_selected_header=//')"
+if [[ -z "$PANEL_RANKING_SELECTED_HEADER" ]]; then
+  echo "E2E failed: ranking lab panel selected header missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_ranking_selected_header=${PANEL_RANKING_SELECTED_HEADER}" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: export preview_ranking_selected_header does not match panel header" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: equal-score tiebreak diagnostics export missing active match marker" >&2
   exit 1
