@@ -91,6 +91,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] warning_search_summary=\(result.warningSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_warning_path=\(result.warningSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_warning_match=\(result.warningSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_warning_search_query_line=\(result.warningSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_warning_search_query_line_match=\(result.warningSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_warning_search_match_lines=\(result.warningSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_warning_search_match_lines_match=\(result.warningSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] fuzzy_warning_search_query=\(result.fuzzyWarningSearchQuery)")
         print("[niko-music-hub-smoke] fuzzy_warning_search_matches=\(result.fuzzyWarningSearchMatchCount)")
         print("[niko-music-hub-smoke] fuzzy_warning_search_match=\(result.fuzzyWarningSearchMatchTitle)")
@@ -107,24 +111,40 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] notes_search_summary=\(result.notesSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_notes_path=\(result.notesSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_notes_match=\(result.notesSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_notes_search_query_line=\(result.notesSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_notes_search_query_line_match=\(result.notesSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_notes_search_match_lines=\(result.notesSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_notes_search_match_lines_match=\(result.notesSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] folder_search_query=\(result.folderSearchQuery)")
         print("[niko-music-hub-smoke] folder_search_matches=\(result.folderSearchMatchCount)")
         print("[niko-music-hub-smoke] folder_search_match=\(result.folderSearchMatchTitle)")
         print("[niko-music-hub-smoke] folder_search_summary=\(result.folderSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_folder_path=\(result.folderSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_folder_match=\(result.folderSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_folder_search_query_line=\(result.folderSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_folder_search_query_line_match=\(result.folderSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_folder_search_match_lines=\(result.folderSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_folder_search_match_lines_match=\(result.folderSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] cpr_search_query=\(result.cprSearchQuery)")
         print("[niko-music-hub-smoke] cpr_search_matches=\(result.cprSearchMatchCount)")
         print("[niko-music-hub-smoke] cpr_search_match=\(result.cprSearchMatchTitle)")
         print("[niko-music-hub-smoke] cpr_search_summary=\(result.cprSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_cpr_path=\(result.cprSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_cpr_match=\(result.cprSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_cpr_search_query_line=\(result.cprSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_cpr_search_query_line_match=\(result.cprSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_cpr_search_match_lines=\(result.cprSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_cpr_search_match_lines_match=\(result.cprSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] preview_search_query=\(result.previewSearchQuery)")
         print("[niko-music-hub-smoke] preview_search_matches=\(result.previewSearchMatchCount)")
         print("[niko-music-hub-smoke] preview_search_match=\(result.previewSearchMatchTitle)")
         print("[niko-music-hub-smoke] preview_search_summary=\(result.previewSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_preview_path=\(result.previewSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_preview_match=\(result.previewSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_preview_search_query_line=\(result.previewSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_preview_search_query_line_match=\(result.previewSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_preview_search_match_lines=\(result.previewSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_preview_search_match_lines_match=\(result.previewSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] skipped_search_query=\(result.skippedSearchQuery)")
         print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
         print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
@@ -237,6 +257,13 @@ enum ArchiveSmokeCommands {
               result.warningSearchMatchSummary.contains("project"),
               !result.warningSearchDiagnosticsExportPath.isEmpty,
               result.warningSearchDiagnosticsExportContainsMatch,
+              !result.warningSearchPanelQueryLine.isEmpty,
+              result.warningSearchPanelQueryLine.contains("project"),
+              result.warningSearchPanelQueryLineMatchesExport,
+              !result.warningSearchPanelMatchLines.isEmpty,
+              result.warningSearchPanelMatchLines.contains("Broken Folder Example"),
+              result.warningSearchPanelMatchLines.contains("scan warning"),
+              result.warningSearchPanelMatchLinesMatchExport,
               result.fuzzyWarningSearchQuery == "ncpr fnd",
               result.fuzzyWarningSearchMatchCount == 1,
               result.fuzzyWarningSearchMatchTitle == "Broken Folder Example",
@@ -260,6 +287,13 @@ enum ArchiveSmokeCommands {
               result.notesSearchMatchSummary.contains("nly"),
               !result.notesSearchDiagnosticsExportPath.isEmpty,
               result.notesSearchDiagnosticsExportContainsMatch,
+              !result.notesSearchPanelQueryLine.isEmpty,
+              result.notesSearchPanelQueryLine.contains("nts nly"),
+              result.notesSearchPanelQueryLineMatchesExport,
+              !result.notesSearchPanelMatchLines.isEmpty,
+              result.notesSearchPanelMatchLines.contains("Broken Folder Example"),
+              result.notesSearchPanelMatchLines.contains("fuzzy song note"),
+              result.notesSearchPanelMatchLinesMatchExport,
               result.folderSearchQuery == "brkn fld",
               result.folderSearchMatchCount == 1,
               result.folderSearchMatchTitle == "Broken Folder Example",
@@ -268,6 +302,13 @@ enum ArchiveSmokeCommands {
               result.folderSearchMatchSummary.contains("fld"),
               !result.folderSearchDiagnosticsExportPath.isEmpty,
               result.folderSearchDiagnosticsExportContainsMatch,
+              !result.folderSearchPanelQueryLine.isEmpty,
+              result.folderSearchPanelQueryLine.contains("brkn fld"),
+              result.folderSearchPanelQueryLineMatchesExport,
+              !result.folderSearchPanelMatchLines.isEmpty,
+              result.folderSearchPanelMatchLines.contains("Broken Folder Example"),
+              result.folderSearchPanelMatchLines.contains("fuzzy folder"),
+              result.folderSearchPanelMatchLinesMatchExport,
               result.cprSearchQuery == "neohkv2",
               result.cprSearchMatchCount == 1,
               result.cprSearchMatchTitle == "Neon Hook",
@@ -275,6 +316,13 @@ enum ArchiveSmokeCommands {
               result.cprSearchMatchSummary.contains("neohkv2"),
               !result.cprSearchDiagnosticsExportPath.isEmpty,
               result.cprSearchDiagnosticsExportContainsMatch,
+              !result.cprSearchPanelQueryLine.isEmpty,
+              result.cprSearchPanelQueryLine.contains("neohkv2"),
+              result.cprSearchPanelQueryLineMatchesExport,
+              !result.cprSearchPanelMatchLines.isEmpty,
+              result.cprSearchPanelMatchLines.contains("Neon Hook"),
+              result.cprSearchPanelMatchLines.contains("fuzzy CPR file"),
+              result.cprSearchPanelMatchLinesMatchExport,
               result.previewSearchQuery == "ranking lab v3 mx",
               result.previewSearchMatchCount >= 1,
               result.previewSearchMatchTitle == "Preview Ranking Lab",
@@ -283,6 +331,13 @@ enum ArchiveSmokeCommands {
               result.previewSearchMatchSummary.contains("mx"),
               !result.previewSearchDiagnosticsExportPath.isEmpty,
               result.previewSearchDiagnosticsExportContainsMatch,
+              !result.previewSearchPanelQueryLine.isEmpty,
+              result.previewSearchPanelQueryLine.contains("ranking lab v3 mx"),
+              result.previewSearchPanelQueryLineMatchesExport,
+              !result.previewSearchPanelMatchLines.isEmpty,
+              result.previewSearchPanelMatchLines.contains("Preview Ranking Lab"),
+              result.previewSearchPanelMatchLines.contains("fuzzy preview file"),
+              result.previewSearchPanelMatchLinesMatchExport,
               result.skippedSearchQuery == "LOOSE_FILE.txt",
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",
