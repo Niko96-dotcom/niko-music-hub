@@ -154,6 +154,32 @@ if ! grep -q "preview_rank_tiebreak=Equal score — longer preview" "$TIEBREAK_E
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_duration_tiebreak_header_match=true" "$LOG_FILE"; then
+  echo "E2E failed: duration tiebreak panel header missing export parity marker" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_duration_tiebreak_callout_match=true" "$LOG_FILE"; then
+  echo "E2E failed: duration tiebreak panel callout missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_DURATION_TIEBREAK_CALLOUT="$(grep -m1 'diagnostics_panel_duration_tiebreak_callout=' "$LOG_FILE" | sed 's/.*diagnostics_panel_duration_tiebreak_callout=//')"
+if [[ -z "$PANEL_DURATION_TIEBREAK_CALLOUT" ]]; then
+  echo "E2E failed: duration tiebreak panel callout missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=${PANEL_DURATION_TIEBREAK_CALLOUT}" "$TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: export preview_rank_tiebreak does not match panel callout" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_preview_tiebreak_id=archive_diagnostics_preview_tiebreak_callout" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel preview tiebreak accessibility id missing from smoke output" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_version_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: version tiebreak diagnostics export missing active match marker" >&2
   exit 1

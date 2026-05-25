@@ -78,6 +78,41 @@ final class PreviewRankingTiebreakTests: XCTestCase {
         XCTAssertTrue(header?.contains("Equal score — longer preview") == true)
     }
 
+    func testSelectedSongHeaderDoesNotDuplicateTiebreakCallout() {
+        let longer = candidate(name: "Song long.wav", duration: 200)
+        let shorter = candidate(name: "Song short.wav", duration: 180)
+        let ranked = ranker.rank([shorter, longer])
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/fixture/Tiebreak Lab"),
+            originalFolderName: "Tiebreak Lab",
+            displayTitle: "Tiebreak Lab",
+            previewCandidates: ranked,
+            mainPreviewCandidateID: ranked.first?.id
+        )
+        guard let header = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: song) else {
+            return XCTFail("expected selected song header")
+        }
+        let needle = "Equal score — longer preview"
+        XCTAssertEqual(header.components(separatedBy: needle).count - 1, 1)
+    }
+
+    func testSelectedSongPreviewTiebreakCalloutMatchesExplainability() {
+        let longer = candidate(name: "Song long.wav", duration: 200)
+        let shorter = candidate(name: "Song short.wav", duration: 180)
+        let ranked = ranker.rank([shorter, longer])
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/fixture/Tiebreak Lab"),
+            originalFolderName: "Tiebreak Lab",
+            displayTitle: "Tiebreak Lab",
+            previewCandidates: ranked,
+            mainPreviewCandidateID: ranked.first?.id
+        )
+        XCTAssertEqual(
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: song),
+            PreviewRankingExplainability.tiebreakCallout(for: song)
+        )
+    }
+
     // MARK: - Helpers
 
     private func candidate(name: String, duration: Double) -> PreviewCandidate {

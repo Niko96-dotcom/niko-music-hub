@@ -23,6 +23,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabDiagnosticsExportContainsMatch: Bool
     public let tiebreakLabDiagnosticsExportPath: String
     public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
+    public let tiebreakPanelPreviewRankingHeader: String
+    public let tiebreakPanelPreviewRankingHeaderMatchesExport: Bool
+    public let tiebreakPanelPreviewTiebreakCallout: String
+    public let tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool
     public let versionTiebreakLabDiagnosticsExportPath: String
     public let versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
     public let extensionTiebreakLabDiagnosticsExportPath: String
@@ -109,6 +113,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         rankingLabDiagnosticsExportContainsMatch: Bool,
         tiebreakLabDiagnosticsExportPath: String,
         tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
+        tiebreakPanelPreviewRankingHeader: String,
+        tiebreakPanelPreviewRankingHeaderMatchesExport: Bool,
+        tiebreakPanelPreviewTiebreakCallout: String,
+        tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool,
         versionTiebreakLabDiagnosticsExportPath: String,
         versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
         extensionTiebreakLabDiagnosticsExportPath: String,
@@ -193,6 +201,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
         self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
         self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
+        self.tiebreakPanelPreviewRankingHeader = tiebreakPanelPreviewRankingHeader
+        self.tiebreakPanelPreviewRankingHeaderMatchesExport = tiebreakPanelPreviewRankingHeaderMatchesExport
+        self.tiebreakPanelPreviewTiebreakCallout = tiebreakPanelPreviewTiebreakCallout
+        self.tiebreakPanelPreviewTiebreakCalloutMatchesExport = tiebreakPanelPreviewTiebreakCalloutMatchesExport
         self.versionTiebreakLabDiagnosticsExportPath = versionTiebreakLabDiagnosticsExportPath
         self.versionTiebreakLabDiagnosticsExportContainsTiebreak = versionTiebreakLabDiagnosticsExportContainsTiebreak
         self.extensionTiebreakLabDiagnosticsExportPath = extensionTiebreakLabDiagnosticsExportPath
@@ -272,6 +284,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case tiebreakLabNotFound
     case tiebreakLabDiagnosticsExportFailed
     case tiebreakLabDiagnosticsExportMissingTiebreak
+    case tiebreakLabPanelPreviewRankingMismatch
     case versionTiebreakLabNotFound
     case versionTiebreakLabDiagnosticsExportFailed
     case versionTiebreakLabDiagnosticsExportMissingTiebreak
@@ -458,6 +471,30 @@ public enum ArchiveUserFlowSmoke {
             && tiebreakLabExportText.contains("Tie Song mix long.wav")
         guard exportContainsTiebreak else {
             throw ArchiveUserFlowSmokeError.tiebreakLabDiagnosticsExportMissingTiebreak
+        }
+
+        let panelDurationTiebreakHeader =
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: tiebreakLab) ?? ""
+        let panelDurationTiebreakCallout =
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: tiebreakLab) ?? ""
+        let exportDurationTiebreakHeader = Self.exportLineValue(
+            prefix: "preview_ranking_selected_header=",
+            in: tiebreakLabExportText
+        ) ?? ""
+        let exportDurationTiebreakCallout = Self.exportLineValue(
+            prefix: "preview_rank_tiebreak=",
+            in: tiebreakLabExportText
+        ) ?? ""
+        let durationTiebreakPanelHeaderMatchesExport =
+            !panelDurationTiebreakHeader.isEmpty
+            && panelDurationTiebreakHeader == exportDurationTiebreakHeader
+        let durationTiebreakPanelCalloutMatchesExport =
+            !panelDurationTiebreakCallout.isEmpty
+            && panelDurationTiebreakCallout == exportDurationTiebreakCallout
+            && panelDurationTiebreakCallout.contains("Equal score — longer preview")
+        guard durationTiebreakPanelHeaderMatchesExport,
+              durationTiebreakPanelCalloutMatchesExport else {
+            throw ArchiveUserFlowSmokeError.tiebreakLabPanelPreviewRankingMismatch
         }
 
         guard let versionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Version Tiebreak" }) else {
@@ -746,6 +783,10 @@ public enum ArchiveUserFlowSmoke {
             rankingLabDiagnosticsExportContainsMatch: exportContainsRankingLabMatch,
             tiebreakLabDiagnosticsExportPath: tiebreakLabExportPath,
             tiebreakLabDiagnosticsExportContainsTiebreak: exportContainsTiebreak,
+            tiebreakPanelPreviewRankingHeader: panelDurationTiebreakHeader,
+            tiebreakPanelPreviewRankingHeaderMatchesExport: durationTiebreakPanelHeaderMatchesExport,
+            tiebreakPanelPreviewTiebreakCallout: panelDurationTiebreakCallout,
+            tiebreakPanelPreviewTiebreakCalloutMatchesExport: durationTiebreakPanelCalloutMatchesExport,
             versionTiebreakLabDiagnosticsExportPath: versionTiebreakLabExportPath,
             versionTiebreakLabDiagnosticsExportContainsTiebreak: exportContainsVersionTiebreak,
             extensionTiebreakLabDiagnosticsExportPath: extensionTiebreakLabExportPath,
@@ -982,6 +1023,13 @@ public enum ArchiveUserFlowSmoke {
             lines.append("\(relative)|\(size)|\(modified)")
         }
         return lines.sorted()
+    }
+
+    private static func exportLineValue(prefix: String, in text: String) -> String? {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .first { $0.hasPrefix(prefix) }
+            .map { String($0.dropFirst(prefix.count)) }
     }
 }
 
