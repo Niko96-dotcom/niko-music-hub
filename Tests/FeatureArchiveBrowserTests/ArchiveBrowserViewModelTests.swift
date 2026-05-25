@@ -36,5 +36,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
         )
         XCTAssertFalse(diagnostics.summaryLine.isEmpty)
+        XCTAssertFalse(diagnostics.displayRootPaths().isEmpty)
+        XCTAssertTrue(
+            diagnostics.displayRootPaths().first?.contains("CubaseArchive") == true
+                || diagnostics.displayRootPaths().first?.hasPrefix("~") == true
+        )
     }
 }
