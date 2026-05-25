@@ -646,6 +646,16 @@ if ! grep -q "summary_line_song_warning_titles_omitted=3" "$SUMMARY_TRUNCATION_E
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_summary_truncation_footnote_match=true" "$LOG_FILE"; then
+  echo "E2E failed: summary truncation panel footnote missing active match marker" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_summary_truncation_footnote=Support summary shows 5 warning song titles; 3 more listed below." "$LOG_FILE"; then
+  echo "E2E failed: summary truncation panel footnote missing expected text" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_panel_support_summary=roots:" "$LOG_FILE"; then
   echo "E2E failed: diagnostics panel support summary missing roots prefix" >&2
   exit 1

@@ -84,6 +84,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let invalidRootPanelBadgeMatchesExport: Bool
     public let summaryTruncationDiagnosticsExportPath: String
     public let summaryTruncationDiagnosticsExportContainsTruncation: Bool
+    public let summaryTruncationPanelFootnote: String
+    public let summaryTruncationPanelFootnoteMatchesDiagnostics: Bool
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
@@ -167,6 +169,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         invalidRootPanelBadgeMatchesExport: Bool,
         summaryTruncationDiagnosticsExportPath: String,
         summaryTruncationDiagnosticsExportContainsTruncation: Bool,
+        summaryTruncationPanelFootnote: String,
+        summaryTruncationPanelFootnoteMatchesDiagnostics: Bool,
         skippedSearchDiagnosticsExportPath: String,
         skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
@@ -250,6 +254,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.summaryTruncationDiagnosticsExportPath = summaryTruncationDiagnosticsExportPath
         self.summaryTruncationDiagnosticsExportContainsTruncation =
             summaryTruncationDiagnosticsExportContainsTruncation
+        self.summaryTruncationPanelFootnote = summaryTruncationPanelFootnote
+        self.summaryTruncationPanelFootnoteMatchesDiagnostics =
+            summaryTruncationPanelFootnoteMatchesDiagnostics
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
@@ -314,6 +321,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case summaryTruncationRootMissing
     case summaryTruncationDiagnosticsExportFailed
     case summaryTruncationDiagnosticsExportMissingTruncation
+    case summaryTruncationPanelFootnoteMissing
+    case summaryTruncationPanelFootnoteMismatch
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
 }
@@ -798,6 +807,9 @@ public enum ArchiveUserFlowSmoke {
             summaryTruncationDiagnosticsExportPath: summaryTruncationHealth.exportPath,
             summaryTruncationDiagnosticsExportContainsTruncation:
                 summaryTruncationHealth.exportContainsTruncation,
+            summaryTruncationPanelFootnote: summaryTruncationHealth.panelFootnote,
+            summaryTruncationPanelFootnoteMatchesDiagnostics:
+                summaryTruncationHealth.panelFootnoteMatchesDiagnostics,
             skippedSearchDiagnosticsExportPath: exportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )
@@ -813,6 +825,8 @@ public enum ArchiveUserFlowSmoke {
     private struct SummaryTruncationCheckResult: Sendable {
         let exportPath: String
         let exportContainsTruncation: Bool
+        let panelFootnote: String
+        let panelFootnoteMatchesDiagnostics: Bool
     }
 
     private static func runSummaryTruncationCheck(
@@ -864,9 +878,20 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
         }
 
+        let panelContext = ArchiveDiagnosticsPanelContext.from(diagnostics)
+        guard let panelFootnote = panelContext.supportSummaryTruncationFootnote,
+              !panelFootnote.isEmpty else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMissing
+        }
+        guard panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMismatch
+        }
+
         return SummaryTruncationCheckResult(
             exportPath: exportPath,
-            exportContainsTruncation: exportContainsTruncation
+            exportContainsTruncation: exportContainsTruncation,
+            panelFootnote: panelFootnote,
+            panelFootnoteMatchesDiagnostics: true
         )
     }
 

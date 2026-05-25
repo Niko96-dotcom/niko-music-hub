@@ -1,20 +1,19 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-51)
+## Picked (music-52)
 
-E2E/user-flow proof of `summary_line` song-title truncation when many songs have warnings (unit tests existed; fixture smoke did not).
+Diagnostics panel: surface support-summary truncation footnote when many songs have warnings (export metadata existed; in-app panel had no operator hint).
 
-## Completed (music-51)
+## Completed (music-52)
 
-- `Fixtures/CubaseArchiveSummaryTruncation/` — eight CPR-less songs for deterministic truncation lab
-- `ArchiveUserFlowSmoke` scans truncation lab in isolation and asserts export `summary_line` + metadata
-- `ArchiveScanDiagnosticsSummaryTruncationFixtureTests` (core scan/builder)
-- E2E: `diagnostics_export_summary_truncation_*` markers and export file assertions
+- `ArchiveScanDiagnostics.summaryLineSongWarningTitlesTruncationFootnote` + `ArchiveDiagnosticsPanelContext.supportSummaryTruncationFootnote`
+- `ArchiveDiagnosticsPanelView` shows footnote under **Support summary** when truncated
+- User-flow smoke + E2E: `diagnostics_panel_summary_truncation_footnote_*` markers on truncation lab
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-50)
+## Prior (music-51)
 
-Diagnostics: export explicit truncation metadata when `summary_line` omits song warning titles beyond the cap.
+E2E/user-flow proof of `summary_line` song-title truncation when many songs have warnings (unit tests existed; fixture smoke did not).
 
 ## Next best TODO
 

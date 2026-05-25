@@ -55,6 +55,13 @@ struct ArchiveDiagnosticsPanelView: View {
                 .textSelection(.enabled)
                 .lineLimit(4)
 
+            if let footnote = panelContext.supportSummaryTruncationFootnote {
+                Text(footnote)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(2)
+            }
+
             Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)
                 .font(.system(size: 10))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)

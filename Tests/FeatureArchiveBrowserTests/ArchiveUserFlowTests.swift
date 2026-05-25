@@ -131,5 +131,10 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.skippedSearchDiagnosticsExportContainsMatch)
         XCTAssertFalse(result.summaryTruncationDiagnosticsExportPath.isEmpty)
         XCTAssertTrue(result.summaryTruncationDiagnosticsExportContainsTruncation)
+        XCTAssertEqual(
+            result.summaryTruncationPanelFootnote,
+            "Support summary shows 5 warning song titles; 3 more listed below."
+        )
+        XCTAssertTrue(result.summaryTruncationPanelFootnoteMatchesDiagnostics)
     }
 }
