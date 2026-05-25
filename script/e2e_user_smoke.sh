@@ -1018,8 +1018,35 @@ if [[ -z "$PANEL_SONG_WARNINGS_LINES" ]]; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_scan_counts_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel scan counts missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SCAN_COUNTS_SONGS="$(grep -m1 'diagnostics_panel_scan_counts_songs=' "$LOG_FILE" | sed 's/.*diagnostics_panel_scan_counts_songs=//')"
+PANEL_SCAN_COUNTS_SONG_WARNINGS="$(grep -m1 'diagnostics_panel_scan_counts_song_warnings=' "$LOG_FILE" | sed 's/.*diagnostics_panel_scan_counts_song_warnings=//')"
+if [[ -z "$PANEL_SCAN_COUNTS_SONGS" || -z "$PANEL_SCAN_COUNTS_SONG_WARNINGS" ]]; then
+  echo "E2E failed: diagnostics panel scan counts missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "songs=${PANEL_SCAN_COUNTS_SONGS}" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: export songs= does not match panel Songs count" >&2
+  exit 1
+fi
+
 if ! grep -q "songs_with_warnings=1" "$SEARCH_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing songs_with_warnings count" >&2
+  exit 1
+fi
+
+if ! grep -q "total_song_warnings=1" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing total_song_warnings count" >&2
+  exit 1
+fi
+
+if [[ "$PANEL_SCAN_COUNTS_SONG_WARNINGS" != "1 (1 total)" ]]; then
+  echo "E2E failed: panel Song warnings count does not match fixture expectation" >&2
   exit 1
 fi
 
