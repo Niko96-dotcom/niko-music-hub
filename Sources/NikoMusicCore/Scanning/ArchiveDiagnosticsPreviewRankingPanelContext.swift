@@ -89,10 +89,15 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
             candidate.id != song.mainPreviewCandidateID
                 && candidate.confidenceReasons.contains("duration:too-short")
         }
+        var parts = ["Main preview: \(mainSummary)"]
+        if let tiebreak = PreviewRankingExplainability.tiebreakCallout(for: song) {
+            parts.append(tiebreak)
+        }
         guard !tooShortAlts.isEmpty else {
-            return "Main preview: \(mainSummary)"
+            return parts.joined(separator: " · ")
         }
         let names = tooShortAlts.map(\.fileName).joined(separator: ", ")
-        return "Main preview: \(mainSummary) · skipped too short: \(names)"
+        parts.append("skipped too short: \(names)")
+        return parts.joined(separator: " · ")
     }
 }

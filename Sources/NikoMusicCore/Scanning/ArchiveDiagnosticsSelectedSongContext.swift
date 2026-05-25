@@ -8,6 +8,7 @@ public struct ArchiveDiagnosticsSelectedSongContext: Sendable, Equatable {
     public let warningLines: [String]
     public let sidecarNotesLine: String?
     public let previewRankingSelectedHeader: String?
+    public let previewRankingTiebreakCallout: String?
 
     public init(
         displayTitle: String,
@@ -16,7 +17,8 @@ public struct ArchiveDiagnosticsSelectedSongContext: Sendable, Equatable {
         cprSummary: String,
         warningLines: [String],
         sidecarNotesLine: String? = nil,
-        previewRankingSelectedHeader: String? = nil
+        previewRankingSelectedHeader: String? = nil,
+        previewRankingTiebreakCallout: String? = nil
     ) {
         self.displayTitle = displayTitle
         self.mainPreviewSummary = mainPreviewSummary
@@ -25,6 +27,7 @@ public struct ArchiveDiagnosticsSelectedSongContext: Sendable, Equatable {
         self.warningLines = warningLines
         self.sidecarNotesLine = sidecarNotesLine
         self.previewRankingSelectedHeader = previewRankingSelectedHeader
+        self.previewRankingTiebreakCallout = previewRankingTiebreakCallout
     }
 
     public static func from(song: Song) -> Self {
@@ -35,7 +38,8 @@ public struct ArchiveDiagnosticsSelectedSongContext: Sendable, Equatable {
             cprSummary: ArchiveDiagnosticsSelectedSongExplainability.cprSummary(for: song),
             warningLines: song.scanWarnings,
             sidecarNotesLine: song.displaySidecarNotes(),
-            previewRankingSelectedHeader: ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: song)
+            previewRankingSelectedHeader: ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: song),
+            previewRankingTiebreakCallout: PreviewRankingExplainability.tiebreakCallout(for: song)
         )
     }
 }
