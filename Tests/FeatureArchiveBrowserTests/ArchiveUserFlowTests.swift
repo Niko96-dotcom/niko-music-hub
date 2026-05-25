@@ -46,6 +46,7 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.diagnosticsExportSummaryLine.contains("summary_line=roots:"))
         XCTAssertTrue(result.diagnosticsExportSummaryLine.contains("Scanned 7 songs"))
         XCTAssertTrue(result.diagnosticsExportSummaryLine.contains("1 song(s) with 1 warning(s)"))
+        XCTAssertTrue(result.diagnosticsExportSummaryLine.contains("Broken Folder Example"))
         XCTAssertTrue(result.diagnosticsExportSummaryLine.contains("2 skipped at roots"))
         XCTAssertTrue(result.diagnosticsPanelMatchesExportSummary)
         XCTAssertEqual(result.fixtureScanHealthBadge, "1 song warning · 2 skipped at roots")

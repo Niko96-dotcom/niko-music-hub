@@ -107,6 +107,27 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         )
     }
 
+    func testSummaryLineIncludesSongWarningTitlesWhenPresent() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 3,
+            songsWithWarningsCount: 2,
+            totalSongWarningCount: 3,
+            globalWarnings: [],
+            songWarningSummaries: [
+                SongWarningSummary(displayTitle: "Zebra Song", warnings: ["warn z"]),
+                SongWarningSummary(displayTitle: "Alpha Song", warnings: ["warn a", "warn a2"]),
+            ],
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(
+            diagnostics.summaryLine,
+            "Scanned 3 songs · 2 song(s) with 3 warning(s) — Alpha Song, Zebra Song · nothing skipped at roots"
+        )
+    }
+
     func testExportSummaryLineIncludesRedactedRootsAndScanCounts() {
         let home = "/Users/tester"
         let diagnostics = ArchiveScanDiagnostics(
@@ -116,7 +137,9 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
             songsWithWarningsCount: 1,
             totalSongWarningCount: 2,
             globalWarnings: [],
-            songWarningSummaries: [],
+            songWarningSummaries: [
+                SongWarningSummary(displayTitle: "Broken Song", warnings: ["missing cpr", "no mixdown"]),
+            ],
             skippedEntries: [
                 SkippedScanEntry(kind: .nonFolderAtRoot, label: "LOOSE.txt", reason: "Not a song folder")
             ]
@@ -124,7 +147,7 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
 
         XCTAssertEqual(
             diagnostics.exportSummaryLine(homeDirectory: home),
-            "roots: ~/Music/Cubase, /Volumes/Archive · Scanned 5 songs · 1 song(s) with 2 warning(s) · 1 skipped at roots"
+            "roots: ~/Music/Cubase, /Volumes/Archive · Scanned 5 songs · 1 song(s) with 2 warning(s) — Broken Song · 1 skipped at roots"
         )
     }
 }

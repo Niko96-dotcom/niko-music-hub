@@ -35,7 +35,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("CubaseArchive"))
         XCTAssertTrue(
             text.contains(
-                "· Scanned 7 songs · 1 song(s) with 1 warning(s) · 2 skipped at roots"
+                "· Scanned 7 songs · 1 song(s) with 1 warning(s) — Broken Folder Example · 2 skipped at roots"
             )
         )
         XCTAssertFalse(text.contains(home))

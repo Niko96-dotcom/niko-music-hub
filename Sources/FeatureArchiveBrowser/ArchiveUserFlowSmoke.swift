@@ -357,6 +357,7 @@ public enum ArchiveUserFlowSmoke {
             diagnosticsExportSummaryLine.hasPrefix("summary_line=roots:")
             && diagnosticsExportSummaryLine.contains("Scanned 7 songs")
             && diagnosticsExportSummaryLine.contains("1 song(s) with 1 warning(s)")
+            && diagnosticsExportSummaryLine.contains("Broken Folder Example")
             && diagnosticsExportSummaryLine.contains("2 skipped at roots")
         guard exportContainsSummaryLine else {
             throw ArchiveUserFlowSmokeError.searchDiagnosticsExportMissingSummaryLine
@@ -687,6 +688,7 @@ public enum ArchiveUserFlowSmoke {
             && panelSupportSummary.hasPrefix("roots:")
             && panelSupportSummary.contains("Scanned 7 songs")
             && panelSupportSummary.contains("1 song(s) with 1 warning(s)")
+            && panelSupportSummary.contains("Broken Folder Example")
             && panelSupportSummary.contains("2 skipped at roots")
         guard panelMatchesExport else {
             throw ArchiveUserFlowSmokeError.diagnosticsPanelSupportSummaryMismatch

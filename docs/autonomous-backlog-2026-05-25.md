@@ -1,21 +1,22 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-47)
+## Picked (music-48)
 
-Diagnostics scan-health badge: surface song warnings and skipped-at-roots in panel + export when roots are otherwise valid.
+Support summary line: include sorted song warning titles in pasteable `summary_line=` / panel support summary when warnings exist.
 
-## Completed (music-47)
+## Completed (music-48)
 
-- `ArchiveDiagnosticsPanelContext.rootHealthBadge`: includes song-warning and non-invalid skipped counts (no double-count with invalid roots)
-- Tests: panel context, exporter, view-model, user-flow, E2E smoke markers for fixture badge parity
+- `ArchiveScanDiagnostics.summaryLine` appends ` — Title A, Title B` after warning counts (sorted, from `songWarningSummaries`)
+- Tests: `ArchiveScanDiagnosticsTests`, panel context fixture parity, exporter, user-flow, E2E smoke markers
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-46)
+## Prior (music-47)
 
-Preview ranking: decouple version/extension from confidence score; prove equal-score version/extension tiebreak in real scan + user-flow/E2E.
+Diagnostics scan-health badge: surface song warnings and skipped-at-roots in panel + export when roots are otherwise valid.
 
 ## Next best TODO
 
 - Search: collaborator/alias fields per SPEC §10 (needs metadata layer beyond sidecar notes)
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Preview ranking: chorus/loudness preview start, manual overrides (deferred v0.2+)
+- Diagnostics: optional cap/truncation when many songs have warnings (large real archives)
