@@ -49,8 +49,10 @@ enum MusicSearchMatcher {
             return (.scanWarning, 45)
         }
 
-        if let notes = song.sidecarNotes, normalize(notes).contains(token) {
-            return (.songNote, 50)
+        if let notes = song.sidecarNotes {
+            let normalizedNotes = normalize(notes)
+            if normalizedNotes.contains(token) { return (.songNote, 50) }
+            if isSubsequence(token, in: normalizedNotes) { return (.fuzzySongNote, 20) }
         }
 
         if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }

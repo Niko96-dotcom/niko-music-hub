@@ -8,6 +8,7 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
     case previewFileName
     case scanWarning
     case songNote
+    case fuzzySongNote
     case fuzzyTitle
     case fuzzyHaystack
 
@@ -20,6 +21,7 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
         case .previewFileName: "preview file"
         case .scanWarning: "scan warning"
         case .songNote: "song note"
+        case .fuzzySongNote: "fuzzy song note"
         case .fuzzyTitle: "fuzzy title"
         case .fuzzyHaystack: "fuzzy text"
         }
