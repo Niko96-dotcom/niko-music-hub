@@ -338,10 +338,10 @@ enum ArchiveSmokeCommands {
               result.previewSearchPanelMatchLines.contains("Preview Ranking Lab"),
               result.previewSearchPanelMatchLines.contains("fuzzy preview file"),
               result.previewSearchPanelMatchLinesMatchExport,
-              result.skippedSearchQuery == "LOOSE_FILE.txt",
+              result.skippedSearchQuery == "lse fle",
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",
-              result.skippedSearchMatchSummary.contains("skipped label"),
+              result.skippedSearchMatchSummary.contains("fuzzy skipped label"),
               !result.searchDiagnosticsExportPath.isEmpty,
               result.searchDiagnosticsExportContainsMatch,
               result.searchDiagnosticsExportContainsSummaryLine,
@@ -376,10 +376,11 @@ enum ArchiveSmokeCommands {
               !result.skippedSearchDiagnosticsExportPath.isEmpty,
               result.skippedSearchDiagnosticsExportContainsMatch,
               !result.skippedSearchPanelQueryLine.isEmpty,
-              result.skippedSearchPanelQueryLine.contains("LOOSE_FILE.txt"),
+              result.skippedSearchPanelQueryLine.contains("lse fle"),
               result.skippedSearchPanelQueryLineMatchesExport,
               !result.skippedSearchPanelMatchLines.isEmpty,
               result.skippedSearchPanelMatchLines.contains("LOOSE_FILE.txt"),
+              result.skippedSearchPanelMatchLines.contains("fuzzy skipped label"),
               result.skippedSearchPanelMatchLinesMatchExport else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }

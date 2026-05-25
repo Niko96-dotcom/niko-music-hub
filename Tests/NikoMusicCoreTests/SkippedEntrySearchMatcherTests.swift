@@ -22,6 +22,15 @@ final class SkippedEntrySearchMatcherTests: XCTestCase {
         XCTAssertEqual(matches.first?.entry.label, "LOOSE_FILE.txt")
     }
 
+    func testFindsLooseFileByFuzzyLabelSubsequence() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+
+        let matches = SkippedEntrySearchMatcher.search("lse fle", in: result.skippedEntries)
+        XCTAssertEqual(matches.map(\.entry.label), ["LOOSE_FILE.txt"])
+        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy skipped label") == true)
+    }
+
     func testAllTokensMustMatchAcrossLabelAndReason() {
         let entry = SkippedScanEntry(
             kind: .nonFolderAtRoot,

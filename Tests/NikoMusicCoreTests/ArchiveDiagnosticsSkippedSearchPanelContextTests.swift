@@ -54,6 +54,47 @@ final class ArchiveDiagnosticsSkippedSearchPanelContextTests: XCTestCase {
         )
     }
 
+    func testFixtureFuzzyLooseFileSkippedSearchPanelMatchesExporter() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let matches = SkippedEntrySearchMatcher.search("lse fle", in: result.skippedEntries)
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches.first?.entry.label, "LOOSE_FILE.txt")
+        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy skipped label") == true)
+
+        guard let context = ArchiveDiagnosticsSkippedSearchContext.from(
+            query: "lse fle",
+            results: matches
+        ) else {
+            XCTFail("expected skipped search context")
+            return
+        }
+
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil,
+            skippedSearchContext: context
+        )
+
+        XCTAssertTrue(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: exportText,
+                query: context.query,
+                matchCount: context.matches.count
+            )
+        )
+        XCTAssertTrue(
+            ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
+                in: exportText,
+                matches: context.matches
+            )
+        )
+    }
+
     func testFixtureLooseFileSkippedSearchPanelMatchesExporter() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
