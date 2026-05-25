@@ -22,10 +22,20 @@ struct ArchiveDiagnosticsPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("Scan diagnostics")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                if let badge = panelContext.rootHealthBadge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(ArchiveDesignTokens.accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(ArchiveDesignTokens.accent.opacity(0.12))
+                        .clipShape(Capsule())
+                        .accessibilityIdentifier("archive_diagnostics_root_health_badge")
+                }
                 Spacer()
                 Button("Export", action: onExport)
                     .buttonStyle(.borderless)

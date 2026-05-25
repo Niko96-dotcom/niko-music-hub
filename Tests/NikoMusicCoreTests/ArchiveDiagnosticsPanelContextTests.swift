@@ -24,6 +24,82 @@ final class ArchiveDiagnosticsPanelContextTests: XCTestCase {
         XCTAssertTrue(panel.supportSummaryLine.contains("2 skipped at roots"))
     }
 
+    func testRootHealthBadgeNilWhenRootsHealthy() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let roots = [CubaseFixtures.archiveRoot]
+        let result = try scanner.scan(roots: roots)
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: roots,
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        XCTAssertNil(ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics))
+    }
+
+    func testRootHealthBadgeShowsInvalidRootCount() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/missing"],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["Root is not a directory: /tmp/missing"],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .invalidRoot, label: "/tmp/missing", reason: "Root is not a directory"),
+            ]
+        )
+
+        XCTAssertEqual(
+            ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics),
+            "1 invalid root · 1 root warning"
+        )
+    }
+
+    func testRootHealthBadgePluralizesMultipleIssues() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: [],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [
+                "Root is not a directory: /tmp/a",
+                "Root is not a directory: /tmp/b",
+            ],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .invalidRoot, label: "/tmp/a", reason: "Root is not a directory"),
+                SkippedScanEntry(kind: .invalidRoot, label: "/tmp/b", reason: "Root is not a directory"),
+            ]
+        )
+
+        XCTAssertEqual(
+            ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics),
+            "2 invalid roots · 2 root warnings"
+        )
+    }
+
+    func testRootHealthBadgeShowsGlobalWarningsWithoutInvalidRoots() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 1,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["Permission denied reading archive"],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(
+            ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics),
+            "1 root warning"
+        )
+    }
+
     func testSupportSummaryUsesRedactedRoots() {
         let home = "/Users/tester"
         let diagnostics = ArchiveScanDiagnostics(
