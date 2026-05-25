@@ -4,12 +4,19 @@ import SwiftUI
 struct SongCardView: View {
     let song: Song
     let isSelected: Bool
+    var matchSummary: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(song.displayTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
+            if let matchSummary, !matchSummary.isEmpty {
+                Text(matchSummary)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(2)
+            }
             RoundedRectangle(cornerRadius: 4)
                 .fill(ArchiveDesignTokens.accent.opacity(0.35))
                 .frame(height: 28)

@@ -7,6 +7,7 @@ final class ArchiveBrowserViewModel: ObservableObject {
     @Published var roots: [URL] = []
     @Published var songs: [Song] = []
     @Published var filteredSongs: [Song] = []
+    @Published var searchMatchSummaries: [String: String] = [:]
     @Published var searchQuery: String = ""
     @Published var selectedSong: Song?
     @Published var isScanning = false
@@ -97,7 +98,18 @@ final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func applySearchFilter() {
-        filteredSongs = searchIndex.search(searchQuery)
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            filteredSongs = songs
+            searchMatchSummaries = [:]
+            return
+        }
+
+        let results = searchIndex.searchResults(searchQuery)
+        filteredSongs = results.map(\.song)
+        searchMatchSummaries = Dictionary(
+            uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) }
+        )
     }
 
     func selectSong(_ song: Song) {

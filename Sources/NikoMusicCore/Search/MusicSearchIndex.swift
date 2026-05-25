@@ -12,19 +12,26 @@ public struct MusicSearchIndex: Sendable {
     }
 
     public func search(_ query: String) -> [Song] {
+        searchResults(query).map(\.song)
+    }
+
+    public func searchResults(_ query: String) -> [MusicSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return songs }
+        guard !trimmed.isEmpty else { return [] }
 
         let tokens = MusicSearchMatcher.tokens(from: trimmed)
-        guard !tokens.isEmpty else { return songs }
+        guard !tokens.isEmpty else { return [] }
 
         return songs
-            .map { ($0, MusicSearchMatcher.matchScore(song: $0, queryTokens: tokens)) }
-            .filter { $0.1 > 0 }
-            .sorted { lhs, rhs in
-                if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
-                return lhs.0.displayTitle.localizedCaseInsensitiveCompare(rhs.0.displayTitle) == .orderedAscending
+            .map { song in
+                let details = MusicSearchMatcher.matchDetails(song: song, queryTokens: tokens)
+                let score = details.reduce(0) { $0 + $1.score }
+                return MusicSearchResult(song: song, score: score, details: details)
             }
-            .map(\.0)
+            .filter { $0.score > 0 }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.song.displayTitle.localizedCaseInsensitiveCompare(rhs.song.displayTitle) == .orderedAscending
+            }
     }
 }

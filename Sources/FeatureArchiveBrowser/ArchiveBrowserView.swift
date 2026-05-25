@@ -68,7 +68,8 @@ struct ArchiveBrowserView: View {
                         } label: {
                             SongCardView(
                                 song: song,
-                                isSelected: viewModel.selectedSong?.id == song.id
+                                isSelected: viewModel.selectedSong?.id == song.id,
+                                matchSummary: viewModel.searchMatchSummaries[song.id]
                             )
                         }
                         .buttonStyle(.plain)
