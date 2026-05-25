@@ -345,6 +345,57 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("selected_song_warning=Duplicate CPR path: ~/Music/Cubase/Neon Hook/Neon Hook.cpr"))
     }
 
+    func testFormattedTextIncludesSummaryLineTruncationMetadataWhenManySongWarnings() {
+        let summaries = (1...8).map { index in
+            SongWarningSummary(displayTitle: "Song \(index)", warnings: ["warn \(index)"])
+        }
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 8,
+            songsWithWarningsCount: 8,
+            totalSongWarningCount: 8,
+            globalWarnings: [],
+            songWarningSummaries: summaries,
+            skippedEntries: []
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil
+        )
+
+        XCTAssertTrue(text.contains("summary_line_song_warning_titles_truncated=true"))
+        XCTAssertTrue(text.contains("summary_line_song_warning_titles_cap=5"))
+        XCTAssertTrue(text.contains("summary_line_song_warning_titles_omitted=3"))
+        XCTAssertTrue(text.contains("and 3 more"))
+    }
+
+    func testFormattedTextOmitsSummaryLineTruncationMetadataWhenUnderCap() {
+        let summaries = [
+            SongWarningSummary(displayTitle: "Broken Song", warnings: ["missing cpr"]),
+        ]
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 1,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 1,
+            globalWarnings: [],
+            songWarningSummaries: summaries,
+            skippedEntries: []
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil
+        )
+
+        XCTAssertFalse(text.contains("summary_line_song_warning_titles_truncated="))
+        XCTAssertFalse(text.contains("summary_line_song_warning_titles_cap="))
+        XCTAssertFalse(text.contains("summary_line_song_warning_titles_omitted="))
+    }
+
     func testExportRejectsDestinationInsideArchiveRoot() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot

@@ -57,6 +57,16 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         return "Scanned \(songCount) songs · \(warningPart) · \(skippedPart)"
     }
 
+    /// True when `summaryLine` lists only the first `summaryLineMaxSongWarningTitles` warning song titles.
+    public var summaryLineSongWarningTitlesTruncated: Bool {
+        songWarningSummaries.count > Self.summaryLineMaxSongWarningTitles
+    }
+
+    /// How many warning song titles are omitted from `summaryLine` when truncated.
+    public var summaryLineSongWarningTitlesOmittedCount: Int {
+        max(0, songWarningSummaries.count - Self.summaryLineMaxSongWarningTitles)
+    }
+
     private var songWarningSummaryClause: String {
         guard totalSongWarningCount > 0 else { return "no warnings" }
         var clause = "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"

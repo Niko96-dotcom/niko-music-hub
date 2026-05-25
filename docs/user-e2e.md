@@ -32,6 +32,16 @@ swift run NikoMusicCoreSelfTest --real-root "<YOUR_ARCHIVE_ROOT>" --read-only
 
 Expect song/CPR/preview counts only. The process must not write under the scanned root (`ReadOnlyArchivePolicy` write-probe).
 
+## Diagnostics support summary
+
+Pasteable scan diagnostics (`summary_line=` in exports and the in-app **Support summary**) list at most **five** song titles when multiple songs have warnings. Additional titles appear as `and N more` in the line. Full per-song warning rows remain in the exported diagnostics file under `song=` entries.
+
+When truncation applies, exports also include:
+
+- `summary_line_song_warning_titles_truncated=true`
+- `summary_line_song_warning_titles_cap=5`
+- `summary_line_song_warning_titles_omitted=<count>`
+
 ## Local gates
 
 ```bash

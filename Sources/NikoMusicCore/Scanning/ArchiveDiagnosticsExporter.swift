@@ -48,6 +48,15 @@ public enum ArchiveDiagnosticsExporter {
         lines.append("total_song_warnings=\(diagnostics.totalSongWarningCount)")
         lines.append("skipped_entries=\(diagnostics.skippedEntries.count)")
         lines.append("summary_line=\(diagnostics.exportSummaryLine(homeDirectory: homeDirectory))")
+        if diagnostics.summaryLineSongWarningTitlesTruncated {
+            lines.append("summary_line_song_warning_titles_truncated=true")
+            lines.append(
+                "summary_line_song_warning_titles_cap=\(ArchiveScanDiagnostics.summaryLineMaxSongWarningTitles)"
+            )
+            lines.append(
+                "summary_line_song_warning_titles_omitted=\(diagnostics.summaryLineSongWarningTitlesOmittedCount)"
+            )
+        }
         if let rootHealthBadge = ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics) {
             lines.append("root_health_badge=\(rootHealthBadge)")
         }
