@@ -48,6 +48,9 @@ public enum ArchiveDiagnosticsExporter {
         lines.append("total_song_warnings=\(diagnostics.totalSongWarningCount)")
         lines.append("skipped_entries=\(diagnostics.skippedEntries.count)")
         lines.append("summary_line=\(diagnostics.exportSummaryLine(homeDirectory: homeDirectory))")
+        if let rootHealthBadge = ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics) {
+            lines.append("root_health_badge=\(rootHealthBadge)")
+        }
 
         if diagnostics.rootPaths.isEmpty {
             lines.append("roots=(none)")

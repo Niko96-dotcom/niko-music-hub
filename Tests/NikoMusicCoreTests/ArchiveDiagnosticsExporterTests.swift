@@ -42,6 +42,51 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("~/"))
     }
 
+    func testFormattedTextOmitsRootHealthBadgeWhenRootsHealthy() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test"
+        )
+
+        XCTAssertNil(ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics))
+        XCTAssertFalse(text.contains("root_health_badge="))
+    }
+
+    func testFormattedTextIncludesRootHealthBadgeForInvalidRootScan() {
+        let missing = URL(fileURLWithPath: "/tmp/niko-music-hub-missing-root", isDirectory: true)
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: ScanResult(
+                songs: [],
+                globalWarnings: ["Root is not a directory: \(missing.path)"],
+                skippedEntries: [
+                    SkippedScanEntry(
+                        kind: .invalidRoot,
+                        label: missing.path,
+                        reason: "Root is not a directory"
+                    ),
+                ]
+            ),
+            roots: [missing],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test"
+        )
+
+        XCTAssertTrue(text.contains("root_health_badge=1 invalid root · 1 root warning"))
+    }
+
     func testFormattedTextIncludesSummaryLineForSupportPaste() {
         let home = "/Users/tester"
         let diagnostics = ArchiveScanDiagnostics(
