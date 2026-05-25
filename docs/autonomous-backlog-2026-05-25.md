@@ -1,22 +1,22 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-60)
+## Picked (music-61)
 
-Diagnostics panel: surface **Active skipped search** (query, match count, per-match explainability) with export parity — `active_skipped_search` was export-only while operators triaged root-level skipped files.
+Diagnostics panel: surface **Selected song** (title, CPR summary, warnings, sidecar notes) with export parity — `selected_song` was export-only while operators triaged broken folders and CPR gaps.
 
-## Completed (music-60)
+## Completed (music-61)
 
-- `ArchiveDiagnosticsSkippedSearchPanelContext` for panel query/match lines and export parity checks
-- Diagnostics panel shows **Active skipped search** when a skipped query is active (matches `ArchiveDiagnosticsSkippedSearchContext`)
-- `ArchiveUserFlowSmoke` + smoke stdout: `diagnostics_panel_skipped_search_query_line_match=`, `diagnostics_panel_skipped_search_match_lines_match=`
-- E2E asserts panel skipped-search lines against export `skipped_search_query=` / `skipped_search_match label=`
-- Unit tests: `ArchiveDiagnosticsSkippedSearchPanelContextTests`
+- `ArchiveDiagnosticsSelectedSongPanelContext` for panel title/CPR/warning/notes lines and export parity checks
+- Diagnostics panel shows **Selected song** when a song is selected (matches `ArchiveDiagnosticsSelectedSongContext`)
+- `ArchiveUserFlowSmoke` + smoke stdout: `diagnostics_panel_selected_song_*_line_match=` markers for Broken Folder Example
+- E2E asserts panel selected-song lines against export `selected_song_title=` / `selected_song_cpr=` / `selected_song_warning=` / `selected_song_notes=`
+- Unit tests: `ArchiveDiagnosticsSelectedSongPanelContextTests`
 - `docs/user-e2e.md` documents new parity markers
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-59)
+## Prior (music-60)
 
-Diagnostics panel: surface **Active search** (query, match count, per-match explainability) with export parity — `active_search` was export-only while operators triaged fuzzy matches.
+Diagnostics panel: surface **Active skipped search** (query, match count, per-match explainability) with export parity.
 
 ## Next best TODO
 
