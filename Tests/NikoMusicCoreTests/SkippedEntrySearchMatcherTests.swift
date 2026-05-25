@@ -31,4 +31,21 @@ final class SkippedEntrySearchMatcherTests: XCTestCase {
         XCTAssertTrue(SkippedEntrySearchMatcher.search("LOOSE_FILE missing", in: [entry]).isEmpty)
         XCTAssertFalse(SkippedEntrySearchMatcher.search("LOOSE_FILE root", in: [entry]).isEmpty)
     }
+
+    func testGenericFileTokenDoesNotMatchUnrelatedSkippedReadme() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+
+        let matches = SkippedEntrySearchMatcher.search("file", in: result.skippedEntries)
+        XCTAssertEqual(matches.map(\.entry.label), ["LOOSE_FILE.txt"])
+    }
+
+    func testGenericFolderTokenDoesNotMatchAllRootSkippedEntries() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+
+        XCTAssertTrue(SkippedEntrySearchMatcher.search("folder", in: result.skippedEntries).isEmpty)
+    }
 }

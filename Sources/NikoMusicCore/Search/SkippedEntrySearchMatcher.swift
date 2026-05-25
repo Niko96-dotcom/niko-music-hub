@@ -89,13 +89,20 @@ public enum SkippedEntrySearchMatcher {
         if label.hasPrefix(token) { return (.labelPrefix, 90) }
         if label.contains(token) { return (.labelContains, 80) }
 
+        if isSubsequence(token, in: label) { return (.fuzzyLabel, 12) }
+
+        guard !usesStandardNonFolderAtRootReason(entry) else { return nil }
+
         let reason = normalize(entry.reason)
         if reason.contains(token) { return (.reasonContains, 55) }
-
-        if isSubsequence(token, in: label) { return (.fuzzyLabel, 12) }
         if isSubsequence(token, in: reason) { return (.fuzzyReason, 8) }
 
         return nil
+    }
+
+    private static func usesStandardNonFolderAtRootReason(_ entry: SkippedScanEntry) -> Bool {
+        entry.kind == .nonFolderAtRoot
+            && normalize(entry.reason) == normalize(SkippedScanEntry.standardNonFolderAtRootReason)
     }
 
     private static func normalize(_ value: String) -> String {
