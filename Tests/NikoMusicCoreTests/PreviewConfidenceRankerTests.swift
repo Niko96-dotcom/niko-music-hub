@@ -88,6 +88,29 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertTrue(ranked.first?.confidenceReasons.contains("version:v3") == true)
     }
 
+    func testMultiDigitVersionBeatsLowerVersionWhenRoleAndFolderMatch() {
+        let v2 = candidate(
+            name: "Song v2 mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: 2,
+            ext: "wav",
+            duration: 200
+        )
+        let v10 = candidate(
+            name: "Song v10 mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: 10,
+            ext: "wav",
+            duration: 200
+        )
+
+        let ranked = ranker.rank([v2, v10])
+        XCTAssertEqual(ranked.first?.fileName, "Song v10 mix.wav")
+        XCTAssertEqual(ranked.first?.detectedVersionNumber, 10)
+    }
+
     func testPrefersWavOverMp3WhenScoresOtherwiseClose() {
         let wav = candidate(
             name: "Song mix.wav",

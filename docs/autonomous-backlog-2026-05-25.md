@@ -1,10 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-33)
+## Picked (music-34)
+
+Stronger preview-ranking duration explainability in UI/export (show actual seconds) plus version-parser edge-case tests (v10 vs v2, separators).
+
+## Completed (music-34)
+
+- `PreviewRankingExplainability` appends formatted duration to duration signals (`too short (5s)`, `plausible length (3:30)`)
+- `PreviewFilenameParserTests` lock multi-digit version parsing and separator edge cases
+- `PreviewConfidenceRankerTests.testMultiDigitVersionBeatsLowerVersionWhenRoleAndFolderMatch`
+- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-33)
 
 Surface per-song too-short preview breakdown inline in the archive diagnostics panel (was export-only after music-32).
 
-## Completed (music-33)
+## Prior completed (music-33)
 
 - `TooShortNonMainSongBreakdown.panelDisplayLine` for operator-facing panel copy
 - `ArchiveDiagnosticsPanelView` lists each affected song under "Too short previews (not main)"
@@ -31,4 +42,4 @@ Machine-readable preview-ranking panel counts in diagnostics export for offline 
 
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias fields per SPEC §10 (needs metadata layer beyond sidecar notes)
-- Preview ranking: parsed version tiebreak edge cases and stronger duration plausibility explainability in UI
+- Preview ranking: surface when version/extension/duration tiebreak (not score bump) decided the main pick among near-tied candidates
