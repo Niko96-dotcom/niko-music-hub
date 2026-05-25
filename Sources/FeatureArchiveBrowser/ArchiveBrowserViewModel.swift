@@ -116,6 +116,18 @@ final class ArchiveBrowserViewModel: ObservableObject {
         selectedSong = song
     }
 
+    func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
+        guard let song = selectedSong,
+              let mainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) else {
+            return nil
+        }
+        return ArchiveDiagnosticsSelectedSongContext(
+            displayTitle: song.displayTitle,
+            mainPreviewSummary: mainPreviewSummary,
+            rankedPreviewLines: PreviewRankingExplainability.rankedPreviewLines(for: song)
+        )
+    }
+
     func activeSearchExportContext() -> ArchiveDiagnosticsSearchContext? {
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -143,7 +155,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
             diagnostics: scanDiagnostics,
             to: destination,
             archiveRoots: roots,
-            searchContext: activeSearchExportContext()
+            searchContext: activeSearchExportContext(),
+            selectedSongContext: selectedSongExportContext()
         )
         lastDiagnosticsExportPath = destination.path
         diagnostics.log(.info, "Exported diagnostics to \(destination.path)")

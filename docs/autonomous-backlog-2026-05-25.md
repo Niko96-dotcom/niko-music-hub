@@ -1,16 +1,20 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-11)
+## Picked (music-12)
 
-Preview ranking explainability: human-readable main-preview summary and ranked alt list in song detail; E2E asserts Ranking Lab signals.
+Diagnostics export: include selected song preview ranking summary and ranked preview lines when a song is selected.
 
 ## Completed
 
-- `PreviewRankingExplainability` maps `confidenceReasons` to readable labels (omits `recency`)
-- `SongDetailView` shows main preview summary and ranked alt previews when multiple candidates exist
-- `ArchiveUserFlowSmoke` + E2E script assert `preview_rank_summary` includes v3/wav for Preview Ranking Lab
-- `PreviewRankingExplainabilityTests`, `ArchiveBrowserViewModelTests`, `ArchiveUserFlowTests` coverage
+- `ArchiveDiagnosticsSelectedSongContext` for export payload
+- `ArchiveDiagnosticsExporter` writes `selected_song`, `main_preview_summary`, and `preview_rank_line` sections
+- `ArchiveBrowserViewModel.selectedSongExportContext()` passes context on export when `selectedSong` is set
+- `ArchiveDiagnosticsExporterTests`, `ArchiveBrowserViewModelTests` coverage
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-11)
+
+Preview ranking explainability: human-readable main-preview summary and ranked alt list in song detail; E2E asserts Ranking Lab signals.
 
 ## Prior (music-10)
 
@@ -40,4 +44,4 @@ Search result ranking: sort matches by match quality (title > folder > filenames
 
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias/note fields per SPEC §10 (no metadata layer yet)
-- Include preview ranking summary in diagnostics export when a song is selected
+- Diagnostics export: include selected song CPR/warning summary alongside preview ranking when selected
