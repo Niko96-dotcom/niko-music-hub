@@ -30,7 +30,14 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.archiveTreeUnchanged)
         XCTAssertTrue(result.dryRunCPRPath.contains("Neon Hook"))
         XCTAssertTrue(result.dryRunCPRPath.hasSuffix("Neon Hook.cpr"))
+        XCTAssertEqual(result.dryRunCPRDisplayPath, Song.displayDryRunPath(result.dryRunCPRPath))
         XCTAssertTrue(result.dryRunLogLine?.contains("[dry-run] open CPR:") == true)
+        if let dryRunLogLine = result.dryRunLogLine {
+            XCTAssertEqual(
+                result.dryRunLogDisplayLine,
+                DiagnosticsPathRedactor.redactPathsInText(dryRunLogLine)
+            )
+        }
         XCTAssertTrue(result.searchMatchSummary.contains("neon"))
         XCTAssertTrue(result.searchMatchSummary.contains("hk"))
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"))

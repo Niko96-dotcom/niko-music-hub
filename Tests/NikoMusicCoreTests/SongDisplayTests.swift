@@ -25,6 +25,17 @@ final class SongDisplayTests: XCTestCase {
             Song.displayDryRunPath(path, homeDirectory: home),
             "~/Music/Cubase/Neon Hook/Neon Hook.cpr"
         )
+        XCTAssertFalse(Song.displayDryRunPath(path, homeDirectory: home).contains(home))
+    }
+
+    func testRedactPathsInTextRedactsDryRunLogLine() {
+        let home = "/Users/tester"
+        let raw = "[dry-run] open CPR: \(home)/Music/Neon Hook/Neon Hook.cpr"
+
+        XCTAssertEqual(
+            DiagnosticsPathRedactor.redactPathsInText(raw, homeDirectory: home),
+            "[dry-run] open CPR: ~/Music/Neon Hook/Neon Hook.cpr"
+        )
     }
 
     func testDisplaySidecarNotesReturnsNilWhenAbsent() {

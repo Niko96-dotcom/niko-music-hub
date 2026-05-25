@@ -9,7 +9,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let searchMatchCount: Int
     public let selectedTitle: String
     public let dryRunCPRPath: String
+    /// Home-redacted CPR path safe for smoke stdout and operator logs.
+    public let dryRunCPRDisplayPath: String
     public let dryRunLogLine: String?
+    public let dryRunLogDisplayLine: String?
     public let writeProbeDenied: Bool
     public let archiveTreeUnchanged: Bool
     public let diagnosticsSongCount: Int
@@ -30,7 +33,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         searchMatchCount: Int,
         selectedTitle: String,
         dryRunCPRPath: String,
+        dryRunCPRDisplayPath: String,
         dryRunLogLine: String?,
+        dryRunLogDisplayLine: String?,
         writeProbeDenied: Bool,
         archiveTreeUnchanged: Bool,
         diagnosticsSongCount: Int,
@@ -50,7 +55,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.searchMatchCount = searchMatchCount
         self.selectedTitle = selectedTitle
         self.dryRunCPRPath = dryRunCPRPath
+        self.dryRunCPRDisplayPath = dryRunCPRDisplayPath
         self.dryRunLogLine = dryRunLogLine
+        self.dryRunLogDisplayLine = dryRunLogDisplayLine
         self.writeProbeDenied = writeProbeDenied
         self.archiveTreeUnchanged = archiveTreeUnchanged
         self.diagnosticsSongCount = diagnosticsSongCount
@@ -110,6 +117,11 @@ public enum ArchiveUserFlowSmoke {
 
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
         let dryRunLogLine = captureDryRunLogLine(from: context)
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+        let dryRunCPRDisplayPath = Song.displayDryRunPath(dryRunPath, homeDirectory: homeDirectory)
+        let dryRunLogDisplayLine = dryRunLogLine.map {
+            DiagnosticsPathRedactor.redactPathsInText($0, homeDirectory: homeDirectory)
+        }
 
         let diagnostics = viewModel.scanDiagnostics
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
@@ -154,7 +166,9 @@ public enum ArchiveUserFlowSmoke {
             searchMatchCount: viewModel.filteredSongs.count,
             selectedTitle: neon.displayTitle,
             dryRunCPRPath: dryRunPath,
+            dryRunCPRDisplayPath: dryRunCPRDisplayPath,
             dryRunLogLine: dryRunLogLine,
+            dryRunLogDisplayLine: dryRunLogDisplayLine,
             writeProbeDenied: writeProbeDenied,
             archiveTreeUnchanged: treeBefore == treeAfter,
             diagnosticsSongCount: diagnostics?.songCount ?? 0,
