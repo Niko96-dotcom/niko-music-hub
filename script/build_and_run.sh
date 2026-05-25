@@ -2,8 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="OutsideCubaseHub"
-BUNDLE_ID="local.outside-cubase-hub.app"
+APP_NAME="NikoMusicHub"
+BUNDLE_ID="local.niko-music-hub.app"
 MIN_SYSTEM_VERSION="14.2"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,7 +36,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
-  <string>$APP_NAME</string>
+  <string>Niko Music Hub</string>
+  <key>CFBundleDisplayName</key>
+  <string>Niko Music Hub</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
@@ -44,7 +46,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSAudioCaptureUsageDescription</key>
-  <string>Outside Cubase Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
+  <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
 </dict>
 </plist>
 PLIST

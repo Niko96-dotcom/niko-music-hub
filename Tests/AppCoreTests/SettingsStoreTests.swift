@@ -6,7 +6,7 @@ final class SettingsStoreTests: XCTestCase {
         let store = makeStore()
         let settings = try store.loadSettings()
 
-        XCTAssertTrue(settings.outputFolder.url.path.contains("Outside Cubase Hub/Inbox"))
+        XCTAssertTrue(settings.outputFolder.url.path.contains("Niko Music Hub/Inbox"))
         XCTAssertEqual(settings.audioPreset.sampleRate, 44100)
         XCTAssertEqual(settings.audioPreset.bitDepth, 24)
         XCTAssertEqual(settings.audioPreset.channelCount, 2)

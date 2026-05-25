@@ -54,7 +54,7 @@ private extension ToolContext {
 
 private struct FixtureSettingsStore: SettingsStore {
     func loadSettings() throws -> AppSettings {
-        AppSettings(outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/Outside Cubase Hub/Inbox")))
+        AppSettings(outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/Niko Music Hub/Inbox")))
     }
 
     func saveSettings(_ settings: AppSettings) throws {}

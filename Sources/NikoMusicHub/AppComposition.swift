@@ -40,7 +40,7 @@ private enum AppPaths {
         ).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
 
         return supportDirectory
-            .appendingPathComponent("Outside Cubase Hub", isDirectory: true)
+            .appendingPathComponent("Niko Music Hub", isDirectory: true)
             .appendingPathComponent("output-inbox.json", isDirectory: false)
     }
 }
