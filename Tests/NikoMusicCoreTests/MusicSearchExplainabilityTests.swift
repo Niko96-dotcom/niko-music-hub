@@ -48,6 +48,21 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         XCTAssertTrue(result.matchSummary.contains("song note"))
     }
 
+    func testFuzzySidecarNotesMatchSummaryNamesFuzzySongNoteField() throws {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            sidecarNotes: "notes only"
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("nts nly").first)
+        XCTAssertEqual(result.song.displayTitle, "Broken")
+        XCTAssertTrue(result.matchSummary.contains("fuzzy song note"))
+        XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
+    }
+
     func testScanWarningMatchSummaryNamesScanWarningField() throws {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Broken"),

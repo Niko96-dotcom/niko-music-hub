@@ -185,6 +185,25 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("scan warning"))
     }
 
+    func testExportDiagnosticsIncludesNotesSearchContext() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        viewModel.searchQuery = "nts nly"
+        viewModel.applySearchFilter()
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+
+        try viewModel.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
+        XCTAssertTrue(text.contains("search_query=nts nly"))
+        XCTAssertTrue(text.contains("search_match title=Broken Folder Example"))
+        XCTAssertTrue(text.contains("fuzzy song note"))
+    }
+
     func testExportDiagnosticsIncludesActiveSearchContext() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

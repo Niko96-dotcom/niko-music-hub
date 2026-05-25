@@ -31,6 +31,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let warningSearchMatchSummary: String
     public let warningSearchDiagnosticsExportPath: String
     public let warningSearchDiagnosticsExportContainsMatch: Bool
+    public let notesSearchQuery: String
+    public let notesSearchMatchCount: Int
+    public let notesSearchMatchTitle: String
+    public let notesSearchMatchSummary: String
+    public let notesSearchDiagnosticsExportPath: String
+    public let notesSearchDiagnosticsExportContainsMatch: Bool
     public let skippedSearchQuery: String
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
@@ -68,6 +74,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         warningSearchMatchSummary: String,
         warningSearchDiagnosticsExportPath: String,
         warningSearchDiagnosticsExportContainsMatch: Bool,
+        notesSearchQuery: String,
+        notesSearchMatchCount: Int,
+        notesSearchMatchTitle: String,
+        notesSearchMatchSummary: String,
+        notesSearchDiagnosticsExportPath: String,
+        notesSearchDiagnosticsExportContainsMatch: Bool,
         skippedSearchQuery: String,
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
@@ -104,6 +116,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.warningSearchMatchSummary = warningSearchMatchSummary
         self.warningSearchDiagnosticsExportPath = warningSearchDiagnosticsExportPath
         self.warningSearchDiagnosticsExportContainsMatch = warningSearchDiagnosticsExportContainsMatch
+        self.notesSearchQuery = notesSearchQuery
+        self.notesSearchMatchCount = notesSearchMatchCount
+        self.notesSearchMatchTitle = notesSearchMatchTitle
+        self.notesSearchMatchSummary = notesSearchMatchSummary
+        self.notesSearchDiagnosticsExportPath = notesSearchDiagnosticsExportPath
+        self.notesSearchDiagnosticsExportContainsMatch = notesSearchDiagnosticsExportContainsMatch
         self.skippedSearchQuery = skippedSearchQuery
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
@@ -132,6 +150,10 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case warningSearchMissingExplainability
     case warningSearchDiagnosticsExportFailed
     case warningSearchDiagnosticsExportMissingMatch
+    case notesSearchNoMatch
+    case notesSearchMissingExplainability
+    case notesSearchDiagnosticsExportFailed
+    case notesSearchDiagnosticsExportMissingMatch
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
     case searchDiagnosticsExportFailed
@@ -280,6 +302,33 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.warningSearchDiagnosticsExportMissingMatch
         }
 
+        let notesSearchQuery = "nts nly"
+        viewModel.searchQuery = notesSearchQuery
+        viewModel.applySearchFilter()
+        guard let notesMatch = viewModel.filteredSongs.first else {
+            throw ArchiveUserFlowSmokeError.notesSearchNoMatch
+        }
+        let notesSearchMatchCount = viewModel.filteredSongs.count
+        let notesSearchMatchSummary = viewModel.searchMatchSummaries[notesMatch.id, default: ""]
+        guard notesMatch.displayTitle == "Broken Folder Example",
+              notesSearchMatchSummary.localizedCaseInsensitiveContains("fuzzy song note"),
+              notesSearchMatchSummary.localizedCaseInsensitiveContains("nts"),
+              notesSearchMatchSummary.localizedCaseInsensitiveContains("nly") else {
+            throw ArchiveUserFlowSmokeError.notesSearchMissingExplainability
+        }
+
+        try viewModel.exportDiagnostics()
+        guard let notesExportPath = viewModel.lastDiagnosticsExportPath,
+              !notesExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.notesSearchDiagnosticsExportFailed
+        }
+        let notesExportText = try String(contentsOf: URL(fileURLWithPath: notesExportPath), encoding: .utf8)
+        let exportContainsNotesMatch = notesExportText.contains("search_match title=Broken Folder Example")
+            && notesExportText.contains("fuzzy song note")
+        guard exportContainsNotesMatch else {
+            throw ArchiveUserFlowSmokeError.notesSearchDiagnosticsExportMissingMatch
+        }
+
         let skippedSearchQuery = "LOOSE_FILE.txt"
         viewModel.searchQuery = skippedSearchQuery
         viewModel.applySearchFilter()
@@ -330,6 +379,12 @@ public enum ArchiveUserFlowSmoke {
             warningSearchMatchSummary: warningSearchMatchSummary,
             warningSearchDiagnosticsExportPath: warningExportPath,
             warningSearchDiagnosticsExportContainsMatch: exportContainsWarningMatch,
+            notesSearchQuery: notesSearchQuery,
+            notesSearchMatchCount: notesSearchMatchCount,
+            notesSearchMatchTitle: notesMatch.displayTitle,
+            notesSearchMatchSummary: notesSearchMatchSummary,
+            notesSearchDiagnosticsExportPath: notesExportPath,
+            notesSearchDiagnosticsExportContainsMatch: exportContainsNotesMatch,
             skippedSearchQuery: skippedSearchQuery,
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,
