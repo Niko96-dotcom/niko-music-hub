@@ -82,6 +82,11 @@ if ! grep -q "preview_rank_summary=.*wav" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "broken_folder_warnings=.*CPR" "$LOG_FILE"; then
+  echo "E2E failed: broken folder display warnings missing CPR signal" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1

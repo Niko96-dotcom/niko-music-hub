@@ -1,0 +1,29 @@
+import XCTest
+@testable import NikoMusicCore
+
+final class SongDisplayTests: XCTestCase {
+    func testDisplayScanWarningsRedactsEmbeddedHomePaths() {
+        let home = "/Users/tester"
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "\(home)/Music/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            scanWarnings: ["Missing mixdown under \(home)/Music/Broken"]
+        )
+
+        XCTAssertEqual(
+            song.displayScanWarnings(homeDirectory: home),
+            ["Missing mixdown under ~/Music/Broken"]
+        )
+    }
+
+    func testDisplayDryRunPathRedactsHomePrefix() {
+        let home = "/Users/tester"
+        let path = "\(home)/Music/Cubase/Neon Hook/Neon Hook.cpr"
+
+        XCTAssertEqual(
+            Song.displayDryRunPath(path, homeDirectory: home),
+            "~/Music/Cubase/Neon Hook/Neon Hook.cpr"
+        )
+    }
+}

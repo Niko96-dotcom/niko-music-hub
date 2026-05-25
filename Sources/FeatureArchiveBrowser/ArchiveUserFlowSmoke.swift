@@ -16,6 +16,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let diagnosticsSkippedCount: Int
     public let searchMatchSummary: String
     public let rankingLabMainPreviewSummary: String
+    public let brokenFolderDisplayWarnings: [String]
 
     public init(
         userFlow: String,
@@ -30,7 +31,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         diagnosticsSongCount: Int,
         diagnosticsSkippedCount: Int,
         searchMatchSummary: String,
-        rankingLabMainPreviewSummary: String
+        rankingLabMainPreviewSummary: String,
+        brokenFolderDisplayWarnings: [String]
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -45,6 +47,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.diagnosticsSkippedCount = diagnosticsSkippedCount
         self.searchMatchSummary = searchMatchSummary
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
+        self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
     }
 }
 
@@ -53,6 +56,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case rankingLabNotFound
     case missingDryRunPath
     case missingRankingLabPreviewSummary
+    case brokenFolderNotFound
+    case brokenFolderMissingDisplayWarnings
 }
 
 @MainActor
@@ -98,6 +103,14 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.missingRankingLabPreviewSummary
         }
 
+        guard let broken = viewModel.songs.first(where: { $0.displayTitle == "Broken Folder Example" }) else {
+            throw ArchiveUserFlowSmokeError.brokenFolderNotFound
+        }
+        let brokenFolderDisplayWarnings = broken.displayScanWarnings()
+        guard brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }) else {
+            throw ArchiveUserFlowSmokeError.brokenFolderMissingDisplayWarnings
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: viewModel.songs.count,
@@ -111,7 +124,8 @@ public enum ArchiveUserFlowSmoke {
             diagnosticsSongCount: diagnostics?.songCount ?? 0,
             diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
             searchMatchSummary: searchMatchSummary,
-            rankingLabMainPreviewSummary: rankingLabMainPreviewSummary
+            rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
+            brokenFolderDisplayWarnings: brokenFolderDisplayWarnings
         )
     }
 
