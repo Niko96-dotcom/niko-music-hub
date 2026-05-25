@@ -160,7 +160,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
         if let result = try opener.openLatestCPR(for: song, dryRun: dryRun) {
             lastDryRunLog = result.path
             if dryRun {
-                print("[niko-music-hub-smoke] dry-run open: \(result.path)")
+                let displayPath = Song.displayDryRunPath(result.path)
+                print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
             }
         }
     }

@@ -43,6 +43,7 @@ public enum ArchiveDiagnosticsExporter {
         lines.append("songs=\(diagnostics.songCount)")
         lines.append("songs_with_warnings=\(diagnostics.songsWithWarningsCount)")
         lines.append("total_song_warnings=\(diagnostics.totalSongWarningCount)")
+        lines.append("skipped_entries=\(diagnostics.skippedEntries.count)")
 
         if diagnostics.rootPaths.isEmpty {
             lines.append("roots=(none)")

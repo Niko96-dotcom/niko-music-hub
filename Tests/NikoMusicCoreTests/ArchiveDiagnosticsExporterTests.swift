@@ -30,6 +30,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         let text = try String(contentsOf: destination, encoding: .utf8)
         XCTAssertTrue(text.contains("songs=4"))
         XCTAssertTrue(text.contains("songs_with_warnings=1"))
+        XCTAssertTrue(text.contains("skipped_entries=2"))
         XCTAssertFalse(text.contains(home))
         XCTAssertTrue(text.contains("~/"))
     }

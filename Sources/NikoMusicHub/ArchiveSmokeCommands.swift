@@ -55,12 +55,13 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
         print("[niko-music-hub-smoke] dry_run=true")
-        print("[niko-music-hub-smoke] cpr_path=\(result.dryRunCPRPath)")
+        print("[niko-music-hub-smoke] cpr_path=\(result.dryRunCPRDisplayPath)")
         print("[niko-music-hub-smoke] write_probe_denied=\(result.writeProbeDenied)")
         print("[niko-music-hub-smoke] archive_unchanged=\(result.archiveTreeUnchanged)")
 
         if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
-            let logLine = result.dryRunLogLine ?? "[dry-run] open CPR: \(result.dryRunCPRPath)"
+            let logLine = result.dryRunLogDisplayLine
+                ?? "[dry-run] open CPR: \(result.dryRunCPRDisplayPath)"
             print(logLine)
         }
 
@@ -89,7 +90,8 @@ enum ArchiveSmokeCommands {
         }
 
         if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
-            let logEvidence = result.dryRunLogLine ?? "[dry-run] open CPR: \(result.dryRunCPRPath)"
+            let logEvidence = result.dryRunLogDisplayLine
+                ?? "[dry-run] open CPR: \(result.dryRunCPRDisplayPath)"
             guard logEvidence.contains("Neon Hook"), logEvidence.contains(".cpr") else {
                 throw ArchiveUserFlowSmokeValidationError.dryRunLogMissing
             }

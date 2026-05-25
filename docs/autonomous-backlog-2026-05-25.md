@@ -1,10 +1,23 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-20)
+## Picked (music-21)
+
+Redact dry-run CPR paths in smoke stdout/logs; add `skipped_entries` count to diagnostics export.
+
+## Completed (music-21)
+
+- `ArchiveUserFlowSmokeResult` exposes `dryRunCPRDisplayPath` and `dryRunLogDisplayLine` via `Song.displayDryRunPath` / `DiagnosticsPathRedactor`
+- `ArchiveSmokeCommands` prints redacted `cpr_path` and dry-run log lines (no raw home prefix in operator logs)
+- `ArchiveBrowserViewModel` dry-run helper line uses redacted path
+- `ArchiveDiagnosticsExporter` header includes `skipped_entries=N`
+- Tests: `SongDisplayTests`, `ArchiveDiagnosticsExporterTests`, `ArchiveUserFlowTests`
+- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-20)
 
 E2E user-flow smoke: assert warning-token search finds Broken Folder with scan-warning explainability.
 
-## Completed (music-20)
+## Prior completed (music-20)
 
 - `ArchiveUserFlowSmoke` runs second query `project` after neon open flow
 - Smoke output: `warning_search_query`, `warning_search_matches`, `warning_search_match`, `warning_search_summary`
@@ -45,5 +58,5 @@ Fuzzy search: match scan warnings so operators can find problematic songs from d
 
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias fields per SPEC §10 (needs metadata layer beyond sidecar notes)
-- Archive diagnostics UX: richer panel/export for global warnings and skipped-entry drill-down
-- Redact dry-run CPR paths in smoke stdout/logs when archive roots live under home (optional polish)
+- Archive diagnostics UX: export skipped-entry lines in user-flow smoke or panel “copy diagnostics” affordance
+- Search/index skipped-root labels (e.g. `LOOSE_FILE.txt`) for operator drill-down
