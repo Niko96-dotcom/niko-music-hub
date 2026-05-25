@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import FeatureArchiveBrowser
 import FeatureAudioConverter
 import FeatureBPMTapper
 import FeatureAudioRecorder
@@ -12,11 +13,12 @@ struct AppComposition {
 
     static func make() -> AppComposition {
         let features: [any ToolFeature] = [
-            DevToolFeature(),
+            ArchiveBrowserFeature(),
             BPMTapperFeature(),
             AudioConverterFeature(),
             AudioRecorderFeature(),
-            DownloaderFeature()
+            DownloaderFeature(),
+            DevToolFeature()
         ]
         let registry = try! ToolRegistry(features: features)
         let context = ToolContext(

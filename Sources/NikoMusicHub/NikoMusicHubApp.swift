@@ -22,6 +22,10 @@ struct NikoMusicHubApp: App {
 }
 
 private final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        _ = ArchiveSmokeCommands.runIfRequested()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)

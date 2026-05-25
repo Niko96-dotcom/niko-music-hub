@@ -1,4 +1,5 @@
 import AppCore
+import FeatureArchiveBrowser
 import SwiftUI
 import XCTest
 
@@ -43,6 +44,14 @@ final class FeatureRegistryTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? DuplicateToolFeatureID, DuplicateToolFeatureID(id: "duplicate"))
         }
+    }
+
+    func testArchiveBrowserRegistersFirst() throws {
+        let registry = try ToolRegistry(features: [
+            ArchiveBrowserFeature(),
+            TestFeature(id: "wav-converter", shortLabel: "WAV")
+        ])
+        XCTAssertEqual(registry.metadata.first?.id, "archive-browser")
     }
 
     func testAddingSecondFeatureDoesNotRequireExistingFeatureChanges() throws {

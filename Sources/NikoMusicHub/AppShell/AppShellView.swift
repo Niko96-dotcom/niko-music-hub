@@ -10,7 +10,7 @@ struct AppShellView: View {
     init(registry: ToolRegistry, context: ToolContext) {
         self.registry = registry
         self.context = context
-        _selectedToolID = State(initialValue: registry.feature(for: "wav-converter")?.metadata.id ?? registry.feature(for: "bpm-tapper")?.metadata.id ?? registry.features.first?.metadata.id)
+        _selectedToolID = State(initialValue: registry.feature(for: "archive-browser")?.metadata.id ?? registry.feature(for: "wav-converter")?.metadata.id ?? registry.features.first?.metadata.id)
     }
 
     var body: some View {

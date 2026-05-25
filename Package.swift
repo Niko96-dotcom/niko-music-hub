@@ -32,6 +32,10 @@ let package = Package(
             name: "FeatureDownloader",
             targets: ["FeatureDownloader"]
         ),
+        .library(
+            name: "FeatureArchiveBrowser",
+            targets: ["FeatureArchiveBrowser"]
+        ),
         .executable(
             name: "NikoMusicHub",
             targets: ["NikoMusicHub"]
@@ -68,10 +72,16 @@ let package = Package(
             name: "FeatureDownloader",
             dependencies: ["AppCore"]
         ),
+        .target(
+            name: "FeatureArchiveBrowser",
+            dependencies: ["AppCore", "NikoMusicCore"]
+        ),
         .executableTarget(
             name: "NikoMusicHub",
             dependencies: [
                 "AppCore",
+                "NikoMusicCore",
+                "FeatureArchiveBrowser",
                 "FeatureBPMTapper",
                 "FeatureAudioConverter",
                 "FeatureAudioRecorder",
@@ -101,6 +111,10 @@ let package = Package(
         .testTarget(
             name: "FeatureDownloaderTests",
             dependencies: ["FeatureDownloader", "AppCore"]
+        ),
+        .testTarget(
+            name: "FeatureArchiveBrowserTests",
+            dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore"]
         )
     ]
 )
