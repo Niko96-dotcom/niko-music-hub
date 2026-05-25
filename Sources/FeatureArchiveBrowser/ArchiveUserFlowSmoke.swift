@@ -70,6 +70,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let fuzzyWarningSearchMatchSummary: String
     public let fuzzyWarningSearchDiagnosticsExportPath: String
     public let fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool
+    public let fuzzyWarningSearchPanelQueryLine: String
+    public let fuzzyWarningSearchPanelQueryLineMatchesExport: Bool
+    public let fuzzyWarningSearchPanelMatchLines: String
+    public let fuzzyWarningSearchPanelMatchLinesMatchExport: Bool
     public let notesSearchQuery: String
     public let notesSearchMatchCount: Int
     public let notesSearchMatchTitle: String
@@ -193,6 +197,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         fuzzyWarningSearchMatchSummary: String,
         fuzzyWarningSearchDiagnosticsExportPath: String,
         fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool,
+        fuzzyWarningSearchPanelQueryLine: String,
+        fuzzyWarningSearchPanelQueryLineMatchesExport: Bool,
+        fuzzyWarningSearchPanelMatchLines: String,
+        fuzzyWarningSearchPanelMatchLinesMatchExport: Bool,
         notesSearchQuery: String,
         notesSearchMatchCount: Int,
         notesSearchMatchTitle: String,
@@ -318,6 +326,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.fuzzyWarningSearchMatchSummary = fuzzyWarningSearchMatchSummary
         self.fuzzyWarningSearchDiagnosticsExportPath = fuzzyWarningSearchDiagnosticsExportPath
         self.fuzzyWarningSearchDiagnosticsExportContainsMatch = fuzzyWarningSearchDiagnosticsExportContainsMatch
+        self.fuzzyWarningSearchPanelQueryLine = fuzzyWarningSearchPanelQueryLine
+        self.fuzzyWarningSearchPanelQueryLineMatchesExport = fuzzyWarningSearchPanelQueryLineMatchesExport
+        self.fuzzyWarningSearchPanelMatchLines = fuzzyWarningSearchPanelMatchLines
+        self.fuzzyWarningSearchPanelMatchLinesMatchExport = fuzzyWarningSearchPanelMatchLinesMatchExport
         self.notesSearchQuery = notesSearchQuery
         self.notesSearchMatchCount = notesSearchMatchCount
         self.notesSearchMatchTitle = notesSearchMatchTitle
@@ -411,6 +423,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case fuzzyWarningSearchMissingExplainability
     case fuzzyWarningSearchDiagnosticsExportFailed
     case fuzzyWarningSearchDiagnosticsExportMissingMatch
+    case fuzzyWarningSearchPanelActiveSearchMismatch
     case notesSearchNoMatch
     case notesSearchMissingExplainability
     case notesSearchDiagnosticsExportFailed
@@ -935,6 +948,16 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.fuzzyWarningSearchDiagnosticsExportMissingMatch
         }
 
+        let fuzzyWarningSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: fuzzyWarningSearchQuery,
+            matchCount: fuzzyWarningSearchMatchCount,
+            exportText: fuzzyWarningExportText,
+            requiredQuerySubstring: "ncpr fnd",
+            requiredMatchTitleSubstring: "Broken Folder Example",
+            requiredSummarySubstrings: ["fuzzy scan warning", "ncpr", "fnd"]
+        )
+
         let notesSearchQuery = "nts nly"
         viewModel.searchQuery = notesSearchQuery
         viewModel.applySearchFilter()
@@ -1201,6 +1224,10 @@ public enum ArchiveUserFlowSmoke {
             fuzzyWarningSearchMatchSummary: fuzzyWarningSearchMatchSummary,
             fuzzyWarningSearchDiagnosticsExportPath: fuzzyWarningExportPath,
             fuzzyWarningSearchDiagnosticsExportContainsMatch: exportContainsFuzzyWarningMatch,
+            fuzzyWarningSearchPanelQueryLine: fuzzyWarningSearchPanel.queryLine,
+            fuzzyWarningSearchPanelQueryLineMatchesExport: fuzzyWarningSearchPanel.queryLineMatchesExport,
+            fuzzyWarningSearchPanelMatchLines: fuzzyWarningSearchPanel.matchLinesJoined,
+            fuzzyWarningSearchPanelMatchLinesMatchExport: fuzzyWarningSearchPanel.matchLinesMatchExport,
             notesSearchQuery: notesSearchQuery,
             notesSearchMatchCount: notesSearchMatchCount,
             notesSearchMatchTitle: notesMatch.displayTitle,
@@ -1257,6 +1284,68 @@ public enum ArchiveUserFlowSmoke {
             skippedSearchPanelQueryLineMatchesExport: skippedSearchPanelQueryLineMatchesExport,
             skippedSearchPanelMatchLines: panelSkippedSearchMatchLinesJoined,
             skippedSearchPanelMatchLinesMatchExport: skippedSearchPanelMatchLinesMatchExport
+        )
+    }
+
+    private struct ActiveSearchPanelParity: Sendable {
+        let queryLine: String
+        let queryLineMatchesExport: Bool
+        let matchLinesJoined: String
+        let matchLinesMatchExport: Bool
+    }
+
+    @MainActor
+    private static func activeSearchPanelParity(
+        viewModel: ArchiveBrowserViewModel,
+        query: String,
+        matchCount: Int,
+        exportText: String,
+        requiredQuerySubstring: String,
+        requiredMatchTitleSubstring: String,
+        requiredSummarySubstrings: [String]
+    ) throws -> ActiveSearchPanelParity {
+        guard let searchPanelContext = viewModel.activeSearchExportContext() else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchPanelActiveSearchMismatch
+        }
+        let panelQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
+            query: searchPanelContext.query,
+            matchCount: searchPanelContext.matches.count
+        )
+        let panelMatchLines = searchPanelContext.matches.map {
+            ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
+                displayTitle: $0.displayTitle,
+                summary: $0.summary
+            )
+        }
+        let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
+        let queryLineMatchesExport =
+            searchPanelContext.query == query
+            && searchPanelContext.matches.count == matchCount
+            && ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: exportText,
+                query: searchPanelContext.query,
+                matchCount: searchPanelContext.matches.count
+            )
+            && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
+            && panelQueryLine.contains("\(matchCount) match")
+        let matchLinesMatchExport =
+            !panelMatchLines.isEmpty
+            && ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
+                in: exportText,
+                matches: searchPanelContext.matches
+            )
+            && panelMatchLines.contains(where: { $0.contains(requiredMatchTitleSubstring) })
+            && requiredSummarySubstrings.allSatisfy { substring in
+                panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
+            }
+        guard queryLineMatchesExport, matchLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchPanelActiveSearchMismatch
+        }
+        return ActiveSearchPanelParity(
+            queryLine: panelQueryLine,
+            queryLineMatchesExport: queryLineMatchesExport,
+            matchLinesJoined: panelMatchLinesJoined,
+            matchLinesMatchExport: matchLinesMatchExport
         )
     }
 

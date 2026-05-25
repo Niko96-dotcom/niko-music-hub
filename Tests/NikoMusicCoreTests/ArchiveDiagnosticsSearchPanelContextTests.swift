@@ -53,6 +53,49 @@ final class ArchiveDiagnosticsSearchPanelContextTests: XCTestCase {
         )
     }
 
+    func testFixtureFuzzyScanWarningSearchPanelMatchesExporter() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let index = MusicSearchIndex(songs: result.songs)
+        let searchResults = index.searchResults("ncpr fnd")
+        XCTAssertEqual(searchResults.count, 1)
+        XCTAssertEqual(searchResults.first?.song.displayTitle, "Broken Folder Example")
+        XCTAssertTrue(searchResults.first?.matchSummary.contains("fuzzy scan warning") == true)
+
+        let context = ArchiveDiagnosticsSearchContext(
+            query: "ncpr fnd",
+            matches: searchResults.map {
+                ArchiveDiagnosticsSearchMatch(
+                    displayTitle: $0.song.displayTitle,
+                    summary: $0.matchSummary
+                )
+            }
+        )
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil,
+            searchContext: context
+        )
+
+        XCTAssertTrue(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: exportText,
+                query: context.query,
+                matchCount: context.matches.count
+            )
+        )
+        XCTAssertTrue(
+            ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
+                in: exportText,
+                matches: context.matches
+            )
+        )
+    }
+
     func testFixtureNeonSearchPanelMatchesExporter() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])

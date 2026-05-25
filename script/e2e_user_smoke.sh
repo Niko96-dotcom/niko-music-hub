@@ -571,6 +571,64 @@ if ! grep -q "diagnostics_export_fuzzy_warning_match=true" "$LOG_FILE"; then
   exit 1
 fi
 
+FUZZY_WARNING_EXPORT_PATH="$(grep -m1 'diagnostics_export_fuzzy_warning_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_fuzzy_warning_path=//')"
+if [[ -z "$FUZZY_WARNING_EXPORT_PATH" || ! -f "$FUZZY_WARNING_EXPORT_PATH" ]]; then
+  echo "E2E failed: fuzzy scan-warning diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Broken Folder Example" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy scan-warning search_match row" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy scan warning" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy scan warning explainability" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_fuzzy_warning_search_query_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel fuzzy scan-warning search query line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_FUZZY_WARNING_SEARCH_QUERY_LINE="$(grep -m1 'diagnostics_panel_fuzzy_warning_search_query_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_fuzzy_warning_search_query_line=//')"
+if [[ -z "$PANEL_FUZZY_WARNING_SEARCH_QUERY_LINE" ]]; then
+  echo "E2E failed: diagnostics panel fuzzy scan-warning search query line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_query=ncpr fnd" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: export search_query does not match panel fuzzy scan-warning search" >&2
+  exit 1
+fi
+
+if ! grep -q "search_matches=1" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: export search_matches does not match panel fuzzy scan-warning search count" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_fuzzy_warning_search_match_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel fuzzy scan-warning search match lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_FUZZY_WARNING_SEARCH_MATCH_LINES="$(grep -m1 'diagnostics_panel_fuzzy_warning_search_match_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_fuzzy_warning_search_match_lines=//')"
+if [[ -z "$PANEL_FUZZY_WARNING_SEARCH_MATCH_LINES" ]]; then
+  echo "E2E failed: diagnostics panel fuzzy scan-warning search match lines missing from smoke output" >&2
+  exit 1
+fi
+
+while IFS= read -r match_line; do
+  [[ -z "$match_line" ]] && continue
+  title="${match_line%% — *}"
+  summary="${match_line#* — }"
+  if ! grep -Fq "search_match title=${title} summary=${summary}" "$FUZZY_WARNING_EXPORT_PATH"; then
+    echo "E2E failed: export missing search_match for panel line: ${match_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_FUZZY_WARNING_SEARCH_MATCH_LINES// | /$'\n'}")
+
 if ! grep -q "notes_search_query=nts nly" "$LOG_FILE"; then
   echo "E2E failed: sidecar notes search query marker missing" >&2
   exit 1
@@ -773,22 +831,6 @@ fi
 
 if ! grep -q "search_match title=Broken Folder Example" "$WARNING_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing search_match row for Broken Folder Example" >&2
-  exit 1
-fi
-
-FUZZY_WARNING_EXPORT_PATH="$(grep -m1 'diagnostics_export_fuzzy_warning_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_fuzzy_warning_path=//')"
-if [[ -z "$FUZZY_WARNING_EXPORT_PATH" || ! -f "$FUZZY_WARNING_EXPORT_PATH" ]]; then
-  echo "E2E failed: fuzzy scan-warning diagnostics export path missing from smoke output" >&2
-  exit 1
-fi
-
-if ! grep -q "search_match title=Broken Folder Example" "$FUZZY_WARNING_EXPORT_PATH"; then
-  echo "E2E failed: exported diagnostics missing fuzzy scan-warning search_match row" >&2
-  exit 1
-fi
-
-if ! grep -q "fuzzy scan warning" "$FUZZY_WARNING_EXPORT_PATH"; then
-  echo "E2E failed: exported diagnostics missing fuzzy scan warning explainability" >&2
   exit 1
 fi
 

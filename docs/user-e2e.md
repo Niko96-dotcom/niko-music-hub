@@ -49,6 +49,11 @@ When a song search is active (fixture flow uses **neon hk**), the diagnostics pa
 - `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)
 - `diagnostics_panel_search_match_lines_match=` (each panel match line matches an export `search_match title=… summary=…`)
 
+Fuzzy scan-warning triage uses query **ncpr fnd** (Broken Folder Example). The same **Active search** panel section must match export; smoke asserts:
+
+- `diagnostics_panel_fuzzy_warning_search_query_line_match=`
+- `diagnostics_panel_fuzzy_warning_search_match_lines_match=`
+
 When a song is selected (fixture flow selects **Broken Folder Example** after scan), the diagnostics panel shows **Selected song** with title, CPR summary, scan warnings, and sidecar notes. Smoke asserts panel/export parity with the export `selected_song` block:
 
 - `diagnostics_panel_selected_song_title_line_match=` (panel title matches export `selected_song_title=`)
