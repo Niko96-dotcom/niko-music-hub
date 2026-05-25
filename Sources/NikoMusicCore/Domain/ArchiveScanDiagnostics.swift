@@ -11,6 +11,9 @@ public struct SongWarningSummary: Sendable, Equatable, Codable {
 }
 
 public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
+    /// Max song titles listed in `summaryLine` / pasteable support summary before an "and N more" suffix.
+    public static let summaryLineMaxSongWarningTitles = 5
+
     public let scannedAt: Date
     public let rootPaths: [String]
     public let songCount: Int
@@ -58,10 +61,21 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         guard totalSongWarningCount > 0 else { return "no warnings" }
         var clause = "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"
         let titles = songWarningSummaries.map(\.displayTitle).sorted()
-        if !titles.isEmpty {
-            clause += " — \(titles.joined(separator: ", "))"
+        if let titleList = Self.formattedSongWarningTitles(titles) {
+            clause += " — \(titleList)"
         }
         return clause
+    }
+
+    static func formattedSongWarningTitles(_ sortedTitles: [String]) -> String? {
+        guard !sortedTitles.isEmpty else { return nil }
+        let cap = summaryLineMaxSongWarningTitles
+        if sortedTitles.count <= cap {
+            return sortedTitles.joined(separator: ", ")
+        }
+        let shown = sortedTitles.prefix(cap).joined(separator: ", ")
+        let remainder = sortedTitles.count - cap
+        return "\(shown) and \(remainder) more"
     }
 
     /// One pasteable support-ticket line: redacted roots plus scan counts.

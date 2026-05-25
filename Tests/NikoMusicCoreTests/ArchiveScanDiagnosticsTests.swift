@@ -128,6 +128,27 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         )
     }
 
+    func testSummaryLineTruncatesManySongWarningTitles() {
+        let summaries = (1...8).map { index in
+            SongWarningSummary(displayTitle: "Song \(index)", warnings: ["warn \(index)"])
+        }
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 8,
+            songsWithWarningsCount: 8,
+            totalSongWarningCount: 8,
+            globalWarnings: [],
+            songWarningSummaries: summaries,
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(
+            diagnostics.summaryLine,
+            "Scanned 8 songs · 8 song(s) with 8 warning(s) — Song 1, Song 2, Song 3, Song 4, Song 5 and 3 more · nothing skipped at roots"
+        )
+    }
+
     func testExportSummaryLineIncludesRedactedRootsAndScanCounts() {
         let home = "/Users/tester"
         let diagnostics = ArchiveScanDiagnostics(
