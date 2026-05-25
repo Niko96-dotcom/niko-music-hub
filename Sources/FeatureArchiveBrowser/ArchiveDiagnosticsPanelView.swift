@@ -41,6 +41,19 @@ struct ArchiveDiagnosticsPanelView: View {
                     .lineLimit(3)
             }
 
+            let tooShortBreakdowns = diagnostics.previewRankingPanel.tooShortSongBreakdowns
+            if !tooShortBreakdowns.isEmpty {
+                Text("Too short previews (not main)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                ForEach(tooShortBreakdowns, id: \.displayTitle) { breakdown in
+                    Text("• \(breakdown.panelDisplayLine)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(3)
+                }
+            }
+
             if let selectedHeader = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(
                 for: selectedSong
             ) {

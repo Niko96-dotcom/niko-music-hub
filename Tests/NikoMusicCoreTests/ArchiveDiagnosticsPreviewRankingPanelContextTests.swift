@@ -46,4 +46,16 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         XCTAssertEqual(labBreakdown.clipCount, 1)
         XCTAssertEqual(labBreakdown.clipNames, ["Lab Song short clip.wav"])
     }
+
+    func testTooShortBreakdownPanelDisplayLine() {
+        let breakdown = TooShortNonMainSongBreakdown(
+            displayTitle: "Preview Ranking Lab",
+            clipCount: 1,
+            clipNames: ["Lab Song short clip.wav"]
+        )
+        XCTAssertEqual(
+            breakdown.panelDisplayLine,
+            "Preview Ranking Lab: 1 too short clip — Lab Song short clip.wav"
+        )
+    }
 }
