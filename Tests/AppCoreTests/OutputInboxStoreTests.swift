@@ -55,7 +55,7 @@ final class OutputInboxStoreTests: XCTestCase {
 
     func testOutputInboxInspectorSourceContainsRevealAndDragHandoff() throws {
         let source = try String(
-            contentsOfFile: "Sources/OutsideCubaseHub/AppShell/OutputInboxInspectorView.swift",
+            contentsOfFile: "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift",
             encoding: .utf8
         )
 
