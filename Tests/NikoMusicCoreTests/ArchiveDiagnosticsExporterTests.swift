@@ -121,6 +121,8 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         )
         XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
         XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
+        XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
+        XCTAssertFalse(neonText.contains("selected_song_notes="))
     }
 
     func testFormattedTextRedactsPathsEmbeddedInWarnings() {

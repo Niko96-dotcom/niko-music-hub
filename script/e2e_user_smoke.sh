@@ -87,6 +87,11 @@ if ! grep -q "broken_folder_warnings=.*CPR" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "broken_folder_notes=notes only" "$LOG_FILE"; then
+  echo "E2E failed: broken folder sidecar notes missing from smoke output" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1

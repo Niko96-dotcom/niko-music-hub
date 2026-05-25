@@ -17,6 +17,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let searchMatchSummary: String
     public let rankingLabMainPreviewSummary: String
     public let brokenFolderDisplayWarnings: [String]
+    public let brokenFolderSidecarNotes: String?
 
     public init(
         userFlow: String,
@@ -32,7 +33,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         diagnosticsSkippedCount: Int,
         searchMatchSummary: String,
         rankingLabMainPreviewSummary: String,
-        brokenFolderDisplayWarnings: [String]
+        brokenFolderDisplayWarnings: [String],
+        brokenFolderSidecarNotes: String?
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -48,6 +50,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.searchMatchSummary = searchMatchSummary
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
+        self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
     }
 }
 
@@ -58,6 +61,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case missingRankingLabPreviewSummary
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
+    case brokenFolderMissingSidecarNotes
 }
 
 @MainActor
@@ -111,6 +115,11 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.brokenFolderMissingDisplayWarnings
         }
 
+        guard let brokenFolderSidecarNotes = broken.displaySidecarNotes(),
+              brokenFolderSidecarNotes == "notes only" else {
+            throw ArchiveUserFlowSmokeError.brokenFolderMissingSidecarNotes
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: viewModel.songs.count,
@@ -125,7 +134,8 @@ public enum ArchiveUserFlowSmoke {
             diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
             searchMatchSummary: searchMatchSummary,
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
-            brokenFolderDisplayWarnings: brokenFolderDisplayWarnings
+            brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
+            brokenFolderSidecarNotes: brokenFolderSidecarNotes
         )
     }
 

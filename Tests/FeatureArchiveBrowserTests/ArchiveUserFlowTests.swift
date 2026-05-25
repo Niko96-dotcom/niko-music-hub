@@ -39,5 +39,6 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(
             result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") })
         )
+        XCTAssertEqual(result.brokenFolderSidecarNotes, "notes only")
     }
 }
