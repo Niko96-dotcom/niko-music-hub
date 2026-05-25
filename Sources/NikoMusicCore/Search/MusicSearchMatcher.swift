@@ -2,9 +2,9 @@ import Foundation
 
 enum MusicSearchMatcher {
     static func tokens(from query: String) -> [String] {
-        normalize(query)
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-            .map(String.init)
+        query
+            .split(whereSeparator: { $0.isWhitespace || (!$0.isLetter && !$0.isNumber) })
+            .map { normalize(String($0)) }
             .filter { !$0.isEmpty }
     }
 
@@ -20,10 +20,12 @@ enum MusicSearchMatcher {
 
     static func matchDetails(song: Song, queryTokens: [String]) -> [MusicSearchMatchDetail] {
         guard !queryTokens.isEmpty else { return [] }
-        return queryTokens.compactMap { token in
+        let details = queryTokens.compactMap { token -> MusicSearchMatchDetail? in
             guard let match = bestTokenMatch(token, for: song) else { return nil }
             return MusicSearchMatchDetail(queryToken: token, kind: match.kind, score: match.score)
         }
+        guard details.count == queryTokens.count else { return [] }
+        return details
     }
 
     private static func bestTokenMatch(_ token: String, for song: Song) -> (kind: MusicSearchMatchKind, score: Int)? {
