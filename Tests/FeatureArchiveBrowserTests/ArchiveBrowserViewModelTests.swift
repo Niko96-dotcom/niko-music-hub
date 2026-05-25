@@ -52,6 +52,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
         )
         XCTAssertFalse(diagnostics.summaryLine.isEmpty)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let panel = ArchiveDiagnosticsPanelContext.from(diagnostics, homeDirectory: home)
+        XCTAssertEqual(panel.supportSummaryLine, diagnostics.exportSummaryLine(homeDirectory: home))
+        XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 5 songs"))
         XCTAssertFalse(diagnostics.displayRootPaths().isEmpty)
         XCTAssertTrue(
             diagnostics.displayRootPaths().first?.contains("CubaseArchive") == true

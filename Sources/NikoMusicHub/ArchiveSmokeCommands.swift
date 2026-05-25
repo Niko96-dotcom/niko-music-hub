@@ -71,6 +71,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_search_match=\(result.searchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_match=\(result.searchDiagnosticsExportContainsSummaryLine)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_line=\(result.diagnosticsExportSummaryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_support_summary=\(result.diagnosticsPanelSupportSummary)")
+        print("[niko-music-hub-smoke] diagnostics_panel_matches_export=\(result.diagnosticsPanelMatchesExportSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_path=\(result.skippedSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_skipped_match=\(result.skippedSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
@@ -132,6 +134,10 @@ enum ArchiveSmokeCommands {
               !result.diagnosticsExportSummaryLine.isEmpty,
               result.diagnosticsExportSummaryLine.contains("summary_line=roots:"),
               result.diagnosticsExportSummaryLine.contains("Scanned 5 songs"),
+              !result.diagnosticsPanelSupportSummary.isEmpty,
+              result.diagnosticsPanelSupportSummary.hasPrefix("roots:"),
+              result.diagnosticsPanelSupportSummary.contains("Scanned 5 songs"),
+              result.diagnosticsPanelMatchesExportSummary,
               !result.skippedSearchDiagnosticsExportPath.isEmpty,
               result.skippedSearchDiagnosticsExportContainsMatch else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete

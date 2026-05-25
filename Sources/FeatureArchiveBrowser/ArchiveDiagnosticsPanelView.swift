@@ -13,6 +13,13 @@ struct ArchiveDiagnosticsPanelView: View {
         return formatter
     }()
 
+    private var panelContext: ArchiveDiagnosticsPanelContext {
+        ArchiveDiagnosticsPanelContext.from(
+            diagnostics,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -24,10 +31,14 @@ struct ArchiveDiagnosticsPanelView: View {
                     .buttonStyle(.borderless)
             }
 
-            Text(diagnostics.summaryLine)
+            Text("Support summary")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            Text(panelContext.supportSummaryLine)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
-                .lineLimit(3)
+                .textSelection(.enabled)
+                .lineLimit(4)
 
             Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)
                 .font(.system(size: 10))

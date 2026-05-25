@@ -301,6 +301,21 @@ if ! grep -q "diagnostics_export_summary_line=.*2 skipped at roots" "$LOG_FILE";
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_matches_export=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel support summary does not match export summary_line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_support_summary=roots:" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel support summary missing roots prefix" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_support_summary=.*Scanned 5 songs" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel support summary missing song count" >&2
+  exit 1
+fi
+
 SEARCH_EXPORT_PATH="$(grep -m1 'diagnostics_export_search_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_search_path=//')"
 if [[ -z "$SEARCH_EXPORT_PATH" || ! -f "$SEARCH_EXPORT_PATH" ]]; then
   echo "E2E failed: song-search diagnostics export path missing from smoke output" >&2
