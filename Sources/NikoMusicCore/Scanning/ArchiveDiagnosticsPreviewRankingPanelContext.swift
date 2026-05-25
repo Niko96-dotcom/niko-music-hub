@@ -16,6 +16,13 @@ public struct TooShortNonMainSongBreakdown: Sendable, Equatable, Codable {
         let clips = clipNames.joined(separator: ", ")
         return "too_short_song=\(displayTitle) count=\(clipCount) clips=\(clips)"
     }
+
+    /// Operator-facing line for the archive diagnostics panel (not export format).
+    public var panelDisplayLine: String {
+        let clipWord = clipCount == 1 ? "clip" : "clips"
+        let clips = clipNames.joined(separator: ", ")
+        return "\(displayTitle): \(clipCount) too short \(clipWord) — \(clips)"
+    }
 }
 
 /// Operator-facing preview ranking hints for the archive diagnostics panel header.
