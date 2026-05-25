@@ -1,10 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-13)
+## Picked (music-14)
+
+Diagnostics export: redact home-prefixed CPR/archive paths embedded in warning and skip-reason text.
+
+## Completed
+
+- `DiagnosticsPathRedactor.redactPathsInText` scans free-form strings for embedded home paths
+- Exporter applies redaction to `global_warning`, per-song `warning`, `selected_song_warning`, and skip `reason` lines
+- `DiagnosticsPathRedactorTests` and `ArchiveDiagnosticsExporterTests` cover embedded CPR paths
+- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-13)
 
 Diagnostics export: include selected song CPR/warning summary alongside preview ranking when selected.
 
-## Completed
+## Prior completed (music-13)
 
 - `ArchiveDiagnosticsSelectedSongExplainability.cprSummary(for:)` for version count + latest CPR filename
 - `ArchiveDiagnosticsSelectedSongContext` extended with `cprSummary`, `warningLines`, optional `mainPreviewSummary`
@@ -50,4 +61,4 @@ Search result ranking: sort matches by match quality (title > folder > filenames
 
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias/note fields per SPEC §10 (no metadata layer yet)
-- Diagnostics export: redact any CPR paths if full paths ever appear in warning text
+- Diagnostics panel: redact embedded paths in on-screen warnings/skipped labels (export is covered)
