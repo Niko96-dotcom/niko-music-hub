@@ -83,4 +83,24 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
             "Preview Ranking Lab: 1 too short clip — Lab Song short clip.wav"
         )
     }
+
+    func testRankingLabTooShortBreakdownPanelMatchesExport() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let breakdown = try XCTUnwrap(
+            diagnostics.previewRankingPanel.tooShortSongBreakdowns.first {
+                $0.displayTitle == "Preview Ranking Lab"
+            }
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil
+        )
+        XCTAssertTrue(exportText.contains(breakdown.exportLine))
+        XCTAssertTrue(breakdown.panelMatchesExport(in: exportText))
+    }
 }
