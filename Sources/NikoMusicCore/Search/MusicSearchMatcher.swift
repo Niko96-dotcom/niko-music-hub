@@ -37,6 +37,7 @@ enum MusicSearchMatcher {
 
         let folder = normalize(song.originalFolderName)
         if folder.contains(token) { return (.folderName, 60) }
+        if isSubsequence(token, in: folder) { return (.fuzzyFolderName, 18) }
 
         if song.projectVersions.contains(where: { normalize($0.fileName).contains(token) }) {
             return (.projectVersionFileName, 40)

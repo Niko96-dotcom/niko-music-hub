@@ -229,6 +229,57 @@ if ! grep -q "diagnostics_export_notes_match=true" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "folder_search_query=brkn fld" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "folder_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "folder_search_match=Broken Folder Example" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search did not select Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "folder_search_summary=.*fuzzy folder" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search explainability missing fuzzy folder signal" >&2
+  exit 1
+fi
+
+if ! grep -q "folder_search_summary=.*brkn" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search explainability missing brkn token" >&2
+  exit 1
+fi
+
+if ! grep -q "folder_search_summary=.*fld" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy folder search explainability missing fld token" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_folder_match=true" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy-folder diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+FOLDER_EXPORT_PATH="$(grep -m1 'diagnostics_export_folder_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_folder_path=//')"
+if [[ -z "$FOLDER_EXPORT_PATH" || ! -f "$FOLDER_EXPORT_PATH" ]]; then
+  echo "E2E failed: fuzzy-folder diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Broken Folder Example" "$FOLDER_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing search_match row for fuzzy folder search" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy folder" "$FOLDER_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy folder explainability" >&2
+  exit 1
+fi
+
 NOTES_EXPORT_PATH="$(grep -m1 'diagnostics_export_notes_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_notes_path=//')"
 if [[ -z "$NOTES_EXPORT_PATH" || ! -f "$NOTES_EXPORT_PATH" ]]; then
   echo "E2E failed: sidecar-notes diagnostics export path missing from smoke output" >&2
