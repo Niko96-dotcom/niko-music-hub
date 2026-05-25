@@ -56,5 +56,7 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(result.skippedSearchMatchCount, 1)
         XCTAssertEqual(result.skippedSearchMatchLabel, "LOOSE_FILE.txt")
         XCTAssertTrue(result.skippedSearchMatchSummary.contains("skipped label"))
+        XCTAssertFalse(result.skippedSearchDiagnosticsExportPath.isEmpty)
+        XCTAssertTrue(result.skippedSearchDiagnosticsExportContainsMatch)
     }
 }

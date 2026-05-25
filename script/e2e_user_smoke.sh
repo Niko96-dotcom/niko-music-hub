@@ -137,6 +137,22 @@ if ! grep -q "skipped_search_summary=.*skipped label" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_skipped_match=true" "$LOG_FILE"; then
+  echo "E2E failed: skipped-search diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+EXPORT_PATH="$(grep -m1 'diagnostics_export_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_path=//')"
+if [[ -z "$EXPORT_PATH" || ! -f "$EXPORT_PATH" ]]; then
+  echo "E2E failed: diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_match label=LOOSE_FILE.txt" "$EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing skipped_search_match row" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1

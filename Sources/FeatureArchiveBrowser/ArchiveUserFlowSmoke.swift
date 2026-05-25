@@ -29,6 +29,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
     public let skippedSearchMatchSummary: String
+    public let skippedSearchDiagnosticsExportPath: String
+    public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
     public init(
         userFlow: String,
@@ -55,7 +57,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         skippedSearchQuery: String,
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
-        skippedSearchMatchSummary: String
+        skippedSearchMatchSummary: String,
+        skippedSearchDiagnosticsExportPath: String,
+        skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -82,6 +86,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
         self.skippedSearchMatchSummary = skippedSearchMatchSummary
+        self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
+        self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
 }
 
@@ -97,6 +103,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case warningSearchMissingExplainability
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
+    case skippedSearchDiagnosticsExportFailed
+    case skippedSearchDiagnosticsExportMissingMatch
 }
 
 @MainActor
@@ -187,6 +195,17 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.skippedSearchMissingExplainability
         }
 
+        try viewModel.exportDiagnostics()
+        guard let exportPath = viewModel.lastDiagnosticsExportPath,
+              !exportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportFailed
+        }
+        let exportText = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
+        let exportContainsSkippedMatch = exportText.contains("skipped_search_match label=LOOSE_FILE.txt")
+        guard exportContainsSkippedMatch else {
+            throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportMissingMatch
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: songCount,
@@ -212,7 +231,9 @@ public enum ArchiveUserFlowSmoke {
             skippedSearchQuery: skippedSearchQuery,
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,
-            skippedSearchMatchSummary: skippedMatch.matchSummary
+            skippedSearchMatchSummary: skippedMatch.matchSummary,
+            skippedSearchDiagnosticsExportPath: exportPath,
+            skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )
     }
 
