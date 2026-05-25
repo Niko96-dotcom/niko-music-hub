@@ -201,6 +201,22 @@ if ! grep -q "preview_rank_tiebreak=Equal score — version v3 beat v2" "$VERSIO
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_version_tiebreak_callout_match=true" "$LOG_FILE"; then
+  echo "E2E failed: version tiebreak panel callout missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_VERSION_TIEBREAK_CALLOUT="$(grep -m1 'diagnostics_panel_version_tiebreak_callout=' "$LOG_FILE" | sed 's/.*diagnostics_panel_version_tiebreak_callout=//')"
+if [[ -z "$PANEL_VERSION_TIEBREAK_CALLOUT" ]]; then
+  echo "E2E failed: version tiebreak panel callout missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=${PANEL_VERSION_TIEBREAK_CALLOUT}" "$VERSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: export preview_rank_tiebreak does not match version panel callout" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_extension_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: extension tiebreak diagnostics export missing active match marker" >&2
   exit 1
@@ -219,6 +235,22 @@ fi
 
 if ! grep -q "preview_rank_tiebreak=Equal score — preferred flac over mp3" "$EXTENSION_TIEBREAK_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing extension preview_rank_tiebreak line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_extension_tiebreak_callout_match=true" "$LOG_FILE"; then
+  echo "E2E failed: extension tiebreak panel callout missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_EXTENSION_TIEBREAK_CALLOUT="$(grep -m1 'diagnostics_panel_extension_tiebreak_callout=' "$LOG_FILE" | sed 's/.*diagnostics_panel_extension_tiebreak_callout=//')"
+if [[ -z "$PANEL_EXTENSION_TIEBREAK_CALLOUT" ]]; then
+  echo "E2E failed: extension tiebreak panel callout missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=${PANEL_EXTENSION_TIEBREAK_CALLOUT}" "$EXTENSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: export preview_rank_tiebreak does not match extension panel callout" >&2
   exit 1
 fi
 

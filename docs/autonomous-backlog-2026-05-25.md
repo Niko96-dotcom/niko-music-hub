@@ -1,20 +1,20 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-53)
+## Picked (music-54)
 
-Diagnostics panel: dedicated preview tiebreak callout when a song is selected (export `preview_rank_tiebreak=` parity) and user-flow/E2E proof that panel selected header + callout match export on the duration tiebreak fixture.
+Diagnostics panel: prove version and extension preview tiebreak callouts match export (`preview_rank_tiebreak=`) on their fixtures — parity gap after duration tiebreak panel proof in music-53.
 
-## Completed (music-53)
+## Completed (music-54)
 
-- `ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for:)`
-- `ArchiveDiagnosticsPanelView` shows accent tiebreak line; accessibility id `archive_diagnostics_preview_tiebreak_callout`
-- Removed duplicate tiebreak text in `selectedSongHeader` (already embedded in `mainPreviewSummary`)
-- User-flow smoke + E2E: `diagnostics_panel_duration_tiebreak_*_match=` markers
+- `ArchiveUserFlowSmoke` panel/export parity for **Equal Score Version Tiebreak** and **Equal Score Extension Tiebreak** callouts
+- Smoke stdout: `diagnostics_panel_version_tiebreak_callout_match=`, `diagnostics_panel_extension_tiebreak_callout_match=`
+- E2E asserts panel callout text equals export `preview_rank_tiebreak=` on both fixtures
+- `docs/user-e2e.md` documents version/extension tiebreak parity markers
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-52)
+## Prior (music-53)
 
-Diagnostics panel: surface support-summary truncation footnote when many songs have warnings (export metadata existed; in-app panel had no operator hint).
+Diagnostics panel: dedicated preview tiebreak callout when a song is selected (export `preview_rank_tiebreak=` parity) and user-flow/E2E proof that panel selected header + callout match export on the duration tiebreak fixture.
 
 ## Next best TODO
 

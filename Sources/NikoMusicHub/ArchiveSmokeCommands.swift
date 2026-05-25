@@ -56,8 +56,12 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_panel_preview_tiebreak_id=\(ArchiveDiagnosticsPanelAccessibility.selectedPreviewTiebreakCallout)")
         print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_path=\(result.versionTiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_match=\(result.versionTiebreakLabDiagnosticsExportContainsTiebreak)")
+        print("[niko-music-hub-smoke] diagnostics_panel_version_tiebreak_callout=\(result.versionTiebreakPanelCallout)")
+        print("[niko-music-hub-smoke] diagnostics_panel_version_tiebreak_callout_match=\(result.versionTiebreakPanelCalloutMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_export_extension_tiebreak_path=\(result.extensionTiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_extension_tiebreak_match=\(result.extensionTiebreakLabDiagnosticsExportContainsTiebreak)")
+        print("[niko-music-hub-smoke] diagnostics_panel_extension_tiebreak_callout=\(result.extensionTiebreakPanelCallout)")
+        print("[niko-music-hub-smoke] diagnostics_panel_extension_tiebreak_callout_match=\(result.extensionTiebreakPanelCalloutMatchesExport)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
         print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
         print("[niko-music-hub-smoke] warning_search_query=\(result.warningSearchQuery)")
@@ -151,8 +155,12 @@ enum ArchiveSmokeCommands {
               result.tiebreakPanelPreviewTiebreakCalloutMatchesExport,
               !result.versionTiebreakLabDiagnosticsExportPath.isEmpty,
               result.versionTiebreakLabDiagnosticsExportContainsTiebreak,
+              result.versionTiebreakPanelCallout.contains("Equal score — version v3 beat v2"),
+              result.versionTiebreakPanelCalloutMatchesExport,
               !result.extensionTiebreakLabDiagnosticsExportPath.isEmpty,
               result.extensionTiebreakLabDiagnosticsExportContainsTiebreak,
+              result.extensionTiebreakPanelCallout.contains("Equal score — preferred flac over mp3"),
+              result.extensionTiebreakPanelCalloutMatchesExport,
               result.selectedTitle == "Neon Hook",
               result.dryRunCPRPath.contains("Neon Hook"),
               result.dryRunCPRPath.hasSuffix(".cpr"),
