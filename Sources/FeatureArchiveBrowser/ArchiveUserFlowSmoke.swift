@@ -64,6 +64,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let warningSearchMatchSummary: String
     public let warningSearchDiagnosticsExportPath: String
     public let warningSearchDiagnosticsExportContainsMatch: Bool
+    public let warningSearchPanelQueryLine: String
+    public let warningSearchPanelQueryLineMatchesExport: Bool
+    public let warningSearchPanelMatchLines: String
+    public let warningSearchPanelMatchLinesMatchExport: Bool
     public let fuzzyWarningSearchQuery: String
     public let fuzzyWarningSearchMatchCount: Int
     public let fuzzyWarningSearchMatchTitle: String
@@ -80,24 +84,40 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let notesSearchMatchSummary: String
     public let notesSearchDiagnosticsExportPath: String
     public let notesSearchDiagnosticsExportContainsMatch: Bool
+    public let notesSearchPanelQueryLine: String
+    public let notesSearchPanelQueryLineMatchesExport: Bool
+    public let notesSearchPanelMatchLines: String
+    public let notesSearchPanelMatchLinesMatchExport: Bool
     public let folderSearchQuery: String
     public let folderSearchMatchCount: Int
     public let folderSearchMatchTitle: String
     public let folderSearchMatchSummary: String
     public let folderSearchDiagnosticsExportPath: String
     public let folderSearchDiagnosticsExportContainsMatch: Bool
+    public let folderSearchPanelQueryLine: String
+    public let folderSearchPanelQueryLineMatchesExport: Bool
+    public let folderSearchPanelMatchLines: String
+    public let folderSearchPanelMatchLinesMatchExport: Bool
     public let cprSearchQuery: String
     public let cprSearchMatchCount: Int
     public let cprSearchMatchTitle: String
     public let cprSearchMatchSummary: String
     public let cprSearchDiagnosticsExportPath: String
     public let cprSearchDiagnosticsExportContainsMatch: Bool
+    public let cprSearchPanelQueryLine: String
+    public let cprSearchPanelQueryLineMatchesExport: Bool
+    public let cprSearchPanelMatchLines: String
+    public let cprSearchPanelMatchLinesMatchExport: Bool
     public let previewSearchQuery: String
     public let previewSearchMatchCount: Int
     public let previewSearchMatchTitle: String
     public let previewSearchMatchSummary: String
     public let previewSearchDiagnosticsExportPath: String
     public let previewSearchDiagnosticsExportContainsMatch: Bool
+    public let previewSearchPanelQueryLine: String
+    public let previewSearchPanelQueryLineMatchesExport: Bool
+    public let previewSearchPanelMatchLines: String
+    public let previewSearchPanelMatchLinesMatchExport: Bool
     public let skippedSearchQuery: String
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
@@ -191,6 +211,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         warningSearchMatchSummary: String,
         warningSearchDiagnosticsExportPath: String,
         warningSearchDiagnosticsExportContainsMatch: Bool,
+        warningSearchPanelQueryLine: String,
+        warningSearchPanelQueryLineMatchesExport: Bool,
+        warningSearchPanelMatchLines: String,
+        warningSearchPanelMatchLinesMatchExport: Bool,
         fuzzyWarningSearchQuery: String,
         fuzzyWarningSearchMatchCount: Int,
         fuzzyWarningSearchMatchTitle: String,
@@ -207,24 +231,40 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         notesSearchMatchSummary: String,
         notesSearchDiagnosticsExportPath: String,
         notesSearchDiagnosticsExportContainsMatch: Bool,
+        notesSearchPanelQueryLine: String,
+        notesSearchPanelQueryLineMatchesExport: Bool,
+        notesSearchPanelMatchLines: String,
+        notesSearchPanelMatchLinesMatchExport: Bool,
         folderSearchQuery: String,
         folderSearchMatchCount: Int,
         folderSearchMatchTitle: String,
         folderSearchMatchSummary: String,
         folderSearchDiagnosticsExportPath: String,
         folderSearchDiagnosticsExportContainsMatch: Bool,
+        folderSearchPanelQueryLine: String,
+        folderSearchPanelQueryLineMatchesExport: Bool,
+        folderSearchPanelMatchLines: String,
+        folderSearchPanelMatchLinesMatchExport: Bool,
         cprSearchQuery: String,
         cprSearchMatchCount: Int,
         cprSearchMatchTitle: String,
         cprSearchMatchSummary: String,
         cprSearchDiagnosticsExportPath: String,
         cprSearchDiagnosticsExportContainsMatch: Bool,
+        cprSearchPanelQueryLine: String,
+        cprSearchPanelQueryLineMatchesExport: Bool,
+        cprSearchPanelMatchLines: String,
+        cprSearchPanelMatchLinesMatchExport: Bool,
         previewSearchQuery: String,
         previewSearchMatchCount: Int,
         previewSearchMatchTitle: String,
         previewSearchMatchSummary: String,
         previewSearchDiagnosticsExportPath: String,
         previewSearchDiagnosticsExportContainsMatch: Bool,
+        previewSearchPanelQueryLine: String,
+        previewSearchPanelQueryLineMatchesExport: Bool,
+        previewSearchPanelMatchLines: String,
+        previewSearchPanelMatchLinesMatchExport: Bool,
         skippedSearchQuery: String,
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
@@ -320,6 +360,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.warningSearchMatchSummary = warningSearchMatchSummary
         self.warningSearchDiagnosticsExportPath = warningSearchDiagnosticsExportPath
         self.warningSearchDiagnosticsExportContainsMatch = warningSearchDiagnosticsExportContainsMatch
+        self.warningSearchPanelQueryLine = warningSearchPanelQueryLine
+        self.warningSearchPanelQueryLineMatchesExport = warningSearchPanelQueryLineMatchesExport
+        self.warningSearchPanelMatchLines = warningSearchPanelMatchLines
+        self.warningSearchPanelMatchLinesMatchExport = warningSearchPanelMatchLinesMatchExport
         self.fuzzyWarningSearchQuery = fuzzyWarningSearchQuery
         self.fuzzyWarningSearchMatchCount = fuzzyWarningSearchMatchCount
         self.fuzzyWarningSearchMatchTitle = fuzzyWarningSearchMatchTitle
@@ -336,24 +380,40 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.notesSearchMatchSummary = notesSearchMatchSummary
         self.notesSearchDiagnosticsExportPath = notesSearchDiagnosticsExportPath
         self.notesSearchDiagnosticsExportContainsMatch = notesSearchDiagnosticsExportContainsMatch
+        self.notesSearchPanelQueryLine = notesSearchPanelQueryLine
+        self.notesSearchPanelQueryLineMatchesExport = notesSearchPanelQueryLineMatchesExport
+        self.notesSearchPanelMatchLines = notesSearchPanelMatchLines
+        self.notesSearchPanelMatchLinesMatchExport = notesSearchPanelMatchLinesMatchExport
         self.folderSearchQuery = folderSearchQuery
         self.folderSearchMatchCount = folderSearchMatchCount
         self.folderSearchMatchTitle = folderSearchMatchTitle
         self.folderSearchMatchSummary = folderSearchMatchSummary
         self.folderSearchDiagnosticsExportPath = folderSearchDiagnosticsExportPath
         self.folderSearchDiagnosticsExportContainsMatch = folderSearchDiagnosticsExportContainsMatch
+        self.folderSearchPanelQueryLine = folderSearchPanelQueryLine
+        self.folderSearchPanelQueryLineMatchesExport = folderSearchPanelQueryLineMatchesExport
+        self.folderSearchPanelMatchLines = folderSearchPanelMatchLines
+        self.folderSearchPanelMatchLinesMatchExport = folderSearchPanelMatchLinesMatchExport
         self.cprSearchQuery = cprSearchQuery
         self.cprSearchMatchCount = cprSearchMatchCount
         self.cprSearchMatchTitle = cprSearchMatchTitle
         self.cprSearchMatchSummary = cprSearchMatchSummary
         self.cprSearchDiagnosticsExportPath = cprSearchDiagnosticsExportPath
         self.cprSearchDiagnosticsExportContainsMatch = cprSearchDiagnosticsExportContainsMatch
+        self.cprSearchPanelQueryLine = cprSearchPanelQueryLine
+        self.cprSearchPanelQueryLineMatchesExport = cprSearchPanelQueryLineMatchesExport
+        self.cprSearchPanelMatchLines = cprSearchPanelMatchLines
+        self.cprSearchPanelMatchLinesMatchExport = cprSearchPanelMatchLinesMatchExport
         self.previewSearchQuery = previewSearchQuery
         self.previewSearchMatchCount = previewSearchMatchCount
         self.previewSearchMatchTitle = previewSearchMatchTitle
         self.previewSearchMatchSummary = previewSearchMatchSummary
         self.previewSearchDiagnosticsExportPath = previewSearchDiagnosticsExportPath
         self.previewSearchDiagnosticsExportContainsMatch = previewSearchDiagnosticsExportContainsMatch
+        self.previewSearchPanelQueryLine = previewSearchPanelQueryLine
+        self.previewSearchPanelQueryLineMatchesExport = previewSearchPanelQueryLineMatchesExport
+        self.previewSearchPanelMatchLines = previewSearchPanelMatchLines
+        self.previewSearchPanelMatchLinesMatchExport = previewSearchPanelMatchLinesMatchExport
         self.skippedSearchQuery = skippedSearchQuery
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
@@ -424,6 +484,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case fuzzyWarningSearchDiagnosticsExportFailed
     case fuzzyWarningSearchDiagnosticsExportMissingMatch
     case fuzzyWarningSearchPanelActiveSearchMismatch
+    case activeSearchPanelMismatch
     case notesSearchNoMatch
     case notesSearchMissingExplainability
     case notesSearchDiagnosticsExportFailed
@@ -921,6 +982,16 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.warningSearchDiagnosticsExportMissingMatch
         }
 
+        let warningSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: warningSearchQuery,
+            matchCount: warningSearchMatchCount,
+            exportText: warningExportText,
+            requiredQuerySubstring: "project",
+            requiredMatchTitleSubstring: "Broken Folder Example",
+            requiredSummarySubstrings: ["scan warning", "project"]
+        )
+
         let fuzzyWarningSearchQuery = "ncpr fnd"
         viewModel.searchQuery = fuzzyWarningSearchQuery
         viewModel.applySearchFilter()
@@ -985,6 +1056,16 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.notesSearchDiagnosticsExportMissingMatch
         }
 
+        let notesSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: notesSearchQuery,
+            matchCount: notesSearchMatchCount,
+            exportText: notesExportText,
+            requiredQuerySubstring: "nts nly",
+            requiredMatchTitleSubstring: "Broken Folder Example",
+            requiredSummarySubstrings: ["fuzzy song note", "nts", "nly"]
+        )
+
         let folderSearchQuery = "brkn fld"
         viewModel.searchQuery = folderSearchQuery
         viewModel.applySearchFilter()
@@ -1012,6 +1093,16 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.folderSearchDiagnosticsExportMissingMatch
         }
 
+        let folderSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: folderSearchQuery,
+            matchCount: folderSearchMatchCount,
+            exportText: folderExportText,
+            requiredQuerySubstring: "brkn fld",
+            requiredMatchTitleSubstring: "Broken Folder Example",
+            requiredSummarySubstrings: ["fuzzy folder", "brkn", "fld"]
+        )
+
         let cprSearchQuery = "neohkv2"
         viewModel.searchQuery = cprSearchQuery
         viewModel.applySearchFilter()
@@ -1037,6 +1128,16 @@ public enum ArchiveUserFlowSmoke {
         guard exportContainsCPRMatch else {
             throw ArchiveUserFlowSmokeError.cprSearchDiagnosticsExportMissingMatch
         }
+
+        let cprSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: cprSearchQuery,
+            matchCount: cprSearchMatchCount,
+            exportText: cprExportText,
+            requiredQuerySubstring: "neohkv2",
+            requiredMatchTitleSubstring: "Neon Hook",
+            requiredSummarySubstrings: ["fuzzy CPR file", "neohkv2"]
+        )
 
         let previewSearchQuery = "ranking lab v3 mx"
         viewModel.searchQuery = previewSearchQuery
@@ -1064,6 +1165,16 @@ public enum ArchiveUserFlowSmoke {
         guard exportContainsPreviewMatch else {
             throw ArchiveUserFlowSmokeError.previewSearchDiagnosticsExportMissingMatch
         }
+
+        let previewSearchPanel = try Self.activeSearchPanelParity(
+            viewModel: viewModel,
+            query: previewSearchQuery,
+            matchCount: previewSearchMatchCount,
+            exportText: previewExportText,
+            requiredQuerySubstring: "ranking lab v3 mx",
+            requiredMatchTitleSubstring: "Preview Ranking Lab",
+            requiredSummarySubstrings: ["fuzzy preview file", "v3", "mx"]
+        )
 
         let skippedSearchQuery = "LOOSE_FILE.txt"
         viewModel.searchQuery = skippedSearchQuery
@@ -1218,6 +1329,10 @@ public enum ArchiveUserFlowSmoke {
             warningSearchMatchSummary: warningSearchMatchSummary,
             warningSearchDiagnosticsExportPath: warningExportPath,
             warningSearchDiagnosticsExportContainsMatch: exportContainsWarningMatch,
+            warningSearchPanelQueryLine: warningSearchPanel.queryLine,
+            warningSearchPanelQueryLineMatchesExport: warningSearchPanel.queryLineMatchesExport,
+            warningSearchPanelMatchLines: warningSearchPanel.matchLinesJoined,
+            warningSearchPanelMatchLinesMatchExport: warningSearchPanel.matchLinesMatchExport,
             fuzzyWarningSearchQuery: fuzzyWarningSearchQuery,
             fuzzyWarningSearchMatchCount: fuzzyWarningSearchMatchCount,
             fuzzyWarningSearchMatchTitle: fuzzyWarningMatch.displayTitle,
@@ -1234,24 +1349,40 @@ public enum ArchiveUserFlowSmoke {
             notesSearchMatchSummary: notesSearchMatchSummary,
             notesSearchDiagnosticsExportPath: notesExportPath,
             notesSearchDiagnosticsExportContainsMatch: exportContainsNotesMatch,
+            notesSearchPanelQueryLine: notesSearchPanel.queryLine,
+            notesSearchPanelQueryLineMatchesExport: notesSearchPanel.queryLineMatchesExport,
+            notesSearchPanelMatchLines: notesSearchPanel.matchLinesJoined,
+            notesSearchPanelMatchLinesMatchExport: notesSearchPanel.matchLinesMatchExport,
             folderSearchQuery: folderSearchQuery,
             folderSearchMatchCount: folderSearchMatchCount,
             folderSearchMatchTitle: folderMatch.displayTitle,
             folderSearchMatchSummary: folderSearchMatchSummary,
             folderSearchDiagnosticsExportPath: folderExportPath,
             folderSearchDiagnosticsExportContainsMatch: exportContainsFolderMatch,
+            folderSearchPanelQueryLine: folderSearchPanel.queryLine,
+            folderSearchPanelQueryLineMatchesExport: folderSearchPanel.queryLineMatchesExport,
+            folderSearchPanelMatchLines: folderSearchPanel.matchLinesJoined,
+            folderSearchPanelMatchLinesMatchExport: folderSearchPanel.matchLinesMatchExport,
             cprSearchQuery: cprSearchQuery,
             cprSearchMatchCount: cprSearchMatchCount,
             cprSearchMatchTitle: cprMatch.displayTitle,
             cprSearchMatchSummary: cprSearchMatchSummary,
             cprSearchDiagnosticsExportPath: cprExportPath,
             cprSearchDiagnosticsExportContainsMatch: exportContainsCPRMatch,
+            cprSearchPanelQueryLine: cprSearchPanel.queryLine,
+            cprSearchPanelQueryLineMatchesExport: cprSearchPanel.queryLineMatchesExport,
+            cprSearchPanelMatchLines: cprSearchPanel.matchLinesJoined,
+            cprSearchPanelMatchLinesMatchExport: cprSearchPanel.matchLinesMatchExport,
             previewSearchQuery: previewSearchQuery,
             previewSearchMatchCount: previewSearchMatchCount,
             previewSearchMatchTitle: previewMatch.displayTitle,
             previewSearchMatchSummary: previewSearchMatchSummary,
             previewSearchDiagnosticsExportPath: previewExportPath,
             previewSearchDiagnosticsExportContainsMatch: exportContainsPreviewMatch,
+            previewSearchPanelQueryLine: previewSearchPanel.queryLine,
+            previewSearchPanelQueryLineMatchesExport: previewSearchPanel.queryLineMatchesExport,
+            previewSearchPanelMatchLines: previewSearchPanel.matchLinesJoined,
+            previewSearchPanelMatchLinesMatchExport: previewSearchPanel.matchLinesMatchExport,
             skippedSearchQuery: skippedSearchQuery,
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,
@@ -1305,7 +1436,7 @@ public enum ArchiveUserFlowSmoke {
         requiredSummarySubstrings: [String]
     ) throws -> ActiveSearchPanelParity {
         guard let searchPanelContext = viewModel.activeSearchExportContext() else {
-            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchPanelActiveSearchMismatch
+            throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
         }
         let panelQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
             query: searchPanelContext.query,
@@ -1339,7 +1470,7 @@ public enum ArchiveUserFlowSmoke {
                 panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
             }
         guard queryLineMatchesExport, matchLinesMatchExport else {
-            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchPanelActiveSearchMismatch
+            throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
         }
         return ActiveSearchPanelParity(
             queryLine: panelQueryLine,
