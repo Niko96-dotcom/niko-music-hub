@@ -108,6 +108,16 @@ if ! grep -q "preview_ranking_tiebreak_legend=" "$RANKING_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -qE 'too_short_non_main=[1-9][0-9]*' "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing too_short_non_main count" >&2
+  exit 1
+fi
+
+if ! grep -qE 'songs_with_too_short=[1-9][0-9]*' "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing songs_with_too_short count" >&2
+  exit 1
+fi
+
 if ! grep -q "preview_ranking_scan_callout=" "$RANKING_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing preview ranking scan callout" >&2
   exit 1
