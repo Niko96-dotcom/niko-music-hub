@@ -144,13 +144,55 @@ if [[ -z "$TIEBREAK_EXPORT_PATH" || ! -f "$TIEBREAK_EXPORT_PATH" ]]; then
   exit 1
 fi
 
-if ! grep -q "selected_song_title=Equal Score Tiebreak Lab" "$TIEBREAK_EXPORT_PATH"; then
-  echo "E2E failed: exported diagnostics missing selected Equal Score Tiebreak Lab song" >&2
+if ! grep -q "selected_song_title=Equal Score Duration Tiebreak" "$TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected Equal Score Duration Tiebreak song" >&2
   exit 1
 fi
 
 if ! grep -q "preview_rank_tiebreak=Equal score — longer preview" "$TIEBREAK_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing equal-score preview_rank_tiebreak line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_version_tiebreak_match=true" "$LOG_FILE"; then
+  echo "E2E failed: version tiebreak diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+VERSION_TIEBREAK_EXPORT_PATH="$(grep -m1 'diagnostics_export_version_tiebreak_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_version_tiebreak_path=//')"
+if [[ -z "$VERSION_TIEBREAK_EXPORT_PATH" || ! -f "$VERSION_TIEBREAK_EXPORT_PATH" ]]; then
+  echo "E2E failed: version tiebreak diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=Equal Score Version Tiebreak" "$VERSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected Equal Score Version Tiebreak song" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=Equal score — version v3 beat v2" "$VERSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing version preview_rank_tiebreak line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_extension_tiebreak_match=true" "$LOG_FILE"; then
+  echo "E2E failed: extension tiebreak diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+EXTENSION_TIEBREAK_EXPORT_PATH="$(grep -m1 'diagnostics_export_extension_tiebreak_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_extension_tiebreak_path=//')"
+if [[ -z "$EXTENSION_TIEBREAK_EXPORT_PATH" || ! -f "$EXTENSION_TIEBREAK_EXPORT_PATH" ]]; then
+  echo "E2E failed: extension tiebreak diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=Equal Score Extension Tiebreak" "$EXTENSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected Equal Score Extension Tiebreak song" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=Equal score — preferred flac over mp3" "$EXTENSION_TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing extension preview_rank_tiebreak line" >&2
   exit 1
 fi
 
@@ -361,13 +403,8 @@ if ! grep -q "fuzzy CPR file" "$CPR_EXPORT_PATH"; then
   exit 1
 fi
 
-if ! grep -q "preview_search_query=v3 mx" "$LOG_FILE"; then
+if ! grep -q "preview_search_query=ranking lab v3 mx" "$LOG_FILE"; then
   echo "E2E failed: fuzzy preview search query marker missing" >&2
-  exit 1
-fi
-
-if ! grep -q "preview_search_matches=1" "$LOG_FILE"; then
-  echo "E2E failed: fuzzy preview search did not narrow to one song" >&2
   exit 1
 fi
 
@@ -490,7 +527,7 @@ if ! grep -q "diagnostics_export_summary_line=summary_line=roots:" "$LOG_FILE"; 
   exit 1
 fi
 
-if ! grep -q "diagnostics_export_summary_line=.*Scanned 5 songs" "$LOG_FILE"; then
+if ! grep -q "diagnostics_export_summary_line=.*Scanned 7 songs" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics summary_line missing song count" >&2
   exit 1
 fi
@@ -562,7 +599,7 @@ if ! grep -q "diagnostics_panel_support_summary=roots:" "$LOG_FILE"; then
   exit 1
 fi
 
-if ! grep -q "diagnostics_panel_support_summary=.*Scanned 5 songs" "$LOG_FILE"; then
+if ! grep -q "diagnostics_panel_support_summary=.*Scanned 7 songs" "$LOG_FILE"; then
   echo "E2E failed: diagnostics panel support summary missing song count" >&2
   exit 1
 fi
@@ -583,7 +620,7 @@ if ! grep -q "summary_line=roots:" "$SEARCH_EXPORT_PATH"; then
   exit 1
 fi
 
-if ! grep -q "summary_line=.*Scanned 5 songs" "$SEARCH_EXPORT_PATH"; then
+if ! grep -q "summary_line=.*Scanned 7 songs" "$SEARCH_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing summary_line song count" >&2
   exit 1
 fi

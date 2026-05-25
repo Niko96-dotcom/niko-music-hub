@@ -185,7 +185,8 @@ final class MusicSearchIndexTests: XCTestCase {
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
         let index = MusicSearchIndex(songs: result.songs)
 
-        let matches = index.searchResults("v3 mx")
+        let matches = index.searchResults("ranking lab v3 mx")
+        XCTAssertGreaterThanOrEqual(matches.count, 1)
         XCTAssertEqual(matches.first?.song.displayTitle, "Preview Ranking Lab")
         XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy preview file") == true)
         XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)

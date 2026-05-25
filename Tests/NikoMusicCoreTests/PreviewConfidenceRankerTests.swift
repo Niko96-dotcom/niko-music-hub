@@ -40,11 +40,82 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertFalse(main.confidenceReasons.contains(where: { $0.contains("duration:too-short") }))
     }
 
+    func testVersionAndExtensionDoNotAffectConfidenceScore() {
+        let v2 = candidate(
+            name: "Song v2 mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: 2,
+            ext: "wav",
+            duration: 200
+        )
+        let v3 = candidate(
+            name: "Song v3 mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: 3,
+            ext: "wav",
+            duration: 200
+        )
+        let mp3 = candidate(
+            name: "Song mix.mp3",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+        let wav = candidate(
+            name: "Song mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+
+        let rankedVersions = ranker.rank([v2, v3])
+        XCTAssertEqual(rankedVersions[0].confidenceScore, rankedVersions[1].confidenceScore)
+
+        let rankedExtensions = ranker.rank([mp3, wav])
+        XCTAssertEqual(rankedExtensions[0].confidenceScore, rankedExtensions[1].confidenceScore)
+    }
+
+    func testEqualScoreVersionTiebreakLabFixtureUsesVersionTiebreakCallout() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Version Tiebreak" })
+        let main = try XCTUnwrap(lab.previewCandidates.first)
+        let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
+
+        XCTAssertEqual(main.fileName, "Tie Song v3 mix.wav")
+        XCTAssertEqual(main.confidenceScore, runnerUp.confidenceScore)
+        XCTAssertEqual(ranker.decidingFactor(winner: main, runnerUp: runnerUp), .version)
+        let callout = try XCTUnwrap(PreviewRankingExplainability.tiebreakCallout(for: lab))
+        XCTAssertTrue(callout.contains("Equal score — version v3 beat v2"))
+    }
+
+    func testEqualScoreExtensionTiebreakLabFixtureUsesExtensionTiebreakCallout() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Extension Tiebreak" })
+        let main = try XCTUnwrap(lab.previewCandidates.first)
+        let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
+
+        XCTAssertEqual(main.fileName, "Tie Song mix.flac")
+        XCTAssertEqual(main.confidenceScore, runnerUp.confidenceScore)
+        XCTAssertEqual(ranker.decidingFactor(winner: main, runnerUp: runnerUp), .extensionFormat)
+        let callout = try XCTUnwrap(PreviewRankingExplainability.tiebreakCallout(for: lab))
+        XCTAssertTrue(callout.contains("Equal score — preferred flac over mp3"))
+    }
+
     func testEqualScoreTiebreakLabFixtureUsesDurationTiebreakCallout() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Tiebreak Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Duration Tiebreak" })
         let main = try XCTUnwrap(lab.previewCandidates.first)
         let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
 

@@ -23,6 +23,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabDiagnosticsExportContainsMatch: Bool
     public let tiebreakLabDiagnosticsExportPath: String
     public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
+    public let versionTiebreakLabDiagnosticsExportPath: String
+    public let versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
+    public let extensionTiebreakLabDiagnosticsExportPath: String
+    public let extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
     public let warningSearchQuery: String
@@ -101,6 +105,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         rankingLabDiagnosticsExportContainsMatch: Bool,
         tiebreakLabDiagnosticsExportPath: String,
         tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
+        versionTiebreakLabDiagnosticsExportPath: String,
+        versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
+        extensionTiebreakLabDiagnosticsExportPath: String,
+        extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
         brokenFolderDisplayWarnings: [String],
         brokenFolderSidecarNotes: String?,
         warningSearchQuery: String,
@@ -177,6 +185,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
         self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
         self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
+        self.versionTiebreakLabDiagnosticsExportPath = versionTiebreakLabDiagnosticsExportPath
+        self.versionTiebreakLabDiagnosticsExportContainsTiebreak = versionTiebreakLabDiagnosticsExportContainsTiebreak
+        self.extensionTiebreakLabDiagnosticsExportPath = extensionTiebreakLabDiagnosticsExportPath
+        self.extensionTiebreakLabDiagnosticsExportContainsTiebreak = extensionTiebreakLabDiagnosticsExportContainsTiebreak
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
         self.warningSearchQuery = warningSearchQuery
@@ -246,6 +258,12 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case tiebreakLabNotFound
     case tiebreakLabDiagnosticsExportFailed
     case tiebreakLabDiagnosticsExportMissingTiebreak
+    case versionTiebreakLabNotFound
+    case versionTiebreakLabDiagnosticsExportFailed
+    case versionTiebreakLabDiagnosticsExportMissingTiebreak
+    case extensionTiebreakLabNotFound
+    case extensionTiebreakLabDiagnosticsExportFailed
+    case extensionTiebreakLabDiagnosticsExportMissingTiebreak
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
@@ -337,7 +355,7 @@ public enum ArchiveUserFlowSmoke {
             .first { $0.hasPrefix("summary_line=") } ?? ""
         let exportContainsSummaryLine =
             diagnosticsExportSummaryLine.hasPrefix("summary_line=roots:")
-            && diagnosticsExportSummaryLine.contains("Scanned 5 songs")
+            && diagnosticsExportSummaryLine.contains("Scanned 7 songs")
             && diagnosticsExportSummaryLine.contains("1 song(s) with 1 warning(s)")
             && diagnosticsExportSummaryLine.contains("2 skipped at roots")
         guard exportContainsSummaryLine else {
@@ -391,7 +409,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
         }
 
-        guard let tiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Tiebreak Lab" }) else {
+        guard let tiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Duration Tiebreak" }) else {
             throw ArchiveUserFlowSmokeError.tiebreakLabNotFound
         }
         viewModel.selectSong(tiebreakLab)
@@ -402,11 +420,53 @@ public enum ArchiveUserFlowSmoke {
         }
         let tiebreakLabExportText = try String(contentsOf: URL(fileURLWithPath: tiebreakLabExportPath), encoding: .utf8)
         let exportContainsTiebreak =
-            tiebreakLabExportText.contains("selected_song_title=Equal Score Tiebreak Lab")
+            tiebreakLabExportText.contains("selected_song_title=Equal Score Duration Tiebreak")
             && tiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — longer preview")
             && tiebreakLabExportText.contains("Tie Song mix long.wav")
         guard exportContainsTiebreak else {
             throw ArchiveUserFlowSmokeError.tiebreakLabDiagnosticsExportMissingTiebreak
+        }
+
+        guard let versionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Version Tiebreak" }) else {
+            throw ArchiveUserFlowSmokeError.versionTiebreakLabNotFound
+        }
+        viewModel.selectSong(versionTiebreakLab)
+        try viewModel.exportDiagnostics()
+        guard let versionTiebreakLabExportPath = viewModel.lastDiagnosticsExportPath,
+              !versionTiebreakLabExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.versionTiebreakLabDiagnosticsExportFailed
+        }
+        let versionTiebreakLabExportText = try String(
+            contentsOf: URL(fileURLWithPath: versionTiebreakLabExportPath),
+            encoding: .utf8
+        )
+        let exportContainsVersionTiebreak =
+            versionTiebreakLabExportText.contains("selected_song_title=Equal Score Version Tiebreak")
+            && versionTiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — version v3 beat v2")
+            && versionTiebreakLabExportText.contains("Tie Song v3 mix.wav")
+        guard exportContainsVersionTiebreak else {
+            throw ArchiveUserFlowSmokeError.versionTiebreakLabDiagnosticsExportMissingTiebreak
+        }
+
+        guard let extensionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Extension Tiebreak" }) else {
+            throw ArchiveUserFlowSmokeError.extensionTiebreakLabNotFound
+        }
+        viewModel.selectSong(extensionTiebreakLab)
+        try viewModel.exportDiagnostics()
+        guard let extensionTiebreakLabExportPath = viewModel.lastDiagnosticsExportPath,
+              !extensionTiebreakLabExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.extensionTiebreakLabDiagnosticsExportFailed
+        }
+        let extensionTiebreakLabExportText = try String(
+            contentsOf: URL(fileURLWithPath: extensionTiebreakLabExportPath),
+            encoding: .utf8
+        )
+        let exportContainsExtensionTiebreak =
+            extensionTiebreakLabExportText.contains("selected_song_title=Equal Score Extension Tiebreak")
+            && extensionTiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — preferred flac over mp3")
+            && extensionTiebreakLabExportText.contains("Tie Song mix.flac")
+        guard exportContainsExtensionTiebreak else {
+            throw ArchiveUserFlowSmokeError.extensionTiebreakLabDiagnosticsExportMissingTiebreak
         }
 
         guard let broken = viewModel.songs.first(where: { $0.displayTitle == "Broken Folder Example" }) else {
@@ -554,7 +614,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.cprSearchDiagnosticsExportMissingMatch
         }
 
-        let previewSearchQuery = "v3 mx"
+        let previewSearchQuery = "ranking lab v3 mx"
         viewModel.searchQuery = previewSearchQuery
         viewModel.applySearchFilter()
         guard let previewMatch = viewModel.filteredSongs.first else {
@@ -615,7 +675,7 @@ public enum ArchiveUserFlowSmoke {
         let panelMatchesExport =
             panelSupportSummary == exportSummaryValue
             && panelSupportSummary.hasPrefix("roots:")
-            && panelSupportSummary.contains("Scanned 5 songs")
+            && panelSupportSummary.contains("Scanned 7 songs")
             && panelSupportSummary.contains("1 song(s) with 1 warning(s)")
             && panelSupportSummary.contains("2 skipped at roots")
         guard panelMatchesExport else {
@@ -654,6 +714,10 @@ public enum ArchiveUserFlowSmoke {
             rankingLabDiagnosticsExportContainsMatch: exportContainsRankingLabMatch,
             tiebreakLabDiagnosticsExportPath: tiebreakLabExportPath,
             tiebreakLabDiagnosticsExportContainsTiebreak: exportContainsTiebreak,
+            versionTiebreakLabDiagnosticsExportPath: versionTiebreakLabExportPath,
+            versionTiebreakLabDiagnosticsExportContainsTiebreak: exportContainsVersionTiebreak,
+            extensionTiebreakLabDiagnosticsExportPath: extensionTiebreakLabExportPath,
+            extensionTiebreakLabDiagnosticsExportContainsTiebreak: exportContainsExtensionTiebreak,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
             warningSearchQuery: warningSearchQuery,

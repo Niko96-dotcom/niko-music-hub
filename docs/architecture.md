@@ -130,8 +130,8 @@ Implement `PreviewConfidenceRanker` with SPEC §8 steps 1–6 for v0.2 preview p
 1. Role confidence (full mix > instrumental > stems)
 2. Location (`Mixdown` folder boost)
 3. Filename semantics (positive/negative tokens)
-4. Parsed version number from filename (tiebreak + score bump)
-5. Extension preference (`wav` > `flac` > `aiff` > `m4a` > `mp3`)
+4. Parsed version number from filename (tiebreak only; listed in `confidenceReasons`)
+5. Extension preference (`wav` > `flac` > `aiff` > `m4a` > `mp3`; tiebreak only)
 6. Duration plausibility (penalize very short; boost typical song length from WAV header)
 7. Recency (modification date, small tiebreak)
 

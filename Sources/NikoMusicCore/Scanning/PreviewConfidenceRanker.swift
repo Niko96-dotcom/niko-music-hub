@@ -110,12 +110,10 @@ public struct PreviewConfidenceRanker: Sendable {
         }
 
         if let version = candidate.detectedVersionNumber {
-            score += Double(version) * 0.5
             reasons.append("version:v\(version)")
         }
 
-        if let extBoost = Self.extensionPreference[candidate.fileExtension] {
-            score += extBoost
+        if Self.extensionPreference[candidate.fileExtension] != nil {
             reasons.append("extension:\(candidate.fileExtension)")
         }
 
