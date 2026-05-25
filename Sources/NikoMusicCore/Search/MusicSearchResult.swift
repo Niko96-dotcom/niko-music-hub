@@ -4,6 +4,7 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
     case titlePrefix
     case titleContains
     case folderName
+    case fuzzyFolderName
     case projectVersionFileName
     case previewFileName
     case scanWarning
@@ -17,6 +18,7 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
         case .titlePrefix: "title start"
         case .titleContains: "title"
         case .folderName: "folder"
+        case .fuzzyFolderName: "fuzzy folder"
         case .projectVersionFileName: "CPR file"
         case .previewFileName: "preview file"
         case .scanWarning: "scan warning"

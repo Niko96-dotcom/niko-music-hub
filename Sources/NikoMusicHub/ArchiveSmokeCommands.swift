@@ -63,6 +63,12 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] notes_search_summary=\(result.notesSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_notes_path=\(result.notesSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_notes_match=\(result.notesSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] folder_search_query=\(result.folderSearchQuery)")
+        print("[niko-music-hub-smoke] folder_search_matches=\(result.folderSearchMatchCount)")
+        print("[niko-music-hub-smoke] folder_search_match=\(result.folderSearchMatchTitle)")
+        print("[niko-music-hub-smoke] folder_search_summary=\(result.folderSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_folder_path=\(result.folderSearchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_folder_match=\(result.folderSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] skipped_search_query=\(result.skippedSearchQuery)")
         print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
         print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
@@ -131,6 +137,14 @@ enum ArchiveSmokeCommands {
               result.notesSearchMatchSummary.contains("nly"),
               !result.notesSearchDiagnosticsExportPath.isEmpty,
               result.notesSearchDiagnosticsExportContainsMatch,
+              result.folderSearchQuery == "brkn fld",
+              result.folderSearchMatchCount == 1,
+              result.folderSearchMatchTitle == "Broken Folder Example",
+              result.folderSearchMatchSummary.contains("fuzzy folder"),
+              result.folderSearchMatchSummary.contains("brkn"),
+              result.folderSearchMatchSummary.contains("fld"),
+              !result.folderSearchDiagnosticsExportPath.isEmpty,
+              result.folderSearchDiagnosticsExportContainsMatch,
               result.skippedSearchQuery == "LOOSE_FILE.txt",
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",

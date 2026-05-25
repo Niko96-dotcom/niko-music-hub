@@ -143,6 +143,18 @@ final class MusicSearchIndexTests: XCTestCase {
         XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy song note") == true)
     }
 
+    func testFindsSongByFuzzyFolderNameToken() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let index = MusicSearchIndex(songs: result.songs)
+
+        let matches = index.searchResults("brkn fld")
+        XCTAssertEqual(matches.first?.song.displayTitle, "Broken Folder Example")
+        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy folder") == true)
+        XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)
+    }
+
     func testRanksExactTitleTokenAboveFuzzyTitleMatch() {
         let exact = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Neon Hook"),
