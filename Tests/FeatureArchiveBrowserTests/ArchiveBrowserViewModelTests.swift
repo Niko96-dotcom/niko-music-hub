@@ -136,6 +136,26 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
     }
 
+    func testExportDiagnosticsIncludesSkippedSearchContext() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        viewModel.searchQuery = "LOOSE_FILE.txt"
+        viewModel.applySearchFilter()
+        XCTAssertEqual(viewModel.skippedSearchMatches.count, 1)
+
+        try viewModel.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
+        XCTAssertTrue(text.contains("skipped_search_query=LOOSE_FILE.txt"))
+        XCTAssertTrue(text.contains("skipped_search_match label=LOOSE_FILE.txt"))
+        XCTAssertTrue(text.contains("summary="))
+        XCTAssertTrue(text.contains("skipped label"))
+    }
+
     func testExportDiagnosticsIncludesActiveSearchContext() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

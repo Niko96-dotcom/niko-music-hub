@@ -11,6 +11,7 @@ public enum ArchiveDiagnosticsExporter {
         archiveRoots: [URL],
         homeDirectory: String? = nil,
         searchContext: ArchiveDiagnosticsSearchContext? = nil,
+        skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext? = nil,
         selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
     ) throws {
         let destinationPath = destination.standardizedFileURL.path
@@ -26,6 +27,7 @@ public enum ArchiveDiagnosticsExporter {
             diagnostics: diagnostics,
             homeDirectory: homeDirectory,
             searchContext: searchContext,
+            skippedSearchContext: skippedSearchContext,
             selectedSongContext: selectedSongContext
         )
         try text.write(to: destination, atomically: true, encoding: .utf8)
@@ -35,6 +37,7 @@ public enum ArchiveDiagnosticsExporter {
         diagnostics: ArchiveScanDiagnostics,
         homeDirectory: String?,
         searchContext: ArchiveDiagnosticsSearchContext? = nil,
+        skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext? = nil,
         selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
     ) -> String {
         var lines: [String] = []
@@ -78,6 +81,18 @@ public enum ArchiveDiagnosticsExporter {
             lines.append("search_matches=\(searchContext.matches.count)")
             for match in searchContext.matches {
                 lines.append("search_match title=\(match.displayTitle) summary=\(match.summary)")
+            }
+        }
+
+        if let skippedSearchContext {
+            lines.append("")
+            lines.append("active_skipped_search")
+            lines.append("skipped_search_query=\(skippedSearchContext.query)")
+            lines.append("skipped_search_matches=\(skippedSearchContext.matches.count)")
+            for match in skippedSearchContext.matches {
+                let label = DiagnosticsPathRedactor.redact(match.label, homeDirectory: homeDirectory)
+                let summary = DiagnosticsPathRedactor.redactPathsInText(match.summary, homeDirectory: homeDirectory)
+                lines.append("skipped_search_match label=\(label) kind=\(match.kind) summary=\(summary)")
             }
         }
 
