@@ -106,6 +106,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
         XCTAssertTrue(text.contains("preview_rank_line="))
+        XCTAssertTrue(text.contains("preview_ranking_tiebreak_legend="))
+        XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
+        XCTAssertTrue(text.contains("preview_ranking_selected_header="))
     }
 
     func testExportDiagnosticsIncludesSelectedSongCPRAndWarnings() async throws {

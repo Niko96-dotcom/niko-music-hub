@@ -103,6 +103,21 @@ if ! grep -q "preview_rank_line=.*v3" "$RANKING_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q "preview_ranking_tiebreak_legend=" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing preview ranking tiebreak legend" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_ranking_scan_callout=" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing preview ranking scan callout" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_ranking_selected_header=" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing preview ranking selected header" >&2
+  exit 1
+fi
+
 if ! grep -q "broken_folder_warnings=.*CPR" "$LOG_FILE"; then
   echo "E2E failed: broken folder display warnings missing CPR signal" >&2
   exit 1

@@ -74,6 +74,15 @@ public enum ArchiveDiagnosticsExporter {
             lines.append("skipped=\(entry.kind.rawValue) label=\(label) reason=\(reason)")
         }
 
+        lines.append("")
+        lines.append("preview_ranking_panel")
+        lines.append(
+            "preview_ranking_tiebreak_legend=\(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)"
+        )
+        if let callout = diagnostics.previewRankingPanel.scanHeaderCallout {
+            lines.append("preview_ranking_scan_callout=\(callout)")
+        }
+
         if let searchContext {
             lines.append("")
             lines.append("active_search")
@@ -114,6 +123,9 @@ public enum ArchiveDiagnosticsExporter {
             }
             for line in selectedSongContext.rankedPreviewLines {
                 lines.append("preview_rank_line=\(line)")
+            }
+            if let selectedHeader = selectedSongContext.previewRankingSelectedHeader {
+                lines.append("preview_ranking_selected_header=\(selectedHeader)")
             }
         }
 
