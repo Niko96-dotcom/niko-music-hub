@@ -88,6 +88,11 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("role → folder → filename → version"))
         XCTAssertTrue(text.contains("too_short_non_main="))
         XCTAssertTrue(text.contains("songs_with_too_short="))
+        XCTAssertTrue(
+            text.contains(
+                "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav"
+            )
+        )
         XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
         XCTAssertTrue(text.contains("too short preview"))
         XCTAssertTrue(text.contains("preview_ranking_selected_header="))

@@ -118,6 +118,11 @@ if ! grep -qE 'songs_with_too_short=[1-9][0-9]*' "$RANKING_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q 'too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav' "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing per-song too_short breakdown" >&2
+  exit 1
+fi
+
 if ! grep -q "preview_ranking_scan_callout=" "$RANKING_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing preview ranking scan callout" >&2
   exit 1

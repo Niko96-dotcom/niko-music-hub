@@ -1,5 +1,23 @@
 import Foundation
 
+/// Per-song too-short non-main preview clips for diagnostics export triage.
+public struct TooShortNonMainSongBreakdown: Sendable, Equatable, Codable {
+    public let displayTitle: String
+    public let clipCount: Int
+    public let clipNames: [String]
+
+    public init(displayTitle: String, clipCount: Int, clipNames: [String]) {
+        self.displayTitle = displayTitle
+        self.clipCount = clipCount
+        self.clipNames = clipNames
+    }
+
+    public var exportLine: String {
+        let clips = clipNames.joined(separator: ", ")
+        return "too_short_song=\(displayTitle) count=\(clipCount) clips=\(clips)"
+    }
+}
+
 /// Operator-facing preview ranking hints for the archive diagnostics panel header.
 public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable, Codable {
     public static let tiebreakLegend =
@@ -7,13 +25,16 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
 
     public let tooShortNonMainPreviewCount: Int
     public let songsWithTooShortNonMainPreviews: Int
+    public let tooShortSongBreakdowns: [TooShortNonMainSongBreakdown]
 
     public init(
         tooShortNonMainPreviewCount: Int,
-        songsWithTooShortNonMainPreviews: Int
+        songsWithTooShortNonMainPreviews: Int,
+        tooShortSongBreakdowns: [TooShortNonMainSongBreakdown] = []
     ) {
         self.tooShortNonMainPreviewCount = tooShortNonMainPreviewCount
         self.songsWithTooShortNonMainPreviews = songsWithTooShortNonMainPreviews
+        self.tooShortSongBreakdowns = tooShortSongBreakdowns
     }
 
     public var scanHeaderCallout: String? {
@@ -26,17 +47,29 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
     public static func from(songs: [Song]) -> Self {
         var tooShortCount = 0
         var songIDs = Set<String>()
+        var breakdowns: [TooShortNonMainSongBreakdown] = []
         for song in songs {
-            for candidate in song.previewCandidates {
-                guard candidate.id != song.mainPreviewCandidateID else { continue }
-                guard candidate.confidenceReasons.contains("duration:too-short") else { continue }
-                tooShortCount += 1
-                songIDs.insert(song.id)
+            let clipNames = song.previewCandidates.compactMap { candidate -> String? in
+                guard candidate.id != song.mainPreviewCandidateID else { return nil }
+                guard candidate.confidenceReasons.contains("duration:too-short") else { return nil }
+                return candidate.fileName
             }
+            guard !clipNames.isEmpty else { continue }
+            tooShortCount += clipNames.count
+            songIDs.insert(song.id)
+            breakdowns.append(
+                TooShortNonMainSongBreakdown(
+                    displayTitle: song.displayTitle,
+                    clipCount: clipNames.count,
+                    clipNames: clipNames
+                )
+            )
         }
+        breakdowns.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
         return Self(
             tooShortNonMainPreviewCount: tooShortCount,
-            songsWithTooShortNonMainPreviews: songIDs.count
+            songsWithTooShortNonMainPreviews: songIDs.count,
+            tooShortSongBreakdowns: breakdowns
         )
     }
 
