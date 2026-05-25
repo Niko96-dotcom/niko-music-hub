@@ -1,6 +1,11 @@
 import NikoMusicCore
 import SwiftUI
 
+/// Accessibility identifiers shared by the diagnostics panel and user-flow smoke.
+public enum ArchiveDiagnosticsPanelAccessibility {
+    public static let rootHealthBadge = "archive_diagnostics_root_health_badge"
+}
+
 struct ArchiveDiagnosticsPanelView: View {
     let diagnostics: ArchiveScanDiagnostics
     let selectedSong: Song?
@@ -34,7 +39,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         .padding(.vertical, 2)
                         .background(ArchiveDesignTokens.accent.opacity(0.12))
                         .clipShape(Capsule())
-                        .accessibilityIdentifier("archive_diagnostics_root_health_badge")
+                        .accessibilityIdentifier(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)
                 }
                 Spacer()
                 Button("Export", action: onExport)
