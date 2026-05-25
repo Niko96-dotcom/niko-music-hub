@@ -49,6 +49,11 @@ When a song search is active (fixture flow uses **neon hk**), the diagnostics pa
 - `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)
 - `diagnostics_panel_search_match_lines_match=` (each panel match line matches an export `search_match title=… summary=…`)
 
+When a skipped-entry search is active (fixture flow uses **LOOSE_FILE.txt**), the diagnostics panel shows **Active skipped search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_skipped_search` block:
+
+- `diagnostics_panel_skipped_search_query_line_match=` (panel query line matches export `skipped_search_query=` / `skipped_search_matches=`)
+- `diagnostics_panel_skipped_search_match_lines_match=` (each panel match line matches an export `skipped_search_match label=… kind=… summary=…`)
+
 On the **Preview Ranking Lab** fixture, smoke asserts panel/export parity for the scan-level too-short callout (`preview_ranking_scan_callout=`), the selected-song header (`preview_ranking_selected_header=`), per-song too-short breakdown lines (`too_short_song=`), the tiebreak legend (`preview_ranking_tiebreak_legend=`), the selected-song main preview summary (`main_preview_summary=`), and ranked preview lines (`preview_rank_line=`):
 
 - `diagnostics_panel_ranking_scan_callout_match=`

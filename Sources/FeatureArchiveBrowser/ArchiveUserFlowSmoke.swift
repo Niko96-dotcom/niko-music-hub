@@ -112,6 +112,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let summaryTruncationPanelFootnoteMatchesDiagnostics: Bool
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
+    public let skippedSearchPanelQueryLine: String
+    public let skippedSearchPanelQueryLineMatchesExport: Bool
+    public let skippedSearchPanelMatchLines: String
+    public let skippedSearchPanelMatchLinesMatchExport: Bool
 
     public init(
         userFlow: String,
@@ -220,7 +224,11 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         summaryTruncationPanelFootnote: String,
         summaryTruncationPanelFootnoteMatchesDiagnostics: Bool,
         skippedSearchDiagnosticsExportPath: String,
-        skippedSearchDiagnosticsExportContainsMatch: Bool
+        skippedSearchDiagnosticsExportContainsMatch: Bool,
+        skippedSearchPanelQueryLine: String,
+        skippedSearchPanelQueryLineMatchesExport: Bool,
+        skippedSearchPanelMatchLines: String,
+        skippedSearchPanelMatchLinesMatchExport: Bool
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -331,6 +339,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
             summaryTruncationPanelFootnoteMatchesDiagnostics
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
+        self.skippedSearchPanelQueryLine = skippedSearchPanelQueryLine
+        self.skippedSearchPanelQueryLineMatchesExport = skippedSearchPanelQueryLineMatchesExport
+        self.skippedSearchPanelMatchLines = skippedSearchPanelMatchLines
+        self.skippedSearchPanelMatchLinesMatchExport = skippedSearchPanelMatchLinesMatchExport
     }
 }
 
@@ -402,6 +414,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case summaryTruncationPanelFootnoteMismatch
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
+    case skippedSearchPanelActiveSkippedSearchMismatch
 }
 
 @MainActor
@@ -941,6 +954,42 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportMissingMatch
         }
 
+        guard let skippedSearchPanelContext = viewModel.activeSkippedSearchExportContext() else {
+            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+        }
+        let panelSkippedSearchQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
+            query: skippedSearchPanelContext.query,
+            matchCount: skippedSearchPanelContext.matches.count
+        )
+        let panelSkippedSearchMatchLines = skippedSearchPanelContext.matches.map {
+            ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
+                label: $0.label,
+                summary: $0.summary
+            )
+        }
+        let panelSkippedSearchMatchLinesJoined = panelSkippedSearchMatchLines.joined(separator: " | ")
+        let skippedSearchPanelQueryLineMatchesExport =
+            skippedSearchPanelContext.query == skippedSearchQuery
+            && skippedSearchPanelContext.matches.count == viewModel.skippedSearchMatches.count
+            && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: exportText,
+                query: skippedSearchPanelContext.query,
+                matchCount: skippedSearchPanelContext.matches.count
+            )
+            && panelSkippedSearchQueryLine.contains("LOOSE_FILE.txt")
+            && panelSkippedSearchQueryLine.contains("1 match")
+        let skippedSearchPanelMatchLinesMatchExport =
+            !panelSkippedSearchMatchLines.isEmpty
+            && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
+                in: exportText,
+                matches: skippedSearchPanelContext.matches
+            )
+            && panelSkippedSearchMatchLines.contains(where: { $0.contains("LOOSE_FILE.txt") })
+            && panelSkippedSearchMatchLines.contains(where: { $0.contains("skipped label") })
+        guard skippedSearchPanelQueryLineMatchesExport, skippedSearchPanelMatchLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+        }
+
         let panelSupportSummary = ArchiveDiagnosticsPanelContext.from(
             diagnostics,
             homeDirectory: homeDirectory
@@ -1080,7 +1129,11 @@ public enum ArchiveUserFlowSmoke {
             summaryTruncationPanelFootnoteMatchesDiagnostics:
                 summaryTruncationHealth.panelFootnoteMatchesDiagnostics,
             skippedSearchDiagnosticsExportPath: exportPath,
-            skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
+            skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch,
+            skippedSearchPanelQueryLine: panelSkippedSearchQueryLine,
+            skippedSearchPanelQueryLineMatchesExport: skippedSearchPanelQueryLineMatchesExport,
+            skippedSearchPanelMatchLines: panelSkippedSearchMatchLinesJoined,
+            skippedSearchPanelMatchLinesMatchExport: skippedSearchPanelMatchLinesMatchExport
         )
     }
 

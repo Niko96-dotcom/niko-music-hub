@@ -11,6 +11,7 @@ struct ArchiveDiagnosticsPanelView: View {
     let diagnostics: ArchiveScanDiagnostics
     let selectedSong: Song?
     let searchContext: ArchiveDiagnosticsSearchContext?
+    let skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext?
     let onExport: () -> Void
 
     private static let scanTimeFormatter: DateFormatter = {
@@ -80,6 +81,32 @@ struct ArchiveDiagnosticsPanelView: View {
                 ForEach(searchContext.matches, id: \.displayTitle) { match in
                     let matchLine = ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
                         displayTitle: match.displayTitle,
+                        summary: match.summary
+                    )
+                    Text("• \(matchLine)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+                }
+            }
+
+            if let skippedSearchContext {
+                Text("Active skipped search")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                Text(
+                    ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
+                        query: skippedSearchContext.query,
+                        matchCount: skippedSearchContext.matches.count
+                    )
+                )
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.accent)
+                .lineLimit(2)
+                ForEach(skippedSearchContext.matches, id: \.label) { match in
+                    let matchLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
+                        label: match.label,
                         summary: match.summary
                     )
                     Text("• \(matchLine)")

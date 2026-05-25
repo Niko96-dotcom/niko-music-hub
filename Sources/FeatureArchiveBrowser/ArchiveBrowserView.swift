@@ -68,7 +68,8 @@ struct ArchiveBrowserView: View {
                 ArchiveDiagnosticsPanelView(
                     diagnostics: diagnostics,
                     selectedSong: viewModel.selectedSong,
-                    searchContext: viewModel.activeSearchExportContext()
+                    searchContext: viewModel.activeSearchExportContext(),
+                    skippedSearchContext: viewModel.activeSkippedSearchExportContext()
                 ) {
                     do {
                         try viewModel.exportDiagnostics()
