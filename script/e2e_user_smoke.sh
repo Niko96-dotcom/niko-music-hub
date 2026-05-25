@@ -281,6 +281,26 @@ if ! grep -q "diagnostics_export_search_match=true" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_summary_match=true" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics summary_line export missing active match marker" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_summary_line=summary_line=roots:" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics summary_line export marker missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_summary_line=.*Scanned 5 songs" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics summary_line missing song count" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_summary_line=.*2 skipped at roots" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics summary_line missing skipped count" >&2
+  exit 1
+fi
+
 SEARCH_EXPORT_PATH="$(grep -m1 'diagnostics_export_search_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_search_path=//')"
 if [[ -z "$SEARCH_EXPORT_PATH" || ! -f "$SEARCH_EXPORT_PATH" ]]; then
   echo "E2E failed: song-search diagnostics export path missing from smoke output" >&2
@@ -289,6 +309,26 @@ fi
 
 if ! grep -q "search_match title=Neon Hook" "$SEARCH_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing search_match row for Neon Hook" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=roots:" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing summary_line roots prefix" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*Scanned 5 songs" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing summary_line song count" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*1 song(s) with 1 warning(s)" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing summary_line warning count" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*2 skipped at roots" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing summary_line skipped count" >&2
   exit 1
 fi
 
