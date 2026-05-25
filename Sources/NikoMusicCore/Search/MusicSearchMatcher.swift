@@ -53,12 +53,6 @@ enum MusicSearchMatcher {
         return normalize(parts.joined(separator: " "))
     }
 
-    private static func tokenMatches(_ token: String, in haystack: String) -> Bool {
-        guard !token.isEmpty else { return true }
-        if haystack.contains(token) { return true }
-        return isSubsequence(token, in: haystack)
-    }
-
     private static func normalize(_ value: String) -> String {
         value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
