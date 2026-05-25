@@ -49,4 +49,8 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
             : "\(skippedEntries.count) skipped at roots"
         return "Scanned \(songCount) songs · \(warningPart) · \(skippedPart)"
     }
+
+    public func displayRootPaths(homeDirectory: String? = nil) -> [String] {
+        rootPaths.map { DiagnosticsPathRedactor.redact($0, homeDirectory: homeDirectory) }
+    }
 }

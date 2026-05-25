@@ -23,9 +23,27 @@ struct ArchiveDiagnosticsPanelView: View {
                     .buttonStyle(.borderless)
             }
 
+            Text(diagnostics.summaryLine)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .lineLimit(3)
+
             Text("Last scan: \(Self.scanTimeFormatter.string(from: diagnostics.scannedAt))")
                 .font(.system(size: 11))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
+
+            let displayRoots = diagnostics.displayRootPaths()
+            if !displayRoots.isEmpty {
+                Text("Archive roots")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                ForEach(displayRoots, id: \.self) { root in
+                    Text("• \(root)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(2)
+                }
+            }
 
             diagnosticRow("Songs", value: "\(diagnostics.songCount)")
             diagnosticRow("Song warnings", value: "\(diagnostics.songsWithWarningsCount) (\(diagnostics.totalSongWarningCount) total)")
