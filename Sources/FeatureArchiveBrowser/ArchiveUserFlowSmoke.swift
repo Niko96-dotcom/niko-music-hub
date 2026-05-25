@@ -25,6 +25,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let warningSearchMatchCount: Int
     public let warningSearchMatchTitle: String
     public let warningSearchMatchSummary: String
+    public let skippedSearchQuery: String
+    public let skippedSearchMatchCount: Int
+    public let skippedSearchMatchLabel: String
+    public let skippedSearchMatchSummary: String
 
     public init(
         userFlow: String,
@@ -47,7 +51,11 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         warningSearchQuery: String,
         warningSearchMatchCount: Int,
         warningSearchMatchTitle: String,
-        warningSearchMatchSummary: String
+        warningSearchMatchSummary: String,
+        skippedSearchQuery: String,
+        skippedSearchMatchCount: Int,
+        skippedSearchMatchLabel: String,
+        skippedSearchMatchSummary: String
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -70,6 +78,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.warningSearchMatchCount = warningSearchMatchCount
         self.warningSearchMatchTitle = warningSearchMatchTitle
         self.warningSearchMatchSummary = warningSearchMatchSummary
+        self.skippedSearchQuery = skippedSearchQuery
+        self.skippedSearchMatchCount = skippedSearchMatchCount
+        self.skippedSearchMatchLabel = skippedSearchMatchLabel
+        self.skippedSearchMatchSummary = skippedSearchMatchSummary
     }
 }
 
@@ -83,6 +95,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case brokenFolderMissingSidecarNotes
     case warningSearchNoMatch
     case warningSearchMissingExplainability
+    case skippedSearchNoMatch
+    case skippedSearchMissingExplainability
 }
 
 @MainActor
@@ -104,6 +118,7 @@ public enum ArchiveUserFlowSmoke {
         let searchQuery = "neon hk"
         viewModel.searchQuery = searchQuery
         viewModel.applySearchFilter()
+        let searchMatchCount = viewModel.filteredSongs.count
 
         guard let neon = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.neonHookNotFound
@@ -125,6 +140,7 @@ public enum ArchiveUserFlowSmoke {
 
         let diagnostics = viewModel.scanDiagnostics
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
+        let songCount = viewModel.songs.count
         guard let rankingLab = viewModel.songs.first(where: { $0.displayTitle == "Preview Ranking Lab" }) else {
             throw ArchiveUserFlowSmokeError.rankingLabNotFound
         }
@@ -152,6 +168,7 @@ public enum ArchiveUserFlowSmoke {
         guard let warningMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.warningSearchNoMatch
         }
+        let warningSearchMatchCount = viewModel.filteredSongs.count
         let warningSearchMatchSummary = viewModel.searchMatchSummaries[warningMatch.id, default: ""]
         guard warningMatch.displayTitle == "Broken Folder Example",
               warningSearchMatchSummary.localizedCaseInsensitiveContains("scan warning"),
@@ -159,11 +176,22 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.warningSearchMissingExplainability
         }
 
+        let skippedSearchQuery = "LOOSE_FILE.txt"
+        viewModel.searchQuery = skippedSearchQuery
+        viewModel.applySearchFilter()
+        guard let skippedMatch = viewModel.skippedSearchMatches.first else {
+            throw ArchiveUserFlowSmokeError.skippedSearchNoMatch
+        }
+        guard skippedMatch.entry.label == "LOOSE_FILE.txt",
+              skippedMatch.matchSummary.localizedCaseInsensitiveContains("skipped label") else {
+            throw ArchiveUserFlowSmokeError.skippedSearchMissingExplainability
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
-            songCount: viewModel.songs.count,
+            songCount: songCount,
             searchQuery: searchQuery,
-            searchMatchCount: viewModel.filteredSongs.count,
+            searchMatchCount: searchMatchCount,
             selectedTitle: neon.displayTitle,
             dryRunCPRPath: dryRunPath,
             dryRunCPRDisplayPath: dryRunCPRDisplayPath,
@@ -178,9 +206,13 @@ public enum ArchiveUserFlowSmoke {
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
             warningSearchQuery: warningSearchQuery,
-            warningSearchMatchCount: viewModel.filteredSongs.count,
+            warningSearchMatchCount: warningSearchMatchCount,
             warningSearchMatchTitle: warningMatch.displayTitle,
-            warningSearchMatchSummary: warningSearchMatchSummary
+            warningSearchMatchSummary: warningSearchMatchSummary,
+            skippedSearchQuery: skippedSearchQuery,
+            skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
+            skippedSearchMatchLabel: skippedMatch.entry.label,
+            skippedSearchMatchSummary: skippedMatch.matchSummary
         )
     }
 

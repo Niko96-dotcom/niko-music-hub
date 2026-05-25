@@ -52,5 +52,9 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertEqual(result.warningSearchMatchTitle, "Broken Folder Example")
         XCTAssertTrue(result.warningSearchMatchSummary.contains("scan warning"))
         XCTAssertTrue(result.warningSearchMatchSummary.contains("project"))
+        XCTAssertEqual(result.skippedSearchQuery, "LOOSE_FILE.txt")
+        XCTAssertGreaterThanOrEqual(result.skippedSearchMatchCount, 1)
+        XCTAssertEqual(result.skippedSearchMatchLabel, "LOOSE_FILE.txt")
+        XCTAssertTrue(result.skippedSearchMatchSummary.contains("skipped label"))
     }
 }

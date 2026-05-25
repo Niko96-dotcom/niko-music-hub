@@ -8,6 +8,7 @@ final class ArchiveBrowserViewModel: ObservableObject {
     @Published var songs: [Song] = []
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
+    @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
     @Published var searchQuery: String = ""
     @Published var selectedSong: Song?
     @Published var isScanning = false
@@ -102,6 +103,7 @@ final class ArchiveBrowserViewModel: ObservableObject {
         if trimmed.isEmpty {
             filteredSongs = songs
             searchMatchSummaries = [:]
+            skippedSearchMatches = []
             return
         }
 
@@ -110,6 +112,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
         searchMatchSummaries = Dictionary(
             uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) }
         )
+        let skipped = scanDiagnostics?.skippedEntries ?? []
+        skippedSearchMatches = SkippedEntrySearchMatcher.search(searchQuery, in: skipped)
     }
 
     func selectSong(_ song: Song) {
