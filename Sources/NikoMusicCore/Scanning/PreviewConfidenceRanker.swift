@@ -129,8 +129,6 @@ public struct PreviewConfidenceRanker: Sendable {
             }
         }
 
-        let recency = candidate.modifiedAt.timeIntervalSince1970 / 1_000_000_000
-        score += recency
         reasons.append("recency")
 
         var updated = candidate
