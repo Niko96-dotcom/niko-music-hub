@@ -10,7 +10,7 @@ public struct StoredFolderLocation: Equatable, Codable, Sendable {
     public static var defaultOutputFolder: URL {
         URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("Music", isDirectory: true)
-            .appendingPathComponent("Outside Cubase Hub", isDirectory: true)
+            .appendingPathComponent("Niko Music Hub", isDirectory: true)
             .appendingPathComponent("Inbox", isDirectory: true)
     }
 }

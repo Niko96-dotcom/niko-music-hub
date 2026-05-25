@@ -1,14 +1,14 @@
 import Foundation
 
 public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
-    public static let defaultOutputFolderDisplayPath = "~/Music/Outside Cubase Hub/Inbox"
+    public static let defaultOutputFolderDisplayPath = "~/Music/Niko Music Hub/Inbox"
 
     private let userDefaults: UserDefaults
     private let key: String
 
     public init(
         userDefaults: UserDefaults = .standard,
-        key: String = "outsideCubaseHub.settings"
+        key: String = "nikoMusicHub.settings"
     ) {
         self.userDefaults = userDefaults
         self.key = key
