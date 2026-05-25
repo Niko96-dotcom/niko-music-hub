@@ -40,5 +40,10 @@ final class ArchiveUserFlowTests: XCTestCase {
             result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") })
         )
         XCTAssertEqual(result.brokenFolderSidecarNotes, "notes only")
+        XCTAssertEqual(result.warningSearchQuery, "project")
+        XCTAssertEqual(result.warningSearchMatchCount, 1)
+        XCTAssertEqual(result.warningSearchMatchTitle, "Broken Folder Example")
+        XCTAssertTrue(result.warningSearchMatchSummary.contains("scan warning"))
+        XCTAssertTrue(result.warningSearchMatchSummary.contains("project"))
     }
 }
