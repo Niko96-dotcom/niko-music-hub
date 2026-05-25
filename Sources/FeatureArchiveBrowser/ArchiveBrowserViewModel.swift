@@ -117,15 +117,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
-        guard let song = selectedSong,
-              let mainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) else {
-            return nil
-        }
-        return ArchiveDiagnosticsSelectedSongContext(
-            displayTitle: song.displayTitle,
-            mainPreviewSummary: mainPreviewSummary,
-            rankedPreviewLines: PreviewRankingExplainability.rankedPreviewLines(for: song)
-        )
+        guard let song = selectedSong else { return nil }
+        return ArchiveDiagnosticsSelectedSongContext.from(song: song)
     }
 
     func activeSearchExportContext() -> ArchiveDiagnosticsSearchContext? {

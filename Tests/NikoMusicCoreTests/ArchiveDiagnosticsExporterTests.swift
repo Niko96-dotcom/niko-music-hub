@@ -75,12 +75,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
         let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
-        let mainSummary = try XCTUnwrap(PreviewRankingExplainability.mainPreviewSummary(for: lab))
-        let selectedContext = ArchiveDiagnosticsSelectedSongContext(
-            displayTitle: lab.displayTitle,
-            mainPreviewSummary: mainSummary,
-            rankedPreviewLines: PreviewRankingExplainability.rankedPreviewLines(for: lab)
-        )
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: lab)
 
         let text = ArchiveDiagnosticsExporter.formattedText(
             diagnostics: diagnostics,
@@ -92,6 +87,40 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
         XCTAssertTrue(text.contains("preview_rank_line="))
+        XCTAssertTrue(text.contains("selected_song_cpr=1 version"))
+        XCTAssertTrue(text.contains("Preview Ranking Lab.cpr"))
+    }
+
+    func testFormattedTextIncludesSelectedSongCPRAndWarnings() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
+        let neonContext = ArchiveDiagnosticsSelectedSongContext.from(song: neon)
+        let neonText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test",
+            selectedSongContext: neonContext
+        )
+        XCTAssertTrue(neonText.contains("selected_song_cpr=2 versions"))
+        XCTAssertTrue(neonText.contains("latest Neon Hook.cpr"))
+        XCTAssertFalse(neonText.contains("selected_song_warning="))
+
+        let broken = try XCTUnwrap(result.songs.first { $0.displayTitle == "Broken Folder Example" })
+        let brokenContext = ArchiveDiagnosticsSelectedSongContext.from(song: broken)
+        let brokenText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test",
+            selectedSongContext: brokenContext
+        )
+        XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
+        XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
     }
 
     func testExportRejectsDestinationInsideArchiveRoot() throws {
