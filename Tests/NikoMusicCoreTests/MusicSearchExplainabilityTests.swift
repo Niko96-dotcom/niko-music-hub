@@ -35,6 +35,19 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         XCTAssertTrue(result.matchSummary.contains("preview"))
     }
 
+    func testSidecarNotesMatchSummaryNamesSongNoteField() throws {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            sidecarNotes: "notes only"
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("only").first)
+        XCTAssertTrue(result.matchSummary.contains("song note"))
+    }
+
     func testScanWarningMatchSummaryNamesScanWarningField() throws {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Broken"),

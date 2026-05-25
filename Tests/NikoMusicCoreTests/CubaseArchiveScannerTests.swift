@@ -23,6 +23,22 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertTrue(broken.scanWarnings.contains(where: { $0.contains("CPR") }))
     }
 
+    func testBrokenFolderLoadsSidecarNotesText() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let broken = try XCTUnwrap(result.songs.first { $0.displayTitle == "Broken Folder Example" })
+        XCTAssertEqual(broken.sidecarNotes, "notes only")
+    }
+
+    func testSongsWithoutSidecarNotesAreNil() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
+        XCTAssertNil(neon.sidecarNotes)
+    }
+
     func testSkipsNonFolderEntriesAtRoot() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

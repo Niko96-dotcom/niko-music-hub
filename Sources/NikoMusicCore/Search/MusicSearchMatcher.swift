@@ -49,6 +49,10 @@ enum MusicSearchMatcher {
             return (.scanWarning, 45)
         }
 
+        if let notes = song.sidecarNotes, normalize(notes).contains(token) {
+            return (.songNote, 50)
+        }
+
         if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
 
         let haystack = searchableHaystack(for: song)
@@ -65,6 +69,9 @@ enum MusicSearchMatcher {
         parts.append(contentsOf: song.projectVersions.map(\.fileName))
         parts.append(contentsOf: song.previewCandidates.map(\.fileName))
         parts.append(contentsOf: song.scanWarnings)
+        if let notes = song.sidecarNotes {
+            parts.append(notes)
+        }
         return normalize(parts.joined(separator: " "))
     }
 
