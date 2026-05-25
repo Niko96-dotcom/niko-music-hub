@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct OutsideCubaseHubApp: App {
+struct NikoMusicHubApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     private let composition = AppComposition.make()

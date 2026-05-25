@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "OutsideCubaseHub",
+    name: "NikoMusicHub",
     platforms: [
         .macOS("14.2")
     ],
@@ -33,8 +33,8 @@ let package = Package(
             targets: ["FeatureDownloader"]
         ),
         .executable(
-            name: "OutsideCubaseHub",
-            targets: ["OutsideCubaseHub"]
+            name: "NikoMusicHub",
+            targets: ["NikoMusicHub"]
         ),
         .executable(
             name: "NikoMusicCoreSelfTest",
@@ -69,7 +69,7 @@ let package = Package(
             dependencies: ["AppCore"]
         ),
         .executableTarget(
-            name: "OutsideCubaseHub",
+            name: "NikoMusicHub",
             dependencies: [
                 "AppCore",
                 "FeatureBPMTapper",
