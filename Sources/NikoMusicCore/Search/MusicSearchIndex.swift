@@ -15,17 +15,9 @@ public struct MusicSearchIndex: Sendable {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return songs }
 
-        let needle = trimmed.lowercased()
-        return songs.filter { song in
-            if song.displayTitle.lowercased().contains(needle) { return true }
-            if song.originalFolderName.lowercased().contains(needle) { return true }
-            if song.projectVersions.contains(where: { $0.fileName.lowercased().contains(needle) }) {
-                return true
-            }
-            if song.previewCandidates.contains(where: { $0.fileName.lowercased().contains(needle) }) {
-                return true
-            }
-            return false
-        }
+        let tokens = MusicSearchMatcher.tokens(from: trimmed)
+        guard !tokens.isEmpty else { return songs }
+
+        return songs.filter { MusicSearchMatcher.matches(song: $0, queryTokens: tokens) }
     }
 }

@@ -11,7 +11,7 @@ This script:
 1. Regenerates `Fixtures/CubaseArchive/`
 2. Builds `dist/NikoMusicHub.app`
 3. Runs the app with `NIKO_MUSIC_HUB_E2E_SMOKE=1` (CLI hook — not pgrep-only)
-4. Drives the same `ArchiveUserFlowSmoke` path as unit tests: fixture root → scan → search **Neon Hook** → dry-run open latest CPR
+4. Drives the same `ArchiveUserFlowSmoke` path as unit tests: fixture root → scan → fuzzy search **neon hk** → dry-run open latest CPR
 5. Asserts stdout includes user-flow markers, CPR path, dry-run log, read-only write-probe, and unchanged fixture tree
 
 Environment variables:

@@ -5,31 +5,40 @@ import NikoMusicCore
 public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let userFlow: String
     public let songCount: Int
+    public let searchQuery: String
     public let searchMatchCount: Int
     public let selectedTitle: String
     public let dryRunCPRPath: String
     public let dryRunLogLine: String?
     public let writeProbeDenied: Bool
     public let archiveTreeUnchanged: Bool
+    public let diagnosticsSongCount: Int
+    public let diagnosticsSkippedCount: Int
 
     public init(
         userFlow: String,
         songCount: Int,
+        searchQuery: String,
         searchMatchCount: Int,
         selectedTitle: String,
         dryRunCPRPath: String,
         dryRunLogLine: String?,
         writeProbeDenied: Bool,
-        archiveTreeUnchanged: Bool
+        archiveTreeUnchanged: Bool,
+        diagnosticsSongCount: Int,
+        diagnosticsSkippedCount: Int
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
+        self.searchQuery = searchQuery
         self.searchMatchCount = searchMatchCount
         self.selectedTitle = selectedTitle
         self.dryRunCPRPath = dryRunCPRPath
         self.dryRunLogLine = dryRunLogLine
         self.writeProbeDenied = writeProbeDenied
         self.archiveTreeUnchanged = archiveTreeUnchanged
+        self.diagnosticsSongCount = diagnosticsSongCount
+        self.diagnosticsSkippedCount = diagnosticsSkippedCount
     }
 }
 
@@ -54,7 +63,8 @@ public enum ArchiveUserFlowSmoke {
         let viewModel = ArchiveBrowserViewModel(context: context)
         viewModel.scanSync()
 
-        viewModel.searchQuery = "Neon Hook"
+        let searchQuery = "neon hk"
+        viewModel.searchQuery = searchQuery
         viewModel.applySearchFilter()
 
         guard let neon = viewModel.filteredSongs.first else {
@@ -70,15 +80,20 @@ public enum ArchiveUserFlowSmoke {
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
         let dryRunLogLine = captureDryRunLogLine(from: context)
 
+        let diagnostics = viewModel.scanDiagnostics
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: viewModel.songs.count,
+            searchQuery: searchQuery,
             searchMatchCount: viewModel.filteredSongs.count,
             selectedTitle: neon.displayTitle,
             dryRunCPRPath: dryRunPath,
             dryRunLogLine: dryRunLogLine,
             writeProbeDenied: writeProbeDenied,
-            archiveTreeUnchanged: treeBefore == treeAfter
+            archiveTreeUnchanged: treeBefore == treeAfter,
+            diagnosticsSongCount: diagnostics?.songCount ?? 0,
+            diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0
         )
     }
 
