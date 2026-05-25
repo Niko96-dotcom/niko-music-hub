@@ -31,4 +31,16 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.latestCPR = latestCPR
         self.id = folderPath.path
     }
+
+    /// Scan warnings safe for on-screen display (redacts embedded home paths).
+    public func displayScanWarnings(homeDirectory: String? = nil) -> [String] {
+        scanWarnings.map {
+            DiagnosticsPathRedactor.redactPathsInText($0, homeDirectory: homeDirectory)
+        }
+    }
+
+    /// Redacts a CPR/open path for song detail and cards.
+    public static func displayDryRunPath(_ path: String, homeDirectory: String? = nil) -> String {
+        DiagnosticsPathRedactor.redact(path, homeDirectory: homeDirectory)
+    }
 }

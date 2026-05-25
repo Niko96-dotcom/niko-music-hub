@@ -11,6 +11,21 @@ struct SongDetailView: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
 
+            let displayWarnings = song.displayScanWarnings()
+            if !displayWarnings.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Scan warnings")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    ForEach(displayWarnings, id: \.self) { warning in
+                        Text("⚠ \(warning)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(ArchiveDesignTokens.accent)
+                            .lineLimit(3)
+                    }
+                }
+            }
+
             PreviewPlayerView(url: mainPreviewURL)
 
             if let mainSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) {
@@ -45,7 +60,7 @@ struct SongDetailView: View {
                 .tint(ArchiveDesignTokens.accent)
 
                 if let path = viewModel.lastDryRunLog {
-                    Text(path)
+                    Text(Song.displayDryRunPath(path))
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                         .lineLimit(2)

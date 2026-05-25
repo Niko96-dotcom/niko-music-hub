@@ -17,6 +17,12 @@ struct SongCardView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(2)
             }
+            if let warningLine = song.displayScanWarnings().first {
+                Text("⚠ \(warningLine)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .lineLimit(2)
+            }
             RoundedRectangle(cornerRadius: 4)
                 .fill(ArchiveDesignTokens.accent.opacity(0.35))
                 .frame(height: 28)
