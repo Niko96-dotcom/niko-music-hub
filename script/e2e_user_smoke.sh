@@ -186,6 +186,22 @@ if ! grep -q "Lab Song short clip.wav" <<<"$PANEL_RANKING_TOO_SHORT_BREAKDOWN"; 
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_ranking_tiebreak_legend_match=true" "$LOG_FILE"; then
+  echo "E2E failed: ranking lab panel tiebreak legend missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_RANKING_TIEBREAK_LEGEND="$(grep -m1 'diagnostics_panel_ranking_tiebreak_legend=' "$LOG_FILE" | sed 's/.*diagnostics_panel_ranking_tiebreak_legend=//')"
+if [[ -z "$PANEL_RANKING_TIEBREAK_LEGEND" ]]; then
+  echo "E2E failed: ranking lab panel tiebreak legend missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_ranking_tiebreak_legend=${PANEL_RANKING_TIEBREAK_LEGEND}" "$RANKING_EXPORT_PATH"; then
+  echo "E2E failed: export preview_ranking_tiebreak_legend does not match panel legend" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_tiebreak_match=true" "$LOG_FILE"; then
   echo "E2E failed: equal-score tiebreak diagnostics export missing active match marker" >&2
   exit 1

@@ -27,6 +27,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabPanelSelectedHeaderMatchesExport: Bool
     public let rankingLabPanelTooShortBreakdownLine: String
     public let rankingLabPanelTooShortBreakdownMatchesExport: Bool
+    public let rankingLabPanelTiebreakLegend: String
+    public let rankingLabPanelTiebreakLegendMatchesExport: Bool
     public let tiebreakLabDiagnosticsExportPath: String
     public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
     public let tiebreakPanelPreviewRankingHeader: String
@@ -127,6 +129,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         rankingLabPanelSelectedHeaderMatchesExport: Bool,
         rankingLabPanelTooShortBreakdownLine: String,
         rankingLabPanelTooShortBreakdownMatchesExport: Bool,
+        rankingLabPanelTiebreakLegend: String,
+        rankingLabPanelTiebreakLegendMatchesExport: Bool,
         tiebreakLabDiagnosticsExportPath: String,
         tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
         tiebreakPanelPreviewRankingHeader: String,
@@ -225,6 +229,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabPanelSelectedHeaderMatchesExport = rankingLabPanelSelectedHeaderMatchesExport
         self.rankingLabPanelTooShortBreakdownLine = rankingLabPanelTooShortBreakdownLine
         self.rankingLabPanelTooShortBreakdownMatchesExport = rankingLabPanelTooShortBreakdownMatchesExport
+        self.rankingLabPanelTiebreakLegend = rankingLabPanelTiebreakLegend
+        self.rankingLabPanelTiebreakLegendMatchesExport = rankingLabPanelTiebreakLegendMatchesExport
         self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
         self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
         self.tiebreakPanelPreviewRankingHeader = tiebreakPanelPreviewRankingHeader
@@ -522,6 +528,19 @@ public enum ArchiveUserFlowSmoke {
             rankingLabTooShortBreakdown.panelMatchesExport(in: rankingLabExportText)
         guard rankingLabPanelTooShortBreakdownMatchesExport,
               panelRankingLabTooShortBreakdownLine.contains("Lab Song short clip.wav") else {
+            throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
+        }
+
+        let panelRankingLabTiebreakLegend = ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend
+        let exportRankingLabTiebreakLegend = Self.exportLineValue(
+            prefix: "preview_ranking_tiebreak_legend=",
+            in: rankingLabExportText
+        ) ?? ""
+        let rankingLabPanelTiebreakLegendMatchesExport =
+            ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegendMatchesExport(in: rankingLabExportText)
+            && panelRankingLabTiebreakLegend == exportRankingLabTiebreakLegend
+            && panelRankingLabTiebreakLegend.contains("Preview tiebreak")
+        guard rankingLabPanelTiebreakLegendMatchesExport else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
@@ -885,6 +904,8 @@ public enum ArchiveUserFlowSmoke {
             rankingLabPanelSelectedHeaderMatchesExport: rankingLabPanelSelectedHeaderMatchesExport,
             rankingLabPanelTooShortBreakdownLine: panelRankingLabTooShortBreakdownLine,
             rankingLabPanelTooShortBreakdownMatchesExport: rankingLabPanelTooShortBreakdownMatchesExport,
+            rankingLabPanelTiebreakLegend: panelRankingLabTiebreakLegend,
+            rankingLabPanelTiebreakLegendMatchesExport: rankingLabPanelTiebreakLegendMatchesExport,
             tiebreakLabDiagnosticsExportPath: tiebreakLabExportPath,
             tiebreakLabDiagnosticsExportContainsTiebreak: exportContainsTiebreak,
             tiebreakPanelPreviewRankingHeader: panelDurationTiebreakHeader,

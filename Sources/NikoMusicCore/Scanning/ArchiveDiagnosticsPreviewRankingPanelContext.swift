@@ -38,6 +38,11 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
     public static let tiebreakLegend =
         "Preview tiebreak: role → folder → filename → version → extension → duration → recency"
 
+    /// True when export text carries the same operator-facing tiebreak legend shown in the panel.
+    public static func tiebreakLegendMatchesExport(in exportText: String) -> Bool {
+        exportText.contains("preview_ranking_tiebreak_legend=\(tiebreakLegend)")
+    }
+
     public let tooShortNonMainPreviewCount: Int
     public let songsWithTooShortNonMainPreviews: Int
     public let tooShortSongBreakdowns: [TooShortNonMainSongBreakdown]

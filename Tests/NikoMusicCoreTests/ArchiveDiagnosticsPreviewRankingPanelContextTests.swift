@@ -9,6 +9,22 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         XCTAssertTrue(legend.contains("duration"))
     }
 
+    func testTiebreakLegendMatchesExporterLine() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [CubaseFixtures.archiveRoot]
+        )
+        let exportText = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil
+        )
+        XCTAssertTrue(
+            ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegendMatchesExport(in: exportText)
+        )
+    }
+
     func testScanSummaryCountsTooShortNonMainPreviewsInFixtures() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
