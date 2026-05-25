@@ -4,14 +4,31 @@ import XCTest
 final class PreviewRankingExplainabilityTests: XCTestCase {
     func testMapsConfidenceReasonsToReadableLabels() {
         let summary = PreviewRankingExplainability.summary(
-            from: ["role:full-mix", "folder:mixdown", "version:v3", "extension:wav", "duration:plausible", "recency"]
+            from: ["role:full-mix", "folder:mixdown", "version:v3", "extension:wav", "duration:plausible", "recency"],
+            durationSeconds: 210
         )
         XCTAssertTrue(summary.contains("full mix"))
         XCTAssertTrue(summary.contains("mixdown"))
         XCTAssertTrue(summary.contains("v3"))
         XCTAssertTrue(summary.contains("wav"))
-        XCTAssertTrue(summary.contains("plausible length"))
+        XCTAssertTrue(summary.contains("plausible length (3:30)"))
         XCTAssertFalse(summary.contains("recency"))
+    }
+
+    func testDurationLabelsIncludeSecondsForTooShort() {
+        let summary = PreviewRankingExplainability.summary(
+            from: ["duration:too-short"],
+            durationSeconds: 5
+        )
+        XCTAssertEqual(summary, "too short (5s)")
+    }
+
+    func testDurationLabelsIncludeSecondsForLongTake() {
+        let summary = PreviewRankingExplainability.summary(
+            from: ["duration:long"],
+            durationSeconds: 720
+        )
+        XCTAssertEqual(summary, "long take (12:00)")
     }
 
     func testMainPreviewSummaryForRankingLabFixture() throws {
@@ -24,6 +41,7 @@ final class PreviewRankingExplainabilityTests: XCTestCase {
         XCTAssertTrue(summary.contains("Lab Song v3 mix.wav"))
         XCTAssertTrue(summary.contains("v3"))
         XCTAssertTrue(summary.contains("wav"))
+        XCTAssertTrue(summary.contains("plausible length (3:30)"))
         XCTAssertFalse(summary.lowercased().contains("too short"))
     }
 }
