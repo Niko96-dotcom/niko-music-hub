@@ -24,7 +24,7 @@ final class ArchiveDiagnosticsPanelContextTests: XCTestCase {
         XCTAssertTrue(panel.supportSummaryLine.contains("2 skipped at roots"))
     }
 
-    func testRootHealthBadgeNilWhenRootsHealthy() throws {
+    func testRootHealthBadgeShowsSongWarningsAndSkippedOnFixtureScan() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let roots = [CubaseFixtures.archiveRoot]
@@ -33,6 +33,24 @@ final class ArchiveDiagnosticsPanelContextTests: XCTestCase {
             result: result,
             roots: roots,
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        XCTAssertEqual(
+            ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics),
+            "1 song warning · 2 skipped at roots"
+        )
+    }
+
+    func testRootHealthBadgeNilWhenScanFullyHealthy() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 3,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: []
         )
 
         XCTAssertNil(ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics))

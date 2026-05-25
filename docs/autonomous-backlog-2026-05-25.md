@@ -1,20 +1,18 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-46)
+## Picked (music-47)
 
-Preview ranking: decouple version/extension from confidence score; prove equal-score version/extension tiebreak in real scan + user-flow/E2E.
+Diagnostics scan-health badge: surface song warnings and skipped-at-roots in panel + export when roots are otherwise valid.
 
-## Completed (music-46)
+## Completed (music-47)
 
-- `PreviewConfidenceRanker`: version and extension affect tiebreak order only (not `confidenceScore`)
-- Fixtures: `Equal Score Version Tiebreak`, `Equal Score Extension Tiebreak`; synced mtimes on `Preview Ranking Lab` v2/v3
-- Tests: `PreviewConfidenceRankerTests`, `ArchiveDiagnosticsExporterTests`
-- User-flow + E2E: version/extension tiebreak diagnostics export proof; fixture song count 7
+- `ArchiveDiagnosticsPanelContext.rootHealthBadge`: includes song-warning and non-invalid skipped counts (no double-count with invalid roots)
+- Tests: panel context, exporter, view-model, user-flow, E2E smoke markers for fixture badge parity
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-45)
+## Prior (music-46)
 
-Fuzzy scan-warning search with explicit explainability and user-flow/E2E proof.
+Preview ranking: decouple version/extension from confidence score; prove equal-score version/extension tiebreak in real scan + user-flow/E2E.
 
 ## Next best TODO
 
