@@ -18,13 +18,22 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     public func scan(roots: [URL]) throws -> ScanResult {
         var songs: [Song] = []
         var globalWarnings: [String] = []
+        var skippedEntries: [SkippedScanEntry] = []
 
         for root in roots {
             let standardizedRoot = root.standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: standardizedRoot.path, isDirectory: &isDirectory),
                   isDirectory.boolValue else {
-                globalWarnings.append("Root is not a directory: \(standardizedRoot.path)")
+                let message = "Root is not a directory: \(standardizedRoot.path)"
+                globalWarnings.append(message)
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .invalidRoot,
+                        label: standardizedRoot.path,
+                        reason: "Root is not a directory"
+                    )
+                )
                 continue
             }
 
@@ -36,7 +45,16 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
 
             for child in children {
                 let values = try child.resourceValues(forKeys: [.isDirectoryKey])
-                guard values.isDirectory == true else { continue }
+                guard values.isDirectory == true else {
+                    skippedEntries.append(
+                        SkippedScanEntry(
+                            kind: .nonFolderAtRoot,
+                            label: child.lastPathComponent,
+                            reason: "Not a folder — only immediate child folders are scanned as songs"
+                        )
+                    )
+                    continue
+                }
                 if let song = try scanSongFolder(child) {
                     songs.append(song)
                 }
@@ -44,7 +62,16 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         }
 
         songs.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
-        return ScanResult(songs: songs, globalWarnings: globalWarnings)
+        skippedEntries.sort {
+            let kindOrder = $0.kind.rawValue.localizedCaseInsensitiveCompare($1.kind.rawValue)
+            if kindOrder != .orderedSame { return kindOrder == .orderedAscending }
+            return $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        }
+        return ScanResult(
+            songs: songs,
+            globalWarnings: globalWarnings,
+            skippedEntries: skippedEntries
+        )
     }
 
     private func scanSongFolder(_ folder: URL) throws -> Song? {

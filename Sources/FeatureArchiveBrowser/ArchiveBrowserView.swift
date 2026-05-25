@@ -50,6 +50,16 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
             }
 
+            if let diagnostics = viewModel.scanDiagnostics {
+                ArchiveDiagnosticsPanelView(diagnostics: diagnostics) {
+                    do {
+                        try viewModel.exportDiagnostics()
+                    } catch {
+                        viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                    }
+                }
+            }
+
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in

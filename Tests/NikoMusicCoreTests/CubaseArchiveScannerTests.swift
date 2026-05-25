@@ -23,6 +23,17 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertTrue(broken.scanWarnings.contains(where: { $0.contains("CPR") }))
     }
 
+    func testSkipsNonFolderEntriesAtRoot() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        XCTAssertTrue(
+            result.skippedEntries.contains {
+                $0.kind == .nonFolderAtRoot && $0.label == "LOOSE_FILE.txt"
+            }
+        )
+    }
+
     func testNeonHookHasMultipleCPRFiles() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
