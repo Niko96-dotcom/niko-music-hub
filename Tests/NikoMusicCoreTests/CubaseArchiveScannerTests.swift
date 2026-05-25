@@ -11,7 +11,7 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertTrue(titles.contains("Neon Hook"))
         XCTAssertTrue(titles.contains("Second Song"))
         XCTAssertTrue(titles.contains("Broken Folder Example"))
-        XCTAssertEqual(result.songs.count, 3)
+        XCTAssertEqual(result.songs.count, 4)
     }
 
     func testBrokenFolderHasWarningAndNoCPR() throws {

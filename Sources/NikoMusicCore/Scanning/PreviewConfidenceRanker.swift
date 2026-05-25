@@ -6,16 +6,45 @@ public struct PreviewConfidenceRanker: Sendable {
         "stem", "stems", "ref", "reference", "test", "temp", "old", "backup"
     ]
 
+    private static let extensionPreference: [String: Double] = [
+        "wav": 8,
+        "flac": 6,
+        "aiff": 5,
+        "aif": 5,
+        "m4a": 3,
+        "mp3": 1,
+    ]
+
+    private static let minimumPlausibleDuration: Double = 30
+    private static let maximumPlausibleDuration: Double = 600
+
     public init() {}
 
     public func rank(_ candidates: [PreviewCandidate]) -> [PreviewCandidate] {
         candidates
             .map { scored($0) }
-            .sorted { $0.confidenceScore > $1.confidenceScore }
+            .sorted(by: compareCandidates)
     }
 
     public func mainPreviewID(from ranked: [PreviewCandidate]) -> String? {
         ranked.first?.id
+    }
+
+    private func compareCandidates(_ lhs: PreviewCandidate, _ rhs: PreviewCandidate) -> Bool {
+        if lhs.confidenceScore != rhs.confidenceScore {
+            return lhs.confidenceScore > rhs.confidenceScore
+        }
+        let lv = lhs.detectedVersionNumber ?? 0
+        let rv = rhs.detectedVersionNumber ?? 0
+        if lv != rv { return lv > rv }
+        let le = Self.extensionPreference[lhs.fileExtension] ?? 0
+        let re = Self.extensionPreference[rhs.fileExtension] ?? 0
+        if le != re { return le > re }
+        let ld = lhs.durationSeconds ?? 0
+        let rd = rhs.durationSeconds ?? 0
+        if ld != rd { return ld > rd }
+        if lhs.modifiedAt != rhs.modifiedAt { return lhs.modifiedAt > rhs.modifiedAt }
+        return lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
     }
 
     private func scored(_ candidate: PreviewCandidate) -> PreviewCandidate {
@@ -60,6 +89,28 @@ public struct PreviewConfidenceRanker: Sendable {
         for token in Self.negativeTokens where lower.contains(token) {
             score -= 30
             reasons.append("filename:negative-\(token)")
+        }
+
+        if let version = candidate.detectedVersionNumber {
+            score += Double(version) * 0.5
+            reasons.append("version:v\(version)")
+        }
+
+        if let extBoost = Self.extensionPreference[candidate.fileExtension] {
+            score += extBoost
+            reasons.append("extension:\(candidate.fileExtension)")
+        }
+
+        if let duration = candidate.durationSeconds {
+            if duration < Self.minimumPlausibleDuration {
+                score -= 20
+                reasons.append("duration:too-short")
+            } else if duration <= Self.maximumPlausibleDuration {
+                score += 5
+                reasons.append("duration:plausible")
+            } else {
+                reasons.append("duration:long")
+            }
         }
 
         let recency = candidate.modifiedAt.timeIntervalSince1970 / 1_000_000_000

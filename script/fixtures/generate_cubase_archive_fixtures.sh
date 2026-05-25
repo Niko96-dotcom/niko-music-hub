@@ -8,15 +8,18 @@ FIXTURE_ROOT="$ROOT/Fixtures/CubaseArchive"
 
 write_minimal_wav() {
   local path="$1"
+  local seconds="${2:-0.1}"
   mkdir -p "$(dirname "$path")"
-  /usr/bin/python3 - "$path" <<'PY'
+  /usr/bin/python3 - "$path" "$seconds" <<'PY'
 import struct, sys, wave
 path = sys.argv[1]
+seconds = float(sys.argv[2])
+frames = max(1, int(44100 * seconds))
 with wave.open(path, "w") as w:
     w.setnchannels(1)
     w.setsampwidth(2)
     w.setframerate(44100)
-    w.writeframes(b"\x00\x00" * 4410)  # ~0.1s silence
+    w.writeframes(b"\x00\x00" * frames)
 PY
 }
 
@@ -48,6 +51,27 @@ touch "$FIXTURE_ROOT/Neon Hook/Ideas/Neon Hook topline.mid"
 write_placeholder_cpr "$FIXTURE_ROOT/Second Song/Second Song.cpr"
 write_minimal_wav "$FIXTURE_ROOT/Second Song/Mixdown/Second Song mixdown.wav"
 write_minimal_wav "$FIXTURE_ROOT/Second Song/Mixdown/Second Song instr.wav"
+
+# Preview Ranking Lab — version, extension, role, and duration competition
+write_placeholder_cpr "$FIXTURE_ROOT/Preview Ranking Lab/Preview Ranking Lab.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav" 210
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v2 mix.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" <<'PY'
+import struct, sys
+path = sys.argv[1]
+# Minimal MP3-like placeholder bytes for ranking tests (not a real decode target).
+with open(path, "wb") as f:
+    f.write(b"ID3" + b"\x00" * 128)
+PY
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song short clip.wav" 5
+/usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav" <<'PY'
+import os, sys, time
+path = sys.argv[1]
+now = time.time() + 300
+os.utime(path, (now, now))
+PY
 
 # Broken folder — no CPR
 mkdir -p "$FIXTURE_ROOT/Broken Folder Example"

@@ -10,7 +10,9 @@ enum CubaseFixtures {
 
     static func ensureGenerated() throws {
         let neonHook = archiveRoot.appendingPathComponent("Neon Hook/Neon Hook.cpr")
-        if FileManager.default.fileExists(atPath: neonHook.path) {
+        let rankingLab = archiveRoot.appendingPathComponent("Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav")
+        if FileManager.default.fileExists(atPath: neonHook.path),
+           FileManager.default.fileExists(atPath: rankingLab.path) {
             return
         }
         let script = packageRoot(from: archiveRoot)

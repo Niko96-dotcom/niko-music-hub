@@ -125,14 +125,17 @@ Milestone 2+ can add virtual titles, collaborator overrides — same store, sche
 
 ## Preview ranking (port from spec)
 
-Implement `PreviewConfidenceRanker` for v0.1 with a **subset** of SPEC §8:
+Implement `PreviewConfidenceRanker` with SPEC §8 steps 1–6 for v0.2 preview picking:
 
 1. Role confidence (full mix > instrumental > stems)
 2. Location (`Mixdown` folder boost)
 3. Filename semantics (positive/negative tokens)
-4. Recency (modification date)
+4. Parsed version number from filename (tiebreak + score bump)
+5. Extension preference (`wav` > `flac` > `aiff` > `m4a` > `mp3`)
+6. Duration plausibility (penalize very short; boost typical song length from WAV header)
+7. Recency (modification date, small tiebreak)
 
-Defer to post-v0.1: parsed version tiebreak, duration plausibility, extension tiebreak, chorus/loudness preview start.
+Defer: chorus/loudness preview start, manual overrides.
 
 Output: `mainPreviewCandidateID` per song + `confidenceReasons[]` for debug UI.
 
