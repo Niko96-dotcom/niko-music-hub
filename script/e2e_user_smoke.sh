@@ -42,8 +42,18 @@ rm -f "$LOG_FILE"
   "$APP_BINARY"
 ) 2>&1 | tee "$LOG_FILE"
 
+if ! grep -q "user_flow=scan_search_open" "$LOG_FILE"; then
+  echo "E2E failed: view-model user flow marker missing" >&2
+  exit 1
+fi
+
 if ! grep -q "neon_hook=Neon Hook" "$LOG_FILE"; then
   echo "E2E failed: Neon Hook not found in smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: Neon Hook search did not narrow to one song" >&2
   exit 1
 fi
 
@@ -54,6 +64,16 @@ fi
 
 if ! grep -q "\[dry-run\] open CPR:" "$LOG_FILE"; then
   echo "E2E failed: dry-run open log line missing" >&2
+  exit 1
+fi
+
+if ! grep -q "write_probe_denied=true" "$LOG_FILE"; then
+  echo "E2E failed: read-only write probe not reported" >&2
+  exit 1
+fi
+
+if ! grep -q "archive_unchanged=true" "$LOG_FILE"; then
+  echo "E2E failed: fixture archive tree changed during smoke" >&2
   exit 1
 fi
 

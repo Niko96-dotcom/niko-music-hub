@@ -14,20 +14,7 @@ final class OpenLatestCPRTests: XCTestCase {
             unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN")
         }
 
-        let context = ToolContext(
-            registeredToolCount: 1,
-            settingsStore: UserDefaultsSettingsStore(
-                userDefaults: UserDefaults(suiteName: "OpenLatestCPRTests.\(UUID())")!,
-                key: "settings"
-            ),
-            outputInboxStore: JSONOutputInboxStore(
-                storageURL: FileManager.default.temporaryDirectory
-                    .appendingPathComponent("inbox-\(UUID()).json")
-            ),
-            jobRunner: JobRunner(),
-            fileActions: NoopFileActions(),
-            diagnostics: ConsoleDiagnostics()
-        )
+        let context = TestToolContext.make()
 
         let viewModel = ArchiveBrowserViewModel(context: context)
         await viewModel.scan()
@@ -38,9 +25,4 @@ final class OpenLatestCPRTests: XCTestCase {
         XCTAssertTrue(path.contains("Neon Hook"))
         XCTAssertTrue(path.hasSuffix(".cpr"))
     }
-}
-
-private struct NoopFileActions: FileActions {
-    func chooseOutputFolder() -> URL? { nil }
-    func revealInFinder(_ url: URL) {}
 }

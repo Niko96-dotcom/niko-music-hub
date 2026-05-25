@@ -63,6 +63,10 @@ final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func scan() async {
+        scanSync()
+    }
+
+    func scanSync() {
         guard !roots.isEmpty else {
             statusMessage = "Add at least one archive root."
             return
