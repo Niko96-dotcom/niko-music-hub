@@ -1,16 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-07)
+## Picked (music-08)
 
-Search match explainability: show per-token match reasons on song cards when a search filter is active.
+E2E/search smoke: assert search match explainability in `ArchiveUserFlowSmoke` and fixture smoke script.
 
 ## Completed
 
-- `MusicSearchResult` / `MusicSearchMatchDetail` with `matchSummary` (e.g. `neon → title start; hk → fuzzy title`)
-- `MusicSearchIndex.searchResults(_:)` returns ranked results with explainability
-- `ArchiveBrowserViewModel.searchMatchSummaries` + `SongCardView` hint line
-- Tests: `MusicSearchExplainabilityTests`, extended `ArchiveBrowserViewModelTests`
+- `ArchiveUserFlowSmokeResult.searchMatchSummary` from `searchMatchSummaries` after fuzzy `neon hk` filter
+- `ArchiveSmokeCommands` prints `search_match_summary=` and validates neon/hk tokens
+- `script/e2e_user_smoke.sh` greps explainability markers
+- `ArchiveUserFlowTests` asserts non-empty per-token summary on Neon Hook
+- `docs/user-e2e.md` notes explainability in smoke assertions
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-07)
+
+Search match explainability: show per-token match reasons on song cards when a search filter is active.
 
 ## Prior (music-06)
 
@@ -30,7 +35,7 @@ Archive scan diagnostics: counts, warnings, root paths, latest scan time, skippe
 
 ## Next best TODO
 
+- Search tokenizer: split on whitespace *before* stripping punctuation so `neon hk` yields two tokens (today normalize collapses to `neonhk`)
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias/note fields per SPEC §10 (no metadata layer yet)
-- Deeper per-folder skip reasons inside song folders if operators need them
-- Optional: surface search score/reasons in exported diagnostics for support threads
+- Optional: include search match summary in exported diagnostics text for support threads

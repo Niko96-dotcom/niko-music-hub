@@ -62,6 +62,16 @@ if ! grep -q "search_matches=1" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "search_match_summary=.*neon" "$LOG_FILE"; then
+  echo "E2E failed: search match explainability missing neon token" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match_summary=.*hk" "$LOG_FILE"; then
+  echo "E2E failed: search match explainability missing hk token" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1

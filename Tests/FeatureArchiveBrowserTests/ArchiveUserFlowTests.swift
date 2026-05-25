@@ -31,5 +31,7 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.dryRunCPRPath.contains("Neon Hook"))
         XCTAssertTrue(result.dryRunCPRPath.hasSuffix("Neon Hook.cpr"))
         XCTAssertTrue(result.dryRunLogLine?.contains("[dry-run] open CPR:") == true)
+        XCTAssertTrue(result.searchMatchSummary.contains("neon"))
+        XCTAssertTrue(result.searchMatchSummary.contains("hk"))
     }
 }
