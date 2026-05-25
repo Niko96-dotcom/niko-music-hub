@@ -10,6 +10,7 @@ public enum ArchiveDiagnosticsPanelAccessibility {
 struct ArchiveDiagnosticsPanelView: View {
     let diagnostics: ArchiveScanDiagnostics
     let selectedSong: Song?
+    let searchContext: ArchiveDiagnosticsSearchContext?
     let onExport: () -> Void
 
     private static let scanTimeFormatter: DateFormatter = {
@@ -61,6 +62,32 @@ struct ArchiveDiagnosticsPanelView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(2)
+            }
+
+            if let searchContext {
+                Text("Active search")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                Text(
+                    ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
+                        query: searchContext.query,
+                        matchCount: searchContext.matches.count
+                    )
+                )
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.accent)
+                .lineLimit(2)
+                ForEach(searchContext.matches, id: \.displayTitle) { match in
+                    let matchLine = ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
+                        displayTitle: match.displayTitle,
+                        summary: match.summary
+                    )
+                    Text("• \(matchLine)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+                }
             }
 
             Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)

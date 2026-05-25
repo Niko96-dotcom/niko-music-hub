@@ -44,6 +44,11 @@ When truncation applies, exports also include:
 
 `./script/e2e_user_smoke.sh` also scans the eight-song **Summary Warning** truncation lab and asserts the exported `summary_line=` includes `and 3 more` plus the truncation metadata lines above. The in-app diagnostics panel shows a matching footnote under **Support summary** (`Support summary shows 5 warning song titles; 3 more listed below.`); smoke asserts that text via `diagnostics_panel_summary_truncation_footnote=`.
 
+When a song search is active (fixture flow uses **neon hk**), the diagnostics panel shows **Active search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_search` block:
+
+- `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)
+- `diagnostics_panel_search_match_lines_match=` (each panel match line matches an export `search_match title=… summary=…`)
+
 On the **Preview Ranking Lab** fixture, smoke asserts panel/export parity for the scan-level too-short callout (`preview_ranking_scan_callout=`), the selected-song header (`preview_ranking_selected_header=`), per-song too-short breakdown lines (`too_short_song=`), the tiebreak legend (`preview_ranking_tiebreak_legend=`), the selected-song main preview summary (`main_preview_summary=`), and ranked preview lines (`preview_rank_line=`):
 
 - `diagnostics_panel_ranking_scan_callout_match=`
