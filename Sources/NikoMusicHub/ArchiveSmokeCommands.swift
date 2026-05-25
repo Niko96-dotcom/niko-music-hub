@@ -53,6 +53,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_panel_ranking_selected_header_match=\(result.rankingLabPanelSelectedHeaderMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_panel_ranking_too_short_breakdown=\(result.rankingLabPanelTooShortBreakdownLine)")
         print("[niko-music-hub-smoke] diagnostics_panel_ranking_too_short_breakdown_match=\(result.rankingLabPanelTooShortBreakdownMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_tiebreak_legend=\(result.rankingLabPanelTiebreakLegend)")
+        print("[niko-music-hub-smoke] diagnostics_panel_ranking_tiebreak_legend_match=\(result.rankingLabPanelTiebreakLegendMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_path=\(result.tiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_match=\(result.tiebreakLabDiagnosticsExportContainsTiebreak)")
         print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_header=\(result.tiebreakPanelPreviewRankingHeader)")
@@ -161,6 +163,9 @@ enum ArchiveSmokeCommands {
               !result.rankingLabPanelTooShortBreakdownLine.isEmpty,
               result.rankingLabPanelTooShortBreakdownLine.contains("Lab Song short clip.wav"),
               result.rankingLabPanelTooShortBreakdownMatchesExport,
+              !result.rankingLabPanelTiebreakLegend.isEmpty,
+              result.rankingLabPanelTiebreakLegend.contains("Preview tiebreak"),
+              result.rankingLabPanelTiebreakLegendMatchesExport,
               !result.tiebreakLabDiagnosticsExportPath.isEmpty,
               result.tiebreakLabDiagnosticsExportContainsTiebreak,
               !result.tiebreakPanelPreviewRankingHeader.isEmpty,
