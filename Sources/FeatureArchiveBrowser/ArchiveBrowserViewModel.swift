@@ -116,6 +116,18 @@ final class ArchiveBrowserViewModel: ObservableObject {
         selectedSong = song
     }
 
+    func activeSearchExportContext() -> ArchiveDiagnosticsSearchContext? {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let matches = filteredSongs.map { song in
+            ArchiveDiagnosticsSearchMatch(
+                displayTitle: song.displayTitle,
+                summary: searchMatchSummaries[song.id, default: ""]
+            )
+        }
+        return ArchiveDiagnosticsSearchContext(query: trimmed, matches: matches)
+    }
+
     func exportDiagnostics() throws {
         guard let scanDiagnostics else {
             statusMessage = "Scan the archive before exporting diagnostics."
@@ -130,7 +142,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
         try ArchiveDiagnosticsExporter.exportText(
             diagnostics: scanDiagnostics,
             to: destination,
-            archiveRoots: roots
+            archiveRoots: roots,
+            searchContext: activeSearchExportContext()
         )
         lastDiagnosticsExportPath = destination.path
         diagnostics.log(.info, "Exported diagnostics to \(destination.path)")

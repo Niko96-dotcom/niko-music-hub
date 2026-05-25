@@ -44,4 +44,23 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 || diagnostics.displayRootPaths().first?.hasPrefix("~") == true
         )
     }
+
+    func testExportDiagnosticsIncludesActiveSearchContext() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        viewModel.searchQuery = "neon hk"
+        viewModel.applySearchFilter()
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+
+        try viewModel.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
+        XCTAssertTrue(text.contains("search_query=neon hk"))
+        XCTAssertTrue(text.contains("search_match title=Neon Hook"))
+        XCTAssertTrue(text.contains("summary="))
+    }
 }

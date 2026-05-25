@@ -9,7 +9,8 @@ public enum ArchiveDiagnosticsExporter {
         diagnostics: ArchiveScanDiagnostics,
         to destination: URL,
         archiveRoots: [URL],
-        homeDirectory: String? = nil
+        homeDirectory: String? = nil,
+        searchContext: ArchiveDiagnosticsSearchContext? = nil
     ) throws {
         let destinationPath = destination.standardizedFileURL.path
         for root in archiveRoots {
@@ -20,13 +21,18 @@ public enum ArchiveDiagnosticsExporter {
             }
         }
 
-        let text = formattedText(diagnostics: diagnostics, homeDirectory: homeDirectory)
+        let text = formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: homeDirectory,
+            searchContext: searchContext
+        )
         try text.write(to: destination, atomically: true, encoding: .utf8)
     }
 
     static func formattedText(
         diagnostics: ArchiveScanDiagnostics,
-        homeDirectory: String?
+        homeDirectory: String?,
+        searchContext: ArchiveDiagnosticsSearchContext? = nil
     ) -> String {
         var lines: [String] = []
         lines.append("Niko Music Hub — archive scan diagnostics")
@@ -57,6 +63,16 @@ public enum ArchiveDiagnosticsExporter {
         for entry in diagnostics.skippedEntries {
             let label = DiagnosticsPathRedactor.redact(entry.label, homeDirectory: homeDirectory)
             lines.append("skipped=\(entry.kind.rawValue) label=\(label) reason=\(entry.reason)")
+        }
+
+        if let searchContext {
+            lines.append("")
+            lines.append("active_search")
+            lines.append("search_query=\(searchContext.query)")
+            lines.append("search_matches=\(searchContext.matches.count)")
+            for match in searchContext.matches {
+                lines.append("search_match title=\(match.displayTitle) summary=\(match.summary)")
+            }
         }
 
         return lines.joined(separator: "\n") + "\n"
