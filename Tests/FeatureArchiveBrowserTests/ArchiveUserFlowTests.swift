@@ -45,6 +45,8 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav"))
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("v3"))
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("wav"))
+        XCTAssertFalse(result.rankingLabDiagnosticsExportPath.isEmpty)
+        XCTAssertTrue(result.rankingLabDiagnosticsExportContainsMatch)
         XCTAssertTrue(
             result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") })
         )

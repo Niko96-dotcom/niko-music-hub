@@ -19,6 +19,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let diagnosticsSkippedCount: Int
     public let searchMatchSummary: String
     public let rankingLabMainPreviewSummary: String
+    public let rankingLabDiagnosticsExportPath: String
+    public let rankingLabDiagnosticsExportContainsMatch: Bool
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
     public let warningSearchQuery: String
@@ -52,6 +54,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         diagnosticsSkippedCount: Int,
         searchMatchSummary: String,
         rankingLabMainPreviewSummary: String,
+        rankingLabDiagnosticsExportPath: String,
+        rankingLabDiagnosticsExportContainsMatch: Bool,
         brokenFolderDisplayWarnings: [String],
         brokenFolderSidecarNotes: String?,
         warningSearchQuery: String,
@@ -84,6 +88,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.diagnosticsSkippedCount = diagnosticsSkippedCount
         self.searchMatchSummary = searchMatchSummary
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
+        self.rankingLabDiagnosticsExportPath = rankingLabDiagnosticsExportPath
+        self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
         self.warningSearchQuery = warningSearchQuery
@@ -108,6 +114,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case rankingLabNotFound
     case missingDryRunPath
     case missingRankingLabPreviewSummary
+    case rankingLabDiagnosticsExportFailed
+    case rankingLabDiagnosticsExportMissingMatch
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
@@ -182,6 +190,21 @@ public enum ArchiveUserFlowSmoke {
         guard let rankingLabMainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: rankingLab),
               !rankingLabMainPreviewSummary.isEmpty else {
             throw ArchiveUserFlowSmokeError.missingRankingLabPreviewSummary
+        }
+
+        viewModel.selectSong(rankingLab)
+        try viewModel.exportDiagnostics()
+        guard let rankingLabExportPath = viewModel.lastDiagnosticsExportPath,
+              !rankingLabExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportFailed
+        }
+        let rankingLabExportText = try String(contentsOf: URL(fileURLWithPath: rankingLabExportPath), encoding: .utf8)
+        let exportContainsRankingLabMatch =
+            rankingLabExportText.contains("selected_song_title=Preview Ranking Lab")
+            && rankingLabExportText.contains("preview_rank_line=")
+            && rankingLabExportText.contains("v3")
+        guard exportContainsRankingLabMatch else {
+            throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
         }
 
         guard let broken = viewModel.songs.first(where: { $0.displayTitle == "Broken Folder Example" }) else {
@@ -260,6 +283,8 @@ public enum ArchiveUserFlowSmoke {
             diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
             searchMatchSummary: searchMatchSummary,
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
+            rankingLabDiagnosticsExportPath: rankingLabExportPath,
+            rankingLabDiagnosticsExportContainsMatch: exportContainsRankingLabMatch,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
             warningSearchQuery: warningSearchQuery,
