@@ -45,6 +45,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let searchDiagnosticsExportContainsMatch: Bool
     public let searchDiagnosticsExportContainsSummaryLine: Bool
     public let diagnosticsExportSummaryLine: String
+    /// In-app panel support summary (matches export `summary_line=` value without prefix).
+    public let diagnosticsPanelSupportSummary: String
+    public let diagnosticsPanelMatchesExportSummary: Bool
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
@@ -90,6 +93,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         searchDiagnosticsExportContainsMatch: Bool,
         searchDiagnosticsExportContainsSummaryLine: Bool,
         diagnosticsExportSummaryLine: String,
+        diagnosticsPanelSupportSummary: String,
+        diagnosticsPanelMatchesExportSummary: Bool,
         skippedSearchDiagnosticsExportPath: String,
         skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
@@ -134,6 +139,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.searchDiagnosticsExportContainsMatch = searchDiagnosticsExportContainsMatch
         self.searchDiagnosticsExportContainsSummaryLine = searchDiagnosticsExportContainsSummaryLine
         self.diagnosticsExportSummaryLine = diagnosticsExportSummaryLine
+        self.diagnosticsPanelSupportSummary = diagnosticsPanelSupportSummary
+        self.diagnosticsPanelMatchesExportSummary = diagnosticsPanelMatchesExportSummary
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
@@ -165,6 +172,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case searchDiagnosticsExportFailed
     case searchDiagnosticsExportMissingMatch
     case searchDiagnosticsExportMissingSummaryLine
+    case diagnosticsPanelSupportSummaryMissing
+    case diagnosticsPanelSupportSummaryMismatch
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
 }
@@ -370,6 +379,25 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.skippedSearchDiagnosticsExportMissingMatch
         }
 
+        guard let diagnostics else {
+            throw ArchiveUserFlowSmokeError.diagnosticsPanelSupportSummaryMissing
+        }
+        let panelSupportSummary = ArchiveDiagnosticsPanelContext.from(
+            diagnostics,
+            homeDirectory: homeDirectory
+        ).supportSummaryLine
+        let exportSummaryValue = diagnosticsExportSummaryLine
+            .replacingOccurrences(of: "summary_line=", with: "")
+        let panelMatchesExport =
+            panelSupportSummary == exportSummaryValue
+            && panelSupportSummary.hasPrefix("roots:")
+            && panelSupportSummary.contains("Scanned 5 songs")
+            && panelSupportSummary.contains("1 song(s) with 1 warning(s)")
+            && panelSupportSummary.contains("2 skipped at roots")
+        guard panelMatchesExport else {
+            throw ArchiveUserFlowSmokeError.diagnosticsPanelSupportSummaryMismatch
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: songCount,
@@ -382,8 +410,8 @@ public enum ArchiveUserFlowSmoke {
             dryRunLogDisplayLine: dryRunLogDisplayLine,
             writeProbeDenied: writeProbeDenied,
             archiveTreeUnchanged: treeBefore == treeAfter,
-            diagnosticsSongCount: diagnostics?.songCount ?? 0,
-            diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
+            diagnosticsSongCount: diagnostics.songCount,
+            diagnosticsSkippedCount: diagnostics.skippedEntries.count,
             searchMatchSummary: searchMatchSummary,
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
             rankingLabDiagnosticsExportPath: rankingLabExportPath,
@@ -412,6 +440,8 @@ public enum ArchiveUserFlowSmoke {
             searchDiagnosticsExportContainsMatch: exportContainsSearchMatch,
             searchDiagnosticsExportContainsSummaryLine: exportContainsSummaryLine,
             diagnosticsExportSummaryLine: diagnosticsExportSummaryLine,
+            diagnosticsPanelSupportSummary: panelSupportSummary,
+            diagnosticsPanelMatchesExportSummary: panelMatchesExport,
             skippedSearchDiagnosticsExportPath: exportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )
