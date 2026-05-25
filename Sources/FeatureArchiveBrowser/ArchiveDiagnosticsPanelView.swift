@@ -4,6 +4,7 @@ import SwiftUI
 /// Accessibility identifiers shared by the diagnostics panel and user-flow smoke.
 public enum ArchiveDiagnosticsPanelAccessibility {
     public static let rootHealthBadge = "archive_diagnostics_root_health_badge"
+    public static let selectedPreviewTiebreakCallout = "archive_diagnostics_preview_tiebreak_callout"
 }
 
 struct ArchiveDiagnosticsPanelView: View {
@@ -94,6 +95,17 @@ struct ArchiveDiagnosticsPanelView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(4)
+            }
+
+            if let tiebreakCallout = ArchiveDiagnosticsPreviewRankingPanelContext
+                .selectedSongPreviewTiebreakCallout(for: selectedSong) {
+                Text(tiebreakCallout)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .lineLimit(2)
+                    .accessibilityIdentifier(
+                        ArchiveDiagnosticsPanelAccessibility.selectedPreviewTiebreakCallout
+                    )
             }
 
             Text("Last scan: \(Self.scanTimeFormatter.string(from: diagnostics.scannedAt))")

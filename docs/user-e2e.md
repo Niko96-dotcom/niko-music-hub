@@ -44,6 +44,8 @@ When truncation applies, exports also include:
 
 `./script/e2e_user_smoke.sh` also scans the eight-song **Summary Warning** truncation lab and asserts the exported `summary_line=` includes `and 3 more` plus the truncation metadata lines above. The in-app diagnostics panel shows a matching footnote under **Support summary** (`Support summary shows 5 warning song titles; 3 more listed below.`); smoke asserts that text via `diagnostics_panel_summary_truncation_footnote=`.
 
+When a selected song’s main preview was chosen by an equal-score tiebreak, the diagnostics panel shows a dedicated accent **preview tiebreak** line (export parity with `preview_rank_tiebreak=`). Smoke asserts panel/export parity on the **Equal Score Duration Tiebreak** fixture via `diagnostics_panel_duration_tiebreak_header_match=` and `diagnostics_panel_duration_tiebreak_callout_match=`.
+
 ## Local gates
 
 ```bash

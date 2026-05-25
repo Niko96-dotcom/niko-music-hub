@@ -80,6 +80,12 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
         )
     }
 
+    /// Equal-score tiebreak callout for the selected song; nil when score alone decided the main preview.
+    public static func selectedSongPreviewTiebreakCallout(for song: Song?) -> String? {
+        guard let song else { return nil }
+        return PreviewRankingExplainability.tiebreakCallout(for: song)
+    }
+
     public static func selectedSongHeader(for song: Song?) -> String? {
         guard let song else { return nil }
         guard let mainSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) else {
@@ -90,9 +96,6 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
                 && candidate.confidenceReasons.contains("duration:too-short")
         }
         var parts = ["Main preview: \(mainSummary)"]
-        if let tiebreak = PreviewRankingExplainability.tiebreakCallout(for: song) {
-            parts.append(tiebreak)
-        }
         guard !tooShortAlts.isEmpty else {
             return parts.joined(separator: " · ")
         }

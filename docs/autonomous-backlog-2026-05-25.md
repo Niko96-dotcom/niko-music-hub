@@ -1,19 +1,20 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-52)
+## Picked (music-53)
 
-Diagnostics panel: surface support-summary truncation footnote when many songs have warnings (export metadata existed; in-app panel had no operator hint).
+Diagnostics panel: dedicated preview tiebreak callout when a song is selected (export `preview_rank_tiebreak=` parity) and user-flow/E2E proof that panel selected header + callout match export on the duration tiebreak fixture.
 
-## Completed (music-52)
+## Completed (music-53)
 
-- `ArchiveScanDiagnostics.summaryLineSongWarningTitlesTruncationFootnote` + `ArchiveDiagnosticsPanelContext.supportSummaryTruncationFootnote`
-- `ArchiveDiagnosticsPanelView` shows footnote under **Support summary** when truncated
-- User-flow smoke + E2E: `diagnostics_panel_summary_truncation_footnote_*` markers on truncation lab
+- `ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for:)`
+- `ArchiveDiagnosticsPanelView` shows accent tiebreak line; accessibility id `archive_diagnostics_preview_tiebreak_callout`
+- Removed duplicate tiebreak text in `selectedSongHeader` (already embedded in `mainPreviewSummary`)
+- User-flow smoke + E2E: `diagnostics_panel_duration_tiebreak_*_match=` markers
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-51)
+## Prior (music-52)
 
-E2E/user-flow proof of `summary_line` song-title truncation when many songs have warnings (unit tests existed; fixture smoke did not).
+Diagnostics panel: surface support-summary truncation footnote when many songs have warnings (export metadata existed; in-app panel had no operator hint).
 
 ## Next best TODO
 

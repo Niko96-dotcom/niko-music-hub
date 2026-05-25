@@ -49,6 +49,11 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_ranking_match=\(result.rankingLabDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_path=\(result.tiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_match=\(result.tiebreakLabDiagnosticsExportContainsTiebreak)")
+        print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_header=\(result.tiebreakPanelPreviewRankingHeader)")
+        print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_header_match=\(result.tiebreakPanelPreviewRankingHeaderMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_callout=\(result.tiebreakPanelPreviewTiebreakCallout)")
+        print("[niko-music-hub-smoke] diagnostics_panel_duration_tiebreak_callout_match=\(result.tiebreakPanelPreviewTiebreakCalloutMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_preview_tiebreak_id=\(ArchiveDiagnosticsPanelAccessibility.selectedPreviewTiebreakCallout)")
         print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_path=\(result.versionTiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_match=\(result.versionTiebreakLabDiagnosticsExportContainsTiebreak)")
         print("[niko-music-hub-smoke] diagnostics_export_extension_tiebreak_path=\(result.extensionTiebreakLabDiagnosticsExportPath)")
@@ -139,6 +144,11 @@ enum ArchiveSmokeCommands {
               result.rankingLabDiagnosticsExportContainsMatch,
               !result.tiebreakLabDiagnosticsExportPath.isEmpty,
               result.tiebreakLabDiagnosticsExportContainsTiebreak,
+              !result.tiebreakPanelPreviewRankingHeader.isEmpty,
+              result.tiebreakPanelPreviewRankingHeaderMatchesExport,
+              !result.tiebreakPanelPreviewTiebreakCallout.isEmpty,
+              result.tiebreakPanelPreviewTiebreakCallout.contains("Equal score — longer preview"),
+              result.tiebreakPanelPreviewTiebreakCalloutMatchesExport,
               !result.versionTiebreakLabDiagnosticsExportPath.isEmpty,
               result.versionTiebreakLabDiagnosticsExportContainsTiebreak,
               !result.extensionTiebreakLabDiagnosticsExportPath.isEmpty,

@@ -47,6 +47,16 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         XCTAssertEqual(labBreakdown.clipNames, ["Lab Song short clip.wav"])
     }
 
+    func testDurationTiebreakFixtureExposesSelectedSongPreviewTiebreakCallout() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Duration Tiebreak" })
+        let callout = try XCTUnwrap(
+            ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: lab)
+        )
+        XCTAssertTrue(callout.contains("Equal score — longer preview"))
+    }
+
     func testTooShortBreakdownPanelDisplayLine() {
         let breakdown = TooShortNonMainSongBreakdown(
             displayTitle: "Preview Ranking Lab",
