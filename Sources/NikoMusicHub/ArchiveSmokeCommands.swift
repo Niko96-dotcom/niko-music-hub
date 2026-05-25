@@ -47,6 +47,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] preview_rank_summary=\(result.rankingLabMainPreviewSummary)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
         print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
+        print("[niko-music-hub-smoke] warning_search_query=\(result.warningSearchQuery)")
+        print("[niko-music-hub-smoke] warning_search_matches=\(result.warningSearchMatchCount)")
+        print("[niko-music-hub-smoke] warning_search_match=\(result.warningSearchMatchTitle)")
+        print("[niko-music-hub-smoke] warning_search_summary=\(result.warningSearchMatchSummary)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
@@ -75,7 +79,12 @@ enum ArchiveSmokeCommands {
               result.diagnosticsSongCount >= 3,
               result.diagnosticsSkippedCount >= 1,
               result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }),
-              result.brokenFolderSidecarNotes == "notes only" else {
+              result.brokenFolderSidecarNotes == "notes only",
+              result.warningSearchQuery == "project",
+              result.warningSearchMatchCount == 1,
+              result.warningSearchMatchTitle == "Broken Folder Example",
+              result.warningSearchMatchSummary.contains("scan warning"),
+              result.warningSearchMatchSummary.contains("project") else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 

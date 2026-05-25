@@ -18,6 +18,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabMainPreviewSummary: String
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
+    public let warningSearchQuery: String
+    public let warningSearchMatchCount: Int
+    public let warningSearchMatchTitle: String
+    public let warningSearchMatchSummary: String
 
     public init(
         userFlow: String,
@@ -34,7 +38,11 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         searchMatchSummary: String,
         rankingLabMainPreviewSummary: String,
         brokenFolderDisplayWarnings: [String],
-        brokenFolderSidecarNotes: String?
+        brokenFolderSidecarNotes: String?,
+        warningSearchQuery: String,
+        warningSearchMatchCount: Int,
+        warningSearchMatchTitle: String,
+        warningSearchMatchSummary: String
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -51,6 +59,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
+        self.warningSearchQuery = warningSearchQuery
+        self.warningSearchMatchCount = warningSearchMatchCount
+        self.warningSearchMatchTitle = warningSearchMatchTitle
+        self.warningSearchMatchSummary = warningSearchMatchSummary
     }
 }
 
@@ -62,6 +74,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
+    case warningSearchNoMatch
+    case warningSearchMissingExplainability
 }
 
 @MainActor
@@ -120,6 +134,19 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.brokenFolderMissingSidecarNotes
         }
 
+        let warningSearchQuery = "project"
+        viewModel.searchQuery = warningSearchQuery
+        viewModel.applySearchFilter()
+        guard let warningMatch = viewModel.filteredSongs.first else {
+            throw ArchiveUserFlowSmokeError.warningSearchNoMatch
+        }
+        let warningSearchMatchSummary = viewModel.searchMatchSummaries[warningMatch.id, default: ""]
+        guard warningMatch.displayTitle == "Broken Folder Example",
+              warningSearchMatchSummary.localizedCaseInsensitiveContains("scan warning"),
+              warningSearchMatchSummary.localizedCaseInsensitiveContains("project") else {
+            throw ArchiveUserFlowSmokeError.warningSearchMissingExplainability
+        }
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: viewModel.songs.count,
@@ -135,7 +162,11 @@ public enum ArchiveUserFlowSmoke {
             searchMatchSummary: searchMatchSummary,
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
-            brokenFolderSidecarNotes: brokenFolderSidecarNotes
+            brokenFolderSidecarNotes: brokenFolderSidecarNotes,
+            warningSearchQuery: warningSearchQuery,
+            warningSearchMatchCount: viewModel.filteredSongs.count,
+            warningSearchMatchTitle: warningMatch.displayTitle,
+            warningSearchMatchSummary: warningSearchMatchSummary
         )
     }
 

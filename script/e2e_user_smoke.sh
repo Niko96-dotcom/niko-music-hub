@@ -92,6 +92,31 @@ if ! grep -q "broken_folder_notes=notes only" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "warning_search_query=project" "$LOG_FILE"; then
+  echo "E2E failed: warning search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "warning_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: warning search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "warning_search_match=Broken Folder Example" "$LOG_FILE"; then
+  echo "E2E failed: warning search did not select Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "warning_search_summary=.*scan warning" "$LOG_FILE"; then
+  echo "E2E failed: warning search explainability missing scan warning signal" >&2
+  exit 1
+fi
+
+if ! grep -q "warning_search_summary=.*project" "$LOG_FILE"; then
+  echo "E2E failed: warning search explainability missing project token" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1
