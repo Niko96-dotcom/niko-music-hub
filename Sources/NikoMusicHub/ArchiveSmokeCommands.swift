@@ -51,6 +51,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] warning_search_matches=\(result.warningSearchMatchCount)")
         print("[niko-music-hub-smoke] warning_search_match=\(result.warningSearchMatchTitle)")
         print("[niko-music-hub-smoke] warning_search_summary=\(result.warningSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_warning_path=\(result.warningSearchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_warning_match=\(result.warningSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] skipped_search_query=\(result.skippedSearchQuery)")
         print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
         print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
@@ -94,6 +96,8 @@ enum ArchiveSmokeCommands {
               result.warningSearchMatchTitle == "Broken Folder Example",
               result.warningSearchMatchSummary.contains("scan warning"),
               result.warningSearchMatchSummary.contains("project"),
+              !result.warningSearchDiagnosticsExportPath.isEmpty,
+              result.warningSearchDiagnosticsExportContainsMatch,
               result.skippedSearchQuery == "LOOSE_FILE.txt",
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",

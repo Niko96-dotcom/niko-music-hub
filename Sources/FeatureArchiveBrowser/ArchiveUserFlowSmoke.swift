@@ -25,6 +25,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let warningSearchMatchCount: Int
     public let warningSearchMatchTitle: String
     public let warningSearchMatchSummary: String
+    public let warningSearchDiagnosticsExportPath: String
+    public let warningSearchDiagnosticsExportContainsMatch: Bool
     public let skippedSearchQuery: String
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
@@ -56,6 +58,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         warningSearchMatchCount: Int,
         warningSearchMatchTitle: String,
         warningSearchMatchSummary: String,
+        warningSearchDiagnosticsExportPath: String,
+        warningSearchDiagnosticsExportContainsMatch: Bool,
         skippedSearchQuery: String,
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
@@ -86,6 +90,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.warningSearchMatchCount = warningSearchMatchCount
         self.warningSearchMatchTitle = warningSearchMatchTitle
         self.warningSearchMatchSummary = warningSearchMatchSummary
+        self.warningSearchDiagnosticsExportPath = warningSearchDiagnosticsExportPath
+        self.warningSearchDiagnosticsExportContainsMatch = warningSearchDiagnosticsExportContainsMatch
         self.skippedSearchQuery = skippedSearchQuery
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
@@ -107,6 +113,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case brokenFolderMissingSidecarNotes
     case warningSearchNoMatch
     case warningSearchMissingExplainability
+    case warningSearchDiagnosticsExportFailed
+    case warningSearchDiagnosticsExportMissingMatch
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
     case searchDiagnosticsExportFailed
@@ -203,6 +211,17 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.warningSearchMissingExplainability
         }
 
+        try viewModel.exportDiagnostics()
+        guard let warningExportPath = viewModel.lastDiagnosticsExportPath,
+              !warningExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.warningSearchDiagnosticsExportFailed
+        }
+        let warningExportText = try String(contentsOf: URL(fileURLWithPath: warningExportPath), encoding: .utf8)
+        let exportContainsWarningMatch = warningExportText.contains("search_match title=Broken Folder Example")
+        guard exportContainsWarningMatch else {
+            throw ArchiveUserFlowSmokeError.warningSearchDiagnosticsExportMissingMatch
+        }
+
         let skippedSearchQuery = "LOOSE_FILE.txt"
         viewModel.searchQuery = skippedSearchQuery
         viewModel.applySearchFilter()
@@ -247,6 +266,8 @@ public enum ArchiveUserFlowSmoke {
             warningSearchMatchCount: warningSearchMatchCount,
             warningSearchMatchTitle: warningMatch.displayTitle,
             warningSearchMatchSummary: warningSearchMatchSummary,
+            warningSearchDiagnosticsExportPath: warningExportPath,
+            warningSearchDiagnosticsExportContainsMatch: exportContainsWarningMatch,
             skippedSearchQuery: skippedSearchQuery,
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,

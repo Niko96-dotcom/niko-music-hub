@@ -1,10 +1,23 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-26)
+## Picked (music-27)
+
+Export diagnostics from user-flow smoke when warning search is active; E2E greps `search_match title=Broken Folder Example` in the export file.
+
+## Completed (music-27)
+
+- `ArchiveUserFlowSmoke` exports diagnostics after warning-token search and asserts `search_match title=Broken Folder Example` in export text
+- `ArchiveUserFlowSmokeResult` carries warning export path + match flag for smoke stdout
+- `ArchiveSmokeCommands` prints `diagnostics_export_warning_path` and `diagnostics_export_warning_match`
+- `script/e2e_user_smoke.sh` verifies warning export file contains `search_match title=Broken Folder Example`
+- Tests: `ArchiveUserFlowTests` warning export assertions; `ArchiveBrowserViewModelTests.testExportDiagnosticsIncludesWarningSearchContext`
+- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
+
+## Prior (music-26)
 
 Export diagnostics from user-flow smoke when song search is active; E2E greps `search_match title=Neon Hook` in the export file.
 
-## Completed (music-26)
+## Prior completed (music-26)
 
 - `ArchiveUserFlowSmoke` exports diagnostics after neon hk search and asserts `search_match title=Neon Hook` in export text
 - `ArchiveUserFlowSmokeResult` carries search export path + match flag for smoke stdout
@@ -14,21 +27,8 @@ Export diagnostics from user-flow smoke when song search is active; E2E greps `s
 - Tests: `ArchiveUserFlowTests` search export assertions
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-25)
-
-Export diagnostics from user-flow smoke when skipped search is active; E2E greps `skipped_search_match` in the export file.
-
-## Prior completed (music-25)
-
-- `ArchiveUserFlowSmoke` exports diagnostics after skipped-entry search and asserts `skipped_search_match label=LOOSE_FILE.txt` in export text
-- `ArchiveUserFlowSmokeResult` carries export path + match flag for smoke stdout
-- `ArchiveSmokeCommands` prints `diagnostics_export_path` and `diagnostics_export_skipped_match`
-- `script/e2e_user_smoke.sh` verifies export file contains `skipped_search_match` row
-- Tests: `ArchiveUserFlowTests` export assertions
-- `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
-
 ## Next best TODO
 
 - E2E still lacks full SwiftUI Accessibility click-through (view-model smoke remains primary gate)
 - Search: collaborator/alias fields per SPEC §10 (needs metadata layer beyond sidecar notes)
-- Export diagnostics from user-flow smoke when warning search is active (mirror song/skipped E2E for warning `search_match` rows)
+- Preview ranking v0.2: parsed version tiebreak, duration plausibility, extension tiebreak, stronger explainability in export/UI

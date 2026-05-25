@@ -117,6 +117,22 @@ if ! grep -q "warning_search_summary=.*project" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_warning_match=true" "$LOG_FILE"; then
+  echo "E2E failed: warning-search diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+WARNING_EXPORT_PATH="$(grep -m1 'diagnostics_export_warning_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_warning_path=//')"
+if [[ -z "$WARNING_EXPORT_PATH" || ! -f "$WARNING_EXPORT_PATH" ]]; then
+  echo "E2E failed: warning-search diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Broken Folder Example" "$WARNING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing search_match row for Broken Folder Example" >&2
+  exit 1
+fi
+
 if ! grep -q "skipped_search_query=LOOSE_FILE.txt" "$LOG_FILE"; then
   echo "E2E failed: skipped-entry search query marker missing" >&2
   exit 1
