@@ -43,6 +43,18 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let folderSearchMatchSummary: String
     public let folderSearchDiagnosticsExportPath: String
     public let folderSearchDiagnosticsExportContainsMatch: Bool
+    public let cprSearchQuery: String
+    public let cprSearchMatchCount: Int
+    public let cprSearchMatchTitle: String
+    public let cprSearchMatchSummary: String
+    public let cprSearchDiagnosticsExportPath: String
+    public let cprSearchDiagnosticsExportContainsMatch: Bool
+    public let previewSearchQuery: String
+    public let previewSearchMatchCount: Int
+    public let previewSearchMatchTitle: String
+    public let previewSearchMatchSummary: String
+    public let previewSearchDiagnosticsExportPath: String
+    public let previewSearchDiagnosticsExportContainsMatch: Bool
     public let skippedSearchQuery: String
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
@@ -103,6 +115,18 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         folderSearchMatchSummary: String,
         folderSearchDiagnosticsExportPath: String,
         folderSearchDiagnosticsExportContainsMatch: Bool,
+        cprSearchQuery: String,
+        cprSearchMatchCount: Int,
+        cprSearchMatchTitle: String,
+        cprSearchMatchSummary: String,
+        cprSearchDiagnosticsExportPath: String,
+        cprSearchDiagnosticsExportContainsMatch: Bool,
+        previewSearchQuery: String,
+        previewSearchMatchCount: Int,
+        previewSearchMatchTitle: String,
+        previewSearchMatchSummary: String,
+        previewSearchDiagnosticsExportPath: String,
+        previewSearchDiagnosticsExportContainsMatch: Bool,
         skippedSearchQuery: String,
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
@@ -161,6 +185,18 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.folderSearchMatchSummary = folderSearchMatchSummary
         self.folderSearchDiagnosticsExportPath = folderSearchDiagnosticsExportPath
         self.folderSearchDiagnosticsExportContainsMatch = folderSearchDiagnosticsExportContainsMatch
+        self.cprSearchQuery = cprSearchQuery
+        self.cprSearchMatchCount = cprSearchMatchCount
+        self.cprSearchMatchTitle = cprSearchMatchTitle
+        self.cprSearchMatchSummary = cprSearchMatchSummary
+        self.cprSearchDiagnosticsExportPath = cprSearchDiagnosticsExportPath
+        self.cprSearchDiagnosticsExportContainsMatch = cprSearchDiagnosticsExportContainsMatch
+        self.previewSearchQuery = previewSearchQuery
+        self.previewSearchMatchCount = previewSearchMatchCount
+        self.previewSearchMatchTitle = previewSearchMatchTitle
+        self.previewSearchMatchSummary = previewSearchMatchSummary
+        self.previewSearchDiagnosticsExportPath = previewSearchDiagnosticsExportPath
+        self.previewSearchDiagnosticsExportContainsMatch = previewSearchDiagnosticsExportContainsMatch
         self.skippedSearchQuery = skippedSearchQuery
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
@@ -207,6 +243,14 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case folderSearchMissingExplainability
     case folderSearchDiagnosticsExportFailed
     case folderSearchDiagnosticsExportMissingMatch
+    case cprSearchNoMatch
+    case cprSearchMissingExplainability
+    case cprSearchDiagnosticsExportFailed
+    case cprSearchDiagnosticsExportMissingMatch
+    case previewSearchNoMatch
+    case previewSearchMissingExplainability
+    case previewSearchDiagnosticsExportFailed
+    case previewSearchDiagnosticsExportMissingMatch
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
     case searchDiagnosticsExportFailed
@@ -435,6 +479,59 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.folderSearchDiagnosticsExportMissingMatch
         }
 
+        let cprSearchQuery = "neohkv2"
+        viewModel.searchQuery = cprSearchQuery
+        viewModel.applySearchFilter()
+        guard let cprMatch = viewModel.filteredSongs.first else {
+            throw ArchiveUserFlowSmokeError.cprSearchNoMatch
+        }
+        let cprSearchMatchCount = viewModel.filteredSongs.count
+        let cprSearchMatchSummary = viewModel.searchMatchSummaries[cprMatch.id, default: ""]
+        guard cprMatch.displayTitle == "Neon Hook",
+              cprSearchMatchSummary.localizedCaseInsensitiveContains("fuzzy CPR file"),
+              cprSearchMatchSummary.localizedCaseInsensitiveContains("neohkv2") else {
+            throw ArchiveUserFlowSmokeError.cprSearchMissingExplainability
+        }
+
+        try viewModel.exportDiagnostics()
+        guard let cprExportPath = viewModel.lastDiagnosticsExportPath,
+              !cprExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.cprSearchDiagnosticsExportFailed
+        }
+        let cprExportText = try String(contentsOf: URL(fileURLWithPath: cprExportPath), encoding: .utf8)
+        let exportContainsCPRMatch = cprExportText.contains("search_match title=Neon Hook")
+            && cprExportText.contains("fuzzy CPR file")
+        guard exportContainsCPRMatch else {
+            throw ArchiveUserFlowSmokeError.cprSearchDiagnosticsExportMissingMatch
+        }
+
+        let previewSearchQuery = "v3 mx"
+        viewModel.searchQuery = previewSearchQuery
+        viewModel.applySearchFilter()
+        guard let previewMatch = viewModel.filteredSongs.first else {
+            throw ArchiveUserFlowSmokeError.previewSearchNoMatch
+        }
+        let previewSearchMatchCount = viewModel.filteredSongs.count
+        let previewSearchMatchSummary = viewModel.searchMatchSummaries[previewMatch.id, default: ""]
+        guard previewMatch.displayTitle == "Preview Ranking Lab",
+              previewSearchMatchSummary.localizedCaseInsensitiveContains("fuzzy preview file"),
+              previewSearchMatchSummary.localizedCaseInsensitiveContains("v3"),
+              previewSearchMatchSummary.localizedCaseInsensitiveContains("mx") else {
+            throw ArchiveUserFlowSmokeError.previewSearchMissingExplainability
+        }
+
+        try viewModel.exportDiagnostics()
+        guard let previewExportPath = viewModel.lastDiagnosticsExportPath,
+              !previewExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.previewSearchDiagnosticsExportFailed
+        }
+        let previewExportText = try String(contentsOf: URL(fileURLWithPath: previewExportPath), encoding: .utf8)
+        let exportContainsPreviewMatch = previewExportText.contains("search_match title=Preview Ranking Lab")
+            && previewExportText.contains("fuzzy preview file")
+        guard exportContainsPreviewMatch else {
+            throw ArchiveUserFlowSmokeError.previewSearchDiagnosticsExportMissingMatch
+        }
+
         let skippedSearchQuery = "LOOSE_FILE.txt"
         viewModel.searchQuery = skippedSearchQuery
         viewModel.applySearchFilter()
@@ -528,6 +625,18 @@ public enum ArchiveUserFlowSmoke {
             folderSearchMatchSummary: folderSearchMatchSummary,
             folderSearchDiagnosticsExportPath: folderExportPath,
             folderSearchDiagnosticsExportContainsMatch: exportContainsFolderMatch,
+            cprSearchQuery: cprSearchQuery,
+            cprSearchMatchCount: cprSearchMatchCount,
+            cprSearchMatchTitle: cprMatch.displayTitle,
+            cprSearchMatchSummary: cprSearchMatchSummary,
+            cprSearchDiagnosticsExportPath: cprExportPath,
+            cprSearchDiagnosticsExportContainsMatch: exportContainsCPRMatch,
+            previewSearchQuery: previewSearchQuery,
+            previewSearchMatchCount: previewSearchMatchCount,
+            previewSearchMatchTitle: previewMatch.displayTitle,
+            previewSearchMatchSummary: previewSearchMatchSummary,
+            previewSearchDiagnosticsExportPath: previewExportPath,
+            previewSearchDiagnosticsExportContainsMatch: exportContainsPreviewMatch,
             skippedSearchQuery: skippedSearchQuery,
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,

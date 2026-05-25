@@ -90,6 +90,46 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         XCTAssertTrue(result.matchSummary.contains("scan warning"))
     }
 
+    func testFuzzyCPRFileNameMatchSummaryNamesFuzzyCPRField() throws {
+        let version = ProjectVersion(
+            filePath: URL(fileURLWithPath: "/tmp/Unrelated/Secret Project Alpha.cpr"),
+            fileName: "Secret Project Alpha.cpr",
+            modifiedAt: .distantPast
+        )
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Unrelated"),
+            originalFolderName: "Unrelated",
+            displayTitle: "Unrelated",
+            projectVersions: [version]
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("scrt prj").first)
+        XCTAssertTrue(result.matchSummary.contains("fuzzy CPR file"))
+        XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
+    }
+
+    func testFuzzyPreviewFileNameMatchSummaryNamesFuzzyPreviewField() throws {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/Unrelated/Mixdown/Lab Song v3 mix.wav"),
+            fileName: "Lab Song v3 mix.wav",
+            folderRole: .mixdown,
+            modifiedAt: .distantPast,
+            detectedRole: .mainMix
+        )
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Unrelated"),
+            originalFolderName: "Unrelated",
+            displayTitle: "Unrelated",
+            previewCandidates: [preview]
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("v3 mx").first)
+        XCTAssertTrue(result.matchSummary.contains("fuzzy preview file"))
+        XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
+    }
+
     func testMultiTokenSummaryListsEachToken() throws {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Neon Hook"),
