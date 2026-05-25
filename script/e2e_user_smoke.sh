@@ -981,6 +981,32 @@ if [[ "$FIXTURE_SCAN_HEALTH_BADGE" != *"skipped at roots"* ]]; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_skipped_entries_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel skipped-at-roots lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SKIPPED_ENTRIES_LINES="$(grep -m1 'diagnostics_panel_skipped_entries_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_skipped_entries_lines=//')"
+if [[ -z "$PANEL_SKIPPED_ENTRIES_LINES" ]]; then
+  echo "E2E failed: diagnostics panel skipped-at-roots lines missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_entries=2" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing skipped_entries count" >&2
+  exit 1
+fi
+
+while IFS= read -r skipped_line; do
+  [[ -z "$skipped_line" ]] && continue
+  label="${skipped_line%% — *}"
+  reason="${skipped_line#* — }"
+  if ! grep -Fq "skipped=nonFolderAtRoot label=${label} reason=${reason}" "$SEARCH_EXPORT_PATH"; then
+    echo "E2E failed: export missing skipped= line for panel entry: ${skipped_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_SKIPPED_ENTRIES_LINES// | /$'\n'}")
+
 if ! grep -q "diagnostics_export_invalid_root_badge_match=true" "$LOG_FILE"; then
   echo "E2E failed: invalid-root diagnostics export missing root_health_badge match" >&2
   exit 1

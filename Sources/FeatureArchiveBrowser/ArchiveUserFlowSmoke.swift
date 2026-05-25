@@ -135,6 +135,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let diagnosticsPanelMatchesExportSummary: Bool
     public let fixtureScanHealthBadge: String
     public let fixtureScanHealthBadgeMatchesExport: Bool
+    public let fixtureScanSkippedPanelLines: String
+    public let fixtureScanSkippedPanelLinesMatchExport: Bool
     public let invalidRootDiagnosticsExportPath: String
     public let invalidRootExportContainsRootHealthBadge: Bool
     public let invalidRootPanelRootHealthBadge: String
@@ -281,6 +283,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         diagnosticsPanelMatchesExportSummary: Bool,
         fixtureScanHealthBadge: String,
         fixtureScanHealthBadgeMatchesExport: Bool,
+        fixtureScanSkippedPanelLines: String,
+        fixtureScanSkippedPanelLinesMatchExport: Bool,
         invalidRootDiagnosticsExportPath: String,
         invalidRootExportContainsRootHealthBadge: Bool,
         invalidRootPanelRootHealthBadge: String,
@@ -430,6 +434,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.diagnosticsPanelMatchesExportSummary = diagnosticsPanelMatchesExportSummary
         self.fixtureScanHealthBadge = fixtureScanHealthBadge
         self.fixtureScanHealthBadgeMatchesExport = fixtureScanHealthBadgeMatchesExport
+        self.fixtureScanSkippedPanelLines = fixtureScanSkippedPanelLines
+        self.fixtureScanSkippedPanelLinesMatchExport = fixtureScanSkippedPanelLinesMatchExport
         self.invalidRootDiagnosticsExportPath = invalidRootDiagnosticsExportPath
         self.invalidRootExportContainsRootHealthBadge = invalidRootExportContainsRootHealthBadge
         self.invalidRootPanelRootHealthBadge = invalidRootPanelRootHealthBadge
@@ -511,6 +517,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case diagnosticsPanelSupportSummaryMismatch
     case fixtureScanHealthBadgeMissing
     case fixtureScanHealthBadgeMismatch
+    case fixtureScanSkippedPanelMismatch
     case invalidRootDiagnosticsExportFailed
     case invalidRootExportMissingRootHealthBadge
     case invalidRootPanelRootHealthBadgeMissing
@@ -642,6 +649,29 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMismatch
         }
         let fixtureScanHealthBadgeMatchesExport = true
+
+        let displaySkippedEntries = diagnostics.displaySkippedEntries(homeDirectory: homeDirectory)
+        let fixtureScanSkippedPanelLines = displaySkippedEntries
+            .map {
+                ArchiveDiagnosticsSkippedEntriesPanelContext.panelLine(
+                    label: $0.label,
+                    reason: $0.reason
+                )
+            }
+            .joined(separator: " | ")
+        let fixtureScanSkippedPanelLinesMatchExport =
+            !displaySkippedEntries.isEmpty
+            && displaySkippedEntries.count == diagnostics.skippedEntries.count
+            && ArchiveDiagnosticsSkippedEntriesPanelContext.linesMatchExport(
+                in: searchExportText,
+                entries: displaySkippedEntries,
+                homeDirectory: homeDirectory
+            )
+            && fixtureScanSkippedPanelLines.contains("LOOSE_FILE.txt")
+            && fixtureScanSkippedPanelLines.contains("README.md")
+        guard fixtureScanSkippedPanelLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.fixtureScanSkippedPanelMismatch
+        }
 
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
         let songCount = viewModel.songs.count
@@ -1378,6 +1408,8 @@ public enum ArchiveUserFlowSmoke {
             diagnosticsPanelMatchesExportSummary: panelMatchesExport,
             fixtureScanHealthBadge: fixtureScanHealthBadge,
             fixtureScanHealthBadgeMatchesExport: fixtureScanHealthBadgeMatchesExport,
+            fixtureScanSkippedPanelLines: fixtureScanSkippedPanelLines,
+            fixtureScanSkippedPanelLinesMatchExport: fixtureScanSkippedPanelLinesMatchExport,
             invalidRootDiagnosticsExportPath: invalidRootHealth.exportPath,
             invalidRootExportContainsRootHealthBadge: invalidRootHealth.exportContainsBadge,
             invalidRootPanelRootHealthBadge: invalidRootHealth.panelBadge,
