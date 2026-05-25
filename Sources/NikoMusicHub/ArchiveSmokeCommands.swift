@@ -55,6 +55,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
         print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
         print("[niko-music-hub-smoke] skipped_search_summary=\(result.skippedSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_search_path=\(result.searchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_search_match=\(result.searchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] diagnostics_export_path=\(result.skippedSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_skipped_match=\(result.skippedSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
@@ -96,6 +98,8 @@ enum ArchiveSmokeCommands {
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",
               result.skippedSearchMatchSummary.contains("skipped label"),
+              !result.searchDiagnosticsExportPath.isEmpty,
+              result.searchDiagnosticsExportContainsMatch,
               !result.skippedSearchDiagnosticsExportPath.isEmpty,
               result.skippedSearchDiagnosticsExportContainsMatch else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete

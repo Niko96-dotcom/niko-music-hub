@@ -29,6 +29,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let skippedSearchMatchCount: Int
     public let skippedSearchMatchLabel: String
     public let skippedSearchMatchSummary: String
+    public let searchDiagnosticsExportPath: String
+    public let searchDiagnosticsExportContainsMatch: Bool
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
@@ -58,6 +60,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         skippedSearchMatchCount: Int,
         skippedSearchMatchLabel: String,
         skippedSearchMatchSummary: String,
+        searchDiagnosticsExportPath: String,
+        searchDiagnosticsExportContainsMatch: Bool,
         skippedSearchDiagnosticsExportPath: String,
         skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
@@ -86,6 +90,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.skippedSearchMatchCount = skippedSearchMatchCount
         self.skippedSearchMatchLabel = skippedSearchMatchLabel
         self.skippedSearchMatchSummary = skippedSearchMatchSummary
+        self.searchDiagnosticsExportPath = searchDiagnosticsExportPath
+        self.searchDiagnosticsExportContainsMatch = searchDiagnosticsExportContainsMatch
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
@@ -103,6 +109,8 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case warningSearchMissingExplainability
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
+    case searchDiagnosticsExportFailed
+    case searchDiagnosticsExportMissingMatch
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
 }
@@ -136,6 +144,17 @@ public enum ArchiveUserFlowSmoke {
 
         guard let dryRunPath = viewModel.lastDryRunLog else {
             throw ArchiveUserFlowSmokeError.missingDryRunPath
+        }
+
+        try viewModel.exportDiagnostics()
+        guard let searchExportPath = viewModel.lastDiagnosticsExportPath,
+              !searchExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.searchDiagnosticsExportFailed
+        }
+        let searchExportText = try String(contentsOf: URL(fileURLWithPath: searchExportPath), encoding: .utf8)
+        let exportContainsSearchMatch = searchExportText.contains("search_match title=Neon Hook")
+        guard exportContainsSearchMatch else {
+            throw ArchiveUserFlowSmokeError.searchDiagnosticsExportMissingMatch
         }
 
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
@@ -232,6 +251,8 @@ public enum ArchiveUserFlowSmoke {
             skippedSearchMatchCount: viewModel.skippedSearchMatches.count,
             skippedSearchMatchLabel: skippedMatch.entry.label,
             skippedSearchMatchSummary: skippedMatch.matchSummary,
+            searchDiagnosticsExportPath: searchExportPath,
+            searchDiagnosticsExportContainsMatch: exportContainsSearchMatch,
             skippedSearchDiagnosticsExportPath: exportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )

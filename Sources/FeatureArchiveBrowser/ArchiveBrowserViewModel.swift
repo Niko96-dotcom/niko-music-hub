@@ -152,9 +152,9 @@ final class ArchiveBrowserViewModel: ObservableObject {
         let exportDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("niko-music-hub-diagnostics", isDirectory: true)
         try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
-        let stamp = ISO8601DateFormatter().string(from: scanDiagnostics.scannedAt)
+        let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
-        let destination = exportDir.appendingPathComponent("scan-\(stamp).txt")
+        let destination = exportDir.appendingPathComponent("scan-\(stamp)-\(UUID().uuidString.prefix(8)).txt")
         try ArchiveDiagnosticsExporter.exportText(
             diagnostics: scanDiagnostics,
             to: destination,

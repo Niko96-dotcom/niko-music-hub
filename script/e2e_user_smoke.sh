@@ -137,6 +137,22 @@ if ! grep -q "skipped_search_summary=.*skipped label" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_search_match=true" "$LOG_FILE"; then
+  echo "E2E failed: song-search diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+SEARCH_EXPORT_PATH="$(grep -m1 'diagnostics_export_search_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_search_path=//')"
+if [[ -z "$SEARCH_EXPORT_PATH" || ! -f "$SEARCH_EXPORT_PATH" ]]; then
+  echo "E2E failed: song-search diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Neon Hook" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing search_match row for Neon Hook" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_skipped_match=true" "$LOG_FILE"; then
   echo "E2E failed: skipped-search diagnostics export missing active match marker" >&2
   exit 1
