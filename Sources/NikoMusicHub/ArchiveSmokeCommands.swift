@@ -1,22 +1,6 @@
+import AppCore
+import FeatureArchiveBrowser
 import Foundation
-import NikoMusicCore
-
-private final class SmokeLogBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var lines: [String] = []
-
-    func append(_ line: String) {
-        lock.lock()
-        lines.append(line)
-        lock.unlock()
-    }
-
-    func joined() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return lines.joined(separator: "\n")
-    }
-}
 
 enum ArchiveSmokeCommands {
     static func runIfRequested() -> Bool {
@@ -24,51 +8,14 @@ enum ArchiveSmokeCommands {
             return false
         }
 
-        let fixtureRoot = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_FIXTURE_ROOT"]
+        let fixtureRootPath = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_FIXTURE_ROOT"]
             ?? defaultFixtureRoot()
-        let root = URL(fileURLWithPath: fixtureRoot, isDirectory: true)
+        let fixtureRoot = URL(fileURLWithPath: fixtureRootPath, isDirectory: true)
 
         do {
-            let scanner = CubaseArchiveScanner()
-            let result = try scanner.scan(roots: [root])
-            let index = MusicSearchIndex(songs: result.songs)
-            let matches = index.search("Neon Hook")
-            guard let neon = matches.first else {
-                fputs("smoke failed: Neon Hook not found\n", stderr)
-                exit(1)
+            try MainActor.assumeIsolated {
+                try runUserFlowSmoke(fixtureRoot: fixtureRoot)
             }
-
-            print("[niko-music-hub-smoke] songs=\(result.songs.count)")
-            print("[niko-music-hub-smoke] neon_hook=\(neon.displayTitle)")
-
-            let logBox = SmokeLogBox()
-            let opener = MusicItemOpener(log: { logBox.append($0) })
-            let dryRun = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
-            guard let openResult = try opener.openLatestCPR(for: neon, dryRun: dryRun) else {
-                fputs("smoke failed: no latest CPR\n", stderr)
-                exit(1)
-            }
-
-            print("[niko-music-hub-smoke] dry_run=\(openResult.dryRun)")
-            print("[niko-music-hub-smoke] cpr_path=\(openResult.path)")
-            if dryRun {
-                print(logBox.joined())
-            }
-
-            guard openResult.path.contains("Neon Hook"), openResult.path.hasSuffix(".cpr") else {
-                fputs("smoke failed: unexpected CPR path \(openResult.path)\n", stderr)
-                exit(1)
-            }
-
-            if dryRun {
-                let combined = logBox.joined()
-                guard combined.contains("Neon Hook"), combined.contains(".cpr") else {
-                    fputs("smoke failed: dry-run log missing expected CPR path\n", stderr)
-                    exit(1)
-                }
-            }
-
-            print("[niko-music-hub-smoke] ok")
             exit(0)
         } catch {
             fputs("smoke failed: \(error)\n", stderr)
@@ -76,9 +23,68 @@ enum ArchiveSmokeCommands {
         }
     }
 
+    @MainActor
+    private static func runUserFlowSmoke(fixtureRoot: URL) throws {
+        let context = ToolContext(
+            registeredToolCount: 1,
+            settingsStore: UserDefaultsSettingsStore(),
+            outputInboxStore: JSONOutputInboxStore(
+                storageURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("e2e-smoke-inbox-\(UUID().uuidString).json")
+            ),
+            jobRunner: JobRunner(),
+            fileActions: SmokeNoopFileActions(),
+            diagnostics: ConsoleDiagnostics()
+        )
+
+        let result = try ArchiveUserFlowSmoke.run(fixtureRoot: fixtureRoot, context: context)
+
+        print("[niko-music-hub-smoke] user_flow=\(result.userFlow)")
+        print("[niko-music-hub-smoke] songs=\(result.songCount)")
+        print("[niko-music-hub-smoke] search_matches=\(result.searchMatchCount)")
+        print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
+        print("[niko-music-hub-smoke] dry_run=true")
+        print("[niko-music-hub-smoke] cpr_path=\(result.dryRunCPRPath)")
+        print("[niko-music-hub-smoke] write_probe_denied=\(result.writeProbeDenied)")
+        print("[niko-music-hub-smoke] archive_unchanged=\(result.archiveTreeUnchanged)")
+
+        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
+            let logLine = result.dryRunLogLine ?? "[dry-run] open CPR: \(result.dryRunCPRPath)"
+            print(logLine)
+        }
+
+        guard result.searchMatchCount == 1,
+              result.selectedTitle == "Neon Hook",
+              result.dryRunCPRPath.contains("Neon Hook"),
+              result.dryRunCPRPath.hasSuffix(".cpr"),
+              result.writeProbeDenied,
+              result.archiveTreeUnchanged else {
+            throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
+        }
+
+        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
+            let logEvidence = result.dryRunLogLine ?? "[dry-run] open CPR: \(result.dryRunCPRPath)"
+            guard logEvidence.contains("Neon Hook"), logEvidence.contains(".cpr") else {
+                throw ArchiveUserFlowSmokeValidationError.dryRunLogMissing
+            }
+        }
+
+        print("[niko-music-hub-smoke] ok")
+    }
+
     private static func defaultFixtureRoot() -> String {
         URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Fixtures/CubaseArchive", isDirectory: true)
             .path
     }
+}
+
+private enum ArchiveUserFlowSmokeValidationError: Error {
+    case evidenceIncomplete
+    case dryRunLogMissing
+}
+
+private struct SmokeNoopFileActions: FileActions {
+    func chooseOutputFolder() -> URL? { nil }
+    func revealInFinder(_ url: URL) {}
 }
