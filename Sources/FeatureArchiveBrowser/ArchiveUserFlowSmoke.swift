@@ -15,6 +15,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let diagnosticsSongCount: Int
     public let diagnosticsSkippedCount: Int
     public let searchMatchSummary: String
+    public let rankingLabMainPreviewSummary: String
 
     public init(
         userFlow: String,
@@ -28,7 +29,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         archiveTreeUnchanged: Bool,
         diagnosticsSongCount: Int,
         diagnosticsSkippedCount: Int,
-        searchMatchSummary: String
+        searchMatchSummary: String,
+        rankingLabMainPreviewSummary: String
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -42,12 +44,15 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.diagnosticsSongCount = diagnosticsSongCount
         self.diagnosticsSkippedCount = diagnosticsSkippedCount
         self.searchMatchSummary = searchMatchSummary
+        self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
     }
 }
 
 public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case neonHookNotFound
+    case rankingLabNotFound
     case missingDryRunPath
+    case missingRankingLabPreviewSummary
 }
 
 @MainActor
@@ -85,6 +90,13 @@ public enum ArchiveUserFlowSmoke {
 
         let diagnostics = viewModel.scanDiagnostics
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
+        guard let rankingLab = viewModel.songs.first(where: { $0.displayTitle == "Preview Ranking Lab" }) else {
+            throw ArchiveUserFlowSmokeError.rankingLabNotFound
+        }
+        guard let rankingLabMainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: rankingLab),
+              !rankingLabMainPreviewSummary.isEmpty else {
+            throw ArchiveUserFlowSmokeError.missingRankingLabPreviewSummary
+        }
 
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
@@ -98,7 +110,8 @@ public enum ArchiveUserFlowSmoke {
             archiveTreeUnchanged: treeBefore == treeAfter,
             diagnosticsSongCount: diagnostics?.songCount ?? 0,
             diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
-            searchMatchSummary: searchMatchSummary
+            searchMatchSummary: searchMatchSummary,
+            rankingLabMainPreviewSummary: rankingLabMainPreviewSummary
         )
     }
 

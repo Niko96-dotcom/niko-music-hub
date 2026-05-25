@@ -72,6 +72,16 @@ if ! grep -q "search_match_summary=.*hk" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "preview_rank_summary=.*v3" "$LOG_FILE"; then
+  echo "E2E failed: preview ranking explainability missing v3 signal" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_summary=.*wav" "$LOG_FILE"; then
+  echo "E2E failed: preview ranking explainability missing wav signal" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1

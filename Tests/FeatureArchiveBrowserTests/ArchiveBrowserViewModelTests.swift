@@ -45,6 +45,20 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
     }
 
+    func testScanExposesPreviewRankingSummaryForLab() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+
+        let lab = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let summary = try XCTUnwrap(PreviewRankingExplainability.mainPreviewSummary(for: lab))
+        XCTAssertTrue(summary.contains("v3"))
+        XCTAssertTrue(summary.contains("wav"))
+    }
+
     func testExportDiagnosticsIncludesActiveSearchContext() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
