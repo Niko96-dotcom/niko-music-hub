@@ -91,6 +91,48 @@ struct ArchiveDiagnosticsPanelView: View {
                 }
             }
 
+            if let selectedSong {
+                let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: selectedSong)
+                Text("Selected song")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                Text(
+                    ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
+                        displayTitle: selectedContext.displayTitle
+                    )
+                )
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.accent)
+                .lineLimit(2)
+                Text(
+                    ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(
+                        cprSummary: selectedContext.cprSummary
+                    )
+                )
+                .font(.system(size: 10))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .lineLimit(3)
+                .textSelection(.enabled)
+                ForEach(selectedContext.warningLines, id: \.self) { warning in
+                    Text(
+                        "• \(ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: warning))"
+                    )
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+                }
+                if let notes = selectedContext.sidecarNotesLine {
+                    Text(
+                        ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: notes)
+                    )
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+                }
+            }
+
             if let skippedSearchContext {
                 Text("Active skipped search")
                     .font(.system(size: 11, weight: .medium))

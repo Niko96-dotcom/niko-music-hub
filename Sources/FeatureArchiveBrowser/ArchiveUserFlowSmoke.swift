@@ -49,6 +49,15 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let extensionTiebreakPanelCalloutMatchesExport: Bool
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
+    public let brokenFolderSelectedSongDiagnosticsExportPath: String
+    public let brokenFolderSelectedSongPanelTitleLine: String
+    public let brokenFolderSelectedSongPanelTitleLineMatchesExport: Bool
+    public let brokenFolderSelectedSongPanelCprLine: String
+    public let brokenFolderSelectedSongPanelCprLineMatchesExport: Bool
+    public let brokenFolderSelectedSongPanelWarningLines: String
+    public let brokenFolderSelectedSongPanelWarningLinesMatchExport: Bool
+    public let brokenFolderSelectedSongPanelNotesLine: String
+    public let brokenFolderSelectedSongPanelNotesLineMatchesExport: Bool
     public let warningSearchQuery: String
     public let warningSearchMatchCount: Int
     public let warningSearchMatchTitle: String
@@ -163,6 +172,15 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         extensionTiebreakPanelCalloutMatchesExport: Bool,
         brokenFolderDisplayWarnings: [String],
         brokenFolderSidecarNotes: String?,
+        brokenFolderSelectedSongDiagnosticsExportPath: String,
+        brokenFolderSelectedSongPanelTitleLine: String,
+        brokenFolderSelectedSongPanelTitleLineMatchesExport: Bool,
+        brokenFolderSelectedSongPanelCprLine: String,
+        brokenFolderSelectedSongPanelCprLineMatchesExport: Bool,
+        brokenFolderSelectedSongPanelWarningLines: String,
+        brokenFolderSelectedSongPanelWarningLinesMatchExport: Bool,
+        brokenFolderSelectedSongPanelNotesLine: String,
+        brokenFolderSelectedSongPanelNotesLineMatchesExport: Bool,
         warningSearchQuery: String,
         warningSearchMatchCount: Int,
         warningSearchMatchTitle: String,
@@ -275,6 +293,19 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.extensionTiebreakPanelCalloutMatchesExport = extensionTiebreakPanelCalloutMatchesExport
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
+        self.brokenFolderSelectedSongDiagnosticsExportPath = brokenFolderSelectedSongDiagnosticsExportPath
+        self.brokenFolderSelectedSongPanelTitleLine = brokenFolderSelectedSongPanelTitleLine
+        self.brokenFolderSelectedSongPanelTitleLineMatchesExport =
+            brokenFolderSelectedSongPanelTitleLineMatchesExport
+        self.brokenFolderSelectedSongPanelCprLine = brokenFolderSelectedSongPanelCprLine
+        self.brokenFolderSelectedSongPanelCprLineMatchesExport =
+            brokenFolderSelectedSongPanelCprLineMatchesExport
+        self.brokenFolderSelectedSongPanelWarningLines = brokenFolderSelectedSongPanelWarningLines
+        self.brokenFolderSelectedSongPanelWarningLinesMatchExport =
+            brokenFolderSelectedSongPanelWarningLinesMatchExport
+        self.brokenFolderSelectedSongPanelNotesLine = brokenFolderSelectedSongPanelNotesLine
+        self.brokenFolderSelectedSongPanelNotesLineMatchesExport =
+            brokenFolderSelectedSongPanelNotesLineMatchesExport
         self.warningSearchQuery = warningSearchQuery
         self.warningSearchMatchCount = warningSearchMatchCount
         self.warningSearchMatchTitle = warningSearchMatchTitle
@@ -369,6 +400,9 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
+    case brokenFolderSelectedSongDiagnosticsExportFailed
+    case brokenFolderSelectedSongDiagnosticsExportMissingSection
+    case brokenFolderSelectedSongPanelMismatch
     case warningSearchNoMatch
     case warningSearchMissingExplainability
     case warningSearchDiagnosticsExportFailed
@@ -773,6 +807,82 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.brokenFolderMissingSidecarNotes
         }
 
+        viewModel.selectSong(broken)
+        try viewModel.exportDiagnostics()
+        guard let brokenFolderSelectedSongExportPath = viewModel.lastDiagnosticsExportPath,
+              !brokenFolderSelectedSongExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.brokenFolderSelectedSongDiagnosticsExportFailed
+        }
+        let brokenFolderSelectedSongExportText = try String(
+            contentsOf: URL(fileURLWithPath: brokenFolderSelectedSongExportPath),
+            encoding: .utf8
+        )
+        guard brokenFolderSelectedSongExportText.contains("selected_song_title=Broken Folder Example"),
+              brokenFolderSelectedSongExportText.contains("selected_song_cpr=no CPR versions"),
+              brokenFolderSelectedSongExportText.contains(
+                  "selected_song_warning=No CPR project files found"
+              ),
+              brokenFolderSelectedSongExportText.contains("selected_song_notes=notes only") else {
+            throw ArchiveUserFlowSmokeError.brokenFolderSelectedSongDiagnosticsExportMissingSection
+        }
+
+        guard let brokenFolderSelectedSongPanelContext = viewModel.selectedSongExportContext() else {
+            throw ArchiveUserFlowSmokeError.brokenFolderSelectedSongPanelMismatch
+        }
+        let brokenFolderSelectedSongPanelTitleLine =
+            ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
+                displayTitle: brokenFolderSelectedSongPanelContext.displayTitle
+            )
+        let brokenFolderSelectedSongPanelCprLine =
+            ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(
+                cprSummary: brokenFolderSelectedSongPanelContext.cprSummary
+            )
+        let brokenFolderSelectedSongPanelWarningLines = brokenFolderSelectedSongPanelContext.warningLines.map {
+            ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: $0)
+        }
+        let brokenFolderSelectedSongPanelWarningLinesJoined =
+            brokenFolderSelectedSongPanelWarningLines.joined(separator: " | ")
+        let brokenFolderSelectedSongPanelNotesLine =
+            brokenFolderSelectedSongPanelContext.sidecarNotesLine.map {
+                ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: $0)
+            } ?? ""
+        let brokenFolderSelectedSongPanelTitleLineMatchesExport =
+            brokenFolderSelectedSongPanelContext.displayTitle == "Broken Folder Example"
+            && ArchiveDiagnosticsSelectedSongPanelContext.titleLineMatchesExport(
+                in: brokenFolderSelectedSongExportText,
+                displayTitle: brokenFolderSelectedSongPanelContext.displayTitle
+            )
+            && brokenFolderSelectedSongPanelTitleLine == "Broken Folder Example"
+        let brokenFolderSelectedSongPanelCprLineMatchesExport =
+            brokenFolderSelectedSongPanelContext.cprSummary == "no CPR versions"
+            && ArchiveDiagnosticsSelectedSongPanelContext.cprLineMatchesExport(
+                in: brokenFolderSelectedSongExportText,
+                cprSummary: brokenFolderSelectedSongPanelContext.cprSummary
+            )
+            && brokenFolderSelectedSongPanelCprLine.contains("no CPR versions")
+        let brokenFolderSelectedSongPanelWarningLinesMatchExport =
+            !brokenFolderSelectedSongPanelWarningLines.isEmpty
+            && ArchiveDiagnosticsSelectedSongPanelContext.warningLinesMatchExport(
+                in: brokenFolderSelectedSongExportText,
+                warningLines: brokenFolderSelectedSongPanelContext.warningLines
+            )
+            && brokenFolderSelectedSongPanelWarningLines.contains(where: {
+                $0.contains("No CPR project files found")
+            })
+        let brokenFolderSelectedSongPanelNotesLineMatchesExport =
+            brokenFolderSelectedSongPanelContext.sidecarNotesLine == "notes only"
+            && ArchiveDiagnosticsSelectedSongPanelContext.notesLineMatchesExport(
+                in: brokenFolderSelectedSongExportText,
+                notes: "notes only"
+            )
+            && brokenFolderSelectedSongPanelNotesLine.contains("notes only")
+        guard brokenFolderSelectedSongPanelTitleLineMatchesExport,
+              brokenFolderSelectedSongPanelCprLineMatchesExport,
+              brokenFolderSelectedSongPanelWarningLinesMatchExport,
+              brokenFolderSelectedSongPanelNotesLineMatchesExport else {
+            throw ArchiveUserFlowSmokeError.brokenFolderSelectedSongPanelMismatch
+        }
+
         let warningSearchQuery = "project"
         viewModel.searchQuery = warningSearchQuery
         viewModel.applySearchFilter()
@@ -1066,6 +1176,19 @@ public enum ArchiveUserFlowSmoke {
             extensionTiebreakPanelCalloutMatchesExport: extensionTiebreakPanelCalloutMatchesExport,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
+            brokenFolderSelectedSongDiagnosticsExportPath: brokenFolderSelectedSongExportPath,
+            brokenFolderSelectedSongPanelTitleLine: brokenFolderSelectedSongPanelTitleLine,
+            brokenFolderSelectedSongPanelTitleLineMatchesExport:
+                brokenFolderSelectedSongPanelTitleLineMatchesExport,
+            brokenFolderSelectedSongPanelCprLine: brokenFolderSelectedSongPanelCprLine,
+            brokenFolderSelectedSongPanelCprLineMatchesExport:
+                brokenFolderSelectedSongPanelCprLineMatchesExport,
+            brokenFolderSelectedSongPanelWarningLines: brokenFolderSelectedSongPanelWarningLinesJoined,
+            brokenFolderSelectedSongPanelWarningLinesMatchExport:
+                brokenFolderSelectedSongPanelWarningLinesMatchExport,
+            brokenFolderSelectedSongPanelNotesLine: brokenFolderSelectedSongPanelNotesLine,
+            brokenFolderSelectedSongPanelNotesLineMatchesExport:
+                brokenFolderSelectedSongPanelNotesLineMatchesExport,
             warningSearchQuery: warningSearchQuery,
             warningSearchMatchCount: warningSearchMatchCount,
             warningSearchMatchTitle: warningMatch.displayTitle,

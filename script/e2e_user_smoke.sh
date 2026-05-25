@@ -416,6 +416,96 @@ if ! grep -q "broken_folder_notes=notes only" "$LOG_FILE"; then
   exit 1
 fi
 
+BROKEN_SELECTED_EXPORT_PATH="$(grep -m1 'diagnostics_export_broken_selected_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_broken_selected_path=//')"
+if [[ -z "$BROKEN_SELECTED_EXPORT_PATH" || ! -f "$BROKEN_SELECTED_EXPORT_PATH" ]]; then
+  echo "E2E failed: broken folder selected-song diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=Broken Folder Example" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected_song_title for Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_cpr=no CPR versions" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected_song_cpr for Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_warning=No CPR project files found" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected_song_warning for Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_notes=notes only" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected_song_notes for Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_selected_song_title_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel selected song title line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SELECTED_SONG_TITLE_LINE="$(grep -m1 'diagnostics_panel_selected_song_title_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_selected_song_title_line=//')"
+if [[ -z "$PANEL_SELECTED_SONG_TITLE_LINE" ]]; then
+  echo "E2E failed: diagnostics panel selected song title line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=${PANEL_SELECTED_SONG_TITLE_LINE}" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: export selected_song_title does not match panel title line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_selected_song_cpr_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel selected song CPR line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SELECTED_SONG_CPR_LINE="$(grep -m1 'diagnostics_panel_selected_song_cpr_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_selected_song_cpr_line=//')"
+if [[ -z "$PANEL_SELECTED_SONG_CPR_LINE" ]]; then
+  echo "E2E failed: diagnostics panel selected song CPR line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_cpr=no CPR versions" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: export selected_song_cpr missing no CPR versions" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_selected_song_warning_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel selected song warning lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SELECTED_SONG_WARNING_LINES="$(grep -m1 'diagnostics_panel_selected_song_warning_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_selected_song_warning_lines=//')"
+if [[ -z "$PANEL_SELECTED_SONG_WARNING_LINES" ]]; then
+  echo "E2E failed: diagnostics panel selected song warning lines missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -Fq "selected_song_warning=No CPR project files found" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: export missing selected_song_warning for panel warning line" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_selected_song_notes_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel selected song notes line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SELECTED_SONG_NOTES_LINE="$(grep -m1 'diagnostics_panel_selected_song_notes_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_selected_song_notes_line=//')"
+if [[ -z "$PANEL_SELECTED_SONG_NOTES_LINE" ]]; then
+  echo "E2E failed: diagnostics panel selected song notes line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_notes=notes only" "$BROKEN_SELECTED_EXPORT_PATH"; then
+  echo "E2E failed: export selected_song_notes does not match panel notes line" >&2
+  exit 1
+fi
+
 if ! grep -q "warning_search_query=project" "$LOG_FILE"; then
   echo "E2E failed: warning search query marker missing" >&2
   exit 1

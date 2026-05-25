@@ -49,6 +49,13 @@ When a song search is active (fixture flow uses **neon hk**), the diagnostics pa
 - `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)
 - `diagnostics_panel_search_match_lines_match=` (each panel match line matches an export `search_match title=… summary=…`)
 
+When a song is selected (fixture flow selects **Broken Folder Example** after scan), the diagnostics panel shows **Selected song** with title, CPR summary, scan warnings, and sidecar notes. Smoke asserts panel/export parity with the export `selected_song` block:
+
+- `diagnostics_panel_selected_song_title_line_match=` (panel title matches export `selected_song_title=`)
+- `diagnostics_panel_selected_song_cpr_line_match=` (panel CPR line matches export `selected_song_cpr=`)
+- `diagnostics_panel_selected_song_warning_lines_match=` (panel warnings match export `selected_song_warning=`)
+- `diagnostics_panel_selected_song_notes_line_match=` (panel notes line matches export `selected_song_notes=`)
+
 When a skipped-entry search is active (fixture flow uses **LOOSE_FILE.txt**), the diagnostics panel shows **Active skipped search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_skipped_search` block:
 
 - `diagnostics_panel_skipped_search_query_line_match=` (panel query line matches export `skipped_search_query=` / `skipped_search_matches=`)

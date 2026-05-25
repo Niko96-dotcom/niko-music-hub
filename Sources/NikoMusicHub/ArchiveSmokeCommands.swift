@@ -76,6 +76,15 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_panel_extension_tiebreak_callout_match=\(result.extensionTiebreakPanelCalloutMatchesExport)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
         print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
+        print("[niko-music-hub-smoke] diagnostics_export_broken_selected_path=\(result.brokenFolderSelectedSongDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_title_line=\(result.brokenFolderSelectedSongPanelTitleLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_title_line_match=\(result.brokenFolderSelectedSongPanelTitleLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_cpr_line=\(result.brokenFolderSelectedSongPanelCprLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_cpr_line_match=\(result.brokenFolderSelectedSongPanelCprLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_warning_lines=\(result.brokenFolderSelectedSongPanelWarningLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_warning_lines_match=\(result.brokenFolderSelectedSongPanelWarningLinesMatchExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_notes_line=\(result.brokenFolderSelectedSongPanelNotesLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_selected_song_notes_line_match=\(result.brokenFolderSelectedSongPanelNotesLineMatchesExport)")
         print("[niko-music-hub-smoke] warning_search_query=\(result.warningSearchQuery)")
         print("[niko-music-hub-smoke] warning_search_matches=\(result.warningSearchMatchCount)")
         print("[niko-music-hub-smoke] warning_search_match=\(result.warningSearchMatchTitle)")
@@ -208,6 +217,15 @@ enum ArchiveSmokeCommands {
               result.diagnosticsSkippedCount >= 1,
               result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }),
               result.brokenFolderSidecarNotes == "notes only",
+              !result.brokenFolderSelectedSongDiagnosticsExportPath.isEmpty,
+              result.brokenFolderSelectedSongPanelTitleLine == "Broken Folder Example",
+              result.brokenFolderSelectedSongPanelTitleLineMatchesExport,
+              result.brokenFolderSelectedSongPanelCprLine.contains("no CPR versions"),
+              result.brokenFolderSelectedSongPanelCprLineMatchesExport,
+              result.brokenFolderSelectedSongPanelWarningLines.contains("No CPR project files found"),
+              result.brokenFolderSelectedSongPanelWarningLinesMatchExport,
+              result.brokenFolderSelectedSongPanelNotesLine.contains("notes only"),
+              result.brokenFolderSelectedSongPanelNotesLineMatchesExport,
               result.warningSearchQuery == "project",
               result.warningSearchMatchCount == 1,
               result.warningSearchMatchTitle == "Broken Folder Example",
