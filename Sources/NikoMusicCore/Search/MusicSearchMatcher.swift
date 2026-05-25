@@ -62,6 +62,10 @@ enum MusicSearchMatcher {
             if isSubsequence(token, in: normalizedNotes) { return (.fuzzySongNote, 20) }
         }
 
+        if song.scanWarnings.contains(where: { isSubsequence(token, in: normalize($0)) }) {
+            return (.fuzzyScanWarning, 19)
+        }
+
         if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
 
         let haystack = searchableHaystack(for: song)
