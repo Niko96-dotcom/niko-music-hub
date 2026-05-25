@@ -6,6 +6,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     private let cprDetector: CPRVersionDetector
     private let previewDetector: PreviewCandidateDetector
     private let previewRanker: PreviewConfidenceRanker
+    private let sidecarNotesReader: SidecarNotesReader
 
     public init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -13,6 +14,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         self.cprDetector = CPRVersionDetector(fileManager: fileManager)
         self.previewDetector = PreviewCandidateDetector(fileManager: fileManager)
         self.previewRanker = PreviewConfidenceRanker()
+        self.sidecarNotesReader = SidecarNotesReader(fileManager: fileManager)
     }
 
     public func scan(roots: [URL]) throws -> ScanResult {
@@ -97,6 +99,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             projectVersions: versions,
             previewCandidates: previews,
             scanWarnings: warnings,
+            sidecarNotes: sidecarNotesReader.readNotes(in: folder),
             mainPreviewCandidateID: mainPreviewID,
             latestCPR: latest
         )

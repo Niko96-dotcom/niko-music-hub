@@ -8,6 +8,8 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public var projectVersions: [ProjectVersion]
     public var previewCandidates: [PreviewCandidate]
     public var scanWarnings: [String]
+    /// Trimmed text from `notes.txt` at the song folder root, when present.
+    public var sidecarNotes: String?
     public var mainPreviewCandidateID: String?
     public var latestCPR: ProjectVersion?
 
@@ -18,6 +20,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         projectVersions: [ProjectVersion] = [],
         previewCandidates: [PreviewCandidate] = [],
         scanWarnings: [String] = [],
+        sidecarNotes: String? = nil,
         mainPreviewCandidateID: String? = nil,
         latestCPR: ProjectVersion? = nil
     ) {
@@ -27,6 +30,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.projectVersions = projectVersions
         self.previewCandidates = previewCandidates
         self.scanWarnings = scanWarnings
+        self.sidecarNotes = sidecarNotes
         self.mainPreviewCandidateID = mainPreviewCandidateID
         self.latestCPR = latestCPR
         self.id = folderPath.path
