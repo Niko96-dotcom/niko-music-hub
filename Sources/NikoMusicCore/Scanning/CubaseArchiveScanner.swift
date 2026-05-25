@@ -52,7 +52,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                         SkippedScanEntry(
                             kind: .nonFolderAtRoot,
                             label: child.lastPathComponent,
-                            reason: "Not a folder — only immediate child folders are scanned as songs"
+                            reason: SkippedScanEntry.standardNonFolderAtRootReason
                         )
                     )
                     continue
