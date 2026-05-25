@@ -163,6 +163,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] fixture_scan_health_badge_matches_export=\(result.fixtureScanHealthBadgeMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_panel_skipped_entries_lines=\(result.fixtureScanSkippedPanelLines)")
         print("[niko-music-hub-smoke] diagnostics_panel_skipped_entries_lines_match=\(result.fixtureScanSkippedPanelLinesMatchExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_song_warnings_lines=\(result.fixtureScanSongWarningsPanelLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_song_warnings_lines_match=\(result.fixtureScanSongWarningsPanelLinesMatchExport)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_path=\(result.invalidRootDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_badge_match=\(result.invalidRootExportContainsRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge=\(result.invalidRootPanelRootHealthBadge)")
@@ -368,6 +370,10 @@ enum ArchiveSmokeCommands {
               result.fixtureScanSkippedPanelLines.contains("LOOSE_FILE.txt"),
               result.fixtureScanSkippedPanelLines.contains("README.md"),
               result.fixtureScanSkippedPanelLinesMatchExport,
+              !result.fixtureScanSongWarningsPanelLines.isEmpty,
+              result.fixtureScanSongWarningsPanelLines.contains("Broken Folder Example"),
+              result.fixtureScanSongWarningsPanelLines.contains("No CPR project files found"),
+              result.fixtureScanSongWarningsPanelLinesMatchExport,
               !result.invalidRootDiagnosticsExportPath.isEmpty,
               result.invalidRootExportContainsRootHealthBadge,
               !result.invalidRootPanelRootHealthBadge.isEmpty,

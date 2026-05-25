@@ -1007,6 +1007,36 @@ while IFS= read -r skipped_line; do
   fi
 done < <(printf '%s\n' "${PANEL_SKIPPED_ENTRIES_LINES// | /$'\n'}")
 
+if ! grep -q "diagnostics_panel_song_warnings_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel song warnings lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SONG_WARNINGS_LINES="$(grep -m1 'diagnostics_panel_song_warnings_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_song_warnings_lines=//')"
+if [[ -z "$PANEL_SONG_WARNINGS_LINES" ]]; then
+  echo "E2E failed: diagnostics panel song warnings lines missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "songs_with_warnings=1" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing songs_with_warnings count" >&2
+  exit 1
+fi
+
+while IFS= read -r song_warning_line; do
+  [[ -z "$song_warning_line" ]] && continue
+  song_title="${song_warning_line%%: *}"
+  warning_text="${song_warning_line#*: }"
+  if ! grep -Fq "song=${song_title}" "$SEARCH_EXPORT_PATH"; then
+    echo "E2E failed: export missing song= line for panel entry: ${song_warning_line}" >&2
+    exit 1
+  fi
+  if ! grep -Fq "warning=${warning_text}" "$SEARCH_EXPORT_PATH"; then
+    echo "E2E failed: export missing warning= line for panel entry: ${song_warning_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_SONG_WARNINGS_LINES// | /$'\n'}")
+
 if ! grep -q "diagnostics_export_invalid_root_badge_match=true" "$LOG_FILE"; then
   echo "E2E failed: invalid-root diagnostics export missing root_health_badge match" >&2
   exit 1

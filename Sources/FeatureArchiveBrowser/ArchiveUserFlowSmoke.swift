@@ -137,6 +137,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let fixtureScanHealthBadgeMatchesExport: Bool
     public let fixtureScanSkippedPanelLines: String
     public let fixtureScanSkippedPanelLinesMatchExport: Bool
+    public let fixtureScanSongWarningsPanelLines: String
+    public let fixtureScanSongWarningsPanelLinesMatchExport: Bool
     public let invalidRootDiagnosticsExportPath: String
     public let invalidRootExportContainsRootHealthBadge: Bool
     public let invalidRootPanelRootHealthBadge: String
@@ -285,6 +287,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         fixtureScanHealthBadgeMatchesExport: Bool,
         fixtureScanSkippedPanelLines: String,
         fixtureScanSkippedPanelLinesMatchExport: Bool,
+        fixtureScanSongWarningsPanelLines: String,
+        fixtureScanSongWarningsPanelLinesMatchExport: Bool,
         invalidRootDiagnosticsExportPath: String,
         invalidRootExportContainsRootHealthBadge: Bool,
         invalidRootPanelRootHealthBadge: String,
@@ -436,6 +440,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.fixtureScanHealthBadgeMatchesExport = fixtureScanHealthBadgeMatchesExport
         self.fixtureScanSkippedPanelLines = fixtureScanSkippedPanelLines
         self.fixtureScanSkippedPanelLinesMatchExport = fixtureScanSkippedPanelLinesMatchExport
+        self.fixtureScanSongWarningsPanelLines = fixtureScanSongWarningsPanelLines
+        self.fixtureScanSongWarningsPanelLinesMatchExport = fixtureScanSongWarningsPanelLinesMatchExport
         self.invalidRootDiagnosticsExportPath = invalidRootDiagnosticsExportPath
         self.invalidRootExportContainsRootHealthBadge = invalidRootExportContainsRootHealthBadge
         self.invalidRootPanelRootHealthBadge = invalidRootPanelRootHealthBadge
@@ -518,6 +524,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case fixtureScanHealthBadgeMissing
     case fixtureScanHealthBadgeMismatch
     case fixtureScanSkippedPanelMismatch
+    case fixtureScanSongWarningsPanelMismatch
     case invalidRootDiagnosticsExportFailed
     case invalidRootExportMissingRootHealthBadge
     case invalidRootPanelRootHealthBadgeMissing
@@ -671,6 +678,31 @@ public enum ArchiveUserFlowSmoke {
             && fixtureScanSkippedPanelLines.contains("README.md")
         guard fixtureScanSkippedPanelLinesMatchExport else {
             throw ArchiveUserFlowSmokeError.fixtureScanSkippedPanelMismatch
+        }
+
+        let displaySongWarningSummaries = diagnostics.displaySongWarningSummaries(
+            homeDirectory: homeDirectory
+        )
+        let fixtureScanSongWarningsPanelLines = displaySongWarningSummaries
+            .map {
+                ArchiveDiagnosticsSongWarningsPanelContext.panelLine(
+                    displayTitle: $0.displayTitle,
+                    warnings: $0.warnings
+                )
+            }
+            .joined(separator: " | ")
+        let fixtureScanSongWarningsPanelLinesMatchExport =
+            !displaySongWarningSummaries.isEmpty
+            && displaySongWarningSummaries.count == diagnostics.songsWithWarningsCount
+            && ArchiveDiagnosticsSongWarningsPanelContext.linesMatchExport(
+                in: searchExportText,
+                summaries: displaySongWarningSummaries,
+                homeDirectory: homeDirectory
+            )
+            && fixtureScanSongWarningsPanelLines.contains("Broken Folder Example")
+            && fixtureScanSongWarningsPanelLines.contains("No CPR project files found")
+        guard fixtureScanSongWarningsPanelLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.fixtureScanSongWarningsPanelMismatch
         }
 
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
@@ -1410,6 +1442,8 @@ public enum ArchiveUserFlowSmoke {
             fixtureScanHealthBadgeMatchesExport: fixtureScanHealthBadgeMatchesExport,
             fixtureScanSkippedPanelLines: fixtureScanSkippedPanelLines,
             fixtureScanSkippedPanelLinesMatchExport: fixtureScanSkippedPanelLinesMatchExport,
+            fixtureScanSongWarningsPanelLines: fixtureScanSongWarningsPanelLines,
+            fixtureScanSongWarningsPanelLinesMatchExport: fixtureScanSongWarningsPanelLinesMatchExport,
             invalidRootDiagnosticsExportPath: invalidRootHealth.exportPath,
             invalidRootExportContainsRootHealthBadge: invalidRootHealth.exportContainsBadge,
             invalidRootPanelRootHealthBadge: invalidRootHealth.panelBadge,
