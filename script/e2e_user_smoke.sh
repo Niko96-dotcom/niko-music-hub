@@ -133,6 +133,27 @@ if ! grep -q "preview_ranking_selected_header=" "$RANKING_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_tiebreak_match=true" "$LOG_FILE"; then
+  echo "E2E failed: equal-score tiebreak diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+TIEBREAK_EXPORT_PATH="$(grep -m1 'diagnostics_export_tiebreak_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_tiebreak_path=//')"
+if [[ -z "$TIEBREAK_EXPORT_PATH" || ! -f "$TIEBREAK_EXPORT_PATH" ]]; then
+  echo "E2E failed: equal-score tiebreak diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "selected_song_title=Equal Score Tiebreak Lab" "$TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing selected Equal Score Tiebreak Lab song" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_rank_tiebreak=Equal score — longer preview" "$TIEBREAK_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing equal-score preview_rank_tiebreak line" >&2
+  exit 1
+fi
+
 if ! grep -q "broken_folder_warnings=.*CPR" "$LOG_FILE"; then
   echo "E2E failed: broken folder display warnings missing CPR signal" >&2
   exit 1

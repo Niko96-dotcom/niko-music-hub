@@ -20,11 +20,11 @@ final class ArchiveUserFlowTests: XCTestCase {
         )
 
         XCTAssertEqual(result.userFlow, "scan_search_open")
-        XCTAssertGreaterThanOrEqual(result.songCount, 3)
+        XCTAssertGreaterThanOrEqual(result.songCount, 4)
         XCTAssertEqual(result.searchQuery, "neon hk")
         XCTAssertEqual(result.searchMatchCount, 1)
         XCTAssertEqual(result.selectedTitle, "Neon Hook")
-        XCTAssertGreaterThanOrEqual(result.diagnosticsSongCount, 3)
+        XCTAssertGreaterThanOrEqual(result.diagnosticsSongCount, 4)
         XCTAssertGreaterThanOrEqual(result.diagnosticsSkippedCount, 1)
         XCTAssertTrue(result.writeProbeDenied)
         XCTAssertTrue(result.archiveTreeUnchanged)
@@ -47,6 +47,8 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.rankingLabMainPreviewSummary.contains("wav"))
         XCTAssertFalse(result.rankingLabDiagnosticsExportPath.isEmpty)
         XCTAssertTrue(result.rankingLabDiagnosticsExportContainsMatch)
+        XCTAssertFalse(result.tiebreakLabDiagnosticsExportPath.isEmpty)
+        XCTAssertTrue(result.tiebreakLabDiagnosticsExportContainsTiebreak)
         XCTAssertTrue(
             result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") })
         )

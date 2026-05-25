@@ -76,6 +76,19 @@ now = time.time() + 300
 os.utime(path, (now, now))
 PY
 
+# Equal Score Tiebreak Lab — same ranking signals except duration (tiebreak, not score bump)
+write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Equal Score Tiebreak Lab.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown/Tie Song mix long.wav" 210
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown/Tie Song mix short.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown" <<'PY'
+import os, sys, time
+mixdown = sys.argv[1]
+now = time.time() + 400
+for name in ("Tie Song mix long.wav", "Tie Song mix short.wav"):
+    path = os.path.join(mixdown, name)
+    os.utime(path, (now, now))
+PY
+
 # Broken folder — no CPR
 mkdir -p "$FIXTURE_ROOT/Broken Folder Example"
 echo "notes only" >"$FIXTURE_ROOT/Broken Folder Example/notes.txt"

@@ -40,6 +40,21 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertFalse(main.confidenceReasons.contains(where: { $0.contains("duration:too-short") }))
     }
 
+    func testEqualScoreTiebreakLabFixtureUsesDurationTiebreakCallout() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Tiebreak Lab" })
+        let main = try XCTUnwrap(lab.previewCandidates.first)
+        let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
+
+        XCTAssertEqual(main.fileName, "Tie Song mix long.wav")
+        XCTAssertEqual(main.confidenceScore, runnerUp.confidenceScore)
+        XCTAssertEqual(ranker.decidingFactor(winner: main, runnerUp: runnerUp), .duration)
+        let callout = try XCTUnwrap(PreviewRankingExplainability.tiebreakCallout(for: lab))
+        XCTAssertTrue(callout.contains("Equal score — longer preview"))
+    }
+
     // MARK: - Unit ranking scenarios
 
     func testPrefersHigherParsedVersionOverNewerWorseRole() {
