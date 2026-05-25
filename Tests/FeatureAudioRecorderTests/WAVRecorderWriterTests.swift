@@ -1,0 +1,99 @@
+import AVFAudio
+import FeatureAudioConverter
+import XCTest
+@testable import FeatureAudioRecorder
+
+final class WAVRecorderWriterTests: XCTestCase {
+    func testWAVWriterCreatesFile() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_writer_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        XCTAssertTrue(writer.isRecording)
+
+        let result = try writer.finalize()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
+        XCTAssertEqual(result.sampleRate, 44100)
+        XCTAssertEqual(result.bitDepth, 24)
+        XCTAssertEqual(result.channelCount, 2)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    func testWAVWriterHasCorrectSampleRate() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_samplerate_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        _ = try writer.finalize()
+
+        let audioFile = try AVAudioFile(forReading: outputURL)
+        XCTAssertEqual(audioFile.fileFormat.sampleRate, 44100)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    func testWAVWriterHasCorrectBitDepth() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_bitdepth_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        _ = try writer.finalize()
+
+        let audioFile = try AVAudioFile(forReading: outputURL)
+        let bitsPerChannel = audioFile.fileFormat.streamDescription.pointee.mBitsPerChannel
+        XCTAssertEqual(Int(bitsPerChannel), 24)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    func testWAVWriterHasCorrectChannelCount() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_channels_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        _ = try writer.finalize()
+
+        let audioFile = try AVAudioFile(forReading: outputURL)
+        XCTAssertEqual(audioFile.fileFormat.channelCount, 2)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    func testFilenameOverride() throws {
+        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
+        let filename = useCase.generateOutputFilename(override: "My Recording.wav")
+        XCTAssertEqual(filename, "My Recording.wav")
+    }
+
+    func testFilenameAutoTimestamp() throws {
+        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
+        let filename = useCase.generateOutputFilename(override: nil)
+        XCTAssertTrue(filename.hasPrefix("Recording "))
+        XCTAssertTrue(filename.hasSuffix(".wav"))
+    }
+}
+
+private final class MockAudioCapturePort: AudioCapturePort, @unchecked Sendable {
+    var recording: Bool = false
+
+    func checkPermission() async -> RecorderPermissionState {
+        .authorized
+    }
+
+    func requestPermission() async -> RecorderPermissionState {
+        .authorized
+    }
+
+    func isCompatibleMacOS() -> Bool {
+        true
+    }
+
+    func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
+        AsyncStream { _ in }
+    }
+
+    func stopRecording() async throws -> RecorderResult {
+        RecorderResult(outputURL: URL(fileURLWithPath: "/tmp/test.wav"), duration: 0, sampleRate: 44100, bitDepth: 24, channelCount: 2)
+    }
+}
