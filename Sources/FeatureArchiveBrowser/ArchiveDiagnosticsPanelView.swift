@@ -265,9 +265,13 @@ struct ArchiveDiagnosticsPanelView: View {
             let displayWarnings = diagnostics.displayGlobalWarnings()
             if !displayWarnings.isEmpty {
                 ForEach(displayWarnings, id: \.self) { warning in
-                    Text("⚠ \(warning)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(ArchiveDesignTokens.accent)
+                    Text(
+                        "⚠ \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
                 }
             }
 

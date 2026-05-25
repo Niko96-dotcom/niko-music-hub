@@ -172,6 +172,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_badge_match=\(result.invalidRootExportContainsRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge=\(result.invalidRootPanelRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge_matches_export=\(result.invalidRootPanelBadgeMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_global_warning_lines=\(result.invalidRootPanelGlobalWarningLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_global_warning_lines_match=\(result.invalidRootPanelGlobalWarningLinesMatchExport)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_truncation_path=\(result.summaryTruncationDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_truncation_match=\(result.summaryTruncationDiagnosticsExportContainsTruncation)")
         print("[niko-music-hub-smoke] diagnostics_panel_summary_truncation_footnote=\(result.summaryTruncationPanelFootnote)")
@@ -386,6 +388,9 @@ enum ArchiveSmokeCommands {
               result.invalidRootPanelRootHealthBadge.contains("invalid root"),
               result.invalidRootPanelRootHealthBadge.contains("root warning"),
               result.invalidRootPanelBadgeMatchesExport,
+              !result.invalidRootPanelGlobalWarningLines.isEmpty,
+              result.invalidRootPanelGlobalWarningLines.contains("Root is not a directory"),
+              result.invalidRootPanelGlobalWarningLinesMatchExport,
               !result.summaryTruncationDiagnosticsExportPath.isEmpty,
               result.summaryTruncationDiagnosticsExportContainsTruncation,
               result.summaryTruncationPanelFootnote

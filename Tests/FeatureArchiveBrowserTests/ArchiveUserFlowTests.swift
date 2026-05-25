@@ -71,6 +71,9 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.invalidRootPanelRootHealthBadge.contains("invalid root"))
         XCTAssertTrue(result.invalidRootPanelRootHealthBadge.contains("root warning"))
         XCTAssertTrue(result.invalidRootPanelBadgeMatchesExport)
+        XCTAssertFalse(result.invalidRootPanelGlobalWarningLines.isEmpty)
+        XCTAssertTrue(result.invalidRootPanelGlobalWarningLines.contains("Root is not a directory"))
+        XCTAssertTrue(result.invalidRootPanelGlobalWarningLinesMatchExport)
         XCTAssertEqual(
             ArchiveDiagnosticsPanelAccessibility.rootHealthBadge,
             "archive_diagnostics_root_health_badge"

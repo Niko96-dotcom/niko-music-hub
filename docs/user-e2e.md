@@ -50,6 +50,8 @@ The **Songs with warnings** section lists each warning song (`Broken Folder Exam
 
 The **Songs** and **Song warnings** count rows match export `songs=`, `songs_with_warnings=`, and `total_song_warnings=` via `diagnostics_panel_scan_counts_match=` (panel values `diagnostics_panel_scan_counts_songs=` / `diagnostics_panel_scan_counts_song_warnings=`).
 
+The invalid-root smoke pass adds a missing directory alongside the fixture root. Each panel global warning line matches an export `global_warning=` row via `diagnostics_panel_invalid_root_global_warning_lines_match=` (panel text `diagnostics_panel_invalid_root_global_warning_lines=`). The compact **root health badge** still matches export `root_health_badge=` via `diagnostics_panel_invalid_root_badge_matches_export=`.
+
 When a song search is active (fixture flow uses **neon hk**), the diagnostics panel shows **Active search** with the query, match count, and per-match explainability lines. Smoke asserts panel/export parity with the export `active_search` block:
 
 - `diagnostics_panel_search_query_line_match=` (panel query line matches export `search_query=` / `search_matches=`)
