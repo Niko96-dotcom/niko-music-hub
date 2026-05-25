@@ -67,7 +67,8 @@ struct ArchiveBrowserView: View {
             if let diagnostics = viewModel.scanDiagnostics {
                 ArchiveDiagnosticsPanelView(
                     diagnostics: diagnostics,
-                    selectedSong: viewModel.selectedSong
+                    selectedSong: viewModel.selectedSong,
+                    searchContext: viewModel.activeSearchExportContext()
                 ) {
                     do {
                         try viewModel.exportDiagnostics()

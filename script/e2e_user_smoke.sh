@@ -72,6 +72,54 @@ if ! grep -q "search_match_summary=.*hk" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_search_query_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel active search query line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SEARCH_QUERY_LINE="$(grep -m1 'diagnostics_panel_search_query_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_search_query_line=//')"
+if [[ -z "$PANEL_SEARCH_QUERY_LINE" ]]; then
+  echo "E2E failed: diagnostics panel active search query line missing from smoke output" >&2
+  exit 1
+fi
+
+SEARCH_EXPORT_PATH="$(grep -m1 'diagnostics_export_search_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_search_path=//')"
+if [[ -z "$SEARCH_EXPORT_PATH" || ! -f "$SEARCH_EXPORT_PATH" ]]; then
+  echo "E2E failed: neon search diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_query=neon hk" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: export search_query does not match neon hk panel search" >&2
+  exit 1
+fi
+
+if ! grep -q "search_matches=1" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: export search_matches does not match panel search count" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_search_match_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel active search match lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SEARCH_MATCH_LINES="$(grep -m1 'diagnostics_panel_search_match_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_search_match_lines=//')"
+if [[ -z "$PANEL_SEARCH_MATCH_LINES" ]]; then
+  echo "E2E failed: diagnostics panel active search match lines missing from smoke output" >&2
+  exit 1
+fi
+
+while IFS= read -r match_line; do
+  [[ -z "$match_line" ]] && continue
+  title="${match_line%% — *}"
+  summary="${match_line#* — }"
+  if ! grep -Fq "search_match title=${title} summary=${summary}" "$SEARCH_EXPORT_PATH"; then
+    echo "E2E failed: export missing search_match for panel line: ${match_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_SEARCH_MATCH_LINES// | /$'\n'}")
+
 if ! grep -q "preview_rank_summary=.*v3" "$LOG_FILE"; then
   echo "E2E failed: preview ranking explainability missing v3 signal" >&2
   exit 1

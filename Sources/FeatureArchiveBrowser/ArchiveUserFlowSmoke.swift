@@ -92,6 +92,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let searchDiagnosticsExportPath: String
     public let searchDiagnosticsExportContainsMatch: Bool
     public let searchDiagnosticsExportContainsSummaryLine: Bool
+    public let searchPanelQueryLine: String
+    public let searchPanelQueryLineMatchesExport: Bool
+    public let searchPanelMatchLines: String
+    public let searchPanelMatchLinesMatchExport: Bool
     public let diagnosticsExportSummaryLine: String
     /// In-app panel support summary (matches export `summary_line=` value without prefix).
     public let diagnosticsPanelSupportSummary: String
@@ -198,6 +202,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         searchDiagnosticsExportPath: String,
         searchDiagnosticsExportContainsMatch: Bool,
         searchDiagnosticsExportContainsSummaryLine: Bool,
+        searchPanelQueryLine: String,
+        searchPanelQueryLineMatchesExport: Bool,
+        searchPanelMatchLines: String,
+        searchPanelMatchLinesMatchExport: Bool,
         diagnosticsExportSummaryLine: String,
         diagnosticsPanelSupportSummary: String,
         diagnosticsPanelMatchesExportSummary: Bool,
@@ -302,6 +310,10 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.searchDiagnosticsExportPath = searchDiagnosticsExportPath
         self.searchDiagnosticsExportContainsMatch = searchDiagnosticsExportContainsMatch
         self.searchDiagnosticsExportContainsSummaryLine = searchDiagnosticsExportContainsSummaryLine
+        self.searchPanelQueryLine = searchPanelQueryLine
+        self.searchPanelQueryLineMatchesExport = searchPanelQueryLineMatchesExport
+        self.searchPanelMatchLines = searchPanelMatchLines
+        self.searchPanelMatchLinesMatchExport = searchPanelMatchLinesMatchExport
         self.diagnosticsExportSummaryLine = diagnosticsExportSummaryLine
         self.diagnosticsPanelSupportSummary = diagnosticsPanelSupportSummary
         self.diagnosticsPanelMatchesExportSummary = diagnosticsPanelMatchesExportSummary
@@ -374,6 +386,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case searchDiagnosticsExportFailed
     case searchDiagnosticsExportMissingMatch
     case searchDiagnosticsExportMissingSummaryLine
+    case searchPanelActiveSearchMismatch
     case diagnosticsPanelSupportSummaryMissing
     case diagnosticsPanelSupportSummaryMismatch
     case fixtureScanHealthBadgeMissing
@@ -444,6 +457,42 @@ public enum ArchiveUserFlowSmoke {
             && diagnosticsExportSummaryLine.contains("2 skipped at roots")
         guard exportContainsSummaryLine else {
             throw ArchiveUserFlowSmokeError.searchDiagnosticsExportMissingSummaryLine
+        }
+
+        guard let searchPanelContext = viewModel.activeSearchExportContext() else {
+            throw ArchiveUserFlowSmokeError.searchPanelActiveSearchMismatch
+        }
+        let panelSearchQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
+            query: searchPanelContext.query,
+            matchCount: searchPanelContext.matches.count
+        )
+        let panelSearchMatchLines = searchPanelContext.matches.map {
+            ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
+                displayTitle: $0.displayTitle,
+                summary: $0.summary
+            )
+        }
+        let panelSearchMatchLinesJoined = panelSearchMatchLines.joined(separator: " | ")
+        let searchPanelQueryLineMatchesExport =
+            searchPanelContext.query == searchQuery
+            && searchPanelContext.matches.count == searchMatchCount
+            && ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: searchExportText,
+                query: searchPanelContext.query,
+                matchCount: searchPanelContext.matches.count
+            )
+            && panelSearchQueryLine.contains("neon hk")
+            && panelSearchQueryLine.contains("1 match")
+        let searchPanelMatchLinesMatchExport =
+            !panelSearchMatchLines.isEmpty
+            && ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
+                in: searchExportText,
+                matches: searchPanelContext.matches
+            )
+            && panelSearchMatchLines.contains(where: { $0.contains("Neon Hook") })
+            && panelSearchMatchLines.contains(where: { $0.contains("neon") })
+        guard searchPanelQueryLineMatchesExport, searchPanelMatchLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.searchPanelActiveSearchMismatch
         }
 
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
@@ -1011,6 +1060,10 @@ public enum ArchiveUserFlowSmoke {
             searchDiagnosticsExportPath: searchExportPath,
             searchDiagnosticsExportContainsMatch: exportContainsSearchMatch,
             searchDiagnosticsExportContainsSummaryLine: exportContainsSummaryLine,
+            searchPanelQueryLine: panelSearchQueryLine,
+            searchPanelQueryLineMatchesExport: searchPanelQueryLineMatchesExport,
+            searchPanelMatchLines: panelSearchMatchLinesJoined,
+            searchPanelMatchLinesMatchExport: searchPanelMatchLinesMatchExport,
             diagnosticsExportSummaryLine: diagnosticsExportSummaryLine,
             diagnosticsPanelSupportSummary: panelSupportSummary,
             diagnosticsPanelMatchesExportSummary: panelMatchesExport,

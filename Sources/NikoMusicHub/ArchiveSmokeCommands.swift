@@ -119,6 +119,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_search_path=\(result.searchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_search_match=\(result.searchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_match=\(result.searchDiagnosticsExportContainsSummaryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_search_query_line=\(result.searchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_search_query_line_match=\(result.searchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_search_match_lines=\(result.searchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_search_match_lines_match=\(result.searchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] diagnostics_export_summary_line=\(result.diagnosticsExportSummaryLine)")
         print("[niko-music-hub-smoke] diagnostics_panel_support_summary=\(result.diagnosticsPanelSupportSummary)")
         print("[niko-music-hub-smoke] diagnostics_panel_matches_export=\(result.diagnosticsPanelMatchesExportSummary)")
@@ -253,6 +257,12 @@ enum ArchiveSmokeCommands {
               !result.searchDiagnosticsExportPath.isEmpty,
               result.searchDiagnosticsExportContainsMatch,
               result.searchDiagnosticsExportContainsSummaryLine,
+              !result.searchPanelQueryLine.isEmpty,
+              result.searchPanelQueryLine.contains("neon hk"),
+              result.searchPanelQueryLineMatchesExport,
+              !result.searchPanelMatchLines.isEmpty,
+              result.searchPanelMatchLines.contains("Neon Hook"),
+              result.searchPanelMatchLinesMatchExport,
               !result.diagnosticsExportSummaryLine.isEmpty,
               result.diagnosticsExportSummaryLine.contains("summary_line=roots:"),
               result.diagnosticsExportSummaryLine.contains("Scanned 7 songs"),
