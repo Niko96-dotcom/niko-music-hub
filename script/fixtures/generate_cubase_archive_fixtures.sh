@@ -57,8 +57,16 @@ write_minimal_wav "$FIXTURE_ROOT/Second Song/Mixdown/Second Song instr.wav"
 
 # Preview Ranking Lab — version, extension, role, and duration competition
 write_placeholder_cpr "$FIXTURE_ROOT/Preview Ranking Lab/Preview Ranking Lab.cpr"
-write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav" 210
+write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v2 mix.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown" <<'PY'
+import os, sys, time
+mixdown = sys.argv[1]
+now = time.time() + 350
+for name in ("Lab Song v3 mix.wav", "Lab Song v2 mix.wav"):
+    path = os.path.join(mixdown, name)
+    os.utime(path, (now, now))
+PY
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" 200
 /usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" <<'PY'
@@ -76,15 +84,47 @@ now = time.time() + 300
 os.utime(path, (now, now))
 PY
 
-# Equal Score Tiebreak Lab — same ranking signals except duration (tiebreak, not score bump)
-write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Equal Score Tiebreak Lab.cpr"
-write_minimal_wav "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown/Tie Song mix long.wav" 210
-write_minimal_wav "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown/Tie Song mix short.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Tiebreak Lab/Mixdown" <<'PY'
+# Equal Score Duration Tiebreak — same ranking signals except duration (tiebreak, not score bump)
+write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Equal Score Duration Tiebreak.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown/Tie Song mix long.wav" 210
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown/Tie Song mix short.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown" <<'PY'
 import os, sys, time
 mixdown = sys.argv[1]
 now = time.time() + 400
 for name in ("Tie Song mix long.wav", "Tie Song mix short.wav"):
+    path = os.path.join(mixdown, name)
+    os.utime(path, (now, now))
+PY
+
+# Equal Score Version Tiebreak — matched score; version is the deciding tiebreak
+write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Version Tiebreak/Equal Score Version Tiebreak.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown/Tie Song v3 mix.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown/Tie Song v2 mix.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown" <<'PY'
+import os, sys, time
+mixdown = sys.argv[1]
+now = time.time() + 500
+for name in ("Tie Song v3 mix.wav", "Tie Song v2 mix.wav"):
+    path = os.path.join(mixdown, name)
+    os.utime(path, (now, now))
+PY
+
+# Equal Score Extension Tiebreak — matched score; extension is the deciding tiebreak
+# (non-wav placeholders skip duration reader so scores stay equal)
+write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Extension Tiebreak/Equal Score Extension Tiebreak.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Equal Score Extension Tiebreak/Mixdown/Tie Song mix.flac" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Extension Tiebreak/Mixdown/Tie Song mix.mp3" <<'PY'
+import struct, sys
+path = sys.argv[1]
+with open(path, "wb") as f:
+    f.write(b"ID3" + b"\x00" * 128)
+PY
+/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Extension Tiebreak/Mixdown" <<'PY'
+import os, sys, time
+mixdown = sys.argv[1]
+now = time.time() + 600
+for name in ("Tie Song mix.flac", "Tie Song mix.mp3"):
     path = os.path.join(mixdown, name)
     os.utime(path, (now, now))
 PY

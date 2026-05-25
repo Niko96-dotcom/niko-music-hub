@@ -41,7 +41,7 @@ final class PreviewRankingExplainabilityTests: XCTestCase {
         XCTAssertTrue(summary.contains("Lab Song v3 mix.wav"))
         XCTAssertTrue(summary.contains("v3"))
         XCTAssertTrue(summary.contains("wav"))
-        XCTAssertTrue(summary.contains("plausible length (3:30)"))
+        XCTAssertTrue(summary.contains("plausible length (3:20)"))
         XCTAssertFalse(summary.lowercased().contains("too short"))
     }
 }

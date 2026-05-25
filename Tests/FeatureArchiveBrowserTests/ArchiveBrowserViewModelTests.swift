@@ -46,7 +46,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
 
         let diagnostics = try XCTUnwrap(viewModel.scanDiagnostics)
-        XCTAssertEqual(diagnostics.songCount, 5)
+        XCTAssertEqual(diagnostics.songCount, 7)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertTrue(
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
@@ -56,7 +56,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let panel = ArchiveDiagnosticsPanelContext.from(diagnostics, homeDirectory: home)
         XCTAssertEqual(panel.supportSummaryLine, diagnostics.exportSummaryLine(homeDirectory: home))
         XCTAssertNil(panel.rootHealthBadge)
-        XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 5 songs"))
+        XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 7 songs"))
         XCTAssertFalse(diagnostics.displayRootPaths().isEmpty)
         XCTAssertTrue(
             diagnostics.displayRootPaths().first?.contains("CubaseArchive") == true

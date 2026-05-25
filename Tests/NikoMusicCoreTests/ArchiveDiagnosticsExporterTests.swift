@@ -28,14 +28,14 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         )
 
         let text = try String(contentsOf: destination, encoding: .utf8)
-        XCTAssertTrue(text.contains("songs=5"))
+        XCTAssertTrue(text.contains("songs=7"))
         XCTAssertTrue(text.contains("songs_with_warnings=1"))
         XCTAssertTrue(text.contains("skipped_entries=2"))
         XCTAssertTrue(text.contains("summary_line=roots: "))
         XCTAssertTrue(text.contains("CubaseArchive"))
         XCTAssertTrue(
             text.contains(
-                "· Scanned 5 songs · 1 song(s) with 1 warning(s) · 2 skipped at roots"
+                "· Scanned 7 songs · 1 song(s) with 1 warning(s) · 2 skipped at roots"
             )
         )
         XCTAssertFalse(text.contains(home))
@@ -177,11 +177,11 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("skipped too short:"))
     }
 
-    func testFormattedTextIncludesEqualScoreTiebreakExportForTiebreakLab() throws {
+    func testFormattedTextIncludesEqualScoreVersionTiebreakExport() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
         let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Tiebreak Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Version Tiebreak" })
         let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: lab)
 
         let text = ArchiveDiagnosticsExporter.formattedText(
@@ -194,7 +194,51 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             selectedSongContext: selectedContext
         )
 
-        XCTAssertTrue(text.contains("selected_song_title=Equal Score Tiebreak Lab"))
+        XCTAssertTrue(text.contains("selected_song_title=Equal Score Version Tiebreak"))
+        XCTAssertTrue(text.contains("preview_rank_tiebreak=Equal score — version v3 beat v2"))
+        XCTAssertTrue(text.contains("Tie Song v3 mix.wav"))
+    }
+
+    func testFormattedTextIncludesEqualScoreExtensionTiebreakExport() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Extension Tiebreak" })
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: lab)
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: ArchiveScanDiagnosticsBuilder.build(
+                result: result,
+                roots: [archiveRoot],
+                scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+            ),
+            homeDirectory: "/Users/test",
+            selectedSongContext: selectedContext
+        )
+
+        XCTAssertTrue(text.contains("selected_song_title=Equal Score Extension Tiebreak"))
+        XCTAssertTrue(text.contains("preview_rank_tiebreak=Equal score — preferred flac over mp3"))
+        XCTAssertTrue(text.contains("Tie Song mix.flac"))
+    }
+
+    func testFormattedTextIncludesEqualScoreTiebreakExportForTiebreakLab() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Duration Tiebreak" })
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: lab)
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: ArchiveScanDiagnosticsBuilder.build(
+                result: result,
+                roots: [archiveRoot],
+                scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+            ),
+            homeDirectory: "/Users/test",
+            selectedSongContext: selectedContext
+        )
+
+        XCTAssertTrue(text.contains("selected_song_title=Equal Score Duration Tiebreak"))
         XCTAssertTrue(text.contains("preview_rank_tiebreak=Equal score — longer preview"))
         XCTAssertTrue(text.contains("Tie Song mix long.wav"))
     }

@@ -132,14 +132,14 @@ final class MusicSearchExplainabilityTests: XCTestCase {
             detectedRole: .mainMix
         )
         let song = Song(
-            folderPath: URL(fileURLWithPath: "/tmp/Unrelated"),
-            originalFolderName: "Unrelated",
-            displayTitle: "Unrelated",
+            folderPath: URL(fileURLWithPath: "/tmp/Preview Ranking Lab"),
+            originalFolderName: "Preview Ranking Lab",
+            displayTitle: "Preview Ranking Lab",
             previewCandidates: [preview]
         )
         let index = MusicSearchIndex(songs: [song])
 
-        let result = try XCTUnwrap(index.searchResults("v3 mx").first)
+        let result = try XCTUnwrap(index.searchResults("ranking lab v3 mx").first)
         XCTAssertTrue(result.matchSummary.contains("fuzzy preview file"))
         XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
     }

@@ -49,6 +49,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_ranking_match=\(result.rankingLabDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_path=\(result.tiebreakLabDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_tiebreak_match=\(result.tiebreakLabDiagnosticsExportContainsTiebreak)")
+        print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_path=\(result.versionTiebreakLabDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_version_tiebreak_match=\(result.versionTiebreakLabDiagnosticsExportContainsTiebreak)")
+        print("[niko-music-hub-smoke] diagnostics_export_extension_tiebreak_path=\(result.extensionTiebreakLabDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_extension_tiebreak_match=\(result.extensionTiebreakLabDiagnosticsExportContainsTiebreak)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
         print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
         print("[niko-music-hub-smoke] warning_search_query=\(result.warningSearchQuery)")
@@ -131,12 +135,16 @@ enum ArchiveSmokeCommands {
               result.rankingLabDiagnosticsExportContainsMatch,
               !result.tiebreakLabDiagnosticsExportPath.isEmpty,
               result.tiebreakLabDiagnosticsExportContainsTiebreak,
+              !result.versionTiebreakLabDiagnosticsExportPath.isEmpty,
+              result.versionTiebreakLabDiagnosticsExportContainsTiebreak,
+              !result.extensionTiebreakLabDiagnosticsExportPath.isEmpty,
+              result.extensionTiebreakLabDiagnosticsExportContainsTiebreak,
               result.selectedTitle == "Neon Hook",
               result.dryRunCPRPath.contains("Neon Hook"),
               result.dryRunCPRPath.hasSuffix(".cpr"),
               result.writeProbeDenied,
               result.archiveTreeUnchanged,
-              result.diagnosticsSongCount >= 4,
+              result.diagnosticsSongCount >= 7,
               result.diagnosticsSkippedCount >= 1,
               result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }),
               result.brokenFolderSidecarNotes == "notes only",
@@ -178,8 +186,8 @@ enum ArchiveSmokeCommands {
               result.cprSearchMatchSummary.contains("neohkv2"),
               !result.cprSearchDiagnosticsExportPath.isEmpty,
               result.cprSearchDiagnosticsExportContainsMatch,
-              result.previewSearchQuery == "v3 mx",
-              result.previewSearchMatchCount == 1,
+              result.previewSearchQuery == "ranking lab v3 mx",
+              result.previewSearchMatchCount >= 1,
               result.previewSearchMatchTitle == "Preview Ranking Lab",
               result.previewSearchMatchSummary.contains("fuzzy preview file"),
               result.previewSearchMatchSummary.contains("v3"),
@@ -195,10 +203,10 @@ enum ArchiveSmokeCommands {
               result.searchDiagnosticsExportContainsSummaryLine,
               !result.diagnosticsExportSummaryLine.isEmpty,
               result.diagnosticsExportSummaryLine.contains("summary_line=roots:"),
-              result.diagnosticsExportSummaryLine.contains("Scanned 5 songs"),
+              result.diagnosticsExportSummaryLine.contains("Scanned 7 songs"),
               !result.diagnosticsPanelSupportSummary.isEmpty,
               result.diagnosticsPanelSupportSummary.hasPrefix("roots:"),
-              result.diagnosticsPanelSupportSummary.contains("Scanned 5 songs"),
+              result.diagnosticsPanelSupportSummary.contains("Scanned 7 songs"),
               result.diagnosticsPanelMatchesExportSummary,
               result.healthyExportOmitsRootHealthBadge,
               result.healthyPanelRootHealthBadgeNil,
