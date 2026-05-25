@@ -97,6 +97,33 @@ struct ArchiveDiagnosticsPanelView: View {
                     .lineLimit(4)
             }
 
+            if let mainSummary = ArchiveDiagnosticsPreviewRankingPanelContext
+                .selectedSongMainPreviewSummary(for: selectedSong) {
+                Text("Main preview ranking")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                Text(mainSummary)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+            }
+
+            let rankedPreviewLines = ArchiveDiagnosticsPreviewRankingPanelContext
+                .selectedSongRankedPreviewLines(for: selectedSong)
+            if rankedPreviewLines.count > 1 {
+                Text("All previews (ranked)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                ForEach(rankedPreviewLines, id: \.self) { line in
+                    Text("• \(line)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
+
             if let tiebreakCallout = ArchiveDiagnosticsPreviewRankingPanelContext
                 .selectedSongPreviewTiebreakCallout(for: selectedSong) {
                 Text(tiebreakCallout)
