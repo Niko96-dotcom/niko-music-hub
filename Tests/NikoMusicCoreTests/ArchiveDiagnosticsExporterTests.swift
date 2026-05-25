@@ -34,6 +34,37 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("~/"))
     }
 
+    func testFormattedTextIncludesActiveSearchContext() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let searchContext = ArchiveDiagnosticsSearchContext(
+            query: "neon hk",
+            matches: [
+                ArchiveDiagnosticsSearchMatch(
+                    displayTitle: "Neon Hook",
+                    summary: "neon → title; hk → fuzzy title"
+                ),
+            ]
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test",
+            searchContext: searchContext
+        )
+
+        XCTAssertTrue(text.contains("search_query=neon hk"))
+        XCTAssertTrue(text.contains("search_matches=1"))
+        XCTAssertTrue(text.contains("search_match title=Neon Hook"))
+        XCTAssertTrue(text.contains("summary=neon → title; hk → fuzzy title"))
+    }
+
     func testExportRejectsDestinationInsideArchiveRoot() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
