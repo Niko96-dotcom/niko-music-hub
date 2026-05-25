@@ -69,6 +69,18 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] folder_search_summary=\(result.folderSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_folder_path=\(result.folderSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_folder_match=\(result.folderSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] cpr_search_query=\(result.cprSearchQuery)")
+        print("[niko-music-hub-smoke] cpr_search_matches=\(result.cprSearchMatchCount)")
+        print("[niko-music-hub-smoke] cpr_search_match=\(result.cprSearchMatchTitle)")
+        print("[niko-music-hub-smoke] cpr_search_summary=\(result.cprSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_cpr_path=\(result.cprSearchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_cpr_match=\(result.cprSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] preview_search_query=\(result.previewSearchQuery)")
+        print("[niko-music-hub-smoke] preview_search_matches=\(result.previewSearchMatchCount)")
+        print("[niko-music-hub-smoke] preview_search_match=\(result.previewSearchMatchTitle)")
+        print("[niko-music-hub-smoke] preview_search_summary=\(result.previewSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_preview_path=\(result.previewSearchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_preview_match=\(result.previewSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] skipped_search_query=\(result.skippedSearchQuery)")
         print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
         print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
@@ -145,6 +157,21 @@ enum ArchiveSmokeCommands {
               result.folderSearchMatchSummary.contains("fld"),
               !result.folderSearchDiagnosticsExportPath.isEmpty,
               result.folderSearchDiagnosticsExportContainsMatch,
+              result.cprSearchQuery == "neohkv2",
+              result.cprSearchMatchCount == 1,
+              result.cprSearchMatchTitle == "Neon Hook",
+              result.cprSearchMatchSummary.contains("fuzzy CPR file"),
+              result.cprSearchMatchSummary.contains("neohkv2"),
+              !result.cprSearchDiagnosticsExportPath.isEmpty,
+              result.cprSearchDiagnosticsExportContainsMatch,
+              result.previewSearchQuery == "v3 mx",
+              result.previewSearchMatchCount == 1,
+              result.previewSearchMatchTitle == "Preview Ranking Lab",
+              result.previewSearchMatchSummary.contains("fuzzy preview file"),
+              result.previewSearchMatchSummary.contains("v3"),
+              result.previewSearchMatchSummary.contains("mx"),
+              !result.previewSearchDiagnosticsExportPath.isEmpty,
+              result.previewSearchDiagnosticsExportContainsMatch,
               result.skippedSearchQuery == "LOOSE_FILE.txt",
               result.skippedSearchMatchCount >= 1,
               result.skippedSearchMatchLabel == "LOOSE_FILE.txt",

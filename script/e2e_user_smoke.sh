@@ -280,6 +280,103 @@ if ! grep -q "fuzzy folder" "$FOLDER_EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q "cpr_search_query=neohkv2" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy CPR search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "cpr_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy CPR search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "cpr_search_match=Neon Hook" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy CPR search did not select Neon Hook" >&2
+  exit 1
+fi
+
+if ! grep -q "cpr_search_summary=.*fuzzy CPR file" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy CPR search explainability missing fuzzy CPR file signal" >&2
+  exit 1
+fi
+
+if ! grep -q "cpr_search_summary=.*neohkv2" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy CPR search explainability missing neohkv2 token" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_cpr_match=true" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy-CPR diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+CPR_EXPORT_PATH="$(grep -m1 'diagnostics_export_cpr_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_cpr_path=//')"
+if [[ -z "$CPR_EXPORT_PATH" || ! -f "$CPR_EXPORT_PATH" ]]; then
+  echo "E2E failed: fuzzy-CPR diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Neon Hook" "$CPR_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing search_match row for fuzzy CPR search" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy CPR file" "$CPR_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy CPR file explainability" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_query=v3 mx" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_match=Preview Ranking Lab" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search did not select Preview Ranking Lab" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_summary=.*fuzzy preview file" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search explainability missing fuzzy preview file signal" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_summary=.*v3" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search explainability missing v3 token" >&2
+  exit 1
+fi
+
+if ! grep -q "preview_search_summary=.*mx" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy preview search explainability missing mx token" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_preview_match=true" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy-preview diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
+PREVIEW_EXPORT_PATH="$(grep -m1 'diagnostics_export_preview_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_preview_path=//')"
+if [[ -z "$PREVIEW_EXPORT_PATH" || ! -f "$PREVIEW_EXPORT_PATH" ]]; then
+  echo "E2E failed: fuzzy-preview diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Preview Ranking Lab" "$PREVIEW_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing search_match row for fuzzy preview search" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy preview file" "$PREVIEW_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy preview file explainability" >&2
+  exit 1
+fi
+
 NOTES_EXPORT_PATH="$(grep -m1 'diagnostics_export_notes_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_notes_path=//')"
 if [[ -z "$NOTES_EXPORT_PATH" || ! -f "$NOTES_EXPORT_PATH" ]]; then
   echo "E2E failed: sidecar-notes diagnostics export path missing from smoke output" >&2

@@ -42,8 +42,14 @@ enum MusicSearchMatcher {
         if song.projectVersions.contains(where: { normalize($0.fileName).contains(token) }) {
             return (.projectVersionFileName, 40)
         }
+        if song.projectVersions.contains(where: { isSubsequence(token, in: normalize($0.fileName)) }) {
+            return (.fuzzyProjectVersionFileName, 17)
+        }
         if song.previewCandidates.contains(where: { normalize($0.fileName).contains(token) }) {
             return (.previewFileName, 40)
+        }
+        if song.previewCandidates.contains(where: { isSubsequence(token, in: normalize($0.fileName)) }) {
+            return (.fuzzyPreviewFileName, 17)
         }
 
         if song.scanWarnings.contains(where: { normalize($0).contains(token) }) {
