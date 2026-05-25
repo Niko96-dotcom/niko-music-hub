@@ -14,6 +14,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let archiveTreeUnchanged: Bool
     public let diagnosticsSongCount: Int
     public let diagnosticsSkippedCount: Int
+    public let searchMatchSummary: String
 
     public init(
         userFlow: String,
@@ -26,7 +27,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         writeProbeDenied: Bool,
         archiveTreeUnchanged: Bool,
         diagnosticsSongCount: Int,
-        diagnosticsSkippedCount: Int
+        diagnosticsSkippedCount: Int,
+        searchMatchSummary: String
     ) {
         self.userFlow = userFlow
         self.songCount = songCount
@@ -39,6 +41,7 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.archiveTreeUnchanged = archiveTreeUnchanged
         self.diagnosticsSongCount = diagnosticsSongCount
         self.diagnosticsSkippedCount = diagnosticsSkippedCount
+        self.searchMatchSummary = searchMatchSummary
     }
 }
 
@@ -81,6 +84,7 @@ public enum ArchiveUserFlowSmoke {
         let dryRunLogLine = captureDryRunLogLine(from: context)
 
         let diagnostics = viewModel.scanDiagnostics
+        let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
 
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
@@ -93,7 +97,8 @@ public enum ArchiveUserFlowSmoke {
             writeProbeDenied: writeProbeDenied,
             archiveTreeUnchanged: treeBefore == treeAfter,
             diagnosticsSongCount: diagnostics?.songCount ?? 0,
-            diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0
+            diagnosticsSkippedCount: diagnostics?.skippedEntries.count ?? 0,
+            searchMatchSummary: searchMatchSummary
         )
     }
 

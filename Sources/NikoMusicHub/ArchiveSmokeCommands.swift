@@ -43,6 +43,7 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] songs=\(result.songCount)")
         print("[niko-music-hub-smoke] search_query=\(result.searchQuery)")
         print("[niko-music-hub-smoke] search_matches=\(result.searchMatchCount)")
+        print("[niko-music-hub-smoke] search_match_summary=\(result.searchMatchSummary)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
@@ -58,6 +59,8 @@ enum ArchiveSmokeCommands {
 
         guard result.searchQuery == "neon hk",
               result.searchMatchCount == 1,
+              result.searchMatchSummary.contains("neon"),
+              result.searchMatchSummary.contains("hk"),
               result.selectedTitle == "Neon Hook",
               result.dryRunCPRPath.contains("Neon Hook"),
               result.dryRunCPRPath.hasSuffix(".cpr"),
