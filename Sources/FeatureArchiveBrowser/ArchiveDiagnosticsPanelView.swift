@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ArchiveDiagnosticsPanelView: View {
     let diagnostics: ArchiveScanDiagnostics
+    let selectedSong: Song?
     let onExport: () -> Void
 
     private static let scanTimeFormatter: DateFormatter = {
@@ -27,6 +28,27 @@ struct ArchiveDiagnosticsPanelView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
                 .lineLimit(3)
+
+            Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)
+                .font(.system(size: 10))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .lineLimit(3)
+
+            if let callout = diagnostics.previewRankingPanel.scanHeaderCallout {
+                Text(callout)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .lineLimit(3)
+            }
+
+            if let selectedHeader = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(
+                for: selectedSong
+            ) {
+                Text(selectedHeader)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(4)
+            }
 
             Text("Last scan: \(Self.scanTimeFormatter.string(from: diagnostics.scannedAt))")
                 .font(.system(size: 11))

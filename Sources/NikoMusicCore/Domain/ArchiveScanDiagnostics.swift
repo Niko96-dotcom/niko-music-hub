@@ -19,6 +19,7 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
     public let globalWarnings: [String]
     public let songWarningSummaries: [SongWarningSummary]
     public let skippedEntries: [SkippedScanEntry]
+    public let previewRankingPanel: ArchiveDiagnosticsPreviewRankingPanelContext
 
     public init(
         scannedAt: Date,
@@ -28,7 +29,11 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         totalSongWarningCount: Int,
         globalWarnings: [String],
         songWarningSummaries: [SongWarningSummary],
-        skippedEntries: [SkippedScanEntry]
+        skippedEntries: [SkippedScanEntry],
+        previewRankingPanel: ArchiveDiagnosticsPreviewRankingPanelContext = .init(
+            tooShortNonMainPreviewCount: 0,
+            songsWithTooShortNonMainPreviews: 0
+        )
     ) {
         self.scannedAt = scannedAt
         self.rootPaths = rootPaths
@@ -38,6 +43,7 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         self.globalWarnings = globalWarnings
         self.songWarningSummaries = songWarningSummaries
         self.skippedEntries = skippedEntries
+        self.previewRankingPanel = previewRankingPanel
     }
 
     public var summaryLine: String {

@@ -22,7 +22,8 @@ public enum ArchiveScanDiagnosticsBuilder {
             totalSongWarningCount: totalWarnings,
             globalWarnings: result.globalWarnings,
             songWarningSummaries: summaries,
-            skippedEntries: result.skippedEntries
+            skippedEntries: result.skippedEntries,
+            previewRankingPanel: ArchiveDiagnosticsPreviewRankingPanelContext.from(songs: result.songs)
         )
     }
 }
