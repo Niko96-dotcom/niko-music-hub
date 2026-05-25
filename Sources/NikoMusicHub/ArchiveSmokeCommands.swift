@@ -57,6 +57,12 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] warning_search_summary=\(result.warningSearchMatchSummary)")
         print("[niko-music-hub-smoke] diagnostics_export_warning_path=\(result.warningSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_warning_match=\(result.warningSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] fuzzy_warning_search_query=\(result.fuzzyWarningSearchQuery)")
+        print("[niko-music-hub-smoke] fuzzy_warning_search_matches=\(result.fuzzyWarningSearchMatchCount)")
+        print("[niko-music-hub-smoke] fuzzy_warning_search_match=\(result.fuzzyWarningSearchMatchTitle)")
+        print("[niko-music-hub-smoke] fuzzy_warning_search_summary=\(result.fuzzyWarningSearchMatchSummary)")
+        print("[niko-music-hub-smoke] diagnostics_export_fuzzy_warning_path=\(result.fuzzyWarningSearchDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_fuzzy_warning_match=\(result.fuzzyWarningSearchDiagnosticsExportContainsMatch)")
         print("[niko-music-hub-smoke] notes_search_query=\(result.notesSearchQuery)")
         print("[niko-music-hub-smoke] notes_search_matches=\(result.notesSearchMatchCount)")
         print("[niko-music-hub-smoke] notes_search_match=\(result.notesSearchMatchTitle)")
@@ -141,6 +147,14 @@ enum ArchiveSmokeCommands {
               result.warningSearchMatchSummary.contains("project"),
               !result.warningSearchDiagnosticsExportPath.isEmpty,
               result.warningSearchDiagnosticsExportContainsMatch,
+              result.fuzzyWarningSearchQuery == "ncpr fnd",
+              result.fuzzyWarningSearchMatchCount == 1,
+              result.fuzzyWarningSearchMatchTitle == "Broken Folder Example",
+              result.fuzzyWarningSearchMatchSummary.contains("fuzzy scan warning"),
+              result.fuzzyWarningSearchMatchSummary.contains("ncpr"),
+              result.fuzzyWarningSearchMatchSummary.contains("fnd"),
+              !result.fuzzyWarningSearchDiagnosticsExportPath.isEmpty,
+              result.fuzzyWarningSearchDiagnosticsExportContainsMatch,
               result.notesSearchQuery == "nts nly",
               result.notesSearchMatchCount == 1,
               result.notesSearchMatchTitle == "Broken Folder Example",

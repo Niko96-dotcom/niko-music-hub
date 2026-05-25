@@ -123,6 +123,18 @@ final class MusicSearchIndexTests: XCTestCase {
         XCTAssertEqual(matches.first?.displayTitle, "Broken Folder Example")
     }
 
+    func testFindsSongByFuzzyScanWarningToken() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let index = MusicSearchIndex(songs: result.songs)
+
+        let matches = index.searchResults("ncpr fnd")
+        XCTAssertEqual(matches.first?.song.displayTitle, "Broken Folder Example")
+        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy scan warning") == true)
+        XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)
+    }
+
     func testFindsSongBySidecarNotesToken() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

@@ -90,6 +90,20 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         XCTAssertTrue(result.matchSummary.contains("scan warning"))
     }
 
+    func testFuzzyScanWarningMatchSummaryNamesFuzzyScanWarningField() throws {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            scanWarnings: ["No CPR project files found"]
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("ncpr fnd").first)
+        XCTAssertTrue(result.matchSummary.contains("fuzzy scan warning"))
+        XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
+    }
+
     func testFuzzyCPRFileNameMatchSummaryNamesFuzzyCPRField() throws {
         let version = ProjectVersion(
             filePath: URL(fileURLWithPath: "/tmp/Unrelated/Secret Project Alpha.cpr"),

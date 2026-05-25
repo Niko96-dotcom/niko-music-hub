@@ -1,20 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-44)
+## Picked (music-45)
 
-Fuzzy CPR/preview filename search with explicit explainability and user-flow/E2E proof.
+Fuzzy scan-warning search with explicit explainability and user-flow/E2E proof.
 
-## Completed (music-44)
+## Completed (music-45)
 
-- `MusicSearchMatcher`: subsequence on CPR/preview filenames → `fuzzyProjectVersionFileName` / `fuzzyPreviewFileName` (score 17), labels `fuzzy CPR file` / `fuzzy preview file`
-- Fixture queries: `neohkv2` → Neon Hook; `v3 mx` → Preview Ranking Lab (no generic `fuzzy text`)
+- `MusicSearchMatcher`: subsequence on scan warnings → `fuzzyScanWarning` (score 19), label `fuzzy scan warning`
+- Matcher order: exact scan warning → sidecar notes (exact/fuzzy) → fuzzy scan warning (avoids stealing `nts`-style note tokens)
+- Fixture query: `ncpr fnd` → Broken Folder Example warning "No CPR project files found"
 - Tests: `MusicSearchIndexTests`, `MusicSearchExplainabilityTests`
-- User-flow + E2E: `cpr_search_*`, `preview_search_*`, diagnostics export grep
+- User-flow + E2E: `fuzzy_warning_search_*`, diagnostics export grep
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-43)
+## Prior (music-44)
 
-Fuzzy folder-name song search with explicit explainability and user-flow/E2E proof.
+Fuzzy CPR/preview filename search with explicit explainability and user-flow/E2E proof.
 
 ## Next best TODO
 

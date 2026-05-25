@@ -31,6 +31,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let warningSearchMatchSummary: String
     public let warningSearchDiagnosticsExportPath: String
     public let warningSearchDiagnosticsExportContainsMatch: Bool
+    public let fuzzyWarningSearchQuery: String
+    public let fuzzyWarningSearchMatchCount: Int
+    public let fuzzyWarningSearchMatchTitle: String
+    public let fuzzyWarningSearchMatchSummary: String
+    public let fuzzyWarningSearchDiagnosticsExportPath: String
+    public let fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool
     public let notesSearchQuery: String
     public let notesSearchMatchCount: Int
     public let notesSearchMatchTitle: String
@@ -103,6 +109,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         warningSearchMatchSummary: String,
         warningSearchDiagnosticsExportPath: String,
         warningSearchDiagnosticsExportContainsMatch: Bool,
+        fuzzyWarningSearchQuery: String,
+        fuzzyWarningSearchMatchCount: Int,
+        fuzzyWarningSearchMatchTitle: String,
+        fuzzyWarningSearchMatchSummary: String,
+        fuzzyWarningSearchDiagnosticsExportPath: String,
+        fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool,
         notesSearchQuery: String,
         notesSearchMatchCount: Int,
         notesSearchMatchTitle: String,
@@ -173,6 +185,12 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.warningSearchMatchSummary = warningSearchMatchSummary
         self.warningSearchDiagnosticsExportPath = warningSearchDiagnosticsExportPath
         self.warningSearchDiagnosticsExportContainsMatch = warningSearchDiagnosticsExportContainsMatch
+        self.fuzzyWarningSearchQuery = fuzzyWarningSearchQuery
+        self.fuzzyWarningSearchMatchCount = fuzzyWarningSearchMatchCount
+        self.fuzzyWarningSearchMatchTitle = fuzzyWarningSearchMatchTitle
+        self.fuzzyWarningSearchMatchSummary = fuzzyWarningSearchMatchSummary
+        self.fuzzyWarningSearchDiagnosticsExportPath = fuzzyWarningSearchDiagnosticsExportPath
+        self.fuzzyWarningSearchDiagnosticsExportContainsMatch = fuzzyWarningSearchDiagnosticsExportContainsMatch
         self.notesSearchQuery = notesSearchQuery
         self.notesSearchMatchCount = notesSearchMatchCount
         self.notesSearchMatchTitle = notesSearchMatchTitle
@@ -235,6 +253,10 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case warningSearchMissingExplainability
     case warningSearchDiagnosticsExportFailed
     case warningSearchDiagnosticsExportMissingMatch
+    case fuzzyWarningSearchNoMatch
+    case fuzzyWarningSearchMissingExplainability
+    case fuzzyWarningSearchDiagnosticsExportFailed
+    case fuzzyWarningSearchDiagnosticsExportMissingMatch
     case notesSearchNoMatch
     case notesSearchMissingExplainability
     case notesSearchDiagnosticsExportFailed
@@ -425,6 +447,33 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.warningSearchDiagnosticsExportMissingMatch
         }
 
+        let fuzzyWarningSearchQuery = "ncpr fnd"
+        viewModel.searchQuery = fuzzyWarningSearchQuery
+        viewModel.applySearchFilter()
+        guard let fuzzyWarningMatch = viewModel.filteredSongs.first else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchNoMatch
+        }
+        let fuzzyWarningSearchMatchCount = viewModel.filteredSongs.count
+        let fuzzyWarningSearchMatchSummary = viewModel.searchMatchSummaries[fuzzyWarningMatch.id, default: ""]
+        guard fuzzyWarningMatch.displayTitle == "Broken Folder Example",
+              fuzzyWarningSearchMatchSummary.localizedCaseInsensitiveContains("fuzzy scan warning"),
+              fuzzyWarningSearchMatchSummary.localizedCaseInsensitiveContains("ncpr"),
+              fuzzyWarningSearchMatchSummary.localizedCaseInsensitiveContains("fnd") else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchMissingExplainability
+        }
+
+        try viewModel.exportDiagnostics()
+        guard let fuzzyWarningExportPath = viewModel.lastDiagnosticsExportPath,
+              !fuzzyWarningExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchDiagnosticsExportFailed
+        }
+        let fuzzyWarningExportText = try String(contentsOf: URL(fileURLWithPath: fuzzyWarningExportPath), encoding: .utf8)
+        let exportContainsFuzzyWarningMatch = fuzzyWarningExportText.contains("search_match title=Broken Folder Example")
+            && fuzzyWarningExportText.contains("fuzzy scan warning")
+        guard exportContainsFuzzyWarningMatch else {
+            throw ArchiveUserFlowSmokeError.fuzzyWarningSearchDiagnosticsExportMissingMatch
+        }
+
         let notesSearchQuery = "nts nly"
         viewModel.searchQuery = notesSearchQuery
         viewModel.applySearchFilter()
@@ -613,6 +662,12 @@ public enum ArchiveUserFlowSmoke {
             warningSearchMatchSummary: warningSearchMatchSummary,
             warningSearchDiagnosticsExportPath: warningExportPath,
             warningSearchDiagnosticsExportContainsMatch: exportContainsWarningMatch,
+            fuzzyWarningSearchQuery: fuzzyWarningSearchQuery,
+            fuzzyWarningSearchMatchCount: fuzzyWarningSearchMatchCount,
+            fuzzyWarningSearchMatchTitle: fuzzyWarningMatch.displayTitle,
+            fuzzyWarningSearchMatchSummary: fuzzyWarningSearchMatchSummary,
+            fuzzyWarningSearchDiagnosticsExportPath: fuzzyWarningExportPath,
+            fuzzyWarningSearchDiagnosticsExportContainsMatch: exportContainsFuzzyWarningMatch,
             notesSearchQuery: notesSearchQuery,
             notesSearchMatchCount: notesSearchMatchCount,
             notesSearchMatchTitle: notesMatch.displayTitle,

@@ -194,6 +194,41 @@ if ! grep -q "diagnostics_export_warning_match=true" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "fuzzy_warning_search_query=ncpr fnd" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy_warning_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy_warning_search_match=Broken Folder Example" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search did not select Broken Folder Example" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy_warning_search_summary=.*fuzzy scan warning" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search explainability missing fuzzy scan warning signal" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy_warning_search_summary=.*ncpr" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search explainability missing ncpr token" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy_warning_search_summary=.*fnd" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan warning search explainability missing fnd token" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_export_fuzzy_warning_match=true" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy scan-warning diagnostics export missing active match marker" >&2
+  exit 1
+fi
+
 if ! grep -q "notes_search_query=nts nly" "$LOG_FILE"; then
   echo "E2E failed: sidecar notes search query marker missing" >&2
   exit 1
@@ -401,6 +436,22 @@ fi
 
 if ! grep -q "search_match title=Broken Folder Example" "$WARNING_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing search_match row for Broken Folder Example" >&2
+  exit 1
+fi
+
+FUZZY_WARNING_EXPORT_PATH="$(grep -m1 'diagnostics_export_fuzzy_warning_path=' "$LOG_FILE" | sed 's/.*diagnostics_export_fuzzy_warning_path=//')"
+if [[ -z "$FUZZY_WARNING_EXPORT_PATH" || ! -f "$FUZZY_WARNING_EXPORT_PATH" ]]; then
+  echo "E2E failed: fuzzy scan-warning diagnostics export path missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "search_match title=Broken Folder Example" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy scan-warning search_match row" >&2
+  exit 1
+fi
+
+if ! grep -q "fuzzy scan warning" "$FUZZY_WARNING_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing fuzzy scan warning explainability" >&2
   exit 1
 fi
 
