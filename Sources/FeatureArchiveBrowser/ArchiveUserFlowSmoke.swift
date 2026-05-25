@@ -21,6 +21,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let rankingLabMainPreviewSummary: String
     public let rankingLabDiagnosticsExportPath: String
     public let rankingLabDiagnosticsExportContainsMatch: Bool
+    public let tiebreakLabDiagnosticsExportPath: String
+    public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
     public let brokenFolderDisplayWarnings: [String]
     public let brokenFolderSidecarNotes: String?
     public let warningSearchQuery: String
@@ -56,6 +58,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         rankingLabMainPreviewSummary: String,
         rankingLabDiagnosticsExportPath: String,
         rankingLabDiagnosticsExportContainsMatch: Bool,
+        tiebreakLabDiagnosticsExportPath: String,
+        tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
         brokenFolderDisplayWarnings: [String],
         brokenFolderSidecarNotes: String?,
         warningSearchQuery: String,
@@ -90,6 +94,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
         self.rankingLabDiagnosticsExportPath = rankingLabDiagnosticsExportPath
         self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
+        self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
+        self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
         self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
         self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
         self.warningSearchQuery = warningSearchQuery
@@ -116,6 +122,9 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case missingRankingLabPreviewSummary
     case rankingLabDiagnosticsExportFailed
     case rankingLabDiagnosticsExportMissingMatch
+    case tiebreakLabNotFound
+    case tiebreakLabDiagnosticsExportFailed
+    case tiebreakLabDiagnosticsExportMissingTiebreak
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
@@ -215,6 +224,24 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
         }
 
+        guard let tiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Tiebreak Lab" }) else {
+            throw ArchiveUserFlowSmokeError.tiebreakLabNotFound
+        }
+        viewModel.selectSong(tiebreakLab)
+        try viewModel.exportDiagnostics()
+        guard let tiebreakLabExportPath = viewModel.lastDiagnosticsExportPath,
+              !tiebreakLabExportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.tiebreakLabDiagnosticsExportFailed
+        }
+        let tiebreakLabExportText = try String(contentsOf: URL(fileURLWithPath: tiebreakLabExportPath), encoding: .utf8)
+        let exportContainsTiebreak =
+            tiebreakLabExportText.contains("selected_song_title=Equal Score Tiebreak Lab")
+            && tiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — longer preview")
+            && tiebreakLabExportText.contains("Tie Song mix long.wav")
+        guard exportContainsTiebreak else {
+            throw ArchiveUserFlowSmokeError.tiebreakLabDiagnosticsExportMissingTiebreak
+        }
+
         guard let broken = viewModel.songs.first(where: { $0.displayTitle == "Broken Folder Example" }) else {
             throw ArchiveUserFlowSmokeError.brokenFolderNotFound
         }
@@ -293,6 +320,8 @@ public enum ArchiveUserFlowSmoke {
             rankingLabMainPreviewSummary: rankingLabMainPreviewSummary,
             rankingLabDiagnosticsExportPath: rankingLabExportPath,
             rankingLabDiagnosticsExportContainsMatch: exportContainsRankingLabMatch,
+            tiebreakLabDiagnosticsExportPath: tiebreakLabExportPath,
+            tiebreakLabDiagnosticsExportContainsTiebreak: exportContainsTiebreak,
             brokenFolderDisplayWarnings: brokenFolderDisplayWarnings,
             brokenFolderSidecarNotes: brokenFolderSidecarNotes,
             warningSearchQuery: warningSearchQuery,

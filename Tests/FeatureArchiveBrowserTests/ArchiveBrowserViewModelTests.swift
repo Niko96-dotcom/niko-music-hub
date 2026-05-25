@@ -46,7 +46,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
 
         let diagnostics = try XCTUnwrap(viewModel.scanDiagnostics)
-        XCTAssertEqual(diagnostics.songCount, 4)
+        XCTAssertEqual(diagnostics.songCount, 5)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertTrue(
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
