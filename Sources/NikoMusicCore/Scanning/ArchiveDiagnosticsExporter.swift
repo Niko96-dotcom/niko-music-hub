@@ -89,6 +89,10 @@ public enum ArchiveDiagnosticsExporter {
                 let redacted = DiagnosticsPathRedactor.redactPathsInText(warning, homeDirectory: homeDirectory)
                 lines.append("selected_song_warning=\(redacted)")
             }
+            if let notes = selectedSongContext.sidecarNotesLine {
+                let redacted = DiagnosticsPathRedactor.redactPathsInText(notes, homeDirectory: homeDirectory)
+                lines.append("selected_song_notes=\(redacted)")
+            }
             if let mainPreviewSummary = selectedSongContext.mainPreviewSummary {
                 lines.append("main_preview_summary=\(mainPreviewSummary)")
             }

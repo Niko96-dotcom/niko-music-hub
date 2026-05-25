@@ -46,6 +46,7 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] search_match_summary=\(result.searchMatchSummary)")
         print("[niko-music-hub-smoke] preview_rank_summary=\(result.rankingLabMainPreviewSummary)")
         print("[niko-music-hub-smoke] broken_folder_warnings=\(result.brokenFolderDisplayWarnings.joined(separator: "; "))")
+        print("[niko-music-hub-smoke] broken_folder_notes=\(result.brokenFolderSidecarNotes ?? "")")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
@@ -73,7 +74,8 @@ enum ArchiveSmokeCommands {
               result.archiveTreeUnchanged,
               result.diagnosticsSongCount >= 3,
               result.diagnosticsSkippedCount >= 1,
-              result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }) else {
+              result.brokenFolderDisplayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }),
+              result.brokenFolderSidecarNotes == "notes only" else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 

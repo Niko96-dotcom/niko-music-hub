@@ -26,4 +26,28 @@ final class SongDisplayTests: XCTestCase {
             "~/Music/Cubase/Neon Hook/Neon Hook.cpr"
         )
     }
+
+    func testDisplaySidecarNotesReturnsNilWhenAbsent() {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Neon"),
+            originalFolderName: "Neon",
+            displayTitle: "Neon Hook"
+        )
+        XCTAssertNil(song.displaySidecarNotes())
+    }
+
+    func testDisplaySidecarNotesRedactsEmbeddedHomePaths() {
+        let home = "/Users/tester"
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "\(home)/Music/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            sidecarNotes: "Session notes under \(home)/Music/Broken"
+        )
+
+        XCTAssertEqual(
+            song.displaySidecarNotes(homeDirectory: home),
+            "Session notes under ~/Music/Broken"
+        )
+    }
 }

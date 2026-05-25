@@ -26,6 +26,18 @@ struct SongDetailView: View {
                 }
             }
 
+            if let notes = song.displaySidecarNotes() {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Song notes (notes.txt)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    Text(notes)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(6)
+                }
+            }
+
             PreviewPlayerView(url: mainPreviewURL)
 
             if let mainSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) {

@@ -45,6 +45,21 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
     }
 
+    func testBrokenFolderExposesDisplaySidecarNotes() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+
+        let broken = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Broken Folder Example" })
+        XCTAssertEqual(broken.displaySidecarNotes(), "notes only")
+
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        XCTAssertNil(neon.displaySidecarNotes())
+    }
+
     func testScanExposesPreviewRankingSummaryForLab() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -104,6 +119,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(brokenText.contains("selected_song_title=Broken Folder Example"))
         XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
         XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
+        XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
     }
 
     func testExportDiagnosticsIncludesActiveSearchContext() async throws {

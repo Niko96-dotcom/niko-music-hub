@@ -43,6 +43,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         }
     }
 
+    /// Sidecar `notes.txt` text safe for on-screen display (redacts embedded home paths).
+    public func displaySidecarNotes(homeDirectory: String? = nil) -> String? {
+        guard let sidecarNotes else { return nil }
+        return DiagnosticsPathRedactor.redactPathsInText(sidecarNotes, homeDirectory: homeDirectory)
+    }
+
     /// Redacts a CPR/open path for song detail and cards.
     public static func displayDryRunPath(_ path: String, homeDirectory: String? = nil) -> String {
         DiagnosticsPathRedactor.redact(path, homeDirectory: homeDirectory)
