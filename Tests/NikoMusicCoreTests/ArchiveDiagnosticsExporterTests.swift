@@ -42,7 +42,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("~/"))
     }
 
-    func testFormattedTextOmitsRootHealthBadgeWhenRootsHealthy() throws {
+    func testFormattedTextIncludesScanHealthBadgeForFixtureScan() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
         let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
@@ -57,8 +57,11 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             homeDirectory: "/Users/test"
         )
 
-        XCTAssertNil(ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics))
-        XCTAssertFalse(text.contains("root_health_badge="))
+        XCTAssertEqual(
+            ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics),
+            "1 song warning · 2 skipped at roots"
+        )
+        XCTAssertTrue(text.contains("root_health_badge=1 song warning · 2 skipped at roots"))
     }
 
     func testFormattedTextIncludesRootHealthBadgeForInvalidRootScan() {

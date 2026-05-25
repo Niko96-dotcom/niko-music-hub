@@ -542,13 +542,24 @@ if ! grep -q "diagnostics_panel_matches_export=true" "$LOG_FILE"; then
   exit 1
 fi
 
-if ! grep -q "healthy_export_omits_root_health_badge=true" "$LOG_FILE"; then
-  echo "E2E failed: healthy fixture export should omit root_health_badge=" >&2
+FIXTURE_SCAN_HEALTH_BADGE="$(grep -m1 'fixture_scan_health_badge=' "$LOG_FILE" | sed 's/.*fixture_scan_health_badge=//')"
+if [[ -z "$FIXTURE_SCAN_HEALTH_BADGE" ]]; then
+  echo "E2E failed: fixture scan health badge missing from smoke output" >&2
   exit 1
 fi
 
-if ! grep -q "healthy_panel_root_health_badge_nil=true" "$LOG_FILE"; then
-  echo "E2E failed: healthy fixture panel should not show root health badge" >&2
+if ! grep -q "fixture_scan_health_badge_matches_export=true" "$LOG_FILE"; then
+  echo "E2E failed: fixture scan health badge does not match export root_health_badge" >&2
+  exit 1
+fi
+
+if [[ "$FIXTURE_SCAN_HEALTH_BADGE" != *"song warning"* ]]; then
+  echo "E2E failed: fixture scan health badge missing song warning signal" >&2
+  exit 1
+fi
+
+if [[ "$FIXTURE_SCAN_HEALTH_BADGE" != *"skipped at roots"* ]]; then
+  echo "E2E failed: fixture scan health badge missing skipped-at-roots signal" >&2
   exit 1
 fi
 
@@ -635,8 +646,8 @@ if ! grep -q "summary_line=.*2 skipped at roots" "$SEARCH_EXPORT_PATH"; then
   exit 1
 fi
 
-if grep -q "root_health_badge=" "$SEARCH_EXPORT_PATH"; then
-  echo "E2E failed: healthy fixture export must omit root_health_badge=" >&2
+if ! grep -q "root_health_badge=${FIXTURE_SCAN_HEALTH_BADGE}" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: fixture search export root_health_badge does not match panel badge" >&2
   exit 1
 fi
 

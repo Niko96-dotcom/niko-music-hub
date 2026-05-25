@@ -55,7 +55,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let panel = ArchiveDiagnosticsPanelContext.from(diagnostics, homeDirectory: home)
         XCTAssertEqual(panel.supportSummaryLine, diagnostics.exportSummaryLine(homeDirectory: home))
-        XCTAssertNil(panel.rootHealthBadge)
+        XCTAssertEqual(panel.rootHealthBadge, "1 song warning · 2 skipped at roots")
         XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 7 songs"))
         XCTAssertFalse(diagnostics.displayRootPaths().isEmpty)
         XCTAssertTrue(

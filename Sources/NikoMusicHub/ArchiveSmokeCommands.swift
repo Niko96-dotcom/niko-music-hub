@@ -101,8 +101,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_summary_line=\(result.diagnosticsExportSummaryLine)")
         print("[niko-music-hub-smoke] diagnostics_panel_support_summary=\(result.diagnosticsPanelSupportSummary)")
         print("[niko-music-hub-smoke] diagnostics_panel_matches_export=\(result.diagnosticsPanelMatchesExportSummary)")
-        print("[niko-music-hub-smoke] healthy_export_omits_root_health_badge=\(result.healthyExportOmitsRootHealthBadge)")
-        print("[niko-music-hub-smoke] healthy_panel_root_health_badge_nil=\(result.healthyPanelRootHealthBadgeNil)")
+        print("[niko-music-hub-smoke] fixture_scan_health_badge=\(result.fixtureScanHealthBadge)")
+        print("[niko-music-hub-smoke] fixture_scan_health_badge_matches_export=\(result.fixtureScanHealthBadgeMatchesExport)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_path=\(result.invalidRootDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_badge_match=\(result.invalidRootExportContainsRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge=\(result.invalidRootPanelRootHealthBadge)")
@@ -208,8 +208,10 @@ enum ArchiveSmokeCommands {
               result.diagnosticsPanelSupportSummary.hasPrefix("roots:"),
               result.diagnosticsPanelSupportSummary.contains("Scanned 7 songs"),
               result.diagnosticsPanelMatchesExportSummary,
-              result.healthyExportOmitsRootHealthBadge,
-              result.healthyPanelRootHealthBadgeNil,
+              !result.fixtureScanHealthBadge.isEmpty,
+              result.fixtureScanHealthBadge.contains("song warning"),
+              result.fixtureScanHealthBadge.contains("skipped at roots"),
+              result.fixtureScanHealthBadgeMatchesExport,
               !result.invalidRootDiagnosticsExportPath.isEmpty,
               result.invalidRootExportContainsRootHealthBadge,
               !result.invalidRootPanelRootHealthBadge.isEmpty,
