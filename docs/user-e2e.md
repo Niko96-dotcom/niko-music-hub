@@ -8,7 +8,7 @@
 
 This script:
 
-1. Regenerates `Fixtures/CubaseArchive/`
+1. Regenerates `Fixtures/CubaseArchive/` and `Fixtures/CubaseArchiveSummaryTruncation/`
 2. Builds `dist/NikoMusicHub.app`
 3. Runs the app with `NIKO_MUSIC_HUB_E2E_SMOKE=1` (CLI hook — not pgrep-only)
 4. Drives the same `ArchiveUserFlowSmoke` path as unit tests: fixture root → scan → fuzzy search **neon hk** → dry-run open latest CPR
@@ -41,6 +41,8 @@ When truncation applies, exports also include:
 - `summary_line_song_warning_titles_truncated=true`
 - `summary_line_song_warning_titles_cap=5`
 - `summary_line_song_warning_titles_omitted=<count>`
+
+`./script/e2e_user_smoke.sh` also scans the eight-song **Summary Warning** truncation lab and asserts the exported `summary_line=` includes `and 3 more` plus the truncation metadata lines above.
 
 ## Local gates
 

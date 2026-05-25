@@ -107,6 +107,8 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_export_invalid_root_badge_match=\(result.invalidRootExportContainsRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge=\(result.invalidRootPanelRootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_panel_invalid_root_badge_matches_export=\(result.invalidRootPanelBadgeMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_export_summary_truncation_path=\(result.summaryTruncationDiagnosticsExportPath)")
+        print("[niko-music-hub-smoke] diagnostics_export_summary_truncation_match=\(result.summaryTruncationDiagnosticsExportContainsTruncation)")
         print("[niko-music-hub-smoke] diagnostics_panel_root_health_badge_id=\(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_export_path=\(result.skippedSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_skipped_match=\(result.skippedSearchDiagnosticsExportContainsMatch)")
@@ -218,6 +220,8 @@ enum ArchiveSmokeCommands {
               result.invalidRootPanelRootHealthBadge.contains("invalid root"),
               result.invalidRootPanelRootHealthBadge.contains("root warning"),
               result.invalidRootPanelBadgeMatchesExport,
+              !result.summaryTruncationDiagnosticsExportPath.isEmpty,
+              result.summaryTruncationDiagnosticsExportContainsTruncation,
               !result.skippedSearchDiagnosticsExportPath.isEmpty,
               result.skippedSearchDiagnosticsExportContainsMatch else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete

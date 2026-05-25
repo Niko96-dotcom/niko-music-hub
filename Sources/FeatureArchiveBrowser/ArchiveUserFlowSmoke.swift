@@ -82,6 +82,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let invalidRootExportContainsRootHealthBadge: Bool
     public let invalidRootPanelRootHealthBadge: String
     public let invalidRootPanelBadgeMatchesExport: Bool
+    public let summaryTruncationDiagnosticsExportPath: String
+    public let summaryTruncationDiagnosticsExportContainsTruncation: Bool
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
@@ -163,6 +165,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         invalidRootExportContainsRootHealthBadge: Bool,
         invalidRootPanelRootHealthBadge: String,
         invalidRootPanelBadgeMatchesExport: Bool,
+        summaryTruncationDiagnosticsExportPath: String,
+        summaryTruncationDiagnosticsExportContainsTruncation: Bool,
         skippedSearchDiagnosticsExportPath: String,
         skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
@@ -243,6 +247,9 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.invalidRootExportContainsRootHealthBadge = invalidRootExportContainsRootHealthBadge
         self.invalidRootPanelRootHealthBadge = invalidRootPanelRootHealthBadge
         self.invalidRootPanelBadgeMatchesExport = invalidRootPanelBadgeMatchesExport
+        self.summaryTruncationDiagnosticsExportPath = summaryTruncationDiagnosticsExportPath
+        self.summaryTruncationDiagnosticsExportContainsTruncation =
+            summaryTruncationDiagnosticsExportContainsTruncation
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
@@ -304,6 +311,9 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case invalidRootExportMissingRootHealthBadge
     case invalidRootPanelRootHealthBadgeMissing
     case invalidRootPanelBadgeMismatch
+    case summaryTruncationRootMissing
+    case summaryTruncationDiagnosticsExportFailed
+    case summaryTruncationDiagnosticsExportMissingTruncation
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
 }
@@ -700,6 +710,13 @@ public enum ArchiveUserFlowSmoke {
             homeDirectory: homeDirectory
         )
 
+        let summaryTruncationRoot = fixtureRoot.deletingLastPathComponent()
+            .appendingPathComponent("CubaseArchiveSummaryTruncation", isDirectory: true)
+        let summaryTruncationHealth = try runSummaryTruncationCheck(
+            truncationRoot: summaryTruncationRoot,
+            context: context
+        )
+
         return ArchiveUserFlowSmokeResult(
             userFlow: "scan_search_open",
             songCount: songCount,
@@ -778,6 +795,9 @@ public enum ArchiveUserFlowSmoke {
             invalidRootExportContainsRootHealthBadge: invalidRootHealth.exportContainsBadge,
             invalidRootPanelRootHealthBadge: invalidRootHealth.panelBadge,
             invalidRootPanelBadgeMatchesExport: invalidRootHealth.panelMatchesExport,
+            summaryTruncationDiagnosticsExportPath: summaryTruncationHealth.exportPath,
+            summaryTruncationDiagnosticsExportContainsTruncation:
+                summaryTruncationHealth.exportContainsTruncation,
             skippedSearchDiagnosticsExportPath: exportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )
@@ -788,6 +808,66 @@ public enum ArchiveUserFlowSmoke {
         let exportContainsBadge: Bool
         let panelBadge: String
         let panelMatchesExport: Bool
+    }
+
+    private struct SummaryTruncationCheckResult: Sendable {
+        let exportPath: String
+        let exportContainsTruncation: Bool
+    }
+
+    private static func runSummaryTruncationCheck(
+        truncationRoot: URL,
+        context: ToolContext
+    ) throws -> SummaryTruncationCheckResult {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: truncationRoot.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationRootMissing
+        }
+
+        let truncationViewModel = ArchiveBrowserViewModel(context: context)
+        truncationViewModel.roots = [truncationRoot.standardizedFileURL]
+        truncationViewModel.scanSync()
+
+        guard let diagnostics = truncationViewModel.scanDiagnostics,
+              diagnostics.songCount == 8,
+              diagnostics.songsWithWarningsCount == 8,
+              diagnostics.summaryLineSongWarningTitlesTruncated,
+              diagnostics.summaryLineSongWarningTitlesOmittedCount == 3,
+              diagnostics.summaryLine.contains("and 3 more") else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
+        }
+
+        try truncationViewModel.exportDiagnostics()
+        guard let exportPath = truncationViewModel.lastDiagnosticsExportPath,
+              !exportPath.isEmpty else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportFailed
+        }
+
+        let exportText = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
+        let summaryLine = exportText
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .first { $0.hasPrefix("summary_line=") } ?? ""
+        let exportContainsTruncation =
+            summaryLine.hasPrefix("summary_line=roots:")
+            && summaryLine.contains("Scanned 8 songs")
+            && summaryLine.contains("8 song(s) with 8 warning(s)")
+            && summaryLine.contains("and 3 more")
+            && summaryLine.contains("Summary Warning 01")
+            && !summaryLine.contains("Summary Warning 08")
+            && exportText.contains("summary_line_song_warning_titles_truncated=true")
+            && exportText.contains("summary_line_song_warning_titles_cap=5")
+            && exportText.contains("summary_line_song_warning_titles_omitted=3")
+            && exportText.contains("song=Summary Warning 08")
+        guard exportContainsTruncation else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
+        }
+
+        return SummaryTruncationCheckResult(
+            exportPath: exportPath,
+            exportContainsTruncation: exportContainsTruncation
+        )
     }
 
     private static func runInvalidRootHealthCheck(
