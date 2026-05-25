@@ -50,6 +50,20 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
             }
 
+            if !viewModel.skippedSearchMatches.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Skipped matches (\(viewModel.skippedSearchMatches.count))")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    ForEach(Array(viewModel.skippedSearchMatches.enumerated()), id: \.offset) { _, match in
+                        Text("• \(match.entry.label) — \(match.matchSummary)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(ArchiveDesignTokens.accent)
+                            .lineLimit(2)
+                    }
+                }
+            }
+
             if let diagnostics = viewModel.scanDiagnostics {
                 ArchiveDiagnosticsPanelView(diagnostics: diagnostics) {
                     do {

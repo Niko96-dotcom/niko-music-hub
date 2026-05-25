@@ -51,6 +51,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] warning_search_matches=\(result.warningSearchMatchCount)")
         print("[niko-music-hub-smoke] warning_search_match=\(result.warningSearchMatchTitle)")
         print("[niko-music-hub-smoke] warning_search_summary=\(result.warningSearchMatchSummary)")
+        print("[niko-music-hub-smoke] skipped_search_query=\(result.skippedSearchQuery)")
+        print("[niko-music-hub-smoke] skipped_search_matches=\(result.skippedSearchMatchCount)")
+        print("[niko-music-hub-smoke] skipped_search_label=\(result.skippedSearchMatchLabel)")
+        print("[niko-music-hub-smoke] skipped_search_summary=\(result.skippedSearchMatchSummary)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
@@ -85,7 +89,11 @@ enum ArchiveSmokeCommands {
               result.warningSearchMatchCount == 1,
               result.warningSearchMatchTitle == "Broken Folder Example",
               result.warningSearchMatchSummary.contains("scan warning"),
-              result.warningSearchMatchSummary.contains("project") else {
+              result.warningSearchMatchSummary.contains("project"),
+              result.skippedSearchQuery == "LOOSE_FILE.txt",
+              result.skippedSearchMatchCount >= 1,
+              result.skippedSearchMatchLabel == "LOOSE_FILE.txt",
+              result.skippedSearchMatchSummary.contains("skipped label") else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 

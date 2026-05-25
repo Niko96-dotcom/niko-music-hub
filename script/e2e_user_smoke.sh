@@ -117,6 +117,26 @@ if ! grep -q "warning_search_summary=.*project" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "skipped_search_query=LOOSE_FILE.txt" "$LOG_FILE"; then
+  echo "E2E failed: skipped-entry search query marker missing" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_matches=1" "$LOG_FILE"; then
+  echo "E2E failed: skipped-entry search did not narrow to one match" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_label=LOOSE_FILE.txt" "$LOG_FILE"; then
+  echo "E2E failed: skipped-entry search did not select LOOSE_FILE.txt" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_summary=.*skipped label" "$LOG_FILE"; then
+  echo "E2E failed: skipped-entry search explainability missing skipped label signal" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1
