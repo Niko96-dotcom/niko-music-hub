@@ -10,7 +10,8 @@ public enum ArchiveDiagnosticsExporter {
         to destination: URL,
         archiveRoots: [URL],
         homeDirectory: String? = nil,
-        searchContext: ArchiveDiagnosticsSearchContext? = nil
+        searchContext: ArchiveDiagnosticsSearchContext? = nil,
+        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
     ) throws {
         let destinationPath = destination.standardizedFileURL.path
         for root in archiveRoots {
@@ -24,7 +25,8 @@ public enum ArchiveDiagnosticsExporter {
         let text = formattedText(
             diagnostics: diagnostics,
             homeDirectory: homeDirectory,
-            searchContext: searchContext
+            searchContext: searchContext,
+            selectedSongContext: selectedSongContext
         )
         try text.write(to: destination, atomically: true, encoding: .utf8)
     }
@@ -32,7 +34,8 @@ public enum ArchiveDiagnosticsExporter {
     static func formattedText(
         diagnostics: ArchiveScanDiagnostics,
         homeDirectory: String?,
-        searchContext: ArchiveDiagnosticsSearchContext? = nil
+        searchContext: ArchiveDiagnosticsSearchContext? = nil,
+        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
     ) -> String {
         var lines: [String] = []
         lines.append("Niko Music Hub — archive scan diagnostics")
@@ -72,6 +75,16 @@ public enum ArchiveDiagnosticsExporter {
             lines.append("search_matches=\(searchContext.matches.count)")
             for match in searchContext.matches {
                 lines.append("search_match title=\(match.displayTitle) summary=\(match.summary)")
+            }
+        }
+
+        if let selectedSongContext {
+            lines.append("")
+            lines.append("selected_song")
+            lines.append("selected_song_title=\(selectedSongContext.displayTitle)")
+            lines.append("main_preview_summary=\(selectedSongContext.mainPreviewSummary)")
+            for line in selectedSongContext.rankedPreviewLines {
+                lines.append("preview_rank_line=\(line)")
             }
         }
 

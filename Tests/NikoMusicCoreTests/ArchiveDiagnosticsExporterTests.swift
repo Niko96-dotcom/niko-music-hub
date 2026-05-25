@@ -65,6 +65,35 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("summary=neon → title; hk → fuzzy title"))
     }
 
+    func testFormattedTextIncludesSelectedSongPreviewRanking() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let mainSummary = try XCTUnwrap(PreviewRankingExplainability.mainPreviewSummary(for: lab))
+        let selectedContext = ArchiveDiagnosticsSelectedSongContext(
+            displayTitle: lab.displayTitle,
+            mainPreviewSummary: mainSummary,
+            rankedPreviewLines: PreviewRankingExplainability.rankedPreviewLines(for: lab)
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: "/Users/test",
+            selectedSongContext: selectedContext
+        )
+
+        XCTAssertTrue(text.contains("selected_song_title=Preview Ranking Lab"))
+        XCTAssertTrue(text.contains("main_preview_summary="))
+        XCTAssertTrue(text.contains("v3"))
+        XCTAssertTrue(text.contains("preview_rank_line="))
+    }
+
     func testExportRejectsDestinationInsideArchiveRoot() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
