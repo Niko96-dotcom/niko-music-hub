@@ -13,6 +13,10 @@ let package = Package(
             targets: ["AppCore"]
         ),
         .library(
+            name: "NikoMusicCore",
+            targets: ["NikoMusicCore"]
+        ),
+        .library(
             name: "FeatureBPMTapper",
             targets: ["FeatureBPMTapper"]
         ),
@@ -31,11 +35,22 @@ let package = Package(
         .executable(
             name: "OutsideCubaseHub",
             targets: ["OutsideCubaseHub"]
+        ),
+        .executable(
+            name: "NikoMusicCoreSelfTest",
+            targets: ["NikoMusicCoreSelfTest"]
         )
     ],
     targets: [
         .target(
             name: "AppCore"
+        ),
+        .target(
+            name: "NikoMusicCore"
+        ),
+        .executableTarget(
+            name: "NikoMusicCoreSelfTest",
+            dependencies: ["NikoMusicCore"]
         ),
         .target(
             name: "FeatureBPMTapper",
@@ -66,6 +81,10 @@ let package = Package(
         .testTarget(
             name: "AppCoreTests",
             dependencies: ["AppCore"]
+        ),
+        .testTarget(
+            name: "NikoMusicCoreTests",
+            dependencies: ["NikoMusicCore"]
         ),
         .testTarget(
             name: "FeatureBPMTapperTests",
