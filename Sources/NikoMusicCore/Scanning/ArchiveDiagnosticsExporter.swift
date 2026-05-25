@@ -82,6 +82,9 @@ public enum ArchiveDiagnosticsExporter {
         let panel = diagnostics.previewRankingPanel
         lines.append("too_short_non_main=\(panel.tooShortNonMainPreviewCount)")
         lines.append("songs_with_too_short=\(panel.songsWithTooShortNonMainPreviews)")
+        for breakdown in panel.tooShortSongBreakdowns {
+            lines.append(breakdown.exportLine)
+        }
         if let callout = panel.scanHeaderCallout {
             lines.append("preview_ranking_scan_callout=\(callout)")
         }

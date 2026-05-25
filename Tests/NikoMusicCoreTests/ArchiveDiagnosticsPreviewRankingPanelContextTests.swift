@@ -34,4 +34,16 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
     func testSelectedSongHeaderNilWhenNoSong() {
         XCTAssertNil(ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: nil))
     }
+
+    func testPerSongTooShortBreakdownForRankingLabFixture() throws {
+        try CubaseFixtures.ensureGenerated()
+        let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
+        let context = ArchiveDiagnosticsPreviewRankingPanelContext.from(songs: result.songs)
+
+        let labBreakdown = try XCTUnwrap(
+            context.tooShortSongBreakdowns.first { $0.displayTitle == "Preview Ranking Lab" }
+        )
+        XCTAssertEqual(labBreakdown.clipCount, 1)
+        XCTAssertEqual(labBreakdown.clipNames, ["Lab Song short clip.wav"])
+    }
 }
