@@ -52,8 +52,23 @@ if ! grep -q "neon_hook=Neon Hook" "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -q "search_query=neon hk" "$LOG_FILE"; then
+  echo "E2E failed: fuzzy search query marker missing" >&2
+  exit 1
+fi
+
 if ! grep -q "search_matches=1" "$LOG_FILE"; then
   echo "E2E failed: Neon Hook search did not narrow to one song" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics song count missing" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_skipped=" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics skipped count missing" >&2
   exit 1
 fi
 

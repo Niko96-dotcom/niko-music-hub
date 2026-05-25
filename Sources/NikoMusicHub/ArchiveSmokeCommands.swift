@@ -41,8 +41,11 @@ enum ArchiveSmokeCommands {
 
         print("[niko-music-hub-smoke] user_flow=\(result.userFlow)")
         print("[niko-music-hub-smoke] songs=\(result.songCount)")
+        print("[niko-music-hub-smoke] search_query=\(result.searchQuery)")
         print("[niko-music-hub-smoke] search_matches=\(result.searchMatchCount)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
+        print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
+        print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
         print("[niko-music-hub-smoke] dry_run=true")
         print("[niko-music-hub-smoke] cpr_path=\(result.dryRunCPRPath)")
         print("[niko-music-hub-smoke] write_probe_denied=\(result.writeProbeDenied)")
@@ -53,12 +56,15 @@ enum ArchiveSmokeCommands {
             print(logLine)
         }
 
-        guard result.searchMatchCount == 1,
+        guard result.searchQuery == "neon hk",
+              result.searchMatchCount == 1,
               result.selectedTitle == "Neon Hook",
               result.dryRunCPRPath.contains("Neon Hook"),
               result.dryRunCPRPath.hasSuffix(".cpr"),
               result.writeProbeDenied,
-              result.archiveTreeUnchanged else {
+              result.archiveTreeUnchanged,
+              result.diagnosticsSongCount >= 3,
+              result.diagnosticsSkippedCount >= 1 else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 

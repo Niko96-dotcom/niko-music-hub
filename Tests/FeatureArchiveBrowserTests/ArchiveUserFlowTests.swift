@@ -21,8 +21,11 @@ final class ArchiveUserFlowTests: XCTestCase {
 
         XCTAssertEqual(result.userFlow, "scan_search_open")
         XCTAssertGreaterThanOrEqual(result.songCount, 3)
+        XCTAssertEqual(result.searchQuery, "neon hk")
         XCTAssertEqual(result.searchMatchCount, 1)
         XCTAssertEqual(result.selectedTitle, "Neon Hook")
+        XCTAssertGreaterThanOrEqual(result.diagnosticsSongCount, 3)
+        XCTAssertGreaterThanOrEqual(result.diagnosticsSkippedCount, 1)
         XCTAssertTrue(result.writeProbeDenied)
         XCTAssertTrue(result.archiveTreeUnchanged)
         XCTAssertTrue(result.dryRunCPRPath.contains("Neon Hook"))
