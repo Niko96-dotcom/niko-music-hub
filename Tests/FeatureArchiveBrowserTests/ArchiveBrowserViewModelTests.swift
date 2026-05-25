@@ -20,4 +20,21 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
         XCTAssertEqual(viewModel.filteredSongs.first?.displayTitle, "Neon Hook")
     }
+
+    func testScanExposesDiagnosticsSummary() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+
+        let diagnostics = try XCTUnwrap(viewModel.scanDiagnostics)
+        XCTAssertEqual(diagnostics.songCount, 4)
+        XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
+        XCTAssertTrue(
+            diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
+        )
+        XCTAssertFalse(diagnostics.summaryLine.isEmpty)
+    }
 }

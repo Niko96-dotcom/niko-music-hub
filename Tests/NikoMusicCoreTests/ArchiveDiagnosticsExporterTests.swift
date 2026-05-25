@@ -1,0 +1,56 @@
+import XCTest
+@testable import NikoMusicCore
+
+final class ArchiveDiagnosticsExporterTests: XCTestCase {
+    func testExportWritesRedactedTextOutsideArchiveRoots() throws {
+        try CubaseFixtures.ensureGenerated()
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: result,
+            roots: [archiveRoot],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertTrue(diagnostics.rootPaths.first?.hasPrefix(home) == true)
+
+        let exportDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("niko-diagnostics-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: exportDir) }
+
+        let destination = exportDir.appendingPathComponent("scan-diagnostics.txt")
+        try ArchiveDiagnosticsExporter.exportText(
+            diagnostics: diagnostics,
+            to: destination,
+            archiveRoots: [archiveRoot],
+            homeDirectory: home
+        )
+
+        let text = try String(contentsOf: destination, encoding: .utf8)
+        XCTAssertTrue(text.contains("songs=4"))
+        XCTAssertTrue(text.contains("songs_with_warnings=1"))
+        XCTAssertFalse(text.contains(home))
+        XCTAssertTrue(text.contains("~/"))
+    }
+
+    func testExportRejectsDestinationInsideArchiveRoot() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: ScanResult(),
+            roots: [archiveRoot]
+        )
+        let destination = archiveRoot.appendingPathComponent("scan-diagnostics.txt")
+
+        XCTAssertThrowsError(
+            try ArchiveDiagnosticsExporter.exportText(
+                diagnostics: diagnostics,
+                to: destination,
+                archiveRoots: [archiveRoot]
+            )
+        ) { error in
+            XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+        }
+    }
+}

@@ -11,7 +11,9 @@ final class ArchiveBrowserViewModel: ObservableObject {
     @Published var selectedSong: Song?
     @Published var isScanning = false
     @Published var statusMessage: String?
+    @Published var scanDiagnostics: ArchiveScanDiagnostics?
     @Published var lastDryRunLog: String?
+    @Published var lastDiagnosticsExportPath: String?
 
     private let scanner = CubaseArchiveScanner()
     private var searchIndex = MusicSearchIndex()
@@ -74,13 +76,21 @@ final class ArchiveBrowserViewModel: ObservableObject {
         isScanning = true
         defer { isScanning = false }
         do {
+            let scannedAt = Date()
             let result = try scanner.scan(roots: roots)
             songs = result.songs
             searchIndex.rebuild(from: songs)
             applySearchFilter()
-            statusMessage = "Scanned \(songs.count) songs."
+            let built = ArchiveScanDiagnosticsBuilder.build(
+                result: result,
+                roots: roots,
+                scannedAt: scannedAt
+            )
+            scanDiagnostics = built
+            statusMessage = built.summaryLine
             diagnostics.log(.info, statusMessage ?? "scan complete")
         } catch {
+            scanDiagnostics = nil
             statusMessage = "Scan failed: \(error.localizedDescription)"
             diagnostics.log(.error, statusMessage ?? "scan failed")
         }
@@ -92,6 +102,26 @@ final class ArchiveBrowserViewModel: ObservableObject {
 
     func selectSong(_ song: Song) {
         selectedSong = song
+    }
+
+    func exportDiagnostics() throws {
+        guard let scanDiagnostics else {
+            statusMessage = "Scan the archive before exporting diagnostics."
+            return
+        }
+        let exportDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("niko-music-hub-diagnostics", isDirectory: true)
+        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
+        let stamp = ISO8601DateFormatter().string(from: scanDiagnostics.scannedAt)
+            .replacingOccurrences(of: ":", with: "-")
+        let destination = exportDir.appendingPathComponent("scan-\(stamp).txt")
+        try ArchiveDiagnosticsExporter.exportText(
+            diagnostics: scanDiagnostics,
+            to: destination,
+            archiveRoots: roots
+        )
+        lastDiagnosticsExportPath = destination.path
+        diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
     }
 
     func openLatestCPR(for song: Song) throws {

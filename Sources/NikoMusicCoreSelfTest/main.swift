@@ -65,6 +65,7 @@ struct NikoMusicCoreSelfTest {
         print("roots=\(roots.map(\.path).joined(separator: ","))")
         print("songs=\(result.songs.count)")
         print("warnings=\(result.globalWarnings.count)")
+        print("skipped=\(result.skippedEntries.count)")
         print("neon_hook_matches=\(neonMatches.count)")
 
         for song in result.songs {

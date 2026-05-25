@@ -32,6 +32,9 @@ write_placeholder_cpr() {
 rm -rf "$FIXTURE_ROOT"
 mkdir -p "$FIXTURE_ROOT"
 
+# Loose file at archive root — should be skipped (not scanned as a song folder)
+echo "not a song folder" >"$FIXTURE_ROOT/LOOSE_FILE.txt"
+
 # Neon Hook — full mix in Mixdown beats stem names
 write_placeholder_cpr "$FIXTURE_ROOT/Neon Hook/Neon Hook v2.cpr"
 write_placeholder_cpr "$FIXTURE_ROOT/Neon Hook/Neon Hook.cpr"
