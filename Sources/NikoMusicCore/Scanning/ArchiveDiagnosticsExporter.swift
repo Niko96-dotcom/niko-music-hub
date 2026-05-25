@@ -79,7 +79,10 @@ public enum ArchiveDiagnosticsExporter {
         lines.append(
             "preview_ranking_tiebreak_legend=\(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)"
         )
-        if let callout = diagnostics.previewRankingPanel.scanHeaderCallout {
+        let panel = diagnostics.previewRankingPanel
+        lines.append("too_short_non_main=\(panel.tooShortNonMainPreviewCount)")
+        lines.append("songs_with_too_short=\(panel.songsWithTooShortNonMainPreviews)")
+        if let callout = panel.scanHeaderCallout {
             lines.append("preview_ranking_scan_callout=\(callout)")
         }
 

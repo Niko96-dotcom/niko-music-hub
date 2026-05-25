@@ -204,6 +204,8 @@ public enum ArchiveUserFlowSmoke {
             && rankingLabExportText.contains("preview_rank_line=")
             && rankingLabExportText.contains("v3")
             && rankingLabExportText.contains("preview_ranking_tiebreak_legend=")
+            && rankingLabExportText.contains("too_short_non_main=")
+            && rankingLabExportText.contains("songs_with_too_short=")
             && rankingLabExportText.contains("preview_ranking_scan_callout=")
             && rankingLabExportText.contains("preview_ranking_selected_header=")
         guard exportContainsRankingLabMatch else {
