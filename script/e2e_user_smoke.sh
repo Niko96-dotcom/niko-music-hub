@@ -1106,6 +1106,30 @@ if ! grep -q "root_health_badge=${PANEL_INVALID_ROOT_BADGE}" "$INVALID_ROOT_EXPO
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_invalid_root_global_warning_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: invalid-root global warning panel lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_INVALID_ROOT_GLOBAL_WARNINGS="$(grep -m1 'diagnostics_panel_invalid_root_global_warning_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_invalid_root_global_warning_lines=//')"
+if [[ -z "$PANEL_INVALID_ROOT_GLOBAL_WARNINGS" ]]; then
+  echo "E2E failed: invalid-root global warning panel lines missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "global_warning=.*Root is not a directory" "$INVALID_ROOT_EXPORT_PATH"; then
+  echo "E2E failed: invalid-root export missing global_warning line" >&2
+  exit 1
+fi
+
+while IFS= read -r warning_line; do
+  [[ -z "$warning_line" ]] && continue
+  if ! grep -Fq "global_warning=${warning_line}" "$INVALID_ROOT_EXPORT_PATH"; then
+    echo "E2E failed: export missing global_warning for panel line: ${warning_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_INVALID_ROOT_GLOBAL_WARNINGS// | /$'\n'}")
+
 if ! grep -q "diagnostics_export_summary_truncation_match=true" "$LOG_FILE"; then
   echo "E2E failed: summary truncation diagnostics export missing active match marker" >&2
   exit 1

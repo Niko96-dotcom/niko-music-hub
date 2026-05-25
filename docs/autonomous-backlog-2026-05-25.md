@@ -1,21 +1,21 @@
 # Autonomous backlog — 2026-05-25
 
-## Picked (music-67)
+## Picked (music-68)
 
-Prove **scan count rows** panel/export parity (`Songs` / `Song warnings` vs `songs=` / `songs_with_warnings=` / `total_song_warnings=`) in fixture E2E and smoke.
+Prove **global warning** panel/export parity (`global_warning=` rows vs in-app scan diagnostics warning lines) on the invalid-root smoke pass.
 
-## Completed (music-67)
+## Completed (music-68)
 
-- `ArchiveDiagnosticsScanCountsPanelContext` for panel count values + export line parity
-- User-flow smoke prints `diagnostics_panel_scan_counts_*` with match marker
-- E2E asserts panel Songs/Song warnings values map to export count lines
-- Unit tests: `ArchiveDiagnosticsScanCountsPanelContextTests` including fixture scan
-- `docs/user-e2e.md` updated for scan-count panel parity
+- `ArchiveDiagnosticsGlobalWarningsPanelContext` for panel line text + export `global_warning=` parity
+- Invalid-root user-flow smoke asserts panel global warning lines match export
+- E2E asserts `diagnostics_panel_invalid_root_global_warning_lines_match=` and per-line `global_warning=` rows
+- Unit tests: `ArchiveDiagnosticsGlobalWarningsPanelContextTests`
+- `docs/user-e2e.md` updated for global-warning panel parity
 - `./script/ci.sh` and `./script/e2e_user_smoke.sh` green
 
-## Prior (music-66)
+## Prior (music-67)
 
-Prove **song warnings list** panel/export parity (`song=` / `warning=` rows vs in-app **Songs with warnings** section) in fixture E2E and smoke.
+Prove **scan count rows** panel/export parity (`Songs` / `Song warnings` vs `songs=` / `songs_with_warnings=` / `total_song_warnings=`) in fixture E2E and smoke.
 
 ## Next best TODO
 

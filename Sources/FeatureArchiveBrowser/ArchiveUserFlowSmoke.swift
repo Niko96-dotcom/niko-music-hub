@@ -146,6 +146,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let invalidRootExportContainsRootHealthBadge: Bool
     public let invalidRootPanelRootHealthBadge: String
     public let invalidRootPanelBadgeMatchesExport: Bool
+    public let invalidRootPanelGlobalWarningLines: String
+    public let invalidRootPanelGlobalWarningLinesMatchExport: Bool
     public let summaryTruncationDiagnosticsExportPath: String
     public let summaryTruncationDiagnosticsExportContainsTruncation: Bool
     public let summaryTruncationPanelFootnote: String
@@ -299,6 +301,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         invalidRootExportContainsRootHealthBadge: Bool,
         invalidRootPanelRootHealthBadge: String,
         invalidRootPanelBadgeMatchesExport: Bool,
+        invalidRootPanelGlobalWarningLines: String,
+        invalidRootPanelGlobalWarningLinesMatchExport: Bool,
         summaryTruncationDiagnosticsExportPath: String,
         summaryTruncationDiagnosticsExportContainsTruncation: Bool,
         summaryTruncationPanelFootnote: String,
@@ -455,6 +459,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.invalidRootExportContainsRootHealthBadge = invalidRootExportContainsRootHealthBadge
         self.invalidRootPanelRootHealthBadge = invalidRootPanelRootHealthBadge
         self.invalidRootPanelBadgeMatchesExport = invalidRootPanelBadgeMatchesExport
+        self.invalidRootPanelGlobalWarningLines = invalidRootPanelGlobalWarningLines
+        self.invalidRootPanelGlobalWarningLinesMatchExport = invalidRootPanelGlobalWarningLinesMatchExport
         self.summaryTruncationDiagnosticsExportPath = summaryTruncationDiagnosticsExportPath
         self.summaryTruncationDiagnosticsExportContainsTruncation =
             summaryTruncationDiagnosticsExportContainsTruncation
@@ -539,6 +545,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case invalidRootExportMissingRootHealthBadge
     case invalidRootPanelRootHealthBadgeMissing
     case invalidRootPanelBadgeMismatch
+    case invalidRootPanelGlobalWarningsMismatch
     case summaryTruncationRootMissing
     case summaryTruncationDiagnosticsExportFailed
     case summaryTruncationDiagnosticsExportMissingTruncation
@@ -1482,6 +1489,9 @@ public enum ArchiveUserFlowSmoke {
             invalidRootExportContainsRootHealthBadge: invalidRootHealth.exportContainsBadge,
             invalidRootPanelRootHealthBadge: invalidRootHealth.panelBadge,
             invalidRootPanelBadgeMatchesExport: invalidRootHealth.panelMatchesExport,
+            invalidRootPanelGlobalWarningLines: invalidRootHealth.panelGlobalWarningLines,
+            invalidRootPanelGlobalWarningLinesMatchExport:
+                invalidRootHealth.panelGlobalWarningLinesMatchExport,
             summaryTruncationDiagnosticsExportPath: summaryTruncationHealth.exportPath,
             summaryTruncationDiagnosticsExportContainsTruncation:
                 summaryTruncationHealth.exportContainsTruncation,
@@ -1626,6 +1636,8 @@ public enum ArchiveUserFlowSmoke {
         let exportContainsBadge: Bool
         let panelBadge: String
         let panelMatchesExport: Bool
+        let panelGlobalWarningLines: String
+        let panelGlobalWarningLinesMatchExport: Bool
     }
 
     private struct SummaryTruncationCheckResult: Sendable {
@@ -1748,11 +1760,30 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.invalidRootPanelBadgeMismatch
         }
 
+        let displayWarnings = invalidDiagnostics.displayGlobalWarnings(homeDirectory: homeDirectory)
+        guard !displayWarnings.isEmpty else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
+        }
+        let panelGlobalWarningLines = displayWarnings
+            .map { ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: $0) }
+            .joined(separator: " | ")
+        let panelGlobalWarningLinesMatchExport =
+            ArchiveDiagnosticsGlobalWarningsPanelContext.linesMatchExport(
+                in: exportText,
+                warnings: displayWarnings,
+                homeDirectory: homeDirectory
+            )
+        guard panelGlobalWarningLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
+        }
+
         return InvalidRootHealthCheckResult(
             exportPath: exportPath,
             exportContainsBadge: true,
             panelBadge: panelBadge,
-            panelMatchesExport: panelMatchesExport
+            panelMatchesExport: panelMatchesExport,
+            panelGlobalWarningLines: panelGlobalWarningLines,
+            panelGlobalWarningLinesMatchExport: panelGlobalWarningLinesMatchExport
         )
     }
 
