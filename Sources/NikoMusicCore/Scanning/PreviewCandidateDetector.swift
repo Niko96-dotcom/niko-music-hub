@@ -26,14 +26,20 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             guard values.isRegularFile == true else { continue }
             let modified = values.contentModificationDate ?? .distantPast
             let role = Self.folderRole(for: fileURL, songFolder: songFolder)
-            let detectedRole = Self.detectedRole(from: fileURL.lastPathComponent)
+            let fileName = fileURL.lastPathComponent
+            let detectedRole = Self.detectedRole(from: fileName)
+            let version = PreviewFilenameParser.parseVersionNumber(from: fileName)
+            let duration = PreviewWAVDurationReader.durationSeconds(for: fileURL)
             candidates.append(
                 PreviewCandidate(
                     filePath: fileURL,
-                    fileName: fileURL.lastPathComponent,
+                    fileName: fileName,
                     folderRole: role,
                     modifiedAt: modified,
-                    detectedRole: detectedRole
+                    detectedRole: detectedRole,
+                    fileExtension: ext,
+                    detectedVersionNumber: version,
+                    durationSeconds: duration
                 )
             )
         }
