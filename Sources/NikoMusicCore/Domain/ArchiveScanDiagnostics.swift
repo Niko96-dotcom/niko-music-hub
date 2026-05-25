@@ -56,6 +56,18 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         return "Scanned \(songCount) songs · \(warningPart) · \(skippedPart)"
     }
 
+    /// One pasteable support-ticket line: redacted roots plus scan counts.
+    public func exportSummaryLine(homeDirectory: String? = nil) -> String {
+        let rootsPart: String
+        let displayRoots = displayRootPaths(homeDirectory: homeDirectory)
+        if displayRoots.isEmpty {
+            rootsPart = "roots: (none)"
+        } else {
+            rootsPart = "roots: \(displayRoots.joined(separator: ", "))"
+        }
+        return "\(rootsPart) · \(summaryLine)"
+    }
+
     public func displayRootPaths(homeDirectory: String? = nil) -> [String] {
         rootPaths.map { DiagnosticsPathRedactor.redact($0, homeDirectory: homeDirectory) }
     }

@@ -31,8 +31,40 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("songs=5"))
         XCTAssertTrue(text.contains("songs_with_warnings=1"))
         XCTAssertTrue(text.contains("skipped_entries=2"))
+        XCTAssertTrue(text.contains("summary_line=roots: "))
+        XCTAssertTrue(text.contains("CubaseArchive"))
+        XCTAssertTrue(
+            text.contains(
+                "· Scanned 5 songs · 1 song(s) with 1 warning(s) · 2 skipped at roots"
+            )
+        )
         XCTAssertFalse(text.contains(home))
         XCTAssertTrue(text.contains("~/"))
+    }
+
+    func testFormattedTextIncludesSummaryLineForSupportPaste() {
+        let home = "/Users/tester"
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            rootPaths: ["\(home)/Music/Cubase"],
+            songCount: 3,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: home
+        )
+
+        XCTAssertTrue(
+            text.contains(
+                "summary_line=roots: ~/Music/Cubase · Scanned 3 songs · no warnings · nothing skipped at roots"
+            )
+        )
     }
 
     func testFormattedTextIncludesActiveSearchContext() throws {
