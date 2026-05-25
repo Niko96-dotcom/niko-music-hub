@@ -47,13 +47,21 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
     }
 
     public var summaryLine: String {
-        let warningPart = totalSongWarningCount == 0
-            ? "no warnings"
-            : "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"
+        let warningPart = songWarningSummaryClause
         let skippedPart = skippedEntries.isEmpty
             ? "nothing skipped at roots"
             : "\(skippedEntries.count) skipped at roots"
         return "Scanned \(songCount) songs · \(warningPart) · \(skippedPart)"
+    }
+
+    private var songWarningSummaryClause: String {
+        guard totalSongWarningCount > 0 else { return "no warnings" }
+        var clause = "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"
+        let titles = songWarningSummaries.map(\.displayTitle).sorted()
+        if !titles.isEmpty {
+            clause += " — \(titles.joined(separator: ", "))"
+        }
+        return clause
     }
 
     /// One pasteable support-ticket line: redacted roots plus scan counts.

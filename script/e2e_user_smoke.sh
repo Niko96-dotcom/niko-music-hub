@@ -532,6 +532,11 @@ if ! grep -q "diagnostics_export_summary_line=.*Scanned 7 songs" "$LOG_FILE"; th
   exit 1
 fi
 
+if ! grep -q "diagnostics_export_summary_line=.*Broken Folder Example" "$LOG_FILE"; then
+  echo "E2E failed: scan diagnostics summary_line missing song warning titles" >&2
+  exit 1
+fi
+
 if ! grep -q "diagnostics_export_summary_line=.*2 skipped at roots" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics summary_line missing skipped count" >&2
   exit 1
@@ -638,6 +643,11 @@ fi
 
 if ! grep -q "summary_line=.*1 song(s) with 1 warning(s)" "$SEARCH_EXPORT_PATH"; then
   echo "E2E failed: exported diagnostics missing summary_line warning count" >&2
+  exit 1
+fi
+
+if ! grep -q "summary_line=.*Broken Folder Example" "$SEARCH_EXPORT_PATH"; then
+  echo "E2E failed: exported diagnostics missing summary_line song warning titles" >&2
   exit 1
 fi
 
