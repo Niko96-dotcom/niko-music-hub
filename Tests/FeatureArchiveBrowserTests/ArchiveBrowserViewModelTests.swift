@@ -73,9 +73,37 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("selected_song_title=Preview Ranking Lab"))
+        XCTAssertTrue(text.contains("selected_song_cpr=1 version"))
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
         XCTAssertTrue(text.contains("preview_rank_line="))
+    }
+
+    func testExportDiagnosticsIncludesSelectedSongCPRAndWarnings() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        viewModel.selectSong(neon)
+        try viewModel.exportDiagnostics()
+        let neonPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        let neonText = try String(contentsOf: URL(fileURLWithPath: neonPath), encoding: .utf8)
+        XCTAssertTrue(neonText.contains("selected_song_cpr=2 versions"))
+        XCTAssertTrue(neonText.contains("latest Neon Hook.cpr"))
+        XCTAssertFalse(neonText.contains("selected_song_warning="))
+
+        let broken = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Broken Folder Example" })
+        viewModel.selectSong(broken)
+        try viewModel.exportDiagnostics()
+        let brokenPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        let brokenText = try String(contentsOf: URL(fileURLWithPath: brokenPath), encoding: .utf8)
+        XCTAssertTrue(brokenText.contains("selected_song_title=Broken Folder Example"))
+        XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
+        XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
     }
 
     func testExportDiagnosticsIncludesActiveSearchContext() async throws {

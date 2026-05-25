@@ -82,7 +82,13 @@ public enum ArchiveDiagnosticsExporter {
             lines.append("")
             lines.append("selected_song")
             lines.append("selected_song_title=\(selectedSongContext.displayTitle)")
-            lines.append("main_preview_summary=\(selectedSongContext.mainPreviewSummary)")
+            lines.append("selected_song_cpr=\(selectedSongContext.cprSummary)")
+            for warning in selectedSongContext.warningLines {
+                lines.append("selected_song_warning=\(warning)")
+            }
+            if let mainPreviewSummary = selectedSongContext.mainPreviewSummary {
+                lines.append("main_preview_summary=\(mainPreviewSummary)")
+            }
             for line in selectedSongContext.rankedPreviewLines {
                 lines.append("preview_rank_line=\(line)")
             }
