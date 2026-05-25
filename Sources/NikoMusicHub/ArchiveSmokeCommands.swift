@@ -139,6 +139,10 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] diagnostics_panel_root_health_badge_id=\(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)")
         print("[niko-music-hub-smoke] diagnostics_export_path=\(result.skippedSearchDiagnosticsExportPath)")
         print("[niko-music-hub-smoke] diagnostics_export_skipped_match=\(result.skippedSearchDiagnosticsExportContainsMatch)")
+        print("[niko-music-hub-smoke] diagnostics_panel_skipped_search_query_line=\(result.skippedSearchPanelQueryLine)")
+        print("[niko-music-hub-smoke] diagnostics_panel_skipped_search_query_line_match=\(result.skippedSearchPanelQueryLineMatchesExport)")
+        print("[niko-music-hub-smoke] diagnostics_panel_skipped_search_match_lines=\(result.skippedSearchPanelMatchLines)")
+        print("[niko-music-hub-smoke] diagnostics_panel_skipped_search_match_lines_match=\(result.skippedSearchPanelMatchLinesMatchExport)")
         print("[niko-music-hub-smoke] neon_hook=\(result.selectedTitle)")
         print("[niko-music-hub-smoke] diagnostics_songs=\(result.diagnosticsSongCount)")
         print("[niko-music-hub-smoke] diagnostics_skipped=\(result.diagnosticsSkippedCount)")
@@ -286,7 +290,13 @@ enum ArchiveSmokeCommands {
                   == "Support summary shows 5 warning song titles; 3 more listed below.",
               result.summaryTruncationPanelFootnoteMatchesDiagnostics,
               !result.skippedSearchDiagnosticsExportPath.isEmpty,
-              result.skippedSearchDiagnosticsExportContainsMatch else {
+              result.skippedSearchDiagnosticsExportContainsMatch,
+              !result.skippedSearchPanelQueryLine.isEmpty,
+              result.skippedSearchPanelQueryLine.contains("LOOSE_FILE.txt"),
+              result.skippedSearchPanelQueryLineMatchesExport,
+              !result.skippedSearchPanelMatchLines.isEmpty,
+              result.skippedSearchPanelMatchLines.contains("LOOSE_FILE.txt"),
+              result.skippedSearchPanelMatchLinesMatchExport else {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 

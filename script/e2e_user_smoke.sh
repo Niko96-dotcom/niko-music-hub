@@ -933,6 +933,49 @@ if ! grep -q "skipped_search_match label=LOOSE_FILE.txt" "$EXPORT_PATH"; then
   exit 1
 fi
 
+if ! grep -q "diagnostics_panel_skipped_search_query_line_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel active skipped search query line missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SKIPPED_SEARCH_QUERY_LINE="$(grep -m1 'diagnostics_panel_skipped_search_query_line=' "$LOG_FILE" | sed 's/.*diagnostics_panel_skipped_search_query_line=//')"
+if [[ -z "$PANEL_SKIPPED_SEARCH_QUERY_LINE" ]]; then
+  echo "E2E failed: diagnostics panel active skipped search query line missing from smoke output" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_query=LOOSE_FILE.txt" "$EXPORT_PATH"; then
+  echo "E2E failed: export skipped_search_query does not match panel skipped search" >&2
+  exit 1
+fi
+
+if ! grep -q "skipped_search_matches=1" "$EXPORT_PATH"; then
+  echo "E2E failed: export skipped_search_matches does not match panel skipped search count" >&2
+  exit 1
+fi
+
+if ! grep -q "diagnostics_panel_skipped_search_match_lines_match=true" "$LOG_FILE"; then
+  echo "E2E failed: diagnostics panel active skipped search match lines missing export parity marker" >&2
+  exit 1
+fi
+
+PANEL_SKIPPED_SEARCH_MATCH_LINES="$(grep -m1 'diagnostics_panel_skipped_search_match_lines=' "$LOG_FILE" | sed 's/.*diagnostics_panel_skipped_search_match_lines=//')"
+if [[ -z "$PANEL_SKIPPED_SEARCH_MATCH_LINES" ]]; then
+  echo "E2E failed: diagnostics panel active skipped search match lines missing from smoke output" >&2
+  exit 1
+fi
+
+while IFS= read -r match_line; do
+  [[ -z "$match_line" ]] && continue
+  label="${match_line%% — *}"
+  summary="${match_line#* — }"
+  if ! grep -Fq "skipped_search_match label=${label} kind=" "$EXPORT_PATH" \
+    || ! grep -Fq "summary=${summary}" "$EXPORT_PATH"; then
+    echo "E2E failed: export missing skipped_search_match for panel line: ${match_line}" >&2
+    exit 1
+  fi
+done < <(printf '%s\n' "${PANEL_SKIPPED_SEARCH_MATCH_LINES// | /$'\n'}")
+
 if ! grep -q "diagnostics_songs=" "$LOG_FILE"; then
   echo "E2E failed: scan diagnostics song count missing" >&2
   exit 1
