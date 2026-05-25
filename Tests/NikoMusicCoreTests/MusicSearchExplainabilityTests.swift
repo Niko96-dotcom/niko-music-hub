@@ -35,6 +35,19 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         XCTAssertTrue(result.matchSummary.contains("preview"))
     }
 
+    func testScanWarningMatchSummaryNamesScanWarningField() throws {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Broken"),
+            originalFolderName: "Broken",
+            displayTitle: "Broken",
+            scanWarnings: ["No CPR project files found"]
+        )
+        let index = MusicSearchIndex(songs: [song])
+
+        let result = try XCTUnwrap(index.searchResults("project").first)
+        XCTAssertTrue(result.matchSummary.contains("scan warning"))
+    }
+
     func testMultiTokenSummaryListsEachToken() throws {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Neon Hook"),

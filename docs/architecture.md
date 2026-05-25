@@ -155,8 +155,9 @@ Output: `mainPreviewCandidateID` per song + `confidenceReasons[]` for debug UI.
 - Original folder name
 - CPR filenames
 - Preview filenames
+- Scan warnings (e.g. missing CPR)
 
-v0.1 skips: aliases, collaborator names, song notes (no metadata layer yet).
+v0.1 skips: aliases, collaborator names, sidecar song notes (no metadata layer yet).
 
 ## Safety architecture
 
