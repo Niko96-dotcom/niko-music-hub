@@ -30,6 +30,24 @@ public struct PreviewConfidenceRanker: Sendable {
         ranked.first?.id
     }
 
+    /// Returns which comparison step would rank `winner` above `runnerUp`.
+    public func decidingFactor(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> PreviewRankingDecidingFactor {
+        if winner.confidenceScore != runnerUp.confidenceScore {
+            return .score
+        }
+        let lv = winner.detectedVersionNumber ?? 0
+        let rv = runnerUp.detectedVersionNumber ?? 0
+        if lv != rv { return .version }
+        let le = Self.extensionPreference[winner.fileExtension] ?? 0
+        let re = Self.extensionPreference[runnerUp.fileExtension] ?? 0
+        if le != re { return .extensionFormat }
+        let ld = winner.durationSeconds ?? 0
+        let rd = runnerUp.durationSeconds ?? 0
+        if ld != rd { return .duration }
+        if winner.modifiedAt != runnerUp.modifiedAt { return .recency }
+        return .filename
+    }
+
     private func compareCandidates(_ lhs: PreviewCandidate, _ rhs: PreviewCandidate) -> Bool {
         if lhs.confidenceScore != rhs.confidenceScore {
             return lhs.confidenceScore > rhs.confidenceScore

@@ -133,6 +133,9 @@ public enum ArchiveDiagnosticsExporter {
             if let selectedHeader = selectedSongContext.previewRankingSelectedHeader {
                 lines.append("preview_ranking_selected_header=\(selectedHeader)")
             }
+            if let tiebreakCallout = selectedSongContext.previewRankingTiebreakCallout {
+                lines.append("preview_rank_tiebreak=\(tiebreakCallout)")
+            }
         }
 
         return lines.joined(separator: "\n") + "\n"

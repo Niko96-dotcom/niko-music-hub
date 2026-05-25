@@ -2,6 +2,38 @@ import Foundation
 
 /// User-facing labels for preview confidence ranking signals.
 public enum PreviewRankingExplainability: Sendable {
+    private static let ranker = PreviewConfidenceRanker()
+
+    /// When equal scores made version/extension/duration the main pick, returns a short operator callout.
+    public static func tiebreakCallout(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> String? {
+        let factor = ranker.decidingFactor(winner: winner, runnerUp: runnerUp)
+        switch factor {
+        case .score, .recency, .filename:
+            return nil
+        case .version:
+            let winnerVersion = winner.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
+            let runnerVersion = runnerUp.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
+            return "Equal score — version \(winnerVersion) beat \(runnerVersion)"
+        case .extensionFormat:
+            return "Equal score — preferred \(winner.fileExtension) over \(runnerUp.fileExtension)"
+        case .duration:
+            let winnerDuration = formattedDuration(winner.durationSeconds ?? 0)
+            let runnerDuration = formattedDuration(runnerUp.durationSeconds ?? 0)
+            return "Equal score — longer preview (\(winnerDuration)) beat \(runnerDuration)"
+        }
+    }
+
+    public static func tiebreakCallout(for rankedPreviews: [PreviewCandidate]) -> String? {
+        guard rankedPreviews.count >= 2,
+              let winner = rankedPreviews.first else {
+            return nil
+        }
+        return tiebreakCallout(winner: winner, runnerUp: rankedPreviews[1])
+    }
+
+    public static func tiebreakCallout(for song: Song) -> String? {
+        tiebreakCallout(for: song.previewCandidates)
+    }
     private static let displayOrderPrefixes = [
         "role:",
         "folder:",
@@ -81,10 +113,16 @@ public enum PreviewRankingExplainability: Sendable {
             return nil
         }
         let signals = summary(from: main.confidenceReasons, durationSeconds: main.durationSeconds)
-        if signals.isEmpty {
-            return main.fileName
+        var parts: [String] = []
+        if !signals.isEmpty {
+            parts.append("\(main.fileName) — \(signals)")
+        } else {
+            parts.append(main.fileName)
         }
-        return "\(main.fileName) — \(signals)"
+        if let tiebreak = tiebreakCallout(for: song) {
+            parts.append(tiebreak)
+        }
+        return parts.joined(separator: " · ")
     }
 
     public static func rankedPreviewLines(for song: Song) -> [String] {
