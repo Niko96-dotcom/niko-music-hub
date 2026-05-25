@@ -2,6 +2,28 @@ import XCTest
 @testable import NikoMusicCore
 
 final class MusicSearchIndexTests: XCTestCase {
+    func testTokensSplitOnWhitespaceBeforeStrippingPunctuation() {
+        XCTAssertEqual(MusicSearchMatcher.tokens(from: "neon hk"), ["neon", "hk"])
+        XCTAssertEqual(MusicSearchMatcher.tokens(from: "  neon   hk  "), ["neon", "hk"])
+        XCTAssertEqual(MusicSearchMatcher.tokens(from: "neon-hook"), ["neon", "hook"])
+    }
+
+    func testSpacedQueryRequiresDistinctTokensNotConcatenatedFuzzy() {
+        let neonOnly = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Neon"),
+            originalFolderName: "Neon",
+            displayTitle: "Neon"
+        )
+        let hkOnly = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/HK"),
+            originalFolderName: "HK",
+            displayTitle: "HK"
+        )
+        let index = MusicSearchIndex(songs: [neonOnly, hkOnly])
+
+        XCTAssertTrue(index.search("neon hk").isEmpty)
+    }
+
     func testFindsNeonHookByTitleAndMixdownFilename() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
