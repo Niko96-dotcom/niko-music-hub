@@ -43,6 +43,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let skippedSearchMatchSummary: String
     public let searchDiagnosticsExportPath: String
     public let searchDiagnosticsExportContainsMatch: Bool
+    public let searchDiagnosticsExportContainsSummaryLine: Bool
+    public let diagnosticsExportSummaryLine: String
     public let skippedSearchDiagnosticsExportPath: String
     public let skippedSearchDiagnosticsExportContainsMatch: Bool
 
@@ -86,6 +88,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         skippedSearchMatchSummary: String,
         searchDiagnosticsExportPath: String,
         searchDiagnosticsExportContainsMatch: Bool,
+        searchDiagnosticsExportContainsSummaryLine: Bool,
+        diagnosticsExportSummaryLine: String,
         skippedSearchDiagnosticsExportPath: String,
         skippedSearchDiagnosticsExportContainsMatch: Bool
     ) {
@@ -128,6 +132,8 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         self.skippedSearchMatchSummary = skippedSearchMatchSummary
         self.searchDiagnosticsExportPath = searchDiagnosticsExportPath
         self.searchDiagnosticsExportContainsMatch = searchDiagnosticsExportContainsMatch
+        self.searchDiagnosticsExportContainsSummaryLine = searchDiagnosticsExportContainsSummaryLine
+        self.diagnosticsExportSummaryLine = diagnosticsExportSummaryLine
         self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
         self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
     }
@@ -158,6 +164,7 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case skippedSearchMissingExplainability
     case searchDiagnosticsExportFailed
     case searchDiagnosticsExportMissingMatch
+    case searchDiagnosticsExportMissingSummaryLine
     case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
 }
@@ -202,6 +209,18 @@ public enum ArchiveUserFlowSmoke {
         let exportContainsSearchMatch = searchExportText.contains("search_match title=Neon Hook")
         guard exportContainsSearchMatch else {
             throw ArchiveUserFlowSmokeError.searchDiagnosticsExportMissingMatch
+        }
+        let diagnosticsExportSummaryLine = searchExportText
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .first { $0.hasPrefix("summary_line=") } ?? ""
+        let exportContainsSummaryLine =
+            diagnosticsExportSummaryLine.hasPrefix("summary_line=roots:")
+            && diagnosticsExportSummaryLine.contains("Scanned 5 songs")
+            && diagnosticsExportSummaryLine.contains("1 song(s) with 1 warning(s)")
+            && diagnosticsExportSummaryLine.contains("2 skipped at roots")
+        guard exportContainsSummaryLine else {
+            throw ArchiveUserFlowSmokeError.searchDiagnosticsExportMissingSummaryLine
         }
 
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
@@ -391,6 +410,8 @@ public enum ArchiveUserFlowSmoke {
             skippedSearchMatchSummary: skippedMatch.matchSummary,
             searchDiagnosticsExportPath: searchExportPath,
             searchDiagnosticsExportContainsMatch: exportContainsSearchMatch,
+            searchDiagnosticsExportContainsSummaryLine: exportContainsSummaryLine,
+            diagnosticsExportSummaryLine: diagnosticsExportSummaryLine,
             skippedSearchDiagnosticsExportPath: exportPath,
             skippedSearchDiagnosticsExportContainsMatch: exportContainsSkippedMatch
         )
