@@ -47,12 +47,21 @@ cat >"$INFO_PLIST" <<PLIST
   <string>NSApplication</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Niko Music Hub uses audio capture permission only when you start Recorder, so it can save a local WAV recording to your selected output folder.</string>
 </dict>
 </plist>
 PLIST
 
 open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
+  local open_args=(-n)
+  local var
+  for var in NIKO_MUSIC_HUB_DRY_RUN_OPEN NIKO_MUSIC_HUB_FIXTURE_ROOT NIKO_MUSIC_HUB_E2E_SMOKE; do
+    if [[ -n "${!var+x}" ]]; then
+      open_args+=(--env "$var=${!var}")
+    fi
+  done
+  /usr/bin/open "${open_args[@]}" "$APP_BUNDLE"
 }
 
 case "$MODE" in

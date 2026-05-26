@@ -84,6 +84,48 @@ final class DownloaderUseCaseTests: XCTestCase {
         _ = try await useCase.simulateAndEnqueue(url: url, options: options)
         XCTAssertEqual(jobRunner.enqueueCount, 1)
     }
+
+    func testCompletedDownloadLogsDestinationForOutputInbox() async throws {
+        let outputURL = URL(fileURLWithPath: "/tmp/out/Me at the zoo.webm")
+        let jobRunner = JobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: SuccessfulDownloader(outputURLs: [outputURL]),
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                fileExists: { _ in true }
+            ),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: AvailableVersionRunner()
+        )
+
+        let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
+        let job = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out")
+            )
+        )
+
+        let completed = try await waitForJob(job.id, in: jobRunner)
+        XCTAssertEqual(completed.state, .completed)
+        XCTAssertTrue(
+            completed.logEntries.contains {
+                $0.message == "[download] Destination: \(outputURL.path)"
+            }
+        )
+    }
+
+    private func waitForJob(_ id: Job.ID, in runner: JobRunner) async throws -> Job {
+        for _ in 0..<50 {
+            if let job = runner.job(id: id), job.state == .completed || job.state == .failed {
+                return job
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        throw XCTSkip("Timed out waiting for downloader job to finish")
+    }
 }
 
 private final class SimulateFailureRunner: ExternalProcessRunning, @unchecked Sendable {
@@ -113,6 +155,23 @@ private struct NeverCalledDownloadRunner: ExternalProcessRunning {
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
         XCTFail("Download runner should not run during simulate-only tests: \(request.arguments)")
         return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+    }
+}
+
+private struct SuccessfulDownloader: DownloadRunning {
+    let outputURLs: [URL]
+
+    func download(
+        _ request: DownloadRequest,
+        progressHandler: @escaping @Sendable (String) -> Void
+    ) async throws -> DownloadResult {
+        progressHandler("[download] 100.0% of 1.0MiB in 00:01")
+        return DownloadResult(
+            outputURLs: outputURLs,
+            sourceURL: request.sourceURL,
+            exitCode: 0,
+            standardError: ""
+        )
     }
 }
 

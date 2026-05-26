@@ -79,6 +79,11 @@ public struct YtDlpDownloader: DownloadRunning {
         let args: [String] = [
             "--newline",
             "--force-overwrites",
+            "--socket-timeout", "30",
+            "--retries", "1",
+            "--fragment-retries", "1",
+            "--extractor-retries", "1",
+            "-f", "best[height<=360][ext=mp4]/best[height<=360]/worst",
             "--progress-template", "download:%progress",
             "-o", outputPath,
             request.sourceURL.absoluteString
@@ -86,14 +91,14 @@ public struct YtDlpDownloader: DownloadRunning {
 
         let processRequest = ExternalProcessRequest(
             executableURL: request.ytDlpURL,
-            arguments: args
+            arguments: args,
+            timeoutSeconds: 90
         )
 
         do {
             let result = try await runner.run(processRequest)
 
             var outputURLs: [URL] = []
-            var lastProgress: Double = 0
             let lines = result.standardOutput.split(whereSeparator: \.isNewline)
             for line in lines {
                 let str = String(line)
@@ -131,9 +136,6 @@ public struct YtDlpDownloader: DownloadRunning {
                     }
                 }
 
-                if let progressPct = Self.parseProgressPercentage(from: str) {
-                    lastProgress = progressPct / 100.0
-                }
             }
 
             if outputURLs.isEmpty && result.exitCode == 0 {

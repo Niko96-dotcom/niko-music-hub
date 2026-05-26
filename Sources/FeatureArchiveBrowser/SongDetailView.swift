@@ -4,6 +4,7 @@ import SwiftUI
 struct SongDetailView: View {
     let song: Song
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    private let previewDisplayLimit = 30
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -52,18 +53,6 @@ struct SongDetailView: View {
                 }
             }
 
-            if song.previewCandidates.count > 1 {
-                Text("All previews (ranked)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                ForEach(PreviewRankingExplainability.rankedPreviewLines(for: song), id: \.self) { line in
-                    Text(line)
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(2)
-                }
-            }
-
             HStack(spacing: 12) {
                 Button("Open Latest CPR") {
                     try? viewModel.openLatestCPR(for: song)
@@ -93,6 +82,25 @@ struct SongDetailView: View {
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 }
             }
+
+            if song.previewCandidates.count > 1 {
+                let rankedLines = PreviewRankingExplainability.rankedPreviewLines(for: song)
+                let visibleLines = SongDetailPreviewRows.visibleLines(from: rankedLines, limit: previewDisplayLimit)
+                Text("All previews (ranked, showing first \(visibleLines.count) of \(rankedLines.count))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                ForEach(visibleLines, id: \.self) { line in
+                    Text(line)
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(2)
+                }
+                if rankedLines.count > visibleLines.count {
+                    Text("\(rankedLines.count - visibleLines.count) more previews available in the archive scan.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -104,5 +112,12 @@ struct SongDetailView: View {
 
     private var mainPreviewURL: URL? {
         mainPreviewCandidate?.filePath
+    }
+}
+
+enum SongDetailPreviewRows {
+    static func visibleLines(from lines: [String], limit: Int) -> [String] {
+        guard limit > 0 else { return [] }
+        return Array(lines.prefix(limit))
     }
 }
