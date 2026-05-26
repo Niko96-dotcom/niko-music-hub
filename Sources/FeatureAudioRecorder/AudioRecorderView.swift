@@ -5,14 +5,13 @@ import SwiftUI
 public struct AudioRecorderView: View {
     let context: ToolContext
     @StateObject private var viewModel: AudioRecorderViewModel
-    @FocusState private var recorderFocused: Bool
 
     public init(context: ToolContext) {
         self.context = context
 
         let capturePort = CoreAudioTapAdapter()
         let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
-        let outputURL = AppSettings.default.outputFolder.url
+        let outputURL = ((try? context.settingsStore.loadSettings()) ?? .default).outputFolder.url
         let outputInboxStore = context.outputInboxStore
 
         _viewModel = StateObject(wrappedValue: AudioRecorderViewModel(
@@ -44,17 +43,6 @@ public struct AudioRecorderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
-        .focusable()
-        .focused($recorderFocused)
-        .onAppear { recorderFocused = true }
-        .onKeyPress(.space) {
-            if viewModel.isRecording {
-                Task { await viewModel.stopRecording() }
-            } else {
-                Task { await viewModel.startRecording() }
-            }
-            return .handled
-        }
     }
 
     private var header: some View {

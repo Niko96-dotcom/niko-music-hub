@@ -4,12 +4,18 @@ import Foundation
 
 enum TestToolContext {
     static func make() -> ToolContext {
-        ToolContext(
-            registeredToolCount: 1,
+        make(
             settingsStore: UserDefaultsSettingsStore(
                 userDefaults: UserDefaults(suiteName: "FeatureArchiveBrowserTests.\(UUID())")!,
                 key: "settings"
-            ),
+            )
+        )
+    }
+
+    static func make(settingsStore: SettingsStore) -> ToolContext {
+        ToolContext(
+            registeredToolCount: 1,
+            settingsStore: settingsStore,
             outputInboxStore: JSONOutputInboxStore(
                 storageURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent("inbox-\(UUID()).json")

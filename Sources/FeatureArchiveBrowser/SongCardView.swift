@@ -18,9 +18,9 @@ struct SongCardView: View {
                     .lineLimit(2)
             }
             if let warningLine = song.displayScanWarnings().first {
-                Text("⚠ \(warningLine)")
+                Text("Warning: \(warningLine)")
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(ArchiveDesignTokens.warning)
                     .lineLimit(2)
             }
             RoundedRectangle(cornerRadius: 4)
@@ -37,7 +37,7 @@ struct SongCardView: View {
         }
         .padding(12)
         .background(isSelected ? ArchiveDesignTokens.accent.opacity(0.15) : ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var previewLabel: String {

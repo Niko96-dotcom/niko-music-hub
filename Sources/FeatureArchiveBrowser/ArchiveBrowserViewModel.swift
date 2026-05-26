@@ -43,7 +43,11 @@ final class ArchiveBrowserViewModel: ObservableObject {
             return
         }
         if let settings = try? settingsStore.loadSettings() {
-            roots = settings.archiveRoots.map(\.url)
+            let loadedRoots = settings.archiveRoots.map(\.url)
+            roots = ArchiveRootDisplayPolicy.publicRoots(from: loadedRoots)
+            if roots.map(\.path) != loadedRoots.map(\.path) {
+                persistRoots()
+            }
         }
     }
 

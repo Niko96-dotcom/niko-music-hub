@@ -266,10 +266,10 @@ struct ArchiveDiagnosticsPanelView: View {
             if !displayWarnings.isEmpty {
                 ForEach(displayWarnings, id: \.self) { warning in
                     Text(
-                        "⚠ \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
+                        "Warning: \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
                     )
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(ArchiveDesignTokens.warning)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }

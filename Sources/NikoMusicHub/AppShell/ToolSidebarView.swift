@@ -8,7 +8,7 @@ struct ToolSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Outside Cubase")
+            Text("Niko Music Hub")
                 .font(.system(size: 16, weight: .semibold))
                 .lineLimit(1)
                 .padding(.horizontal, 16)
@@ -45,7 +45,7 @@ struct ToolSidebarView: View {
 
             if let context {
                 HelperToolsHealthStrip(context: context)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 12)
                     .padding(.bottom, 16)
             }
         }

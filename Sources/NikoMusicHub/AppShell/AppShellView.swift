@@ -20,20 +20,20 @@ struct AppShellView: View {
                 registry: registry,
                 selectedToolID: $selectedToolID
             )
-            .frame(width: 280)
+            .frame(minWidth: 220, idealWidth: 240, maxWidth: 270)
 
             Divider()
 
             activeToolView
-                .frame(minWidth: 540, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 660, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
 
             Divider()
 
             OutputInboxInspectorView(context: context)
-                .frame(width: 280)
+                .frame(minWidth: 300, idealWidth: 320, maxWidth: 380)
         }
-        .frame(minWidth: 1_060, minHeight: 600)
+        .frame(minWidth: 1_220, minHeight: 720)
     }
 
     @ViewBuilder
