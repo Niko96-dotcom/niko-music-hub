@@ -7,12 +7,14 @@ final class ExternalProcessRunningTests: XCTestCase {
         let request = ExternalProcessRequest(
             executableURL: executableURL,
             arguments: ["--version"],
-            environment: ["LC_ALL": "C"]
+            environment: ["LC_ALL": "C"],
+            timeoutSeconds: 5
         )
 
         XCTAssertEqual(request.executableURL, executableURL)
         XCTAssertEqual(request.arguments, ["--version"])
         XCTAssertEqual(request.environment, ["LC_ALL": "C"])
+        XCTAssertEqual(request.timeoutSeconds, 5)
     }
 
     func testFoundationRunnerCapturesExitCodeAndOutput() async throws {
@@ -27,6 +29,23 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertEqual(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines), "Outside Cubase")
         XCTAssertEqual(result.standardError, "")
+    }
+
+    func testFoundationRunnerTimesOutAndTerminatesProcess() async throws {
+        let runner = FoundationExternalProcessRunner()
+
+        do {
+            _ = try await runner.run(
+                ExternalProcessRequest(
+                    executableURL: URL(fileURLWithPath: "/bin/sleep"),
+                    arguments: ["5"],
+                    timeoutSeconds: 0.2
+                )
+            )
+            XCTFail("Expected timeout")
+        } catch let error as ExternalProcessError {
+            XCTAssertEqual(error, .timedOut(executable: "sleep", seconds: 0.2))
+        }
     }
 
     func testFoundationRunnerCapturesLargeStandardErrorWithoutBlocking() async throws {

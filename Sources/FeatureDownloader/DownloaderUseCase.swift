@@ -84,7 +84,8 @@ public final class DownloaderUseCase: @unchecked Sendable {
         // Use --simulate to validate URL without actually downloading
         let simulateRequest = ExternalProcessRequest(
             executableURL: ytDlpURL,
-            arguments: ["--simulate", "--print", "%(title)s", url.absoluteString]
+            arguments: ["--simulate", "--print", "%(title)s", url.absoluteString],
+            timeoutSeconds: 30
         )
 
         do {
@@ -148,6 +149,11 @@ public final class DownloaderUseCase: @unchecked Sendable {
                 if result.outputURLs.isEmpty {
                     throw DownloadUseCaseError.outputNotFound
                 }
+
+                for outputURL in result.outputURLs {
+                    progress.log("[download] Destination: \(outputURL.path)")
+                }
+                progress.update(progress: 1, message: "Downloaded")
 
                 return
             } catch {

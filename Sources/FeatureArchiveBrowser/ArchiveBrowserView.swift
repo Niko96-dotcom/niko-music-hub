@@ -175,8 +175,11 @@ struct ArchiveBrowserView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let song = viewModel.selectedSong {
-            SongDetailView(song: song, viewModel: viewModel)
-                .padding(20)
+            ScrollView {
+                SongDetailView(song: song, viewModel: viewModel)
+                    .padding(20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "music.note.house")

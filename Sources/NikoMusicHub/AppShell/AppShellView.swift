@@ -33,6 +33,7 @@ struct AppShellView: View {
             OutputInboxInspectorView(context: context)
                 .frame(minWidth: 300, idealWidth: 320, maxWidth: 380)
         }
+        .padding(14)
         .frame(minWidth: 1_220, minHeight: 720)
     }
 

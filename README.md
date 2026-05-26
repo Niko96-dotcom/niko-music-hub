@@ -68,4 +68,6 @@ Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broke
 
 `./script/e2e_user_smoke.sh` covers the fixture archive flow, dry-run CPR open, read-only archive proof, diagnostics export parity, and a public first-run UI smoke that rejects prototype labels, fixture paths, temp paths, and exposed diagnostics in the normal app window.
 
+The real public-release UAT record is in `docs/public-release-real-uat-2026-05-26.md`. It covers live archive, BPM, converter, downloader, output-folder, helper-health, and Output Inbox flows. Recorder remains blocked on local macOS microphone/audio-capture permission until the user grants access.
+
 See `docs/user-e2e.md` for smoke details and `AGENTS.md` for agent workflow rules.
