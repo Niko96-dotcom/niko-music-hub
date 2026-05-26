@@ -49,8 +49,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         recordingStart = Date()
 
         tapID = try createProcessTap()
-        aggregateDeviceID = try createAggregateDevice()
-        try attachTapToAggregate(tapID: tapID, deviceID: aggregateDeviceID)
+        aggregateDeviceID = try createAggregateDevice(tapUID: try readTapUID(tapID: tapID))
 
         let streamDescription = try readTapStreamDescription(tapID: tapID)
         guard let tapAudioFormat = AVAudioFormat(streamDescription: streamDescription) else {
@@ -148,7 +147,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         return tapID
     }
 
-    private func createAggregateDevice() throws -> AudioObjectID {
+    private func createAggregateDevice(tapUID: String) throws -> AudioObjectID {
         let uid = UUID().uuidString
         var mainDeviceUID = ""
         if let defaultUID = try? readDefaultOutputDeviceUID() {
@@ -160,6 +159,10 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
             kAudioAggregateDeviceUIDKey: uid,
             kAudioAggregateDeviceSubDeviceListKey: [] as CFArray,
             kAudioAggregateDeviceMainSubDeviceKey: mainDeviceUID,
+            kAudioAggregateDeviceTapListKey: [
+                [kAudioSubTapUIDKey: tapUID]
+            ] as CFArray,
+            kAudioAggregateDeviceTapAutoStartKey: false,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false
         ]
@@ -172,7 +175,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         return deviceID
     }
 
-    private func attachTapToAggregate(tapID: AudioObjectID, deviceID: AudioObjectID) throws {
+    private func readTapUID(tapID: AudioObjectID) throws -> String {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioTapPropertyUID,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -186,16 +189,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         guard uidStatus == noErr else {
             throw SystemAudioTapError.osStatus(uidStatus, context: "Could not read tap UID")
         }
-
-        propertyAddress.mSelector = kAudioAggregateDevicePropertyTapList
-        let tapList = [tapUID] as CFArray
-        propertySize = UInt32(MemoryLayout<CFArray>.size)
-        let listStatus = withUnsafePointer(to: tapList) { listPtr in
-            AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, propertySize, listPtr)
-        }
-        guard listStatus == noErr else {
-            throw SystemAudioTapError.osStatus(listStatus, context: "Could not attach tap to aggregate device")
-        }
+        return tapUID as String
     }
 
     private func readTapStreamDescription(tapID: AudioObjectID) throws -> AudioStreamBasicDescription {

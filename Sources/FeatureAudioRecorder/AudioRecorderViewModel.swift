@@ -1,4 +1,5 @@
 import AppCore
+import AVFAudio
 import FeatureAudioConverter
 import Foundation
 
@@ -89,15 +90,6 @@ public final class AudioRecorderViewModel: ObservableObject {
                     elapsedTime = level.elapsedTime
                     currentLevel = level
                 }
-
-                if Task.isCancelled {
-                    let result = try await capturePort.stopRecording()
-                    try await finalizeRecording(result)
-                    return
-                }
-
-                let result = try await capturePort.stopRecording()
-                try await finalizeRecording(result)
             } catch let recorderError as RecorderError {
                 recordingState = .error(recorderError)
                 error = recorderError
@@ -112,9 +104,24 @@ public final class AudioRecorderViewModel: ObservableObject {
     public func stopRecording() async {
         guard recordingState == .recording else { return }
         recordingState = .stopping
-        recordingTask?.cancel()
-        await recordingTask?.value
-        recordingTask = nil
+        do {
+            let result = try await capturePort.stopRecording()
+            recordingTask?.cancel()
+            await recordingTask?.value
+            recordingTask = nil
+            try await finalizeRecording(result)
+        } catch let recorderError as RecorderError {
+            recordingTask?.cancel()
+            recordingTask = nil
+            recordingState = .error(recorderError)
+            error = recorderError
+        } catch {
+            recordingTask?.cancel()
+            recordingTask = nil
+            let wrapped = RecorderError.verificationFailed(error.localizedDescription)
+            recordingState = .error(wrapped)
+            self.error = wrapped
+        }
     }
 
     public func requestPermission() async {
@@ -132,6 +139,10 @@ public final class AudioRecorderViewModel: ObservableObject {
             channelCount: result.channelCount
         )
         _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
+        let file = try AVAudioFile(forReading: result.outputURL)
+        guard file.length > 0 else {
+            throw RecorderError.verificationFailed("Recording contained no audio frames.")
+        }
 
         let item = OutputInboxItem(
             id: UUID(),

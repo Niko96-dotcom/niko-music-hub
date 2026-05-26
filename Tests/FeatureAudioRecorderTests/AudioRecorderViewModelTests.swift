@@ -1,4 +1,5 @@
 import AppCore
+import AVFAudio
 import FeatureAudioConverter
 import XCTest
 @testable import FeatureAudioRecorder
@@ -74,6 +75,66 @@ final class AudioRecorderViewModelTests: XCTestCase {
         vm.maxDurationMinutes = 5
         XCTAssertEqual(vm.maxDurationMinutes, 5)
     }
+
+    func testStopRecordingFinalizesAndAddsOutputInboxItem() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: true)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        XCTAssertEqual(vm.recordingState, .idle)
+        XCTAssertEqual(try inbox.listItems().count, 1)
+        XCTAssertNotNil(vm.lastRecordedURL)
+        XCTAssertTrue(vm.showSaveConfirmation)
+    }
+
+    func testStopRecordingRejectsEmptyWAVHeader() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-empty-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: false)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        guard case .error(.verificationFailed(let message)) = vm.recordingState else {
+            XCTFail("Expected verification failure, got \(vm.recordingState)")
+            return
+        }
+        XCTAssertEqual(message, "Recording contained no audio frames.")
+        XCTAssertEqual(try inbox.listItems().count, 0)
+    }
+}
+
+private func waitUntilRecording(_ port: WritingCapturePort) async throws {
+    for _ in 0..<20 {
+        if port.recording { return }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTFail("Timed out waiting for mock recorder to start")
 }
 
 private final class DenyingCapturePort: AudioCapturePort, @unchecked Sendable {
@@ -150,6 +211,78 @@ private final class MockAudioCapturePort: AudioCapturePort, @unchecked Sendable 
 
     func stopRecording() async throws -> RecorderResult {
         RecorderResult(outputURL: URL(fileURLWithPath: "/tmp/test.wav"), duration: 0.1, sampleRate: 44100, bitDepth: 24, channelCount: 2)
+    }
+}
+
+private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
+    private let writesAudioFrames: Bool
+    private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
+    private var outputURL: URL?
+    var recording: Bool = false
+
+    init(writesAudioFrames: Bool) {
+        self.writesAudioFrames = writesAudioFrames
+    }
+
+    func checkPermission() async -> RecorderPermissionState {
+        .authorized
+    }
+
+    func requestPermission() async -> RecorderPermissionState {
+        .authorized
+    }
+
+    func isCompatibleMacOS() -> Bool {
+        true
+    }
+
+    func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
+        recording = true
+        self.outputURL = outputURL
+        return AsyncStream { continuation in
+            self.continuation = continuation
+            continuation.yield(RecorderAudioLevel(peak: 0.5, average: 0.25, elapsedTime: 0.1))
+        }
+    }
+
+    func stopRecording() async throws -> RecorderResult {
+        guard let outputURL else {
+            throw RecorderError.apiError("Missing output URL")
+        }
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 2,
+            AVLinearPCMBitDepthKey: 24,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+        let file = try AVAudioFile(forWriting: outputURL, settings: settings)
+        if writesAudioFrames {
+            let format = file.processingFormat
+            let frameCount: AVAudioFrameCount = 512
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
+            buffer.frameLength = frameCount
+            if let channelData = buffer.floatChannelData {
+                for channel in 0..<Int(format.channelCount) {
+                    for frame in 0..<Int(frameCount) {
+                        channelData[channel][frame] = Float(frame % 32) / 32.0
+                    }
+                }
+            }
+            try file.write(from: buffer)
+        }
+
+        recording = false
+        continuation?.finish()
+        return RecorderResult(
+            outputURL: outputURL,
+            duration: writesAudioFrames ? 0.1 : 0,
+            sampleRate: 44_100,
+            bitDepth: 24,
+            channelCount: 2
+        )
     }
 }
 
