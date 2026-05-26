@@ -2,21 +2,14 @@
 
 Native macOS SwiftUI app combining outside-Cubase production tools with a read-only Cubase archive browser.
 
-## Local setup (Mac)
+## Working in Cursor (this session)
 
-Canonical folder: **`/Users/niko/Documents/Niko-Music-Hub`**
+If your workspace is this repository (cloud or local checkout), **you are already set up** — no install script, no clone step, nothing to run first. Ask the agent to change code, docs, or tests here.
 
-One-shot install (clone, test, build app):
+- **Edit & ship from Cursor Cloud:** full repo at workspace root; push via git when ready.
+- **Build the Mac app:** needs a Mac with Xcode (`swift build`, `./script/build_and_run.sh`). Cloud/Linux cannot compile SwiftUI.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Niko96-dotcom/niko-music-hub/main/script/bootstrap_documents_mac.sh -o /tmp/bootstrap_documents_mac.sh
-chmod +x /tmp/bootstrap_documents_mac.sh
-/tmp/bootstrap_documents_mac.sh
-```
-
-Or from a checkout: `./script/bootstrap_documents_mac.sh`
-
-Details: **[docs/local-development.md](docs/local-development.md)**.
+Optional Mac-only folder (only if you want a separate copy under Documents): see `docs/local-development.md`.
 
 ## Build and run
 

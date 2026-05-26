@@ -53,19 +53,14 @@ Do not set or depend on `LOCUS_*` environment variables.
 
 MacBook is read-only/reference unless a task explicitly says copy source/reference files. Do not modify MacBook projects in place.
 
-## Local development (Mac)
+## Where you work
 
-Canonical working copy:
-
-```text
-/Users/niko/Documents/Niko-Music-Hub
-```
-
-Install or refresh: `./script/bootstrap_documents_mac.sh` (see `docs/local-development.md`). Cloud/Linux sandboxes may edit source but cannot run `swift test`; validate on the Mac checkout before merge.
+- **Cursor Cloud / this workspace:** the repo is already checked out. No bootstrap or clone required for the user.
+- **Optional Mac copy** (`/Users/niko/Documents/Niko-Music-Hub`): only to run the app and host-only tests; see `docs/local-development.md`.
 
 ## Local gates
 
-Run on macOS in the Documents checkout:
+Run on a Mac when you need compile/test proof:
 
 ```bash
 ./script/ci.sh
