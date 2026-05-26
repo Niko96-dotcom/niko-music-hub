@@ -53,9 +53,13 @@ Do not set or depend on `LOCUS_*` environment variables.
 
 MacBook is read-only/reference unless a task explicitly says copy source/reference files. Do not modify MacBook projects in place.
 
+## Local development (human Mac checkout)
+
+Humans work in a macOS clone (see `docs/local-development.md`). Cloud/Linux checkouts may edit source but cannot run `swift test`; validate on Mac before merge.
+
 ## Local gates
 
-Run:
+Run on macOS:
 
 ```bash
 ./script/ci.sh

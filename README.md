@@ -2,6 +2,18 @@
 
 Native macOS SwiftUI app combining outside-Cubase production tools with a read-only Cubase archive browser.
 
+## Local setup (Mac)
+
+Clone and open on your Mac (Swift does not build on Linux CI sandboxes):
+
+```bash
+git clone https://github.com/Niko96-dotcom/niko-music-hub.git ~/src/niko-music-hub
+cd ~/src/niko-music-hub
+./script/setup_mac_check.sh
+```
+
+Full workflow (Cursor + cloud agent + real archive): **[docs/local-development.md](docs/local-development.md)**.
+
 ## Build and run
 
 ```bash

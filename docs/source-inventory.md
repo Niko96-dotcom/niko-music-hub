@@ -75,7 +75,9 @@ Application Support path (today): `~/Library/Application Support/Outside Cubase 
 
 | Test target | Approx. focus |
 |-------------|----------------|
+| `NikoMusicCoreTests` | Scan, search, preview, path safety, diagnostics |
 | `AppCoreTests` | Registry, jobs, inbox, settings, handoff |
+| `FeatureArchiveBrowserTests` | Archive browser view model / integration |
 | `FeatureBPMTapperTests` | Tempo, history, view model |
 | `FeatureAudioConverterTests` | Pipeline, FFmpeg, presets, handoff |
 | `FeatureAudioRecorderTests` | WAV writer, permissions, CoreAudio (partially CI-skipped) |
