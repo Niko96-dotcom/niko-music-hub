@@ -12,18 +12,20 @@ struct AppComposition {
     let context: ToolContext
 
     static func make() -> AppComposition {
-        let features: [any ToolFeature] = [
+        var features: [any ToolFeature] = [
             ArchiveBrowserFeature(),
             BPMTapperFeature(),
             AudioConverterFeature(),
             AudioRecorderFeature(),
-            DownloaderFeature(),
-            DevToolFeature()
+            DownloaderFeature()
         ]
+        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1" {
+            features.append(DevToolFeature())
+        }
         let registry = try! ToolRegistry(features: features)
         let context = ToolContext(
             registeredToolCount: features.count,
-            settingsStore: UserDefaultsSettingsStore(),
+            settingsStore: Self.makeSettingsStore(),
             outputInboxStore: JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL()),
             jobRunner: JobRunner(),
             fileActions: AppKitFileActions(),
@@ -31,6 +33,16 @@ struct AppComposition {
         )
 
         return AppComposition(registry: registry, context: context)
+    }
+
+    private static func makeSettingsStore() -> SettingsStore {
+        if let suiteName = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SETTINGS_SUITE"],
+           !suiteName.isEmpty,
+           let defaults = UserDefaults(suiteName: suiteName) {
+            defaults.removePersistentDomain(forName: suiteName)
+            return UserDefaultsSettingsStore(userDefaults: defaults)
+        }
+        return UserDefaultsSettingsStore()
     }
 }
 

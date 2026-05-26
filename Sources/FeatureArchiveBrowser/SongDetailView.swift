@@ -18,9 +18,9 @@ struct SongDetailView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     ForEach(displayWarnings, id: \.self) { warning in
-                        Text("⚠ \(warning)")
+                        Text("Warning: \(warning)")
                             .font(.system(size: 11))
-                            .foregroundStyle(ArchiveDesignTokens.accent)
+                            .foregroundStyle(ArchiveDesignTokens.warning)
                             .lineLimit(3)
                     }
                 }

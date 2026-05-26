@@ -1285,4 +1285,52 @@ if ! grep -q "\[niko-music-hub-smoke\] ok" "$LOG_FILE"; then
   exit 1
 fi
 
+echo "== public first-run UI smoke =="
+PUBLIC_UI_TEXT="$ROOT/.build/e2e-public-ui.txt"
+PUBLIC_UI_SCREENSHOT="$ROOT/.build/e2e-public-ui.png"
+UI_SUITE="NikoMusicHubE2E.$(uuidgen)"
+launchctl setenv NIKO_MUSIC_HUB_SETTINGS_SUITE "$UI_SUITE" >/dev/null 2>&1 || true
+cleanup_public_ui() {
+  launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
+}
+trap cleanup_public_ui EXIT
+
+NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" ./script/build_and_run.sh --verify >/dev/null
+sleep 1
+PUBLIC_UI_PID="$(pgrep -x NikoMusicHub | head -1 || true)"
+if [[ -z "$PUBLIC_UI_PID" ]]; then
+  echo "E2E failed: public UI app process missing" >&2
+  exit 1
+fi
+
+screencapture -x "$PUBLIC_UI_SCREENSHOT" >/dev/null 2>&1 || true
+NIKO_MUSIC_HUB_AX_PID="$PUBLIC_UI_PID" swift "$ROOT/script/e2e_ax_dump.swift" >"$PUBLIC_UI_TEXT"
+
+for required_text in \
+  "Niko Music Hub" \
+  "Cubase Archive" \
+  "Start with an archive root" \
+  "Add an archive root" \
+  "Output Inbox" \
+  "Choose the folder that contains your Cubase song/project folders"; do
+  if ! grep -Fq "$required_text" "$PUBLIC_UI_TEXT"; then
+    echo "E2E failed: public first-run UI missing: $required_text" >&2
+    exit 1
+  fi
+done
+
+for forbidden_text in \
+  "Outside Cubase" \
+  "Dev Tool" \
+  "Developer Tool" \
+  "Fixtures/CubaseArchive" \
+  "/var/folders" \
+  "Scan diagnostics" \
+  "Support summary"; do
+  if grep -Fq "$forbidden_text" "$PUBLIC_UI_TEXT"; then
+    echo "E2E failed: public first-run UI exposed forbidden text: $forbidden_text" >&2
+    exit 1
+  fi
+done
+
 echo "E2E user smoke passed."

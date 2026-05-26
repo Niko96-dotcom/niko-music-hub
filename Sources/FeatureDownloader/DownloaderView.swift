@@ -6,7 +6,6 @@ public struct DownloaderView: View {
     let context: ToolContext
 
     @StateObject private var viewModel: DownloaderViewModel
-    @FocusState private var downloaderFocused: Bool
 
     public init(
         context: ToolContext,
@@ -40,15 +39,6 @@ public struct DownloaderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
-        .focusable()
-        .focused($downloaderFocused)
-        .onAppear { downloaderFocused = true }
-        .onKeyPress(.escape) {
-            if !viewModel.urlText.isEmpty {
-                viewModel.clearInput()
-            }
-            return .handled
-        }
     }
 
     private var header: some View {

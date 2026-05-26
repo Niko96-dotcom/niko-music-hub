@@ -10,7 +10,6 @@ public struct AudioConverterView: View {
     @State private var fileImporterVisible = false
     @State private var dropTargeted = false
     @State private var presetEditorVisible = false
-    @FocusState private var converterFocused: Bool
 
     public init(
         context: ToolContext,
@@ -37,15 +36,6 @@ public struct AudioConverterView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
-        .focusable()
-        .focused($converterFocused)
-        .onAppear { converterFocused = true }
-        .onKeyPress(.escape) {
-            if viewModel.isConverting {
-                viewModel.requestStopAfterCurrent()
-            }
-            return .handled
-        }
         .fileImporter(
             isPresented: $fileImporterVisible,
             allowedContentTypes: allowedAudioTypes,

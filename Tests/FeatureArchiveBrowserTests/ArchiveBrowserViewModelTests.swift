@@ -5,6 +5,46 @@ import XCTest
 
 @MainActor
 final class ArchiveBrowserViewModelTests: XCTestCase {
+    func testNormalLaunchFiltersFixtureTempAndMissingRootsFromSavedSettings() async throws {
+        try CubaseFixtures.ensureGenerated()
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let publicRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubPublicRootTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: publicRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: publicRoot) }
+
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("niko-music-hub-temp-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        try store.saveSettings(AppSettings(
+            archiveRoots: [
+                StoredArchiveRoot(path: publicRoot.path),
+                StoredArchiveRoot(path: CubaseFixtures.archiveRoot.path),
+                StoredArchiveRoot(path: tempRoot.path),
+                StoredArchiveRoot(path: "/var/folders/niko-music-hub-invalid-root"),
+                StoredArchiveRoot(path: "/tmp/niko-music-hub-missing-root")
+            ]
+        ))
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: store)
+        )
+
+        XCTAssertEqual(viewModel.roots.map(\.path), [publicRoot.standardizedFileURL.path])
+        XCTAssertEqual(
+            try store.loadSettings().archiveRoots.map(\.path),
+            [publicRoot.standardizedFileURL.path]
+        )
+    }
+
     func testScanFixtureRootFindsNeonHook() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
