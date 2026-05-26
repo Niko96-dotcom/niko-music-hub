@@ -2,14 +2,15 @@
 
 Native macOS SwiftUI app combining outside-Cubase production tools with a read-only Cubase archive browser.
 
-## Working in Cursor (this session)
+## Run the app (your Mac)
 
-If your workspace is this repository (cloud or local checkout), **you are already set up** — no install script, no clone step, nothing to run first. Ask the agent to change code, docs, or tests here.
+**This Cursor Cloud session cannot launch the app** (Linux, no SwiftUI). Open the same repo **in Cursor on your Mac**, then in the integrated terminal:
 
-- **Edit & ship from Cursor Cloud:** full repo at workspace root; push via git when ready.
-- **Build the Mac app:** needs a Mac with Xcode (`swift build`, `./script/build_and_run.sh`). Cloud/Linux cannot compile SwiftUI.
+```bash
+./script/build_and_run.sh
+```
 
-Optional Mac-only folder (only if you want a separate copy under Documents): see `docs/local-development.md`.
+Or **Terminal → Run Build Task** (default **⌘⇧B**) — runs the same command via `.vscode/tasks.json`.
 
 ## Build and run
 
