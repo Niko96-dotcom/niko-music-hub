@@ -27,6 +27,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
     private var levelHandler: ((RecorderAudioLevel) -> Void)?
     private var maxDuration: TimeInterval?
     private var recordingStart: Date?
+    private let ioQueue = DispatchQueue(label: "NikoMusicHub.SystemAudioProcessTapSession.io", qos: .userInitiated)
+    private var diagnostics = RecorderDiagnosticsAccumulator()
     private let stateLock = NSLock()
     private var isRunning = false
 
@@ -48,34 +50,34 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         self.maxDuration = maxDuration
         recordingStart = Date()
 
-        tapID = try createProcessTap()
-        aggregateDeviceID = try createAggregateDevice(tapUID: try readTapUID(tapID: tapID))
+        let processTap = try createProcessTap()
+        tapID = processTap.id
+        let outputDeviceUID = try readDefaultSystemOutputDeviceUID()
+        let tapUID = processTap.uid
+        aggregateDeviceID = try createAggregateDevice(tapUID: tapUID, outputDeviceUID: outputDeviceUID)
+        try attachTapToAggregateDevice(tapUID: tapUID, aggregateDeviceID: aggregateDeviceID)
 
         let streamDescription = try readTapStreamDescription(tapID: tapID)
         guard let tapAudioFormat = AVAudioFormat(streamDescription: streamDescription) else {
             throw RecorderError.apiError("Unsupported tap audio format")
         }
 
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: preset.sampleRate,
-            AVNumberOfChannelsKey: preset.channelCount,
-            AVLinearPCMBitDepthKey: preset.bitDepth,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false
-        ]
-        guard let destinationFormat = AVAudioFormat(settings: settings) else {
-            throw RecorderError.apiError("Could not build output audio format")
-        }
+        let activeWriter = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
+        let destinationFormat = activeWriter.processingFormat
 
         tapFormat = tapAudioFormat
         outputFormat = destinationFormat
         converter = AVAudioConverter(from: tapAudioFormat, to: destinationFormat)
-        writer = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
+        writer = activeWriter
+        diagnostics = RecorderDiagnosticsAccumulator(
+            outputDeviceUID: outputDeviceUID,
+            tapSampleRate: tapAudioFormat.sampleRate,
+            tapChannelCount: Int(tapAudioFormat.channelCount)
+        )
 
+        isRunning = true
         try installIOProc(deviceID: aggregateDeviceID)
         try startDevice(deviceID: aggregateDeviceID)
-        isRunning = true
     }
 
     func stop() throws -> RecorderResult {
@@ -90,7 +92,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
             throw RecorderError.writeError("Recorder writer not initialized")
         }
 
-        let result = try activeWriter.finalize()
+        diagnostics.setWrittenFrameCount(activeWriter.writtenFrameCount)
+        let result = try activeWriter.finalize(diagnostics: diagnostics.snapshot())
         self.writer = nil
         converter = nil
         tapFormat = nil
@@ -128,44 +131,23 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         }
     }
 
-    private func createProcessTap() throws -> AudioObjectID {
-        let description = CATapDescription()
-        description.name = "OutsideCubaseHub-SystemTap"
-        description.processes = []
-        description.isPrivate = true
-        description.isMixdown = true
-        description.isMono = false
-        description.isExclusive = false
-        description.stream = 0
-        description.muteBehavior = CATapMuteBehavior.unmuted
+    private func createProcessTap() throws -> (id: AudioObjectID, uid: String) {
+        let description = SystemAudioTapConfiguration.makeGlobalTapDescription()
+        description.uuid = UUID()
 
         var tapID = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateProcessTap(description, &tapID)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not create system audio tap")
         }
-        return tapID
+        return (tapID, description.uuid.uuidString)
     }
 
-    private func createAggregateDevice(tapUID: String) throws -> AudioObjectID {
-        let uid = UUID().uuidString
-        var mainDeviceUID = ""
-        if let defaultUID = try? readDefaultOutputDeviceUID() {
-            mainDeviceUID = defaultUID
-        }
-
-        let description: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "OutsideCubaseHub-Aggregate",
-            kAudioAggregateDeviceUIDKey: uid,
-            kAudioAggregateDeviceSubDeviceListKey: [] as CFArray,
-            kAudioAggregateDeviceMainSubDeviceKey: mainDeviceUID,
-            kAudioAggregateDeviceTapListKey: [
-                [kAudioSubTapUIDKey: tapUID]
-            ] as CFArray,
-            kAudioAggregateDeviceTapAutoStartKey: false,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false
-        ]
+    private func createAggregateDevice(tapUID: String, outputDeviceUID mainDeviceUID: String) throws -> AudioObjectID {
+        let description = SystemAudioTapConfiguration.makeAggregateDeviceDescription(
+            tapUID: tapUID,
+            outputDeviceUID: mainDeviceUID
+        )
 
         var deviceID = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &deviceID)
@@ -175,21 +157,28 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         return deviceID
     }
 
-    private func readTapUID(tapID: AudioObjectID) throws -> String {
+    private func attachTapToAggregateDevice(tapUID: String, aggregateDeviceID: AudioObjectID) throws {
         var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioTapPropertyUID,
+            mSelector: kAudioAggregateDevicePropertyTapList,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var propertySize = UInt32(MemoryLayout<CFString>.size)
-        var tapUID = "" as CFString
-        let uidStatus = withUnsafeMutablePointer(to: &tapUID) { uidPtr in
-            AudioObjectGetPropertyData(tapID, &propertyAddress, 0, nil, &propertySize, uidPtr)
+
+        var tapList = [tapUID] as CFArray
+        let propertySize = UInt32(MemoryLayout<CFArray>.size)
+        let status = withUnsafeMutablePointer(to: &tapList) { tapListPointer in
+            AudioObjectSetPropertyData(
+                aggregateDeviceID,
+                &propertyAddress,
+                0,
+                nil,
+                propertySize,
+                tapListPointer
+            )
         }
-        guard uidStatus == noErr else {
-            throw SystemAudioTapError.osStatus(uidStatus, context: "Could not read tap UID")
+        guard status == noErr else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not attach tap to aggregate device")
         }
-        return tapUID as String
     }
 
     private func readTapStreamDescription(tapID: AudioObjectID) throws -> AudioStreamBasicDescription {
@@ -207,18 +196,26 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         return streamDescription
     }
 
-    private func readDefaultOutputDeviceUID() throws -> String {
+    private func readDefaultSystemOutputDeviceUID() throws -> String {
+        do {
+            return try readOutputDeviceUID(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+        } catch {
+            return try readOutputDeviceUID(selector: kAudioHardwarePropertyDefaultOutputDevice)
+        }
+    }
+
+    private func readOutputDeviceUID(selector: AudioObjectPropertySelector) throws -> String {
         var deviceID = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         let systemObject = AudioObjectID(kAudioObjectSystemObject)
         var status = AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &deviceID)
         guard status == noErr else {
-            throw SystemAudioTapError.osStatus(status, context: "Could not read default output device")
+            throw SystemAudioTapError.osStatus(status, context: "Could not read output device")
         }
 
         var uid = "" as CFString
@@ -235,8 +232,14 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
 
     private func installIOProc(deviceID: AudioObjectID) throws {
         var procID: AudioDeviceIOProcID?
-        let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, nil) { [weak self] _, inputData, _, _, _ in
-            self?.handleInput(inputData: inputData)
+        let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, ioQueue) { [weak self] _, inputData, _, outputData, _ in
+            if inputData.pointee.mNumberBuffers > 0 {
+                self?.diagnostics.recordIOCallback(source: .input)
+                self?.handleAudio(bufferList: inputData)
+            } else {
+                self?.diagnostics.recordIOCallback(source: .output)
+                self?.handleAudio(bufferList: UnsafePointer(outputData))
+            }
         }
         guard status == noErr, let procID else {
             throw SystemAudioTapError.osStatus(status, context: "Could not create IO proc")
@@ -254,7 +257,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         }
     }
 
-    private func handleInput(inputData: UnsafePointer<AudioBufferList>?) {
+    private func handleAudio(bufferList inputData: UnsafePointer<AudioBufferList>?) {
         stateLock.lock()
         guard isRunning,
               let writer,
@@ -269,35 +272,56 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         stateLock.unlock()
 
         let bufferList = inputData.pointee
-        guard bufferList.mNumberBuffers > 0 else { return }
-
-        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: tapFormat, bufferListNoCopy: inputData, deallocator: nil) else {
+        guard bufferList.mNumberBuffers > 0 else {
+            diagnostics.recordZeroBuffer()
             return
         }
+
+        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: tapFormat, bufferListNoCopy: inputData, deallocator: nil) else {
+            diagnostics.recordZeroBuffer()
+            return
+        }
+        diagnostics.recordInputFrames(Int64(inputBuffer.frameLength))
 
         let frameCapacity = AVAudioFrameCount(
             Double(inputBuffer.frameLength) * outputFormat.sampleRate / tapFormat.sampleRate
         ) + 32
         guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: frameCapacity) else {
+            diagnostics.recordZeroBuffer()
             return
         }
 
         var error: NSError?
+        let inputState = ConverterInputState()
         let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
+            guard !inputState.didProvideInput else {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            inputState.didProvideInput = true
             outStatus.pointee = .haveData
             return inputBuffer
         }
         converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputBlock)
-        if error != nil { return }
-        if convertedBuffer.frameLength == 0 { return }
+        if error != nil {
+            diagnostics.recordConverterError()
+            return
+        }
+        if convertedBuffer.frameLength == 0 {
+            diagnostics.recordZeroBuffer()
+            return
+        }
+        diagnostics.recordConvertedFrames(Int64(convertedBuffer.frameLength))
 
         do {
             try writer.writeBuffer(convertedBuffer)
         } catch {
+            diagnostics.recordWriteError()
             return
         }
+        diagnostics.setWrittenFrameCount(writer.writtenFrameCount)
 
-        let peak = meterPeak(from: convertedBuffer)
+        let peak = meterPeak(from: inputBuffer)
         let average = peak * 0.6
         let elapsed = writer.currentTime
         let level = RecorderAudioLevel(peak: peak, average: average, elapsedTime: elapsed)
@@ -326,6 +350,141 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
             }
         }
         return min(peak, 1.0)
+    }
+}
+
+private final class ConverterInputState: @unchecked Sendable {
+    var didProvideInput = false
+}
+
+private final class RecorderDiagnosticsAccumulator: @unchecked Sendable {
+    enum CallbackSource {
+        case input
+        case output
+    }
+
+    private let lock = NSLock()
+    private var outputDeviceUID: String
+    private var tapSampleRate: Double
+    private var tapChannelCount: Int
+    private var ioCallbackCount = 0
+    private var inputBufferCallbackCount = 0
+    private var outputBufferCallbackCount = 0
+    private var zeroBufferCallbackCount = 0
+    private var inputFrameCount: Int64 = 0
+    private var convertedFrameCount: Int64 = 0
+    private var writtenFrameCount: Int64 = 0
+    private var converterErrorCount = 0
+    private var writeErrorCount = 0
+
+    init(
+        outputDeviceUID: String = "",
+        tapSampleRate: Double = 0,
+        tapChannelCount: Int = 0
+    ) {
+        self.outputDeviceUID = outputDeviceUID
+        self.tapSampleRate = tapSampleRate
+        self.tapChannelCount = tapChannelCount
+    }
+
+    func recordIOCallback(source: CallbackSource) {
+        lock.lock()
+        ioCallbackCount += 1
+        switch source {
+        case .input:
+            inputBufferCallbackCount += 1
+        case .output:
+            outputBufferCallbackCount += 1
+        }
+        lock.unlock()
+    }
+
+    func recordZeroBuffer() {
+        lock.lock()
+        zeroBufferCallbackCount += 1
+        lock.unlock()
+    }
+
+    func recordInputFrames(_ frames: Int64) {
+        lock.lock()
+        inputFrameCount += max(0, frames)
+        lock.unlock()
+    }
+
+    func recordConvertedFrames(_ frames: Int64) {
+        lock.lock()
+        convertedFrameCount += max(0, frames)
+        lock.unlock()
+    }
+
+    func setWrittenFrameCount(_ frames: Int64) {
+        lock.lock()
+        writtenFrameCount = max(0, frames)
+        lock.unlock()
+    }
+
+    func recordConverterError() {
+        lock.lock()
+        converterErrorCount += 1
+        lock.unlock()
+    }
+
+    func recordWriteError() {
+        lock.lock()
+        writeErrorCount += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> RecorderDiagnostics {
+        lock.lock()
+        defer { lock.unlock() }
+        return RecorderDiagnostics(
+            outputDeviceUID: outputDeviceUID,
+            tapSampleRate: tapSampleRate,
+            tapChannelCount: tapChannelCount,
+            ioCallbackCount: ioCallbackCount,
+            inputBufferCallbackCount: inputBufferCallbackCount,
+            outputBufferCallbackCount: outputBufferCallbackCount,
+            zeroBufferCallbackCount: zeroBufferCallbackCount,
+            inputFrameCount: inputFrameCount,
+            convertedFrameCount: convertedFrameCount,
+            writtenFrameCount: writtenFrameCount,
+            converterErrorCount: converterErrorCount,
+            writeErrorCount: writeErrorCount
+        )
+    }
+}
+
+enum SystemAudioTapConfiguration {
+    static let tapName = "NikoMusicHub-SystemTap"
+    static let aggregateDeviceName = "NikoMusicHub-Aggregate"
+
+    static func makeGlobalTapDescription() -> CATapDescription {
+        let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+        description.name = tapName
+        description.isPrivate = true
+        description.muteBehavior = CATapMuteBehavior.unmuted
+        return description
+    }
+
+    static func makeAggregateDeviceDescription(tapUID: String, outputDeviceUID: String) -> [String: Any] {
+        [
+            kAudioAggregateDeviceNameKey: aggregateDeviceName,
+            kAudioAggregateDeviceUIDKey: UUID().uuidString,
+            kAudioAggregateDeviceSubDeviceListKey: [
+                [kAudioSubDeviceUIDKey: outputDeviceUID]
+            ] as CFArray,
+            kAudioAggregateDeviceMainSubDeviceKey: outputDeviceUID,
+            kAudioAggregateDeviceTapListKey: [
+                [
+                    kAudioSubTapUIDKey: tapUID,
+                    kAudioSubTapDriftCompensationKey: true
+                ]
+            ] as CFArray,
+            kAudioAggregateDeviceTapAutoStartKey: false,
+            kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceIsStackedKey: false
+        ]
     }
 }
 

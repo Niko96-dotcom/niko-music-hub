@@ -124,7 +124,10 @@ final class AudioRecorderViewModelTests: XCTestCase {
             XCTFail("Expected verification failure, got \(vm.recordingState)")
             return
         }
-        XCTAssertEqual(message, "Recording contained no audio frames.")
+        XCTAssertTrue(message.hasPrefix("Recording contained no audio frames."))
+        XCTAssertTrue(message.contains("callbacks=3"))
+        XCTAssertTrue(message.contains("inputFrames=1024"))
+        XCTAssertTrue(message.contains("writtenFrames=0"))
         XCTAssertEqual(try inbox.listItems().count, 0)
     }
 }
@@ -281,7 +284,18 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
             duration: writesAudioFrames ? 0.1 : 0,
             sampleRate: 44_100,
             bitDepth: 24,
-            channelCount: 2
+            channelCount: 2,
+            frameCount: writesAudioFrames ? 512 : 0,
+            diagnostics: RecorderDiagnostics(
+                outputDeviceUID: "test-output",
+                tapSampleRate: 44_100,
+                tapChannelCount: 2,
+                ioCallbackCount: 3,
+                inputBufferCallbackCount: 3,
+                inputFrameCount: 1024,
+                convertedFrameCount: writesAudioFrames ? 512 : 0,
+                writtenFrameCount: writesAudioFrames ? 512 : 0
+            )
         )
     }
 }

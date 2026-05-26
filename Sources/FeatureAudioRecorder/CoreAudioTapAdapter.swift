@@ -1,5 +1,4 @@
 import AppCore
-import AVFoundation
 import CoreAudio
 import Foundation
 
@@ -27,24 +26,15 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     }
 
     public func checkPermission() async -> RecorderPermissionState {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        switch status {
-        case .authorized:
-            return .authorized
-        case .denied:
-            return .denied(needsSettings: true)
-        case .restricted:
-            return .restricted
-        case .notDetermined:
-            return .notDetermined
-        @unknown default:
-            return .notDetermined
-        }
+        // CoreAudio process taps use the system-audio capture privacy prompt
+        // (`NSAudioCaptureUsageDescription`). Apple does not expose a public
+        // preflight/request API for that permission, so the first real
+        // `AudioDeviceStart` is what requests it.
+        return .authorized
     }
 
     public func requestPermission() async -> RecorderPermissionState {
-        let granted = await AVCaptureDevice.requestAccess(for: AVMediaType.audio)
-        return granted ? .authorized : .denied(needsSettings: true)
+        .authorized
     }
 
     public func startRecording(

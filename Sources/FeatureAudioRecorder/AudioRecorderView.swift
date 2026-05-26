@@ -224,7 +224,16 @@ public struct AudioRecorderView: View {
     @ViewBuilder
     private func errorCard(for error: RecorderError) -> some View {
         let card = cardFor(error)
-        StandardErrorCard(card: card)
+        StandardErrorCard(card: card) { action in
+            switch action {
+            case .tryAgain:
+                Task { await viewModel.startRecording() }
+            case .openSystemSettings:
+                openSystemSettingsPrivacy()
+            default:
+                break
+            }
+        }
     }
 
     private func cardFor(_ error: RecorderError) -> AppErrorCard {
@@ -257,6 +266,7 @@ public struct AudioRecorderView: View {
                 icon: "waveform.badge.xmark",
                 body: message,
                 recoveryActions: [
+                    AppErrorCard.RecoveryAction(label: "Open System Settings", style: .secondary, action: .openSystemSettings),
                     AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
                 ]
             )
