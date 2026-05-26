@@ -4,15 +4,19 @@ Native macOS SwiftUI app combining outside-Cubase production tools with a read-o
 
 ## Local setup (Mac)
 
-Clone and open on your Mac (Swift does not build on Linux CI sandboxes):
+Canonical folder: **`/Users/niko/Documents/Niko-Music-Hub`**
+
+One-shot install (clone, test, build app):
 
 ```bash
-git clone https://github.com/Niko96-dotcom/niko-music-hub.git ~/src/niko-music-hub
-cd ~/src/niko-music-hub
-./script/setup_mac_check.sh
+curl -fsSL https://raw.githubusercontent.com/Niko96-dotcom/niko-music-hub/main/script/bootstrap_documents_mac.sh -o /tmp/bootstrap_documents_mac.sh
+chmod +x /tmp/bootstrap_documents_mac.sh
+/tmp/bootstrap_documents_mac.sh
 ```
 
-Full workflow (Cursor + cloud agent + real archive): **[docs/local-development.md](docs/local-development.md)**.
+Or from a checkout: `./script/bootstrap_documents_mac.sh`
+
+Details: **[docs/local-development.md](docs/local-development.md)**.
 
 ## Build and run
 

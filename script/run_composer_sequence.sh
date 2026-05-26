@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -u
 
-REPO="/Users/nikolaymohr/src/niko-music-hub"
+REPO="${NIKO_MUSIC_HUB_REPO:-/Users/niko/Documents/Niko-Music-Hub}"
+export NIKO_MUSIC_HUB_REPO="$REPO"
 ROOT="/Users/nikolaymohr/.hermes/workers/niko-music-hub-composer"
 LOCK="/tmp/niko-music-hub-composer.lock"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -21,7 +22,7 @@ status_json() {
   code="$3"
   message="$4"
   /usr/bin/python3 - "$ROOT/state.json" "$RUN_DIR" "$state" "$phase" "$code" "$message" <<'PY'
-import json, sys, datetime
+import json, os, sys, datetime
 path, run_dir, state, phase, code, message = sys.argv[1:]
 data = {
     "updated_utc": datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
@@ -31,7 +32,7 @@ data = {
     "exit_code": int(code),
     "message": message,
     "run_dir": run_dir,
-    "repo": "/Users/nikolaymohr/src/niko-music-hub",
+    "repo": os.environ.get("NIKO_MUSIC_HUB_REPO", "/Users/niko/Documents/Niko-Music-Hub"),
 }
 open(path, "w", encoding="utf-8").write(json.dumps(data, indent=2, sort_keys=True) + "\n")
 open(f"{run_dir}/status/latest.json", "w", encoding="utf-8").write(json.dumps(data, indent=2, sort_keys=True) + "\n")

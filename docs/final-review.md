@@ -2,7 +2,7 @@
 
 **Reviewer:** Composer 2.5 (Pi Agent SDK)  
 **Date:** 2026-05-25  
-**Repo:** `/Users/nikolaymohr/src/niko-music-hub`  
+**Repo:** `/Users/niko/Documents/Niko-Music-Hub`  
 **Verdict:** **APPROVED** — no blockers; safe to treat v0.1 implementation as complete pending operator real-archive smoke.
 
 ---

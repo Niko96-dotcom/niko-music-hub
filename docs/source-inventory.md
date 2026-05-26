@@ -6,7 +6,7 @@ Last verified: 2026-05-25
 
 | Item | Value |
 |------|-------|
-| Local path | `/Users/nikolaymohr/src/niko-music-hub` |
+| Local path | `/Users/niko/Documents/Niko-Music-Hub` |
 | Git remote | `Niko96-dotcom/niko-music-hub` (private) |
 | SwiftPM package name | `OutsideCubaseHub` (seed name; rename planned) |
 | macOS platform | 14.2+ |
@@ -75,9 +75,7 @@ Application Support path (today): `~/Library/Application Support/Outside Cubase 
 
 | Test target | Approx. focus |
 |-------------|----------------|
-| `NikoMusicCoreTests` | Scan, search, preview, path safety, diagnostics |
 | `AppCoreTests` | Registry, jobs, inbox, settings, handoff |
-| `FeatureArchiveBrowserTests` | Archive browser view model / integration |
 | `FeatureBPMTapperTests` | Tempo, history, view model |
 | `FeatureAudioConverterTests` | Pipeline, FFmpeg, presets, handoff |
 | `FeatureAudioRecorderTests` | WAV writer, permissions, CoreAudio (partially CI-skipped) |

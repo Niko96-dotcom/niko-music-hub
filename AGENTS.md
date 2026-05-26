@@ -53,13 +53,19 @@ Do not set or depend on `LOCUS_*` environment variables.
 
 MacBook is read-only/reference unless a task explicitly says copy source/reference files. Do not modify MacBook projects in place.
 
-## Local development (human Mac checkout)
+## Local development (Mac)
 
-Humans work in a macOS clone (see `docs/local-development.md`). Cloud/Linux checkouts may edit source but cannot run `swift test`; validate on Mac before merge.
+Canonical working copy:
+
+```text
+/Users/niko/Documents/Niko-Music-Hub
+```
+
+Install or refresh: `./script/bootstrap_documents_mac.sh` (see `docs/local-development.md`). Cloud/Linux sandboxes may edit source but cannot run `swift test`; validate on the Mac checkout before merge.
 
 ## Local gates
 
-Run on macOS:
+Run on macOS in the Documents checkout:
 
 ```bash
 ./script/ci.sh

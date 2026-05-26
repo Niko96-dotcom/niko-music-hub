@@ -1,6 +1,6 @@
 You are Composer 2.5 running via Pi Agent SDK. You are the EXECUTOR for Niko Music Hub.
 
-Repo: `/Users/nikolaymohr/src/niko-music-hub`
+Repo: `/Users/niko/Documents/Niko-Music-Hub`
 
 Implement v0.1 using the approved plan and critic notes.
 

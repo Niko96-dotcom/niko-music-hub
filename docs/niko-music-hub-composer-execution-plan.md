@@ -132,7 +132,7 @@ Create a new private repo:
 
 ```text
 Niko96-dotcom/niko-music-hub
-/Users/nikolaymohr/src/niko-music-hub
+/Users/niko/Documents/Niko-Music-Hub
 ```
 
 Why private first:
@@ -205,7 +205,7 @@ rsync -a \
   --exclude 'dist' \
   --exclude '.DS_Store' \
   macbook:'/Users/niko/Documents/OutSideCubaseHub/' \
-  '/Users/nikolaymohr/src/niko-music-hub/'
+  '/Users/niko/Documents/Niko-Music-Hub/'
 ```
 
 Then Composer owns:
@@ -524,7 +524,7 @@ Save as `.ai/prompts/01-planner.md` after bootstrap:
 ```markdown
 You are Composer 2.5 running via Pi Agent SDK. You are the planner for Niko Music Hub.
 
-Repo: /Users/nikolaymohr/src/niko-music-hub
+Repo: /Users/niko/Documents/Niko-Music-Hub
 Mission: turn the existing Swift OutsideCubaseHub seed plus Cubase archive browser spec into one clean native SwiftUI app called Niko Music Hub.
 
 Hard rules:
@@ -538,9 +538,9 @@ Hard rules:
 
 Inspect first:
 - /Users/nikolaymohr/.hermes/plans/2026-05-25_1001-niko-music-hub-composer-execution-plan.md
-- /Users/nikolaymohr/src/niko-music-hub/Package.swift
-- /Users/nikolaymohr/src/niko-music-hub/Sources/AppCore/Features/ToolRegistry.swift
-- /Users/nikolaymohr/src/niko-music-hub/Sources/OutsideCubaseHub/AppComposition.swift
+- /Users/niko/Documents/Niko-Music-Hub/Package.swift
+- /Users/niko/Documents/Niko-Music-Hub/Sources/AppCore/Features/ToolRegistry.swift
+- /Users/niko/Documents/Niko-Music-Hub/Sources/OutsideCubaseHub/AppComposition.swift
 - /Users/nikolaymohr/src/automation-health/Package.swift
 - /Users/nikolaymohr/src/automation-health/Sources/AutomationHealth/App/AutomationHealthApp.swift
 - copied reference docs under docs/reference/cubase-file-orga/
@@ -559,7 +559,7 @@ Do not write product code yet.
 ```bash
 set -euo pipefail
 
-REPO=/Users/nikolaymohr/src/niko-music-hub
+REPO=/Users/niko/Documents/Niko-Music-Hub
 SRC_MACBOOK=/Users/niko/Documents/OutSideCubaseHub
 CUBASE_REF="/Users/niko/Library/Mobile Documents/com~apple~CloudDocs/Documents/02_PROJECTS/01_ACTIVE_PROJECTS/CUBASE FILE ORGA"
 
