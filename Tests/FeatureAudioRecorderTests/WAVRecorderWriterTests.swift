@@ -60,6 +60,39 @@ final class WAVRecorderWriterTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
+    func testWAVWriterAcceptsProcessingFormatBuffer() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_processing_buffer_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        let format = writer.processingFormat
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1_024))
+        buffer.frameLength = 1_024
+
+        if let channelData = buffer.floatChannelData {
+            for channel in 0..<Int(format.channelCount) {
+                for frame in 0..<Int(buffer.frameLength) {
+                    channelData[channel][frame] = Float(frame % 64) / 64.0
+                }
+            }
+        }
+
+        try writer.writeBuffer(buffer)
+        let result = try writer.finalize()
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: outputURL.path)
+        let fileSize = try XCTUnwrap(attributes[.size] as? NSNumber).intValue
+        XCTAssertGreaterThan(fileSize, 4_096)
+        XCTAssertEqual(result.frameCount, 1_024)
+
+        let audioFile = try AVAudioFile(forReading: outputURL)
+        XCTAssertEqual(audioFile.fileFormat.sampleRate, 44_100)
+        XCTAssertEqual(Int(audioFile.fileFormat.streamDescription.pointee.mBitsPerChannel), 24)
+        XCTAssertEqual(audioFile.length, 1_024)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
     func testFilenameOverride() throws {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
         let filename = useCase.generateOutputFilename(override: "My Recording.wav")

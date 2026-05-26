@@ -141,7 +141,11 @@ public final class AudioRecorderViewModel: ObservableObject {
         _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
         let file = try AVAudioFile(forReading: result.outputURL)
         guard file.length > 0 else {
-            throw RecorderError.verificationFailed("Recording contained no audio frames.")
+            var message = "Recording contained no audio frames."
+            if let diagnostics = result.diagnostics {
+                message += " CoreAudio diagnostics: \(diagnostics.summary)."
+            }
+            throw RecorderError.verificationFailed(message)
         }
 
         let item = OutputInboxItem(
