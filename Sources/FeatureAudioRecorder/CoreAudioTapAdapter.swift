@@ -129,10 +129,9 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             throw RecorderError.apiError(error.localizedDescription)
         }
 
+        let continuation = levelContinuation
         resetRecordingState()
-
-        levelContinuation?.finish()
-        levelContinuation = nil
+        continuation?.finish()
 
         return result
     }
