@@ -73,7 +73,14 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 1
-    pgrep -x "$APP_NAME" >/dev/null
+    while IFS= read -r pid; do
+      command="$(ps -p "$pid" -o command=)"
+      if [[ "$command" == "$APP_BINARY"* ]]; then
+        exit 0
+      fi
+    done < <(pgrep -x "$APP_NAME" || true)
+    echo "$APP_NAME did not launch from $APP_BINARY" >&2
+    exit 1
     ;;
   *)
     echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
