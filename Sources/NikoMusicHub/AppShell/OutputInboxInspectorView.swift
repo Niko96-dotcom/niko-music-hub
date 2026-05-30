@@ -40,6 +40,9 @@ struct OutputInboxInspectorView: View {
             } else {
                 List(items) { item in
                     itemRow(item)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
             }
@@ -48,7 +51,6 @@ struct OutputInboxInspectorView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .controlBackgroundColor))
         .onAppear {
             refreshSettings()
             refreshItems()
@@ -94,81 +96,50 @@ struct OutputInboxInspectorView: View {
 
     @ViewBuilder
     private func itemRow(_ item: OutputInboxItem) -> some View {
-        if let dragURL = OutputHandoff.dragFileURL(for: item) {
-            itemRowContent(item)
+        let card = itemCard(item)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+
+        if OutputHandoff.dragFileURL(for: item) != nil {
+            card
                 .onDrag {
-                    NSItemProvider(contentsOf: dragURL) ?? NSItemProvider()
+                    guard let dragURL = OutputHandoff.dragFileURL(for: item) else {
+                        return NSItemProvider()
+                    }
+                    return NSItemProvider(contentsOf: dragURL) ?? NSItemProvider()
                 }
+                .accessibilityHint("Drag the file to your DAW or Finder")
         } else {
-            itemRowContent(item)
+            card
         }
     }
 
-    private func itemRowContent(_ item: OutputInboxItem) -> some View {
+    private func itemCard(_ item: OutputInboxItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(item.fileURL.lastPathComponent)
                 .font(.system(size: 13, weight: .semibold))
-                .lineLimit(1)
+                .lineLimit(2)
 
-            Text(item.status.rawValue.capitalized)
-                .font(.system(size: 12))
-                .foregroundStyle(statusColor(for: item.status))
-
-            metadataLines(for: item)
-
-            if OutputHandoff.isRevealable(item) {
-                HStack(spacing: 8) {
-                    Button("Reveal in Finder") {
-                        context.fileActions.revealInFinder(item.fileURL)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Label("Drag WAV", systemImage: "hand.draw")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+            if item.status == .failed {
+                Text("Failed")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
             } else if item.status == .missing {
-                Text("Output folder is unavailable. Choose Output Folder to reconnect a local destination.")
+                Text("File missing — choose Output Folder if you moved the inbox.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        .padding(.vertical, 4)
-    }
 
-    @ViewBuilder
-    private func metadataLines(for item: OutputInboxItem) -> some View {
-        if let sourceFile = item.metadata["sourceFile"] {
-            Text(URL(fileURLWithPath: sourceFile).lastPathComponent)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            if OutputHandoff.isRevealable(item) {
+                Button("Reveal in Finder") {
+                    context.fileActions.revealInFinder(item.fileURL)
+                }
+                .buttonStyle(.bordered)
+            }
         }
-
-        if let sampleRate = item.metadata["sampleRate"],
-           let bitDepth = item.metadata["bitDepth"],
-           let channels = item.metadata["channels"] {
-            Text("\(sampleRate) Hz - \(bitDepth)-bit - \(channels) ch")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-
-        if let converter = item.metadata["converter"] {
-            Text(converter)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func statusColor(for status: OutputInboxItemStatus) -> Color {
-        switch status {
-        case .failed, .missing:
-            return .red
-        case .available, .pending:
-            return .secondary
-        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
