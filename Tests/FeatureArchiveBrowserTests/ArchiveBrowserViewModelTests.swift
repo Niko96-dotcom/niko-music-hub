@@ -198,6 +198,15 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
     }
 
+    func testPerformExportSurfacesFailureOnStatusMessage() {
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        struct SampleError: LocalizedError {
+            var errorDescription: String? { "sample failure" }
+        }
+        viewModel.performExport { throw SampleError() }
+        XCTAssertEqual(viewModel.statusMessage, "Export failed: sample failure")
+    }
+
     func testToggleBrowseFilterReassignsOptionSetForPublishedUpdates() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

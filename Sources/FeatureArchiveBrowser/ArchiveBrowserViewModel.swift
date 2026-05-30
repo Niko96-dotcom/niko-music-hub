@@ -268,6 +268,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         applySearchFilter()
     }
 
+    /// Runs an export action and surfaces failures on `statusMessage`.
+    func performExport(_ operation: () throws -> Void) {
+        do {
+            try operation()
+        } catch {
+            statusMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
     func applySearchFilter() {
         let shelfSongs = songsForSelectedShelf()
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
