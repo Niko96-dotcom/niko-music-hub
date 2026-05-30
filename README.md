@@ -20,6 +20,8 @@ Requirements:
 
 Produces `dist/NikoMusicHub.app`. The first launch starts clean: add the folder that contains your Cubase song/project folders, choose an output folder if the default is not right, then scan.
 
+Codex is wired to the same command through `.codex/environments/environment.toml`, so the app Run button builds a fresh bundle and launches Niko Music Hub.
+
 ## Local gates
 
 ```bash
@@ -29,6 +31,25 @@ Produces `dist/NikoMusicHub.app`. The first launch starts clean: add the folder 
 ```
 
 `ci.sh` skips host-only CoreAudio recorder tests that need a working system-audio capture device.
+
+For visual proof of a foreground app window:
+
+```bash
+./script/capture_window_proof.sh
+```
+
+This saves `dist/window-visible-proof.png` and `dist/desktop-proof.png`.
+
+## GitHub workflow
+
+This repo uses GitHub for review and history, but local gates are the source of truth. Before opening or merging a PR, run:
+
+```bash
+./script/ci.sh
+./script/e2e_user_smoke.sh
+```
+
+GitHub Actions are intentionally not required for this project.
 
 ## Fixtures
 
