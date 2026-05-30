@@ -4,7 +4,8 @@ import SwiftUI
 struct SongDetailView: View {
     let song: Song
     @ObservedObject var viewModel: ArchiveBrowserViewModel
-    private let previewDisplayLimit = 30
+
+    private let alternatePreviewCount = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -12,76 +13,60 @@ struct SongDetailView: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
 
-            let displayWarnings = song.displayScanWarnings()
-            if !displayWarnings.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Scan warnings")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    ForEach(displayWarnings, id: \.self) { warning in
-                        Text("Warning: \(warning)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(ArchiveDesignTokens.warning)
-                            .lineLimit(3)
-                    }
-                }
+            if let warning = song.displayScanWarnings().first {
+                Text(warning)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.warning)
+                    .lineLimit(3)
             }
 
             if let notes = song.displaySidecarNotes() {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Song notes (notes.txt)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    Text(notes)
-                        .font(.system(size: 11))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(6)
-                }
+                Text(notes)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(4)
             }
 
-            PreviewPlayerView(url: mainPreviewURL)
+            ArchiveMiniPlayerView(
+                url: mainPreviewURL,
+                style: .full,
+                label: mainPreviewLabel
+            )
 
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button("Open Latest CPR") {
                     try? viewModel.openLatestCPR(for: song)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(ArchiveDesignTokens.accent)
 
-                if let path = viewModel.lastDryRunLog {
-                    Text(Song.displayDryRunPath(path))
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(2)
+                Button("Show in Finder") {
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
                 }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.preferredRevealURL(for: song) == nil)
             }
 
-            Text("CPR versions")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
-
-            ForEach(song.projectVersions) { version in
-                HStack {
-                    Text(version.fileName)
-                        .font(.system(size: 12))
-                    Spacer()
-                    Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 11))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                }
+            if let latest = song.latestCPR ?? song.projectVersions.first {
+                Text(latest.fileName)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
             }
 
-            if song.previewCandidates.count > 1 {
-                let rankedLines = PreviewRankingExplainability.rankedPreviewLines(for: song)
-                let visibleLines = SongDetailPreviewRows.visibleLines(from: rankedLines, limit: previewDisplayLimit)
-                Text("More previews (\(visibleLines.count) of \(rankedLines.count))")
+            let alternates = alternatePreviews
+            if !alternates.isEmpty {
+                Text("Other previews")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                ForEach(visibleLines, id: \.self) { line in
-                    Text(line)
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(2)
+
+                ForEach(alternates, id: \.id) { candidate in
+                    ArchiveMiniPlayerView(
+                        url: candidate.filePath,
+                        style: .full,
+                        label: candidate.fileName
+                    )
                 }
             }
         }
@@ -96,11 +81,19 @@ struct SongDetailView: View {
     private var mainPreviewURL: URL? {
         mainPreviewCandidate?.filePath
     }
-}
 
-enum SongDetailPreviewRows {
-    static func visibleLines(from lines: [String], limit: Int) -> [String] {
-        guard limit > 0 else { return [] }
-        return Array(lines.prefix(limit))
+    private var mainPreviewLabel: String? {
+        mainPreviewCandidate?.fileName
+    }
+
+    private var alternatePreviews: [PreviewCandidate] {
+        let ranked = song.previewCandidates
+        guard let mainID = song.mainPreviewCandidateID else {
+            return Array(ranked.prefix(alternatePreviewCount))
+        }
+        return ranked
+            .filter { $0.id != mainID }
+            .prefix(alternatePreviewCount)
+            .map { $0 }
     }
 }

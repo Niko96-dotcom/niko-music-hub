@@ -59,13 +59,6 @@ struct ArchiveBrowserView: View {
                     .lineLimit(2)
             }
 
-            if !viewModel.songs.isEmpty {
-                Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)
-                    .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             if !viewModel.skippedSearchMatches.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Skipped matches (\(viewModel.skippedSearchMatches.count))")
@@ -82,18 +75,21 @@ struct ArchiveBrowserView: View {
 
             if let diagnostics = viewModel.scanDiagnostics {
                 DisclosureGroup(isExpanded: $supportReportExpanded) {
-                    ArchiveDiagnosticsPanelView(
-                        diagnostics: diagnostics,
-                        selectedSong: viewModel.selectedSong,
-                        searchContext: viewModel.activeSearchExportContext(),
-                        skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                    ) {
-                        do {
-                            try viewModel.exportDiagnostics()
-                        } catch {
-                            viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                    ScrollView {
+                        ArchiveDiagnosticsPanelView(
+                            diagnostics: diagnostics,
+                            selectedSong: viewModel.selectedSong,
+                            searchContext: viewModel.activeSearchExportContext(),
+                            skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                        ) {
+                            do {
+                                try viewModel.exportDiagnostics()
+                            } catch {
+                                viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                            }
                         }
                     }
+                    .frame(maxHeight: 200)
                 } label: {
                     HStack(spacing: 8) {
                         Text("Scan report")

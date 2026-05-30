@@ -179,7 +179,7 @@ public struct PreviewConfidenceRanker: Sendable {
         if let projectContext, let anchor = projectContext.anchorCPRVersion, anchor >= 1 {
             let previewVersion = effectiveRankVersion(candidate)
             if maturity <= .demo {
-                score -= 28
+                score -= 40
                 reasons.append("cpr-anchor:demo-below-project")
             } else if maturity <= .sessionBounce {
                 score -= 14
@@ -187,14 +187,14 @@ public struct PreviewConfidenceRanker: Sendable {
             }
             if let previewVersion {
                 if previewVersion == anchor {
-                    score += 18
+                    score += 32
                     reasons.append("cpr-anchor:version-match")
                 } else if previewVersion < anchor {
-                    score -= Double(anchor - previewVersion) * 9
+                    score -= Double(anchor - previewVersion) * 12
                     reasons.append("cpr-anchor:version-behind-v\(anchor)")
                 }
             } else if PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName) == 0 {
-                score -= 22
+                score -= 30
                 reasons.append("cpr-anchor:pre-v1-behind-project")
             }
             let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)

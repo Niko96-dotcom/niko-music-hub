@@ -268,6 +268,31 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertEqual(ranked.first?.fileName, "Song v1 mix.wav")
     }
 
+    func testCPRAnchorDemotesDemoV06BelowCubaseStyleV4MP3() {
+        let context = PreviewRankingProjectContext(anchorCPRVersion: 4, titleTokens: ["90s", "icon"])
+        let demo = candidate(
+            name: "demo v0.6.mp3",
+            role: .unknown,
+            modifiedAt: baseDate.addingTimeInterval(100),
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+        let cubaseMix = candidate(
+            name: "BLÜMCHEN - 90s ICON V4 (Blümchen, Jaro Omar, Niko Mohr).mp3",
+            role: .unknown,
+            modifiedAt: baseDate,
+            version: 4,
+            ext: "mp3",
+            duration: 200
+        )
+        let ranked = ranker.rank([demo, cubaseMix], projectContext: context)
+        XCTAssertEqual(
+            ranked.first?.fileName,
+            "BLÜMCHEN - 90s ICON V4 (Blümchen, Jaro Omar, Niko Mohr).mp3"
+        )
+    }
+
     func testCPRAnchorDemotesDemoV06BelowTitleMatchedV4Mix() {
         let context = PreviewRankingProjectContext(anchorCPRVersion: 4, titleTokens: ["90s", "icon"])
         let demo = candidate(

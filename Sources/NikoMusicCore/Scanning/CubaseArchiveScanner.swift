@@ -94,11 +94,15 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
 
         if let anchor = previewContext.anchorCPRVersion,
            anchor >= 2,
-           let mainPreview,
-           PreviewProductionMaturity.detect(from: mainPreview.fileName) <= .demo {
-            warnings.append(
-                "Main preview is an early demo; newest CPR is v\(anchor) — export a v\(anchor) mixdown for a better default"
-            )
+           let mainPreview {
+            switch PreviewProductionMaturity.detect(from: mainPreview.fileName) {
+            case .demo, .sketch, .sessionBounce:
+                warnings.append(
+                    "Main preview is an early bounce; newest CPR is v\(anchor) — export a v\(anchor) mixdown for a better default"
+                )
+            case .none, .prod, .mix, .master:
+                break
+            }
         }
 
         let latest = cprDetector.latestCPR(from: versions)
