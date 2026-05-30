@@ -1,63 +1,29 @@
 import Foundation
+
 public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case neonHookNotFound
     case rankingLabNotFound
     case missingDryRunPath
     case missingRankingLabPreviewSummary
-    case rankingLabDiagnosticsExportFailed
     case rankingLabDiagnosticsExportMissingMatch
     case rankingLabPanelPreviewRankingMismatch
-    case tiebreakLabNotFound
-    case tiebreakLabDiagnosticsExportFailed
-    case tiebreakLabDiagnosticsExportMissingTiebreak
-    case tiebreakLabPanelPreviewRankingMismatch
-    case versionTiebreakLabNotFound
-    case versionTiebreakLabDiagnosticsExportFailed
-    case versionTiebreakLabDiagnosticsExportMissingTiebreak
-    case versionTiebreakLabPanelPreviewRankingMismatch
-    case extensionTiebreakLabNotFound
-    case extensionTiebreakLabDiagnosticsExportFailed
-    case extensionTiebreakLabDiagnosticsExportMissingTiebreak
-    case extensionTiebreakLabPanelPreviewRankingMismatch
+    case previewTiebreakLabNotFound(String)
+    case previewTiebreakLabExportMissing(String)
+    case previewTiebreakLabPanelMismatch(String)
     case brokenFolderNotFound
     case brokenFolderMissingDisplayWarnings
     case brokenFolderMissingSidecarNotes
-    case brokenFolderSelectedSongDiagnosticsExportFailed
     case brokenFolderSelectedSongDiagnosticsExportMissingSection
     case brokenFolderSelectedSongPanelMismatch
-    case warningSearchNoMatch
-    case warningSearchMissingExplainability
-    case warningSearchDiagnosticsExportFailed
-    case warningSearchDiagnosticsExportMissingMatch
-    case fuzzyWarningSearchNoMatch
-    case fuzzyWarningSearchMissingExplainability
-    case fuzzyWarningSearchDiagnosticsExportFailed
-    case fuzzyWarningSearchDiagnosticsExportMissingMatch
-    case fuzzyWarningSearchPanelActiveSearchMismatch
-    case activeSearchPanelMismatch
-    case notesSearchNoMatch
-    case notesSearchMissingExplainability
-    case notesSearchDiagnosticsExportFailed
-    case notesSearchDiagnosticsExportMissingMatch
-    case folderSearchNoMatch
-    case folderSearchMissingExplainability
-    case folderSearchDiagnosticsExportFailed
-    case folderSearchDiagnosticsExportMissingMatch
-    case cprSearchNoMatch
-    case cprSearchMissingExplainability
-    case cprSearchDiagnosticsExportFailed
-    case cprSearchDiagnosticsExportMissingMatch
-    case previewSearchNoMatch
-    case previewSearchMissingExplainability
-    case previewSearchDiagnosticsExportFailed
-    case previewSearchDiagnosticsExportMissingMatch
+    case songSearchNoMatch(String)
+    case songSearchMissingExplainability(String)
+    case songSearchExportMissingMatch(String)
     case skippedSearchNoMatch
     case skippedSearchMissingExplainability
-    case searchDiagnosticsExportFailed
     case searchDiagnosticsExportMissingMatch
     case searchDiagnosticsExportMissingSummaryLine
-    case searchPanelActiveSearchMismatch
-    case diagnosticsPanelSupportSummaryMissing
+    case activeSearchPanelMismatch
+    case diagnosticsExportFailed
     case diagnosticsPanelSupportSummaryMismatch
     case fixtureScanHealthBadgeMissing
     case fixtureScanHealthBadgeMismatch
@@ -67,14 +33,11 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case invalidRootDiagnosticsExportFailed
     case invalidRootExportMissingRootHealthBadge
     case invalidRootPanelRootHealthBadgeMissing
-    case invalidRootPanelBadgeMismatch
     case invalidRootPanelGlobalWarningsMismatch
     case summaryTruncationRootMissing
-    case summaryTruncationDiagnosticsExportFailed
     case summaryTruncationDiagnosticsExportMissingTruncation
     case summaryTruncationPanelFootnoteMissing
     case summaryTruncationPanelFootnoteMismatch
-    case skippedSearchDiagnosticsExportFailed
     case skippedSearchDiagnosticsExportMissingMatch
     case skippedSearchPanelActiveSkippedSearchMismatch
 }
