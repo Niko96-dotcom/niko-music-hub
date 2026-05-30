@@ -46,7 +46,8 @@ struct AppComposition {
             archiveIndexStore: archiveIndexStore,
             songMetadataStore: songMetadataStore,
             archiveRootWatcher: archiveRootWatcher,
-            collaboratorStore: collaboratorStore
+            collaboratorStore: collaboratorStore,
+            runtime: runtime
         )
 
         var features: [any ToolFeature] = [
@@ -66,8 +67,7 @@ struct AppComposition {
     }
 
     private static func makeSettingsStore(runtime: MusicHubRuntimeEnvironment) -> SettingsStore {
-        if let suiteName = ProcessInfo.processInfo.environment[MusicHubRuntimeEnvironment.settingsSuiteKey],
-           !suiteName.isEmpty,
+        if let suiteName = runtime.settingsSuiteName,
            let defaults = UserDefaults(suiteName: suiteName) {
             defaults.removePersistentDomain(forName: suiteName)
             return UserDefaultsSettingsStore(userDefaults: defaults)

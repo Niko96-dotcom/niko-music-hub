@@ -1,474 +1,224 @@
 import Foundation
+
 public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
-    public let userFlow: String
-    public let songCount: Int
-    public let searchQuery: String
-    public let searchMatchCount: Int
-    public let selectedTitle: String
-    public let dryRunCPRPath: String
-    /// Home-redacted CPR path safe for smoke stdout and operator logs.
-    public let dryRunCPRDisplayPath: String
-    public let dryRunLogLine: String?
-    public let dryRunLogDisplayLine: String?
-    public let writeProbeDenied: Bool
-    public let archiveTreeUnchanged: Bool
-    public let diagnosticsSongCount: Int
-    public let diagnosticsSkippedCount: Int
-    public let searchMatchSummary: String
-    public let rankingLabMainPreviewSummary: String
-    public let rankingLabDiagnosticsExportPath: String
-    public let rankingLabDiagnosticsExportContainsMatch: Bool
-    public let rankingLabPanelScanCallout: String
-    public let rankingLabPanelScanCalloutMatchesExport: Bool
-    public let rankingLabPanelSelectedHeader: String
-    public let rankingLabPanelSelectedHeaderMatchesExport: Bool
-    public let rankingLabPanelTooShortBreakdownLine: String
-    public let rankingLabPanelTooShortBreakdownMatchesExport: Bool
-    public let rankingLabPanelTiebreakLegend: String
-    public let rankingLabPanelTiebreakLegendMatchesExport: Bool
-    public let rankingLabPanelMainPreviewSummary: String
-    public let rankingLabPanelMainPreviewSummaryMatchesExport: Bool
-    public let rankingLabPanelRankedPreviewLines: String
-    public let rankingLabPanelRankedPreviewLinesMatchExport: Bool
-    public let tiebreakLabDiagnosticsExportPath: String
-    public let tiebreakLabDiagnosticsExportContainsTiebreak: Bool
-    public let tiebreakPanelPreviewRankingHeader: String
-    public let tiebreakPanelPreviewRankingHeaderMatchesExport: Bool
-    public let tiebreakPanelPreviewTiebreakCallout: String
-    public let tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool
-    public let versionTiebreakLabDiagnosticsExportPath: String
-    public let versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
-    public let versionTiebreakPanelCallout: String
-    public let versionTiebreakPanelCalloutMatchesExport: Bool
-    public let extensionTiebreakLabDiagnosticsExportPath: String
-    public let extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool
-    public let extensionTiebreakPanelCallout: String
-    public let extensionTiebreakPanelCalloutMatchesExport: Bool
-    public let brokenFolderDisplayWarnings: [String]
-    public let brokenFolderSidecarNotes: String?
-    public let brokenFolderSelectedSongDiagnosticsExportPath: String
-    public let brokenFolderSelectedSongPanelTitleLine: String
-    public let brokenFolderSelectedSongPanelTitleLineMatchesExport: Bool
-    public let brokenFolderSelectedSongPanelCprLine: String
-    public let brokenFolderSelectedSongPanelCprLineMatchesExport: Bool
-    public let brokenFolderSelectedSongPanelWarningLines: String
-    public let brokenFolderSelectedSongPanelWarningLinesMatchExport: Bool
-    public let brokenFolderSelectedSongPanelNotesLine: String
-    public let brokenFolderSelectedSongPanelNotesLineMatchesExport: Bool
-    public let warningSearchQuery: String
-    public let warningSearchMatchCount: Int
-    public let warningSearchMatchTitle: String
-    public let warningSearchMatchSummary: String
-    public let warningSearchDiagnosticsExportPath: String
-    public let warningSearchDiagnosticsExportContainsMatch: Bool
-    public let warningSearchPanelQueryLine: String
-    public let warningSearchPanelQueryLineMatchesExport: Bool
-    public let warningSearchPanelMatchLines: String
-    public let warningSearchPanelMatchLinesMatchExport: Bool
-    public let fuzzyWarningSearchQuery: String
-    public let fuzzyWarningSearchMatchCount: Int
-    public let fuzzyWarningSearchMatchTitle: String
-    public let fuzzyWarningSearchMatchSummary: String
-    public let fuzzyWarningSearchDiagnosticsExportPath: String
-    public let fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool
-    public let fuzzyWarningSearchPanelQueryLine: String
-    public let fuzzyWarningSearchPanelQueryLineMatchesExport: Bool
-    public let fuzzyWarningSearchPanelMatchLines: String
-    public let fuzzyWarningSearchPanelMatchLinesMatchExport: Bool
-    public let notesSearchQuery: String
-    public let notesSearchMatchCount: Int
-    public let notesSearchMatchTitle: String
-    public let notesSearchMatchSummary: String
-    public let notesSearchDiagnosticsExportPath: String
-    public let notesSearchDiagnosticsExportContainsMatch: Bool
-    public let notesSearchPanelQueryLine: String
-    public let notesSearchPanelQueryLineMatchesExport: Bool
-    public let notesSearchPanelMatchLines: String
-    public let notesSearchPanelMatchLinesMatchExport: Bool
-    public let folderSearchQuery: String
-    public let folderSearchMatchCount: Int
-    public let folderSearchMatchTitle: String
-    public let folderSearchMatchSummary: String
-    public let folderSearchDiagnosticsExportPath: String
-    public let folderSearchDiagnosticsExportContainsMatch: Bool
-    public let folderSearchPanelQueryLine: String
-    public let folderSearchPanelQueryLineMatchesExport: Bool
-    public let folderSearchPanelMatchLines: String
-    public let folderSearchPanelMatchLinesMatchExport: Bool
-    public let cprSearchQuery: String
-    public let cprSearchMatchCount: Int
-    public let cprSearchMatchTitle: String
-    public let cprSearchMatchSummary: String
-    public let cprSearchDiagnosticsExportPath: String
-    public let cprSearchDiagnosticsExportContainsMatch: Bool
-    public let cprSearchPanelQueryLine: String
-    public let cprSearchPanelQueryLineMatchesExport: Bool
-    public let cprSearchPanelMatchLines: String
-    public let cprSearchPanelMatchLinesMatchExport: Bool
-    public let previewSearchQuery: String
-    public let previewSearchMatchCount: Int
-    public let previewSearchMatchTitle: String
-    public let previewSearchMatchSummary: String
-    public let previewSearchDiagnosticsExportPath: String
-    public let previewSearchDiagnosticsExportContainsMatch: Bool
-    public let previewSearchPanelQueryLine: String
-    public let previewSearchPanelQueryLineMatchesExport: Bool
-    public let previewSearchPanelMatchLines: String
-    public let previewSearchPanelMatchLinesMatchExport: Bool
-    public let skippedSearchQuery: String
-    public let skippedSearchMatchCount: Int
-    public let skippedSearchMatchLabel: String
-    public let skippedSearchMatchSummary: String
-    public let searchDiagnosticsExportPath: String
-    public let searchDiagnosticsExportContainsMatch: Bool
-    public let searchDiagnosticsExportContainsSummaryLine: Bool
-    public let searchPanelQueryLine: String
-    public let searchPanelQueryLineMatchesExport: Bool
-    public let searchPanelMatchLines: String
-    public let searchPanelMatchLinesMatchExport: Bool
-    public let diagnosticsExportSummaryLine: String
-    /// In-app panel support summary (matches export `summary_line=` value without prefix).
-    public let diagnosticsPanelSupportSummary: String
-    public let diagnosticsPanelMatchesExportSummary: Bool
-    public let fixtureScanHealthBadge: String
-    public let fixtureScanHealthBadgeMatchesExport: Bool
-    public let fixtureScanSkippedPanelLines: String
-    public let fixtureScanSkippedPanelLinesMatchExport: Bool
-    public let fixtureScanSongWarningsPanelLines: String
-    public let fixtureScanSongWarningsPanelLinesMatchExport: Bool
-    public let fixtureScanCountsPanelSongsValue: String
-    public let fixtureScanCountsPanelSongWarningsValue: String
-    public let fixtureScanCountsPanelMatchExport: Bool
-    public let invalidRootDiagnosticsExportPath: String
-    public let invalidRootExportContainsRootHealthBadge: Bool
-    public let invalidRootPanelRootHealthBadge: String
-    public let invalidRootPanelBadgeMatchesExport: Bool
-    public let invalidRootPanelGlobalWarningLines: String
-    public let invalidRootPanelGlobalWarningLinesMatchExport: Bool
-    public let summaryTruncationDiagnosticsExportPath: String
-    public let summaryTruncationDiagnosticsExportContainsTruncation: Bool
-    public let summaryTruncationPanelFootnote: String
-    public let summaryTruncationPanelFootnoteMatchesDiagnostics: Bool
-    public let skippedSearchDiagnosticsExportPath: String
-    public let skippedSearchDiagnosticsExportContainsMatch: Bool
-    public let skippedSearchPanelQueryLine: String
-    public let skippedSearchPanelQueryLineMatchesExport: Bool
-    public let skippedSearchPanelMatchLines: String
-    public let skippedSearchPanelMatchLinesMatchExport: Bool
+    public let core: CoreFlowOutcome
+    public let primarySearch: PrimarySearchExportOutcome
+    public let fixtureDiagnostics: FixtureDiagnosticsOutcome
+    public let rankingLab: RankingLabOutcome
+    public let tiebreakLabs: PreviewTiebreakLabsOutcome
+    public let brokenFolder: BrokenFolderOutcome
+    public let searches: SongSearchResults
+    public let skippedSearch: SkippedSearchScenarioOutcome
+    public let invalidRoot: InvalidRootCheckOutcome
+    public let summaryTruncation: SummaryTruncationCheckOutcome
+    public let smokeLog: [String: String]
 
     public init(
-        userFlow: String,
-        songCount: Int,
-        searchQuery: String,
-        searchMatchCount: Int,
-        selectedTitle: String,
-        dryRunCPRPath: String,
-        dryRunCPRDisplayPath: String,
-        dryRunLogLine: String?,
-        dryRunLogDisplayLine: String?,
-        writeProbeDenied: Bool,
-        archiveTreeUnchanged: Bool,
-        diagnosticsSongCount: Int,
-        diagnosticsSkippedCount: Int,
-        searchMatchSummary: String,
-        rankingLabMainPreviewSummary: String,
-        rankingLabDiagnosticsExportPath: String,
-        rankingLabDiagnosticsExportContainsMatch: Bool,
-        rankingLabPanelScanCallout: String,
-        rankingLabPanelScanCalloutMatchesExport: Bool,
-        rankingLabPanelSelectedHeader: String,
-        rankingLabPanelSelectedHeaderMatchesExport: Bool,
-        rankingLabPanelTooShortBreakdownLine: String,
-        rankingLabPanelTooShortBreakdownMatchesExport: Bool,
-        rankingLabPanelTiebreakLegend: String,
-        rankingLabPanelTiebreakLegendMatchesExport: Bool,
-        rankingLabPanelMainPreviewSummary: String,
-        rankingLabPanelMainPreviewSummaryMatchesExport: Bool,
-        rankingLabPanelRankedPreviewLines: String,
-        rankingLabPanelRankedPreviewLinesMatchExport: Bool,
-        tiebreakLabDiagnosticsExportPath: String,
-        tiebreakLabDiagnosticsExportContainsTiebreak: Bool,
-        tiebreakPanelPreviewRankingHeader: String,
-        tiebreakPanelPreviewRankingHeaderMatchesExport: Bool,
-        tiebreakPanelPreviewTiebreakCallout: String,
-        tiebreakPanelPreviewTiebreakCalloutMatchesExport: Bool,
-        versionTiebreakLabDiagnosticsExportPath: String,
-        versionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
-        versionTiebreakPanelCallout: String,
-        versionTiebreakPanelCalloutMatchesExport: Bool,
-        extensionTiebreakLabDiagnosticsExportPath: String,
-        extensionTiebreakLabDiagnosticsExportContainsTiebreak: Bool,
-        extensionTiebreakPanelCallout: String,
-        extensionTiebreakPanelCalloutMatchesExport: Bool,
-        brokenFolderDisplayWarnings: [String],
-        brokenFolderSidecarNotes: String?,
-        brokenFolderSelectedSongDiagnosticsExportPath: String,
-        brokenFolderSelectedSongPanelTitleLine: String,
-        brokenFolderSelectedSongPanelTitleLineMatchesExport: Bool,
-        brokenFolderSelectedSongPanelCprLine: String,
-        brokenFolderSelectedSongPanelCprLineMatchesExport: Bool,
-        brokenFolderSelectedSongPanelWarningLines: String,
-        brokenFolderSelectedSongPanelWarningLinesMatchExport: Bool,
-        brokenFolderSelectedSongPanelNotesLine: String,
-        brokenFolderSelectedSongPanelNotesLineMatchesExport: Bool,
-        warningSearchQuery: String,
-        warningSearchMatchCount: Int,
-        warningSearchMatchTitle: String,
-        warningSearchMatchSummary: String,
-        warningSearchDiagnosticsExportPath: String,
-        warningSearchDiagnosticsExportContainsMatch: Bool,
-        warningSearchPanelQueryLine: String,
-        warningSearchPanelQueryLineMatchesExport: Bool,
-        warningSearchPanelMatchLines: String,
-        warningSearchPanelMatchLinesMatchExport: Bool,
-        fuzzyWarningSearchQuery: String,
-        fuzzyWarningSearchMatchCount: Int,
-        fuzzyWarningSearchMatchTitle: String,
-        fuzzyWarningSearchMatchSummary: String,
-        fuzzyWarningSearchDiagnosticsExportPath: String,
-        fuzzyWarningSearchDiagnosticsExportContainsMatch: Bool,
-        fuzzyWarningSearchPanelQueryLine: String,
-        fuzzyWarningSearchPanelQueryLineMatchesExport: Bool,
-        fuzzyWarningSearchPanelMatchLines: String,
-        fuzzyWarningSearchPanelMatchLinesMatchExport: Bool,
-        notesSearchQuery: String,
-        notesSearchMatchCount: Int,
-        notesSearchMatchTitle: String,
-        notesSearchMatchSummary: String,
-        notesSearchDiagnosticsExportPath: String,
-        notesSearchDiagnosticsExportContainsMatch: Bool,
-        notesSearchPanelQueryLine: String,
-        notesSearchPanelQueryLineMatchesExport: Bool,
-        notesSearchPanelMatchLines: String,
-        notesSearchPanelMatchLinesMatchExport: Bool,
-        folderSearchQuery: String,
-        folderSearchMatchCount: Int,
-        folderSearchMatchTitle: String,
-        folderSearchMatchSummary: String,
-        folderSearchDiagnosticsExportPath: String,
-        folderSearchDiagnosticsExportContainsMatch: Bool,
-        folderSearchPanelQueryLine: String,
-        folderSearchPanelQueryLineMatchesExport: Bool,
-        folderSearchPanelMatchLines: String,
-        folderSearchPanelMatchLinesMatchExport: Bool,
-        cprSearchQuery: String,
-        cprSearchMatchCount: Int,
-        cprSearchMatchTitle: String,
-        cprSearchMatchSummary: String,
-        cprSearchDiagnosticsExportPath: String,
-        cprSearchDiagnosticsExportContainsMatch: Bool,
-        cprSearchPanelQueryLine: String,
-        cprSearchPanelQueryLineMatchesExport: Bool,
-        cprSearchPanelMatchLines: String,
-        cprSearchPanelMatchLinesMatchExport: Bool,
-        previewSearchQuery: String,
-        previewSearchMatchCount: Int,
-        previewSearchMatchTitle: String,
-        previewSearchMatchSummary: String,
-        previewSearchDiagnosticsExportPath: String,
-        previewSearchDiagnosticsExportContainsMatch: Bool,
-        previewSearchPanelQueryLine: String,
-        previewSearchPanelQueryLineMatchesExport: Bool,
-        previewSearchPanelMatchLines: String,
-        previewSearchPanelMatchLinesMatchExport: Bool,
-        skippedSearchQuery: String,
-        skippedSearchMatchCount: Int,
-        skippedSearchMatchLabel: String,
-        skippedSearchMatchSummary: String,
-        searchDiagnosticsExportPath: String,
-        searchDiagnosticsExportContainsMatch: Bool,
-        searchDiagnosticsExportContainsSummaryLine: Bool,
-        searchPanelQueryLine: String,
-        searchPanelQueryLineMatchesExport: Bool,
-        searchPanelMatchLines: String,
-        searchPanelMatchLinesMatchExport: Bool,
-        diagnosticsExportSummaryLine: String,
-        diagnosticsPanelSupportSummary: String,
-        diagnosticsPanelMatchesExportSummary: Bool,
-        fixtureScanHealthBadge: String,
-        fixtureScanHealthBadgeMatchesExport: Bool,
-        fixtureScanSkippedPanelLines: String,
-        fixtureScanSkippedPanelLinesMatchExport: Bool,
-        fixtureScanSongWarningsPanelLines: String,
-        fixtureScanSongWarningsPanelLinesMatchExport: Bool,
-        fixtureScanCountsPanelSongsValue: String,
-        fixtureScanCountsPanelSongWarningsValue: String,
-        fixtureScanCountsPanelMatchExport: Bool,
-        invalidRootDiagnosticsExportPath: String,
-        invalidRootExportContainsRootHealthBadge: Bool,
-        invalidRootPanelRootHealthBadge: String,
-        invalidRootPanelBadgeMatchesExport: Bool,
-        invalidRootPanelGlobalWarningLines: String,
-        invalidRootPanelGlobalWarningLinesMatchExport: Bool,
-        summaryTruncationDiagnosticsExportPath: String,
-        summaryTruncationDiagnosticsExportContainsTruncation: Bool,
-        summaryTruncationPanelFootnote: String,
-        summaryTruncationPanelFootnoteMatchesDiagnostics: Bool,
-        skippedSearchDiagnosticsExportPath: String,
-        skippedSearchDiagnosticsExportContainsMatch: Bool,
-        skippedSearchPanelQueryLine: String,
-        skippedSearchPanelQueryLineMatchesExport: Bool,
-        skippedSearchPanelMatchLines: String,
-        skippedSearchPanelMatchLinesMatchExport: Bool
+        core: CoreFlowOutcome,
+        primarySearch: PrimarySearchExportOutcome,
+        fixtureDiagnostics: FixtureDiagnosticsOutcome,
+        rankingLab: RankingLabOutcome,
+        tiebreakLabs: PreviewTiebreakLabsOutcome,
+        brokenFolder: BrokenFolderOutcome,
+        searches: SongSearchResults,
+        skippedSearch: SkippedSearchScenarioOutcome,
+        invalidRoot: InvalidRootCheckOutcome,
+        summaryTruncation: SummaryTruncationCheckOutcome
     ) {
-        self.userFlow = userFlow
-        self.songCount = songCount
-        self.searchQuery = searchQuery
-        self.searchMatchCount = searchMatchCount
-        self.selectedTitle = selectedTitle
-        self.dryRunCPRPath = dryRunCPRPath
-        self.dryRunCPRDisplayPath = dryRunCPRDisplayPath
-        self.dryRunLogLine = dryRunLogLine
-        self.dryRunLogDisplayLine = dryRunLogDisplayLine
-        self.writeProbeDenied = writeProbeDenied
-        self.archiveTreeUnchanged = archiveTreeUnchanged
-        self.diagnosticsSongCount = diagnosticsSongCount
-        self.diagnosticsSkippedCount = diagnosticsSkippedCount
-        self.searchMatchSummary = searchMatchSummary
-        self.rankingLabMainPreviewSummary = rankingLabMainPreviewSummary
-        self.rankingLabDiagnosticsExportPath = rankingLabDiagnosticsExportPath
-        self.rankingLabDiagnosticsExportContainsMatch = rankingLabDiagnosticsExportContainsMatch
-        self.rankingLabPanelScanCallout = rankingLabPanelScanCallout
-        self.rankingLabPanelScanCalloutMatchesExport = rankingLabPanelScanCalloutMatchesExport
-        self.rankingLabPanelSelectedHeader = rankingLabPanelSelectedHeader
-        self.rankingLabPanelSelectedHeaderMatchesExport = rankingLabPanelSelectedHeaderMatchesExport
-        self.rankingLabPanelTooShortBreakdownLine = rankingLabPanelTooShortBreakdownLine
-        self.rankingLabPanelTooShortBreakdownMatchesExport = rankingLabPanelTooShortBreakdownMatchesExport
-        self.rankingLabPanelTiebreakLegend = rankingLabPanelTiebreakLegend
-        self.rankingLabPanelTiebreakLegendMatchesExport = rankingLabPanelTiebreakLegendMatchesExport
-        self.rankingLabPanelMainPreviewSummary = rankingLabPanelMainPreviewSummary
-        self.rankingLabPanelMainPreviewSummaryMatchesExport = rankingLabPanelMainPreviewSummaryMatchesExport
-        self.rankingLabPanelRankedPreviewLines = rankingLabPanelRankedPreviewLines
-        self.rankingLabPanelRankedPreviewLinesMatchExport = rankingLabPanelRankedPreviewLinesMatchExport
-        self.tiebreakLabDiagnosticsExportPath = tiebreakLabDiagnosticsExportPath
-        self.tiebreakLabDiagnosticsExportContainsTiebreak = tiebreakLabDiagnosticsExportContainsTiebreak
-        self.tiebreakPanelPreviewRankingHeader = tiebreakPanelPreviewRankingHeader
-        self.tiebreakPanelPreviewRankingHeaderMatchesExport = tiebreakPanelPreviewRankingHeaderMatchesExport
-        self.tiebreakPanelPreviewTiebreakCallout = tiebreakPanelPreviewTiebreakCallout
-        self.tiebreakPanelPreviewTiebreakCalloutMatchesExport = tiebreakPanelPreviewTiebreakCalloutMatchesExport
-        self.versionTiebreakLabDiagnosticsExportPath = versionTiebreakLabDiagnosticsExportPath
-        self.versionTiebreakLabDiagnosticsExportContainsTiebreak = versionTiebreakLabDiagnosticsExportContainsTiebreak
-        self.versionTiebreakPanelCallout = versionTiebreakPanelCallout
-        self.versionTiebreakPanelCalloutMatchesExport = versionTiebreakPanelCalloutMatchesExport
-        self.extensionTiebreakLabDiagnosticsExportPath = extensionTiebreakLabDiagnosticsExportPath
-        self.extensionTiebreakLabDiagnosticsExportContainsTiebreak = extensionTiebreakLabDiagnosticsExportContainsTiebreak
-        self.extensionTiebreakPanelCallout = extensionTiebreakPanelCallout
-        self.extensionTiebreakPanelCalloutMatchesExport = extensionTiebreakPanelCalloutMatchesExport
-        self.brokenFolderDisplayWarnings = brokenFolderDisplayWarnings
-        self.brokenFolderSidecarNotes = brokenFolderSidecarNotes
-        self.brokenFolderSelectedSongDiagnosticsExportPath = brokenFolderSelectedSongDiagnosticsExportPath
-        self.brokenFolderSelectedSongPanelTitleLine = brokenFolderSelectedSongPanelTitleLine
-        self.brokenFolderSelectedSongPanelTitleLineMatchesExport =
-            brokenFolderSelectedSongPanelTitleLineMatchesExport
-        self.brokenFolderSelectedSongPanelCprLine = brokenFolderSelectedSongPanelCprLine
-        self.brokenFolderSelectedSongPanelCprLineMatchesExport =
-            brokenFolderSelectedSongPanelCprLineMatchesExport
-        self.brokenFolderSelectedSongPanelWarningLines = brokenFolderSelectedSongPanelWarningLines
-        self.brokenFolderSelectedSongPanelWarningLinesMatchExport =
-            brokenFolderSelectedSongPanelWarningLinesMatchExport
-        self.brokenFolderSelectedSongPanelNotesLine = brokenFolderSelectedSongPanelNotesLine
-        self.brokenFolderSelectedSongPanelNotesLineMatchesExport =
-            brokenFolderSelectedSongPanelNotesLineMatchesExport
-        self.warningSearchQuery = warningSearchQuery
-        self.warningSearchMatchCount = warningSearchMatchCount
-        self.warningSearchMatchTitle = warningSearchMatchTitle
-        self.warningSearchMatchSummary = warningSearchMatchSummary
-        self.warningSearchDiagnosticsExportPath = warningSearchDiagnosticsExportPath
-        self.warningSearchDiagnosticsExportContainsMatch = warningSearchDiagnosticsExportContainsMatch
-        self.warningSearchPanelQueryLine = warningSearchPanelQueryLine
-        self.warningSearchPanelQueryLineMatchesExport = warningSearchPanelQueryLineMatchesExport
-        self.warningSearchPanelMatchLines = warningSearchPanelMatchLines
-        self.warningSearchPanelMatchLinesMatchExport = warningSearchPanelMatchLinesMatchExport
-        self.fuzzyWarningSearchQuery = fuzzyWarningSearchQuery
-        self.fuzzyWarningSearchMatchCount = fuzzyWarningSearchMatchCount
-        self.fuzzyWarningSearchMatchTitle = fuzzyWarningSearchMatchTitle
-        self.fuzzyWarningSearchMatchSummary = fuzzyWarningSearchMatchSummary
-        self.fuzzyWarningSearchDiagnosticsExportPath = fuzzyWarningSearchDiagnosticsExportPath
-        self.fuzzyWarningSearchDiagnosticsExportContainsMatch = fuzzyWarningSearchDiagnosticsExportContainsMatch
-        self.fuzzyWarningSearchPanelQueryLine = fuzzyWarningSearchPanelQueryLine
-        self.fuzzyWarningSearchPanelQueryLineMatchesExport = fuzzyWarningSearchPanelQueryLineMatchesExport
-        self.fuzzyWarningSearchPanelMatchLines = fuzzyWarningSearchPanelMatchLines
-        self.fuzzyWarningSearchPanelMatchLinesMatchExport = fuzzyWarningSearchPanelMatchLinesMatchExport
-        self.notesSearchQuery = notesSearchQuery
-        self.notesSearchMatchCount = notesSearchMatchCount
-        self.notesSearchMatchTitle = notesSearchMatchTitle
-        self.notesSearchMatchSummary = notesSearchMatchSummary
-        self.notesSearchDiagnosticsExportPath = notesSearchDiagnosticsExportPath
-        self.notesSearchDiagnosticsExportContainsMatch = notesSearchDiagnosticsExportContainsMatch
-        self.notesSearchPanelQueryLine = notesSearchPanelQueryLine
-        self.notesSearchPanelQueryLineMatchesExport = notesSearchPanelQueryLineMatchesExport
-        self.notesSearchPanelMatchLines = notesSearchPanelMatchLines
-        self.notesSearchPanelMatchLinesMatchExport = notesSearchPanelMatchLinesMatchExport
-        self.folderSearchQuery = folderSearchQuery
-        self.folderSearchMatchCount = folderSearchMatchCount
-        self.folderSearchMatchTitle = folderSearchMatchTitle
-        self.folderSearchMatchSummary = folderSearchMatchSummary
-        self.folderSearchDiagnosticsExportPath = folderSearchDiagnosticsExportPath
-        self.folderSearchDiagnosticsExportContainsMatch = folderSearchDiagnosticsExportContainsMatch
-        self.folderSearchPanelQueryLine = folderSearchPanelQueryLine
-        self.folderSearchPanelQueryLineMatchesExport = folderSearchPanelQueryLineMatchesExport
-        self.folderSearchPanelMatchLines = folderSearchPanelMatchLines
-        self.folderSearchPanelMatchLinesMatchExport = folderSearchPanelMatchLinesMatchExport
-        self.cprSearchQuery = cprSearchQuery
-        self.cprSearchMatchCount = cprSearchMatchCount
-        self.cprSearchMatchTitle = cprSearchMatchTitle
-        self.cprSearchMatchSummary = cprSearchMatchSummary
-        self.cprSearchDiagnosticsExportPath = cprSearchDiagnosticsExportPath
-        self.cprSearchDiagnosticsExportContainsMatch = cprSearchDiagnosticsExportContainsMatch
-        self.cprSearchPanelQueryLine = cprSearchPanelQueryLine
-        self.cprSearchPanelQueryLineMatchesExport = cprSearchPanelQueryLineMatchesExport
-        self.cprSearchPanelMatchLines = cprSearchPanelMatchLines
-        self.cprSearchPanelMatchLinesMatchExport = cprSearchPanelMatchLinesMatchExport
-        self.previewSearchQuery = previewSearchQuery
-        self.previewSearchMatchCount = previewSearchMatchCount
-        self.previewSearchMatchTitle = previewSearchMatchTitle
-        self.previewSearchMatchSummary = previewSearchMatchSummary
-        self.previewSearchDiagnosticsExportPath = previewSearchDiagnosticsExportPath
-        self.previewSearchDiagnosticsExportContainsMatch = previewSearchDiagnosticsExportContainsMatch
-        self.previewSearchPanelQueryLine = previewSearchPanelQueryLine
-        self.previewSearchPanelQueryLineMatchesExport = previewSearchPanelQueryLineMatchesExport
-        self.previewSearchPanelMatchLines = previewSearchPanelMatchLines
-        self.previewSearchPanelMatchLinesMatchExport = previewSearchPanelMatchLinesMatchExport
-        self.skippedSearchQuery = skippedSearchQuery
-        self.skippedSearchMatchCount = skippedSearchMatchCount
-        self.skippedSearchMatchLabel = skippedSearchMatchLabel
-        self.skippedSearchMatchSummary = skippedSearchMatchSummary
-        self.searchDiagnosticsExportPath = searchDiagnosticsExportPath
-        self.searchDiagnosticsExportContainsMatch = searchDiagnosticsExportContainsMatch
-        self.searchDiagnosticsExportContainsSummaryLine = searchDiagnosticsExportContainsSummaryLine
-        self.searchPanelQueryLine = searchPanelQueryLine
-        self.searchPanelQueryLineMatchesExport = searchPanelQueryLineMatchesExport
-        self.searchPanelMatchLines = searchPanelMatchLines
-        self.searchPanelMatchLinesMatchExport = searchPanelMatchLinesMatchExport
-        self.diagnosticsExportSummaryLine = diagnosticsExportSummaryLine
-        self.diagnosticsPanelSupportSummary = diagnosticsPanelSupportSummary
-        self.diagnosticsPanelMatchesExportSummary = diagnosticsPanelMatchesExportSummary
-        self.fixtureScanHealthBadge = fixtureScanHealthBadge
-        self.fixtureScanHealthBadgeMatchesExport = fixtureScanHealthBadgeMatchesExport
-        self.fixtureScanSkippedPanelLines = fixtureScanSkippedPanelLines
-        self.fixtureScanSkippedPanelLinesMatchExport = fixtureScanSkippedPanelLinesMatchExport
-        self.fixtureScanSongWarningsPanelLines = fixtureScanSongWarningsPanelLines
-        self.fixtureScanSongWarningsPanelLinesMatchExport = fixtureScanSongWarningsPanelLinesMatchExport
-        self.fixtureScanCountsPanelSongsValue = fixtureScanCountsPanelSongsValue
-        self.fixtureScanCountsPanelSongWarningsValue = fixtureScanCountsPanelSongWarningsValue
-        self.fixtureScanCountsPanelMatchExport = fixtureScanCountsPanelMatchExport
-        self.invalidRootDiagnosticsExportPath = invalidRootDiagnosticsExportPath
-        self.invalidRootExportContainsRootHealthBadge = invalidRootExportContainsRootHealthBadge
-        self.invalidRootPanelRootHealthBadge = invalidRootPanelRootHealthBadge
-        self.invalidRootPanelBadgeMatchesExport = invalidRootPanelBadgeMatchesExport
-        self.invalidRootPanelGlobalWarningLines = invalidRootPanelGlobalWarningLines
-        self.invalidRootPanelGlobalWarningLinesMatchExport = invalidRootPanelGlobalWarningLinesMatchExport
-        self.summaryTruncationDiagnosticsExportPath = summaryTruncationDiagnosticsExportPath
-        self.summaryTruncationDiagnosticsExportContainsTruncation =
-            summaryTruncationDiagnosticsExportContainsTruncation
-        self.summaryTruncationPanelFootnote = summaryTruncationPanelFootnote
-        self.summaryTruncationPanelFootnoteMatchesDiagnostics =
-            summaryTruncationPanelFootnoteMatchesDiagnostics
-        self.skippedSearchDiagnosticsExportPath = skippedSearchDiagnosticsExportPath
-        self.skippedSearchDiagnosticsExportContainsMatch = skippedSearchDiagnosticsExportContainsMatch
-        self.skippedSearchPanelQueryLine = skippedSearchPanelQueryLine
-        self.skippedSearchPanelQueryLineMatchesExport = skippedSearchPanelQueryLineMatchesExport
-        self.skippedSearchPanelMatchLines = skippedSearchPanelMatchLines
-        self.skippedSearchPanelMatchLinesMatchExport = skippedSearchPanelMatchLinesMatchExport
+        self.core = core
+        self.primarySearch = primarySearch
+        self.fixtureDiagnostics = fixtureDiagnostics
+        self.rankingLab = rankingLab
+        self.tiebreakLabs = tiebreakLabs
+        self.brokenFolder = brokenFolder
+        self.searches = searches
+        self.skippedSearch = skippedSearch
+        self.invalidRoot = invalidRoot
+        self.summaryTruncation = summaryTruncation
+
+        var log: [String: String] = [:]
+        core.appendSmokeLog(into: &log)
+        primarySearch.appendSmokeLog(into: &log)
+        fixtureDiagnostics.appendSmokeLog(into: &log)
+        rankingLab.appendSmokeLog(into: &log)
+        tiebreakLabs.duration.appendSmokeLog(prefix: "tiebreak", into: &log)
+        tiebreakLabs.version.appendSmokeLog(prefix: "version_tiebreak", into: &log)
+        tiebreakLabs.extensionLab.appendSmokeLog(prefix: "extension_tiebreak", into: &log)
+        brokenFolder.appendSmokeLog(into: &log)
+        searches.warning.appendSmokeLog(prefix: "warning_search", into: &log)
+        searches.fuzzyWarning.appendSmokeLog(prefix: "fuzzy_warning_search", into: &log)
+        searches.notes.appendSmokeLog(prefix: "notes_search", into: &log)
+        searches.folder.appendSmokeLog(prefix: "folder_search", into: &log)
+        searches.cpr.appendSmokeLog(prefix: "cpr_search", into: &log)
+        searches.preview.appendSmokeLog(prefix: "preview_search", into: &log)
+        skippedSearch.appendSmokeLog(into: &log)
+        invalidRoot.appendSmokeLog(into: &log)
+        summaryTruncation.appendSmokeLog(into: &log)
+        log["dry_run"] = "true"
+        smokeLog = log
     }
+
+    public func validateForE2ESmoke(dryRunOpen: Bool) throws {
+        guard primarySearch.query == "neon hk",
+              primarySearch.matchCount == 1,
+              core.searchMatchSummary.contains("neon"),
+              core.searchMatchSummary.contains("hk"),
+              rankingLab.mainPreviewSummary.contains("v3"),
+              rankingLab.mainPreviewSummary.contains("wav"),
+              rankingLab.mainPreviewSummary.contains("Lab Song v3 mix.wav"),
+              !rankingLab.exportPath.isEmpty,
+              rankingLab.exportContainsMatch,
+              !rankingLab.panelScanCallout.isEmpty,
+              rankingLab.panelScanCallout.contains("too short"),
+              rankingLab.panelScanCalloutMatchesExport,
+              !rankingLab.panelSelectedHeader.isEmpty,
+              rankingLab.panelSelectedHeader.contains("Lab Song v3 mix.wav"),
+              rankingLab.panelSelectedHeaderMatchesExport,
+              !rankingLab.panelTooShortBreakdownLine.isEmpty,
+              rankingLab.panelTooShortBreakdownLine.contains("Lab Song short clip.wav"),
+              rankingLab.panelTooShortBreakdownMatchesExport,
+              !rankingLab.panelTiebreakLegend.isEmpty,
+              rankingLab.panelTiebreakLegend.contains("CPR version anchor"),
+              rankingLab.panelTiebreakLegendMatchesExport,
+              !rankingLab.panelMainPreviewSummary.isEmpty,
+              rankingLab.panelMainPreviewSummary.contains("Lab Song v3 mix.wav"),
+              rankingLab.panelMainPreviewSummaryMatchesExport,
+              !rankingLab.panelRankedPreviewLines.isEmpty,
+              rankingLab.panelRankedPreviewLines.contains("v3"),
+              rankingLab.panelRankedPreviewLinesMatchExport,
+              !tiebreakLabs.duration.exportPath.isEmpty,
+              tiebreakLabs.duration.exportContainsTiebreak,
+              !tiebreakLabs.duration.panelHeader.isEmpty,
+              tiebreakLabs.duration.panelHeaderMatchesExport,
+              !tiebreakLabs.duration.panelCallout.isEmpty,
+              tiebreakLabs.duration.panelCallout.contains("Equal score — longer preview"),
+              tiebreakLabs.duration.panelCalloutMatchesExport,
+              !tiebreakLabs.version.exportPath.isEmpty,
+              tiebreakLabs.version.exportContainsTiebreak,
+              tiebreakLabs.version.panelCallout.contains("Equal score — version v3 beat v2"),
+              tiebreakLabs.version.panelCalloutMatchesExport,
+              !tiebreakLabs.extensionLab.exportPath.isEmpty,
+              tiebreakLabs.extensionLab.exportContainsTiebreak,
+              tiebreakLabs.extensionLab.panelCallout.contains("Equal score — preferred flac over mp3"),
+              tiebreakLabs.extensionLab.panelCalloutMatchesExport,
+              core.selectedTitle == "Neon Hook",
+              core.dryRunCPRPath.contains("Neon Hook"),
+              core.dryRunCPRPath.hasSuffix(".cpr"),
+              core.writeProbeDenied,
+              core.archiveTreeUnchanged,
+              fixtureDiagnostics.songCount >= 7,
+              fixtureDiagnostics.skippedCount >= 1,
+              brokenFolder.displayWarnings.contains(where: { $0.localizedCaseInsensitiveContains("CPR") }),
+              brokenFolder.sidecarNotes == "notes only",
+              !brokenFolder.selectedSongExportPath.isEmpty,
+              brokenFolder.panelTitleLine == "Broken Folder Example",
+              brokenFolder.panelTitleLineMatchesExport,
+              brokenFolder.panelCprLine.contains("no CPR versions"),
+              brokenFolder.panelCprLineMatchesExport,
+              brokenFolder.panelWarningLines.contains("No CPR project files found"),
+              brokenFolder.panelWarningLinesMatchExport,
+              brokenFolder.panelNotesLine.contains("notes only"),
+              brokenFolder.panelNotesLineMatchesExport,
+              validateSearch(searches.warning, query: "project", title: "Broken Folder Example", summaryParts: ["scan warning", "project"]),
+              validateSearch(searches.fuzzyWarning, query: "ncpr fnd", title: "Broken Folder Example", summaryParts: ["fuzzy scan warning", "ncpr", "fnd"]),
+              validateSearch(searches.notes, query: "nts nly", title: "Broken Folder Example", summaryParts: ["fuzzy song note", "nts", "nly"]),
+              validateSearch(searches.folder, query: "brkn fld", title: "Broken Folder Example", summaryParts: ["fuzzy folder", "brkn", "fld"]),
+              validateSearch(searches.cpr, query: "neohkv2", title: "Neon Hook", summaryParts: ["fuzzy CPR file", "neohkv2"]),
+              validateSearch(searches.preview, query: "ranking lab v3 mx", title: "Lab Song", summaryParts: ["fuzzy preview file", "v3"], matchCountAtLeast: 1),
+              skippedSearch.query == "lse fle",
+              skippedSearch.matchCount >= 1,
+              skippedSearch.matchLabel == "LOOSE_FILE.txt",
+              skippedSearch.matchSummary.contains("fuzzy skipped label"),
+              !primarySearch.exportPath.isEmpty,
+              primarySearch.exportContainsMatch,
+              primarySearch.exportContainsSummaryLine,
+              !primarySearch.panel.queryLine.isEmpty,
+              primarySearch.panel.queryLine.contains("neon hk"),
+              primarySearch.panel.queryLineMatchesExport,
+              !primarySearch.panel.matchLinesJoined.isEmpty,
+              primarySearch.panel.matchLinesJoined.contains("Neon Hook"),
+              primarySearch.panel.matchLinesMatchExport,
+              !primarySearch.exportSummaryLine.isEmpty,
+              primarySearch.exportSummaryLine.contains("summary_line=roots:"),
+              primarySearch.exportSummaryLine.contains("Scanned 9 songs"),
+              !fixtureDiagnostics.panelSupportSummary.isEmpty,
+              fixtureDiagnostics.panelSupportSummary.hasPrefix("roots:"),
+              fixtureDiagnostics.panelSupportSummary.contains("Scanned 9 songs"),
+              fixtureDiagnostics.panelMatchesExportSummary,
+              !fixtureDiagnostics.healthBadge.isEmpty,
+              fixtureDiagnostics.healthBadge.contains("song warning"),
+              fixtureDiagnostics.healthBadge.contains("skipped at roots"),
+              fixtureDiagnostics.healthBadgeMatchesExport,
+              !fixtureDiagnostics.skippedPanelLines.isEmpty,
+              fixtureDiagnostics.skippedPanelLines.contains("LOOSE_FILE.txt"),
+              fixtureDiagnostics.skippedPanelLines.contains("README.md"),
+              fixtureDiagnostics.skippedPanelLinesMatchExport,
+              !fixtureDiagnostics.songWarningsPanelLines.isEmpty,
+              fixtureDiagnostics.songWarningsPanelLines.contains("Broken Folder Example"),
+              fixtureDiagnostics.songWarningsPanelLines.contains("No CPR project files found"),
+              fixtureDiagnostics.songWarningsPanelLinesMatchExport,
+              fixtureDiagnostics.countsPanelSongsValue == "9",
+              fixtureDiagnostics.countsPanelSongWarningsValue == "1 (1 total)",
+              fixtureDiagnostics.countsPanelMatchExport,
+              !invalidRoot.exportPath.isEmpty,
+              invalidRoot.exportContainsBadge,
+              !invalidRoot.panelBadge.isEmpty,
+              invalidRoot.panelBadge.contains("invalid root"),
+              invalidRoot.panelBadge.contains("root warning"),
+              invalidRoot.panelBadgeMatchesExport,
+              !invalidRoot.panelGlobalWarningLines.isEmpty,
+              invalidRoot.panelGlobalWarningLines.contains("Root is not a directory"),
+              invalidRoot.panelGlobalWarningLinesMatchExport,
+              !summaryTruncation.exportPath.isEmpty,
+              summaryTruncation.exportContainsTruncation,
+              summaryTruncation.panelFootnote
+                  == "Support summary shows 5 warning song titles; 3 more listed below.",
+              summaryTruncation.panelFootnoteMatchesDiagnostics,
+              !skippedSearch.exportPath.isEmpty,
+              skippedSearch.exportContainsMatch,
+              !skippedSearch.panel.queryLine.isEmpty,
+              skippedSearch.panel.queryLine.contains("lse fle"),
+              skippedSearch.panel.queryLineMatchesExport,
+              !skippedSearch.panel.matchLinesJoined.isEmpty,
+              skippedSearch.panel.matchLinesJoined.contains("LOOSE_FILE.txt"),
+              skippedSearch.panel.matchLinesJoined.contains("fuzzy skipped label"),
+              skippedSearch.panel.matchLinesMatchExport else {
+            throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
+        }
+
+        if dryRunOpen {
+            let logEvidence = core.dryRunLogDisplayLine
+                ?? "[dry-run] open CPR: \(core.dryRunCPRDisplayPath)"
+            guard logEvidence.contains("Neon Hook"), logEvidence.contains(".cpr") else {
+                throw ArchiveUserFlowSmokeValidationError.dryRunLogMissing
+            }
+        }
+    }
+
+    private func validateSearch(
+        _ outcome: SongSearchScenarioOutcome,
+        query: String,
+        title: String,
+        summaryParts: [String],
+        matchCountAtLeast: Int = 1
+    ) -> Bool {
+        outcome.query == query
+            && outcome.matchCount >= matchCountAtLeast
+            && outcome.matchTitle == title
+            && summaryParts.allSatisfy { outcome.matchSummary.contains($0) }
+            && !outcome.exportPath.isEmpty
+            && outcome.exportContainsMatch
+            && !outcome.panel.queryLine.isEmpty
+            && outcome.panel.queryLine.contains(query)
+            && outcome.panel.queryLineMatchesExport
+            && !outcome.panel.matchLinesJoined.isEmpty
+            && outcome.panel.matchLinesJoined.contains(title)
+            && summaryParts.allSatisfy { outcome.panel.matchLinesJoined.contains($0) || outcome.panel.matchLinesJoined.localizedCaseInsensitiveContains($0) }
+            && outcome.panel.matchLinesMatchExport
+    }
+}
+
+public enum ArchiveUserFlowSmokeValidationError: Error, Equatable, Sendable {
+    case evidenceIncomplete
+    case dryRunLogMissing
 }

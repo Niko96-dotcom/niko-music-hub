@@ -15,6 +15,7 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
     public let dryRunOpen: Bool
     public let fixtureRootURL: URL?
     public let devArchiveRootURL: URL?
+    public let settingsSuiteName: String?
     public let usesIsolatedSettingsSuite: Bool
     public let showsDevTool: Bool
     public let disableArchiveWatcher: Bool
@@ -26,7 +27,9 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
         dryRunOpen = environment[Self.dryRunOpenKey] == "1"
         fixtureRootURL = Self.directoryURL(for: environment[Self.fixtureRootKey])
         devArchiveRootURL = Self.directoryURL(for: environment[Self.devArchiveRootKey])
-        usesIsolatedSettingsSuite = environment[Self.settingsSuiteKey] != nil
+        let suiteName = environment[Self.settingsSuiteKey]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        settingsSuiteName = suiteName.flatMap { $0.isEmpty ? nil : $0 }
+        usesIsolatedSettingsSuite = settingsSuiteName != nil
         showsDevTool = environment[Self.showDevToolKey] == "1"
         disableArchiveWatcher = environment[Self.disableArchiveWatcherKey] == "1"
         e2eSmoke = environment[Self.e2eSmokeKey] == "1"

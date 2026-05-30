@@ -101,7 +101,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             return
         }
         let completed = (try? settingsStore.loadSettings())?.archiveOnboardingCompleted ?? false
-        let hasDevBootstrap = ArchiveDefaultRootPolicy.bootstrapRoot() != nil
+        let hasDevBootstrap = ArchiveDefaultRootPolicy.bootstrapRoot(runtime: runtime) != nil
         needsFirstRunOnboarding = !completed && !hasDevBootstrap
     }
 

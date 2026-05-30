@@ -4,284 +4,34 @@ import NikoMusicCore
 
 @MainActor
 extension ArchiveUserFlowSmoke {
-    struct ActiveSkippedSearchPanelParity: Sendable {
-        let queryLine: String
-        let queryLineMatchesExport: Bool
-        let matchLinesJoined: String
-        let matchLinesMatchExport: Bool
+    static func harnessRuntime(fixtureRoot: URL) -> MusicHubRuntimeEnvironment {
+        var environment = ProcessInfo.processInfo.environment
+        environment[MusicHubRuntimeEnvironment.fixtureRootKey] = fixtureRoot.path
+        return MusicHubRuntimeEnvironment(environment: environment)
     }
 
-    @MainActor
-    static func activeSkippedSearchPanelParity(
-        viewModel: ArchiveBrowserViewModel,
-        query: String,
-        matchCount: Int,
-        exportText: String,
-        requiredQuerySubstring: String,
-        requiredMatchLabelSubstring: String,
-        requiredSummarySubstrings: [String]
-    ) throws -> ActiveSkippedSearchPanelParity {
-        guard let skippedSearchPanelContext = viewModel.activeSkippedSearchExportContext() else {
-            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+    static func exportDiagnosticsText(
+        from viewModel: ArchiveBrowserViewModel
+    ) throws -> (path: String, text: String) {
+        try viewModel.exportDiagnostics()
+        guard let path = viewModel.lastDiagnosticsExportPath, !path.isEmpty else {
+            throw ArchiveUserFlowSmokeError.diagnosticsExportFailed
         }
-        let panelQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
-            query: skippedSearchPanelContext.query,
-            matchCount: skippedSearchPanelContext.matches.count
-        )
-        let panelMatchLines = skippedSearchPanelContext.matches.map {
-            ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
-                label: $0.label,
-                summary: $0.summary
-            )
-        }
-        let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
-        let queryLineMatchesExport =
-            skippedSearchPanelContext.query == query
-            && skippedSearchPanelContext.matches.count == matchCount
-            && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
-                in: exportText,
-                query: skippedSearchPanelContext.query,
-                matchCount: skippedSearchPanelContext.matches.count
-            )
-            && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
-            && panelQueryLine.contains("\(matchCount) match")
-        let matchLinesMatchExport =
-            !panelMatchLines.isEmpty
-            && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
-                in: exportText,
-                matches: skippedSearchPanelContext.matches
-            )
-            && panelMatchLines.contains(where: { $0.contains(requiredMatchLabelSubstring) })
-            && requiredSummarySubstrings.allSatisfy { substring in
-                panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
-            }
-        guard queryLineMatchesExport, matchLinesMatchExport else {
-            throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
-        }
-        return ActiveSkippedSearchPanelParity(
-            queryLine: panelQueryLine,
-            queryLineMatchesExport: queryLineMatchesExport,
-            matchLinesJoined: panelMatchLinesJoined,
-            matchLinesMatchExport: matchLinesMatchExport
-        )
+        let text = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+        return (path, text)
     }
 
-    struct ActiveSearchPanelParity: Sendable {
-        let queryLine: String
-        let queryLineMatchesExport: Bool
-        let matchLinesJoined: String
-        let matchLinesMatchExport: Bool
-    }
-
-    @MainActor
-    static func activeSearchPanelParity(
-        viewModel: ArchiveBrowserViewModel,
-        query: String,
-        matchCount: Int,
-        exportText: String,
-        requiredQuerySubstring: String,
-        requiredMatchTitleSubstring: String,
-        requiredSummarySubstrings: [String]
-    ) throws -> ActiveSearchPanelParity {
-        guard let searchPanelContext = viewModel.activeSearchExportContext() else {
-            throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
-        }
-        let panelQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
-            query: searchPanelContext.query,
-            matchCount: searchPanelContext.matches.count
-        )
-        let panelMatchLines = searchPanelContext.matches.map {
-            ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
-                displayTitle: $0.displayTitle,
-                summary: $0.summary
-            )
-        }
-        let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
-        let queryLineMatchesExport =
-            searchPanelContext.query == query
-            && searchPanelContext.matches.count == matchCount
-            && ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
-                in: exportText,
-                query: searchPanelContext.query,
-                matchCount: searchPanelContext.matches.count
-            )
-            && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
-            && panelQueryLine.contains("\(matchCount) match")
-        let matchLinesMatchExport =
-            !panelMatchLines.isEmpty
-            && ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
-                in: exportText,
-                matches: searchPanelContext.matches
-            )
-            && panelMatchLines.contains(where: { $0.contains(requiredMatchTitleSubstring) })
-            && requiredSummarySubstrings.allSatisfy { substring in
-                panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
-            }
-        guard queryLineMatchesExport, matchLinesMatchExport else {
-            throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
-        }
-        return ActiveSearchPanelParity(
-            queryLine: panelQueryLine,
-            queryLineMatchesExport: queryLineMatchesExport,
-            matchLinesJoined: panelMatchLinesJoined,
-            matchLinesMatchExport: matchLinesMatchExport
-        )
-    }
-
-    struct InvalidRootHealthCheckResult: Sendable {
-        let exportPath: String
-        let exportContainsBadge: Bool
-        let panelBadge: String
-        let panelMatchesExport: Bool
-        let panelGlobalWarningLines: String
-        let panelGlobalWarningLinesMatchExport: Bool
-    }
-
-    struct SummaryTruncationCheckResult: Sendable {
-        let exportPath: String
-        let exportContainsTruncation: Bool
-        let panelFootnote: String
-        let panelFootnoteMatchesDiagnostics: Bool
-    }
-
-    static func runSummaryTruncationCheck(
-        truncationRoot: URL,
-        context: ToolContext
-    ) throws -> SummaryTruncationCheckResult {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: truncationRoot.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationRootMissing
-        }
-
-        let truncationViewModel = ArchiveBrowserViewModel(context: context)
-        truncationViewModel.roots = [truncationRoot.standardizedFileURL]
-        truncationViewModel.scanSync()
-
-        guard let diagnostics = truncationViewModel.scanDiagnostics,
-              diagnostics.songCount == 8,
-              diagnostics.songsWithWarningsCount == 8,
-              diagnostics.summaryLineSongWarningTitlesTruncated,
-              diagnostics.summaryLineSongWarningTitlesOmittedCount == 3,
-              diagnostics.summaryLine.contains("and 3 more") else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
-        }
-
-        try truncationViewModel.exportDiagnostics()
-        guard let exportPath = truncationViewModel.lastDiagnosticsExportPath,
-              !exportPath.isEmpty else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportFailed
-        }
-
-        let exportText = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
-        let summaryLine = exportText
-            .split(separator: "\n", omittingEmptySubsequences: false)
+    static func exportLineValue(prefix: String, in text: String) -> String? {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
-            .first { $0.hasPrefix("summary_line=") } ?? ""
-        let exportContainsTruncation =
-            summaryLine.hasPrefix("summary_line=roots:")
-            && summaryLine.contains("Scanned 8 songs")
-            && summaryLine.contains("8 song(s) with 8 warning(s)")
-            && summaryLine.contains("and 3 more")
-            && summaryLine.contains("Summary Warning 01")
-            && !summaryLine.contains("Summary Warning 08")
-            && exportText.contains("summary_line_song_warning_titles_truncated=true")
-            && exportText.contains("summary_line_song_warning_titles_cap=5")
-            && exportText.contains("summary_line_song_warning_titles_omitted=3")
-            && exportText.contains("song=Summary Warning 08")
-        guard exportContainsTruncation else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
-        }
-
-        let panelContext = ArchiveDiagnosticsPanelContext.from(diagnostics)
-        guard let panelFootnote = panelContext.supportSummaryTruncationFootnote,
-              !panelFootnote.isEmpty else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMissing
-        }
-        guard panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote else {
-            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMismatch
-        }
-
-        return SummaryTruncationCheckResult(
-            exportPath: exportPath,
-            exportContainsTruncation: exportContainsTruncation,
-            panelFootnote: panelFootnote,
-            panelFootnoteMatchesDiagnostics: true
-        )
+            .first { $0.hasPrefix(prefix) }
+            .map { String($0.dropFirst(prefix.count)) }
     }
 
-    static func runInvalidRootHealthCheck(
-        fixtureRoot: URL,
-        context: ToolContext,
-        homeDirectory: String
-    ) throws -> InvalidRootHealthCheckResult {
-        let missingRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "niko-music-hub-invalid-root-\(UUID().uuidString)",
-                isDirectory: true
-            )
-        let invalidViewModel = ArchiveBrowserViewModel(context: context)
-        invalidViewModel.addRoot(fixtureRoot)
-        invalidViewModel.addRoot(missingRoot)
-        invalidViewModel.scanSync()
-
-        guard let invalidDiagnostics = invalidViewModel.scanDiagnostics else {
-            throw ArchiveUserFlowSmokeError.invalidRootDiagnosticsExportFailed
-        }
-
-        guard let panelBadge = ArchiveDiagnosticsPanelContext.rootHealthBadge(for: invalidDiagnostics) else {
-            throw ArchiveUserFlowSmokeError.invalidRootPanelRootHealthBadgeMissing
-        }
-        guard panelBadge.contains("invalid root"),
-              panelBadge.contains("root warning") else {
-            throw ArchiveUserFlowSmokeError.invalidRootPanelRootHealthBadgeMissing
-        }
-
-        try invalidViewModel.exportDiagnostics()
-        guard let exportPath = invalidViewModel.lastDiagnosticsExportPath,
-              !exportPath.isEmpty else {
-            throw ArchiveUserFlowSmokeError.invalidRootDiagnosticsExportFailed
-        }
-        let exportText = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
-        let exportBadgeLine = exportText
-            .split(separator: "\n", omittingEmptySubsequences: false)
+    static func firstExportLine(prefix: String, in text: String) -> String? {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
-            .first { $0.hasPrefix("root_health_badge=") }
-        guard let exportBadgeLine,
-              exportBadgeLine == "root_health_badge=\(panelBadge)" else {
-            throw ArchiveUserFlowSmokeError.invalidRootExportMissingRootHealthBadge
-        }
-
-        let panelMatchesExport = exportBadgeLine == "root_health_badge=\(panelBadge)"
-        guard panelMatchesExport else {
-            throw ArchiveUserFlowSmokeError.invalidRootPanelBadgeMismatch
-        }
-
-        let displayWarnings = invalidDiagnostics.displayGlobalWarnings(homeDirectory: homeDirectory)
-        guard !displayWarnings.isEmpty else {
-            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
-        }
-        let panelGlobalWarningLines = displayWarnings
-            .map { ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: $0) }
-            .joined(separator: " | ")
-        let panelGlobalWarningLinesMatchExport =
-            ArchiveDiagnosticsGlobalWarningsPanelContext.linesMatchExport(
-                in: exportText,
-                warnings: displayWarnings,
-                homeDirectory: homeDirectory
-            )
-        guard panelGlobalWarningLinesMatchExport else {
-            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
-        }
-
-        return InvalidRootHealthCheckResult(
-            exportPath: exportPath,
-            exportContainsBadge: true,
-            panelBadge: panelBadge,
-            panelMatchesExport: panelMatchesExport,
-            panelGlobalWarningLines: panelGlobalWarningLines,
-            panelGlobalWarningLinesMatchExport: panelGlobalWarningLinesMatchExport
-        )
+            .first { $0.hasPrefix(prefix) }
     }
 
     static func captureDryRunLogLine(from context: ToolContext) -> String? {
@@ -318,25 +68,231 @@ extension ArchiveUserFlowSmoke {
         return lines.sorted()
     }
 
-    static func exportLineValue(prefix: String, in text: String) -> String? {
-        text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-            .first { $0.hasPrefix(prefix) }
-            .map { String($0.dropFirst(prefix.count)) }
+    enum SearchPanelKind {
+        case songs
+        case skipped
     }
-}
 
-/// Test/smoke helper that records diagnostic lines for assertions.
-public final class CapturingDiagnostics: Diagnostics, @unchecked Sendable {
-    private let lock = NSLock()
-    private(set) var lines: [String] = []
+    static func assertSearchPanelParity(
+        kind: SearchPanelKind,
+        viewModel: ArchiveBrowserViewModel,
+        query: String,
+        matchCount: Int,
+        exportText: String,
+        requiredQuerySubstring: String,
+        requiredMatchSubstring: String,
+        requiredSummarySubstrings: [String]
+    ) throws -> SearchPanelParity {
+        switch kind {
+        case .songs:
+            guard let context = viewModel.activeSearchExportContext() else {
+                throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
+            }
+            let panelQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
+                query: context.query,
+                matchCount: context.matches.count
+            )
+            let panelMatchLines = context.matches.map {
+                ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
+                    displayTitle: $0.displayTitle,
+                    summary: $0.summary
+                )
+            }
+            let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
+            let queryLineMatchesExport =
+                context.query == query
+                && context.matches.count == matchCount
+                && ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                    in: exportText,
+                    query: context.query,
+                    matchCount: context.matches.count
+                )
+                && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
+                && panelQueryLine.contains("\(matchCount) match")
+            let matchLinesMatchExport =
+                !panelMatchLines.isEmpty
+                && ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
+                    in: exportText,
+                    matches: context.matches
+                )
+                && panelMatchLines.contains(where: { $0.contains(requiredMatchSubstring) })
+                && requiredSummarySubstrings.allSatisfy { substring in
+                    panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
+                }
+            guard queryLineMatchesExport, matchLinesMatchExport else {
+                throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
+            }
+            return SearchPanelParity(
+                queryLine: panelQueryLine,
+                queryLineMatchesExport: queryLineMatchesExport,
+                matchLinesJoined: panelMatchLinesJoined,
+                matchLinesMatchExport: matchLinesMatchExport
+            )
 
-    public init() {}
+        case .skipped:
+            guard let context = viewModel.activeSkippedSearchExportContext() else {
+                throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+            }
+            let panelQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
+                query: context.query,
+                matchCount: context.matches.count
+            )
+            let panelMatchLines = context.matches.map {
+                ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
+                    label: $0.label,
+                    summary: $0.summary
+                )
+            }
+            let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
+            let queryLineMatchesExport =
+                context.query == query
+                && context.matches.count == matchCount
+                && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                    in: exportText,
+                    query: context.query,
+                    matchCount: context.matches.count
+                )
+                && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
+                && panelQueryLine.contains("\(matchCount) match")
+            let matchLinesMatchExport =
+                !panelMatchLines.isEmpty
+                && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
+                    in: exportText,
+                    matches: context.matches
+                )
+                && panelMatchLines.contains(where: { $0.contains(requiredMatchSubstring) })
+                && requiredSummarySubstrings.allSatisfy { substring in
+                    panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
+                }
+            guard queryLineMatchesExport, matchLinesMatchExport else {
+                throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
+            }
+            return SearchPanelParity(
+                queryLine: panelQueryLine,
+                queryLineMatchesExport: queryLineMatchesExport,
+                matchLinesJoined: panelMatchLinesJoined,
+                matchLinesMatchExport: matchLinesMatchExport
+            )
+        }
+    }
 
-    public func log(_ level: DiagnosticLevel, _ message: String) {
-        lock.lock()
-        lines.append(message)
-        lock.unlock()
-        print("[\(level.rawValue)] \(message)")
+    static func runInvalidRootHealthCheck(
+        fixtureRoot: URL,
+        context: ToolContext,
+        runtime: MusicHubRuntimeEnvironment,
+        homeDirectory: String
+    ) throws -> InvalidRootCheckOutcome {
+        let missingRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "niko-music-hub-invalid-root-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let invalidViewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
+        invalidViewModel.addRoot(fixtureRoot)
+        invalidViewModel.addRoot(missingRoot)
+        invalidViewModel.scanSync()
+
+        guard let invalidDiagnostics = invalidViewModel.scanDiagnostics else {
+            throw ArchiveUserFlowSmokeError.invalidRootDiagnosticsExportFailed
+        }
+
+        guard let panelBadge = ArchiveDiagnosticsPanelContext.rootHealthBadge(for: invalidDiagnostics) else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelRootHealthBadgeMissing
+        }
+        guard panelBadge.contains("invalid root"),
+              panelBadge.contains("root warning") else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelRootHealthBadgeMissing
+        }
+
+        let (exportPath, exportText) = try exportDiagnosticsText(from: invalidViewModel)
+        let exportBadgeLine = firstExportLine(prefix: "root_health_badge=", in: exportText)
+        guard let exportBadgeLine,
+              exportBadgeLine == "root_health_badge=\(panelBadge)" else {
+            throw ArchiveUserFlowSmokeError.invalidRootExportMissingRootHealthBadge
+        }
+
+        let displayWarnings = invalidDiagnostics.displayGlobalWarnings(homeDirectory: homeDirectory)
+        guard !displayWarnings.isEmpty else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
+        }
+        let panelGlobalWarningLines = displayWarnings
+            .map { ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: $0) }
+            .joined(separator: " | ")
+        let panelGlobalWarningLinesMatchExport =
+            ArchiveDiagnosticsGlobalWarningsPanelContext.linesMatchExport(
+                in: exportText,
+                warnings: displayWarnings,
+                homeDirectory: homeDirectory
+            )
+        guard panelGlobalWarningLinesMatchExport else {
+            throw ArchiveUserFlowSmokeError.invalidRootPanelGlobalWarningsMismatch
+        }
+
+        return InvalidRootCheckOutcome(
+            exportPath: exportPath,
+            exportContainsBadge: true,
+            panelBadge: panelBadge,
+            panelBadgeMatchesExport: exportBadgeLine == "root_health_badge=\(panelBadge)",
+            panelGlobalWarningLines: panelGlobalWarningLines,
+            panelGlobalWarningLinesMatchExport: panelGlobalWarningLinesMatchExport
+        )
+    }
+
+    static func runSummaryTruncationCheck(
+        truncationRoot: URL,
+        context: ToolContext,
+        runtime: MusicHubRuntimeEnvironment
+    ) throws -> SummaryTruncationCheckOutcome {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: truncationRoot.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationRootMissing
+        }
+
+        let truncationViewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
+        truncationViewModel.roots = [truncationRoot.standardizedFileURL]
+        truncationViewModel.scanSync()
+
+        guard let diagnostics = truncationViewModel.scanDiagnostics,
+              diagnostics.songCount == 8,
+              diagnostics.songsWithWarningsCount == 8,
+              diagnostics.summaryLineSongWarningTitlesTruncated,
+              diagnostics.summaryLineSongWarningTitlesOmittedCount == 3,
+              diagnostics.summaryLine.contains("and 3 more") else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
+        }
+
+        let (exportPath, exportText) = try exportDiagnosticsText(from: truncationViewModel)
+        let summaryLine = firstExportLine(prefix: "summary_line=", in: exportText) ?? ""
+        let exportContainsTruncation =
+            summaryLine.hasPrefix("summary_line=roots:")
+            && summaryLine.contains("Scanned 8 songs")
+            && summaryLine.contains("8 song(s) with 8 warning(s)")
+            && summaryLine.contains("and 3 more")
+            && summaryLine.contains("Summary Warning 01")
+            && !summaryLine.contains("Summary Warning 08")
+            && exportText.contains("summary_line_song_warning_titles_truncated=true")
+            && exportText.contains("summary_line_song_warning_titles_cap=5")
+            && exportText.contains("summary_line_song_warning_titles_omitted=3")
+            && exportText.contains("song=Summary Warning 08")
+        guard exportContainsTruncation else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
+        }
+
+        let panelContext = ArchiveDiagnosticsPanelContext.from(diagnostics)
+        guard let panelFootnote = panelContext.supportSummaryTruncationFootnote,
+              !panelFootnote.isEmpty else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMissing
+        }
+        guard panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote else {
+            throw ArchiveUserFlowSmokeError.summaryTruncationPanelFootnoteMismatch
+        }
+
+        return SummaryTruncationCheckOutcome(
+            exportPath: exportPath,
+            exportContainsTruncation: exportContainsTruncation,
+            panelFootnote: panelFootnote,
+            panelFootnoteMatchesDiagnostics: panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote
+        )
     }
 }

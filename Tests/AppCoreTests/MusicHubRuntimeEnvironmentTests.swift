@@ -15,6 +15,7 @@ final class MusicHubRuntimeEnvironmentTests: XCTestCase {
         XCTAssertTrue(runtime.dryRunOpen)
         XCTAssertEqual(runtime.fixtureRootURL?.path, "/tmp/nmh-fixture")
         XCTAssertTrue(runtime.usesFixtureRoot)
+        XCTAssertEqual(runtime.settingsSuiteName, "nmh-test")
         XCTAssertTrue(runtime.usesIsolatedSettingsSuite)
         XCTAssertTrue(runtime.showsDevTool)
         XCTAssertTrue(runtime.disableArchiveWatcher)
