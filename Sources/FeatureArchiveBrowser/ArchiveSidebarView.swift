@@ -187,7 +187,10 @@ struct ArchiveSidebarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
-            TextField("Search", text: $viewModel.searchQuery)
+            TextField("Search", text: Binding(
+                get: { viewModel.searchQuery },
+                set: { viewModel.setSearchQuery($0) }
+            ))
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
         }
