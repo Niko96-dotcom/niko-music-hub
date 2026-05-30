@@ -5,9 +5,58 @@ import XCTest
 
 @MainActor
 final class ArchiveBrowserViewModelTests: XCTestCase {
+    func testPersistsAddedArchiveRoot() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubPersistedRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        viewModel.roots = []
+        viewModel.addRoot(root)
+
+        let reloaded = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        XCTAssertEqual(reloaded.roots.map(\.path), [root.standardizedFileURL.path])
+    }
+
+    func testDevArchiveRootEnvBootstrapsWhenSettingsEmpty() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let devRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubDevArchiveRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: devRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: devRoot)
+            unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        }
+
+        setenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT", devRoot.path, 1)
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+
+        XCTAssertEqual(viewModel.roots.map(\.path), [devRoot.standardizedFileURL.path])
+        XCTAssertEqual(
+            try store.loadSettings().archiveRoots.map(\.path),
+            [devRoot.standardizedFileURL.path]
+        )
+    }
+
     func testNormalLaunchFiltersFixtureTempAndMissingRootsFromSavedSettings() async throws {
         try CubaseFixtures.ensureGenerated()
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         userDefaults.removePersistentDomain(forName: suiteName)

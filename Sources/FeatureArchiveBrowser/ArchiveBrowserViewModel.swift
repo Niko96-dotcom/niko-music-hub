@@ -49,6 +49,13 @@ final class ArchiveBrowserViewModel: ObservableObject {
                 persistRoots()
             }
         }
+        applyBootstrapRootWhenEmpty()
+    }
+
+    private func applyBootstrapRootWhenEmpty() {
+        guard roots.isEmpty, let bootstrap = ArchiveDefaultRootPolicy.bootstrapRoot() else { return }
+        roots = [bootstrap]
+        persistRoots()
     }
 
     func persistRoots() {

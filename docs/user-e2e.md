@@ -23,6 +23,7 @@ Environment variables:
 |----------|---------|
 | `NIKO_MUSIC_HUB_E2E_SMOKE=1` | Run smoke and exit (no UI required) |
 | `NIKO_MUSIC_HUB_FIXTURE_ROOT` | Cubase archive fixture root |
+| `NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT` | Dev archive root when settings have no roots (Debug also tries `~/Music/00_Cubase Project` if present) |
 | `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` | Log CPR path without launching Cubase |
 
 ## Real archive read-only smoke (manual)
