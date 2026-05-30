@@ -20,7 +20,7 @@ public struct TempoEstimatorConfiguration: Equatable, Sendable {
         pauseResetThreshold: TimeInterval = Defaults.pauseResetThreshold,
         minimumInterval: TimeInterval = 0.24,
         maximumInterval: TimeInterval = 2.0,
-        outlierTolerance: Double = 0.35
+        outlierTolerance: Double = 0.50
     ) {
         self.recentIntervalLimit = max(1, recentIntervalLimit)
         self.stableIntervalThreshold = max(1, stableIntervalThreshold)
@@ -137,21 +137,50 @@ public struct TempoEstimator: Sendable {
             return true
         }
 
-        let recentAverage = average(acceptedIntervals)
-        let lowerBound = recentAverage * (1.0 - configuration.outlierTolerance)
-        let upperBound = recentAverage * (1.0 + configuration.outlierTolerance)
+        let baseline = robustCentralInterval(acceptedIntervals)
+        if matchesBaseline(interval, baseline) {
+            return true
+        }
+        // Short “double-tap” between beats: count as one beat when it is clearly half the baseline.
+        if interval < baseline * 0.6, matchesBaseline(interval * 2.0, baseline) {
+            return true
+        }
+        return false
+    }
+
+    private func matchesBaseline(_ interval: TimeInterval, _ baseline: TimeInterval) -> Bool {
+        guard baseline > 0 else { return true }
+        let lowerBound = baseline * (1.0 - configuration.outlierTolerance)
+        let upperBound = baseline * (1.0 + configuration.outlierTolerance)
         return interval >= lowerBound && interval <= upperBound
     }
 
     private func bpm(from intervals: [TimeInterval]) -> Double? {
-        let averageInterval = average(intervals)
-        guard averageInterval > 0 else { return nil }
-        return 60.0 / averageInterval
+        let centralInterval = robustCentralInterval(intervals)
+        guard centralInterval > 0 else { return nil }
+        return 60.0 / centralInterval
+    }
+
+    /// Median resists occasional bad taps; mean is fine for the first two intervals.
+    private func robustCentralInterval(_ intervals: [TimeInterval]) -> TimeInterval {
+        guard intervals.count >= 3 else {
+            return average(intervals)
+        }
+        return median(intervals)
     }
 
     private func average(_ intervals: [TimeInterval]) -> TimeInterval {
         guard !intervals.isEmpty else { return 0 }
         return intervals.reduce(0, +) / Double(intervals.count)
+    }
+
+    private func median(_ intervals: [TimeInterval]) -> TimeInterval {
+        let sorted = intervals.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) {
+            return (sorted[middle - 1] + sorted[middle]) / 2.0
+        }
+        return sorted[middle]
     }
 
     private func makeEstimate(
