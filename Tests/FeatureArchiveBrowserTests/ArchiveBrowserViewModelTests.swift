@@ -161,7 +161,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
         defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
 
-        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            browseSearchDebounceNanoseconds: 50_000_000
+        )
         await viewModel.scan()
         let fullCount = viewModel.filteredSongs.count
         XCTAssertGreaterThan(fullCount, 1)
@@ -170,7 +173,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.searchQuery, "Neon Hook")
         XCTAssertEqual(viewModel.filteredSongs.count, fullCount)
 
-        try await Task.sleep(nanoseconds: 250_000_000)
+        let deadline = Date().addingTimeInterval(2)
+        while viewModel.filteredSongs.count != 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
 
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
         XCTAssertEqual(viewModel.filteredSongs.first?.displayTitle, "Neon Hook")
