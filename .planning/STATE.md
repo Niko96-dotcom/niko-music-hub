@@ -1,39 +1,58 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Cubase Archive Recall
-status: in_progress
-last_updated: "2026-05-30T14:50:00Z"
-last_activity: 2026-05-30
+milestone: none
+milestone_name: —
+status: Awaiting next milestone
+last_updated: "2026-05-30T13:15:00Z"
+last_activity: 2026-05-30 — Milestone v1.2 shipped and archived
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md
+See: `.planning/PROJECT.md` (updated 2026-05-30 after v1.2)
 
-**Current focus:** v1.2 phases 15–18 remaining after autonomous run through phase 14
+**Core value:** Fast, local, reliable production chores outside Cubase — plus Cubase archive recall (browse, metadata, intelligence).
+
+**Current focus:** Planning next milestone (`/gsd-new-milestone`)
 
 ## Current Position
 
-Phase: 14 — complete  
-Next: Phase 15 — Browse & Collaborators (CP-09–CP-13)  
-Resume: `/gsd-autonomous --from 15 --to 18`
+Phase: —  
+Plan: —  
+Status: Awaiting next milestone  
+Last activity: 2026-05-30 — v1.2 Cubase Archive Recall shipped (tag `v1.2`)
 
-## Completed this session (autonomous 12→14)
+## Shipped (v1.2)
 
-- **Phase 12:** SQLite `song_metadata`, virtual titles, aliases, app notes, manual preview, first-run onboarding
-- **Phase 13:** Smart shelves (Recently Bounced, Recent CPR Activity) + segmented picker
-- **Phase 14:** Waveform hero, ±5s seek, scrub; E2E first-run copy aligned
+Phases 11–18: persistence, metadata, shelves, waveform, collaborators, filters/BPM, new song, read-only intelligence. Audit: `.planning/milestones/v1.2-MILESTONE-AUDIT.md`.
 
 ## Gates
 
-- `./script/ci.sh` — green through phase 14
-- `./script/e2e_user_smoke.sh` — green (first-run UI + archive smoke)
+- `./script/ci.sh` — green
+- `./script/e2e_user_smoke.sh` — green (2026-05-30)
+
+## Deferred Items
+
+Items acknowledged at v1.2 milestone close (2026-05-30):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | downloader-yt-dlp-failure | diagnosed |
+| quick_task | 260523-2ec-fix-testing | missing |
+| verification | Phase 07 human_needed | deferred |
+| verification | Phase 08 human_needed | deferred |
+| verification | Phase 09 human_needed | deferred |
+| verification | Phase 10 human_needed | deferred |
+
+## Operator Next Steps
+
+- Producer Mac UAT for phases 7–10 and archive FSEvents spot-check
+- `/gsd-new-milestone` when ready for v1.3 scope (e.g. CP-19+ or hub polish)

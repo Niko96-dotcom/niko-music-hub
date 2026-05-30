@@ -2,22 +2,17 @@
 
 ## What This Is
 
-Outside Cubase Hub is a local macOS app for the music production chores that keep pulling you out of Cubase: tapping BPM, recording internal computer audio to WAV, downloading source material, and converting files into Cubase-ready formats. It is built for one producer first, with a clean tool-hub architecture so new "outside Cubase" utilities can be added as soon as better ideas show up.
+Niko Music Hub is a local macOS app for production chores outside Cubase — BPM tap, internal audio capture, downloads, conversion — and a **Cubase archive browser** for recall: persisted scan index, app-owned metadata, smart shelves, waveform preview, collaborators, filters, new-song flow, and read-only intelligence. Built for one producer first, with a registry-driven tool hub so new utilities register without rewriting the shell.
 
 ## Core Value
 
 Repeated production chores outside Cubase should become fast, local, reliable, and drag-and-drop ready for a Cubase project.
 
-## Current Milestone: v1.1 Production-Ready Tools
+## Current Milestone
 
-**Goal:** Close the gap between v1.0 "implemented" and trustworthy daily use on the target Mac for real Cubase prep work.
+**None** — v1.2 Cubase Archive Recall shipped 2026-05-30. Start next scope with `/gsd-new-milestone`.
 
-**Target outcomes:**
-- Downloader: actionable errors, simulate blocks bad enqueue, DL-01–07 verified
-- Recorder: real Core Audio process tap capture to Cubase-ready WAV (REC-01–06 verified)
-- Converter & handoff: human UAT for conversion flow, Finder/Cubase drag, live inbox refresh
-- Hub: helper health accurate, shared error UX, output inbox stays current
-- Quality: green test suite; every v1.1 phase ships with VERIFICATION.md
+**Last shipped (v1.2):** Archive persistence, metadata core, smart shelves, waveform player, browse/collaborators, filters/BPM polish, new song flow, read-only intelligence (CP-01–CP-18).
 
 ## Requirements
 
@@ -33,14 +28,27 @@ Repeated production chores outside Cubase should become fast, local, reliable, a
 - [x] Drag-out/reveal handoff through OutputHandoff safety policy (only accepts .available existing .wav files) — v1.0 Phase 3
 - [x] Reveal in Finder and drag to Cubase/Finder-compatible targets — v1.0 Phase 3
 
-### Active (v1.1)
+### Validated (v1.1)
 
-See `.planning/REQUIREMENTS.md` for full v1.1 scope. Summary:
+- ✓ Downloader reliability and stderr surfacing — v1.1 Phase 7
+- ✓ Real Core Audio process tap recorder — v1.1 Phase 8
+- ✓ Output inbox live refresh — v1.1 Phase 9
+- ✓ Hub helper health and verification discipline — v1.1 Phase 10
 
-- **Downloader:** Verify DL-01–07; fix simulate/enqueue and stderr surfacing; land in-progress FeatureDownloader + AppCore error UI
-- **Recorder:** Replace synthetic tap with real capture; verify REC-01–06 on macOS 14.2+
-- **Converter & hub:** Human UAT for conversion + drag; live output inbox refresh
-- **Polish:** Verify UX-03–04; helper health UX; verification discipline (QA-02)
+### Validated (v1.2)
+
+- ✓ Archive SQLite index + FSEvents refresh — v1.2 Phase 11
+- ✓ Virtual title, notes, manual preview, first-run roots — v1.2 Phase 12
+- ✓ Smart shelves (recent bounce / CPR) — v1.2 Phase 13
+- ✓ Waveform hero + seek — v1.2 Phase 14
+- ✓ Browse home, collaborators, CPR override, shortcuts, search — v1.2 Phase 15
+- ✓ Sort, filters, health report, mixdown BPM — v1.2 Phase 16
+- ✓ New song folder flow — v1.2 Phase 17
+- ✓ Read-only intelligence + JSON export — v1.2 Phase 18
+
+### Active
+
+(none — define in next milestone)
 
 ### Out of Scope
 
@@ -60,14 +68,14 @@ The spark is a real repeated workflow: leaving Cubase for tiny utilities like an
 
 Current local environment checks found Swift 6.3, FFmpeg 8.1 at `/opt/homebrew/bin/ffmpeg`, and yt-dlp 2026.03.17 at `/opt/homebrew/bin/yt-dlp`. Those installed tools are useful for development, but the app design should not assume every future machine has them installed without a visible health check or install path.
 
-**Current State (after v1.0, entering v1.1):**
+**Current State (after v1.2):**
 
-v1.0 shipped the tool hub (Phases 1–6). Milestone audit (`v1.0-v1.0-MILESTONE-AUDIT.md`) scored 20/32 requirements satisfied: REC-01–06 partial (synthetic audio), DL-01–07 and UX-03–04 orphaned (no Phase 5/6 VERIFICATION.md). Engineering baseline restored 2026-05-22 (149 tests, 0 failures, 6 permission skips via `scripts/test.sh`).
+v1.0–v1.2 shipped on `main`. Archive browser is the primary new product surface; tool hub (BPM, converter, recorder, downloader) remains modular via `ToolFeature`. `./script/ci.sh` and `./script/e2e_user_smoke.sh` are the local gates.
 
-**Known v1.1 drivers:**
-- Downloader bug: `simulateAndEnqueue()` ignores non-zero yt-dlp exit — jobs enqueue after failed dry-run; stderr not surfaced (`.planning/debug/downloader-yt-dlp-failure.md`)
-- Uncommitted workspace: FeatureDownloader UI/use case/view model, AppCore `StandardErrorCard` / shared components — land in Phase 7
-- Output inbox: `OutputInboxInspectorView` refreshes on `onAppear` only — new outputs may not appear until view recreated
+**Known follow-ups:**
+- v1.1 phases 7–10: human UAT items still in VERIFICATION.md (`human_needed`)
+- v1.2 tech debt: FSEvents full rescan (CP-02), optional new-song template UI, CPR plugin summary deferred — see `.planning/milestones/v1.2-MILESTONE-AUDIT.md`
+- P3 (CP-19+): multi-DAW, cloud sync, AI search — out of scope until new milestone
 
 ## Constraints
 
@@ -93,7 +101,8 @@ v1.0 shipped the tool hub (Phases 1–6). Milestone audit (`v1.0-v1.0-MILESTONE-
 | Native conversion writes .tmp.wav then moves after WAVOutputVerifier passes | Prevents partial or unverified files from becoming Cubase-ready outputs. | Validated in Phase 3 |
 | External helper execution via Process.executableURL and argument arrays | Avoids command-string construction and shell interpolation. | Validated in Phase 3 and 5 |
 | OutputHandoff gates drag/reveal — only .available existing .wav files | Keeps shared output inbox and future recorder outputs on one handoff safety policy. | Validated in Phase 3 |
-| v1.1 phases require VERIFICATION.md before close | Phases 5–6 shipped without verification; gaps must not repeat | Active for Phases 7–10 |
+| v1.1 phases require VERIFICATION.md before close | Phases 5–6 shipped without verification; gaps must not repeat | ✓ Applied Phases 7–10 |
+| Native Swift archive recall in NikoMusicCore + FeatureArchiveBrowser | Port MacBook reference behaviors; read-only toward music roots | ✓ v1.2 |
 
 ## Evolution
 
@@ -113,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-23 — milestone v1.1 Production-Ready Tools started*
+*Last updated: 2026-05-30 — milestone v1.2 Cubase Archive Recall shipped*
