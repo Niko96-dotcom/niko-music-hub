@@ -38,20 +38,17 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     }
 
     public func refreshAvailability() throws {
-        var changed = false
-        let refreshed = try listItems().map { item in
+        let items = try listItems()
+        let refreshed = items.map { item in
             var copy = item
             if !fileManager.fileExists(atPath: item.fileURL.path) {
                 copy.status = .missing
             } else if item.status == .pending || item.status == .missing {
                 copy.status = .available
             }
-            changed = changed || copy.status != item.status
             return copy
         }
-        guard changed else {
-            return
-        }
+        guard refreshed != items else { return }
         try save(refreshed)
     }
 

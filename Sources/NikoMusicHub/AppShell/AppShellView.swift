@@ -10,7 +10,7 @@ struct AppShellView: View {
     init(registry: ToolRegistry, context: ToolContext) {
         self.registry = registry
         self.context = context
-        _selectedToolID = State(initialValue: registry.feature(for: "archive-browser")?.metadata.id ?? registry.feature(for: "wav-converter")?.metadata.id ?? registry.features.first?.metadata.id)
+        _selectedToolID = State(initialValue: Self.defaultToolID(in: registry))
     }
 
     var body: some View {
@@ -53,5 +53,11 @@ struct AppShellView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(24)
         }
+    }
+
+    private static func defaultToolID(in registry: ToolRegistry) -> ToolFeatureID? {
+        registry.feature(for: "archive-browser")?.metadata.id
+            ?? registry.feature(for: "wav-converter")?.metadata.id
+            ?? registry.features.first?.metadata.id
     }
 }

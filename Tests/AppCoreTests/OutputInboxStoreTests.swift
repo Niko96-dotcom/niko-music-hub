@@ -53,6 +53,26 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(try store.listItems().first?.status, .missing)
     }
 
+    func testRefreshAvailabilityDoesNotNotifyWhenItemsAreUnchanged() throws {
+        let store = try makeStore()
+        let item = OutputInboxItem(
+            fileURL: try makeExistingFile(named: "stable.wav"),
+            sourceToolID: "dev-tool",
+            status: .available
+        )
+        try store.addItem(item)
+
+        let notification = expectation(
+            forNotification: .outputInboxDidChange,
+            object: nil
+        )
+        notification.isInverted = true
+
+        try store.refreshAvailability()
+
+        wait(for: [notification], timeout: 0.1)
+    }
+
     func testOutputInboxInspectorSourceContainsRevealAndDragHandoff() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift",
