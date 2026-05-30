@@ -574,7 +574,7 @@ public enum ArchiveUserFlowSmoke {
 
         let searchQuery = "neon hk"
         viewModel.searchQuery = searchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         let searchMatchCount = viewModel.filteredSongs.count
 
         guard let neon = viewModel.filteredSongs.first else {
@@ -1059,7 +1059,7 @@ public enum ArchiveUserFlowSmoke {
 
         let warningSearchQuery = "project"
         viewModel.searchQuery = warningSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let warningMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.warningSearchNoMatch
         }
@@ -1094,7 +1094,7 @@ public enum ArchiveUserFlowSmoke {
 
         let fuzzyWarningSearchQuery = "ncpr fnd"
         viewModel.searchQuery = fuzzyWarningSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let fuzzyWarningMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.fuzzyWarningSearchNoMatch
         }
@@ -1131,7 +1131,7 @@ public enum ArchiveUserFlowSmoke {
 
         let notesSearchQuery = "nts nly"
         viewModel.searchQuery = notesSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let notesMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.notesSearchNoMatch
         }
@@ -1168,7 +1168,7 @@ public enum ArchiveUserFlowSmoke {
 
         let folderSearchQuery = "brkn fld"
         viewModel.searchQuery = folderSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let folderMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.folderSearchNoMatch
         }
@@ -1205,7 +1205,7 @@ public enum ArchiveUserFlowSmoke {
 
         let cprSearchQuery = "neohkv2"
         viewModel.searchQuery = cprSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let cprMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.cprSearchNoMatch
         }
@@ -1241,7 +1241,7 @@ public enum ArchiveUserFlowSmoke {
 
         let previewSearchQuery = "ranking lab v3 mx"
         viewModel.searchQuery = previewSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let previewMatch = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.previewSearchNoMatch
         }
@@ -1278,7 +1278,7 @@ public enum ArchiveUserFlowSmoke {
 
         let skippedSearchQuery = "lse fle"
         viewModel.searchQuery = skippedSearchQuery
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         guard let skippedMatch = viewModel.skippedSearchMatches.first else {
             throw ArchiveUserFlowSmokeError.skippedSearchNoMatch
         }

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ArchiveSidebarView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @StateObject private var sidebarUI = ArchiveSidebarUIState()
     let compactList: Bool
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
@@ -37,7 +38,10 @@ struct ArchiveSidebarView: View {
             }
 
             if viewModel.showsSidebarMorePanel {
-                ArchiveSidebarMorePanel(viewModel: viewModel)
+                ArchiveSidebarMorePanel(
+                    viewModel: viewModel,
+                    isExpanded: $sidebarUI.morePanelExpanded
+                )
             }
         }
         .padding(compactList ? 10 : 12)
@@ -101,7 +105,7 @@ struct ArchiveSidebarView: View {
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
-            DisclosureGroup(isExpanded: $viewModel.sidebarRootsSectionExpanded) {
+            DisclosureGroup(isExpanded: $sidebarUI.rootsSectionExpanded) {
                 RootSelectionView(viewModel: viewModel, onAddRoot: onChooseRoot, compact: true)
             } label: {
                 HStack(spacing: 6) {
@@ -115,7 +119,7 @@ struct ArchiveSidebarView: View {
             }
             .onChange(of: viewModel.roots.count) { _, count in
                 if count <= 1 {
-                    viewModel.sidebarRootsSectionExpanded = false
+                    sidebarUI.rootsSectionExpanded = false
                 }
             }
         }
@@ -140,7 +144,10 @@ struct ArchiveSidebarView: View {
 
     @ViewBuilder
     private var browseControls: some View {
-        let sortPicker = Picker("Sort", selection: $viewModel.sortMode) {
+        let sortPicker = Picker("Sort", selection: Binding(
+            get: { viewModel.sortMode },
+            set: { viewModel.setSortMode($0) }
+        )) {
             ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
                 Text(mode.title).tag(mode)
             }

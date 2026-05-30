@@ -3,10 +3,11 @@ import SwiftUI
 /// Health, collaborators, intelligence, and diagnostics folded into the sidebar footer.
 struct ArchiveSidebarMorePanel: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @Binding var isExpanded: Bool
 
     var body: some View {
         let health = viewModel.sidebarHealthContext
-        DisclosureGroup(isExpanded: $viewModel.sidebarMorePanelExpanded) {
+        DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 ArchiveHealthReportView(report: health.report, compact: true)
                 ArchiveCollaboratorAddressBookView(viewModel: viewModel)

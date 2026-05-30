@@ -34,13 +34,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
-    @Published var sidebarMorePanelExpanded = false
-    @Published var sidebarRootsSectionExpanded = false
 
     private let scanner = CubaseArchiveScanner()
     private var cancellables = Set<AnyCancellable>()
     private var suppressBrowseRefresh = false
-    private var searchIndex = MusicSearchIndex()
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
@@ -73,11 +70,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         )
         loadRootsFromSettings()
         loadCollaborators()
-        loadCachedIndexIfAvailable()
         refreshFirstRunState()
         restartArchiveRootWatching()
         installBrowseRefreshPipeline()
-        applySearchFilter()
+        loadCachedIndexIfAvailable()
     }
 
     func loadRootsFromSettings() {
@@ -165,20 +161,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             songs = []
             selectedSong = nil
             scanDiagnostics = nil
-            statusMessage = nil
-            searchIndex.rebuild(from: [])
         }
+        statusMessage = nil
         refreshIntelligence()
     }
 
     func scan() async {
-        guard !roots.isEmpty else {
-            statusMessage = "Add at least one archive root."
-            return
-        }
-        guard !isScanning else { return }
-        isScanning = true
-        let rootsSnapshot = roots
+        guard let rootsSnapshot = beginScan() else { return }
         defer { isScanning = false }
         do {
             let scannedAt = Date()
@@ -188,40 +177,50 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }.value
             applyScanResult(result, roots: rootsSnapshot, scannedAt: scannedAt)
         } catch {
-            scanDiagnostics = nil
-            statusMessage = "Scan failed: \(error.localizedDescription)"
-            diagnostics.log(.error, statusMessage ?? "scan failed")
+            recordScanFailure(error)
         }
     }
 
     func scanSync() {
-        guard !roots.isEmpty else {
-            statusMessage = "Add at least one archive root."
-            return
-        }
-        isScanning = true
+        guard let rootsSnapshot = beginScan() else { return }
         defer { isScanning = false }
         do {
-            let scannedAt = Date()
-            let result = try scanner.scan(roots: roots)
-            applyScanResult(result, roots: roots, scannedAt: scannedAt)
+            let result = try scanner.scan(roots: rootsSnapshot)
+            applyScanResult(result, roots: rootsSnapshot, scannedAt: Date())
         } catch {
-            scanDiagnostics = nil
-            statusMessage = "Scan failed: \(error.localizedDescription)"
-            diagnostics.log(.error, statusMessage ?? "scan failed")
+            recordScanFailure(error)
         }
     }
 
+    private func beginScan() -> [URL]? {
+        guard !roots.isEmpty else {
+            statusMessage = "Add at least one archive root."
+            return nil
+        }
+        guard !isScanning else { return nil }
+        isScanning = true
+        return roots
+    }
+
+    private func recordScanFailure(_ error: Error) {
+        mutateBrowseInputs {
+            scanDiagnostics = nil
+        }
+        statusMessage = "Scan failed: \(error.localizedDescription)"
+        diagnostics.log(.error, statusMessage ?? "scan failed")
+    }
+
     private func applyScanResult(_ result: ScanResult, roots: [URL], scannedAt: Date) {
-        songs = mergeUserMetadata(into: result.songs)
-        searchIndex.rebuild(from: songs)
-        refreshIntelligence()
         let built = ArchiveScanDiagnosticsBuilder.build(
             result: result,
             roots: roots,
             scannedAt: scannedAt
         )
-        scanDiagnostics = built
+        mutateBrowseInputs {
+            songs = mergeUserMetadata(into: result.songs)
+            scanDiagnostics = built
+        }
+        refreshIntelligence()
         statusMessage = built.compactSummaryLine
         diagnostics.log(.info, built.summaryLine)
         persistCachedIndex(roots: roots, scannedAt: scannedAt)
@@ -232,8 +231,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         guard let archiveIndexStore else { return }
         guard let snapshot = try? archiveIndexStore.loadLatest() else { return }
         guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return }
-        songs = mergeUserMetadata(into: snapshot.songs)
-        searchIndex.rebuild(from: songs)
+        mutateBrowseInputs {
+            songs = mergeUserMetadata(into: snapshot.songs)
+        }
         refreshIntelligence()
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
@@ -266,19 +266,27 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func toggleBrowseFilter(_ filter: ArchiveBrowseFilter) {
-        var next = browseFilter
-        if next.contains(filter) {
-            next.remove(filter)
-        } else {
-            next.insert(filter)
+        mutateBrowseInputs {
+            var next = browseFilter
+            if next.contains(filter) {
+                next.remove(filter)
+            } else {
+                next.insert(filter)
+            }
+            browseFilter = next
         }
-        browseFilter = next
-        refreshBrowseResults()
     }
 
     func toggleShowHiddenSongs() {
-        showHiddenSongs.toggle()
-        refreshBrowseResults()
+        mutateBrowseInputs {
+            showHiddenSongs.toggle()
+        }
+    }
+
+    func setSortMode(_ mode: ArchiveBrowseSortMode) {
+        mutateBrowseInputs {
+            sortMode = mode
+        }
     }
 
     /// Runs an export action and surfaces failures on `statusMessage`.
@@ -290,28 +298,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    func applySearchFilter() {
-        let shelfSongs = songsForSelectedShelf()
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let searched: [Song]
-        if trimmed.isEmpty {
-            searched = shelfSongs
-            searchMatchSummaries = [:]
-            skippedSearchMatches = []
-        } else {
-            let scopedIndex = MusicSearchIndex(songs: shelfSongs)
-            let results = scopedIndex.searchResults(searchQuery)
-            searched = results.map(\.song)
-            searchMatchSummaries = Dictionary(
-                uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) }
-            )
-            let skipped = scanDiagnostics?.skippedEntries ?? []
-            skippedSearchMatches = SkippedEntrySearchMatcher.search(searchQuery, in: skipped)
-        }
-        filteredSongs = ArchiveBrowseSortMode.sort(
-            ArchiveBrowseFilter.apply(searched, filter: browseFilter),
-            mode: sortMode
-        )
+    /// Recomputes browse list state from current shelf, search, filters, and sort.
+    func refreshBrowseResults() {
+        recomputeBrowseResults()
     }
 
     func selectSong(_ song: Song) {
@@ -608,14 +597,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         var created = try NewSongFolderCreator.create(request: request)
         created = mergeUserMetadata(into: [created]).first ?? created
         if !songs.contains(where: { $0.id == created.id }) {
-            var updatedSongs = songs
-            updatedSongs.append(created)
-            updatedSongs.sort {
-                $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
+            mutateBrowseInputs {
+                var updatedSongs = songs
+                updatedSongs.append(created)
+                updatedSongs.sort {
+                    $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
+                }
+                songs = updatedSongs
             }
-            songs = updatedSongs
         }
-        searchIndex.rebuild(from: songs)
         persistUserMetadata(for: [created])
         if !roots.isEmpty {
             persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
@@ -648,12 +638,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func songsForSelectedShelf() -> [Song] {
-        let base = showHiddenSongs ? songs : songs.filter { !$0.isIgnored }
-        return ArchiveShelfRanker.filter(
-            base,
-            shelf: selectedShelf,
-            collaboratorID: selectedShelf == .byCollaborator ? selectedCollaboratorID : nil
-        )
+        ArchiveBrowseProjection.shelfSongs(from: browseState())
     }
 
     func selectShelf(_ shelf: ArchiveSmartShelf) {
@@ -670,54 +655,57 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     private func replaceSong(_ updated: Song) {
-        if let index = songs.firstIndex(where: { $0.id == updated.id }) {
-            var updatedSongs = songs
-            updatedSongs[index] = updated
-            songs = updatedSongs
+        mutateBrowseInputs {
+            if let index = songs.firstIndex(where: { $0.id == updated.id }) {
+                var updatedSongs = songs
+                updatedSongs[index] = updated
+                songs = updatedSongs
+            }
         }
         if selectedSong?.id == updated.id {
             selectedSong = updated
         }
-        searchIndex.rebuild(from: songs)
     }
 
+    private func browseState() -> ArchiveBrowseState {
+        ArchiveBrowseState(
+            songs: songs,
+            showHiddenSongs: showHiddenSongs,
+            selectedShelf: selectedShelf,
+            selectedCollaboratorID: selectedCollaboratorID,
+            searchQuery: searchQuery,
+            browseFilter: browseFilter,
+            sortMode: sortMode,
+            skippedScanEntries: scanDiagnostics?.skippedEntries ?? []
+        )
+    }
+
+    /// Applies browse-affecting mutations and recomputes list state once (synchronous).
+    private func mutateBrowseInputs(_ updates: () -> Void) {
+        suppressBrowseRefresh = true
+        updates()
+        suppressBrowseRefresh = false
+        recomputeBrowseResults()
+    }
+
+    private func recomputeBrowseResults() {
+        let result = ArchiveBrowseProjection.project(browseState())
+        filteredSongs = result.filteredSongs
+        searchMatchSummaries = result.searchMatchSummaries
+        skippedSearchMatches = result.skippedSearchMatches
+    }
+
+    /// Debounced search typing only; all other browse inputs use `mutateBrowseInputs`.
     private func installBrowseRefreshPipeline() {
         $searchQuery
             .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
-                self?.refreshBrowseResults()
+                guard let self, !self.suppressBrowseRefresh else { return }
+                self.recomputeBrowseResults()
             }
             .store(in: &cancellables)
-
-        // `browseFilter` and `showHiddenSongs` refresh via their toggle methods (synchronous on MainActor).
-        for publisher in [
-            $sortMode.map { _ in () }.eraseToAnyPublisher(),
-            $selectedShelf.map { _ in () }.eraseToAnyPublisher(),
-            $selectedCollaboratorID.map { _ in () }.eraseToAnyPublisher(),
-            $songs.map { _ in () }.eraseToAnyPublisher(),
-            $scanDiagnostics.map { _ in () }.eraseToAnyPublisher(),
-        ] {
-            publisher
-                .dropFirst()
-                .sink { [weak self] _ in
-                    self?.refreshBrowseResults()
-                }
-                .store(in: &cancellables)
-        }
-    }
-
-    private func mutateBrowseInputs(_ updates: () -> Void) {
-        suppressBrowseRefresh = true
-        updates()
-        suppressBrowseRefresh = false
-        refreshBrowseResults()
-    }
-
-    private func refreshBrowseResults() {
-        guard !suppressBrowseRefresh else { return }
-        applySearchFilter()
     }
 
     private func sidebarSummary(for report: ArchiveHealthReport) -> String {
