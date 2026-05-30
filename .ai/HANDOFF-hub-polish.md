@@ -7,8 +7,8 @@
 
 | Wave | Commit | Notes |
 |------|--------|--------|
-| F | (this run) | Inbox cards: filename only, card drag, collapsible tool/inbox sidebars |
-| G | (this run) | `HubGlassChrome` — `glassEffect` on macOS 26+, `.regularMaterial` fallback; shell sidebars + archive header |
+| F | `0dcff9e` | Inbox cards: filename only, card drag, collapsible tool/inbox sidebars |
+| G | `0dcff9e` | `HubGlassChrome` — `glassEffect` on macOS 26+, `.regularMaterial` fallback; shell sidebars + archive header |
 
 ## Visual (G)
 
