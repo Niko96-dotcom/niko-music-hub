@@ -8,12 +8,22 @@ struct ToolSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Niko Music Hub")
-                .font(.system(size: 16, weight: .semibold))
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .padding(.top, 24)
-                .padding(.bottom, 10)
+            HStack(spacing: 10) {
+                if let logo = HubBrandLogo.sidebar {
+                    logo
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 28, height: 28)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .accessibilityHidden(true)
+                }
+                Text("Niko Music Hub")
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
 
             Text("Tools")
                 .font(.system(size: 12))
@@ -51,5 +61,6 @@ struct ToolSidebarView: View {
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .hubPanelBackground()
     }
 }

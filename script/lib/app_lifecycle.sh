@@ -46,6 +46,17 @@ nmh_build_bundle() {
   cp "$build_binary" "$NMH_APP_BINARY"
   chmod +x "$NMH_APP_BINARY"
 
+  local brand_dir="$NMH_ROOT_DIR/Resources/Brand"
+  local app_resources="$NMH_APP_CONTENTS/Resources"
+  if [[ -d "$brand_dir" ]]; then
+    mkdir -p "$app_resources"
+    for asset in AppIcon.icns AppLogo-48.png AppLogo-96.png; do
+      if [[ -f "$brand_dir/$asset" ]]; then
+        cp "$brand_dir/$asset" "$app_resources/$asset"
+      fi
+    done
+  fi
+
   printf 'APPL????' >"$NMH_APP_CONTENTS/PkgInfo"
 
   cat >"$NMH_INFO_PLIST" <<PLIST
@@ -61,6 +72,8 @@ nmh_build_bundle() {
   <string>Niko Music Hub</string>
   <key>CFBundleDisplayName</key>
   <string>Niko Music Hub</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
