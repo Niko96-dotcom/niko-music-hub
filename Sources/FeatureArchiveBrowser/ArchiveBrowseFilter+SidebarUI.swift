@@ -1,20 +1,42 @@
 import NikoMusicCore
 
 extension ArchiveBrowseFilter {
+    private struct SidebarChipMetadata {
+        let filter: ArchiveBrowseFilter
+        let symbolName: String
+        let accessibilityLabel: String
+    }
+
+    private static let sidebarChipMetadata: [SidebarChipMetadata] = [
+        SidebarChipMetadata(
+            filter: .hasStems,
+            symbolName: "waveform.path",
+            accessibilityLabel: "Songs with stems"
+        ),
+        SidebarChipMetadata(
+            filter: .noPreview,
+            symbolName: "speaker.slash",
+            accessibilityLabel: "Songs missing a preview"
+        ),
+        SidebarChipMetadata(
+            filter: .hasWarnings,
+            symbolName: "exclamationmark.triangle",
+            accessibilityLabel: "Songs with scan warnings"
+        ),
+    ]
+
     /// Single-filter chips shown in the archive sidebar, in display order.
-    static let sidebarFilters: [ArchiveBrowseFilter] = [.hasStems, .noPreview, .hasWarnings]
+    static let sidebarFilters: [ArchiveBrowseFilter] = sidebarChipMetadata.map(\.filter)
 
     var sidebarSymbolName: String {
-        if contains(.hasStems) { return "waveform.path" }
-        if contains(.noPreview) { return "speaker.slash" }
-        if contains(.hasWarnings) { return "exclamationmark.triangle" }
-        return "line.3.horizontal.decrease.circle"
+        Self.metadata(for: self)?.symbolName ?? "line.3.horizontal.decrease.circle"
     }
 
     var sidebarAccessibilityLabel: String {
-        if contains(.hasStems) { return "Songs with stems" }
-        if contains(.noPreview) { return "Songs missing a preview" }
-        if contains(.hasWarnings) { return "Songs with scan warnings" }
-        return "Filter"
+        Self.metadata(for: self)?.accessibilityLabel ?? "Filter"
+    }
+
+    private static func metadata(for filter: ArchiveBrowseFilter) -> SidebarChipMetadata? {
+        sidebarChipMetadata.first { filter == $0.filter }
     }
 }

@@ -161,14 +161,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func clearScanResults() {
-        suppressBrowseRefresh = true
-        songs = []
-        selectedSong = nil
-        scanDiagnostics = nil
-        statusMessage = nil
-        searchIndex.rebuild(from: [])
-        suppressBrowseRefresh = false
-        applySearchFilter()
+        mutateBrowseInputs {
+            songs = []
+            selectedSong = nil
+            scanDiagnostics = nil
+            statusMessage = nil
+            searchIndex.rebuild(from: [])
+        }
         refreshIntelligence()
     }
 
@@ -274,12 +273,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             next.insert(filter)
         }
         browseFilter = next
-        applySearchFilter()
+        refreshBrowseResults()
     }
 
     func toggleShowHiddenSongs() {
         showHiddenSongs.toggle()
-        applySearchFilter()
+        refreshBrowseResults()
     }
 
     /// Runs an export action and surfaces failures on `statusMessage`.
@@ -331,10 +330,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var sidebarHealthContext: ArchiveSidebarHealthContext {
         let report = healthReport()
         return ArchiveSidebarHealthContext(report: report, summary: sidebarSummary(for: report))
-    }
-
-    var sidebarMorePanelSummary: String {
-        sidebarHealthContext.summary
     }
 
     func refreshIntelligence() {
@@ -613,13 +608,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         var created = try NewSongFolderCreator.create(request: request)
         created = mergeUserMetadata(into: [created]).first ?? created
         if !songs.contains(where: { $0.id == created.id }) {
-            songs.append(created)
-            songs.sort {
+            var updatedSongs = songs
+            updatedSongs.append(created)
+            updatedSongs.sort {
                 $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
             }
+            songs = updatedSongs
         }
         searchIndex.rebuild(from: songs)
-        refreshBrowseResults()
         persistUserMetadata(for: [created])
         if !roots.isEmpty {
             persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
@@ -675,13 +671,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     private func replaceSong(_ updated: Song) {
         if let index = songs.firstIndex(where: { $0.id == updated.id }) {
-            songs[index] = updated
+            var updatedSongs = songs
+            updatedSongs[index] = updated
+            songs = updatedSongs
         }
         if selectedSong?.id == updated.id {
             selectedSong = updated
         }
         searchIndex.rebuild(from: songs)
-        refreshBrowseResults()
     }
 
     private func installBrowseRefreshPipeline() {
@@ -694,12 +691,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // `browseFilter` and `showHiddenSongs` refresh via their toggle methods (synchronous on MainActor).
         for publisher in [
             $sortMode.map { _ in () }.eraseToAnyPublisher(),
-            $browseFilter.map { _ in () }.eraseToAnyPublisher(),
             $selectedShelf.map { _ in () }.eraseToAnyPublisher(),
             $selectedCollaboratorID.map { _ in () }.eraseToAnyPublisher(),
-            $showHiddenSongs.map { _ in () }.eraseToAnyPublisher(),
             $songs.map { _ in () }.eraseToAnyPublisher(),
             $scanDiagnostics.map { _ in () }.eraseToAnyPublisher(),
         ] {
