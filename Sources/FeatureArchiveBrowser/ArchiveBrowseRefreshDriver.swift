@@ -4,7 +4,11 @@ import Foundation
 @MainActor
 final class ArchiveBrowseRefreshDriver {
     private var debounceTask: Task<Void, Never>?
-    private static let debounceNanoseconds: UInt64 = 200_000_000
+    private let debounceNanoseconds: UInt64
+
+    init(debounceNanoseconds: UInt64 = 200_000_000) {
+        self.debounceNanoseconds = debounceNanoseconds
+    }
 
     func cancelPendingDebounce() {
         debounceTask?.cancel()
@@ -14,7 +18,7 @@ final class ArchiveBrowseRefreshDriver {
     func scheduleDebouncedBrowseRecompute(_ recompute: @escaping @MainActor () -> Void) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: Self.debounceNanoseconds)
+            try? await Task.sleep(nanoseconds: debounceNanoseconds)
             guard !Task.isCancelled else { return }
             recompute()
         }

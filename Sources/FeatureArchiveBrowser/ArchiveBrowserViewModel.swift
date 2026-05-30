@@ -2,19 +2,18 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
-/// Archive shell view model. Browse projection/refresh: ``ArchiveBrowserViewModel+BrowseRefresh``.
-/// Update search via ``setSearchQuery(_:immediate:)`` (sidebar binding does this for typing).
-/// Next decomposition targets: scan/cache, metadata editing, exports.
+/// Archive shell view model. Browse refresh and projection live in this file (``private(set)`` inputs).
+/// Scan/cache: ``ArchiveBrowserViewModel+Scan``. Metadata: ``ArchiveBrowserViewModel+Metadata``. Exports: ``ArchiveBrowserViewModel+Exports``.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
     @Published public var roots: [URL] = []
     @Published var songs: [Song] = []
-    @Published var filteredSongs: [Song] = []
-    @Published var searchMatchSummaries: [String: String] = [:]
-    @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
-    @Published var searchQuery: String = ""
-    @Published var selectedShelf: ArchiveSmartShelf = .allSongs
-    @Published var selectedCollaboratorID: String?
+    @Published private(set) var filteredSongs: [Song] = []
+    @Published private(set) var searchMatchSummaries: [String: String] = [:]
+    @Published private(set) var skippedSearchMatches: [SkippedEntrySearchResult] = []
+    @Published private(set) var searchQuery: String = ""
+    @Published private(set) var selectedShelf: ArchiveSmartShelf = .allSongs
+    @Published private(set) var selectedCollaboratorID: String?
     @Published var selectedSong: Song?
     @Published var isScanning = false
     @Published var statusMessage: String?
@@ -24,31 +23,32 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var lastIndexExportPath: String?
     @Published var needsFirstRunOnboarding = false
     @Published var collaborators: [Collaborator] = []
-    @Published var showHiddenSongs = false
-    @Published var sortMode: ArchiveBrowseSortMode = .titleAZ
-    @Published var browseFilter: ArchiveBrowseFilter = []
+    @Published private(set) var showHiddenSongs = false
+    @Published private(set) var sortMode: ArchiveBrowseSortMode = .titleAZ
+    @Published private(set) var browseFilter: ArchiveBrowseFilter = []
     @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
 
-    private let scanner = CubaseArchiveScanner()
-    let browseRefreshDriver = ArchiveBrowseRefreshDriver()
-    private let opener: MusicItemOpener
-    private let fileActions: any FileActions
-    private let settingsStore: SettingsStore
-    private let diagnostics: Diagnostics
-    private let archiveIndexStore: (any ArchiveIndexStoring)?
-    private let songMetadataStore: (any SongUserMetadataStoring)?
-    private let collaboratorStore: (any CollaboratorStoring)?
-    private let archiveRootWatcher: (any ArchiveRootWatching)?
+    let scanner = CubaseArchiveScanner()
+    private let browseRefreshDriver: ArchiveBrowseRefreshDriver
+    let opener: MusicItemOpener
+    let fileActions: any FileActions
+    let settingsStore: SettingsStore
+    let diagnostics: Diagnostics
+    let archiveIndexStore: (any ArchiveIndexStoring)?
+    let songMetadataStore: (any SongUserMetadataStoring)?
+    let collaboratorStore: (any CollaboratorStoring)?
+    let archiveRootWatcher: (any ArchiveRootWatching)?
 
     public init(
         context: ToolContext,
         archiveIndexStore: (any ArchiveIndexStoring)? = nil,
         songMetadataStore: (any SongUserMetadataStoring)? = nil,
         archiveRootWatcher: (any ArchiveRootWatching)? = nil,
-        collaboratorStore: (any CollaboratorStoring)? = nil
+        collaboratorStore: (any CollaboratorStoring)? = nil,
+        browseSearchDebounceNanoseconds: UInt64 = 200_000_000
     ) {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
@@ -57,6 +57,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.songMetadataStore = songMetadataStore
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
+        self.browseRefreshDriver = ArchiveBrowseRefreshDriver(debounceNanoseconds: browseSearchDebounceNanoseconds)
         let dryRunOnly = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
         self.opener = MusicItemOpener(
             workspace: dryRunOnly ? nil : AppKitWorkspaceOpener(),
@@ -151,112 +152,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         restartArchiveRootWatching()
     }
 
-    func clearScanResults() {
-        mutateCatalog {
-            songs = []
-            scanDiagnostics = nil
-        }
-        selectedSong = nil
-        statusMessage = nil
-    }
-
-    func scan() async {
-        guard let rootsSnapshot = beginScan() else { return }
-        defer { isScanning = false }
-        do {
-            let scannedAt = Date()
-            let scanner = scanner
-            let result = try await Task.detached(priority: .userInitiated) {
-                try scanner.scan(roots: rootsSnapshot)
-            }.value
-            applyScanResult(result, roots: rootsSnapshot, scannedAt: scannedAt)
-        } catch {
-            recordScanFailure(error)
-        }
-    }
-
-    func scanSync() {
-        guard let rootsSnapshot = beginScan() else { return }
-        defer { isScanning = false }
-        do {
-            let result = try scanner.scan(roots: rootsSnapshot)
-            applyScanResult(result, roots: rootsSnapshot, scannedAt: Date())
-        } catch {
-            recordScanFailure(error)
-        }
-    }
-
-    private func beginScan() -> [URL]? {
-        guard !roots.isEmpty else {
-            statusMessage = "Add at least one archive root."
-            return nil
-        }
-        guard !isScanning else { return nil }
-        isScanning = true
-        return roots
-    }
-
-    private func recordScanFailure(_ error: Error) {
-        mutateCatalog {
-            scanDiagnostics = nil
-        }
-        statusMessage = "Scan failed: \(error.localizedDescription)"
-        diagnostics.log(.error, statusMessage ?? "scan failed")
-    }
-
-    private func applyScanResult(_ result: ScanResult, roots: [URL], scannedAt: Date) {
-        let built = ArchiveScanDiagnosticsBuilder.build(
-            result: result,
-            roots: roots,
-            scannedAt: scannedAt
-        )
-        mutateCatalog {
-            songs = mergeUserMetadata(into: result.songs)
-            scanDiagnostics = built
-        }
-        statusMessage = built.compactSummaryLine
-        diagnostics.log(.info, built.summaryLine)
-        persistCachedIndex(roots: roots, scannedAt: scannedAt)
-        persistUserMetadata(for: songs)
-    }
-
-    private func loadCachedIndexIfAvailable() {
-        guard let archiveIndexStore else { return }
-        guard let snapshot = try? archiveIndexStore.loadLatest() else { return }
-        guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return }
-        mutateCatalog {
-            songs = mergeUserMetadata(into: snapshot.songs)
-        }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        let relative = formatter.localizedString(for: snapshot.scannedAt, relativeTo: Date())
-        statusMessage = "Loaded \(snapshot.songs.count) songs from cache (\(relative)). Scan to refresh."
-    }
-
-    private func persistCachedIndex(roots: [URL], scannedAt: Date) {
-        guard let archiveIndexStore else { return }
-        let snapshot = ArchiveIndexSnapshot(
-            roots: roots.map { $0.standardizedFileURL.path },
-            songs: songs,
-            scannedAt: scannedAt
-        )
-        do {
-            try archiveIndexStore.save(snapshot)
-        } catch {
-            diagnostics.log(.error, "Archive cache save failed: \(error)")
-        }
-    }
-
-    private func restartArchiveRootWatching() {
-        guard let archiveRootWatcher else { return }
-        let rootsSnapshot = roots
-        archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] in
-            guard let self else { return }
-            guard !self.isScanning, !self.roots.isEmpty else { return }
-            Task { await self.scan() }
-        }
-    }
-
     func toggleBrowseFilter(_ filter: ArchiveBrowseFilter) {
         mutateBrowseInputs {
             var next = browseFilter
@@ -287,15 +182,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    /// Runs an export action and surfaces failures on `statusMessage`.
-    func performExport(_ operation: () throws -> Void) {
-        do {
-            try operation()
-        } catch {
-            statusMessage = "Export failed: \(error.localizedDescription)"
-        }
-    }
-
     func selectSong(_ song: Song) {
         selectedSong = song
         refreshBPMEstimate(for: song)
@@ -305,7 +191,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         ArchiveHealthReport(songs: songs, includeHidden: showHiddenSongs)
     }
 
-    /// Shown when at least one archive root exists (health/diagnostics live here, not in the song list).
     var showsSidebarMorePanel: Bool {
         !roots.isEmpty
     }
@@ -340,226 +225,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
     }
 
-    func exportIndexJSON() throws {
-        let exportDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("niko-music-hub-exports", isDirectory: true)
-        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
-        let stamp = ISO8601DateFormatter().string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        let destination = exportDir.appendingPathComponent("archive-index-\(stamp).json")
-        let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: songs)
-        try data.write(to: destination)
-        lastIndexExportPath = destination.path
-        statusMessage = "Exported index JSON (\(songs.count) songs)."
-        diagnostics.log(.info, "Exported archive index to \(destination.path)")
-    }
-
-    func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
-        guard let song = selectedSong else { return nil }
-        return ArchiveDiagnosticsSelectedSongContext.from(song: song)
-    }
-
-    func activeSearchExportContext() -> ArchiveDiagnosticsSearchContext? {
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let matches = filteredSongs.map { song in
-            ArchiveDiagnosticsSearchMatch(
-                displayTitle: song.effectiveDisplayTitle,
-                summary: searchMatchSummaries[song.id, default: ""]
-            )
-        }
-        return ArchiveDiagnosticsSearchContext(query: trimmed, matches: matches)
-    }
-
-    func activeSkippedSearchExportContext() -> ArchiveDiagnosticsSkippedSearchContext? {
-        ArchiveDiagnosticsSkippedSearchContext.from(
-            query: searchQuery,
-            results: skippedSearchMatches
-        )
-    }
-
-    func exportDiagnostics() throws {
-        guard let scanDiagnostics else {
-            statusMessage = "Scan the archive before exporting diagnostics."
-            return
-        }
-        let exportDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("niko-music-hub-diagnostics", isDirectory: true)
-        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
-        let stamp = ISO8601DateFormatter().string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        let destination = exportDir.appendingPathComponent("scan-\(stamp)-\(UUID().uuidString.prefix(8)).txt")
-        try ArchiveDiagnosticsExporter.exportText(
-            diagnostics: scanDiagnostics,
-            to: destination,
-            archiveRoots: roots,
-            searchContext: activeSearchExportContext(),
-            skippedSearchContext: activeSkippedSearchExportContext(),
-            selectedSongContext: selectedSongExportContext()
-        )
-        lastDiagnosticsExportPath = destination.path
-        diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
-    }
-
-    func openLatestCPR(for song: Song) throws {
-        let dryRun = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
-        if let result = try opener.openLatestCPR(for: song, dryRun: dryRun) {
-            lastDryRunLog = result.path
-            if dryRun {
-                let displayPath = Song.displayDryRunPath(result.path)
-                print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
-            }
-        }
-    }
-
-    func openMainPreview(for song: Song) throws {
-        guard let id = song.mainPreviewCandidateID,
-              let candidate = song.previewCandidates.first(where: { $0.id == id }) else { return }
-        let dryRun = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
-        if dryRun {
-            let path = candidate.filePath.path
-            lastDryRunLog = path
-            print("[niko-music-hub-smoke] dry-run open preview: \(Song.displayDryRunPath(path))")
-            return
-        }
-        fileActions.revealInFinder(candidate.filePath)
-    }
-
-    func preferredRevealURL(for song: Song) -> URL? {
-        if let latest = song.effectiveLatestCPR?.filePath ?? song.visibleProjectVersions.first?.filePath {
-            return latest
-        }
-        return song.folderPath
-    }
-
-    func revealInFinder(url: URL?) {
-        guard let url else { return }
-        fileActions.revealInFinder(url)
-    }
-
-    func focusSelectedSongDetail() {
-        // Selection drives detail pane; no-op hook for shortcuts.
-    }
-
-    func updateVirtualTitle(for song: Song, title: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.virtualTitle = trimmed.isEmpty ? nil : trimmed
-        commitSongMetadataUpdate(updated)
-    }
-
-    func updateAppNote(for song: Song, note: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.appNote = trimmed.isEmpty ? nil : trimmed
-        commitSongMetadataUpdate(updated)
-    }
-
-    func updateAliases(for song: Song, aliasesText: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        let aliases = aliasesText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        updated.aliases = aliases
-        commitSongMetadataUpdate(updated)
-    }
-
-    func setManualMainPreview(for song: Song, candidateID: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        guard updated.previewCandidates.contains(where: { $0.id == candidateID }) else { return }
-        updated.previewSelectionMode = .manual
-        updated.mainPreviewCandidateID = candidateID
-        commitSongMetadataUpdate(updated)
-    }
-
-    func revertPreviewToAuto(for song: Song) {
-        guard let song = latestSong(matching: song) else { return }
-        var metadata = SongUserMetadata.from(song: song)
-        metadata.previewSelectionMode = .auto
-        metadata.manualMainPreviewID = nil
-        var scanned = song
-        scanned.previewSelectionMode = .auto
-        let context = PreviewRankingProjectContext.from(projectVersions: scanned.projectVersions)
-        let ranker = PreviewConfidenceRanker()
-        let ranked = ranker.rank(scanned.previewCandidates, projectContext: context)
-        scanned.previewCandidates = ranked
-        scanned.mainPreviewCandidateID = ranker.mainPreviewID(from: ranked)
-        let merged = ArchiveMetadataMerger.merge(
-            scanned: scanned,
-            metadata: metadata,
-            collaboratorsByID: collaboratorsByID()
-        )
-        commitSongMetadataUpdate(merged)
-    }
-
-    func ignorePreviewCandidate(for song: Song, candidateID: String) {
-        guard let song = latestSong(matching: song) else { return }
-        var metadata = SongUserMetadata.from(song: song)
-        if !metadata.ignoredPreviewCandidateIDs.contains(candidateID) {
-            metadata.ignoredPreviewCandidateIDs.append(candidateID)
-        }
-        if metadata.manualMainPreviewID == candidateID {
-            metadata.previewSelectionMode = .auto
-            metadata.manualMainPreviewID = nil
-        }
-        var scanned = song
-        if scanned.mainPreviewCandidateID == candidateID {
-            scanned.previewSelectionMode = .auto
-        }
-        let merged = ArchiveMetadataMerger.merge(
-            scanned: scanned,
-            metadata: metadata,
-            collaboratorsByID: collaboratorsByID()
-        )
-        commitSongMetadataUpdate(merged)
-    }
-
-    func setManualMainCPR(for song: Song, versionID: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        guard updated.visibleProjectVersions.contains(where: { $0.id == versionID }) else { return }
-        updated.cprSelectionMode = .manual
-        updated.manualMainCPRID = versionID
-        updated.latestCPR = updated.visibleProjectVersions.first(where: { $0.id == versionID })
-        commitSongMetadataUpdate(updated)
-    }
-
-    func revertCPRToAuto(for song: Song) {
-        guard var updated = latestSong(matching: song) else { return }
-        updated.cprSelectionMode = .auto
-        updated.manualMainCPRID = nil
-        let detector = CPRVersionDetector()
-        updated.latestCPR = detector.latestCPR(from: updated.projectVersions)
-        commitSongMetadataUpdate(updated)
-    }
-
-    func ignoreCPRVersion(for song: Song, versionID: String) {
-        guard let song = latestSong(matching: song) else { return }
-        var metadata = SongUserMetadata.from(song: song)
-        if !metadata.ignoredCPRVersionIDs.contains(versionID) {
-            metadata.ignoredCPRVersionIDs.append(versionID)
-        }
-        if metadata.manualMainCPRID == versionID {
-            metadata.cprSelectionMode = .auto
-            metadata.manualMainCPRID = nil
-        }
-        let merged = ArchiveMetadataMerger.merge(
-            scanned: song,
-            metadata: metadata,
-            collaboratorsByID: collaboratorsByID()
-        )
-        commitSongMetadataUpdate(merged)
-    }
-
-    func setSongHidden(_ song: Song, hidden: Bool) {
-        guard var updated = latestSong(matching: song) else { return }
-        updated.isIgnored = hidden
-        commitSongMetadataUpdate(updated)
-        if hidden, selectedSong?.id == song.id {
-            selectedSong = nil
-        }
-    }
-
     func loadCollaborators() {
         guard let collaboratorStore else { return }
         collaborators = (try? collaboratorStore.loadAll()) ?? []
@@ -580,44 +245,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    func assignCollaborators(to song: Song, collaboratorIDs: [String]) {
-        guard var updated = latestSong(matching: song) else { return }
-        updated.collaboratorIDs = collaboratorIDs
-        updated.collaboratorNames = collaboratorIDs.compactMap { id in
-            collaborators.first(where: { $0.id == id })?.displayName
-        }
-        commitSongMetadataUpdate(updated)
-    }
-
-    func createNewSong(request: NewSongRequest) throws -> Song {
-        var created = try NewSongFolderCreator.create(request: request)
-        created = mergeUserMetadata(into: [created]).first ?? created
-        let appendedToCatalog: Bool
-        if !songs.contains(where: { $0.id == created.id }) {
-            mutateCatalog {
-                var updatedSongs = songs
-                updatedSongs.append(created)
-                updatedSongs.sort {
-                    $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
-                }
-                songs = updatedSongs
-            }
-            appendedToCatalog = true
-        } else {
-            appendedToCatalog = false
-        }
-        persistUserMetadata(for: [created])
-        if !roots.isEmpty {
-            persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
-        }
-        selectSong(created)
-        if !appendedToCatalog {
-            refreshIntelligence()
-        }
-        try openLatestCPR(for: created)
-        return created
-    }
-
     func refreshBPMEstimate(for song: Song) {
         guard mixdownBPMBySongID[song.id] == nil,
               let id = song.mainPreviewCandidateID,
@@ -630,54 +257,62 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {
         mixdownBPMBySongID[song.id]
     }
+}
 
-    private func commitSongMetadataUpdate(_ updated: Song) {
-        replaceSong(updated)
-        persistUserMetadata(for: [updated])
-        if !roots.isEmpty {
-            persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
-        }
+// MARK: - Browse projection and refresh
+
+extension ArchiveBrowserViewModel {
+    func mutateBrowseInputs(_ updates: () -> Void) {
+        browseRefreshDriver.cancelPendingDebounce()
+        updates()
+        recomputeBrowseResults()
     }
 
-    private func latestSong(matching song: Song) -> Song? {
-        songs.first { $0.id == song.id }
+    func mutateCatalog(_ updates: () -> Void) {
+        browseRefreshDriver.cancelPendingDebounce()
+        updates()
+        recomputeBrowseResults()
+        refreshIntelligence()
     }
 
-    private func replaceSong(_ updated: Song) {
-        mutateCatalog {
-            if let index = songs.firstIndex(where: { $0.id == updated.id }) {
-                var updatedSongs = songs
-                updatedSongs[index] = updated
-                songs = updatedSongs
+    func setSearchQuery(_ query: String, immediate: Bool = false) {
+        searchQuery = query
+        if immediate {
+            browseRefreshDriver.cancelPendingDebounce()
+            recomputeBrowseResults()
+        } else {
+            browseRefreshDriver.scheduleDebouncedBrowseRecompute { [weak self] in
+                self?.recomputeBrowseResults()
             }
         }
-        if selectedSong?.id == updated.id {
-            selectedSong = updated
+    }
+
+    func selectShelf(_ shelf: ArchiveSmartShelf) {
+        mutateBrowseInputs {
+            selectedShelf = shelf
+            if shelf == .byCollaborator, selectedCollaboratorID == nil {
+                selectedCollaboratorID = collaborators.first?.id
+            }
         }
     }
 
-    private func mergeUserMetadata(into scanned: [Song]) -> [Song] {
-        guard songMetadataStore != nil || collaboratorStore != nil else { return scanned }
-        let metadata = (try? songMetadataStore?.loadAll()) ?? [:]
-        let map = collaboratorsByID()
-        return ArchiveMetadataMerger.merge(
-            scanned: scanned,
-            metadataByID: metadata,
-            collaboratorsByID: map
+    func browseState() -> ArchiveBrowseState {
+        ArchiveBrowseState(
+            songs: songs,
+            showHiddenSongs: showHiddenSongs,
+            selectedShelf: selectedShelf,
+            selectedCollaboratorID: selectedCollaboratorID,
+            searchQuery: searchQuery,
+            browseFilter: browseFilter,
+            sortMode: sortMode,
+            skippedScanEntries: scanDiagnostics?.skippedEntries ?? []
         )
     }
 
-    private func collaboratorsByID() -> [String: Collaborator] {
-        Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
-    }
-
-    private func persistUserMetadata(for songs: [Song]) {
-        guard let songMetadataStore, !songs.isEmpty else { return }
-        let items = songs.map { SongUserMetadata.from(song: $0) }
-        do {
-            try songMetadataStore.upsertAll(items)
-        } catch {
-            diagnostics.log(.error, "Song metadata save failed: \(error)")
-        }
+    func recomputeBrowseResults() {
+        let result = ArchiveBrowseProjection.project(browseState())
+        filteredSongs = result.filteredSongs
+        searchMatchSummaries = result.searchMatchSummaries
+        skippedSearchMatches = result.skippedSearchMatches
     }
 }
