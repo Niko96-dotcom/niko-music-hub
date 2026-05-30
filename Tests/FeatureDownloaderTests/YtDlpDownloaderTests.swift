@@ -51,6 +51,7 @@ final class YtDlpDownloaderTests: XCTestCase {
             runner.lastRequest?.arguments.contains("best[height<=360][ext=mp4]/best[height<=360]/worst"),
             true
         )
+        XCTAssertEqual(runner.lastRequest?.arguments.contains("-f"), true)
         XCTAssertEqual(runner.lastRequest?.timeoutSeconds, 90)
     }
 }

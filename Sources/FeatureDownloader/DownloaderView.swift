@@ -20,6 +20,7 @@ public struct DownloaderView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 urlInput
+                formatSelectionSection
                 if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .downloading {
                     trustInfo
                 }
@@ -69,6 +70,67 @@ public struct DownloaderView: View {
             return DownloaderCopy.downloadComplete
         case let .failed(message):
             return message
+        }
+    }
+
+    private var formatSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(DownloaderCopy.formatLabel)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    mediaKindPicker
+                    secondaryFormatPicker
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    mediaKindPicker
+                    secondaryFormatPicker
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: 720, alignment: .leading)
+        .disabled(viewModel.downloadState == .downloading)
+    }
+
+    private var mediaKindPicker: some View {
+        Picker(DownloaderCopy.mediaKindLabel, selection: $viewModel.formatSelection.mediaKind) {
+            Text("Audio only").tag(DownloadMediaKind.audioOnly)
+            Text("Video + audio").tag(DownloadMediaKind.videoWithAudio)
+        }
+        .pickerStyle(.menu)
+        .onChange(of: viewModel.formatSelection.mediaKind) { _, _ in
+            viewModel.persistFormatSelection()
+        }
+    }
+
+    @ViewBuilder
+    private var secondaryFormatPicker: some View {
+        switch viewModel.formatSelection.mediaKind {
+        case .audioOnly:
+            Picker(DownloaderCopy.audioFormatLabel, selection: $viewModel.formatSelection.audioContainer) {
+                Text("Best available").tag(DownloadAudioContainer.best)
+                Text("MP3").tag(DownloadAudioContainer.mp3)
+                Text("M4A").tag(DownloadAudioContainer.m4a)
+            }
+            .pickerStyle(.menu)
+            .onChange(of: viewModel.formatSelection.audioContainer) { _, _ in
+                viewModel.persistFormatSelection()
+            }
+        case .videoWithAudio:
+            Picker(DownloaderCopy.videoQualityLabel, selection: $viewModel.formatSelection.videoQuality) {
+                Text("MP4 (360p)").tag(DownloadVideoQuality.mp4_360)
+                Text("MP4 (720p)").tag(DownloadVideoQuality.mp4_720)
+                Text("Best quality").tag(DownloadVideoQuality.best)
+            }
+            .pickerStyle(.menu)
+            .onChange(of: viewModel.formatSelection.videoQuality) { _, _ in
+                viewModel.persistFormatSelection()
+            }
         }
     }
 
@@ -124,6 +186,15 @@ public struct DownloaderView: View {
                     .font(.system(size: 12))
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+
+            HStack {
+                Text("\(DownloaderCopy.formatLabel):")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(viewModel.formatSelection.summaryLabel)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
             }
 
             HStack {
