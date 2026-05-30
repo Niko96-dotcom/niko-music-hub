@@ -20,7 +20,7 @@ NMH_APP_MACOS="${NMH_APP_MACOS:-$NMH_APP_CONTENTS/MacOS}"
 NMH_APP_BINARY="${NMH_APP_BINARY:-$NMH_APP_MACOS/$NMH_APP_NAME}"
 NMH_INFO_PLIST="${NMH_INFO_PLIST:-$NMH_APP_CONTENTS/Info.plist}"
 NMH_ENTITLEMENTS_PLIST="${NMH_ENTITLEMENTS_PLIST:-$NMH_APP_CONTENTS/NikoMusicHub.entitlements}"
-NMH_WINDOW_VERIFY="${NMH_WINDOW_VERIFY:-$NMH_SCRIPT_DIR/window_verify.swift}"
+NMH_UI_PROBE="${NMH_UI_PROBE:-$NMH_SCRIPT_DIR/ui_probe.swift}"
 
 nmh_stop_app() {
   local force="${1:-false}"
@@ -37,9 +37,9 @@ nmh_stop_app() {
 nmh_build_bundle() {
   cd "$NMH_ROOT_DIR"
 
-  DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --product "$NMH_APP_NAME"
-  local build_binary
-  build_binary="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --show-bin-path)/$NMH_APP_NAME"
+  local build_dir build_binary
+  build_dir="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --product "$NMH_APP_NAME" --show-bin-path)"
+  build_binary="$build_dir/$NMH_APP_NAME"
 
   rm -rf "$NMH_APP_BUNDLE"
   mkdir -p "$NMH_APP_MACOS"
@@ -115,8 +115,12 @@ nmh_open_app() {
   /usr/bin/open "${open_args[@]}" "$NMH_APP_BUNDLE"
 }
 
-nmh_window_verify() {
-  swift "$NMH_WINDOW_VERIFY" \
+nmh_focus_app() {
+  /usr/bin/osascript -e "tell application \"System Events\" to tell process \"$NMH_APP_NAME\" to set frontmost to true" >/dev/null 2>&1 || true
+}
+
+nmh_ui_probe() {
+  swift "$NMH_UI_PROBE" \
     --app-name "$NMH_APP_NAME" \
     --window-title "$NMH_WINDOW_TITLE" \
     --min-width "$NMH_WINDOW_MIN_WIDTH" \

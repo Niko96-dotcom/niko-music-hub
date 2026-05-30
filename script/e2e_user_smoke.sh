@@ -1304,7 +1304,7 @@ if [[ -z "$PUBLIC_UI_PID" ]]; then
 fi
 
 screencapture -x "$PUBLIC_UI_SCREENSHOT" >/dev/null 2>&1 || true
-NIKO_MUSIC_HUB_AX_PID="$PUBLIC_UI_PID" swift "$ROOT/script/e2e_ax_dump.swift" >"$PUBLIC_UI_TEXT"
+swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --ax-dump >"$PUBLIC_UI_TEXT"
 
 for required_text in \
   "Niko Music Hub" \

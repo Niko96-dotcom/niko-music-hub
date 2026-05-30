@@ -29,7 +29,7 @@ For app-window evidence:
 ./script/capture_window_proof.sh
 ```
 
-Window proof uses `script/window_verify.swift` (ApplicationServices/Quartz via Swift; no pyobjc).
+Window proof and accessibility dumps use `script/ui_probe.swift` (CoreGraphics window matching plus ApplicationServices AX; no pyobjc).
 
 Expected artifacts:
 
