@@ -14,13 +14,14 @@ struct AppComposition {
 
     @MainActor
     static func make() -> AppComposition {
-        let settingsStore = Self.makeSettingsStore()
+        let runtime = MusicHubRuntimeEnvironment.current
+        let settingsStore = Self.makeSettingsStore(runtime: runtime)
         let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL())
         let jobRunner = JobRunner()
         let fileActions = AppKitFileActions()
         let diagnostics = ConsoleDiagnostics()
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
-        let showsDevTool = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1"
+        let showsDevTool = runtime.showsDevTool
         let registeredToolCount = showsDevTool ? 6 : 5
 
         let context = ToolContext(
@@ -37,7 +38,7 @@ struct AppComposition {
         let songMetadataStore = try? SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
         let collaboratorStore = try? SQLiteCollaboratorStore(databaseURL: archiveDatabaseURL)
         let archiveRootWatcher: any ArchiveRootWatching =
-            ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER"] == "1"
+            runtime.disableArchiveWatcher
             ? NoopArchiveRootWatcher()
             : FSEventsArchiveRootWatcher()
         let archiveViewModel = ArchiveBrowserViewModel(
@@ -64,8 +65,8 @@ struct AppComposition {
         return AppComposition(registry: registry, context: context)
     }
 
-    private static func makeSettingsStore() -> SettingsStore {
-        if let suiteName = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SETTINGS_SUITE"],
+    private static func makeSettingsStore(runtime: MusicHubRuntimeEnvironment) -> SettingsStore {
+        if let suiteName = ProcessInfo.processInfo.environment[MusicHubRuntimeEnvironment.settingsSuiteKey],
            !suiteName.isEmpty,
            let defaults = UserDefaults(suiteName: suiteName) {
             defaults.removePersistentDomain(forName: suiteName)
