@@ -1297,14 +1297,17 @@ trap cleanup_public_ui EXIT
 
 NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" ./script/build_and_run.sh --verify >/dev/null
 sleep 1
-PUBLIC_UI_PID="$(pgrep -x NikoMusicHub | head -1 || true)"
+PUBLIC_UI_PID="$(pgrep -x NikoMusicHub | sort -n | tail -1 || true)"
 if [[ -z "$PUBLIC_UI_PID" ]]; then
   echo "E2E failed: public UI app process missing" >&2
   exit 1
 fi
 
 screencapture -x "$PUBLIC_UI_SCREENSHOT" >/dev/null 2>&1 || true
-swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --ax-dump >"$PUBLIC_UI_TEXT"
+if ! swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --ax-dump >"$PUBLIC_UI_TEXT"; then
+  echo "E2E failed: ui_probe ax-dump failed for pid $PUBLIC_UI_PID" >&2
+  exit 1
+fi
 
 for required_text in \
   "Niko Music Hub" \
