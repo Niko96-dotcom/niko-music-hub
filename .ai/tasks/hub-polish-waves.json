@@ -101,7 +101,8 @@
     {
       "id": "F",
       "title": "UI chrome — inbox + sidebars",
-      "status": "pending",
+      "status": "done",
+      "commit": "pending",
       "touch_modules": ["FeatureArchiveBrowser", "AppCore", "NikoMusicHub"],
       "acceptance": [
         "Output inbox cards: keep filename; drop noisy Available / sample-rate / bit-depth / channel rows",
@@ -117,7 +118,8 @@
     {
       "id": "G",
       "title": "Liquid Glass — native chrome",
-      "status": "pending",
+      "status": "done",
+      "commit": "pending",
       "touch_modules": ["NikoMusicHub", "FeatureArchiveBrowser", "outside-Cubase features"],
       "acceptance": [
         "Adopt native Liquid Glass (glassEffect / platform APIs) where deployment target allows",

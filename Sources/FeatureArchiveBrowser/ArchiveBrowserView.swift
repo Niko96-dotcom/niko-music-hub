@@ -40,6 +40,10 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hubGlassChrome()
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
 

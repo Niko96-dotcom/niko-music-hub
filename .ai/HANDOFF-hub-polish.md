@@ -1,29 +1,21 @@
 # hub-polish handoff
 
 **Manifest:** `.ai/tasks/hub-polish-waves.json`  
-**Kickoff:** `Run hub-polish-waves until complete`
+**Status:** All waves **A–G** complete.
 
-## Current
+## Last session
 
-| Field | Value |
-|-------|--------|
-| Last completed wave | E (commit pending this run) |
-| Last commit | `8ae883b` — wave D BPM tapper |
-| Next wave | **F** — UI chrome (inbox + sidebars) |
-| Blocked | — |
+| Wave | Commit | Notes |
+|------|--------|--------|
+| F | (this run) | Inbox cards: filename only, card drag, collapsible tool/inbox sidebars |
+| G | (this run) | `HubGlassChrome` — `glassEffect` on macOS 26+, `.regularMaterial` fallback; shell sidebars + archive header |
 
-## Resume instructions (agents)
+## Visual (G)
 
-1. Read `hub-polish-waves.json` — first wave with `"status": "pending"`.
-2. Implement only that wave; run `./script/ci.sh`.
-3. Set wave `status` to `done` and set `commit` SHA in the JSON.
-4. Replace this file (keep under ~25 lines).
-5. Commit. Stop after two waves per session; user re-sends kickoff phrase.
+- **Shell:** tool sidebar + output inbox use `hubGlassChrome()`
+- **Archive:** Cubase Archive header block (one tool surface)
+- **Older macOS:** material fallback only; no build break at deployment target 14.2
 
-## Done summary (do not re-implement)
+## Gates
 
-- **A** `d1c61c2` — preview maturity ranker
-- **B** `4129ddd` — archive root persist
-- **C** `e6e9872` — downloader format menus
-- **D** `8ae883b` — median BPM estimator + `docs/bpm-tapper-algorithm.md`
-- **E** — `resolvedFFmpegURL` matches health strip; pipeline uses auto-detect without nag
+`./script/ci.sh` green after F+G.

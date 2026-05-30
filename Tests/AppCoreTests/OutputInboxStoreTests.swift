@@ -84,12 +84,18 @@ final class OutputInboxStoreTests: XCTestCase {
             "OutputHandoff.dragFileURL",
             "NSItemProvider(contentsOf:",
             "Reveal in Finder",
-            "sampleRate",
-            "bitDepth",
-            "channels",
-            "converter"
+            ".onDrag",
+            "contentShape",
+            "Drag the file to your DAW or Finder",
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing inspector handoff source: \($0)")
+        }
+
+        for removedNoise in ["sampleRate", "bitDepth", "channels", "Drag WAV", "item.status.rawValue.capitalized"] {
+            XCTAssertFalse(
+                source.contains(removedNoise),
+                "Inspector should not show noisy chrome: \(removedNoise)"
+            )
         }
     }
 
