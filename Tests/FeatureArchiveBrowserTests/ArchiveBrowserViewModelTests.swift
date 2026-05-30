@@ -27,6 +27,51 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(reloaded.roots.map(\.path), [root.standardizedFileURL.path])
     }
 
+    func testPersistsMultipleArchiveRoots() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let buildDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+        let firstRoot = buildDir.appendingPathComponent("NikoMusicHubMultiRootA-\(UUID().uuidString)", isDirectory: true)
+        let secondRoot = buildDir.appendingPathComponent("NikoMusicHubMultiRootB-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: firstRoot)
+            try? FileManager.default.removeItem(at: secondRoot)
+        }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        viewModel.roots = []
+        viewModel.addRoots([firstRoot, secondRoot])
+
+        let reloaded = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        XCTAssertEqual(
+            reloaded.roots.map(\.path),
+            [firstRoot.standardizedFileURL.path, secondRoot.standardizedFileURL.path]
+        )
+    }
+
+    func testAddRootsIgnoresDuplicates() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubDuplicateRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        viewModel.roots = []
+        viewModel.addRoots([root, root])
+        XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
+    }
+
     func testDevArchiveRootEnvBootstrapsWhenSettingsEmpty() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"

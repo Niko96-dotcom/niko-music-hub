@@ -68,15 +68,36 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func addRoot(_ url: URL) {
-        let standardized = url.standardizedFileURL
-        guard !roots.contains(where: { $0.path == standardized.path }) else { return }
-        roots.append(standardized)
-        persistRoots()
+        addRoots([url])
+    }
+
+    func addRoots(_ urls: [URL]) {
+        var changed = false
+        for url in urls {
+            let standardized = url.standardizedFileURL
+            guard !roots.contains(where: { $0.path == standardized.path }) else { continue }
+            roots.append(standardized)
+            changed = true
+        }
+        if changed {
+            persistRoots()
+        }
     }
 
     func removeRoot(_ url: URL) {
         roots.removeAll { $0.path == url.path }
         persistRoots()
+    }
+
+    func clearScanResults() {
+        songs = []
+        filteredSongs = []
+        searchMatchSummaries = [:]
+        skippedSearchMatches = []
+        selectedSong = nil
+        scanDiagnostics = nil
+        statusMessage = nil
+        searchIndex.rebuild(from: [])
     }
 
     func scan() async {

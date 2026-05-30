@@ -24,7 +24,11 @@ struct ArchiveBrowserView: View {
         }
         .background(ArchiveDesignTokens.background)
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
-            guard !viewModel.roots.isEmpty, viewModel.songs.isEmpty, !viewModel.isScanning else { return }
+            guard !viewModel.isScanning else { return }
+            if viewModel.roots.isEmpty {
+                viewModel.clearScanResults()
+                return
+            }
             await viewModel.scan()
         }
     }
@@ -117,13 +121,13 @@ struct ArchiveBrowserView: View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
                 title: "Add an archive root",
-                body: "Choose the folder that contains your Cubase song folders.",
+                body: "Choose one or more folders that contain your Cubase song folders.",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
             archiveEmptyState(
                 title: "Ready to scan",
-                body: "Tap Scan to list songs from this root.",
+                body: "Tap Scan to list songs from your archive roots.",
                 systemImage: "music.note.list"
             )
         } else if viewModel.filteredSongs.isEmpty {
@@ -201,10 +205,11 @@ struct ArchiveBrowserView: View {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose Archive Root"
-        if panel.runModal() == .OK, let url = panel.url {
-            viewModel.addRoot(url)
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Choose Archive Roots"
+        panel.message = "Select one or more folders that contain Cubase song folders."
+        if panel.runModal() == .OK {
+            viewModel.addRoots(panel.urls)
         }
     }
 }
