@@ -20,12 +20,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let scanner = CubaseArchiveScanner()
     private var searchIndex = MusicSearchIndex()
     private let opener: MusicItemOpener
+    private let fileActions: any FileActions
     private let settingsStore: SettingsStore
     private let diagnostics: Diagnostics
 
     public init(context: ToolContext) {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
+        self.fileActions = context.fileActions
         let dryRunOnly = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
         self.opener = MusicItemOpener(
             workspace: dryRunOnly ? nil : AppKitWorkspaceOpener(),
@@ -217,5 +219,17 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
             }
         }
+    }
+
+    func preferredRevealURL(for song: Song) -> URL? {
+        if let latest = song.latestCPR?.filePath ?? song.projectVersions.first?.filePath {
+            return latest
+        }
+        return song.folderPath
+    }
+
+    func revealInFinder(url: URL?) {
+        guard let url else { return }
+        fileActions.revealInFinder(url)
     }
 }

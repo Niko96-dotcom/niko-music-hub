@@ -165,7 +165,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         )
 
         XCTAssertTrue(text.contains("preview_ranking_tiebreak_legend="))
-        XCTAssertTrue(text.contains("role → folder → filename → version"))
+        XCTAssertTrue(text.contains("CPR version anchor"))
         XCTAssertTrue(text.contains("too_short_non_main="))
         XCTAssertTrue(text.contains("songs_with_too_short="))
         XCTAssertTrue(

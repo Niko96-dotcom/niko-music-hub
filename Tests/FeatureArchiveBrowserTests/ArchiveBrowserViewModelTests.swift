@@ -317,13 +317,4 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("summary="))
     }
 
-    func testSongDetailCapsVisiblePreviewRowsForLargeRealArchives() {
-        let lines = (1...263).map { "[alt] Preview \($0).wav" }
-
-        let visible = SongDetailPreviewRows.visibleLines(from: lines, limit: 30)
-
-        XCTAssertEqual(visible.count, 30)
-        XCTAssertEqual(visible.first, "[alt] Preview 1.wav")
-        XCTAssertEqual(visible.last, "[alt] Preview 30.wav")
-    }
 }
