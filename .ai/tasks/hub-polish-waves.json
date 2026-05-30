@@ -1,0 +1,132 @@
+{
+  "version": "1",
+  "name": "hub-polish",
+  "kickoff_phrases": [
+    "Run hub-polish-waves until complete",
+    "run hub-polish-waves",
+    "hub-polish-waves"
+  ],
+  "handoff_file": ".ai/HANDOFF-hub-polish.md",
+  "authoritative_note": "When kickoff phrases match, read ONLY this file and the handoff. Do not reload the full original 10-item wish list from chat history.",
+  "gates": {
+    "ci": "./script/ci.sh",
+    "e2e": "./script/e2e_user_smoke.sh",
+    "commit": "green local state only",
+    "push": "only if user explicitly asked for push in this run or repo-wide push policy"
+  },
+  "execution": {
+    "one_wave_per_session_preferred": true,
+    "max_waves_per_session": 2,
+    "order": "strict wave id order; skip done; stop on blocked",
+    "after_each_wave": [
+      "Run gates.ci",
+      "Mark wave done with commit SHA",
+      "Overwrite handoff_file (short)",
+      "Commit with focused message",
+      "If max_waves_per_session reached or context heavy, stop and tell user to send the same kickoff phrase again"
+    ],
+    "no_parallel_coding_agents": true
+  },
+  "waves": [
+    {
+      "id": "A",
+      "title": "Archive brain — preview maturity, stems, titles",
+      "status": "done",
+      "commit": "d1c61c2",
+      "touch_modules": ["NikoMusicCore", "Fixtures/CubaseArchive"],
+      "acceptance": [
+        "Main audio preview uses production maturity ladder (sketch < session bounce < demo < prod < mix < master)",
+        "Drum/stem files demoted; Anne Monsters fixture does not pick drums",
+        "Display title inferred from winning preview (e.g. 90s Rave folder -> Graffiti)",
+        "PreviewConfidenceRankerTests and WaveAPreviewAndTitleTests pass"
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Archive roots — persist + dev default",
+      "status": "done",
+      "commit": "4129ddd",
+      "touch_modules": ["FeatureArchiveBrowser"],
+      "acceptance": [
+        "User-selected archive roots persist via SettingsStore",
+        "NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT or Debug ~/Music/00_Cubase Project when empty and folder exists",
+        "Fixture/E2E still use NIKO_MUSIC_HUB_FIXTURE_ROOT"
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Downloader — format pickers",
+      "status": "done",
+      "commit": "e6e9872",
+      "touch_modules": ["FeatureDownloader"],
+      "acceptance": [
+        "Menu pickers: audio only vs video+audio; secondary format/quality picker",
+        "Choice persisted; yt-dlp -f and extract-audio flags match selection",
+        "DownloadFormatSelectionTests pass"
+      ]
+    },
+    {
+      "id": "D",
+      "title": "BPM tapper — algorithm",
+      "status": "pending",
+      "touch_modules": ["FeatureBPMTapper", "docs"],
+      "acceptance": [
+        "Short research note docs/bpm-tapper-algorithm.md (what changed and why)",
+        "TempoEstimator feels accurate on fixture/simulated tap intervals (120, 128, odd tuples)",
+        "Existing BPM tapper UX unchanged unless clearly better",
+        "FeatureBPMTapper tests green"
+      ],
+      "hints": [
+        "Sources/FeatureBPMTapper/TempoEstimator.swift",
+        "Compare rolling average + outlier handling vs common tap-tempo apps"
+      ]
+    },
+    {
+      "id": "E",
+      "title": "WAV converter — FFmpeg path UX",
+      "status": "pending",
+      "touch_modules": ["FeatureAudioConverter", "AppCore"],
+      "acceptance": [
+        "When helper health shows FFmpeg green, converter does not nag to pick binary again",
+        "Uses settings path or auto-detect consistently with health strip",
+        "Tests cover already-configured path path"
+      ],
+      "hints": [
+        "FeatureAudioConverter views + FFmpegHealthChecker",
+        "User report: green in lower left but still asked to choose ffmpeg"
+      ]
+    },
+    {
+      "id": "F",
+      "title": "UI chrome — inbox + sidebars",
+      "status": "pending",
+      "touch_modules": ["FeatureArchiveBrowser", "AppCore", "NikoMusicHub"],
+      "acceptance": [
+        "Output inbox cards: keep filename; drop noisy Available / sample-rate / bit-depth / channel rows",
+        "Whole card draggable to DAW; remove redundant Drag to DAW button if card drag works",
+        "User can collapse/hide left and right sidebars",
+        "Smoke/E2E still pass or updated deliberately"
+      ],
+      "hints": [
+        "Output inbox inspector / card views",
+        "AppShellView sidebar layout"
+      ]
+    },
+    {
+      "id": "G",
+      "title": "Liquid Glass — native chrome",
+      "status": "pending",
+      "touch_modules": ["NikoMusicHub", "FeatureArchiveBrowser", "outside-Cubase features"],
+      "acceptance": [
+        "Adopt native Liquid Glass (glassEffect / platform APIs) where deployment target allows",
+        "Guard with availability checks; no broken build on older macOS",
+        "Do last — do not refactor ranking/downloader logic in same wave",
+        "Visual pass on shell + one tool surface documented in handoff"
+      ],
+      "hints": [
+        "Run only after D–F or explicitly if user reprioritizes",
+        "Check MACOSX_DEPLOYMENT_TARGET in Package.swift / xcodeproj"
+      ]
+    }
+  ]
+}

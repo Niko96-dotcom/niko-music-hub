@@ -30,6 +30,18 @@ Use the existing Swift app as the seed. Do not start blank. Do not embed Electro
 - Cubase reference docs: `docs/reference/cubase-file-orga/`
 - SwiftUI style reference: `/Users/nikolaymohr/src/automation-health`
 
+## Hub polish autonomous run
+
+If the user says **hub-polish-waves**, **run hub-polish-waves**, or **Run hub-polish-waves until complete**:
+
+1. Read **`.ai/tasks/hub-polish-waves.json`** (authoritative wave list, acceptance, gates).
+2. Read **`.ai/HANDOFF-hub-polish.md`** (last commit, next wave, blockers only).
+3. Execute the **first wave with `"status": "pending"`** in order A→G. Do **not** reload the full original 10-item feature list from old chat context.
+4. After the wave: run `./script/ci.sh`; mark the wave `done` + `commit` in the JSON; overwrite the handoff file; commit (push only if asked).
+5. Prefer **one wave per session** (max two if small). Then stop and tell the user to send the **same kickoff phrase** again in a new chat — do not ask them to say “next”.
+
+Waves A–C are already **done**; start at **D** unless the manifest says otherwise.
+
 ## Composer/Pi workflow
 
 Niko explicitly wants product implementation by Composer 2.5 via Pi Agent SDK, sequentially:
