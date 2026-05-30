@@ -49,6 +49,7 @@ struct ToolSidebarView: View {
                         .fill(selectedToolID == metadata.id ? Color.accentColor : Color.clear)
                 }
                 .accessibilityLabel(metadata.displayName)
+                .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
             }
 
             Spacer()

@@ -29,10 +29,8 @@ public struct AudioConverterView: View {
                 batchRows
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .padding(.top, 56)
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: 720, alignment: .topLeading)
+            .hubToolContentPadding()
+            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -89,10 +87,13 @@ public struct AudioConverterView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Button("Add Audio Files") {
+                HubIconButton(
+                    systemImage: "plus",
+                    accessibilityLabel: "Add audio files",
+                    help: "Choose files to convert"
+                ) {
                     fileImporterVisible = true
                 }
-                .buttonStyle(.bordered)
             }
             .padding(24)
         }
@@ -115,10 +116,14 @@ public struct AudioConverterView: View {
                     .font(.system(size: 13))
                     .monospacedDigit()
                 Spacer(minLength: 8)
-                Button("Edit WAV Preset") {
+                HubIconButton(
+                    systemImage: "slider.horizontal.3",
+                    accessibilityLabel: "Edit WAV preset",
+                    help: "Sample rate, bit depth, and channels",
+                    isSelected: presetEditorVisible
+                ) {
                     presetEditorVisible.toggle()
                 }
-                .buttonStyle(.bordered)
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(viewModel.presetSummaryText)
@@ -207,18 +212,24 @@ public struct AudioConverterView: View {
     private var actionRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Button("Add Audio Files") {
+                HubIconButton(
+                    systemImage: "plus",
+                    accessibilityLabel: "Add audio files",
+                    help: "Choose files to convert to WAV"
+                ) {
                     fileImporterVisible = true
                 }
-                .buttonStyle(.bordered)
 
                 convertButton
 
-                Button("Stop After Current File") {
+                HubIconButton(
+                    systemImage: "stop.fill",
+                    accessibilityLabel: "Stop after current file",
+                    help: "Finish the current file, then stop the batch",
+                    isEnabled: viewModel.canRequestStopAfterCurrent
+                ) {
                     viewModel.requestStopAfterCurrent()
                 }
-                .disabled(!viewModel.canRequestStopAfterCurrent)
-                .buttonStyle(.bordered)
             }
 
             ForEach(viewModel.notices, id: \.self) { notice in
@@ -232,15 +243,14 @@ public struct AudioConverterView: View {
 
     @ViewBuilder
     private var convertButton: some View {
-        if viewModel.canConvertToWAV {
-            Button("Convert to WAV") {
-                viewModel.startConversion()
-            }
-            .buttonStyle(.borderedProminent)
-        } else {
-            Button("Convert to WAV") {}
-                .disabled(true)
-                .buttonStyle(.bordered)
+        HubIconButton(
+            systemImage: "waveform.badge.plus",
+            accessibilityLabel: "Convert to WAV",
+            help: "Convert queued files to Cubase-ready WAV",
+            prominent: true,
+            isEnabled: viewModel.canConvertToWAV
+        ) {
+            viewModel.startConversion()
         }
     }
 
@@ -257,6 +267,7 @@ public struct AudioConverterView: View {
     private func batchRow(_ row: AudioConverterRow) -> some View {
         if let verifiedOutputURL = row.verifiedOutputURLForDrag() {
             batchRowContent(row, verifiedOutputURL: verifiedOutputURL)
+                .hubDragAffordance()
                 .onDrag {
                     NSItemProvider(contentsOf: verifiedOutputURL) ?? NSItemProvider()
                 }
@@ -327,15 +338,16 @@ public struct AudioConverterView: View {
                     .buttonStyle(.bordered)
                 }
 
-                if let verifiedOutputURL {
-                    Button("Reveal in Finder") {
-                        context.fileActions.revealInFinder(verifiedOutputURL)
+                if verifiedOutputURL != nil {
+                    HubIconButton(
+                        systemImage: "folder",
+                        accessibilityLabel: "Reveal in Finder",
+                        help: "Show converted WAV in Finder"
+                    ) {
+                        if let verifiedOutputURL {
+                            context.fileActions.revealInFinder(verifiedOutputURL)
+                        }
                     }
-                    .buttonStyle(.bordered)
-
-                    Label("Drag WAV to Cubase", systemImage: "hand.draw")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
                 }
             }
         }

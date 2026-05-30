@@ -46,4 +46,13 @@ public struct ToolRegistry: Sendable {
     public func feature(for id: ToolFeatureID) -> (any ToolFeature)? {
         features.first { $0.metadata.id == id }
     }
+
+    /// `NIKO_MUSIC_HUB_UI_TOOL` — tool id slug for UI review / automation (e.g. `archive-browser`).
+    public static func initialToolID(from environment: [String: String] = ProcessInfo.processInfo.environment) -> ToolFeatureID? {
+        guard let raw = environment["NIKO_MUSIC_HUB_UI_TOOL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return nil
+        }
+        return ToolFeatureID(raw)
+    }
 }

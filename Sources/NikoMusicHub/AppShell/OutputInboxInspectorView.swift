@@ -20,10 +20,13 @@ struct OutputInboxInspectorView: View {
                     .font(.system(size: 12))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Button("Choose Output Folder") {
+                HubIconButton(
+                    systemImage: "folder.badge.gearshape",
+                    accessibilityLabel: "Choose output folder",
+                    help: "Pick where converted and recorded files are saved"
+                ) {
                     chooseOutputFolder()
                 }
-                .buttonStyle(.bordered)
             }
 
             Divider()
@@ -94,6 +97,7 @@ struct OutputInboxInspectorView: View {
 
         if OutputHandoff.dragFileURL(for: item) != nil {
             card
+                .hubDragAffordance()
                 .onDrag {
                     guard let dragURL = OutputHandoff.dragFileURL(for: item) else {
                         return NSItemProvider()
@@ -124,10 +128,13 @@ struct OutputInboxInspectorView: View {
             }
 
             if OutputHandoff.isRevealable(item) {
-                Button("Reveal in Finder") {
+                HubIconButton(
+                    systemImage: "folder",
+                    accessibilityLabel: "Reveal in Finder",
+                    help: "Show file in Finder"
+                ) {
                     context.fileActions.revealInFinder(item.fileURL)
                 }
-                .buttonStyle(.bordered)
             }
         }
         .padding(10)

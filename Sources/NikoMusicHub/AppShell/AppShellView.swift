@@ -15,7 +15,10 @@ struct AppShellView: View {
     init(registry: ToolRegistry, context: ToolContext) {
         self.registry = registry
         self.context = context
-        _selectedToolID = State(initialValue: registry.preferredDefaultFeatureID)
+        let initialToolID = ToolRegistry.initialToolID()
+            .flatMap { registry.feature(for: $0)?.metadata.id }
+            ?? registry.preferredDefaultFeatureID
+        _selectedToolID = State(initialValue: initialToolID)
     }
 
     var body: some View {
@@ -74,22 +77,18 @@ struct AppShellView: View {
             Button {
                 showToolSidebar.toggle()
             } label: {
-                Label(
-                    showToolSidebar ? "Hide Tools" : "Show Tools",
-                    systemImage: "sidebar.left"
-                )
+                Image(systemName: "sidebar.left")
             }
             .help(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
+            .accessibilityLabel(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
 
             Button {
                 showOutputInbox.toggle()
             } label: {
-                Label(
-                    showOutputInbox ? "Hide Output Inbox" : "Show Output Inbox",
-                    systemImage: "sidebar.right"
-                )
+                Image(systemName: "sidebar.right")
             }
             .help(showOutputInbox ? "Hide output inbox" : "Show output inbox")
+            .accessibilityLabel(showOutputInbox ? "Hide output inbox" : "Show output inbox")
         }
     }
 

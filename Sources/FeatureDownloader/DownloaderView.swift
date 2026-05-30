@@ -33,10 +33,8 @@ public struct DownloaderView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .padding(.top, 56)
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: 720, alignment: .topLeading)
+            .hubToolContentPadding()
+            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -154,27 +152,26 @@ public struct DownloaderView: View {
 
                 Spacer()
 
-                downloadButton
-                clearButton
+                HubIconButton(
+                    systemImage: "arrow.down.circle",
+                    accessibilityLabel: DownloaderCopy.download,
+                    help: "Download from URL",
+                    prominent: true,
+                    isEnabled: viewModel.downloadState == .readyToDownload
+                ) {
+                    viewModel.startDownload()
+                }
+
+                HubIconButton(
+                    systemImage: "xmark",
+                    accessibilityLabel: DownloaderCopy.clear,
+                    help: "Clear URL and reset",
+                    isEnabled: viewModel.downloadState != .downloading
+                ) {
+                    viewModel.clearInput()
+                }
             }
         }
-    }
-
-    @ViewBuilder
-    private var downloadButton: some View {
-        Button(DownloaderCopy.download) {
-            viewModel.startDownload()
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(viewModel.downloadState != .readyToDownload)
-    }
-
-    private var clearButton: some View {
-        Button(DownloaderCopy.clear) {
-            viewModel.clearInput()
-        }
-        .buttonStyle(.bordered)
-        .disabled(viewModel.downloadState == .downloading)
     }
 
     private var trustInfo: some View {

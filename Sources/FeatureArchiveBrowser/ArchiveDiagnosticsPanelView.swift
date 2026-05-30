@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -45,8 +46,12 @@ struct ArchiveDiagnosticsPanelView: View {
                         .accessibilityIdentifier(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)
                 }
                 Spacer()
-                Button("Export", action: onExport)
-                    .buttonStyle(.borderless)
+                HubIconButton(
+                    systemImage: "square.and.arrow.up",
+                    accessibilityLabel: "Export diagnostics",
+                    help: "Export scan diagnostics bundle",
+                    action: onExport
+                )
             }
 
             Text("Support summary")

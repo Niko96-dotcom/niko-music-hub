@@ -7,7 +7,7 @@ struct SongCardView: View {
     var matchSummary: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(song.effectiveDisplayTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
@@ -29,7 +29,7 @@ struct SongCardView: View {
 
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact)
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ArchiveDesignTokens.surface)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
