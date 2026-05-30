@@ -38,7 +38,7 @@ struct AppShellView: View {
             }
 
             activeToolView
-                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .toolbar { shellToolbar }
@@ -62,9 +62,9 @@ struct AppShellView: View {
     }
 
     private var minWindowWidth: CGFloat {
-        var width: CGFloat = 640
+        var width: CGFloat = 480
         if showToolSidebar { width += 220 }
-        if showOutputInbox { width += 280 }
+        if showOutputInbox { width += 260 }
         return width
     }
 

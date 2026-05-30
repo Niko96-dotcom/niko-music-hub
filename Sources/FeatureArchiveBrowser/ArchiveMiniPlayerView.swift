@@ -177,6 +177,15 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         currentTime = clamped
     }
 
+    func seekRelative(_ delta: Double, url: URL?) {
+        seek(to: currentTime + delta, url: url)
+    }
+
+    var playbackProgress: Double {
+        guard duration > 0 else { return 0 }
+        return min(max(currentTime / duration, 0), 1)
+    }
+
     func pauseIfPlaying(url: URL?) {
         guard isPlaying(url) else { return }
         player?.pause()

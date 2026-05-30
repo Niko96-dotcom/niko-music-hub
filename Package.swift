@@ -50,7 +50,10 @@ let package = Package(
             name: "AppCore"
         ),
         .target(
-            name: "NikoMusicCore"
+            name: "NikoMusicCore",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .executableTarget(
             name: "NikoMusicCoreSelfTest",

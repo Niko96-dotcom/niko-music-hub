@@ -13,6 +13,10 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
     case fuzzyScanWarning
     case songNote
     case fuzzySongNote
+    case appNote
+    case fuzzyAppNote
+    case alias
+    case fuzzyAlias
     case fuzzyTitle
     case fuzzyHaystack
 
@@ -30,6 +34,10 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
         case .fuzzyScanWarning: "fuzzy scan warning"
         case .songNote: "song note"
         case .fuzzySongNote: "fuzzy song note"
+        case .appNote: "app note"
+        case .fuzzyAppNote: "fuzzy app note"
+        case .alias: "alias"
+        case .fuzzyAlias: "fuzzy alias"
         case .fuzzyTitle: "fuzzy title"
         case .fuzzyHaystack: "fuzzy text"
         }

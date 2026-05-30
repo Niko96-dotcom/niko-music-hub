@@ -8,7 +8,7 @@ struct SongCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(song.displayTitle)
+            Text(song.effectiveDisplayTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
                 .lineLimit(2)

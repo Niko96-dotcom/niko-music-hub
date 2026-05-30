@@ -362,4 +362,150 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("summary="))
     }
 
+    func testLoadsCachedIndexWhenRootsMatch() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let buildDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+        let root = buildDir.appendingPathComponent("NikoMusicHubCacheRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")
+        let indexStore = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let song = Song(
+            folderPath: root.appendingPathComponent("Cached Song", isDirectory: true),
+            originalFolderName: "Cached Song",
+            displayTitle: "Cached Song"
+        )
+        try indexStore.save(
+            ArchiveIndexSnapshot(
+                roots: [root.path],
+                songs: [song],
+                scannedAt: Date()
+            )
+        )
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+        }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveIndexStore: indexStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        XCTAssertEqual(viewModel.songs.count, 1)
+        XCTAssertEqual(viewModel.songs.first?.displayTitle, "Cached Song")
+        XCTAssertTrue(viewModel.statusMessage?.contains("cache") == true)
+    }
+
+    func testFirstRunOnboardingWhenRootsEmpty() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        if ArchiveDefaultRootPolicy.bootstrapRoot() != nil {
+            throw XCTSkip("Developer bootstrap root is present on this machine.")
+        }
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        viewModel.roots = []
+        viewModel.refreshFirstRunState()
+        XCTAssertTrue(viewModel.needsFirstRunOnboarding)
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubOnboarding-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        viewModel.addRoot(root)
+        XCTAssertFalse(viewModel.needsFirstRunOnboarding)
+        XCTAssertTrue(try store.loadSettings().archiveOnboardingCompleted)
+    }
+
+    func testVirtualTitlePersistsAndSearchMatchesAlias() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-metadata-vm-\(UUID().uuidString).sqlite")
+        let indexStore = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
+        viewModel.updateVirtualTitle(for: neon, title: "Electric Neon")
+        viewModel.updateAliases(for: neon, aliasesText: "glowstick")
+        let afterUpdate = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
+        XCTAssertEqual(afterUpdate.effectiveDisplayTitle, "Electric Neon")
+        let storedMeta = try metadataStore.loadAll()
+        XCTAssertEqual(storedMeta[neon.id]?.virtualTitle, "Electric Neon")
+
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        let reloaded = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await reloaded.scan()
+        let merged = try XCTUnwrap(reloaded.songs.first { $0.originalFolderName == "Neon Hook" })
+        XCTAssertEqual(merged.effectiveDisplayTitle, "Electric Neon")
+        XCTAssertEqual(merged.aliases, ["glowstick"])
+
+        reloaded.searchQuery = "glowstick"
+        reloaded.applySearchFilter()
+        XCTAssertEqual(reloaded.filteredSongs.count, 1)
+    }
+
+    func testManualPreviewSurvivesRescan() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-preview-vm-\(UUID().uuidString).sqlite")
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let lab = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
+        let alternateID = try XCTUnwrap(
+            lab.previewCandidates.first { $0.id != lab.mainPreviewCandidateID }
+        ).id
+        viewModel.setManualMainPreview(for: lab, candidateID: alternateID)
+        await viewModel.scan()
+        let rescanned = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
+        XCTAssertEqual(rescanned.mainPreviewCandidateID, alternateID)
+        XCTAssertEqual(rescanned.previewSelectionMode, .manual)
+
+        viewModel.revertPreviewToAuto(for: rescanned)
+        let auto = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
+        XCTAssertEqual(auto.previewSelectionMode, .auto)
+        XCTAssertNotEqual(auto.mainPreviewCandidateID, alternateID)
+    }
+
 }

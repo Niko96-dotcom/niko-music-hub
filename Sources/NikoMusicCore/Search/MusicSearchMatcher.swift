@@ -31,9 +31,16 @@ enum MusicSearchMatcher {
     private static func bestTokenMatch(_ token: String, for song: Song) -> (kind: MusicSearchMatchKind, score: Int)? {
         guard !token.isEmpty else { return nil }
 
-        let title = normalize(song.displayTitle)
+        let title = normalize(song.effectiveDisplayTitle)
         if title.hasPrefix(token) { return (.titlePrefix, 120) }
         if title.contains(token) { return (.titleContains, 100) }
+
+        if song.aliases.contains(where: { normalize($0).contains(token) }) {
+            return (.alias, 90)
+        }
+        if song.aliases.contains(where: { isSubsequence(token, in: normalize($0)) }) {
+            return (.fuzzyAlias, 22)
+        }
 
         let folder = normalize(song.originalFolderName)
         if folder.contains(token) { return (.folderName, 60) }
@@ -56,6 +63,12 @@ enum MusicSearchMatcher {
             return (.scanWarning, 45)
         }
 
+        if let appNote = song.appNote {
+            let normalizedAppNote = normalize(appNote)
+            if normalizedAppNote.contains(token) { return (.appNote, 55) }
+            if isSubsequence(token, in: normalizedAppNote) { return (.fuzzyAppNote, 21) }
+        }
+
         if let notes = song.sidecarNotes {
             let normalizedNotes = normalize(notes)
             if normalizedNotes.contains(token) { return (.songNote, 50) }
@@ -76,12 +89,16 @@ enum MusicSearchMatcher {
 
     private static func searchableHaystack(for song: Song) -> String {
         var parts = [
-            song.displayTitle,
+            song.effectiveDisplayTitle,
             song.originalFolderName,
         ]
+        parts.append(contentsOf: song.aliases)
         parts.append(contentsOf: song.projectVersions.map(\.fileName))
         parts.append(contentsOf: song.previewCandidates.map(\.fileName))
         parts.append(contentsOf: song.scanWarnings)
+        if let appNote = song.appNote {
+            parts.append(appNote)
+        }
         if let notes = song.sidecarNotes {
             parts.append(notes)
         }
