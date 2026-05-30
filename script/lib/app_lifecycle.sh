@@ -89,7 +89,7 @@ nmh_build_bundle() {
   <key>NSAudioCaptureUsageDescription</key>
   <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Niko Music Hub uses audio capture permission only when you start Recorder, so it can save a local WAV recording to your selected output folder.</string>
+  <string>Niko Music Hub does not record your microphone. Recorder uses system audio capture; allow it under Screen &amp; System Audio Recording in System Settings.</string>
 </dict>
 </plist>
 PLIST

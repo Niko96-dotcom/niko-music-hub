@@ -433,5 +433,7 @@ private enum ArchiveUserFlowSmokeValidationError: Error {
 
 private struct SmokeNoopFileActions: FileActions {
     func chooseOutputFolder() -> URL? { nil }
+    func chooseDirectory(prompt: String) -> URL? { nil }
+    func chooseExecutable(prompt: String) -> URL? { nil }
     func revealInFinder(_ url: URL) {}
 }

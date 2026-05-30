@@ -87,6 +87,12 @@ private struct FixtureFileActions: FileActions {
     func chooseOutputFolder() -> URL? { nil }
 
     @MainActor
+    func chooseDirectory(prompt: String) -> URL? { nil }
+
+    @MainActor
+    func chooseExecutable(prompt: String) -> URL? { nil }
+
+    @MainActor
     func revealInFinder(_ url: URL) {}
 }
 

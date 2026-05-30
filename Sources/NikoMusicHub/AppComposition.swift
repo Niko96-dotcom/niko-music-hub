@@ -18,15 +18,17 @@ struct AppComposition {
         let jobRunner = JobRunner()
         let fileActions = AppKitFileActions()
         let diagnostics = ConsoleDiagnostics()
+        let launchAtLogin = SMAppServiceLaunchAtLoginController()
         let showsDevTool = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1"
-        let toolCount = showsDevTool ? 5 : 4
+        let registeredToolCount = showsDevTool ? 6 : 5
 
         let context = ToolContext(
-            registeredToolCount: toolCount,
+            registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: fileActions,
+            launchAtLogin: launchAtLogin,
             diagnostics: diagnostics
         )
         let archiveViewModel = ArchiveBrowserViewModel(context: context)
@@ -36,7 +38,8 @@ struct AppComposition {
             BPMTapperFeature(),
             AudioConverterFeature(),
             AudioRecorderFeature(),
-            DownloaderFeature()
+            DownloaderFeature(),
+            SettingsFeature(archiveViewModel: archiveViewModel)
         ]
         if showsDevTool {
             features.append(DevToolFeature())
@@ -73,11 +76,27 @@ private enum AppPaths {
 private struct AppKitFileActions: FileActions {
     @MainActor
     func chooseOutputFolder() -> URL? {
+        chooseDirectory(prompt: "Choose Output Folder")
+    }
+
+    @MainActor
+    func chooseDirectory(prompt: String) -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Choose Output Folder"
+        panel.prompt = prompt
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    @MainActor
+    func chooseExecutable(prompt: String) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = prompt
+        panel.message = prompt
         return panel.runModal() == .OK ? panel.url : nil
     }
 
