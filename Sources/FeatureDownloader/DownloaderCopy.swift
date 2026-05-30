@@ -12,6 +12,10 @@ public enum DownloaderCopy {
     public static let trustNotice = "Downloads are for material you are allowed to access and save."
     public static let sourceLabel = "Source"
     public static let destinationLabel = "Output folder"
+    public static let formatLabel = "Download as"
+    public static let mediaKindLabel = "Media"
+    public static let audioFormatLabel = "Audio format"
+    public static let videoQualityLabel = "Video quality"
 
     public static let missingYtDlp = "yt-dlp is required. Choose yt-dlp in Settings."
     public static let unsupportedURL = "This URL is not supported or yt-dlp could not access it."

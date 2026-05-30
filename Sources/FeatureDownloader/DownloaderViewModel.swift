@@ -26,6 +26,7 @@ public enum DownloadState: Equatable {
 @MainActor
 public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public var urlText: String = ""
+    @Published public var formatSelection: DownloadFormatSelection
     @Published public var detectedFileName: String?
     @Published public var downloadState: DownloadState = .idle
     @Published public var statusMessage: String?
@@ -41,17 +42,34 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private let healthChecker: YtDlpHealthChecker
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
+    private let formatSelectionDefaultsKey = "downloader.formatSelection"
 
     public init(
         context: ToolContext,
         useCase: DownloaderUseCase,
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
-        jobFactory: DownloaderJobFactory = DownloaderJobFactory()
+        jobFactory: DownloaderJobFactory = DownloaderJobFactory(),
+        formatSelection: DownloadFormatSelection? = nil
     ) {
         self.context = context
         self.useCase = useCase
         self.healthChecker = healthChecker
         self.jobFactory = jobFactory
+        self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection()
+    }
+
+    private static func loadPersistedFormatSelection() -> DownloadFormatSelection {
+        guard let data = UserDefaults.standard.data(forKey: "downloader.formatSelection"),
+              let decoded = try? JSONDecoder().decode(DownloadFormatSelection.self, from: data)
+        else {
+            return .default
+        }
+        return decoded
+    }
+
+    public func persistFormatSelection() {
+        guard let data = try? JSONEncoder().encode(formatSelection) else { return }
+        UserDefaults.standard.set(data, forKey: formatSelectionDefaultsKey)
     }
 
     public func urlTextDidChange() {
@@ -109,9 +127,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         Task {
             do {
                 let settings = try context.settingsStore.loadSettings()
+                persistFormatSelection()
                 let options = jobFactory.makeJobOptions(
                     sourceURL: url,
-                    outputDirectory: settings.outputFolder.url
+                    outputDirectory: settings.outputFolder.url,
+                    formatSelection: formatSelection
                 )
 
                 downloadState = .downloading

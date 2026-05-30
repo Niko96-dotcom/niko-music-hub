@@ -5,17 +5,20 @@ public struct DownloadJobOptions: Sendable {
     public var sourceURL: URL
     public var outputDirectory: URL
     public var fileNameTemplate: String
+    public var formatSelection: DownloadFormatSelection
     public var retries: Int
 
     public init(
         sourceURL: URL,
         outputDirectory: URL,
         fileNameTemplate: String = "%(title)s.%(ext)s",
+        formatSelection: DownloadFormatSelection = .default,
         retries: Int = 3
     ) {
         self.sourceURL = sourceURL
         self.outputDirectory = outputDirectory
         self.fileNameTemplate = fileNameTemplate
+        self.formatSelection = formatSelection
         self.retries = retries
     }
 }
@@ -132,7 +135,8 @@ public final class DownloaderUseCase: @unchecked Sendable {
                     ytDlpURL: ytDlpURL,
                     sourceURL: url,
                     outputDirectory: options.outputDirectory,
-                    outputTemplate: options.fileNameTemplate
+                    outputTemplate: options.fileNameTemplate,
+                    formatSelection: options.formatSelection
                 )
 
                 let result = try await downloader.download(request) { line in

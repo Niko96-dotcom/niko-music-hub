@@ -6,17 +6,20 @@ public struct DownloadRequest: Equatable, Sendable {
     public var sourceURL: URL
     public var outputDirectory: URL
     public var outputTemplate: String
+    public var formatSelection: DownloadFormatSelection
 
     public init(
         ytDlpURL: URL,
         sourceURL: URL,
         outputDirectory: URL,
-        outputTemplate: String = "%(title)s.%(ext)s"
+        outputTemplate: String = "%(title)s.%(ext)s",
+        formatSelection: DownloadFormatSelection = .default
     ) {
         self.ytDlpURL = ytDlpURL
         self.sourceURL = sourceURL
         self.outputDirectory = outputDirectory
         self.outputTemplate = outputTemplate
+        self.formatSelection = formatSelection
     }
 }
 
@@ -76,18 +79,22 @@ public struct YtDlpDownloader: DownloadRunning {
         let fileManager = FileManager.default
         let outputPath = request.outputDirectory.appendingPathComponent(request.outputTemplate).path
 
-        let args: [String] = [
+        let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: request.formatSelection)
+        var args: [String] = [
             "--newline",
             "--force-overwrites",
             "--socket-timeout", "30",
             "--retries", "1",
             "--fragment-retries", "1",
             "--extractor-retries", "1",
-            "-f", "best[height<=360][ext=mp4]/best[height<=360]/worst",
+            "-f", formatArgs.formatSelector,
+        ]
+        args.append(contentsOf: formatArgs.extraArguments)
+        args.append(contentsOf: [
             "--progress-template", "download:%progress",
             "-o", outputPath,
-            request.sourceURL.absoluteString
-        ]
+            request.sourceURL.absoluteString,
+        ])
 
         let processRequest = ExternalProcessRequest(
             executableURL: request.ytDlpURL,
