@@ -35,7 +35,7 @@ case "$MODE" in
     sleep "$NMH_LAUNCH_WAIT_SEC"
     /usr/bin/pgrep -x "$NMH_APP_NAME" >/dev/null
     VERIFY_STATUS=0
-    nmh_window_verify \
+    nmh_ui_probe \
       --binary-path "$NMH_APP_BINARY" \
       --check-visible || VERIFY_STATUS=$?
     case "$VERIFY_STATUS" in

@@ -36,6 +36,13 @@ public struct ToolRegistry: Sendable {
         metadata.first?.id
     }
 
+    /// Default sidebar selection when the shell opens.
+    public var preferredDefaultFeatureID: ToolFeatureID? {
+        feature(for: "archive-browser")?.metadata.id
+            ?? feature(for: "wav-converter")?.metadata.id
+            ?? firstFeatureID
+    }
+
     public func feature(for id: ToolFeatureID) -> (any ToolFeature)? {
         features.first { $0.metadata.id == id }
     }

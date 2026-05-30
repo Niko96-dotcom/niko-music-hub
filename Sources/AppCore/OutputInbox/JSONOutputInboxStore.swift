@@ -48,7 +48,7 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
             }
             return copy
         }
-        guard refreshed != items else { return }
+        guard !zip(items, refreshed).allSatisfy({ $0.status == $1.status }) else { return }
         try save(refreshed)
     }
 

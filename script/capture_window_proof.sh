@@ -13,13 +13,13 @@ nmh_build_bundle
 nmh_open_app
 sleep "$NMH_LAUNCH_WAIT_SEC"
 
-/usr/bin/osascript -e 'tell application "System Events" to tell process "NikoMusicHub" to set frontmost to true' >/dev/null 2>&1 || true
+nmh_focus_app
 sleep 0.5
 
 CAPTURE_STATUS=0
-nmh_window_verify \
+nmh_ui_probe \
   --capture "$OUT" \
-  --blank-check || CAPTURE_STATUS=$?
+  --require-nonempty-capture || CAPTURE_STATUS=$?
 case "$CAPTURE_STATUS" in
   0) ;;
   2)
