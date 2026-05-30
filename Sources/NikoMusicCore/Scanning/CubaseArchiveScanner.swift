@@ -89,13 +89,14 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         let ranked = previewRanker.rank(previews)
         previews = ranked
         let mainPreviewID = previewRanker.mainPreviewID(from: ranked)
+        let mainPreview = ranked.first
 
         let latest = cprDetector.latestCPR(from: versions)
 
         return Song(
             folderPath: folder,
             originalFolderName: folderName,
-            displayTitle: titleResolver.displayTitle(fromFolderName: folderName),
+            displayTitle: titleResolver.displayTitle(fromFolderName: folderName, mainPreview: mainPreview),
             projectVersions: versions,
             previewCandidates: previews,
             scanWarnings: warnings,

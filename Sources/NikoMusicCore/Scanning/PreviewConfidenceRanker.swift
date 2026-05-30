@@ -3,7 +3,8 @@ import Foundation
 public struct PreviewConfidenceRanker: Sendable {
     private static let negativeTokens = [
         "instr", "instrumental", "acapella", "vox only", "drums only",
-        "stem", "stems", "ref", "reference", "test", "temp", "old", "backup"
+        "drum", "drums", "perc", "percussion", "drumkit", "kit only",
+        "stem", "stems", "ref", "reference", "test", "temp", "old", "backup",
     ]
 
     private static let extensionPreference: [String: Double] = [
@@ -35,6 +36,9 @@ public struct PreviewConfidenceRanker: Sendable {
         if winner.confidenceScore != runnerUp.confidenceScore {
             return .score
         }
+        let wm = PreviewProductionMaturity.detect(from: winner.fileName)
+        let rm = PreviewProductionMaturity.detect(from: runnerUp.fileName)
+        if wm != rm { return .productionMaturity }
         let lv = winner.detectedVersionNumber ?? 0
         let rv = runnerUp.detectedVersionNumber ?? 0
         if lv != rv { return .version }
@@ -52,6 +56,9 @@ public struct PreviewConfidenceRanker: Sendable {
         if lhs.confidenceScore != rhs.confidenceScore {
             return lhs.confidenceScore > rhs.confidenceScore
         }
+        let lm = PreviewProductionMaturity.detect(from: lhs.fileName)
+        let rm = PreviewProductionMaturity.detect(from: rhs.fileName)
+        if lm != rm { return lm > rm }
         let lv = lhs.detectedVersionNumber ?? 0
         let rv = rhs.detectedVersionNumber ?? 0
         if lv != rv { return lv > rv }
@@ -68,6 +75,12 @@ public struct PreviewConfidenceRanker: Sendable {
     private func scored(_ candidate: PreviewCandidate) -> PreviewCandidate {
         var score = 0.0
         var reasons: [String] = []
+
+        let maturity = PreviewProductionMaturity.detect(from: candidate.fileName)
+        if maturity != .none {
+            score += Double(maturity.rawValue)
+            reasons.append("maturity:\(maturity.reasonToken)")
+        }
 
         switch candidate.detectedRole {
         case .mainMix, .master, .preview:
@@ -92,7 +105,7 @@ public struct PreviewConfidenceRanker: Sendable {
             score += 10
             reasons.append("folder:root")
         case .stems:
-            score += 5
+            score -= 15
             reasons.append("folder:stems")
         case .other:
             score += 3
@@ -100,12 +113,14 @@ public struct PreviewConfidenceRanker: Sendable {
         }
 
         let lower = candidate.fileName.lowercased()
-        if lower.contains("mixdown") || lower.contains("mix") || lower.contains("master") || lower.contains("bounce") {
-            score += 15
-            reasons.append("filename:positive")
+        if maturity == .none {
+            if lower.contains("mixdown") || lower.contains("mix") || lower.contains("master") || lower.contains("bounce") {
+                score += 15
+                reasons.append("filename:positive")
+            }
         }
         for token in Self.negativeTokens where lower.contains(token) {
-            score -= 30
+            score -= 35
             reasons.append("filename:negative-\(token)")
         }
 

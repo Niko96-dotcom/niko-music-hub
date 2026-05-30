@@ -54,7 +54,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
     func testSelectedSongHeaderForRankingLab() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let header = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongHeader(for: lab)
 
         XCTAssertNotNil(header)
@@ -72,7 +72,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         let context = ArchiveDiagnosticsPreviewRankingPanelContext.from(songs: result.songs)
 
         let labBreakdown = try XCTUnwrap(
-            context.tooShortSongBreakdowns.first { $0.displayTitle == "Preview Ranking Lab" }
+            context.tooShortSongBreakdowns.first { $0.displayTitle == "Lab Song" }
         )
         XCTAssertEqual(labBreakdown.clipCount, 1)
         XCTAssertEqual(labBreakdown.clipNames, ["Lab Song short clip.wav"])
@@ -81,7 +81,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
     func testDurationTiebreakFixtureExposesSelectedSongPreviewTiebreakCallout() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Duration Tiebreak" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Equal Score Duration Tiebreak" })
         let callout = try XCTUnwrap(
             ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongPreviewTiebreakCallout(for: lab)
         )
@@ -90,20 +90,20 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
 
     func testTooShortBreakdownPanelDisplayLine() {
         let breakdown = TooShortNonMainSongBreakdown(
-            displayTitle: "Preview Ranking Lab",
+            displayTitle: "Lab Song",
             clipCount: 1,
             clipNames: ["Lab Song short clip.wav"]
         )
         XCTAssertEqual(
             breakdown.panelDisplayLine,
-            "Preview Ranking Lab: 1 too short clip — Lab Song short clip.wav"
+            "Lab Song: 1 too short clip — Lab Song short clip.wav"
         )
     }
 
     func testRankingLabMainPreviewSummaryMatchesExport() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let summary = try XCTUnwrap(
             ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongMainPreviewSummary(for: lab)
         )
@@ -128,7 +128,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
     func testRankingLabRankedPreviewLinesMatchExport() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let lines = ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongRankedPreviewLines(for: lab)
         XCTAssertGreaterThan(lines.count, 1)
         XCTAssertTrue(lines.contains(where: { $0.contains("[main]") && $0.contains("v3") }))
@@ -158,7 +158,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         )
         let breakdown = try XCTUnwrap(
             diagnostics.previewRankingPanel.tooShortSongBreakdowns.first {
-                $0.displayTitle == "Preview Ranking Lab"
+                $0.displayTitle == "Lab Song"
             }
         )
         let exportText = ArchiveDiagnosticsExporter.formattedText(

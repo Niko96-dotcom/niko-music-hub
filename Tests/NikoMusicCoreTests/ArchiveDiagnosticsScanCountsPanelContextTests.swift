@@ -12,14 +12,14 @@ final class ArchiveDiagnosticsScanCountsPanelContextTests: XCTestCase {
 
     func testCountsMatchExportForScanCountLines() {
         let export = """
-        songs=7
+        songs=9
         songs_with_warnings=1
         total_song_warnings=1
         """
         let diagnostics = ArchiveScanDiagnostics(
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
             rootPaths: [],
-            songCount: 7,
+            songCount: 9,
             songsWithWarningsCount: 1,
             totalSongWarningCount: 1,
             globalWarnings: [],
@@ -48,12 +48,12 @@ final class ArchiveDiagnosticsScanCountsPanelContextTests: XCTestCase {
             diagnostics: diagnostics,
             homeDirectory: home
         )
-        XCTAssertEqual(diagnostics.songCount, 7)
+        XCTAssertEqual(diagnostics.songCount, 9)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertEqual(diagnostics.totalSongWarningCount, 1)
         XCTAssertEqual(
             ArchiveDiagnosticsScanCountsPanelContext.panelSongsValue(songCount: diagnostics.songCount),
-            "7"
+            "9"
         )
         XCTAssertEqual(
             ArchiveDiagnosticsScanCountsPanelContext.panelSongWarningsValue(

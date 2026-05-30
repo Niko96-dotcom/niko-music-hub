@@ -129,6 +129,29 @@ for name in ("Tie Song mix.flac", "Tie Song mix.mp3"):
     os.utime(path, (now, now))
 PY
 
+# 90s Rave — maturity ladder: master beats session bounce; display title from preview
+write_placeholder_cpr "$FIXTURE_ROOT/90s Rave/90s Rave.cpr"
+write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti SESSIN BOUNCE.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti master.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti sketchyy.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti SESSIN BOUNCE.wav" <<'PY'
+import os, sys, time
+path = sys.argv[1]
+now = time.time() + 700
+os.utime(path, (now, now))
+PY
+
+# Anne Monsters — drum stem must not become main preview
+write_placeholder_cpr "$FIXTURE_ROOT/Anne Monsters/Anne Monsters.cpr"
+write_minimal_wav "$FIXTURE_ROOT/Anne Monsters/Mixdown/Anne Monsters drums.wav" 200
+write_minimal_wav "$FIXTURE_ROOT/Anne Monsters/Mixdown/Anne Monsters master mix.wav" 200
+/usr/bin/python3 - "$FIXTURE_ROOT/Anne Monsters/Mixdown/Anne Monsters drums.wav" <<'PY'
+import os, sys, time
+path = sys.argv[1]
+now = time.time() + 750
+os.utime(path, (now, now))
+PY
+
 # Broken folder — no CPR
 mkdir -p "$FIXTURE_ROOT/Broken Folder Example"
 echo "notes only" >"$FIXTURE_ROOT/Broken Folder Example/notes.txt"

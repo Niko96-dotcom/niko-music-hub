@@ -62,6 +62,7 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
 
     static func detectedRole(from fileName: String) -> PreviewDetectedRole {
         let lower = fileName.lowercased()
+        if lower.contains("drum") || lower.contains("perc") { return .stems }
         if lower.contains("instr") || lower.contains("instrumental") { return .instrumental }
         if lower.contains("acapella") || lower.contains("vox only") { return .acapella }
         if lower.contains("stem") { return .stems }

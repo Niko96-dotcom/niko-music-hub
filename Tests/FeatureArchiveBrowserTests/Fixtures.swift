@@ -19,8 +19,10 @@ enum CubaseFixtures {
         let neonHook = archiveRoot.appendingPathComponent("Neon Hook/Neon Hook.cpr")
         let rankingLab = archiveRoot.appendingPathComponent("Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav")
         let truncationSong = summaryTruncationRoot.appendingPathComponent("Summary Warning 08/notes.txt")
+        let raveMaster = archiveRoot.appendingPathComponent("90s Rave/Mixdown/Graffiti master.wav")
         if FileManager.default.fileExists(atPath: neonHook.path),
            FileManager.default.fileExists(atPath: rankingLab.path),
+           FileManager.default.fileExists(atPath: raveMaster.path),
            FileManager.default.fileExists(atPath: truncationSong.path) {
             return
         }
