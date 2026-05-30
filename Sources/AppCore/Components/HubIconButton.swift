@@ -13,6 +13,9 @@ public struct HubIconButton: View {
     var appearance: HubIconButtonAppearance = .toolbar
     var prominent: Bool = false
     var isSelected: Bool = false
+    /// When true, exposes On/Off `accessibilityValue` and selected trait (browse filters, toggles).
+    var isToggle: Bool = false
+    var chipColors: HubCompactChipColors = .default
     var role: ButtonRole?
     var isEnabled: Bool = true
     let action: () -> Void
@@ -24,6 +27,8 @@ public struct HubIconButton: View {
         appearance: HubIconButtonAppearance = .toolbar,
         prominent: Bool = false,
         isSelected: Bool = false,
+        isToggle: Bool = false,
+        chipColors: HubCompactChipColors = .default,
         role: ButtonRole? = nil,
         isEnabled: Bool = true,
         action: @escaping () -> Void
@@ -34,6 +39,8 @@ public struct HubIconButton: View {
         self.appearance = appearance
         self.prominent = prominent
         self.isSelected = isSelected
+        self.isToggle = isToggle
+        self.chipColors = chipColors
         self.role = role
         self.isEnabled = isEnabled
         self.action = action
@@ -49,8 +56,7 @@ public struct HubIconButton: View {
             }
         }
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(isSelected ? "On" : "Off")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .modifier(ToggleAccessibilityModifier(isToggle: isToggle, isSelected: isSelected))
         .help(help ?? accessibilityLabel)
         .disabled(!isEnabled)
     }
@@ -79,15 +85,15 @@ public struct HubIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: 28, height: 28)
-                .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
                 .background {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.06))
+                        .fill(isSelected ? chipColors.selectedFill : chipColors.unselectedFill)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(
-                            isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                            isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
                             lineWidth: isSelected ? 1.5 : 1
                         )
                 }
@@ -102,6 +108,21 @@ public struct HubIconButton: View {
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
+        }
+    }
+}
+
+private struct ToggleAccessibilityModifier: ViewModifier {
+    let isToggle: Bool
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if isToggle {
+            content
+                .accessibilityValue(isSelected ? "On" : "Off")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            content
         }
     }
 }

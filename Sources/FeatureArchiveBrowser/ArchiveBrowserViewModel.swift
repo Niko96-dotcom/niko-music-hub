@@ -310,6 +310,28 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         ArchiveHealthReport(songs: songs, includeHidden: showHiddenSongs)
     }
 
+    var showsSidebarMorePanel: Bool {
+        !roots.isEmpty
+            || !songs.isEmpty
+            || scanDiagnostics != nil
+            || !pendingCollaboratorSuggestions.isEmpty
+    }
+
+    var sidebarMorePanelSummary: String {
+        let report = healthReport()
+        var parts: [String] = []
+        if report.totalSongs > 0 {
+            parts.append("\(report.totalSongs) songs")
+        }
+        if report.withWarnings > 0 {
+            parts.append("\(report.withWarnings) warnings")
+        }
+        if let skipped = scanDiagnostics?.skippedEntries.count, skipped > 0 {
+            parts.append("\(skipped) skipped")
+        }
+        return parts.isEmpty ? "Health & intelligence" : parts.joined(separator: " · ")
+    }
+
     func refreshIntelligence() {
         pendingCollaboratorSuggestions = ArchiveIntelligence.collaboratorSuggestions(
             songs: songs,

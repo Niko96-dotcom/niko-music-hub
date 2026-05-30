@@ -616,6 +616,26 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
     }
 
+    func testSidebarMorePanelSummaryAndVisibility() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = []
+        viewModel.songs = []
+        viewModel.scanDiagnostics = nil
+        viewModel.pendingCollaboratorSuggestions = []
+        XCTAssertFalse(viewModel.showsSidebarMorePanel)
+        XCTAssertEqual(viewModel.sidebarMorePanelSummary, "Health & intelligence")
+
+        viewModel.roots = [
+            URL(fileURLWithPath: "/tmp/archive-root", isDirectory: true)
+        ]
+        XCTAssertTrue(viewModel.showsSidebarMorePanel)
+    }
+
     func testExportIndexJSONFromViewModel() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
