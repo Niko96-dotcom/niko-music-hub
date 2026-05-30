@@ -46,9 +46,11 @@ final class FeatureRegistryTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testArchiveBrowserRegistersFirst() throws {
+        let context = ToolContext.smokeTest()
         let registry = try ToolRegistry(features: [
-            ArchiveBrowserFeature(),
+            ArchiveBrowserFeature(viewModel: ArchiveBrowserViewModel(context: context)),
             TestFeature(id: "wav-converter", shortLabel: "WAV")
         ])
         XCTAssertEqual(registry.metadata.first?.id, "archive-browser")

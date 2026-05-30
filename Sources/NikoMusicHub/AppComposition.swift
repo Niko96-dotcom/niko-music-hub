@@ -11,26 +11,37 @@ struct AppComposition {
     let registry: ToolRegistry
     let context: ToolContext
 
+    @MainActor
     static func make() -> AppComposition {
+        let settingsStore = Self.makeSettingsStore()
+        let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL())
+        let jobRunner = JobRunner()
+        let fileActions = AppKitFileActions()
+        let diagnostics = ConsoleDiagnostics()
+        let showsDevTool = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1"
+        let toolCount = showsDevTool ? 5 : 4
+
+        let context = ToolContext(
+            registeredToolCount: toolCount,
+            settingsStore: settingsStore,
+            outputInboxStore: outputInboxStore,
+            jobRunner: jobRunner,
+            fileActions: fileActions,
+            diagnostics: diagnostics
+        )
+        let archiveViewModel = ArchiveBrowserViewModel(context: context)
+
         var features: [any ToolFeature] = [
-            ArchiveBrowserFeature(),
+            ArchiveBrowserFeature(viewModel: archiveViewModel),
             BPMTapperFeature(),
             AudioConverterFeature(),
             AudioRecorderFeature(),
             DownloaderFeature()
         ]
-        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1" {
+        if showsDevTool {
             features.append(DevToolFeature())
         }
         let registry = try! ToolRegistry(features: features)
-        let context = ToolContext(
-            registeredToolCount: features.count,
-            settingsStore: Self.makeSettingsStore(),
-            outputInboxStore: JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL()),
-            jobRunner: JobRunner(),
-            fileActions: AppKitFileActions(),
-            diagnostics: ConsoleDiagnostics()
-        )
 
         return AppComposition(registry: registry, context: context)
     }

@@ -14,7 +14,7 @@ struct RootSelectionView: View {
                 addRootButton
             }
             if viewModel.roots.isEmpty {
-                Text("Choose the folder that contains your Cubase song/project folders. Niko Music Hub scans read-only.")
+                Text("Pick the folder that contains your Cubase song folders.")
                     .font(.system(size: 12))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

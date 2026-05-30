@@ -9,10 +9,14 @@ public struct ArchiveBrowserFeature: ToolFeature {
         systemImage: "music.note.list"
     )
 
-    public init() {}
+    private let viewModel: ArchiveBrowserViewModel
+
+    public init(viewModel: ArchiveBrowserViewModel) {
+        self.viewModel = viewModel
+    }
 
     @MainActor
     public func makeView(context: ToolContext) -> AnyView {
-        AnyView(ArchiveBrowserView(context: context))
+        AnyView(ArchiveBrowserView(context: context, viewModel: viewModel))
     }
 }

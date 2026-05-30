@@ -41,18 +41,6 @@ struct SongDetailView: View {
 
             PreviewPlayerView(url: mainPreviewURL)
 
-            if let mainSummary = PreviewRankingExplainability.mainPreviewSummary(for: song) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Main preview")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    Text(mainSummary)
-                        .font(.system(size: 11))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(4)
-                }
-            }
-
             HStack(spacing: 12) {
                 Button("Open Latest CPR") {
                     try? viewModel.openLatestCPR(for: song)
@@ -86,7 +74,7 @@ struct SongDetailView: View {
             if song.previewCandidates.count > 1 {
                 let rankedLines = PreviewRankingExplainability.rankedPreviewLines(for: song)
                 let visibleLines = SongDetailPreviewRows.visibleLines(from: rankedLines, limit: previewDisplayLimit)
-                Text("All previews (ranked, showing first \(visibleLines.count) of \(rankedLines.count))")
+                Text("More previews (\(visibleLines.count) of \(rankedLines.count))")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 ForEach(visibleLines, id: \.self) { line in
@@ -94,11 +82,6 @@ struct SongDetailView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(ArchiveDesignTokens.textSecondary)
                         .lineLimit(2)
-                }
-                if rankedLines.count > visibleLines.count {
-                    Text("\(rankedLines.count - visibleLines.count) more previews available in the archive scan.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 }
             }
         }

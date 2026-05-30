@@ -24,4 +24,10 @@ final class PreviewFilenameParserTests: XCTestCase {
     func testRejectsNonPositiveVersionNumbers() {
         XCTAssertNil(PreviewFilenameParser.parseVersionNumber(from: "Song v0.wav"))
     }
+
+    func testEffectiveRankVersionTreatsV0PointXAsPreV1() {
+        XCTAssertEqual(PreviewFilenameParser.effectiveRankVersion(from: "demo v0.6.mp3"), 0)
+        XCTAssertEqual(PreviewFilenameParser.effectiveRankVersion(from: "90s ICON v4 mix.wav"), 4)
+    }
 }
+

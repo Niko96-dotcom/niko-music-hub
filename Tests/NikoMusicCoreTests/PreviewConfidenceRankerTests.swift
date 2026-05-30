@@ -268,6 +268,46 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertEqual(ranked.first?.fileName, "Song v1 mix.wav")
     }
 
+    func testCPRAnchorDemotesDemoV06BelowTitleMatchedV4Mix() {
+        let context = PreviewRankingProjectContext(anchorCPRVersion: 4, titleTokens: ["90s", "icon"])
+        let demo = candidate(
+            name: "demo v0.6.mp3",
+            role: .unknown,
+            modifiedAt: baseDate.addingTimeInterval(100),
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+        let anchoredMix = candidate(
+            name: "90s ICON v4 mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: 4,
+            ext: "wav",
+            duration: 200
+        )
+        let ranked = ranker.rank([demo, anchoredMix], projectContext: context)
+        XCTAssertEqual(ranked.first?.fileName, "90s ICON v4 mix.wav")
+        XCTAssertTrue(ranked.first?.confidenceReasons.contains("cpr-anchor:version-match") == true)
+        XCTAssertTrue(demo.confidenceReasons.contains("cpr-anchor:demo-below-project") == false)
+        let scoredDemo = ranked.first { $0.fileName == "demo v0.6.mp3" }
+        XCTAssertTrue(scoredDemo?.confidenceReasons.contains("cpr-anchor:demo-below-project") == true)
+    }
+
+    func testCPRAnchorStillPicksBestAvailableWhenOnlyEarlyDemoExists() {
+        let context = PreviewRankingProjectContext(anchorCPRVersion: 4, titleTokens: ["90s", "icon"])
+        let demo = candidate(
+            name: "demo v0.6.mp3",
+            role: .unknown,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+        let ranked = ranker.rank([demo], projectContext: context)
+        XCTAssertEqual(ranked.first?.fileName, "demo v0.6.mp3")
+    }
+
     func testConfidenceReasonsAreDeterministicAndOrdered() {
         let main = candidate(
             name: "Demo v2 mixdown.wav",

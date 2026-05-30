@@ -822,7 +822,7 @@ public enum ArchiveUserFlowSmoke {
         let rankingLabPanelTiebreakLegendMatchesExport =
             ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegendMatchesExport(in: rankingLabExportText)
             && panelRankingLabTiebreakLegend == exportRankingLabTiebreakLegend
-            && panelRankingLabTiebreakLegend.contains("Preview tiebreak")
+            && panelRankingLabTiebreakLegend.contains("CPR version anchor")
         guard rankingLabPanelTiebreakLegendMatchesExport else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }

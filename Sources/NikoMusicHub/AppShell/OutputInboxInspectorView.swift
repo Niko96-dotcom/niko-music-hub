@@ -1,5 +1,5 @@
-import SwiftUI
 import AppCore
+import SwiftUI
 
 struct OutputInboxInspectorView: View {
     let context: ToolContext
@@ -32,7 +32,7 @@ struct OutputInboxInspectorView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("No outputs saved yet")
                         .font(.system(size: 13, weight: .semibold))
-                    Text("Converted WAVs, recordings, and downloads will appear here with reveal and drag-out actions.")
+                    Text("WAVs, recordings, and downloads show up here.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -84,15 +84,7 @@ struct OutputInboxInspectorView: View {
     }
 
     private func displayPath(_ url: URL) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let path = url.path
-        if path == home {
-            return "~"
-        }
-        if path.hasPrefix(home + "/") {
-            return "~" + path.dropFirst(home.count)
-        }
-        return path
+        HumanFriendlyPath.display(url)
     }
 
     @ViewBuilder
