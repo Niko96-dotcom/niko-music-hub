@@ -130,7 +130,7 @@ struct ArchiveSidebarView: View {
         if viewModel.selectedShelf == .byCollaborator {
             Picker("Collaborator", selection: Binding(
                 get: { viewModel.selectedCollaboratorID ?? "" },
-                set: { viewModel.selectedCollaboratorID = $0.isEmpty ? nil : $0 }
+                set: { viewModel.setSelectedCollaboratorID($0.isEmpty ? nil : $0) }
             )) {
                 Text("Choose…").tag("")
                 ForEach(viewModel.collaborators) { collaborator in
