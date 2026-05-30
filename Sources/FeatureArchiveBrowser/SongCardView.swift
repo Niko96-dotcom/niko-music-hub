@@ -7,37 +7,52 @@ struct SongCardView: View {
     var matchSummary: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(song.displayTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .lineLimit(2)
+
             if let matchSummary, !matchSummary.isEmpty {
                 Text(matchSummary)
                     .font(.system(size: 10))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(2)
             }
+
             if let warningLine = song.displayScanWarnings().first {
                 Text("Warning: \(warningLine)")
                     .font(.system(size: 10))
                     .foregroundStyle(ArchiveDesignTokens.warning)
                     .lineLimit(2)
             }
-            RoundedRectangle(cornerRadius: 4)
-                .fill(ArchiveDesignTokens.accent.opacity(0.35))
-                .frame(height: 28)
-                .overlay {
-                    Text(previewLabel)
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                }
+
+            HStack(spacing: 6) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                Text(previewLabel)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
             Text("\(song.projectVersions.count) CPR · \(song.previewCandidates.count) previews")
                 .font(.system(size: 11))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
         }
         .padding(12)
-        .background(isSelected ? ArchiveDesignTokens.accent.opacity(0.15) : ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ArchiveDesignTokens.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    isSelected ? ArchiveDesignTokens.accent : Color.primary.opacity(0.08),
+                    lineWidth: isSelected ? 2 : 1
+                )
+        }
     }
 
     private var previewLabel: String {

@@ -2,8 +2,8 @@ import AppCore
 import SwiftUI
 
 struct AppShellView: View {
-    private static let showToolSidebarKey = "hub.shell.showToolSidebar"
-    private static let showOutputInboxKey = "hub.shell.showOutputInbox"
+    private static let showToolSidebarKey = "hub.shell.panels.toolsVisible"
+    private static let showOutputInboxKey = "hub.shell.panels.inboxVisible"
 
     let registry: ToolRegistry
     let context: ToolContext
@@ -19,7 +19,7 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             if showToolSidebar {
                 ToolSidebarView(
                     context: context,
@@ -27,9 +27,7 @@ struct AppShellView: View {
                     selectedToolID: $selectedToolID
                 )
                 .frame(minWidth: 220, idealWidth: 240, maxWidth: 270)
-                .hubGlassChrome()
-
-                Divider()
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 collapsedRail(
                     systemImage: "sidebar.left",
@@ -40,16 +38,15 @@ struct AppShellView: View {
             }
 
             activeToolView
-                .frame(minWidth: 660, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 560, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .toolbar { shellToolbar }
 
             if showOutputInbox {
-                Divider()
-
                 OutputInboxInspectorView(context: context)
-                    .frame(minWidth: 300, idealWidth: 320, maxWidth: 380)
-                    .hubGlassChrome()
+                    .frame(minWidth: 280, idealWidth: 300, maxWidth: 340)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 collapsedRail(
                     systemImage: "sidebar.right",
@@ -59,14 +56,15 @@ struct AppShellView: View {
                 }
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(minWidth: minWindowWidth, minHeight: 720)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var minWindowWidth: CGFloat {
-        var width: CGFloat = 720
+        var width: CGFloat = 640
         if showToolSidebar { width += 220 }
-        if showOutputInbox { width += 300 }
+        if showOutputInbox { width += 280 }
         return width
     }
 
@@ -109,7 +107,7 @@ struct AppShellView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .hubGlassChrome()
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
@@ -127,6 +125,7 @@ struct AppShellView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(24)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
     }
 }

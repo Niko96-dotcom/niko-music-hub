@@ -51,6 +51,7 @@ struct OutputInboxInspectorView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .hubPanelBackground()
         .onAppear {
             refreshSettings()
             refreshItems()
@@ -139,7 +140,10 @@ struct OutputInboxInspectorView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
     }
 }

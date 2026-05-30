@@ -15,7 +15,7 @@ struct NikoMusicHubApp: App {
             )
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1_360, height: 820)
+        .defaultSize(width: 1_420, height: 860)
         .commands {
             AboutCommand()
         }
@@ -29,6 +29,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        HubBrandLogo.installApplicationIcon()
         NSApp.activate(ignoringOtherApps: true)
     }
 }

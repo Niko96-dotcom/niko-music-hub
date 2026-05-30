@@ -14,12 +14,13 @@ struct ArchiveBrowserView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-                .frame(minWidth: 340, idealWidth: 380, maxWidth: 430)
+                .frame(minWidth: 300, idealWidth: 340, maxWidth: 380)
 
             Divider()
 
             detailPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(ArchiveDesignTokens.background)
         }
         .background(ArchiveDesignTokens.background)
         .task {
@@ -42,8 +43,7 @@ struct ArchiveBrowserView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubGlassChrome()
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .background(ArchiveDesignTokens.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
 
@@ -66,6 +66,8 @@ struct ArchiveBrowserView: View {
                 Text(status)
                     .font(.system(size: 11))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if !viewModel.skippedSearchMatches.isEmpty {
@@ -113,8 +115,9 @@ struct ArchiveBrowserView: View {
 
             songList
         }
-        .padding(18)
+        .padding(16)
         .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(ArchiveDesignTokens.surface)
     }
 
     @ViewBuilder
