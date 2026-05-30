@@ -45,6 +45,40 @@ final class AudioConversionPipelineTests: XCTestCase {
         XCTAssertEqual(ffmpeg.convertCallCount, 1)
     }
 
+    func testFallsBackToFFmpegUsingAutoDetectedPathWhenSettingsUnset() async throws {
+        let request = makeRequest(sourceName: "Auto FFmpeg.flac", sourceType: .flac)
+        let detectedURL = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
+        let ffmpegResult = ConversionResult(
+            sourceURL: request.sourceURL,
+            outputURL: request.outputDirectory.appendingPathComponent("Auto FFmpeg - 44100Hz 24bit.wav"),
+            spec: WAVOutputSpec(sampleRate: 44100, bitDepth: 24, channelCount: 2),
+            converterPath: .ffmpeg
+        )
+        let native = FakeAudioConverter(result: .failure(AudioConversionError.unsupportedSourceType(request.sourceURL)))
+        let factory = RecordingFFmpegFactory(converter: FakeAudioConverter(result: .success(ffmpegResult)))
+        let pipeline = AudioConversionPipeline(
+            native: native,
+            helperSettings: HelperToolSettings(ffmpeg: nil),
+            ffmpegConverterFactory: factory.makeConverter,
+            healthChecker: FFmpegHealthChecker(
+                runner: FakeExternalProcessRunner(result: .success(
+                    ExternalProcessResult(
+                        exitCode: 0,
+                        standardOutput: "ffmpeg version 8.1",
+                        standardError: ""
+                    )
+                )),
+                fileExists: { $0 == detectedURL.path }
+            )
+        )
+
+        let result = try await pipeline.convert(request)
+
+        XCTAssertEqual(result, ffmpegResult)
+        XCTAssertEqual(factory.callCount, 1)
+        XCTAssertEqual(factory.resolvedURLs, [detectedURL])
+    }
+
     func testMissingFFmpegProducesRecoverableMessage() async throws {
         let request = makeRequest(sourceName: "Needs FFmpeg.mp3", sourceType: .mp3)
         let native = FakeAudioConverter(result: .failure(AudioConversionError.conversionFailed("native failed")))
@@ -156,6 +190,10 @@ private final class RecordingFFmpegFactory: @unchecked Sendable {
 
     var callCount: Int {
         lock.withLock { urls.count }
+    }
+
+    var resolvedURLs: [URL] {
+        lock.withLock { urls }
     }
 
     init(converter: any AudioConverting) {

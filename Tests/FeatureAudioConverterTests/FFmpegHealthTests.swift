@@ -31,6 +31,36 @@ final class FFmpegHealthTests: XCTestCase {
         XCTAssertEqual(availability, .missing)
     }
 
+    func testResolvedFFmpegURLUsesAutoDetectWhenSettingsUnset() {
+        let detected = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
+        let checker = FFmpegHealthChecker(
+            runner: FakeExternalProcessRunner(result: .success(
+                ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+            )),
+            fileExists: { $0 == detected.path }
+        )
+
+        XCTAssertEqual(
+            checker.resolvedFFmpegURL(settings: HelperToolSettings(ffmpeg: nil)),
+            detected
+        )
+    }
+
+    func testResolvedFFmpegURLPrefersConfiguredPath() {
+        let configured = URL(fileURLWithPath: "/custom/bin/ffmpeg")
+        let checker = FFmpegHealthChecker(
+            runner: FakeExternalProcessRunner(result: .success(
+                ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+            )),
+            fileExists: { $0 == configured.path }
+        )
+
+        XCTAssertEqual(
+            checker.resolvedFFmpegURL(settings: HelperToolSettings(ffmpeg: configured)),
+            configured
+        )
+    }
+
     func testAvailableWhenVersionCommandSucceeds() async {
         let runner = RecordingExternalProcessRunner(result: .success(
             ExternalProcessResult(
