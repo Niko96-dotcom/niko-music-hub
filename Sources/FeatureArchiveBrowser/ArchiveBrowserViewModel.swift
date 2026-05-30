@@ -4,7 +4,7 @@ import NikoMusicCore
 
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
-    @Published var roots: [URL] = []
+    @Published public var roots: [URL] = []
     @Published var songs: [Song] = []
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
@@ -67,7 +67,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    func addRoot(_ url: URL) {
+    public func addRoot(_ url: URL) {
         addRoots([url])
     }
 
@@ -84,7 +84,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    func removeRoot(_ url: URL) {
+    public func removeRoot(_ url: URL) {
         roots.removeAll { $0.path == url.path }
         persistRoots()
     }

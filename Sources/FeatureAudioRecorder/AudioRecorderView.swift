@@ -155,14 +155,14 @@ public struct AudioRecorderView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.red)
 
-                Text("Audio Recorder needs system audio permission to capture your Mac's audio. Open Privacy & Security settings to allow access.")
+                Text("Audio Recorder captures your Mac's system audio (not your microphone). In System Settings, enable Niko Music Hub under Screen & System Audio Recording.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
-                    Button("Open System Settings") {
-                        openSystemSettingsPrivacy()
+                    Button("Open System Audio Recording Settings") {
+                        SystemPrivacySettings.openSystemAudioRecordingSettings()
                     }
                     .buttonStyle(.bordered)
 
@@ -229,7 +229,7 @@ public struct AudioRecorderView: View {
             case .tryAgain:
                 Task { await viewModel.startRecording() }
             case .openSystemSettings:
-                openSystemSettingsPrivacy()
+                SystemPrivacySettings.openSystemAudioRecordingSettings()
             default:
                 break
             }
@@ -243,9 +243,13 @@ public struct AudioRecorderView: View {
                 category: .permission,
                 label: "Permission Required",
                 icon: "lock.shield",
-                body: "Audio Recorder needs system audio permission to capture your Mac's audio. Open Privacy & Security settings to allow access.",
+                body: "Audio Recorder captures your Mac's system audio (not your microphone). In System Settings, enable Niko Music Hub under Screen & System Audio Recording.",
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Open System Settings", style: .secondary, action: .openSystemSettings),
+                    AppErrorCard.RecoveryAction(
+                        label: "Open System Audio Recording Settings",
+                        style: .secondary,
+                        action: .openSystemSettings
+                    ),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
@@ -339,12 +343,6 @@ public struct AudioRecorderView: View {
             return .yellow
         } else {
             return .green
-        }
-    }
-
-    private func openSystemSettingsPrivacy() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
-            NSWorkspace.shared.open(url)
         }
     }
 

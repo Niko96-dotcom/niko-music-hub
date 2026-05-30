@@ -76,9 +76,7 @@ public struct StandardErrorCard: View {
         }
         switch action {
         case .openSystemSettings:
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
-                NSWorkspace.shared.open(url)
-            }
+            SystemPrivacySettings.openSystemAudioRecordingSettings()
         case .tryAgain, .dismiss:
             break
         case .chooseToolPath:
