@@ -106,7 +106,7 @@ struct SongDetailView: View {
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
 
             if viewModel.collaborators.isEmpty {
-                Text("Add collaborators in the address book below the shelf picker.")
+                Text("Add collaborators in the More panel at the bottom of the sidebar, or below.")
                     .font(.system(size: 11))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
             } else {
@@ -123,19 +123,12 @@ struct SongDetailView: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                TextField("New collaborator", text: $newCollaboratorName)
-                    .textFieldStyle(.roundedBorder)
-                HubIconButton(
-                    systemImage: "person.badge.plus",
-                    accessibilityLabel: "Add collaborator",
-                    help: "Add collaborator to address book",
-                    isEnabled: !newCollaboratorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ) {
-                    if viewModel.upsertCollaborator(name: newCollaboratorName) != nil {
-                        newCollaboratorName = ""
-                    }
-                }
+            CollaboratorAddRow(
+                draftName: $newCollaboratorName,
+                placeholder: "New collaborator",
+                fieldFont: .body
+            ) { name in
+                viewModel.upsertCollaborator(name: name) != nil
             }
         }
     }

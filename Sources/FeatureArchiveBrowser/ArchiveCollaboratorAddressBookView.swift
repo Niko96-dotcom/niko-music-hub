@@ -1,4 +1,3 @@
-import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -24,20 +23,8 @@ struct ArchiveCollaboratorAddressBookView: View {
                 }
             }
 
-            HStack(spacing: 6) {
-                TextField("Add name", text: $newName)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11))
-                HubIconButton(
-                    systemImage: "person.badge.plus",
-                    accessibilityLabel: "Add collaborator",
-                    help: "Add collaborator to address book",
-                    isEnabled: !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ) {
-                    if viewModel.upsertCollaborator(name: newName) != nil {
-                        newName = ""
-                    }
-                }
+            CollaboratorAddRow(draftName: $newName) { name in
+                viewModel.upsertCollaborator(name: name) != nil
             }
         }
         .padding(8)
