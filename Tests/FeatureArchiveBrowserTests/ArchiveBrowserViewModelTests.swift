@@ -150,7 +150,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
         XCTAssertFalse(viewModel.songs.isEmpty)
         viewModel.searchQuery = "Neon Hook"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
         XCTAssertEqual(viewModel.filteredSongs.first?.displayTitle, "Neon Hook")
         let songID = try XCTUnwrap(viewModel.filteredSongs.first?.id)
@@ -165,7 +165,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
         viewModel.searchQuery = "LOOSE_FILE.txt"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
 
         XCTAssertEqual(viewModel.skippedSearchMatches.first?.entry.label, "LOOSE_FILE.txt")
         XCTAssertTrue(viewModel.skippedSearchMatches.first?.matchSummary.contains("skipped label") == true)
@@ -217,6 +217,46 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             ArchiveBrowseFilter.noPreview.sidebarAccessibilityLabel,
             "Songs missing a preview"
         )
+    }
+
+    func testClearScanResultsEmptiesFilteredSongs() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        XCTAssertFalse(viewModel.filteredSongs.isEmpty)
+
+        viewModel.clearScanResults()
+        XCTAssertTrue(viewModel.songs.isEmpty)
+        XCTAssertTrue(viewModel.filteredSongs.isEmpty)
+        XCTAssertNil(viewModel.selectedSong)
+    }
+
+    func testSelectShelfByCollaboratorDefaultsCollaboratorAndFilters() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-shelf-vm-\(UUID().uuidString).sqlite")
+        let collaboratorStore = try SQLiteCollaboratorStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            collaboratorStore: collaboratorStore
+        )
+        let collaborator = try XCTUnwrap(viewModel.upsertCollaborator(name: "Shelf Default"))
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
+        viewModel.assignCollaborators(to: neon, collaboratorIDs: [collaborator.id])
+
+        viewModel.selectShelf(.byCollaborator)
+        XCTAssertEqual(viewModel.selectedCollaboratorID, collaborator.id)
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+        XCTAssertEqual(viewModel.filteredSongs.first?.id, neon.id)
     }
 
     func testToggleBrowseFilterReassignsOptionSetForPublishedUpdates() async throws {
@@ -333,7 +373,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
         viewModel.searchQuery = "LOOSE_FILE.txt"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.skippedSearchMatches.count, 1)
 
         try viewModel.exportDiagnostics()
@@ -353,7 +393,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
         viewModel.searchQuery = "project"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
 
         try viewModel.exportDiagnostics()
@@ -372,7 +412,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
         viewModel.searchQuery = "nts nly"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
 
         try viewModel.exportDiagnostics()
@@ -391,7 +431,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
         viewModel.searchQuery = "neon hk"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
 
         try viewModel.exportDiagnostics()
@@ -512,7 +552,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(merged.aliases, ["glowstick"])
 
         reloaded.searchQuery = "glowstick"
-        reloaded.applySearchFilter()
+        reloaded.refreshBrowseResults()
         XCTAssertEqual(reloaded.filteredSongs.count, 1)
     }
 
@@ -571,11 +611,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.assignCollaborators(to: neon, collaboratorIDs: [collaborator.id])
         viewModel.selectedShelf = .byCollaborator
         viewModel.selectedCollaboratorID = collaborator.id
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
 
         viewModel.searchQuery = "studio"
-        viewModel.applySearchFilter()
+        viewModel.refreshBrowseResults()
         XCTAssertEqual(viewModel.filteredSongs.count, 1)
     }
 

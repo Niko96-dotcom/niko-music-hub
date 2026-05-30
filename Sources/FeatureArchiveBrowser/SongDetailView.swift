@@ -10,8 +10,6 @@ struct SongDetailView: View {
     @State private var virtualTitleDraft = ""
     @State private var appNoteDraft = ""
     @State private var aliasesDraft = ""
-    @State private var newCollaboratorName = ""
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             metadataSection
@@ -106,7 +104,7 @@ struct SongDetailView: View {
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
 
             if viewModel.collaborators.isEmpty {
-                Text("Add collaborators in the More panel at the bottom of the sidebar, or below.")
+                Text("Add collaborators in the More panel at the bottom of the sidebar.")
                     .font(.system(size: 11))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
             } else {
@@ -121,14 +119,6 @@ struct SongDetailView: View {
                         }
                     ))
                 }
-            }
-
-            CollaboratorAddRow(
-                draftName: $newCollaboratorName,
-                placeholder: "New collaborator",
-                fieldFont: .body
-            ) { name in
-                viewModel.upsertCollaborator(name: name) != nil
             }
         }
     }
