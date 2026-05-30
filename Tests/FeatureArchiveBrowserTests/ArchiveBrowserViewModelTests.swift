@@ -207,6 +207,18 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.statusMessage, "Export failed: sample failure")
     }
 
+    func testBrowseFilterSidebarPresentation() {
+        XCTAssertEqual(
+            ArchiveBrowseFilter.sidebarFilters,
+            [.hasStems, .noPreview, .hasWarnings]
+        )
+        XCTAssertEqual(ArchiveBrowseFilter.hasStems.sidebarSymbolName, "waveform.path")
+        XCTAssertEqual(
+            ArchiveBrowseFilter.noPreview.sidebarAccessibilityLabel,
+            "Songs missing a preview"
+        )
+    }
+
     func testToggleBrowseFilterReassignsOptionSetForPublishedUpdates() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -624,16 +636,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
         viewModel.roots = []
-        viewModel.songs = []
-        viewModel.scanDiagnostics = nil
-        viewModel.pendingCollaboratorSuggestions = []
         XCTAssertFalse(viewModel.showsSidebarMorePanel)
-        XCTAssertEqual(viewModel.sidebarMorePanelSummary, "Health & intelligence")
+        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & intelligence")
 
         viewModel.roots = [
             URL(fileURLWithPath: "/tmp/archive-root", isDirectory: true)
         ]
         XCTAssertTrue(viewModel.showsSidebarMorePanel)
+        XCTAssertEqual(viewModel.sidebarMorePanelSummary, viewModel.sidebarHealthContext.summary)
     }
 
     func testExportIndexJSONFromViewModel() async throws {

@@ -8,9 +8,6 @@ struct ArchiveSidebarView: View {
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
 
-    @State private var rootsExpanded = false
-    @State private var morePanelExpanded = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             archiveToolbar
@@ -39,7 +36,9 @@ struct ArchiveSidebarView: View {
                 skippedMatchesCallout
             }
 
-            morePanel
+            if viewModel.showsSidebarMorePanel {
+                ArchiveSidebarMorePanel(viewModel: viewModel)
+            }
         }
         .padding(compactList ? 10 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -89,8 +88,7 @@ struct ArchiveSidebarView: View {
                 isSelected: viewModel.showHiddenSongs,
                 isToggle: true
             ) {
-                viewModel.showHiddenSongs.toggle()
-                viewModel.applySearchFilter()
+                viewModel.toggleShowHiddenSongs()
             }
         }
     }
@@ -103,7 +101,7 @@ struct ArchiveSidebarView: View {
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
-            DisclosureGroup(isExpanded: $rootsExpanded) {
+            DisclosureGroup(isExpanded: $viewModel.sidebarRootsSectionExpanded) {
                 RootSelectionView(viewModel: viewModel, onAddRoot: onChooseRoot, compact: true)
             } label: {
                 HStack(spacing: 6) {
@@ -117,7 +115,7 @@ struct ArchiveSidebarView: View {
             }
             .onChange(of: viewModel.roots.count) { _, count in
                 if count <= 1 {
-                    rootsExpanded = false
+                    viewModel.sidebarRootsSectionExpanded = false
                 }
             }
         }
@@ -128,10 +126,7 @@ struct ArchiveSidebarView: View {
         if viewModel.selectedShelf == .byCollaborator {
             Picker("Collaborator", selection: Binding(
                 get: { viewModel.selectedCollaboratorID ?? "" },
-                set: {
-                    viewModel.selectedCollaboratorID = $0.isEmpty ? nil : $0
-                    viewModel.applySearchFilter()
-                }
+                set: { viewModel.selectedCollaboratorID = $0.isEmpty ? nil : $0 }
             )) {
                 Text("Choose…").tag("")
                 ForEach(viewModel.collaborators) { collaborator in
@@ -152,7 +147,6 @@ struct ArchiveSidebarView: View {
         }
         .labelsHidden()
         .disabled(viewModel.songs.isEmpty)
-        .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
 
         if compactList {
             HStack(spacing: 6) {
@@ -169,18 +163,13 @@ struct ArchiveSidebarView: View {
 
     private var browseFilterButtons: some View {
         HStack(spacing: 6) {
-            ForEach(ArchiveBrowseFilterSidebar.chips) { chip in
-                HubIconButton(
-                    systemImage: chip.symbolName,
-                    accessibilityLabel: chip.accessibilityLabel,
-                    help: chip.accessibilityLabel,
-                    appearance: .compactChip,
-                    isSelected: viewModel.browseFilter.contains(chip.filter),
-                    isToggle: true,
-                    chipColors: .archive,
+            ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
+                HubIconButton.archiveBrowseFilter(
+                    filter: filter,
+                    isSelected: viewModel.browseFilter.contains(filter),
                     isEnabled: !viewModel.songs.isEmpty
                 ) {
-                    viewModel.toggleBrowseFilter(chip.filter)
+                    viewModel.toggleBrowseFilter(filter)
                 }
             }
         }
@@ -194,9 +183,6 @@ struct ArchiveSidebarView: View {
             TextField("Search", text: $viewModel.searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
-                .onChange(of: viewModel.searchQuery) { _, _ in
-                    viewModel.applySearchFilter()
-                }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -204,42 +190,6 @@ struct ArchiveSidebarView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.05))
         )
-    }
-
-    @ViewBuilder
-    private var morePanel: some View {
-        if viewModel.showsSidebarMorePanel {
-            let report = viewModel.healthReport()
-            DisclosureGroup(isExpanded: $morePanelExpanded) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ArchiveHealthReportView(report: report, compact: true)
-                    ArchiveCollaboratorAddressBookView(viewModel: viewModel)
-                    ArchiveIntelligencePanelView(viewModel: viewModel)
-                    if let diagnostics = viewModel.scanDiagnostics {
-                        ScrollView {
-                            ArchiveDiagnosticsPanelView(
-                                diagnostics: diagnostics,
-                                selectedSong: viewModel.selectedSong,
-                                searchContext: viewModel.activeSearchExportContext(),
-                                skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                            ) {
-                                viewModel.performExport { try viewModel.exportDiagnostics() }
-                            }
-                        }
-                        .frame(maxHeight: 140)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.system(size: 11))
-                    Text(viewModel.sidebarMorePanelSummary)
-                        .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-        }
     }
 
     private var skippedMatchesCallout: some View {
