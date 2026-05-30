@@ -4,11 +4,11 @@ import NikoMusicCore
 import SwiftUI
 
 struct ArchiveBrowserView: View {
-    @StateObject private var viewModel: ArchiveBrowserViewModel
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
     @State private var supportReportExpanded = false
 
-    init(context: ToolContext) {
-        _viewModel = StateObject(wrappedValue: ArchiveBrowserViewModel(context: context))
+    init(context: ToolContext, viewModel: ArchiveBrowserViewModel) {
+        self.viewModel = viewModel
     }
 
     var body: some View {
@@ -23,27 +23,17 @@ struct ArchiveBrowserView: View {
                 .background(ArchiveDesignTokens.background)
         }
         .background(ArchiveDesignTokens.background)
-        .task {
-            if !viewModel.roots.isEmpty && viewModel.songs.isEmpty {
-                await viewModel.scan()
-            }
+        .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
+            guard !viewModel.roots.isEmpty, viewModel.songs.isEmpty, !viewModel.isScanning else { return }
+            await viewModel.scan()
         }
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Cubase Archive")
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textPrimary)
-                Text("Find songs, preview mixdowns, and open the latest Cubase project without changing archive files.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ArchiveDesignTokens.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text("Cubase Archive")
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundStyle(ArchiveDesignTokens.textPrimary)
 
             RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
 
@@ -66,7 +56,13 @@ struct ArchiveBrowserView: View {
                 Text(status)
                     .font(.system(size: 11))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
+            }
+
+            if !viewModel.songs.isEmpty {
+                Text(ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -124,20 +120,20 @@ struct ArchiveBrowserView: View {
     private var songList: some View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
-                title: "Start with an archive root",
-                body: "Add the folder where your Cubase song folders live. The scanner reads project files and previews, but never renames, moves, or deletes archive content.",
+                title: "Add an archive root",
+                body: "Choose the folder that contains your Cubase song folders.",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
             archiveEmptyState(
                 title: "Ready to scan",
-                body: "Scan when you want to build a local song list from the selected roots.",
+                body: "Tap Scan to list songs from this root.",
                 systemImage: "music.note.list"
             )
         } else if viewModel.filteredSongs.isEmpty {
             archiveEmptyState(
-                title: "No songs match",
-                body: "Try a title, folder name, CPR filename, or preview filename.",
+                title: "No matches",
+                body: "Try another search.",
                 systemImage: "magnifyingglass"
             )
         } else {
@@ -194,11 +190,11 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
                     .font(.system(size: 18, weight: .semibold))
-                Text(viewModel.roots.isEmpty ? "Your song details and latest CPR actions will appear here after scanning." : "Preview and latest CPR details will appear here.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
+                if viewModel.roots.isEmpty {
+                    Text("Scan a root to browse songs here.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(24)

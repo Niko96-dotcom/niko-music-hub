@@ -3,7 +3,7 @@ import Foundation
 import NikoMusicCore
 
 @MainActor
-final class ArchiveBrowserViewModel: ObservableObject {
+public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var roots: [URL] = []
     @Published var songs: [Song] = []
     @Published var filteredSongs: [Song] = []
@@ -23,7 +23,7 @@ final class ArchiveBrowserViewModel: ObservableObject {
     private let settingsStore: SettingsStore
     private let diagnostics: Diagnostics
 
-    init(context: ToolContext) {
+    public init(context: ToolContext) {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
         let dryRunOnly = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
@@ -78,9 +78,39 @@ final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func scan() async {
-        scanSync()
+        guard !roots.isEmpty else {
+            statusMessage = "Add at least one archive root."
+            return
+        }
+        guard !isScanning else { return }
+        isScanning = true
+        let rootsSnapshot = roots
+        defer { isScanning = false }
+        do {
+            let scannedAt = Date()
+            let scanner = scanner
+            let result = try await Task.detached(priority: .userInitiated) {
+                try scanner.scan(roots: rootsSnapshot)
+            }.value
+            songs = result.songs
+            searchIndex.rebuild(from: songs)
+            applySearchFilter()
+            let built = ArchiveScanDiagnosticsBuilder.build(
+                result: result,
+                roots: rootsSnapshot,
+                scannedAt: scannedAt
+            )
+            scanDiagnostics = built
+            statusMessage = built.compactSummaryLine
+            diagnostics.log(.info, built.summaryLine)
+        } catch {
+            scanDiagnostics = nil
+            statusMessage = "Scan failed: \(error.localizedDescription)"
+            diagnostics.log(.error, statusMessage ?? "scan failed")
+        }
     }
 
+    /// Synchronous scan for tests and smoke tooling (blocks the caller).
     func scanSync() {
         guard !roots.isEmpty else {
             statusMessage = "Add at least one archive root."
@@ -100,8 +130,8 @@ final class ArchiveBrowserViewModel: ObservableObject {
                 scannedAt: scannedAt
             )
             scanDiagnostics = built
-            statusMessage = built.summaryLine
-            diagnostics.log(.info, statusMessage ?? "scan complete")
+            statusMessage = built.compactSummaryLine
+            diagnostics.log(.info, built.summaryLine)
         } catch {
             scanDiagnostics = nil
             statusMessage = "Scan failed: \(error.localizedDescription)"

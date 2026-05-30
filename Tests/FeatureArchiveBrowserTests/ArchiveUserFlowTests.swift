@@ -95,7 +95,7 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(result.rankingLabPanelTooShortBreakdownLine.contains("Lab Song short clip.wav"))
         XCTAssertTrue(result.rankingLabPanelTooShortBreakdownMatchesExport)
         XCTAssertFalse(result.rankingLabPanelTiebreakLegend.isEmpty)
-        XCTAssertTrue(result.rankingLabPanelTiebreakLegend.contains("Preview tiebreak"))
+        XCTAssertTrue(result.rankingLabPanelTiebreakLegend.contains("CPR version anchor"))
         XCTAssertTrue(result.rankingLabPanelTiebreakLegendMatchesExport)
         XCTAssertFalse(result.rankingLabPanelMainPreviewSummary.isEmpty)
         XCTAssertTrue(result.rankingLabPanelMainPreviewSummary.contains("Lab Song v3 mix.wav"))

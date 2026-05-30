@@ -89,6 +89,23 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         XCTAssertEqual(display[0].warnings, ["Missing mixdown under ~/Music/Broken"])
     }
 
+    func testCompactSummaryLineIsShortForSidebar() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 15,
+            songsWithWarningsCount: 2,
+            totalSongWarningCount: 2,
+            globalWarnings: [],
+            songWarningSummaries: [
+                SongWarningSummary(displayTitle: "Alpha Song", warnings: ["warn"]),
+            ],
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(diagnostics.compactSummaryLine, "15 songs · 2 with warnings")
+    }
+
     func testSummaryLineDescribesCleanScan() {
         let diagnostics = ArchiveScanDiagnostics(
             scannedAt: Date(timeIntervalSince1970: 1),

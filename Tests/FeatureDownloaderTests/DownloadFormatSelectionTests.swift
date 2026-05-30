@@ -2,6 +2,14 @@
 import XCTest
 
 final class DownloadFormatSelectionTests: XCTestCase {
+    func testAudioWAVUsesExtractAudioFlags() {
+        let args = YtDlpFormatArgumentBuilder.arguments(
+            for: DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav)
+        )
+        XCTAssertEqual(args.formatSelector, "bestaudio/best")
+        XCTAssertEqual(args.extraArguments, ["--extract-audio", "--audio-format", "wav"])
+    }
+
     func testAudioMP3UsesExtractAudioFlags() {
         let args = YtDlpFormatArgumentBuilder.arguments(
             for: DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .mp3)

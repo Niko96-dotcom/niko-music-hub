@@ -86,17 +86,31 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         }
 
         var previews = try previewDetector.detectCandidates(in: folder)
-        let ranked = previewRanker.rank(previews)
+        let previewContext = PreviewRankingProjectContext.from(projectVersions: versions)
+        let ranked = previewRanker.rank(previews, projectContext: previewContext)
         previews = ranked
         let mainPreviewID = previewRanker.mainPreviewID(from: ranked)
         let mainPreview = ranked.first
+
+        if let anchor = previewContext.anchorCPRVersion,
+           anchor >= 2,
+           let mainPreview,
+           PreviewProductionMaturity.detect(from: mainPreview.fileName) <= .demo {
+            warnings.append(
+                "Main preview is an early demo; newest CPR is v\(anchor) — export a v\(anchor) mixdown for a better default"
+            )
+        }
 
         let latest = cprDetector.latestCPR(from: versions)
 
         return Song(
             folderPath: folder,
             originalFolderName: folderName,
-            displayTitle: titleResolver.displayTitle(fromFolderName: folderName, mainPreview: mainPreview),
+            displayTitle: titleResolver.displayTitle(
+                fromFolderName: folderName,
+                mainPreview: mainPreview,
+                projectVersions: versions
+            ),
             projectVersions: versions,
             previewCandidates: previews,
             scanWarnings: warnings,

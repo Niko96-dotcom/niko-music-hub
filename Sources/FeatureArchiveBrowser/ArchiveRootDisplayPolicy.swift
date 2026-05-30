@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 
 enum ArchiveRootDisplayPolicy {
@@ -8,14 +9,7 @@ enum ArchiveRootDisplayPolicy {
     }
 
     static func displayPath(_ url: URL, homeDirectory: String = NSHomeDirectory()) -> String {
-        let path = url.standardizedFileURL.path
-        if path == homeDirectory {
-            return "~"
-        }
-        if path.hasPrefix(homeDirectory + "/") {
-            return "~" + path.dropFirst(homeDirectory.count)
-        }
-        return path
+        HumanFriendlyPath.archiveRootSubtitle(url, homeDirectory: homeDirectory)
     }
 
     private static func isPublicRoot(_ url: URL) -> Bool {

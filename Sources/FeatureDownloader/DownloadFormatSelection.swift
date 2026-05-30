@@ -9,6 +9,7 @@ public enum DownloadMediaKind: String, CaseIterable, Codable, Sendable, Identifi
 
 public enum DownloadAudioContainer: String, CaseIterable, Codable, Sendable, Identifiable {
     case best
+    case wav
     case mp3
     case m4a
 
@@ -45,6 +46,7 @@ public struct DownloadFormatSelection: Equatable, Sendable, Codable {
         case .audioOnly:
             switch audioContainer {
             case .best: return "Audio — best available"
+            case .wav: return "Audio — WAV"
             case .mp3: return "Audio — MP3"
             case .m4a: return "Audio — M4A"
             }
@@ -83,6 +85,11 @@ public enum YtDlpFormatArgumentBuilder {
         switch container {
         case .best:
             return YtDlpFormatArguments(formatSelector: "bestaudio/best")
+        case .wav:
+            return YtDlpFormatArguments(
+                formatSelector: "bestaudio/best",
+                extraArguments: ["--extract-audio", "--audio-format", "wav"]
+            )
         case .mp3:
             return YtDlpFormatArguments(
                 formatSelector: "bestaudio/best",

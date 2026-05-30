@@ -21,10 +21,13 @@ public struct PreviewConfidenceRanker: Sendable {
 
     public init() {}
 
-    public func rank(_ candidates: [PreviewCandidate]) -> [PreviewCandidate] {
+    public func rank(
+        _ candidates: [PreviewCandidate],
+        projectContext: PreviewRankingProjectContext? = nil
+    ) -> [PreviewCandidate] {
         candidates
-            .map { scored($0) }
-            .sorted(by: compareCandidates)
+            .map { scored($0, projectContext: projectContext) }
+            .sorted { compareCandidates($0, $1, projectContext: projectContext) }
     }
 
     public func mainPreviewID(from ranked: [PreviewCandidate]) -> String? {
@@ -52,16 +55,28 @@ public struct PreviewConfidenceRanker: Sendable {
         return .filename
     }
 
-    private func compareCandidates(_ lhs: PreviewCandidate, _ rhs: PreviewCandidate) -> Bool {
+    private func compareCandidates(
+        _ lhs: PreviewCandidate,
+        _ rhs: PreviewCandidate,
+        projectContext: PreviewRankingProjectContext?
+    ) -> Bool {
         if lhs.confidenceScore != rhs.confidenceScore {
             return lhs.confidenceScore > rhs.confidenceScore
         }
         let lm = PreviewProductionMaturity.detect(from: lhs.fileName)
         let rm = PreviewProductionMaturity.detect(from: rhs.fileName)
         if lm != rm { return lm > rm }
-        let lv = lhs.detectedVersionNumber ?? 0
-        let rv = rhs.detectedVersionNumber ?? 0
+        let lv = effectiveRankVersion(lhs) ?? 0
+        let rv = effectiveRankVersion(rhs) ?? 0
         if lv != rv { return lv > rv }
+        if let anchor = projectContext?.anchorCPRVersion {
+            let ld = titleTokenMatchCount(lhs.fileName, context: projectContext)
+            let rd = titleTokenMatchCount(rhs.fileName, context: projectContext)
+            if ld != rd { return ld > rd }
+            let lGap = abs(lv - anchor)
+            let rGap = abs(rv - anchor)
+            if lGap != rGap { return lGap < rGap }
+        }
         let le = Self.extensionPreference[lhs.fileExtension] ?? 0
         let re = Self.extensionPreference[rhs.fileExtension] ?? 0
         if le != re { return le > re }
@@ -72,7 +87,24 @@ public struct PreviewConfidenceRanker: Sendable {
         return lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
     }
 
-    private func scored(_ candidate: PreviewCandidate) -> PreviewCandidate {
+    private func effectiveRankVersion(_ candidate: PreviewCandidate) -> Int? {
+        PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName)
+            ?? candidate.detectedVersionNumber
+    }
+
+    private func titleTokenMatchCount(
+        _ fileName: String,
+        context: PreviewRankingProjectContext?
+    ) -> Int {
+        guard let context else { return 0 }
+        let lower = fileName.lowercased()
+        return context.titleTokens.filter { lower.contains($0) }.count
+    }
+
+    private func scored(
+        _ candidate: PreviewCandidate,
+        projectContext: PreviewRankingProjectContext?
+    ) -> PreviewCandidate {
         var score = 0.0
         var reasons: [String] = []
 
@@ -141,6 +173,34 @@ public struct PreviewConfidenceRanker: Sendable {
                 reasons.append("duration:plausible")
             } else {
                 reasons.append("duration:long")
+            }
+        }
+
+        if let projectContext, let anchor = projectContext.anchorCPRVersion, anchor >= 1 {
+            let previewVersion = effectiveRankVersion(candidate)
+            if maturity <= .demo {
+                score -= 28
+                reasons.append("cpr-anchor:demo-below-project")
+            } else if maturity <= .sessionBounce {
+                score -= 14
+                reasons.append("cpr-anchor:early-bounce-below-project")
+            }
+            if let previewVersion {
+                if previewVersion == anchor {
+                    score += 18
+                    reasons.append("cpr-anchor:version-match")
+                } else if previewVersion < anchor {
+                    score -= Double(anchor - previewVersion) * 9
+                    reasons.append("cpr-anchor:version-behind-v\(anchor)")
+                }
+            } else if PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName) == 0 {
+                score -= 22
+                reasons.append("cpr-anchor:pre-v1-behind-project")
+            }
+            let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)
+            if tokenHits > 0 {
+                score += Double(tokenHits) * 14
+                reasons.append("cpr-anchor:title-match-\(tokenHits)")
             }
         }
 

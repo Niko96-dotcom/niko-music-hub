@@ -114,6 +114,7 @@ public struct DownloaderView: View {
         case .audioOnly:
             Picker(DownloaderCopy.audioFormatLabel, selection: $viewModel.formatSelection.audioContainer) {
                 Text("Best available").tag(DownloadAudioContainer.best)
+                Text("WAV").tag(DownloadAudioContainer.wav)
                 Text("MP3").tag(DownloadAudioContainer.mp3)
                 Text("M4A").tag(DownloadAudioContainer.m4a)
             }

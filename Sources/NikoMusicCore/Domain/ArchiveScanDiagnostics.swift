@@ -49,6 +49,20 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         self.previewRankingPanel = previewRankingPanel
     }
 
+    /// Short status for the archive sidebar (details live in Scan report).
+    public var compactSummaryLine: String {
+        let warningPart: String
+        if totalSongWarningCount > 0 {
+            warningPart = "\(songsWithWarningsCount) with warnings"
+        } else {
+            warningPart = "no warnings"
+        }
+        if skippedEntries.isEmpty {
+            return "\(songCount) songs · \(warningPart)"
+        }
+        return "\(songCount) songs · \(warningPart) · \(skippedEntries.count) skipped"
+    }
+
     public var summaryLine: String {
         let warningPart = songWarningSummaryClause
         let skippedPart = skippedEntries.isEmpty
