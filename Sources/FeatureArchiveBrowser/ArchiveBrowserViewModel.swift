@@ -1,9 +1,9 @@
 import AppCore
-import Combine
 import Foundation
 import NikoMusicCore
 
 /// Archive shell view model. Browse projection/refresh: ``ArchiveBrowserViewModel+BrowseRefresh``.
+/// Update search via ``setSearchQuery(_:immediate:)`` (sidebar binding does this for typing).
 /// Next decomposition targets: scan/cache, metadata editing, exports.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
@@ -33,8 +33,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
 
     private let scanner = CubaseArchiveScanner()
-    var browseRefreshCancellables = Set<AnyCancellable>()
-    var _suppressDebouncedSearchRefresh = false
+    let browseRefreshDriver = ArchiveBrowseRefreshDriver()
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
@@ -69,7 +68,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         loadCollaborators()
         refreshFirstRunState()
         restartArchiveRootWatching()
-        installBrowseRefreshPipeline()
         loadCachedIndexIfAvailable()
     }
 
@@ -160,7 +158,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         selectedSong = nil
         statusMessage = nil
-        refreshIntelligence()
     }
 
     func scan() async {
@@ -217,7 +214,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             songs = mergeUserMetadata(into: result.songs)
             scanDiagnostics = built
         }
-        refreshIntelligence()
         statusMessage = built.compactSummaryLine
         diagnostics.log(.info, built.summaryLine)
         persistCachedIndex(roots: roots, scannedAt: scannedAt)
@@ -231,7 +227,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         mutateCatalog {
             songs = mergeUserMetadata(into: snapshot.songs)
         }
-        refreshIntelligence()
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         let relative = formatter.localizedString(for: snapshot.scannedAt, relativeTo: Date())
@@ -592,12 +587,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             collaborators.first(where: { $0.id == id })?.displayName
         }
         commitSongMetadataUpdate(updated)
-        refreshIntelligence()
     }
 
     func createNewSong(request: NewSongRequest) throws -> Song {
         var created = try NewSongFolderCreator.create(request: request)
         created = mergeUserMetadata(into: [created]).first ?? created
+        let appendedToCatalog: Bool
         if !songs.contains(where: { $0.id == created.id }) {
             mutateCatalog {
                 var updatedSongs = songs
@@ -607,13 +602,18 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 }
                 songs = updatedSongs
             }
+            appendedToCatalog = true
+        } else {
+            appendedToCatalog = false
         }
         persistUserMetadata(for: [created])
         if !roots.isEmpty {
             persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
         }
         selectSong(created)
-        refreshIntelligence()
+        if !appendedToCatalog {
+            refreshIntelligence()
+        }
         try openLatestCPR(for: created)
         return created
     }

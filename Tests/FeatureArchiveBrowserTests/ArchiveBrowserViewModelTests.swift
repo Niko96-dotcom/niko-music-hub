@@ -156,6 +156,26 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.searchMatchSummaries[songID, default: ""].isEmpty)
     }
 
+    func testDebouncedSearchQueryRecomputesFilteredSongs() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let fullCount = viewModel.filteredSongs.count
+        XCTAssertGreaterThan(fullCount, 1)
+
+        viewModel.setSearchQuery("Neon Hook", immediate: false)
+        XCTAssertEqual(viewModel.searchQuery, "Neon Hook")
+        XCTAssertEqual(viewModel.filteredSongs.count, fullCount)
+
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+        XCTAssertEqual(viewModel.filteredSongs.first?.displayTitle, "Neon Hook")
+    }
+
     func testSearchFindsSkippedRootLabel() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

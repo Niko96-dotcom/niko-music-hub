@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import NikoMusicCore
 
@@ -6,35 +5,32 @@ import NikoMusicCore
 // persistence, and metadata. Further splits (metadata editing, exports) are welcome.
 
 extension ArchiveBrowserViewModel {
-    func installBrowseRefreshPipeline() {
-        $searchQuery
-            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
-            .removeDuplicates()
-            .dropFirst()
-            .sink { [weak self] _ in
-                guard let self, !self._suppressDebouncedSearchRefresh else { return }
-                self.recomputeBrowseResults()
-            }
-            .store(in: &browseRefreshCancellables)
-    }
-
-    /// Shelf, filter, sort, collaborator, and hidden-song controls.
+    /// Shelf, filter, sort, collaborator, and hidden-song controls — recomputes browse only.
     func mutateBrowseInputs(_ updates: () -> Void) {
-        refreshBrowseAfter(updates)
+        browseRefreshDriver.cancelPendingDebounce()
+        updates()
+        recomputeBrowseResults()
     }
 
-    /// Songs or scan diagnostics changed; recomputes browse output (including skipped-entry search).
+    /// Songs or scan diagnostics changed — recomputes browse and refreshes intelligence panels.
     func mutateCatalog(_ updates: () -> Void) {
-        refreshBrowseAfter(updates)
+        browseRefreshDriver.cancelPendingDebounce()
+        updates()
+        recomputeBrowseResults()
+        refreshIntelligence()
     }
 
-    /// Updates search text. Pass `immediate: true` for programmatic queries; UI typing uses debounce.
+    /// Updates search text. UI typing uses debounce; tests and smoke use `immediate: true`.
     func setSearchQuery(_ query: String, immediate: Bool = false) {
-        guard immediate else {
-            searchQuery = query
-            return
+        searchQuery = query
+        if immediate {
+            browseRefreshDriver.cancelPendingDebounce()
+            recomputeBrowseResults()
+        } else {
+            browseRefreshDriver.scheduleDebouncedBrowseRecompute { [weak self] in
+                self?.recomputeBrowseResults()
+            }
         }
-        refreshBrowseAfter { searchQuery = query }
     }
 
     func selectShelf(_ shelf: ArchiveSmartShelf) {
@@ -64,12 +60,5 @@ extension ArchiveBrowserViewModel {
         filteredSongs = result.filteredSongs
         searchMatchSummaries = result.searchMatchSummaries
         skippedSearchMatches = result.skippedSearchMatches
-    }
-
-    private func refreshBrowseAfter(_ updates: () -> Void) {
-        _suppressDebouncedSearchRefresh = true
-        updates()
-        _suppressDebouncedSearchRefresh = false
-        recomputeBrowseResults()
     }
 }
