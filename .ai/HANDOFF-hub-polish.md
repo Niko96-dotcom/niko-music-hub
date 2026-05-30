@@ -7,9 +7,9 @@
 
 | Field | Value |
 |-------|--------|
-| Last completed wave | C |
-| Last commit | `e6e9872` — downloader format pickers |
-| Next wave | **D** — BPM tapper algorithm |
+| Last completed wave | D (commit pending this run) |
+| Last commit | — |
+| Next wave | **E** — WAV converter FFmpeg path UX |
 | Blocked | — |
 
 ## Resume instructions (agents)
@@ -25,3 +25,4 @@
 - **A** `d1c61c2` — preview maturity ranker, titles from main preview
 - **B** `4129ddd` — archive root persist + dev default
 - **C** `e6e9872` — downloader audio/video format menus
+- **D** — median tempo estimator, tuple/jitter tests, `docs/bpm-tapper-algorithm.md`

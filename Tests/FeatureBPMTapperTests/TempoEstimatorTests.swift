@@ -59,7 +59,7 @@ final class TempoEstimatorTests: XCTestCase {
         }
 
         let finalEstimate = try XCTUnwrap(estimate)
-        let expectedBPM = 60.0 / ((0.50 + 0.60 + 0.60) / 3.0)
+        let expectedBPM = 60.0 / 0.60
         XCTAssertEqual(try XCTUnwrap(finalEstimate.bpm), expectedBPM, accuracy: 0.001)
         XCTAssertEqual(finalEstimate.acceptedIntervalCount, 3)
     }
@@ -93,6 +93,65 @@ final class TempoEstimatorTests: XCTestCase {
         XCTAssertEqual(outlierEstimate.acceptedIntervalCount, stableEstimate.acceptedIntervalCount)
         XCTAssertEqual(outlierEstimate.status, .outlierIgnored)
         XCTAssertFalse(outlierEstimate.intervalAccepted)
+    }
+
+    func testSimulated120BPMWithHumanJitter() throws {
+        var estimator = TempoEstimator()
+        let jitteredIntervals: [TimeInterval] = [
+            0.48, 0.52, 0.49, 0.51, 0.50, 0.50, 0.47, 0.53, 0.50, 0.50, 0.51, 0.49,
+        ]
+
+        var estimate: TempoEstimate?
+        var timestamp: TimeInterval = 0.0
+        estimate = estimator.tap(at: timestamp)
+        for interval in jitteredIntervals {
+            timestamp += interval
+            estimate = estimator.tap(at: timestamp)
+        }
+
+        let finalEstimate = try XCTUnwrap(estimate)
+        XCTAssertEqual(try XCTUnwrap(finalEstimate.bpm), 120.0, accuracy: 1.5)
+        XCTAssertEqual(finalEstimate.status, .stableEstimate)
+    }
+
+    func testSimulated128BPMWithHumanJitter() throws {
+        var estimator = TempoEstimator()
+        let targetInterval = 60.0 / 128.0
+        let jitteredIntervals: [TimeInterval] = (0..<12).map { index in
+            let swing = (index.isMultiple(of: 2) ? 1.03 : 0.97)
+            return targetInterval * swing
+        }
+
+        var estimate: TempoEstimate?
+        var timestamp: TimeInterval = 0.0
+        estimate = estimator.tap(at: timestamp)
+        for interval in jitteredIntervals {
+            timestamp += interval
+            estimate = estimator.tap(at: timestamp)
+        }
+
+        let finalEstimate = try XCTUnwrap(estimate)
+        XCTAssertEqual(try XCTUnwrap(finalEstimate.bpm), 128.0, accuracy: 1.5)
+        XCTAssertEqual(finalEstimate.status, .stableEstimate)
+    }
+
+    func testSimulatedOddTupleAlternatingIntervals() throws {
+        var estimator = TempoEstimator()
+        // Long-short pairs that average to 120 BPM (0.5s) but each side alone would fail a tight gate.
+        let tupleIntervals: [TimeInterval] = [0.75, 0.25, 0.75, 0.25, 0.75, 0.25, 0.75, 0.25, 0.75, 0.25]
+
+        var estimate: TempoEstimate?
+        var timestamp: TimeInterval = 0.0
+        estimate = estimator.tap(at: timestamp)
+        for interval in tupleIntervals {
+            timestamp += interval
+            estimate = estimator.tap(at: timestamp)
+        }
+
+        let finalEstimate = try XCTUnwrap(estimate)
+        XCTAssertEqual(try XCTUnwrap(finalEstimate.bpm), 120.0, accuracy: 2.0)
+        XCTAssertEqual(finalEstimate.acceptedIntervalCount, tupleIntervals.count)
+        XCTAssertEqual(finalEstimate.status, .stableEstimate)
     }
 
     func testCleanTapAfterOutlierKeepsRunAlive() throws {

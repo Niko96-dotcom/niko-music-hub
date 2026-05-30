@@ -68,7 +68,8 @@
     {
       "id": "D",
       "title": "BPM tapper — algorithm",
-      "status": "pending",
+      "status": "done",
+      "commit": "pending",
       "touch_modules": ["FeatureBPMTapper", "docs"],
       "acceptance": [
         "Short research note docs/bpm-tapper-algorithm.md (what changed and why)",
