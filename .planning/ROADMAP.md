@@ -34,7 +34,7 @@ Archive: `.planning/milestones/v1.0-phases/`, `.planning/milestones/v1.0-ROADMAP
 - [x] Phase 9: Converter & Output Inbox Handoff UAT (1/1 plan, human UAT pending)
 - [x] Phase 10: Hub Polish, Helper Health & Verification Discipline (1/1 plan, human UAT pending)
 
-Archive: `.planning/milestones/v1.1-phases/` (after cleanup), `.planning/milestones/v1.1-ROADMAP.md` *(create on next archive pass if missing)*
+Archive: `.planning/milestones/v1.1-phases/`
 
 </details>
 
