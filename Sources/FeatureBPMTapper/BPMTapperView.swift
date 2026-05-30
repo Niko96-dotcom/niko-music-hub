@@ -24,9 +24,7 @@ public struct BPMTapperView: View {
                 tapWorkflow
                 historySection
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .padding(.top, 32)
+            .hubToolContentPadding()
             .frame(maxWidth: 640, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -155,26 +153,36 @@ public struct BPMTapperView: View {
     private var actionRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Button("Copy BPM") {
+                HubIconButton(
+                    systemImage: "doc.on.doc",
+                    accessibilityLabel: "Copy BPM",
+                    help: "Copy current BPM to clipboard",
+                    isEnabled: viewModel.displayedBPM != nil
+                ) {
                     copiedHistoryEntryID = nil
                     viewModel.copyDisplayedBPM()
                 }
-                .disabled(viewModel.displayedBPM == nil)
-                .buttonStyle(.bordered)
 
-                Button("Save BPM") {
+                HubIconButton(
+                    systemImage: "bookmark.fill",
+                    accessibilityLabel: "Save BPM",
+                    help: "Save current BPM to history",
+                    prominent: true,
+                    isEnabled: viewModel.displayedBPM != nil
+                ) {
                     copiedHistoryEntryID = nil
                     viewModel.saveDisplayedBPM()
                 }
-                .disabled(viewModel.displayedBPM == nil)
-                .buttonStyle(.borderedProminent)
 
-                Button("Reset Taps") {
+                HubIconButton(
+                    systemImage: "arrow.counterclockwise",
+                    accessibilityLabel: "Reset taps",
+                    help: "Clear current tap run",
+                    isEnabled: viewModel.hasStartedRun
+                ) {
                     viewModel.resetTaps()
                     tapSurfaceFocused = true
                 }
-                .disabled(!viewModel.hasStartedRun)
-                .buttonStyle(.bordered)
             }
 
             inlineMessages
@@ -245,13 +253,16 @@ public struct BPMTapperView: View {
                 }
             }
 
-            Button("Clear History") {
+            HubIconButton(
+                systemImage: "trash",
+                accessibilityLabel: "Clear history",
+                help: "Remove all saved tempos",
+                role: .destructive,
+                isEnabled: !viewModel.historyEntries.isEmpty
+            ) {
                 copiedHistoryEntryID = nil
                 clearHistoryConfirmationVisible = true
             }
-            .disabled(viewModel.historyEntries.isEmpty)
-            .buttonStyle(.bordered)
-            .foregroundStyle(.red)
         }
         .frame(minWidth: 320, idealWidth: 440, maxWidth: 560, alignment: .leading)
     }
@@ -278,11 +289,14 @@ public struct BPMTapperView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
-                Button("Copy Saved BPM") {
+                HubIconButton(
+                    systemImage: "doc.on.doc",
+                    accessibilityLabel: "Copy saved BPM",
+                    help: "Copy this saved tempo"
+                ) {
                     viewModel.copySavedBPM(entry)
                     copiedHistoryEntryID = entry.id
                 }
-                .buttonStyle(.bordered)
 
                 if copiedHistoryEntryID == entry.id {
                     Text("BPM copied")

@@ -198,6 +198,25 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
     }
 
+    func testToggleBrowseFilterReassignsOptionSetForPublishedUpdates() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let baselineCount = viewModel.filteredSongs.count
+
+        XCTAssertFalse(viewModel.browseFilter.contains(.hasWarnings))
+        viewModel.toggleBrowseFilter(.hasWarnings)
+        XCTAssertTrue(viewModel.browseFilter.contains(.hasWarnings))
+        XCTAssertLessThan(viewModel.filteredSongs.count, baselineCount)
+
+        viewModel.toggleBrowseFilter(.hasWarnings)
+        XCTAssertFalse(viewModel.browseFilter.contains(.hasWarnings))
+        XCTAssertEqual(viewModel.filteredSongs.count, baselineCount)
+    }
+
     func testBrokenFolderExposesDisplaySidecarNotes() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

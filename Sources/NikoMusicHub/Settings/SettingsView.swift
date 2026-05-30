@@ -40,12 +40,20 @@ struct SettingsView: View {
                         path: settings.outputFolder.url.path
                     )
                     HStack(spacing: 8) {
-                        Button("Choose Folder…") { chooseOutputFolder() }
-                            .buttonStyle(.bordered)
-                        Button("Reveal in Finder") {
+                        HubIconButton(
+                            systemImage: "folder.badge.gearshape",
+                            accessibilityLabel: "Choose output folder",
+                            help: "Pick where exports and recordings are saved"
+                        ) {
+                            chooseOutputFolder()
+                        }
+                        HubIconButton(
+                            systemImage: "folder",
+                            accessibilityLabel: "Reveal output folder in Finder",
+                            help: "Show output folder in Finder"
+                        ) {
                             context.fileActions.revealInFinder(settings.outputFolder.url)
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
 
@@ -89,10 +97,14 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Open System Audio Recording Settings") {
+                    HubIconButton(
+                        systemImage: "lock.shield",
+                        accessibilityLabel: "Open system audio recording settings",
+                        help: "Open Screen & System Audio Recording in System Settings",
+                        prominent: true
+                    ) {
                         SystemPrivacySettings.openSystemAudioRecordingSettings()
                     }
-                    .buttonStyle(.borderedProminent)
                 }
 
                 SettingsSection(
@@ -136,10 +148,8 @@ struct SettingsView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .padding(.top, 56)
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: 720, alignment: .topLeading)
+            .hubToolContentPadding()
+            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -166,20 +176,24 @@ struct SettingsView: View {
                             .truncationMode(.middle)
                     }
                     Spacer(minLength: 8)
-                    Button("Remove") {
+                    HubIconButton(
+                        systemImage: "trash",
+                        accessibilityLabel: "Remove archive root",
+                        help: "Remove \(root.lastPathComponent) from scan list",
+                        role: .destructive
+                    ) {
                         archiveViewModel.removeRoot(root)
                     }
-                    .buttonStyle(.bordered)
                 }
             }
         }
-        if archiveViewModel.roots.isEmpty {
-            Button("Add Root…", action: addArchiveRoot)
-                .buttonStyle(.borderedProminent)
-        } else {
-            Button("Add Root…", action: addArchiveRoot)
-                .buttonStyle(.bordered)
-        }
+        HubIconButton(
+            systemImage: "folder.badge.plus",
+            accessibilityLabel: "Add archive root",
+            help: "Choose a Cubase projects folder to scan",
+            prominent: archiveViewModel.roots.isEmpty,
+            action: addArchiveRoot
+        )
     }
 
     private var header: some View {
@@ -236,16 +250,22 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
-                Button("Browse…") {
+                HubIconButton(
+                    systemImage: "folder",
+                    accessibilityLabel: "Browse for \(label)",
+                    help: "Choose \(label) executable"
+                ) {
                     guard let chosen = context.fileActions.chooseExecutable(prompt: prompt) else { return }
                     onSet(chosen)
                 }
-                .buttonStyle(.bordered)
                 if url != nil {
-                    Button("Clear") {
+                    HubIconButton(
+                        systemImage: "xmark",
+                        accessibilityLabel: "Clear \(label) path",
+                        help: "Use auto-detect for \(label)"
+                    ) {
                         onSet(nil)
                     }
-                    .buttonStyle(.bordered)
                 }
             }
         }

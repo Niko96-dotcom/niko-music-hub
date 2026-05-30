@@ -120,12 +120,16 @@ PLIST
 nmh_open_app() {
   local open_args=(-n)
   local var
-  for var in NIKO_MUSIC_HUB_DRY_RUN_OPEN NIKO_MUSIC_HUB_FIXTURE_ROOT NIKO_MUSIC_HUB_E2E_SMOKE NIKO_MUSIC_HUB_SETTINGS_SUITE NIKO_MUSIC_HUB_SHOW_DEV_TOOL; do
+  for var in NIKO_MUSIC_HUB_DRY_RUN_OPEN NIKO_MUSIC_HUB_FIXTURE_ROOT NIKO_MUSIC_HUB_E2E_SMOKE NIKO_MUSIC_HUB_SETTINGS_SUITE NIKO_MUSIC_HUB_SHOW_DEV_TOOL NIKO_MUSIC_HUB_UI_TOOL NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER; do
     if [[ -n "${!var+x}" ]]; then
       open_args+=(--env "$var=${!var}")
     fi
   done
-  /usr/bin/open "${open_args[@]}" "$NMH_APP_BUNDLE"
+  open_args+=("$NMH_APP_BUNDLE")
+  if [[ -n "${NIKO_MUSIC_HUB_UI_TOOL:-}" ]]; then
+    open_args+=(--args -ui-tool "$NIKO_MUSIC_HUB_UI_TOOL")
+  fi
+  /usr/bin/open "${open_args[@]}"
 }
 
 nmh_focus_app() {

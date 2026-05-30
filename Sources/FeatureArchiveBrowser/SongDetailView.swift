@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -125,13 +126,16 @@ struct SongDetailView: View {
             HStack(spacing: 8) {
                 TextField("New collaborator", text: $newCollaboratorName)
                     .textFieldStyle(.roundedBorder)
-                Button("Add") {
+                HubIconButton(
+                    systemImage: "person.badge.plus",
+                    accessibilityLabel: "Add collaborator",
+                    help: "Add collaborator to address book",
+                    isEnabled: !newCollaboratorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ) {
                     if viewModel.upsertCollaborator(name: newCollaboratorName) != nil {
                         newCollaboratorName = ""
                     }
                 }
-                .buttonStyle(.bordered)
-                .disabled(newCollaboratorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -164,39 +168,50 @@ struct SongDetailView: View {
             )
 
             if song.previewSelectionMode == .manual {
-                Button("Revert to auto-ranked preview") {
+                Button {
                     viewModel.revertPreviewToAuto(for: song)
+                } label: {
+                    Label("Revert to auto preview", systemImage: "arrow.uturn.backward")
+                        .font(.system(size: 11))
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
     }
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Button("Open in Cubase") {
+            HStack(spacing: 8) {
+                HubIconButton(
+                    systemImage: "pianokeys",
+                    accessibilityLabel: "Open in Cubase",
+                    help: "Open latest CPR (O)",
+                    prominent: true
+                ) {
                     try? viewModel.openLatestCPR(for: song)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(ArchiveDesignTokens.accent)
-                .help("Open latest CPR (O)")
 
-                Button("Reveal in Finder") {
+                HubIconButton(
+                    systemImage: "folder",
+                    accessibilityLabel: "Reveal in Finder",
+                    help: "Reveal CPR or folder (F)",
+                    isEnabled: viewModel.preferredRevealURL(for: song) != nil
+                ) {
                     viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
                 }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.preferredRevealURL(for: song) == nil)
-                .help("Reveal CPR or folder (F)")
 
-                Button("Save metadata") {
+                HubIconButton(
+                    systemImage: "square.and.arrow.down",
+                    accessibilityLabel: "Save metadata",
+                    help: "Save display title, aliases, and note"
+                ) {
                     commitVirtualTitle()
                     commitAliases()
                     commitAppNote()
                 }
-                .buttonStyle(.bordered)
             }
-            Text("Shortcuts when archive is focused: P preview · O open CPR · F Finder · D detail")
+            Text("P preview · O Cubase · F Finder · D detail")
                 .font(.system(size: 10))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
         }
@@ -244,25 +259,32 @@ struct SongDetailView: View {
                             .font(.system(size: 10))
                             .foregroundStyle(ArchiveDesignTokens.textSecondary)
                         if !isIgnored {
-                            HStack(spacing: 8) {
-                                Button("Set as main") {
+                            HStack(spacing: 6) {
+                                HubIconButton(
+                                    systemImage: "star",
+                                    accessibilityLabel: "Set as main CPR",
+                                    help: "Use this CPR version as main"
+                                ) {
                                     viewModel.setManualMainCPR(for: song, versionID: version.id)
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                Button("Hide version") {
+                                HubIconButton(
+                                    systemImage: "eye.slash",
+                                    accessibilityLabel: "Hide CPR version",
+                                    help: "Hide this CPR from browse"
+                                ) {
                                     viewModel.ignoreCPRVersion(for: song, versionID: version.id)
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
                             }
                         }
                     }
                     .padding(.vertical, 2)
                 }
                 if song.cprSelectionMode == .manual {
-                    Button("Revert to auto CPR") {
+                    Button {
                         viewModel.revertCPRToAuto(for: song)
+                    } label: {
+                        Label("Auto CPR", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 11))
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -286,15 +308,21 @@ struct SongDetailView: View {
                         style: .full,
                         label: candidate.fileName
                     )
-                    HStack(spacing: 8) {
-                        Button("Set as main") {
+                    HStack(spacing: 6) {
+                        HubIconButton(
+                            systemImage: "star",
+                            accessibilityLabel: "Set as main preview",
+                            help: "Use this file as the main preview"
+                        ) {
                             viewModel.setManualMainPreview(for: song, candidateID: candidate.id)
                         }
-                        .buttonStyle(.bordered)
-                        Button("Ignore") {
+                        HubIconButton(
+                            systemImage: "eye.slash",
+                            accessibilityLabel: "Ignore preview",
+                            help: "Hide this preview candidate"
+                        ) {
                             viewModel.ignorePreviewCandidate(for: song, candidateID: candidate.id)
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
             }

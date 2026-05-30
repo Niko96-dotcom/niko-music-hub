@@ -36,9 +36,7 @@ public struct AudioRecorderView: View {
                 incompatibleSection
                 saveConfirmationSection
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .padding(.top, 32)
+            .hubToolContentPadding()
             .frame(maxWidth: 640, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -100,16 +98,22 @@ public struct AudioRecorderView: View {
 
     private var controlSection: some View {
         HStack(spacing: 12) {
-            Button(viewModel.isRecording ? "Stop" : "Start Recording") {
+            Button {
                 if viewModel.isRecording {
                     Task { await viewModel.stopRecording() }
                 } else {
                     Task { await viewModel.startRecording() }
                 }
+            } label: {
+                Label(
+                    viewModel.isRecording ? "Stop" : "Record",
+                    systemImage: viewModel.isRecording ? "stop.fill" : "record.circle"
+                )
             }
             .buttonStyle(.bordered)
             .tint(viewModel.isRecording ? .red : nil)
             .disabled(viewModel.recordingState == .stopping)
+            .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
 
             if viewModel.isRecording {
                 Circle()
@@ -161,15 +165,22 @@ public struct AudioRecorderView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
-                    Button("Open System Audio Recording Settings") {
+                    HubIconButton(
+                        systemImage: "lock.shield",
+                        accessibilityLabel: "Open system audio recording settings",
+                        help: "Open Screen & System Audio Recording in System Settings"
+                    ) {
                         SystemPrivacySettings.openSystemAudioRecordingSettings()
                     }
-                    .buttonStyle(.bordered)
 
-                    Button("Try Again") {
+                    HubIconButton(
+                        systemImage: "arrow.clockwise",
+                        accessibilityLabel: "Try again",
+                        help: "Request recording permission again",
+                        prominent: true
+                    ) {
                         Task { await viewModel.requestPermission() }
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
             .padding(12)
@@ -205,15 +216,21 @@ public struct AudioRecorderView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.green)
 
-                Button("Reveal") {
+                HubIconButton(
+                    systemImage: "folder",
+                    accessibilityLabel: "Reveal in Finder",
+                    help: "Show recording in Finder"
+                ) {
                     context.fileActions.revealInFinder(url)
                 }
-                .buttonStyle(.bordered)
 
-                Button("Open") {
+                HubIconButton(
+                    systemImage: "arrow.up.forward.app",
+                    accessibilityLabel: "Open recording",
+                    help: "Open recording file"
+                ) {
                     NSWorkspace.shared.open(url)
                 }
-                .buttonStyle(.bordered)
             }
             .padding(12)
             .background(Color.green.opacity(0.1))

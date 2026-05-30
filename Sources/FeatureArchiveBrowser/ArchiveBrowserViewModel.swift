@@ -257,6 +257,17 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    func toggleBrowseFilter(_ filter: ArchiveBrowseFilter) {
+        var next = browseFilter
+        if next.contains(filter) {
+            next.remove(filter)
+        } else {
+            next.insert(filter)
+        }
+        browseFilter = next
+        applySearchFilter()
+    }
+
     func applySearchFilter() {
         let shelfSongs = songsForSelectedShelf()
         let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)

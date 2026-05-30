@@ -1,3 +1,4 @@
+import AppCore
 import SwiftUI
 
 struct ArchiveFirstRunView: View {
@@ -26,8 +27,13 @@ struct ArchiveFirstRunView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
             }
 
-            Button("Add an archive root", action: onChooseRoot)
-                .buttonStyle(.borderedProminent)
+            HubIconButton(
+                systemImage: "folder.badge.plus",
+                accessibilityLabel: "Add archive root",
+                help: "Choose your Cubase projects folder",
+                prominent: true,
+                action: onChooseRoot
+            )
                 .controlSize(.large)
         }
         .padding(32)

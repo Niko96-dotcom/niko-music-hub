@@ -5,10 +5,9 @@ import SwiftUI
 
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
-    @State private var supportReportExpanded = false
-    @State private var intelligenceExpanded = false
+    @State private var rootsExpanded = false
+    @State private var morePanelExpanded = false
     @State private var showNewSongSheet = false
-    @State private var addressBookName = ""
     @FocusState private var archiveFocused: Bool
 
     init(context: ToolContext, viewModel: ArchiveBrowserViewModel) {
@@ -79,98 +78,115 @@ struct ArchiveBrowserView: View {
     }
 
     private func sidebar(compactList: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Cubase Archive")
-                .font(.system(size: compactList ? 18 : 21, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+        VStack(alignment: .leading, spacing: 8) {
+            archiveToolbar(compactList: compactList)
 
-            RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
+            rootsSection
 
-            shelfPicker(compactList: compactList)
             collaboratorShelfPicker
             browseControls(compactList: compactList)
-            collaboratorAddressBook
-            scanAndSearchControls(compactList: compactList)
 
-            Toggle("Show hidden songs", isOn: $viewModel.showHiddenSongs)
-                .font(.system(size: 11))
-                .onChange(of: viewModel.showHiddenSongs) { _, _ in
-                    viewModel.applySearchFilter()
-                }
+            searchField
+                .disabled(viewModel.songs.isEmpty)
 
-            ArchiveHealthReportView(report: viewModel.healthReport())
-
-            DisclosureGroup(isExpanded: $intelligenceExpanded) {
-                ArchiveIntelligencePanelView(viewModel: viewModel)
-            } label: {
-                Text("Intelligence")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-
-            Button("New song…") { showNewSongSheet = true }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.roots.isEmpty)
+            songList
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .layoutPriority(1)
 
             if let status = viewModel.statusMessage {
                 Text(status)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(2)
             }
 
             if !viewModel.skippedSearchMatches.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Skipped matches (\(viewModel.skippedSearchMatches.count))")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                    ForEach(Array(viewModel.skippedSearchMatches.enumerated()), id: \.offset) { _, match in
-                        Text("• \(match.entry.label) — \(match.matchSummary)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(ArchiveDesignTokens.accent)
-                            .lineLimit(2)
-                    }
-                }
+                skippedMatchesCallout
             }
 
-            if let diagnostics = viewModel.scanDiagnostics {
-                DisclosureGroup(isExpanded: $supportReportExpanded) {
-                    ScrollView {
-                        ArchiveDiagnosticsPanelView(
-                            diagnostics: diagnostics,
-                            selectedSong: viewModel.selectedSong,
-                            searchContext: viewModel.activeSearchExportContext(),
-                            skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                        ) {
-                            do {
-                                try viewModel.exportDiagnostics()
-                            } catch {
-                                viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 200)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Scan report")
-                            .font(.system(size: 12, weight: .semibold))
-                        if let badge = ArchiveDiagnosticsPanelContext.rootHealthBadge(for: diagnostics) {
-                            Text(badge)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(ArchiveDesignTokens.warning)
-                                .lineLimit(1)
-                        }
-                    }
-                }
-                .disclosureGroupStyle(.automatic)
-            }
-
-            songList
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .layoutPriority(1)
+            morePanel
         }
-        .padding(compactList ? 12 : 16)
+        .padding(compactList ? 10 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchiveDesignTokens.surface)
+    }
+
+    private func archiveToolbar(compactList: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note.house")
+                .font(.system(size: compactList ? 14 : 15, weight: .semibold))
+                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .accessibilityLabel("Cubase archive")
+
+            Spacer(minLength: 4)
+
+            archiveMoreMenu
+
+            HubIconButton(
+                systemImage: "arrow.clockwise",
+                accessibilityLabel: viewModel.isScanning ? "Scanning archive" : "Scan archive",
+                help: "Rescan archive roots",
+                prominent: true,
+                isEnabled: !viewModel.isScanning && !viewModel.roots.isEmpty
+            ) {
+                Task { await viewModel.scan() }
+            }
+
+            HubIconButton(
+                systemImage: "plus.circle",
+                accessibilityLabel: "New song",
+                help: "Create a new song folder",
+                isEnabled: !viewModel.roots.isEmpty
+            ) {
+                showNewSongSheet = true
+            }
+
+            HubIconButton(
+                systemImage: "folder.badge.plus",
+                accessibilityLabel: "Add archive root",
+                help: "Add or choose archive roots"
+            ) {
+                chooseRoot()
+            }
+
+            HubIconButton(
+                systemImage: viewModel.showHiddenSongs ? "eye" : "eye.slash",
+                accessibilityLabel: viewModel.showHiddenSongs ? "Showing hidden songs" : "Hiding hidden songs",
+                help: "Toggle hidden songs in browse",
+                isSelected: viewModel.showHiddenSongs
+            ) {
+                viewModel.showHiddenSongs.toggle()
+                viewModel.applySearchFilter()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var rootsSection: some View {
+        if viewModel.roots.isEmpty {
+            Text("Add an archive root to begin.")
+                .font(.system(size: 11))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            DisclosureGroup(isExpanded: $rootsExpanded) {
+                RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot, compact: true)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    Text("\(viewModel.roots.count) root\(viewModel.roots.count == 1 ? "" : "s")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                }
+            }
+            .onAppear {
+                if viewModel.roots.count <= 1 {
+                    rootsExpanded = false
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -195,69 +211,159 @@ struct ArchiveBrowserView: View {
 
     @ViewBuilder
     private func browseControls(compactList: Bool) -> some View {
-        let sortPicker = Picker("Sort", selection: $viewModel.sortMode) {
-            ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
-                Text(mode.title).tag(mode)
-            }
-        }
-        .labelsHidden()
-        .disabled(viewModel.songs.isEmpty)
-        .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
-
-        if compactList {
-            sortPicker.pickerStyle(.menu)
-        } else {
-            sortPicker.pickerStyle(.segmented)
-        }
-
         HStack(spacing: 6) {
-            filterChip("Stems", filter: .hasStems)
-            filterChip("No preview", filter: .noPreview)
-            filterChip("Warnings", filter: .hasWarnings)
-        }
-    }
+            shelfPicker(compactList: true)
+                .frame(maxWidth: .infinity)
 
-    private func filterChip(_ title: String, filter: ArchiveBrowseFilter) -> some View {
-        let active = viewModel.browseFilter.contains(filter)
-        return Button(title) {
-            if active {
-                viewModel.browseFilter.remove(filter)
-            } else {
-                viewModel.browseFilter.insert(filter)
-            }
-            viewModel.applySearchFilter()
-        }
-        .buttonStyle(.bordered)
-        .tint(active ? ArchiveDesignTokens.accent : .secondary)
-        .controlSize(.small)
-        .disabled(viewModel.songs.isEmpty)
-    }
-
-    private var collaboratorAddressBook: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Collaborators")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
-            if viewModel.collaborators.isEmpty {
-                Text("No collaborators yet.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
-            } else {
-                ForEach(viewModel.collaborators) { collaborator in
-                    Text(collaborator.displayName)
-                        .font(.system(size: 10))
+            Picker("Sort", selection: $viewModel.sortMode) {
+                ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
                 }
             }
-            HStack(spacing: 6) {
-                TextField("Add name", text: $addressBookName)
-                    .textFieldStyle(.roundedBorder)
-                Button("Add") {
-                    if viewModel.upsertCollaborator(name: addressBookName) != nil {
-                        addressBookName = ""
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .disabled(viewModel.songs.isEmpty)
+            .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
+
+            ForEach(ArchiveSidebarChrome.filterOrder, id: \.rawValue) { filter in
+                ArchiveFilterIconToggle(
+                    filter: filter,
+                    active: viewModel.browseFilter.contains(filter),
+                    disabled: viewModel.songs.isEmpty
+                ) {
+                    viewModel.toggleBrowseFilter(filter)
+                }
+            }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            TextField("Search", text: $viewModel.searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .onChange(of: viewModel.searchQuery) { _, _ in
+                    viewModel.applySearchFilter()
+                }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+    }
+
+  private var archiveMoreMenu: some View {
+        Menu {
+            Button {
+                morePanelExpanded = true
+            } label: {
+                Label("Show health & intelligence panel", systemImage: "sidebar.bottom")
+            }
+            if viewModel.scanDiagnostics != nil {
+                Button {
+                    do {
+                        try viewModel.exportDiagnostics()
+                    } catch {
+                        viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                    }
+                } label: {
+                    Label("Export scan report", systemImage: "square.and.arrow.up")
+                }
+            }
+            if !viewModel.songs.isEmpty {
+                Button {
+                    do {
+                        try viewModel.exportIndexJSON()
+                    } catch {
+                        viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                    }
+                } label: {
+                    Label("Export index JSON", systemImage: "doc.text")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 28)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Health, intelligence, and exports")
+        .accessibilityLabel("More archive actions")
+    }
+
+    @ViewBuilder
+    private var morePanel: some View {
+        let report = viewModel.healthReport()
+        let hasExtras = !viewModel.songs.isEmpty
+            || viewModel.scanDiagnostics != nil
+            || !viewModel.pendingCollaboratorSuggestions.isEmpty
+
+        if hasExtras {
+            DisclosureGroup(isExpanded: $morePanelExpanded) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ArchiveHealthReportView(report: report, compact: true)
+                    ArchiveIntelligencePanelView(viewModel: viewModel)
+                    if let diagnostics = viewModel.scanDiagnostics {
+                        ScrollView {
+                            ArchiveDiagnosticsPanelView(
+                                diagnostics: diagnostics,
+                                selectedSong: viewModel.selectedSong,
+                                searchContext: viewModel.activeSearchExportContext(),
+                                skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                            ) {
+                                do {
+                                    try viewModel.exportDiagnostics()
+                                } catch {
+                                    viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 140)
                     }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 11))
+                    Text(archiveMoreSummary(report: report))
+                        .font(.system(size: 10))
+                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private func archiveMoreSummary(report: ArchiveHealthReport) -> String {
+        var parts: [String] = []
+        if report.totalSongs > 0 {
+            parts.append("\(report.totalSongs) songs")
+        }
+        if report.withWarnings > 0 {
+            parts.append("\(report.withWarnings) warnings")
+        }
+        if let skipped = viewModel.scanDiagnostics?.skippedEntries.count, skipped > 0 {
+            parts.append("\(skipped) skipped")
+        }
+        return parts.isEmpty ? "Health & intelligence" : parts.joined(separator: " · ")
+    }
+
+    private var skippedMatchesCallout: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("\(viewModel.skippedSearchMatches.count) skipped", systemImage: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            ForEach(Array(viewModel.skippedSearchMatches.prefix(2).enumerated()), id: \.offset) { _, match in
+                Text(match.entry.label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .lineLimit(1)
             }
         }
     }
@@ -283,57 +389,28 @@ struct ArchiveBrowserView: View {
     }
 
     @ViewBuilder
-    private func scanAndSearchControls(compactList: Bool) -> some View {
-        let scanButton = Button(viewModel.isScanning ? "Scanning…" : "Scan") {
-            Task { await viewModel.scan() }
-        }
-        .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
-        .buttonStyle(.borderedProminent)
-
-        let searchField = TextField("Search songs", text: $viewModel.searchQuery)
-            .textFieldStyle(.roundedBorder)
-            .disabled(viewModel.songs.isEmpty)
-            .onChange(of: viewModel.searchQuery) { _, _ in
-                viewModel.applySearchFilter()
-            }
-
-        if compactList {
-            VStack(alignment: .leading, spacing: 8) {
-                scanButton
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                searchField
-            }
-        } else {
-            HStack(spacing: 8) {
-                scanButton
-                searchField
-            }
-        }
-    }
-
-    @ViewBuilder
     private var songList: some View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
                 title: "Start with an archive root",
-                body: "Choose the folder that contains your Cubase song/project folders.",
+                body: "Choose the folder that contains your Cubase song folders.",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
             archiveEmptyState(
                 title: "Ready to scan",
-                body: "Tap Scan to list songs from your archive roots.",
+                body: "Scan loads songs from your roots.",
                 systemImage: "music.note.list"
             )
         } else if viewModel.filteredSongs.isEmpty {
             archiveEmptyState(
                 title: "No matches",
-                body: "Try another search.",
+                body: "Try another search or filter.",
                 systemImage: "magnifyingglass"
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 8) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in
                         Button {
                             viewModel.selectSong(song)
@@ -353,18 +430,15 @@ struct ArchiveBrowserView: View {
     }
 
     private func archiveEmptyState(title: String, body: String, systemImage: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 12, weight: .semibold))
             Text(body)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ArchiveDesignTokens.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))

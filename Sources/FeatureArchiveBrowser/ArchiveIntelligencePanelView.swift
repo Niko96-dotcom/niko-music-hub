@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -18,17 +19,22 @@ struct ArchiveIntelligencePanelView: View {
                         Text("\(suggestion.songTitle) → \(suggestion.suggestedName)")
                             .font(.system(size: 10))
                             .lineLimit(2)
-                        HStack(spacing: 8) {
-                            Button("Yes") {
+                        HStack(spacing: 6) {
+                            HubIconButton(
+                                systemImage: "checkmark",
+                                accessibilityLabel: "Accept suggestion",
+                                help: "Add \(suggestion.suggestedName) for this song",
+                                prominent: true
+                            ) {
                                 viewModel.acceptCollaboratorSuggestion(suggestion)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            Button("No") {
+                            HubIconButton(
+                                systemImage: "xmark",
+                                accessibilityLabel: "Dismiss suggestion",
+                                help: "Dismiss this suggestion"
+                            ) {
                                 viewModel.dismissCollaboratorSuggestion(suggestion)
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
                         }
                     }
                 }
@@ -58,15 +64,18 @@ struct ArchiveIntelligencePanelView: View {
                 }
             }
 
-            Button("Export index JSON") {
+            HubIconButton(
+                systemImage: "square.and.arrow.up",
+                accessibilityLabel: "Export index JSON",
+                help: "Export read-only archive index",
+                isEnabled: !viewModel.songs.isEmpty
+            ) {
                 do {
                     try viewModel.exportIndexJSON()
                 } catch {
                     viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
                 }
             }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.songs.isEmpty)
         }
         .padding(10)
         .background(ArchiveDesignTokens.surface)

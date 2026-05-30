@@ -53,7 +53,7 @@ final class AudioConverterHandoffTests: XCTestCase {
         )
 
         [
-            "Drag WAV to Cubase",
+            "hubDragAffordance",
             "NSItemProvider(contentsOf:",
             "revealInFinder"
         ].forEach {
