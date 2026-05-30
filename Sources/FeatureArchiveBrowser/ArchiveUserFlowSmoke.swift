@@ -603,7 +603,7 @@ public enum ArchiveUserFlowSmoke {
             .first { $0.hasPrefix("summary_line=") } ?? ""
         let exportContainsSummaryLine =
             diagnosticsExportSummaryLine.hasPrefix("summary_line=roots:")
-            && diagnosticsExportSummaryLine.contains("Scanned 7 songs")
+            && diagnosticsExportSummaryLine.contains("Scanned 9 songs")
             && diagnosticsExportSummaryLine.contains("1 song(s) with 1 warning(s)")
             && diagnosticsExportSummaryLine.contains("Broken Folder Example")
             && diagnosticsExportSummaryLine.contains("2 skipped at roots")
@@ -730,10 +730,10 @@ public enum ArchiveUserFlowSmoke {
                 totalSongWarningCount: diagnostics.totalSongWarningCount
             )
         let fixtureScanCountsPanelMatchExport =
-            diagnostics.songCount == 7
+            diagnostics.songCount == 9
             && diagnostics.songsWithWarningsCount == 1
             && diagnostics.totalSongWarningCount == 1
-            && fixtureScanCountsPanelSongsValue == "7"
+            && fixtureScanCountsPanelSongsValue == "9"
             && fixtureScanCountsPanelSongWarningsValue == "1 (1 total)"
             && ArchiveDiagnosticsScanCountsPanelContext.countsMatchExport(
                 in: searchExportText,
@@ -745,7 +745,7 @@ public enum ArchiveUserFlowSmoke {
 
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
         let songCount = viewModel.songs.count
-        guard let rankingLab = viewModel.songs.first(where: { $0.displayTitle == "Preview Ranking Lab" }) else {
+        guard let rankingLab = viewModel.songs.first(where: { $0.originalFolderName == "Preview Ranking Lab" }) else {
             throw ArchiveUserFlowSmokeError.rankingLabNotFound
         }
         guard let rankingLabMainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: rankingLab),
@@ -761,7 +761,7 @@ public enum ArchiveUserFlowSmoke {
         }
         let rankingLabExportText = try String(contentsOf: URL(fileURLWithPath: rankingLabExportPath), encoding: .utf8)
         let exportContainsRankingLabMatch =
-            rankingLabExportText.contains("selected_song_title=Preview Ranking Lab")
+            rankingLabExportText.contains("selected_song_title=Lab Song")
             && rankingLabExportText.contains("main_preview_summary=")
             && rankingLabExportText.contains("preview_rank_line=")
             && rankingLabExportText.contains("v3")
@@ -769,7 +769,7 @@ public enum ArchiveUserFlowSmoke {
             && rankingLabExportText.contains("too_short_non_main=")
             && rankingLabExportText.contains("songs_with_too_short=")
             && rankingLabExportText.contains(
-                "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav"
+                "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav"
             )
             && rankingLabExportText.contains("preview_ranking_scan_callout=")
             && rankingLabExportText.contains("preview_ranking_selected_header=")
@@ -802,7 +802,7 @@ public enum ArchiveUserFlowSmoke {
         }
 
         guard let rankingLabTooShortBreakdown = diagnostics.previewRankingPanel.tooShortSongBreakdowns.first(
-            where: { $0.displayTitle == "Preview Ranking Lab" }
+            where: { $0.displayTitle == "Lab Song" }
         ) else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
@@ -856,7 +856,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
-        guard let tiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Duration Tiebreak" }) else {
+        guard let tiebreakLab = viewModel.songs.first(where: { $0.originalFolderName == "Equal Score Duration Tiebreak" }) else {
             throw ArchiveUserFlowSmokeError.tiebreakLabNotFound
         }
         viewModel.selectSong(tiebreakLab)
@@ -867,7 +867,7 @@ public enum ArchiveUserFlowSmoke {
         }
         let tiebreakLabExportText = try String(contentsOf: URL(fileURLWithPath: tiebreakLabExportPath), encoding: .utf8)
         let exportContainsTiebreak =
-            tiebreakLabExportText.contains("selected_song_title=Equal Score Duration Tiebreak")
+            tiebreakLabExportText.contains("selected_song_title=Tie Song")
             && tiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — longer preview")
             && tiebreakLabExportText.contains("Tie Song mix long.wav")
         guard exportContainsTiebreak else {
@@ -898,7 +898,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.tiebreakLabPanelPreviewRankingMismatch
         }
 
-        guard let versionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Version Tiebreak" }) else {
+        guard let versionTiebreakLab = viewModel.songs.first(where: { $0.originalFolderName == "Equal Score Version Tiebreak" }) else {
             throw ArchiveUserFlowSmokeError.versionTiebreakLabNotFound
         }
         viewModel.selectSong(versionTiebreakLab)
@@ -912,7 +912,7 @@ public enum ArchiveUserFlowSmoke {
             encoding: .utf8
         )
         let exportContainsVersionTiebreak =
-            versionTiebreakLabExportText.contains("selected_song_title=Equal Score Version Tiebreak")
+            versionTiebreakLabExportText.contains("selected_song_title=Tie Song")
             && versionTiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — version v3 beat v2")
             && versionTiebreakLabExportText.contains("Tie Song v3 mix.wav")
         guard exportContainsVersionTiebreak else {
@@ -933,7 +933,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.versionTiebreakLabPanelPreviewRankingMismatch
         }
 
-        guard let extensionTiebreakLab = viewModel.songs.first(where: { $0.displayTitle == "Equal Score Extension Tiebreak" }) else {
+        guard let extensionTiebreakLab = viewModel.songs.first(where: { $0.originalFolderName == "Equal Score Extension Tiebreak" }) else {
             throw ArchiveUserFlowSmokeError.extensionTiebreakLabNotFound
         }
         viewModel.selectSong(extensionTiebreakLab)
@@ -947,7 +947,7 @@ public enum ArchiveUserFlowSmoke {
             encoding: .utf8
         )
         let exportContainsExtensionTiebreak =
-            extensionTiebreakLabExportText.contains("selected_song_title=Equal Score Extension Tiebreak")
+            extensionTiebreakLabExportText.contains("selected_song_title=Tie Song")
             && extensionTiebreakLabExportText.contains("preview_rank_tiebreak=Equal score — preferred flac over mp3")
             && extensionTiebreakLabExportText.contains("Tie Song mix.flac")
         guard exportContainsExtensionTiebreak else {
@@ -1247,7 +1247,7 @@ public enum ArchiveUserFlowSmoke {
         }
         let previewSearchMatchCount = viewModel.filteredSongs.count
         let previewSearchMatchSummary = viewModel.searchMatchSummaries[previewMatch.id, default: ""]
-        guard previewMatch.displayTitle == "Preview Ranking Lab",
+        guard previewMatch.displayTitle == "Lab Song",
               previewSearchMatchSummary.localizedCaseInsensitiveContains("fuzzy preview file"),
               previewSearchMatchSummary.localizedCaseInsensitiveContains("v3"),
               previewSearchMatchSummary.localizedCaseInsensitiveContains("mx") else {
@@ -1260,7 +1260,7 @@ public enum ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.previewSearchDiagnosticsExportFailed
         }
         let previewExportText = try String(contentsOf: URL(fileURLWithPath: previewExportPath), encoding: .utf8)
-        let exportContainsPreviewMatch = previewExportText.contains("search_match title=Preview Ranking Lab")
+        let exportContainsPreviewMatch = previewExportText.contains("search_match title=Lab Song")
             && previewExportText.contains("fuzzy preview file")
         guard exportContainsPreviewMatch else {
             throw ArchiveUserFlowSmokeError.previewSearchDiagnosticsExportMissingMatch
@@ -1272,7 +1272,7 @@ public enum ArchiveUserFlowSmoke {
             matchCount: previewSearchMatchCount,
             exportText: previewExportText,
             requiredQuerySubstring: "ranking lab v3 mx",
-            requiredMatchTitleSubstring: "Preview Ranking Lab",
+            requiredMatchTitleSubstring: "Lab Song",
             requiredSummarySubstrings: ["fuzzy preview file", "v3", "mx"]
         )
 
@@ -1322,7 +1322,7 @@ public enum ArchiveUserFlowSmoke {
         let panelMatchesExport =
             panelSupportSummary == exportSummaryValue
             && panelSupportSummary.hasPrefix("roots:")
-            && panelSupportSummary.contains("Scanned 7 songs")
+            && panelSupportSummary.contains("Scanned 9 songs")
             && panelSupportSummary.contains("1 song(s) with 1 warning(s)")
             && panelSupportSummary.contains("Broken Folder Example")
             && panelSupportSummary.contains("2 skipped at roots")

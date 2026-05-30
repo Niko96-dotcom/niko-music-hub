@@ -35,7 +35,7 @@ final class PreviewRankingExplainabilityTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let summary = try XCTUnwrap(PreviewRankingExplainability.mainPreviewSummary(for: lab))
 
         XCTAssertTrue(summary.contains("Lab Song v3 mix.wav"))

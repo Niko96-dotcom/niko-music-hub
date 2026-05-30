@@ -10,6 +10,10 @@ public enum PreviewRankingExplainability: Sendable {
         switch factor {
         case .score, .recency, .filename:
             return nil
+        case .productionMaturity:
+            let winnerTier = PreviewProductionMaturity.detect(from: winner.fileName).reasonToken
+            let runnerTier = PreviewProductionMaturity.detect(from: runnerUp.fileName).reasonToken
+            return "Equal score — production \(winnerTier) beat \(runnerTier)"
         case .version:
             let winnerVersion = winner.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
             let runnerVersion = runnerUp.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
@@ -35,6 +39,7 @@ public enum PreviewRankingExplainability: Sendable {
         tiebreakCallout(for: song.previewCandidates)
     }
     private static let displayOrderPrefixes = [
+        "maturity:",
         "role:",
         "folder:",
         "version:",
@@ -45,6 +50,9 @@ public enum PreviewRankingExplainability: Sendable {
 
     public static func reasonLabel(_ reason: String, durationSeconds: Double? = nil) -> String? {
         if reason == "recency" { return nil }
+        if reason.hasPrefix("maturity:") {
+            return String(reason.dropFirst("maturity:".count)) + " stage"
+        }
         if reason.hasPrefix("role:") {
             switch reason {
             case "role:full-mix": return "full mix"

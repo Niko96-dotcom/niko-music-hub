@@ -17,7 +17,7 @@ final class ArchiveScanDiagnosticsBuilderTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.scannedAt, scannedAt)
         XCTAssertEqual(diagnostics.rootPaths, [CubaseFixtures.archiveRoot.path])
-        XCTAssertEqual(diagnostics.songCount, 7)
+        XCTAssertEqual(diagnostics.songCount, 9)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertGreaterThanOrEqual(diagnostics.totalSongWarningCount, 1)
         XCTAssertTrue(diagnostics.globalWarnings.isEmpty)

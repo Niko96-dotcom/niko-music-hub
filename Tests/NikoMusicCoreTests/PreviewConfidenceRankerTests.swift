@@ -31,7 +31,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let main = try XCTUnwrap(lab.previewCandidates.first)
 
         XCTAssertEqual(main.fileName, "Lab Song v3 mix.wav")
@@ -85,7 +85,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Version Tiebreak" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Equal Score Version Tiebreak" })
         let main = try XCTUnwrap(lab.previewCandidates.first)
         let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
 
@@ -100,7 +100,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Extension Tiebreak" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Equal Score Extension Tiebreak" })
         let main = try XCTUnwrap(lab.previewCandidates.first)
         let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
 
@@ -115,7 +115,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
-        let lab = try XCTUnwrap(result.songs.first { $0.displayTitle == "Equal Score Duration Tiebreak" })
+        let lab = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Equal Score Duration Tiebreak" })
         let main = try XCTUnwrap(lab.previewCandidates.first)
         let runnerUp = try XCTUnwrap(lab.previewCandidates.dropFirst().first)
 
@@ -282,9 +282,9 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertEqual(
             reasons,
             [
+                "maturity:mix",
                 "role:full-mix",
                 "folder:mixdown",
-                "filename:positive",
                 "version:v2",
                 "extension:wav",
                 "duration:plausible",

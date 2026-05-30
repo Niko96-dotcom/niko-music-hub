@@ -86,7 +86,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
 
         let diagnostics = try XCTUnwrap(viewModel.scanDiagnostics)
-        XCTAssertEqual(diagnostics.songCount, 7)
+        XCTAssertEqual(diagnostics.songCount, 9)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertTrue(
             diagnostics.skippedEntries.contains { $0.kind == .nonFolderAtRoot }
@@ -96,7 +96,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let panel = ArchiveDiagnosticsPanelContext.from(diagnostics, homeDirectory: home)
         XCTAssertEqual(panel.supportSummaryLine, diagnostics.exportSummaryLine(homeDirectory: home))
         XCTAssertEqual(panel.rootHealthBadge, "1 song warning · 2 skipped at roots")
-        XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 7 songs"))
+        XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 9 songs"))
         XCTAssertFalse(diagnostics.displayRootPaths().isEmpty)
         XCTAssertTrue(
             diagnostics.displayRootPaths().first?.contains("CubaseArchive") == true
@@ -127,7 +127,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
 
-        let lab = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         let summary = try XCTUnwrap(PreviewRankingExplainability.mainPreviewSummary(for: lab))
         XCTAssertTrue(summary.contains("v3"))
         XCTAssertTrue(summary.contains("wav"))
@@ -140,13 +140,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
-        let lab = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Preview Ranking Lab" })
+        let lab = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         viewModel.selectSong(lab)
 
         try viewModel.exportDiagnostics()
         let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
-        XCTAssertTrue(text.contains("selected_song_title=Preview Ranking Lab"))
+        XCTAssertTrue(text.contains("selected_song_title=Lab Song"))
         XCTAssertTrue(text.contains("selected_song_cpr=1 version"))
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
@@ -156,7 +156,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("songs_with_too_short="))
         XCTAssertTrue(
             text.contains(
-                "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav"
+                "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav"
             )
         )
         XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
