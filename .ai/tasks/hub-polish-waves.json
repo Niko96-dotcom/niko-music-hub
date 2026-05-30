@@ -69,7 +69,7 @@
       "id": "D",
       "title": "BPM tapper — algorithm",
       "status": "done",
-      "commit": "pending",
+      "commit": "8ae883b",
       "touch_modules": ["FeatureBPMTapper", "docs"],
       "acceptance": [
         "Short research note docs/bpm-tapper-algorithm.md (what changed and why)",
@@ -85,7 +85,8 @@
     {
       "id": "E",
       "title": "WAV converter — FFmpeg path UX",
-      "status": "pending",
+      "status": "done",
+      "commit": "pending",
       "touch_modules": ["FeatureAudioConverter", "AppCore"],
       "acceptance": [
         "When helper health shows FFmpeg green, converter does not nag to pick binary again",

@@ -34,11 +34,19 @@ public struct FFmpegHealthChecker: Sendable {
         return nil
     }
 
-    public func availability(settings: HelperToolSettings) async -> FFmpegAvailability {
-        guard let ffmpegURL = settings.ffmpeg ?? Self.detectFfmpeg() else {
-            return .missing
+    /// Saved settings path first, then the same Homebrew-style auto-detect paths as the health strip.
+    public func resolvedFFmpegURL(settings: HelperToolSettings) -> URL? {
+        if let configured = settings.ffmpeg, fileExists(configured.path) {
+            return configured
         }
-        guard fileExists(ffmpegURL.path) else {
+        for path in Self.homebrewPaths where fileExists(path) {
+            return URL(fileURLWithPath: path)
+        }
+        return nil
+    }
+
+    public func availability(settings: HelperToolSettings) async -> FFmpegAvailability {
+        guard let ffmpegURL = resolvedFFmpegURL(settings: settings) else {
             return .missing
         }
 

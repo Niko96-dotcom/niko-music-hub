@@ -41,7 +41,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
 
         switch await healthChecker.availability(settings: helperSettings) {
         case .available:
-            guard let ffmpegURL = helperSettings.ffmpeg else {
+            guard let ffmpegURL = healthChecker.resolvedFFmpegURL(settings: helperSettings) else {
                 throw missingFFmpegError()
             }
             let ffmpeg = ffmpegConverterFactory(ffmpegURL)
