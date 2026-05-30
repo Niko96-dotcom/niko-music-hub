@@ -207,7 +207,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.statusMessage, "Export failed: sample failure")
     }
 
-    func testBrowseFilterSidebarPresentation() {
+    func testBrowseFilterSidebarUIMetadata() {
         XCTAssertEqual(
             ArchiveBrowseFilter.sidebarFilters,
             [.hasStems, .noPreview, .hasWarnings]
@@ -643,7 +643,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             URL(fileURLWithPath: "/tmp/archive-root", isDirectory: true)
         ]
         XCTAssertTrue(viewModel.showsSidebarMorePanel)
-        XCTAssertEqual(viewModel.sidebarMorePanelSummary, viewModel.sidebarHealthContext.summary)
+        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & intelligence")
     }
 
     func testExportIndexJSONFromViewModel() async throws {
