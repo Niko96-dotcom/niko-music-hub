@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import FeatureArchiveBrowser
+import NikoMusicCore
 import FeatureAudioConverter
 import FeatureBPMTapper
 import FeatureAudioRecorder
@@ -31,7 +32,19 @@ struct AppComposition {
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics
         )
-        let archiveViewModel = ArchiveBrowserViewModel(context: context)
+        let archiveDatabaseURL = AppPaths.archiveIndexStoreURL()
+        let archiveIndexStore = try? SQLiteArchiveIndexStore(databaseURL: archiveDatabaseURL)
+        let songMetadataStore = try? SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
+        let archiveRootWatcher: any ArchiveRootWatching =
+            ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER"] == "1"
+            ? NoopArchiveRootWatcher()
+            : FSEventsArchiveRootWatcher()
+        let archiveViewModel = ArchiveBrowserViewModel(
+            context: context,
+            archiveIndexStore: archiveIndexStore,
+            songMetadataStore: songMetadataStore,
+            archiveRootWatcher: archiveRootWatcher
+        )
 
         var features: [any ToolFeature] = [
             ArchiveBrowserFeature(viewModel: archiveViewModel),
@@ -70,6 +83,10 @@ private enum AppPaths {
         return supportDirectory
             .appendingPathComponent("Niko Music Hub", isDirectory: true)
             .appendingPathComponent("output-inbox.json", isDirectory: false)
+    }
+
+    static func archiveIndexStoreURL() -> URL {
+        SQLiteArchiveIndexStore.defaultStoreURL()
     }
 }
 

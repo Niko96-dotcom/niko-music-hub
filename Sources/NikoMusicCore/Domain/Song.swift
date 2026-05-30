@@ -12,6 +12,21 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public var sidecarNotes: String?
     public var mainPreviewCandidateID: String?
     public var latestCPR: ProjectVersion?
+    /// App-owned display override; never renames `folderPath` on disk.
+    public var virtualTitle: String?
+    public var aliases: [String]
+    /// App-owned searchable note (distinct from read-only sidecar `notes.txt`).
+    public var appNote: String?
+    public var previewSelectionMode: PreviewSelectionMode
+    public var ignoredPreviewCandidateIDs: [String]
+
+    public var effectiveDisplayTitle: String {
+        if let virtualTitle {
+            let trimmed = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return displayTitle
+    }
 
     public init(
         folderPath: URL,
@@ -22,7 +37,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         scanWarnings: [String] = [],
         sidecarNotes: String? = nil,
         mainPreviewCandidateID: String? = nil,
-        latestCPR: ProjectVersion? = nil
+        latestCPR: ProjectVersion? = nil,
+        virtualTitle: String? = nil,
+        aliases: [String] = [],
+        appNote: String? = nil,
+        previewSelectionMode: PreviewSelectionMode = .auto,
+        ignoredPreviewCandidateIDs: [String] = []
     ) {
         self.folderPath = folderPath
         self.originalFolderName = originalFolderName
@@ -33,7 +53,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.sidecarNotes = sidecarNotes
         self.mainPreviewCandidateID = mainPreviewCandidateID
         self.latestCPR = latestCPR
-        self.id = folderPath.path
+        self.virtualTitle = virtualTitle
+        self.aliases = aliases
+        self.appNote = appNote
+        self.previewSelectionMode = previewSelectionMode
+        self.ignoredPreviewCandidateIDs = ignoredPreviewCandidateIDs
+        self.id = folderPath.standardizedFileURL.path
     }
 
     /// Scan warnings safe for on-screen display (redacts embedded home paths).
@@ -52,5 +77,59 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     /// Redacts a CPR/open path for song detail and cards.
     public static func displayDryRunPath(_ path: String, homeDirectory: String? = nil) -> String {
         DiagnosticsPathRedactor.redact(path, homeDirectory: homeDirectory)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case folderPath
+        case originalFolderName
+        case displayTitle
+        case projectVersions
+        case previewCandidates
+        case scanWarnings
+        case sidecarNotes
+        case mainPreviewCandidateID
+        case latestCPR
+        case virtualTitle
+        case aliases
+        case appNote
+        case previewSelectionMode
+        case ignoredPreviewCandidateIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        folderPath = try container.decode(URL.self, forKey: .folderPath)
+        originalFolderName = try container.decode(String.self, forKey: .originalFolderName)
+        displayTitle = try container.decode(String.self, forKey: .displayTitle)
+        projectVersions = try container.decodeIfPresent([ProjectVersion].self, forKey: .projectVersions) ?? []
+        previewCandidates = try container.decodeIfPresent([PreviewCandidate].self, forKey: .previewCandidates) ?? []
+        scanWarnings = try container.decodeIfPresent([String].self, forKey: .scanWarnings) ?? []
+        sidecarNotes = try container.decodeIfPresent(String.self, forKey: .sidecarNotes)
+        mainPreviewCandidateID = try container.decodeIfPresent(String.self, forKey: .mainPreviewCandidateID)
+        latestCPR = try container.decodeIfPresent(ProjectVersion.self, forKey: .latestCPR)
+        virtualTitle = try container.decodeIfPresent(String.self, forKey: .virtualTitle)
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+        appNote = try container.decodeIfPresent(String.self, forKey: .appNote)
+        previewSelectionMode = try container.decodeIfPresent(PreviewSelectionMode.self, forKey: .previewSelectionMode) ?? .auto
+        ignoredPreviewCandidateIDs = try container.decodeIfPresent([String].self, forKey: .ignoredPreviewCandidateIDs) ?? []
+        id = folderPath.standardizedFileURL.path
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(folderPath, forKey: .folderPath)
+        try container.encode(originalFolderName, forKey: .originalFolderName)
+        try container.encode(displayTitle, forKey: .displayTitle)
+        try container.encode(projectVersions, forKey: .projectVersions)
+        try container.encode(previewCandidates, forKey: .previewCandidates)
+        try container.encode(scanWarnings, forKey: .scanWarnings)
+        try container.encodeIfPresent(sidecarNotes, forKey: .sidecarNotes)
+        try container.encodeIfPresent(mainPreviewCandidateID, forKey: .mainPreviewCandidateID)
+        try container.encodeIfPresent(latestCPR, forKey: .latestCPR)
+        try container.encodeIfPresent(virtualTitle, forKey: .virtualTitle)
+        try container.encode(aliases, forKey: .aliases)
+        try container.encodeIfPresent(appNote, forKey: .appNote)
+        try container.encode(previewSelectionMode, forKey: .previewSelectionMode)
+        try container.encode(ignoredPreviewCandidateIDs, forKey: .ignoredPreviewCandidateIDs)
     }
 }

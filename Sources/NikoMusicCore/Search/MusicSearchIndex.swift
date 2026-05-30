@@ -31,7 +31,7 @@ public struct MusicSearchIndex: Sendable {
             .filter { $0.score > 0 }
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
-                return lhs.song.displayTitle.localizedCaseInsensitiveCompare(rhs.song.displayTitle) == .orderedAscending
+                return lhs.song.effectiveDisplayTitle.localizedCaseInsensitiveCompare(rhs.song.effectiveDisplayTitle) == .orderedAscending
             }
     }
 }

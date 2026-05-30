@@ -33,19 +33,23 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var helperTools: HelperToolSettings
     public var maxRecordingDurationMinutes: Int
     public var archiveRoots: [StoredArchiveRoot]
+    /// User completed first-run archive root onboarding (SPEC §5).
+    public var archiveOnboardingCompleted: Bool
 
     public init(
         outputFolder: StoredFolderLocation = StoredFolderLocation(),
         audioPreset: AudioPreset = .cubaseDefault,
         helperTools: HelperToolSettings = HelperToolSettings(),
         maxRecordingDurationMinutes: Int = 30,
-        archiveRoots: [StoredArchiveRoot] = []
+        archiveRoots: [StoredArchiveRoot] = [],
+        archiveOnboardingCompleted: Bool = false
     ) {
         self.outputFolder = outputFolder
         self.audioPreset = audioPreset
         self.helperTools = helperTools
         self.maxRecordingDurationMinutes = maxRecordingDurationMinutes
         self.archiveRoots = archiveRoots
+        self.archiveOnboardingCompleted = archiveOnboardingCompleted
     }
 
     public static let `default` = AppSettings()

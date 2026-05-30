@@ -14,7 +14,7 @@ struct RootSelectionView: View {
                 addRootButton
             }
             if viewModel.roots.isEmpty {
-                Text("Pick one or more folders that contain your Cubase song folders.")
+                Text("Choose the folder that contains your Cubase song/project folders.")
                     .font(.system(size: 12))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -44,7 +44,7 @@ struct RootSelectionView: View {
     @ViewBuilder
     private var addRootButton: some View {
         if viewModel.roots.isEmpty {
-            Button("Add Root", action: onAddRoot)
+            Button("Add an archive root", action: onAddRoot)
                 .buttonStyle(.borderedProminent)
         } else {
             Button("Add Root", action: onAddRoot)

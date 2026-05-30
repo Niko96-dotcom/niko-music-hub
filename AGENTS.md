@@ -65,6 +65,23 @@ Do not set or depend on `LOCUS_*` environment variables.
 
 MacBook is read-only/reference unless a task explicitly says copy source/reference files. Do not modify MacBook projects in place.
 
+## GSD (Get Shit Done) — v1.2 archive recall
+
+**SDK on PATH:** `gsd-sdk` via global `get-shit-done-cc` (also `./script/gsd.sh`).
+
+```bash
+npm install -g get-shit-done-cc   # once per machine
+./script/gsd.sh query roadmap.analyze
+```
+
+**Autonomous milestone run in Cursor:** user says **`/gsd-autonomous --from 12 --to 18`** (phase 11 persistence is done).
+
+- Roadmap: `.planning/ROADMAP.md` phases 11–18
+- Checklist: `docs/goals/niko-archive-recall-autonomous.goals.md`
+- Gates after each phase: `./script/ci.sh` (and `./script/e2e_user_smoke.sh` when UI changes)
+
+Do **not** use `gsd-sdk auto` inside Cursor — that targets external CLI runners. Use the **`/gsd-autonomous`** skill (discuss → plan → execute per phase).
+
 ## Local gates
 
 Run:

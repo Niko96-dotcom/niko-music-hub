@@ -1,0 +1,39 @@
+import SwiftUI
+
+struct ArchiveFirstRunView: View {
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
+    let onChooseRoot: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Start with an archive root")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+
+            Text(
+                "Choose the folder that contains your Cubase song/project folders. "
+                    + "Niko Music Hub scans read-only — your song folders on disk are never renamed or moved."
+            )
+            .font(.system(size: 14))
+            .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Active projects folder (required)", systemImage: "folder.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("You can add more archive roots later from the sidebar.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            }
+
+            Button("Add an archive root", action: onChooseRoot)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+        }
+        .padding(32)
+        .frame(maxWidth: 480, alignment: .leading)
+        .background(ArchiveDesignTokens.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+    }
+}

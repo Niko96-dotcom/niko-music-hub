@@ -12,17 +12,32 @@ struct ArchiveBrowserView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(minWidth: 300, idealWidth: 340, maxWidth: 380)
+        GeometryReader { proxy in
+            let listWidth = ArchiveBrowserLayout.listWidth(totalWidth: proxy.size.width)
+            let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
 
-            Divider()
+            ZStack {
+                HStack(spacing: 0) {
+                    sidebar(compactList: compactList)
+                        .frame(width: listWidth)
 
-            detailPane
-                .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    Divider()
+
+                    detailPane
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .background(ArchiveDesignTokens.background)
+                        .clipped()
+                }
                 .background(ArchiveDesignTokens.background)
+
+                if viewModel.needsFirstRunOnboarding {
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                    ArchiveFirstRunView(viewModel: viewModel, onChooseRoot: chooseRoot)
+                }
+            }
         }
-        .background(ArchiveDesignTokens.background)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
             guard !viewModel.isScanning else { return }
             if viewModel.roots.isEmpty {
@@ -33,28 +48,17 @@ struct ArchiveBrowserView: View {
         }
     }
 
-    private var sidebar: some View {
+    private func sidebar(compactList: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Cubase Archive")
-                .font(.system(size: 21, weight: .semibold))
+                .font(.system(size: compactList ? 18 : 21, weight: .semibold))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
 
             RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
 
-            HStack(spacing: 8) {
-                Button(viewModel.isScanning ? "Scanning…" : "Scan") {
-                    Task { await viewModel.scan() }
-                }
-                .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
-                .buttonStyle(.borderedProminent)
+            shelfPicker(compactList: compactList)
 
-                TextField("Search songs", text: $viewModel.searchQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(viewModel.songs.isEmpty)
-                    .onChange(of: viewModel.searchQuery) { _, _ in
-                        viewModel.applySearchFilter()
-                    }
-            }
+            scanAndSearchControls(compactList: compactList)
 
             if let status = viewModel.statusMessage {
                 Text(status)
@@ -110,18 +114,69 @@ struct ArchiveBrowserView: View {
             }
 
             songList
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .layoutPriority(1)
         }
-        .padding(16)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .padding(compactList ? 12 : 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchiveDesignTokens.surface)
+    }
+
+    @ViewBuilder
+    private func shelfPicker(compactList: Bool) -> some View {
+        let picker = Picker("Shelf", selection: Binding(
+            get: { viewModel.selectedShelf },
+            set: { viewModel.selectShelf($0) }
+        )) {
+            ForEach(ArchiveSmartShelf.allCases, id: \.self) { shelf in
+                Text(shelf.title).tag(shelf)
+            }
+        }
+        .labelsHidden()
+        .disabled(viewModel.songs.isEmpty)
+
+        if compactList {
+            picker.pickerStyle(.menu)
+        } else {
+            picker.pickerStyle(.segmented)
+        }
+    }
+
+    @ViewBuilder
+    private func scanAndSearchControls(compactList: Bool) -> some View {
+        let scanButton = Button(viewModel.isScanning ? "Scanning…" : "Scan") {
+            Task { await viewModel.scan() }
+        }
+        .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
+        .buttonStyle(.borderedProminent)
+
+        let searchField = TextField("Search songs", text: $viewModel.searchQuery)
+            .textFieldStyle(.roundedBorder)
+            .disabled(viewModel.songs.isEmpty)
+            .onChange(of: viewModel.searchQuery) { _, _ in
+                viewModel.applySearchFilter()
+            }
+
+        if compactList {
+            VStack(alignment: .leading, spacing: 8) {
+                scanButton
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                searchField
+            }
+        } else {
+            HStack(spacing: 8) {
+                scanButton
+                searchField
+            }
+        }
     }
 
     @ViewBuilder
     private var songList: some View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
-                title: "Add an archive root",
-                body: "Choose one or more folders that contain your Cubase song folders.",
+                title: "Start with an archive root",
+                body: "Choose the folder that contains your Cubase song/project folders.",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
@@ -210,6 +265,7 @@ struct ArchiveBrowserView: View {
         panel.message = "Select one or more folders that contain Cubase song folders."
         if panel.runModal() == .OK {
             viewModel.addRoots(panel.urls)
+            viewModel.completeArchiveOnboarding()
         }
     }
 }
