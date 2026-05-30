@@ -51,7 +51,7 @@ public struct DownloaderView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     private var headerStatus: String {
@@ -91,7 +91,7 @@ public struct DownloaderView: View {
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
         .disabled(viewModel.downloadState == .downloading)
     }
 

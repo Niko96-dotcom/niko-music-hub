@@ -70,11 +70,7 @@ struct ArchiveIntelligencePanelView: View {
                 help: "Export read-only archive index",
                 isEnabled: !viewModel.songs.isEmpty
             ) {
-                do {
-                    try viewModel.exportIndexJSON()
-                } catch {
-                    viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
-                }
+                viewModel.performExport { try viewModel.exportIndexJSON() }
             }
         }
         .padding(10)

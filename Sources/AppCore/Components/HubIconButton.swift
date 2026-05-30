@@ -1,10 +1,16 @@
 import SwiftUI
 
-/// Compact toolbar control: icon visible, label exposed to VoiceOver and `.help`.
+public enum HubIconButtonAppearance: Sendable {
+    case toolbar
+    case compactChip
+}
+
+/// Compact control: icon visible, label exposed to VoiceOver and `.help`.
 public struct HubIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
     var help: String?
+    var appearance: HubIconButtonAppearance = .toolbar
     var prominent: Bool = false
     var isSelected: Bool = false
     var role: ButtonRole?
@@ -15,6 +21,7 @@ public struct HubIconButton: View {
         systemImage: String,
         accessibilityLabel: String,
         help: String? = nil,
+        appearance: HubIconButtonAppearance = .toolbar,
         prominent: Bool = false,
         isSelected: Bool = false,
         role: ButtonRole? = nil,
@@ -24,6 +31,7 @@ public struct HubIconButton: View {
         self.systemImage = systemImage
         self.accessibilityLabel = accessibilityLabel
         self.help = help
+        self.appearance = appearance
         self.prominent = prominent
         self.isSelected = isSelected
         self.role = role
@@ -32,6 +40,23 @@ public struct HubIconButton: View {
     }
 
     public var body: some View {
+        Group {
+            switch appearance {
+            case .toolbar:
+                toolbarButton
+            case .compactChip:
+                compactChipButton
+            }
+        }
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isSelected ? "On" : "Off")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .help(help ?? accessibilityLabel)
+        .disabled(!isEnabled)
+    }
+
+    @ViewBuilder
+    private var toolbarButton: some View {
         Group {
             if prominent {
                 buttonLabel
@@ -47,11 +72,28 @@ public struct HubIconButton: View {
         }
         .controlSize(.small)
         .labelStyle(.iconOnly)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(isSelected ? "On" : "Off")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .help(help ?? accessibilityLabel)
-        .disabled(!isEnabled)
+    }
+
+    private var compactChipButton: some View {
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.06))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                            lineWidth: isSelected ? 1.5 : 1
+                        )
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var buttonLabel: some View {
@@ -60,29 +102,6 @@ public struct HubIconButton: View {
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
-        }
-    }
-}
-
-/// Small grip shown on draggable cards (output inbox, converter rows).
-public struct HubDragAffordance: View {
-    public init() {}
-
-    public var body: some View {
-        Image(systemName: "line.3.horizontal")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(.tertiary)
-            .padding(6)
-            .accessibilityHidden(true)
-    }
-}
-
-public extension View {
-    func hubDragAffordance(visible: Bool = true) -> some View {
-        overlay(alignment: .topTrailing) {
-            if visible {
-                HubDragAffordance()
-            }
         }
     }
 }

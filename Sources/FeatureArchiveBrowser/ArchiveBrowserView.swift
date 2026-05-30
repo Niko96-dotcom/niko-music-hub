@@ -11,6 +11,7 @@ struct ArchiveBrowserView: View {
     @FocusState private var archiveFocused: Bool
 
     init(context: ToolContext, viewModel: ArchiveBrowserViewModel) {
+        _ = context
         self.viewModel = viewModel
     }
 
@@ -83,6 +84,7 @@ struct ArchiveBrowserView: View {
 
             rootsSection
 
+            shelfPicker(compactList: compactList)
             collaboratorShelfPicker
             browseControls(compactList: compactList)
 
@@ -119,8 +121,6 @@ struct ArchiveBrowserView: View {
                 .accessibilityLabel("Cubase archive")
 
             Spacer(minLength: 4)
-
-            archiveMoreMenu
 
             HubIconButton(
                 systemImage: "arrow.clockwise",
@@ -211,25 +211,38 @@ struct ArchiveBrowserView: View {
 
     @ViewBuilder
     private func browseControls(compactList: Bool) -> some View {
-        HStack(spacing: 6) {
-            shelfPicker(compactList: true)
-                .frame(maxWidth: .infinity)
-
-            Picker("Sort", selection: $viewModel.sortMode) {
-                ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
-                    Text(mode.title).tag(mode)
-                }
+        let sortPicker = Picker("Sort", selection: $viewModel.sortMode) {
+            ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
+                Text(mode.title).tag(mode)
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .disabled(viewModel.songs.isEmpty)
-            .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
+        }
+        .labelsHidden()
+        .disabled(viewModel.songs.isEmpty)
+        .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
 
-            ForEach(ArchiveSidebarChrome.filterOrder, id: \.rawValue) { filter in
-                ArchiveFilterIconToggle(
-                    filter: filter,
-                    active: viewModel.browseFilter.contains(filter),
-                    disabled: viewModel.songs.isEmpty
+        if compactList {
+            HStack(spacing: 6) {
+                sortPicker.pickerStyle(.menu)
+                browseFilterButtons
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                sortPicker.pickerStyle(.segmented)
+                browseFilterButtons
+            }
+        }
+    }
+
+    private var browseFilterButtons: some View {
+        HStack(spacing: 6) {
+            ForEach(ArchiveBrowseFilter.sidebarOrder, id: \.rawValue) { filter in
+                HubIconButton(
+                    systemImage: filter.sidebarSymbolName,
+                    accessibilityLabel: filter.sidebarAccessibilityLabel,
+                    help: filter.sidebarAccessibilityLabel,
+                    appearance: .compactChip,
+                    isSelected: viewModel.browseFilter.contains(filter),
+                    isEnabled: !viewModel.songs.isEmpty
                 ) {
                     viewModel.toggleBrowseFilter(filter)
                 }
@@ -257,50 +270,11 @@ struct ArchiveBrowserView: View {
         )
     }
 
-  private var archiveMoreMenu: some View {
-        Menu {
-            Button {
-                morePanelExpanded = true
-            } label: {
-                Label("Show health & intelligence panel", systemImage: "sidebar.bottom")
-            }
-            if viewModel.scanDiagnostics != nil {
-                Button {
-                    do {
-                        try viewModel.exportDiagnostics()
-                    } catch {
-                        viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
-                    }
-                } label: {
-                    Label("Export scan report", systemImage: "square.and.arrow.up")
-                }
-            }
-            if !viewModel.songs.isEmpty {
-                Button {
-                    do {
-                        try viewModel.exportIndexJSON()
-                    } catch {
-                        viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
-                    }
-                } label: {
-                    Label("Export index JSON", systemImage: "doc.text")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Health, intelligence, and exports")
-        .accessibilityLabel("More archive actions")
-    }
-
     @ViewBuilder
     private var morePanel: some View {
         let report = viewModel.healthReport()
-        let hasExtras = !viewModel.songs.isEmpty
+        let hasExtras = !viewModel.roots.isEmpty
+            || !viewModel.songs.isEmpty
             || viewModel.scanDiagnostics != nil
             || !viewModel.pendingCollaboratorSuggestions.isEmpty
 
@@ -308,6 +282,7 @@ struct ArchiveBrowserView: View {
             DisclosureGroup(isExpanded: $morePanelExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
                     ArchiveHealthReportView(report: report, compact: true)
+                    ArchiveCollaboratorAddressBookView(viewModel: viewModel)
                     ArchiveIntelligencePanelView(viewModel: viewModel)
                     if let diagnostics = viewModel.scanDiagnostics {
                         ScrollView {
@@ -317,11 +292,7 @@ struct ArchiveBrowserView: View {
                                 searchContext: viewModel.activeSearchExportContext(),
                                 skippedSearchContext: viewModel.activeSkippedSearchExportContext()
                             ) {
-                                do {
-                                    try viewModel.exportDiagnostics()
-                                } catch {
-                                    viewModel.statusMessage = "Export failed: \(error.localizedDescription)"
-                                }
+                                viewModel.performExport { try viewModel.exportDiagnostics() }
                             }
                         }
                         .frame(maxHeight: 140)
@@ -329,7 +300,7 @@ struct ArchiveBrowserView: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "chart.bar.doc.horizontal")
                         .font(.system(size: 11))
                     Text(archiveMoreSummary(report: report))
                         .font(.system(size: 10))

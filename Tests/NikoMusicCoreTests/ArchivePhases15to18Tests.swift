@@ -106,6 +106,12 @@ final class ArchivePhases15to18Tests: XCTestCase {
         XCTAssertEqual(filtered.map(\.displayTitle), ["n"])
     }
 
+    func testBrowseFilterSidebarMetadata() {
+        XCTAssertEqual(ArchiveBrowseFilter.sidebarOrder, [.hasStems, .noPreview, .hasWarnings])
+        XCTAssertEqual(ArchiveBrowseFilter.hasStems.sidebarSymbolName, "waveform.path")
+        XCTAssertEqual(ArchiveBrowseFilter.noPreview.sidebarAccessibilityLabel, "Songs missing a preview")
+    }
+
     func testNewSongCreator() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("new-song-\(UUID().uuidString)", isDirectory: true)

@@ -62,7 +62,7 @@ public struct AudioConverterView: View {
                     .tint(Color.accentColor)
             }
         }
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     private var intakeSurface: some View {
@@ -97,7 +97,7 @@ public struct AudioConverterView: View {
             }
             .padding(24)
         }
-        .frame(minWidth: 320, idealWidth: 640, maxWidth: 720, minHeight: 160, alignment: .center)
+        .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, minHeight: 160, alignment: .center)
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $dropTargeted,
@@ -135,7 +135,7 @@ public struct AudioConverterView: View {
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     private var presetEditor: some View {
@@ -238,7 +238,7 @@ public struct AudioConverterView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     @ViewBuilder
@@ -260,7 +260,7 @@ public struct AudioConverterView: View {
                 batchRow(row)
             }
         }
-        .frame(maxWidth: 720, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     @ViewBuilder
