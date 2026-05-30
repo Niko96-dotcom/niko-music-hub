@@ -4,11 +4,12 @@ import Foundation
 
 enum ArchiveSmokeCommands {
     static func runIfRequested() -> Bool {
-        guard ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_E2E_SMOKE"] == "1" else {
+        let runtime = MusicHubRuntimeEnvironment.current
+        guard runtime.e2eSmoke else {
             return false
         }
 
-        let fixtureRootPath = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_FIXTURE_ROOT"]
+        let fixtureRootPath = runtime.fixtureRootURL?.path
             ?? defaultFixtureRoot()
         let fixtureRoot = URL(fileURLWithPath: fixtureRootPath, isDirectory: true)
 
@@ -193,7 +194,7 @@ enum ArchiveSmokeCommands {
         print("[niko-music-hub-smoke] write_probe_denied=\(result.writeProbeDenied)")
         print("[niko-music-hub-smoke] archive_unchanged=\(result.archiveTreeUnchanged)")
 
-        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
+        if MusicHubRuntimeEnvironment.current.dryRunOpen {
             let logLine = result.dryRunLogDisplayLine
                 ?? "[dry-run] open CPR: \(result.dryRunCPRDisplayPath)"
             print(logLine)
@@ -408,7 +409,7 @@ enum ArchiveSmokeCommands {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
 
-        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1" {
+        if MusicHubRuntimeEnvironment.current.dryRunOpen {
             let logEvidence = result.dryRunLogDisplayLine
                 ?? "[dry-run] open CPR: \(result.dryRunCPRDisplayPath)"
             guard logEvidence.contains("Neon Hook"), logEvidence.contains(".cpr") else {

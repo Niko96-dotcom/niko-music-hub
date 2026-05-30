@@ -41,6 +41,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let songMetadataStore: (any SongUserMetadataStoring)?
     private let collaboratorStore: (any CollaboratorStoring)?
     private let archiveRootWatcher: (any ArchiveRootWatching)?
+    private let runtime: MusicHubRuntimeEnvironment
 
     public init(
         context: ToolContext,
@@ -48,7 +49,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         songMetadataStore: (any SongUserMetadataStoring)? = nil,
         archiveRootWatcher: (any ArchiveRootWatching)? = nil,
         collaboratorStore: (any CollaboratorStoring)? = nil,
-        browseSearchDebounceNanoseconds: UInt64 = 200_000_000
+        browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
+        runtime: MusicHubRuntimeEnvironment = .current
     ) {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
@@ -57,8 +59,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.songMetadataStore = songMetadataStore
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
+        self.runtime = runtime
         self.browseRefreshDriver = ArchiveBrowseRefreshDriver(debounceNanoseconds: browseSearchDebounceNanoseconds)
-        let dryRunOnly = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
+        let dryRunOnly = runtime.dryRunOpen
         self.opener = MusicItemOpener(
             workspace: dryRunOnly ? nil : AppKitWorkspaceOpener(),
             log: { [diagnostics] message in
@@ -73,8 +76,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func loadRootsFromSettings() {
-        if let env = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_FIXTURE_ROOT"], !env.isEmpty {
-            roots = [URL(fileURLWithPath: env, isDirectory: true)]
+        if let fixtureRoot = runtime.fixtureRootURL {
+            roots = [fixtureRoot]
             return
         }
         if let settings = try? settingsStore.loadSettings() {
@@ -89,7 +92,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func refreshFirstRunState() {
-        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_FIXTURE_ROOT"] != nil {
+        if runtime.usesFixtureRoot {
             needsFirstRunOnboarding = false
             return
         }
@@ -110,10 +113,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     private func applyBootstrapRootWhenEmpty() {
-        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SETTINGS_SUITE"] != nil {
+        if runtime.usesIsolatedSettingsSuite {
             return
         }
-        guard roots.isEmpty, let bootstrap = ArchiveDefaultRootPolicy.bootstrapRoot() else { return }
+        guard roots.isEmpty, let bootstrap = ArchiveDefaultRootPolicy.bootstrapRoot(runtime: runtime) else { return }
         roots = [bootstrap]
         persistRoots()
         completeArchiveOnboarding()
@@ -271,6 +274,9 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Shelf, filter, sort, and collaborator browse inputs. Always recomputes browse projection immediately.
+    /// For live search typing use ``setSearchQuery(_:immediate:)`` instead — routing search through here
+    /// would recompute on every keystroke and defeat debounce.
     func mutateBrowseInputs(_ updates: () -> Void) {
         applyBrowseChange(shouldRefreshIntelligence: false, updates)
     }
@@ -279,6 +285,8 @@ extension ArchiveBrowserViewModel {
         applyBrowseChange(shouldRefreshIntelligence: true, updates)
     }
 
+    /// Debounced browse entry point for search text. Writes `searchQuery` directly (not via
+    /// ``mutateBrowseInputs``) and recomputes after debounce, or immediately when `immediate` is true.
     func setSearchQuery(_ query: String, immediate: Bool = false) {
         searchQuery = query
         if immediate {
@@ -721,10 +729,9 @@ extension ArchiveBrowserViewModel {
     }
 
     func openLatestCPR(for song: Song) throws {
-        let dryRun = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
-        if let result = try opener.openLatestCPR(for: song, dryRun: dryRun) {
+        if let result = try opener.openLatestCPR(for: song, dryRun: runtime.dryRunOpen) {
             lastDryRunLog = result.path
-            if dryRun {
+            if runtime.dryRunOpen {
                 let displayPath = Song.displayDryRunPath(result.path)
                 print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
             }
@@ -734,8 +741,7 @@ extension ArchiveBrowserViewModel {
     func openMainPreview(for song: Song) throws {
         guard let id = song.mainPreviewCandidateID,
               let candidate = song.previewCandidates.first(where: { $0.id == id }) else { return }
-        let dryRun = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"] == "1"
-        if dryRun {
+        if runtime.dryRunOpen {
             let path = candidate.filePath.path
             lastDryRunLog = path
             print("[niko-music-hub-smoke] dry-run open preview: \(Song.displayDryRunPath(path))")
