@@ -5,63 +5,104 @@ import Foundation
 enum ArchiveUserFlowSmokeScenarios {
     static let coreSearchQuery = "neon hk"
 
+    static let rankingLab = RankingLabScenario(
+        folderName: "Preview Ranking Lab",
+        exportMustContain: [
+            "selected_song_title=Lab Song",
+            "main_preview_summary=",
+            "preview_rank_line=",
+            "v3",
+            "preview_ranking_tiebreak_legend=",
+            "too_short_non_main=",
+            "songs_with_too_short=",
+            "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav",
+            "preview_ranking_scan_callout=",
+            "preview_ranking_selected_header=",
+        ],
+        tooShortSongTitle: "Lab Song",
+        tooShortClipSubstring: "Lab Song short clip.wav",
+        scanCalloutSubstring: "too short",
+        selectedHeaderSubstring: "Lab Song v3 mix.wav",
+        tiebreakLegendSubstring: "CPR version anchor",
+        mainPreviewSummarySubstrings: ["v3", "wav", "Lab Song v3 mix.wav"],
+        rankedPreviewLineSubstring: "v3"
+    )
+
     static let songSearches: [SongSearchScenario] = [
         SongSearchScenario(
             logPrefix: "warning_search",
+            diagnosticsExportStem: "warning",
+            diagnosticsPanelStem: "warning",
             query: "project",
             expectedDisplayTitle: "Broken Folder Example",
             summarySubstrings: ["scan warning", "project"],
-            exportMustContain: ["search_match title=Broken Folder Example"]
+            exportMustContain: ["search_match title=Broken Folder Example"],
+            minimumMatchCount: 1
         ),
         SongSearchScenario(
             logPrefix: "fuzzy_warning_search",
+            diagnosticsExportStem: "fuzzy_warning",
+            diagnosticsPanelStem: "fuzzy_warning",
             query: "ncpr fnd",
             expectedDisplayTitle: "Broken Folder Example",
             summarySubstrings: ["fuzzy scan warning", "ncpr", "fnd"],
             exportMustContain: [
                 "search_match title=Broken Folder Example",
                 "fuzzy scan warning",
-            ]
+            ],
+            minimumMatchCount: 1
         ),
         SongSearchScenario(
             logPrefix: "notes_search",
+            diagnosticsExportStem: "notes",
+            diagnosticsPanelStem: "notes",
             query: "nts nly",
             expectedDisplayTitle: "Broken Folder Example",
             summarySubstrings: ["fuzzy song note", "nts", "nly"],
             exportMustContain: [
                 "search_match title=Broken Folder Example",
                 "fuzzy song note",
-            ]
+            ],
+            minimumMatchCount: 1
         ),
         SongSearchScenario(
             logPrefix: "folder_search",
+            diagnosticsExportStem: "folder",
+            diagnosticsPanelStem: "folder",
             query: "brkn fld",
             expectedDisplayTitle: "Broken Folder Example",
             summarySubstrings: ["fuzzy folder", "brkn", "fld"],
             exportMustContain: [
                 "search_match title=Broken Folder Example",
                 "fuzzy folder",
-            ]
+            ],
+            minimumMatchCount: 1
         ),
         SongSearchScenario(
             logPrefix: "cpr_search",
+            diagnosticsExportStem: "cpr",
+            diagnosticsPanelStem: "cpr",
             query: "neohkv2",
             expectedDisplayTitle: "Neon Hook",
             summarySubstrings: ["fuzzy CPR file", "neohkv2"],
             exportMustContain: [
                 "search_match title=Neon Hook",
                 "fuzzy CPR file",
-            ]
+            ],
+            minimumMatchCount: 1
         ),
         SongSearchScenario(
             logPrefix: "preview_search",
+            diagnosticsExportStem: "preview",
+            diagnosticsPanelStem: "preview",
             query: "ranking lab v3 mx",
             expectedDisplayTitle: "Lab Song",
             summarySubstrings: ["fuzzy preview file", "v3", "mx"],
             exportMustContain: [
                 "search_match title=Lab Song",
                 "fuzzy preview file",
-            ]
+            ],
+            minimumMatchCount: 1
         ),
     ]
 
@@ -76,6 +117,9 @@ enum ArchiveUserFlowSmokeScenarios {
     static let previewTiebreakLabs: [PreviewTiebreakLabScenario] = [
         PreviewTiebreakLabScenario(
             logPrefix: "tiebreak",
+            exportStem: "tiebreak",
+            panelCalloutStem: "duration_tiebreak",
+            panelHeaderStem: "duration_tiebreak",
             folderName: "Equal Score Duration Tiebreak",
             exportMustContain: [
                 "selected_song_title=Tie Song",
@@ -87,6 +131,9 @@ enum ArchiveUserFlowSmokeScenarios {
         ),
         PreviewTiebreakLabScenario(
             logPrefix: "version_tiebreak",
+            exportStem: "version_tiebreak",
+            panelCalloutStem: "version_tiebreak",
+            panelHeaderStem: nil,
             folderName: "Equal Score Version Tiebreak",
             exportMustContain: [
                 "selected_song_title=Tie Song",
@@ -98,6 +145,9 @@ enum ArchiveUserFlowSmokeScenarios {
         ),
         PreviewTiebreakLabScenario(
             logPrefix: "extension_tiebreak",
+            exportStem: "extension_tiebreak",
+            panelCalloutStem: "extension_tiebreak",
+            panelHeaderStem: nil,
             folderName: "Equal Score Extension Tiebreak",
             exportMustContain: [
                 "selected_song_title=Tie Song",
@@ -110,15 +160,30 @@ enum ArchiveUserFlowSmokeScenarios {
     ]
 }
 
-struct SongSearchScenario: Sendable {
+struct RankingLabScenario: Sendable, Equatable {
+    let folderName: String
+    let exportMustContain: [String]
+    let tooShortSongTitle: String
+    let tooShortClipSubstring: String
+    let scanCalloutSubstring: String
+    let selectedHeaderSubstring: String
+    let tiebreakLegendSubstring: String
+    let mainPreviewSummarySubstrings: [String]
+    let rankedPreviewLineSubstring: String
+}
+
+struct SongSearchScenario: Sendable, Equatable {
     let logPrefix: String
+    let diagnosticsExportStem: String
+    let diagnosticsPanelStem: String
     let query: String
     let expectedDisplayTitle: String
     let summarySubstrings: [String]
     let exportMustContain: [String]
+    let minimumMatchCount: Int
 }
 
-struct SkippedSearchScenario: Sendable {
+struct SkippedSearchScenario: Sendable, Equatable {
     let logPrefix: String
     let query: String
     let expectedLabel: String
@@ -126,8 +191,11 @@ struct SkippedSearchScenario: Sendable {
     let exportMustContain: [String]
 }
 
-struct PreviewTiebreakLabScenario: Sendable {
+struct PreviewTiebreakLabScenario: Sendable, Equatable {
     let logPrefix: String
+    let exportStem: String
+    let panelCalloutStem: String
+    let panelHeaderStem: String?
     let folderName: String
     let exportMustContain: [String]
     let requiresHeader: Bool
@@ -144,6 +212,7 @@ public struct SearchPanelParity: Sendable, Equatable {
 }
 
 public struct SongSearchScenarioOutcome: Sendable, Equatable {
+    let scenario: SongSearchScenario
     let query: String
     let matchCount: Int
     let matchTitle: String
@@ -152,47 +221,44 @@ public struct SongSearchScenarioOutcome: Sendable, Equatable {
     let exportContainsMatch: Bool
     let panel: SearchPanelParity
 
-    func appendSmokeLog(prefix: String, into log: inout [String: String]) {
+    func satisfiesScenario() -> Bool {
+        query == scenario.query
+            && matchCount >= scenario.minimumMatchCount
+            && matchTitle == scenario.expectedDisplayTitle
+            && scenario.summarySubstrings.allSatisfy { matchSummary.localizedCaseInsensitiveContains($0) }
+            && exportContainsMatch
+            && !exportPath.isEmpty
+            && !panel.queryLine.isEmpty
+            && panel.queryLine.contains(scenario.query)
+            && panel.queryLineMatchesExport
+            && !panel.matchLinesJoined.isEmpty
+            && panel.matchLinesJoined.contains(scenario.expectedDisplayTitle)
+            && scenario.summarySubstrings.allSatisfy {
+                panel.matchLinesJoined.localizedCaseInsensitiveContains($0)
+                    || panel.matchLinesJoined.contains($0)
+            }
+            && panel.matchLinesMatchExport
+    }
+
+    func appendSmokeLog(into log: inout [String: String]) {
+        let prefix = scenario.logPrefix
+        let exportStem = scenario.diagnosticsExportStem
+        let panelStem = scenario.diagnosticsPanelStem
         log["\(prefix)_query"] = query
         log["\(prefix)_matches"] = String(matchCount)
         log["\(prefix)_match"] = matchTitle
         log["\(prefix)_summary"] = matchSummary
-        log["diagnostics_export_\(exportLogSuffix(prefix: prefix))_path"] = exportPath
-        log["diagnostics_export_\(exportLogSuffix(prefix: prefix))_match"] = String(exportContainsMatch)
-        log["diagnostics_panel_\(panelLogSuffix(prefix: prefix))_search_query_line"] = panel.queryLine
-        log["diagnostics_panel_\(panelLogSuffix(prefix: prefix))_search_query_line_match"] =
-            String(panel.queryLineMatchesExport)
-        log["diagnostics_panel_\(panelLogSuffix(prefix: prefix))_search_match_lines"] = panel.matchLinesJoined
-        log["diagnostics_panel_\(panelLogSuffix(prefix: prefix))_search_match_lines_match"] =
-            String(panel.matchLinesMatchExport)
-    }
-
-    private func exportLogSuffix(prefix: String) -> String {
-        switch prefix {
-        case "warning_search": "warning"
-        case "fuzzy_warning_search": "fuzzy_warning"
-        case "notes_search": "notes"
-        case "folder_search": "folder"
-        case "cpr_search": "cpr"
-        case "preview_search": "preview"
-        default: prefix.replacingOccurrences(of: "_search", with: "")
-        }
-    }
-
-    private func panelLogSuffix(prefix: String) -> String {
-        switch prefix {
-        case "warning_search": "warning"
-        case "fuzzy_warning_search": "fuzzy_warning"
-        case "notes_search": "notes"
-        case "folder_search": "folder"
-        case "cpr_search": "cpr"
-        case "preview_search": "preview"
-        default: prefix.replacingOccurrences(of: "_search", with: "")
-        }
+        log["diagnostics_export_\(exportStem)_path"] = exportPath
+        log["diagnostics_export_\(exportStem)_match"] = String(exportContainsMatch)
+        log["diagnostics_panel_\(panelStem)_search_query_line"] = panel.queryLine
+        log["diagnostics_panel_\(panelStem)_search_query_line_match"] = String(panel.queryLineMatchesExport)
+        log["diagnostics_panel_\(panelStem)_search_match_lines"] = panel.matchLinesJoined
+        log["diagnostics_panel_\(panelStem)_search_match_lines_match"] = String(panel.matchLinesMatchExport)
     }
 }
 
 public struct SkippedSearchScenarioOutcome: Sendable, Equatable {
+    let scenario: SkippedSearchScenario
     let query: String
     let matchCount: Int
     let matchLabel: String
@@ -201,11 +267,28 @@ public struct SkippedSearchScenarioOutcome: Sendable, Equatable {
     let exportContainsMatch: Bool
     let panel: SearchPanelParity
 
+    func satisfiesScenario() -> Bool {
+        query == scenario.query
+            && matchCount >= 1
+            && matchLabel == scenario.expectedLabel
+            && scenario.summarySubstrings.allSatisfy { matchSummary.localizedCaseInsensitiveContains($0) }
+            && exportContainsMatch
+            && !exportPath.isEmpty
+            && !panel.queryLine.isEmpty
+            && panel.queryLine.contains(scenario.query)
+            && panel.queryLineMatchesExport
+            && !panel.matchLinesJoined.isEmpty
+            && panel.matchLinesJoined.contains(scenario.expectedLabel)
+            && panel.matchLinesJoined.localizedCaseInsensitiveContains("fuzzy skipped label")
+            && panel.matchLinesMatchExport
+    }
+
     func appendSmokeLog(into log: inout [String: String]) {
-        log["skipped_search_query"] = query
-        log["skipped_search_matches"] = String(matchCount)
-        log["skipped_search_label"] = matchLabel
-        log["skipped_search_summary"] = matchSummary
+        let prefix = scenario.logPrefix
+        log["\(prefix)_query"] = query
+        log["\(prefix)_matches"] = String(matchCount)
+        log["\(prefix)_label"] = matchLabel
+        log["\(prefix)_summary"] = matchSummary
         log["diagnostics_export_path"] = exportPath
         log["diagnostics_export_skipped_match"] = String(exportContainsMatch)
         log["diagnostics_panel_skipped_search_query_line"] = panel.queryLine
@@ -216,16 +299,18 @@ public struct SkippedSearchScenarioOutcome: Sendable, Equatable {
 }
 
 public struct CoreFlowOutcome: Sendable, Equatable {
-    let userFlow: String
-    let songCount: Int
-    let writeProbeDenied: Bool
-    let archiveTreeUnchanged: Bool
-    let selectedTitle: String
-    let dryRunCPRPath: String
-    let dryRunCPRDisplayPath: String
-    let dryRunLogLine: String?
-    let dryRunLogDisplayLine: String?
-    let searchMatchSummary: String
+    public let userFlow: String
+    public let songCount: Int
+    public let writeProbeDenied: Bool
+    public let archiveTreeUnchanged: Bool
+    public let selectedTitle: String
+    public let dryRunCPRPath: String
+    public let dryRunCPRDisplayPath: String
+    /// Captured diagnostic line when tests use ``CapturingDiagnostics``; nil for console-only E2E smoke.
+    public let dryRunLogLine: String?
+    /// Always populated when dry-run open succeeds (captured line or synthetic from CPR path).
+    public let dryRunLogDisplayLine: String
+    public let searchMatchSummary: String
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["user_flow"] = userFlow
@@ -294,6 +379,7 @@ public struct FixtureDiagnosticsOutcome: Sendable, Equatable {
 }
 
 public struct RankingLabOutcome: Sendable, Equatable {
+    let scenario: RankingLabScenario
     let mainPreviewSummary: String
     let exportPath: String
     let exportContainsMatch: Bool
@@ -309,6 +395,30 @@ public struct RankingLabOutcome: Sendable, Equatable {
     let panelMainPreviewSummaryMatchesExport: Bool
     let panelRankedPreviewLines: String
     let panelRankedPreviewLinesMatchExport: Bool
+
+    func satisfiesScenario() -> Bool {
+        scenario.mainPreviewSummarySubstrings.allSatisfy { mainPreviewSummary.contains($0) }
+            && !exportPath.isEmpty
+            && exportContainsMatch
+            && !panelScanCallout.isEmpty
+            && panelScanCallout.contains(scenario.scanCalloutSubstring)
+            && panelScanCalloutMatchesExport
+            && !panelSelectedHeader.isEmpty
+            && panelSelectedHeader.contains(scenario.selectedHeaderSubstring)
+            && panelSelectedHeaderMatchesExport
+            && !panelTooShortBreakdownLine.isEmpty
+            && panelTooShortBreakdownLine.contains(scenario.tooShortClipSubstring)
+            && panelTooShortBreakdownMatchesExport
+            && !panelTiebreakLegend.isEmpty
+            && panelTiebreakLegend.contains(scenario.tiebreakLegendSubstring)
+            && panelTiebreakLegendMatchesExport
+            && !panelMainPreviewSummary.isEmpty
+            && scenario.mainPreviewSummarySubstrings.allSatisfy { panelMainPreviewSummary.contains($0) }
+            && panelMainPreviewSummaryMatchesExport
+            && !panelRankedPreviewLines.isEmpty
+            && panelRankedPreviewLines.contains(scenario.rankedPreviewLineSubstring)
+            && panelRankedPreviewLinesMatchExport
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["preview_rank_summary"] = mainPreviewSummary
@@ -330,6 +440,7 @@ public struct RankingLabOutcome: Sendable, Equatable {
 }
 
 public struct PreviewTiebreakLabOutcome: Sendable, Equatable {
+    let scenario: PreviewTiebreakLabScenario
     let exportPath: String
     let exportContainsTiebreak: Bool
     let panelHeader: String
@@ -337,33 +448,25 @@ public struct PreviewTiebreakLabOutcome: Sendable, Equatable {
     let panelCallout: String
     let panelCalloutMatchesExport: Bool
 
-    func appendSmokeLog(prefix: String, into log: inout [String: String]) {
-        switch prefix {
-        case "tiebreak":
-            log["diagnostics_export_tiebreak_path"] = exportPath
-            log["diagnostics_export_tiebreak_match"] = String(exportContainsTiebreak)
-            if !panelHeader.isEmpty {
-                log["diagnostics_panel_duration_tiebreak_header"] = panelHeader
-                log["diagnostics_panel_duration_tiebreak_header_match"] = String(panelHeaderMatchesExport)
-            }
-            log["diagnostics_panel_duration_tiebreak_callout"] = panelCallout
-            log["diagnostics_panel_duration_tiebreak_callout_match"] = String(panelCalloutMatchesExport)
-        case "version_tiebreak":
-            log["diagnostics_export_version_tiebreak_path"] = exportPath
-            log["diagnostics_export_version_tiebreak_match"] = String(exportContainsTiebreak)
-            log["diagnostics_panel_version_tiebreak_callout"] = panelCallout
-            log["diagnostics_panel_version_tiebreak_callout_match"] = String(panelCalloutMatchesExport)
-        case "extension_tiebreak":
-            log["diagnostics_export_extension_tiebreak_path"] = exportPath
-            log["diagnostics_export_extension_tiebreak_match"] = String(exportContainsTiebreak)
-            log["diagnostics_panel_extension_tiebreak_callout"] = panelCallout
-            log["diagnostics_panel_extension_tiebreak_callout_match"] = String(panelCalloutMatchesExport)
-        default:
-            log["diagnostics_export_\(prefix)_path"] = exportPath
-            log["diagnostics_export_\(prefix)_match"] = String(exportContainsTiebreak)
-            log["diagnostics_panel_\(prefix)_callout"] = panelCallout
-            log["diagnostics_panel_\(prefix)_callout_match"] = String(panelCalloutMatchesExport)
+    func satisfiesScenario() -> Bool {
+        !exportPath.isEmpty
+            && exportContainsTiebreak
+            && panelCallout.contains(scenario.calloutSubstring)
+            && panelCalloutMatchesExport
+            && (!scenario.requiresHeader || (!panelHeader.isEmpty && panelHeaderMatchesExport))
+    }
+
+    func appendSmokeLog(into log: inout [String: String]) {
+        let exportStem = scenario.exportStem
+        let calloutStem = scenario.panelCalloutStem
+        log["diagnostics_export_\(exportStem)_path"] = exportPath
+        log["diagnostics_export_\(exportStem)_match"] = String(exportContainsTiebreak)
+        if let headerStem = scenario.panelHeaderStem, !panelHeader.isEmpty {
+            log["diagnostics_panel_\(headerStem)_header"] = panelHeader
+            log["diagnostics_panel_\(headerStem)_header_match"] = String(panelHeaderMatchesExport)
         }
+        log["diagnostics_panel_\(calloutStem)_callout"] = panelCallout
+        log["diagnostics_panel_\(calloutStem)_callout_match"] = String(panelCalloutMatchesExport)
     }
 }
 
@@ -429,16 +532,31 @@ public struct SummaryTruncationCheckOutcome: Sendable, Equatable {
 }
 
 public struct SongSearchResults: Sendable, Equatable {
-    let warning: SongSearchScenarioOutcome
-    let fuzzyWarning: SongSearchScenarioOutcome
-    let notes: SongSearchScenarioOutcome
-    let folder: SongSearchScenarioOutcome
-    let cpr: SongSearchScenarioOutcome
-    let preview: SongSearchScenarioOutcome
+    public let byLogPrefix: [String: SongSearchScenarioOutcome]
+
+    public init(byLogPrefix: [String: SongSearchScenarioOutcome]) {
+        self.byLogPrefix = byLogPrefix
+    }
+
+    public subscript(logPrefix: String) -> SongSearchScenarioOutcome {
+        guard let outcome = byLogPrefix[logPrefix] else {
+            preconditionFailure("Missing song search outcome for log prefix \(logPrefix)")
+        }
+        return outcome
+    }
 }
 
-public struct PreviewTiebreakLabsOutcome: Sendable, Equatable {
-    let duration: PreviewTiebreakLabOutcome
-    let version: PreviewTiebreakLabOutcome
-    let extensionLab: PreviewTiebreakLabOutcome
+public struct PreviewTiebreakLabSuite: Sendable, Equatable {
+    public let byLogPrefix: [String: PreviewTiebreakLabOutcome]
+
+    public init(byLogPrefix: [String: PreviewTiebreakLabOutcome]) {
+        self.byLogPrefix = byLogPrefix
+    }
+
+    public subscript(logPrefix: String) -> PreviewTiebreakLabOutcome {
+        guard let outcome = byLogPrefix[logPrefix] else {
+            preconditionFailure("Missing preview tiebreak outcome for log prefix \(logPrefix)")
+        }
+        return outcome
+    }
 }

@@ -23,39 +23,43 @@ public enum ArchiveUserFlowSmoke {
             searchQuery: searchQuery,
             searchMatchCount: searchMatchCount
         )
+        let (_, primaryExportText) = try exportDiagnosticsText(from: viewModel)
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
         let fixtureDiagnostics = try runFixtureDiagnosticsCheck(
             viewModel: viewModel,
-            exportText: try String(
-                contentsOf: URL(fileURLWithPath: primarySearch.exportPath),
-                encoding: .utf8
-            ),
+            exportText: primaryExportText,
             homeDirectory: homeDirectory
         )
 
         guard let diagnostics = viewModel.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMissing
         }
-        let rankingLab = try runRankingLabCheck(viewModel: viewModel, diagnostics: diagnostics)
-
-        let tiebreakSpecs = ArchiveUserFlowSmokeScenarios.previewTiebreakLabs
-        let tiebreakLabs = PreviewTiebreakLabsOutcome(
-            duration: try runPreviewTiebreakLab(viewModel: viewModel, scenario: tiebreakSpecs[0]),
-            version: try runPreviewTiebreakLab(viewModel: viewModel, scenario: tiebreakSpecs[1]),
-            extensionLab: try runPreviewTiebreakLab(viewModel: viewModel, scenario: tiebreakSpecs[2])
+        let rankingLab = try runRankingLabCheck(
+            viewModel: viewModel,
+            diagnostics: diagnostics,
+            scenario: ArchiveUserFlowSmokeScenarios.rankingLab
         )
+
+        var tiebreakByPrefix: [String: PreviewTiebreakLabOutcome] = [:]
+        for scenario in ArchiveUserFlowSmokeScenarios.previewTiebreakLabs {
+            tiebreakByPrefix[scenario.logPrefix] = try runPreviewTiebreakLab(
+                viewModel: viewModel,
+                scenario: scenario
+            )
+        }
+        let tiebreakLabs = PreviewTiebreakLabSuite(byLogPrefix: tiebreakByPrefix)
 
         let brokenFolder = try runBrokenFolderCheck(viewModel: viewModel)
 
-        let songSearchSpecs = ArchiveUserFlowSmokeScenarios.songSearches
-        let searches = SongSearchResults(
-            warning: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[0]),
-            fuzzyWarning: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[1]),
-            notes: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[2]),
-            folder: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[3]),
-            cpr: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[4]),
-            preview: try runSongSearchScenario(viewModel: viewModel, scenario: songSearchSpecs[5])
-        )
+        var searchByPrefix: [String: SongSearchScenarioOutcome] = [:]
+        for scenario in ArchiveUserFlowSmokeScenarios.songSearches {
+            searchByPrefix[scenario.logPrefix] = try runSongSearchScenario(
+                viewModel: viewModel,
+                scenario: scenario
+            )
+        }
+        let searches = SongSearchResults(byLogPrefix: searchByPrefix)
+
         let skippedSearch = try runSkippedSearchScenario(
             viewModel: viewModel,
             scenario: ArchiveUserFlowSmokeScenarios.skippedSearch
