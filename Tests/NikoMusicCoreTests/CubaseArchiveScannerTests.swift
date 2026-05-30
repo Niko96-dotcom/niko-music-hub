@@ -59,4 +59,24 @@ final class CubaseArchiveScannerTests: XCTestCase {
         let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
         XCTAssertGreaterThanOrEqual(neon.projectVersions.count, 1)
     }
+
+    func testScanCombinesSongsFromMultipleRoots() throws {
+        try CubaseFixtures.ensureGenerated()
+        let buildDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+        let extraRoot = buildDir.appendingPathComponent("NikoMusicHubExtraArchiveRoot-\(UUID().uuidString)", isDirectory: true)
+        let extraSongFolder = extraRoot.appendingPathComponent("Extra Archive Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: extraSongFolder, withIntermediateDirectories: true)
+        let cpr = extraSongFolder.appendingPathComponent("Extra Archive Song.cpr")
+        FileManager.default.createFile(atPath: cpr.path, contents: Data("fixture".utf8))
+        defer { try? FileManager.default.removeItem(at: extraRoot) }
+
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot, extraRoot])
+
+        let titles = Set(result.songs.map(\.displayTitle))
+        XCTAssertTrue(titles.contains("Neon Hook"))
+        XCTAssertTrue(titles.contains("Extra Archive Song"))
+        XCTAssertGreaterThan(result.songs.count, 9)
+    }
 }

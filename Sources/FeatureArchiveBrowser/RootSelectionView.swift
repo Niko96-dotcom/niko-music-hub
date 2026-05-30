@@ -14,7 +14,7 @@ struct RootSelectionView: View {
                 addRootButton
             }
             if viewModel.roots.isEmpty {
-                Text("Pick the folder that contains your Cubase song folders.")
+                Text("Pick one or more folders that contain your Cubase song folders.")
                     .font(.system(size: 12))
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
