@@ -9,6 +9,11 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
     public var previewSelectionMode: PreviewSelectionMode
     public var manualMainPreviewID: String?
     public var ignoredPreviewCandidateIDs: [String]
+    public var collaboratorIDs: [String]
+    public var isIgnored: Bool
+    public var cprSelectionMode: CPRSelectionMode
+    public var manualMainCPRID: String?
+    public var ignoredCPRVersionIDs: [String]
     public var updatedAt: Date
 
     public init(
@@ -19,6 +24,11 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
         previewSelectionMode: PreviewSelectionMode = .auto,
         manualMainPreviewID: String? = nil,
         ignoredPreviewCandidateIDs: [String] = [],
+        collaboratorIDs: [String] = [],
+        isIgnored: Bool = false,
+        cprSelectionMode: CPRSelectionMode = .auto,
+        manualMainCPRID: String? = nil,
+        ignoredCPRVersionIDs: [String] = [],
         updatedAt: Date = Date()
     ) {
         self.songID = songID
@@ -28,6 +38,11 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
         self.previewSelectionMode = previewSelectionMode
         self.manualMainPreviewID = manualMainPreviewID
         self.ignoredPreviewCandidateIDs = ignoredPreviewCandidateIDs
+        self.collaboratorIDs = collaboratorIDs
+        self.isIgnored = isIgnored
+        self.cprSelectionMode = cprSelectionMode
+        self.manualMainCPRID = manualMainCPRID
+        self.ignoredCPRVersionIDs = ignoredCPRVersionIDs
         self.updatedAt = updatedAt
     }
 
@@ -40,6 +55,11 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
             previewSelectionMode: song.previewSelectionMode,
             manualMainPreviewID: song.previewSelectionMode == .manual ? song.mainPreviewCandidateID : nil,
             ignoredPreviewCandidateIDs: song.ignoredPreviewCandidateIDs,
+            collaboratorIDs: song.collaboratorIDs,
+            isIgnored: song.isIgnored,
+            cprSelectionMode: song.cprSelectionMode,
+            manualMainCPRID: song.cprSelectionMode == .manual ? song.manualMainCPRID : nil,
+            ignoredCPRVersionIDs: song.ignoredCPRVersionIDs,
             updatedAt: updatedAt
         )
     }

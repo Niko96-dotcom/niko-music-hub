@@ -17,6 +17,8 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
     case fuzzyAppNote
     case alias
     case fuzzyAlias
+    case collaborator
+    case fuzzyCollaborator
     case fuzzyTitle
     case fuzzyHaystack
 
@@ -38,6 +40,8 @@ public enum MusicSearchMatchKind: String, Sendable, Equatable {
         case .fuzzyAppNote: "fuzzy app note"
         case .alias: "alias"
         case .fuzzyAlias: "fuzzy alias"
+        case .collaborator: "collaborator"
+        case .fuzzyCollaborator: "fuzzy collaborator"
         case .fuzzyTitle: "fuzzy title"
         case .fuzzyHaystack: "fuzzy text"
         }

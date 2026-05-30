@@ -6,6 +6,10 @@ import SwiftUI
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @State private var supportReportExpanded = false
+    @State private var intelligenceExpanded = false
+    @State private var showNewSongSheet = false
+    @State private var addressBookName = ""
+    @FocusState private var archiveFocused: Bool
 
     init(context: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
@@ -38,6 +42,32 @@ struct ArchiveBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .focused($archiveFocused)
+        .onAppear { archiveFocused = true }
+        .onKeyPress("p") {
+            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            try? viewModel.openMainPreview(for: song)
+            return .handled
+        }
+        .onKeyPress("o") {
+            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            try? viewModel.openLatestCPR(for: song)
+            return .handled
+        }
+        .onKeyPress("f") {
+            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+            return .handled
+        }
+        .onKeyPress("d") {
+            guard archiveFocused else { return .ignored }
+            viewModel.focusSelectedSongDetail()
+            return .handled
+        }
+        .sheet(isPresented: $showNewSongSheet) {
+            NewSongSheet(viewModel: viewModel)
+        }
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
             guard !viewModel.isScanning else { return }
             if viewModel.roots.isEmpty {
@@ -57,8 +87,29 @@ struct ArchiveBrowserView: View {
             RootSelectionView(viewModel: viewModel, onAddRoot: chooseRoot)
 
             shelfPicker(compactList: compactList)
-
+            collaboratorShelfPicker
+            browseControls(compactList: compactList)
+            collaboratorAddressBook
             scanAndSearchControls(compactList: compactList)
+
+            Toggle("Show hidden songs", isOn: $viewModel.showHiddenSongs)
+                .font(.system(size: 11))
+                .onChange(of: viewModel.showHiddenSongs) { _, _ in
+                    viewModel.applySearchFilter()
+                }
+
+            ArchiveHealthReportView(report: viewModel.healthReport())
+
+            DisclosureGroup(isExpanded: $intelligenceExpanded) {
+                ArchiveIntelligencePanelView(viewModel: viewModel)
+            } label: {
+                Text("Intelligence")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+
+            Button("New song…") { showNewSongSheet = true }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.roots.isEmpty)
 
             if let status = viewModel.statusMessage {
                 Text(status)
@@ -120,6 +171,95 @@ struct ArchiveBrowserView: View {
         .padding(compactList ? 12 : 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchiveDesignTokens.surface)
+    }
+
+    @ViewBuilder
+    private var collaboratorShelfPicker: some View {
+        if viewModel.selectedShelf == .byCollaborator {
+            Picker("Collaborator", selection: Binding(
+                get: { viewModel.selectedCollaboratorID ?? "" },
+                set: {
+                    viewModel.selectedCollaboratorID = $0.isEmpty ? nil : $0
+                    viewModel.applySearchFilter()
+                }
+            )) {
+                Text("Choose…").tag("")
+                ForEach(viewModel.collaborators) { collaborator in
+                    Text(collaborator.displayName).tag(collaborator.id)
+                }
+            }
+            .labelsHidden()
+            .disabled(viewModel.collaborators.isEmpty)
+        }
+    }
+
+    @ViewBuilder
+    private func browseControls(compactList: Bool) -> some View {
+        let sortPicker = Picker("Sort", selection: $viewModel.sortMode) {
+            ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
+                Text(mode.title).tag(mode)
+            }
+        }
+        .labelsHidden()
+        .disabled(viewModel.songs.isEmpty)
+        .onChange(of: viewModel.sortMode) { _, _ in viewModel.applySearchFilter() }
+
+        if compactList {
+            sortPicker.pickerStyle(.menu)
+        } else {
+            sortPicker.pickerStyle(.segmented)
+        }
+
+        HStack(spacing: 6) {
+            filterChip("Stems", filter: .hasStems)
+            filterChip("No preview", filter: .noPreview)
+            filterChip("Warnings", filter: .hasWarnings)
+        }
+    }
+
+    private func filterChip(_ title: String, filter: ArchiveBrowseFilter) -> some View {
+        let active = viewModel.browseFilter.contains(filter)
+        return Button(title) {
+            if active {
+                viewModel.browseFilter.remove(filter)
+            } else {
+                viewModel.browseFilter.insert(filter)
+            }
+            viewModel.applySearchFilter()
+        }
+        .buttonStyle(.bordered)
+        .tint(active ? ArchiveDesignTokens.accent : .secondary)
+        .controlSize(.small)
+        .disabled(viewModel.songs.isEmpty)
+    }
+
+    private var collaboratorAddressBook: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Collaborators")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            if viewModel.collaborators.isEmpty {
+                Text("No collaborators yet.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            } else {
+                ForEach(viewModel.collaborators) { collaborator in
+                    Text(collaborator.displayName)
+                        .font(.system(size: 10))
+                }
+            }
+            HStack(spacing: 6) {
+                TextField("Add name", text: $addressBookName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    if viewModel.upsertCollaborator(name: addressBookName) != nil {
+                        addressBookName = ""
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
     }
 
     @ViewBuilder
