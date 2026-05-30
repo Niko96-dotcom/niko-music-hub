@@ -27,7 +27,9 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
             defer { sqlite3_finalize(statement) }
             let sql = """
             SELECT song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
-                   manual_main_preview_id, ignored_preview_ids_json, updated_at
+                   manual_main_preview_id, ignored_preview_ids_json, updated_at,
+                   collaborator_ids_json, is_ignored, cpr_selection_mode,
+                   manual_main_cpr_id, ignored_cpr_ids_json
             FROM song_metadata;
             """
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -41,12 +43,20 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 let aliasesJSON = textColumn(statement, column: 2) ?? "[]"
                 let appNote = optionalText(statement, column: 3)
                 let modeRaw = textColumn(statement, column: 4) ?? PreviewSelectionMode.auto.rawValue
-                let manualID = optionalText(statement, column: 5)
-                let ignoredJSON = textColumn(statement, column: 6) ?? "[]"
+                let manualPreviewID = optionalText(statement, column: 5)
+                let ignoredPreviewJSON = textColumn(statement, column: 6) ?? "[]"
                 let updatedText = textColumn(statement, column: 7) ?? ""
+                let collaboratorJSON = textColumn(statement, column: 8) ?? "[]"
+                let isIgnored = sqlite3_column_int(statement, 9) != 0
+                let cprModeRaw = textColumn(statement, column: 10) ?? CPRSelectionMode.auto.rawValue
+                let manualCPRID = optionalText(statement, column: 11)
+                let ignoredCPRJSON = textColumn(statement, column: 12) ?? "[]"
                 let aliases = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
-                let ignored = try decoder.decode([String].self, from: Data(ignoredJSON.utf8))
-                let mode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
+                let ignoredPreviews = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
+                let collaboratorIDs = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
+                let ignoredCPRs = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
+                let previewMode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
+                let cprMode = CPRSelectionMode(rawValue: cprModeRaw) ?? .auto
                 let formatter = ISO8601DateFormatter()
                 let updatedAt = formatter.date(from: updatedText) ?? Date()
                 result[songID] = SongUserMetadata(
@@ -54,9 +64,14 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                     virtualTitle: virtualTitle,
                     aliases: aliases,
                     appNote: appNote,
-                    previewSelectionMode: mode,
-                    manualMainPreviewID: manualID,
-                    ignoredPreviewCandidateIDs: ignored,
+                    previewSelectionMode: previewMode,
+                    manualMainPreviewID: manualPreviewID,
+                    ignoredPreviewCandidateIDs: ignoredPreviews,
+                    collaboratorIDs: collaboratorIDs,
+                    isIgnored: isIgnored,
+                    cprSelectionMode: cprMode,
+                    manualMainCPRID: manualCPRID,
+                    ignoredCPRVersionIDs: ignoredCPRs,
                     updatedAt: updatedAt
                 )
             }
@@ -74,9 +89,13 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
         try withConnection { db in
             for item in metadata {
                 let aliasesData = try encoder.encode(item.aliases)
-                let ignoredData = try encoder.encode(item.ignoredPreviewCandidateIDs)
+                let ignoredPreviewData = try encoder.encode(item.ignoredPreviewCandidateIDs)
+                let collaboratorData = try encoder.encode(item.collaboratorIDs)
+                let ignoredCPRData = try encoder.encode(item.ignoredCPRVersionIDs)
                 guard let aliasesJSON = String(data: aliasesData, encoding: .utf8),
-                      let ignoredJSON = String(data: ignoredData, encoding: .utf8) else {
+                      let ignoredPreviewJSON = String(data: ignoredPreviewData, encoding: .utf8),
+                      let collaboratorJSON = String(data: collaboratorData, encoding: .utf8),
+                      let ignoredCPRJSON = String(data: ignoredCPRData, encoding: .utf8) else {
                     throw StoreError.encode("utf8")
                 }
                 let updatedText = formatter.string(from: item.updatedAt)
@@ -85,8 +104,10 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 let sql = """
                 INSERT INTO song_metadata (
                   song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
-                  manual_main_preview_id, ignored_preview_ids_json, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  manual_main_preview_id, ignored_preview_ids_json, updated_at,
+                  collaborator_ids_json, is_ignored, cpr_selection_mode,
+                  manual_main_cpr_id, ignored_cpr_ids_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id) DO UPDATE SET
                   virtual_title = excluded.virtual_title,
                   aliases_json = excluded.aliases_json,
@@ -94,7 +115,12 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                   preview_selection_mode = excluded.preview_selection_mode,
                   manual_main_preview_id = excluded.manual_main_preview_id,
                   ignored_preview_ids_json = excluded.ignored_preview_ids_json,
-                  updated_at = excluded.updated_at;
+                  updated_at = excluded.updated_at,
+                  collaborator_ids_json = excluded.collaborator_ids_json,
+                  is_ignored = excluded.is_ignored,
+                  cpr_selection_mode = excluded.cpr_selection_mode,
+                  manual_main_cpr_id = excluded.manual_main_cpr_id,
+                  ignored_cpr_ids_json = excluded.ignored_cpr_ids_json;
                 """
                 guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
                     throw StoreError.prepare(message(db))
@@ -105,8 +131,13 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 bindOptionalText(statement, index: 4, value: item.appNote)
                 sqlite3_bind_text(statement, 5, item.previewSelectionMode.rawValue, -1, sqliteTransient)
                 bindOptionalText(statement, index: 6, value: item.manualMainPreviewID)
-                sqlite3_bind_text(statement, 7, ignoredJSON, -1, sqliteTransient)
+                sqlite3_bind_text(statement, 7, ignoredPreviewJSON, -1, sqliteTransient)
                 sqlite3_bind_text(statement, 8, updatedText, -1, sqliteTransient)
+                sqlite3_bind_text(statement, 9, collaboratorJSON, -1, sqliteTransient)
+                sqlite3_bind_int(statement, 10, item.isIgnored ? 1 : 0)
+                sqlite3_bind_text(statement, 11, item.cprSelectionMode.rawValue, -1, sqliteTransient)
+                bindOptionalText(statement, index: 12, value: item.manualMainCPRID)
+                sqlite3_bind_text(statement, 13, ignoredCPRJSON, -1, sqliteTransient)
                 guard sqlite3_step(statement) == SQLITE_DONE else {
                     throw StoreError.step(message(db))
                 }
@@ -127,13 +158,48 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
               preview_selection_mode TEXT NOT NULL DEFAULT 'auto',
               manual_main_preview_id TEXT,
               ignored_preview_ids_json TEXT NOT NULL DEFAULT '[]',
-              updated_at TEXT NOT NULL
+              updated_at TEXT NOT NULL,
+              collaborator_ids_json TEXT NOT NULL DEFAULT '[]',
+              is_ignored INTEGER NOT NULL DEFAULT 0,
+              cpr_selection_mode TEXT NOT NULL DEFAULT 'auto',
+              manual_main_cpr_id TEXT,
+              ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]'
             );
             """
             guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
                 throw StoreError.exec(message(db))
             }
+            try migrateLegacyColumns(db)
         }
+    }
+
+    private func migrateLegacyColumns(_ db: OpaquePointer) throws {
+        let migrations: [(column: String, ddl: String)] = [
+            ("collaborator_ids_json", "ALTER TABLE song_metadata ADD COLUMN collaborator_ids_json TEXT NOT NULL DEFAULT '[]';"),
+            ("is_ignored", "ALTER TABLE song_metadata ADD COLUMN is_ignored INTEGER NOT NULL DEFAULT 0;"),
+            ("cpr_selection_mode", "ALTER TABLE song_metadata ADD COLUMN cpr_selection_mode TEXT NOT NULL DEFAULT 'auto';"),
+            ("manual_main_cpr_id", "ALTER TABLE song_metadata ADD COLUMN manual_main_cpr_id TEXT;"),
+            ("ignored_cpr_ids_json", "ALTER TABLE song_metadata ADD COLUMN ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]';"),
+        ]
+        for migration in migrations {
+            if try columnExists(migration.column, db: db) { continue }
+            guard sqlite3_exec(db, migration.ddl, nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
+            }
+        }
+    }
+
+    private func columnExists(_ name: String, db: OpaquePointer) throws -> Bool {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(song_metadata);", -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let cString = sqlite3_column_text(statement, 1) else { continue }
+            if String(cString: cString) == name { return true }
+        }
+        return false
     }
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {

@@ -4,12 +4,16 @@ public enum ArchiveSmartShelf: String, CaseIterable, Sendable, Codable {
     case allSongs = "all"
     case recentlyBounced = "recent_bounce"
     case recentCPRActivity = "recent_cpr"
+    case hasStems = "has_stems"
+    case byCollaborator = "by_collaborator"
 
     public var title: String {
         switch self {
         case .allSongs: "All songs"
         case .recentlyBounced: "Recently Bounced"
         case .recentCPRActivity: "Recent CPR Activity"
+        case .hasStems: "Has Stems"
+        case .byCollaborator: "By Collaborator"
         }
     }
 }
@@ -37,7 +41,25 @@ public enum ArchiveShelfRanker {
             .map(\.0)
     }
 
-    public static func filter(_ songs: [Song], shelf: ArchiveSmartShelf) -> [Song] {
+    /// Songs with stems-like exports detected.
+    public static func hasStems(_ songs: [Song]) -> [Song] {
+        songs.filter(\.hasStems)
+    }
+
+    /// Songs assigned to a collaborator, ordered by title.
+    public static func byCollaborator(_ songs: [Song], collaboratorID: String) -> [Song] {
+        songs
+            .filter { $0.collaboratorIDs.contains(collaboratorID) }
+            .sorted {
+                $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
+            }
+    }
+
+    public static func filter(
+        _ songs: [Song],
+        shelf: ArchiveSmartShelf,
+        collaboratorID: String? = nil
+    ) -> [Song] {
         switch shelf {
         case .allSongs:
             return songs
@@ -45,6 +67,11 @@ public enum ArchiveShelfRanker {
             return recentlyBounced(songs)
         case .recentCPRActivity:
             return recentCPRActivity(songs)
+        case .hasStems:
+            return hasStems(songs)
+        case .byCollaborator:
+            guard let collaboratorID else { return [] }
+            return byCollaborator(songs, collaboratorID: collaboratorID)
         }
     }
 
@@ -56,9 +83,9 @@ public enum ArchiveShelfRanker {
     }
 
     public static func latestCPRActivity(for song: Song) -> Date? {
-        if let latest = song.latestCPR?.modifiedAt {
+        if let latest = song.effectiveLatestCPR?.modifiedAt {
             return latest
         }
-        return song.projectVersions.map(\.modifiedAt).max()
+        return song.visibleProjectVersions.map(\.modifiedAt).max()
     }
 }

@@ -9,23 +9,29 @@ struct SongDetailView: View {
     @State private var virtualTitleDraft = ""
     @State private var appNoteDraft = ""
     @State private var aliasesDraft = ""
+    @State private var newCollaboratorName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             metadataSection
+            collaboratorsSection
             previewSection
+            bpmSection
             actionsSection
-            cprSection
+            cprListSection
             alternatePreviewsSection
+            hideSection
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear {
             syncDrafts(from: song)
             heroPlayback.prepare(url: mainPreviewURL)
+            viewModel.refreshBPMEstimate(for: song)
         }
         .onChange(of: song.id) { _, _ in
             syncDrafts(from: song)
             heroPlayback.prepare(url: mainPreviewURL)
+            viewModel.refreshBPMEstimate(for: song)
         }
         .onDisappear {
             heroPlayback.stopIfPlaying(url: mainPreviewURL)
@@ -70,6 +76,12 @@ struct SongDetailView: View {
                     .onSubmit { commitAppNote() }
             }
 
+            if song.hasStems {
+                Text("Stems detected")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+            }
+
             if let warning = song.displayScanWarnings().first {
                 Text(warning)
                     .font(.system(size: 11))
@@ -83,6 +95,53 @@ struct SongDetailView: View {
                     .foregroundStyle(ArchiveDesignTokens.textSecondary)
                     .lineLimit(4)
             }
+        }
+    }
+
+    private var collaboratorsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Collaborators")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+
+            if viewModel.collaborators.isEmpty {
+                Text("Add collaborators in the address book below the shelf picker.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            } else {
+                ForEach(viewModel.collaborators) { collaborator in
+                    Toggle(collaborator.displayName, isOn: Binding(
+                        get: { song.collaboratorIDs.contains(collaborator.id) },
+                        set: { on in
+                            var ids = song.collaboratorIDs
+                            if on { ids.append(collaborator.id) }
+                            else { ids.removeAll { $0 == collaborator.id } }
+                            viewModel.assignCollaborators(to: song, collaboratorIDs: ids)
+                        }
+                    ))
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("New collaborator", text: $newCollaboratorName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    if viewModel.upsertCollaborator(name: newCollaboratorName) != nil {
+                        newCollaboratorName = ""
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(newCollaboratorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bpmSection: some View {
+        if let estimate = viewModel.bpmEstimate(for: song) {
+            Text("Mixdown BPM: \(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
+                .font(.system(size: 11))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
         }
     }
 
@@ -114,36 +173,101 @@ struct SongDetailView: View {
     }
 
     private var actionsSection: some View {
-        HStack(spacing: 10) {
-            Button("Open Latest CPR") {
-                try? viewModel.openLatestCPR(for: song)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(ArchiveDesignTokens.accent)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button("Open in Cubase") {
+                    try? viewModel.openLatestCPR(for: song)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(ArchiveDesignTokens.accent)
+                .help("Open latest CPR (O)")
 
-            Button("Show in Finder") {
-                viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
-            }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.preferredRevealURL(for: song) == nil)
+                Button("Reveal in Finder") {
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.preferredRevealURL(for: song) == nil)
+                .help("Reveal CPR or folder (F)")
 
-            Button("Save metadata") {
-                commitVirtualTitle()
-                commitAliases()
-                commitAppNote()
+                Button("Save metadata") {
+                    commitVirtualTitle()
+                    commitAliases()
+                    commitAppNote()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
+            Text("Shortcuts when archive is focused: P preview · O open CPR · F Finder · D detail")
+                .font(.system(size: 10))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
         }
     }
 
-    @ViewBuilder
-    private var cprSection: some View {
-        if let latest = song.latestCPR ?? song.projectVersions.first {
-            Text(latest.fileName)
-                .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
-                .lineLimit(2)
-                .truncationMode(.middle)
+    private var cprListSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("CPR versions")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                Spacer()
+                Text(song.cprSelectionMode == .manual ? "Manual main" : "Auto main")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(ArchiveDesignTokens.accent)
+            }
+
+            if song.projectVersions.isEmpty {
+                Text("No CPR project files found")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ArchiveDesignTokens.warning)
+            } else {
+                ForEach(song.projectVersions, id: \.id) { version in
+                    let isMain = song.effectiveLatestCPR?.id == version.id
+                    let isIgnored = song.ignoredCPRVersionIDs.contains(version.id)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(version.fileName)
+                                .font(.system(size: 11, weight: isMain ? .semibold : .regular))
+                                .foregroundStyle(isIgnored ? ArchiveDesignTokens.textSecondary : ArchiveDesignTokens.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            if isMain {
+                                Text("Main")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(ArchiveDesignTokens.accent)
+                            }
+                            if isIgnored {
+                                Text("Hidden")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                            }
+                        }
+                        Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.system(size: 10))
+                            .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        if !isIgnored {
+                            HStack(spacing: 8) {
+                                Button("Set as main") {
+                                    viewModel.setManualMainCPR(for: song, versionID: version.id)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                Button("Hide version") {
+                                    viewModel.ignoreCPRVersion(for: song, versionID: version.id)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                if song.cprSelectionMode == .manual {
+                    Button("Revert to auto CPR") {
+                        viewModel.revertCPRToAuto(for: song)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
         }
     }
 
@@ -175,6 +299,14 @@ struct SongDetailView: View {
                 }
             }
         }
+    }
+
+    private var hideSection: some View {
+        Toggle("Hide song from browse", isOn: Binding(
+            get: { song.isIgnored },
+            set: { viewModel.setSongHidden(song, hidden: $0) }
+        ))
+        .font(.system(size: 11))
     }
 
     private var rankedPreviews: [PreviewCandidate] {

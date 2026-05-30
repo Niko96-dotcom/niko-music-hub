@@ -23,7 +23,7 @@ public struct MusicItemOpener: Sendable {
     }
 
     public func openLatestCPR(for song: Song, dryRun: Bool) throws -> OpenResult? {
-        guard let latest = song.latestCPR else { return nil }
+        guard let latest = song.effectiveLatestCPR ?? song.latestCPR else { return nil }
         let path = latest.filePath.path
         if dryRun {
             log("[dry-run] open CPR: \(path)")
@@ -36,7 +36,7 @@ public struct MusicItemOpener: Sendable {
     }
 
     public func revealLatestCPR(for song: Song, dryRun: Bool) throws -> OpenResult? {
-        guard let latest = song.latestCPR else { return nil }
+        guard let latest = song.effectiveLatestCPR ?? song.latestCPR else { return nil }
         let path = latest.filePath.path
         if dryRun {
             log("[dry-run] reveal CPR: \(path)")

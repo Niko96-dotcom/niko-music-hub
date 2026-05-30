@@ -87,16 +87,16 @@ The goal is **COMPLETE** when:
 | [CP-06](#cp-06-manual-main-preview) | Manual main preview | M2-06, M5-07 | [x] |
 | [CP-07](#cp-07-smart-shelves-recent) | Smart shelves (recent) | M3-01, M3-02, M3-07 | [x] |
 | [CP-08](#cp-08-waveform-hero--seek) | Waveform hero + seek | M5-03, M5-04 | [x] |
-| [CP-09](#cp-09-home-browse-shelves-ui) | Home browse + shelves UI | M3-08, M3-03 | [ ] |
-| [CP-10](#cp-10-collaborators-address-book) | Collaborators + address book | M2-05, M3-04, M3-06 | [ ] |
-| [CP-11](#cp-11-main-cpr-override-hide) | Main CPR override + hide | M2-07, M2-08 | [ ] |
-| [CP-12](#cp-12-keyboard-shortcuts-quick-actions) | Keyboard shortcuts | M1-10, M5-N2 | [ ] |
-| [CP-13](#cp-13-search-aliases-collaborators) | Search aliases + collaborators | M3-05, M3-06 | [ ] |
-| [CP-14](#cp-14-sort-filters-health-report) | Sort, filters, health report | M3-N1, M3-N2, M1-N2 | [ ] |
-| [CP-15](#cp-15-bpm-from-mixdown--hub) | BPM from mixdown + hub | M2-N1, HUB-01 | [ ] |
-| [CP-16](#cp-16-cpr-list-polish-confidence) | CPR list + confidence polish | M5-06, M5-02, M5-N1 | [ ] |
-| [CP-17](#cp-17-new-song-flow) | New song flow | M4-01–M4-04 | [ ] |
-| [CP-18](#cp-18-read-only-intelligence-export) | Read-only intelligence + export | M5-01, NN-01, NN-03, NN-04, NN-09 | [ ] |
+| [CP-09](#cp-09-home-browse-shelves-ui) | Home browse + shelves UI | M3-08, M3-03 | [x] |
+| [CP-10](#cp-10-collaborators-address-book) | Collaborators + address book | M2-05, M3-04, M3-06 | [x] |
+| [CP-11](#cp-11-main-cpr-override-hide) | Main CPR override + hide | M2-07, M2-08 | [x] |
+| [CP-12](#cp-12-keyboard-shortcuts-quick-actions) | Keyboard shortcuts | M1-10, M5-N2 | [x] |
+| [CP-13](#cp-13-search-aliases-collaborators) | Search aliases + collaborators | M3-05, M3-06 | [x] |
+| [CP-14](#cp-14-sort-filters-health-report) | Sort, filters, health report | M3-N1, M3-N2, M1-N2 | [x] |
+| [CP-15](#cp-15-bpm-from-mixdown--hub) | BPM from mixdown + hub | M2-N1, HUB-01 | [x] |
+| [CP-16](#cp-16-cpr-list-polish-confidence) | CPR list + confidence polish | M5-06, M5-02, M5-N1 | [x] |
+| [CP-17](#cp-17-new-song-flow) | New song flow | M4-01–M4-04 | [x] |
+| [CP-18](#cp-18-read-only-intelligence-export) | Read-only intelligence + export | M5-01, NN-01, NN-03, NN-04, NN-09 | [x] |
 | [CP-19](#cp-19-p3--optional-skip-by-default) | P3 optional (skip) | NN-02, NN-05–08, HUB-02 | [ ] skip |
 
 ---

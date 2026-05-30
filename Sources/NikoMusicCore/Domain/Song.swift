@@ -19,6 +19,13 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public var appNote: String?
     public var previewSelectionMode: PreviewSelectionMode
     public var ignoredPreviewCandidateIDs: [String]
+    public var collaboratorIDs: [String]
+    /// Resolved at merge time for search; not persisted in the archive index snapshot.
+    public var collaboratorNames: [String]
+    public var isIgnored: Bool
+    public var cprSelectionMode: CPRSelectionMode
+    public var manualMainCPRID: String?
+    public var ignoredCPRVersionIDs: [String]
 
     public var effectiveDisplayTitle: String {
         if let virtualTitle {
@@ -26,6 +33,36 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
             if !trimmed.isEmpty { return trimmed }
         }
         return displayTitle
+    }
+
+    /// True when stems-like exports are detected (SPEC §10 Has Stems shelf).
+    public var hasStems: Bool {
+        previewCandidates.contains {
+            $0.folderRole == .stems || $0.detectedRole == .stems
+        }
+    }
+
+    /// Visible CPR versions after user ignores.
+    public var visibleProjectVersions: [ProjectVersion] {
+        projectVersions.filter { !ignoredCPRVersionIDs.contains($0.id) }
+    }
+
+    /// Effective main CPR after manual/auto selection and ignores.
+    public var effectiveLatestCPR: ProjectVersion? {
+        let visible = visibleProjectVersions
+        switch cprSelectionMode {
+        case .manual:
+            if let manualID = manualMainCPRID,
+               let manual = visible.first(where: { $0.id == manualID }) {
+                return manual
+            }
+            fallthrough
+        case .auto:
+            if let latest = latestCPR, visible.contains(where: { $0.id == latest.id }) {
+                return latest
+            }
+            return visible.max(by: { $0.modifiedAt < $1.modifiedAt })
+        }
     }
 
     public init(
@@ -42,7 +79,13 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         aliases: [String] = [],
         appNote: String? = nil,
         previewSelectionMode: PreviewSelectionMode = .auto,
-        ignoredPreviewCandidateIDs: [String] = []
+        ignoredPreviewCandidateIDs: [String] = [],
+        collaboratorIDs: [String] = [],
+        collaboratorNames: [String] = [],
+        isIgnored: Bool = false,
+        cprSelectionMode: CPRSelectionMode = .auto,
+        manualMainCPRID: String? = nil,
+        ignoredCPRVersionIDs: [String] = []
     ) {
         self.folderPath = folderPath
         self.originalFolderName = originalFolderName
@@ -58,6 +101,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.appNote = appNote
         self.previewSelectionMode = previewSelectionMode
         self.ignoredPreviewCandidateIDs = ignoredPreviewCandidateIDs
+        self.collaboratorIDs = collaboratorIDs
+        self.collaboratorNames = collaboratorNames
+        self.isIgnored = isIgnored
+        self.cprSelectionMode = cprSelectionMode
+        self.manualMainCPRID = manualMainCPRID
+        self.ignoredCPRVersionIDs = ignoredCPRVersionIDs
         self.id = folderPath.standardizedFileURL.path
     }
 
@@ -94,6 +143,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         case appNote
         case previewSelectionMode
         case ignoredPreviewCandidateIDs
+        case collaboratorIDs
+        case collaboratorNames
+        case isIgnored
+        case cprSelectionMode
+        case manualMainCPRID
+        case ignoredCPRVersionIDs
     }
 
     public init(from decoder: Decoder) throws {
@@ -112,6 +167,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         appNote = try container.decodeIfPresent(String.self, forKey: .appNote)
         previewSelectionMode = try container.decodeIfPresent(PreviewSelectionMode.self, forKey: .previewSelectionMode) ?? .auto
         ignoredPreviewCandidateIDs = try container.decodeIfPresent([String].self, forKey: .ignoredPreviewCandidateIDs) ?? []
+        collaboratorIDs = try container.decodeIfPresent([String].self, forKey: .collaboratorIDs) ?? []
+        collaboratorNames = try container.decodeIfPresent([String].self, forKey: .collaboratorNames) ?? []
+        isIgnored = try container.decodeIfPresent(Bool.self, forKey: .isIgnored) ?? false
+        cprSelectionMode = try container.decodeIfPresent(CPRSelectionMode.self, forKey: .cprSelectionMode) ?? .auto
+        manualMainCPRID = try container.decodeIfPresent(String.self, forKey: .manualMainCPRID)
+        ignoredCPRVersionIDs = try container.decodeIfPresent([String].self, forKey: .ignoredCPRVersionIDs) ?? []
         id = folderPath.standardizedFileURL.path
     }
 
@@ -131,5 +192,11 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         try container.encodeIfPresent(appNote, forKey: .appNote)
         try container.encode(previewSelectionMode, forKey: .previewSelectionMode)
         try container.encode(ignoredPreviewCandidateIDs, forKey: .ignoredPreviewCandidateIDs)
+        try container.encode(collaboratorIDs, forKey: .collaboratorIDs)
+        try container.encode(collaboratorNames, forKey: .collaboratorNames)
+        try container.encode(isIgnored, forKey: .isIgnored)
+        try container.encode(cprSelectionMode, forKey: .cprSelectionMode)
+        try container.encodeIfPresent(manualMainCPRID, forKey: .manualMainCPRID)
+        try container.encode(ignoredCPRVersionIDs, forKey: .ignoredCPRVersionIDs)
     }
 }

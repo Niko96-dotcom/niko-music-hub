@@ -508,4 +508,103 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNotEqual(auto.mainPreviewCandidateID, alternateID)
     }
 
+    func testCollaboratorAssignmentAndSearch() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-collab-vm-\(UUID().uuidString).sqlite")
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        let collaboratorStore = try SQLiteCollaboratorStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            collaboratorStore: collaboratorStore
+        )
+        let collaborator = try XCTUnwrap(viewModel.upsertCollaborator(name: "Studio Alex"))
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
+        viewModel.assignCollaborators(to: neon, collaboratorIDs: [collaborator.id])
+        viewModel.selectedShelf = .byCollaborator
+        viewModel.selectedCollaboratorID = collaborator.id
+        viewModel.applySearchFilter()
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+
+        viewModel.searchQuery = "studio"
+        viewModel.applySearchFilter()
+        XCTAssertEqual(viewModel.filteredSongs.count, 1)
+    }
+
+    func testHideSongRemovesFromBrowse() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-hide-vm-\(UUID().uuidString).sqlite")
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let before = viewModel.songsForSelectedShelf().count
+        let target = try XCTUnwrap(viewModel.songs.first)
+        viewModel.setSongHidden(target, hidden: true)
+        XCTAssertEqual(viewModel.songsForSelectedShelf().count, before - 1)
+        viewModel.showHiddenSongs = true
+        XCTAssertEqual(viewModel.songsForSelectedShelf().count, before)
+    }
+
+    func testCreateNewSongInTempRoot() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN") }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-vm-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let databaseURL = root.appendingPathComponent("index.sqlite")
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [root]
+        let created = try viewModel.createNewSong(
+            request: NewSongRequest(name: "CI Song", root: root, appNote: "test")
+        )
+        XCTAssertEqual(created.originalFolderName, "CI Song")
+        XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
+    }
+
+    func testExportIndexJSONFromViewModel() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        try viewModel.exportIndexJSON()
+        let path = try XCTUnwrap(viewModel.lastIndexExportPath)
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ArchiveIndexExport.self, from: data)
+        XCTAssertGreaterThan(decoded.songCount, 0)
+    }
+
 }
