@@ -53,9 +53,7 @@ enum ArchiveSmokeCommands {
         try result.validateForE2ESmoke(dryRunOpen: runtime.dryRunOpen)
 
         if runtime.dryRunOpen {
-            let logLine = result.dryRunLogDisplayLine
-                ?? "[dry-run] open CPR: \(result.dryRunCPRDisplayPath)"
-            print(logLine)
+            print(result.core.dryRunLogDisplayLine)
         }
 
         print("[niko-music-hub-smoke] ok")

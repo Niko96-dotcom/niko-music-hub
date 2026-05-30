@@ -34,11 +34,20 @@ extension ArchiveUserFlowSmoke {
             .first { $0.hasPrefix(prefix) }
     }
 
-    static func captureDryRunLogLine(from context: ToolContext) -> String? {
-        guard let capturing = context.diagnostics as? CapturingDiagnostics else {
-            return nil
+    /// Unit tests capture the real diagnostics line via ``CapturingDiagnostics``; E2E uses a synthetic display line from the CPR path.
+    static func dryRunLogEvidence(
+        cprPath: String,
+        context: ToolContext,
+        homeDirectory: String
+    ) -> (line: String?, displayLine: String) {
+        let displayPath = Song.displayDryRunPath(cprPath, homeDirectory: homeDirectory)
+        let syntheticDisplay = "[dry-run] open CPR: \(displayPath)"
+        if let capturing = context.diagnostics as? CapturingDiagnostics,
+           let line = capturing.lines.last(where: { $0.contains("[dry-run] open CPR:") }) {
+            let display = DiagnosticsPathRedactor.redactPathsInText(line, homeDirectory: homeDirectory)
+            return (line, display)
         }
-        return capturing.lines.last { $0.contains("[dry-run] open CPR:") }
+        return (nil, syntheticDisplay)
     }
 
     static func snapshotArchiveTree(at root: URL) throws -> [String] {
@@ -88,92 +97,109 @@ extension ArchiveUserFlowSmoke {
             guard let context = viewModel.activeSearchExportContext() else {
                 throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
             }
-            let panelQueryLine = ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
-                query: context.query,
-                matchCount: context.matches.count
-            )
-            let panelMatchLines = context.matches.map {
-                ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
-                    displayTitle: $0.displayTitle,
-                    summary: $0.summary
-                )
-            }
-            let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
-            let queryLineMatchesExport =
-                context.query == query
-                && context.matches.count == matchCount
-                && ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+            return try buildSearchPanelParity(
+                contextQuery: context.query,
+                contextMatchCount: context.matches.count,
+                panelQueryLine: ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
+                    query: context.query,
+                    matchCount: context.matches.count
+                ),
+                panelMatchLines: context.matches.map {
+                    ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
+                        displayTitle: $0.displayTitle,
+                        summary: $0.summary
+                    )
+                },
+                queryLineMatchesExport: ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
                     in: exportText,
                     query: context.query,
                     matchCount: context.matches.count
-                )
-                && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
-                && panelQueryLine.contains("\(matchCount) match")
-            let matchLinesMatchExport =
-                !panelMatchLines.isEmpty
-                && ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
+                ),
+                matchLinesMatchExport: ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
                     in: exportText,
                     matches: context.matches
-                )
-                && panelMatchLines.contains(where: { $0.contains(requiredMatchSubstring) })
-                && requiredSummarySubstrings.allSatisfy { substring in
-                    panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
-                }
-            guard queryLineMatchesExport, matchLinesMatchExport else {
-                throw ArchiveUserFlowSmokeError.activeSearchPanelMismatch
-            }
-            return SearchPanelParity(
-                queryLine: panelQueryLine,
-                queryLineMatchesExport: queryLineMatchesExport,
-                matchLinesJoined: panelMatchLinesJoined,
-                matchLinesMatchExport: matchLinesMatchExport
+                ),
+                query: query,
+                matchCount: matchCount,
+                requiredQuerySubstring: requiredQuerySubstring,
+                requiredMatchSubstring: requiredMatchSubstring,
+                requiredSummarySubstrings: requiredSummarySubstrings,
+                mismatchError: .activeSearchPanelMismatch
             )
 
         case .skipped:
             guard let context = viewModel.activeSkippedSearchExportContext() else {
                 throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
             }
-            let panelQueryLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
-                query: context.query,
-                matchCount: context.matches.count
-            )
-            let panelMatchLines = context.matches.map {
-                ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
-                    label: $0.label,
-                    summary: $0.summary
-                )
-            }
-            let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
-            let queryLineMatchesExport =
-                context.query == query
-                && context.matches.count == matchCount
-                && ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+            return try buildSearchPanelParity(
+                contextQuery: context.query,
+                contextMatchCount: context.matches.count,
+                panelQueryLine: ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
+                    query: context.query,
+                    matchCount: context.matches.count
+                ),
+                panelMatchLines: context.matches.map {
+                    ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
+                        label: $0.label,
+                        summary: $0.summary
+                    )
+                },
+                queryLineMatchesExport: ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
                     in: exportText,
                     query: context.query,
                     matchCount: context.matches.count
-                )
-                && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
-                && panelQueryLine.contains("\(matchCount) match")
-            let matchLinesMatchExport =
-                !panelMatchLines.isEmpty
-                && ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
+                ),
+                matchLinesMatchExport: ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
                     in: exportText,
                     matches: context.matches
-                )
-                && panelMatchLines.contains(where: { $0.contains(requiredMatchSubstring) })
-                && requiredSummarySubstrings.allSatisfy { substring in
-                    panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
-                }
-            guard queryLineMatchesExport, matchLinesMatchExport else {
-                throw ArchiveUserFlowSmokeError.skippedSearchPanelActiveSkippedSearchMismatch
-            }
-            return SearchPanelParity(
-                queryLine: panelQueryLine,
-                queryLineMatchesExport: queryLineMatchesExport,
-                matchLinesJoined: panelMatchLinesJoined,
-                matchLinesMatchExport: matchLinesMatchExport
+                ),
+                query: query,
+                matchCount: matchCount,
+                requiredQuerySubstring: requiredQuerySubstring,
+                requiredMatchSubstring: requiredMatchSubstring,
+                requiredSummarySubstrings: requiredSummarySubstrings,
+                mismatchError: .skippedSearchPanelActiveSkippedSearchMismatch
             )
         }
+    }
+
+    private static func buildSearchPanelParity(
+        contextQuery: String,
+        contextMatchCount: Int,
+        panelQueryLine: String,
+        panelMatchLines: [String],
+        queryLineMatchesExport: Bool,
+        matchLinesMatchExport: Bool,
+        query: String,
+        matchCount: Int,
+        requiredQuerySubstring: String,
+        requiredMatchSubstring: String,
+        requiredSummarySubstrings: [String],
+        mismatchError: ArchiveUserFlowSmokeError
+    ) throws -> SearchPanelParity {
+        let panelMatchLinesJoined = panelMatchLines.joined(separator: " | ")
+        let queryLineMatches =
+            contextQuery == query
+            && contextMatchCount == matchCount
+            && queryLineMatchesExport
+            && panelQueryLine.localizedCaseInsensitiveContains(requiredQuerySubstring)
+            && panelQueryLine.contains("\(matchCount) match")
+        let matchLinesMatch =
+            !panelMatchLines.isEmpty
+            && matchLinesMatchExport
+            && panelMatchLines.contains(where: { $0.contains(requiredMatchSubstring) })
+            && requiredSummarySubstrings.allSatisfy { substring in
+                panelMatchLines.contains(where: { $0.localizedCaseInsensitiveContains(substring) })
+            }
+        guard queryLineMatches, matchLinesMatch else {
+            throw mismatchError
+        }
+        return SearchPanelParity(
+            queryLine: panelQueryLine,
+            queryLineMatchesExport: queryLineMatches,
+            matchLinesJoined: panelMatchLinesJoined,
+            matchLinesMatchExport: matchLinesMatch
+        )
     }
 
     static func runInvalidRootHealthCheck(

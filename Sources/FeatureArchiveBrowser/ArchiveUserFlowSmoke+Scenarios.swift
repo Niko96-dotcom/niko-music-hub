@@ -30,12 +30,13 @@ extension ArchiveUserFlowSmoke {
         }
 
         let treeAfter = try snapshotArchiveTree(at: fixtureRoot)
-        let dryRunLogLine = captureDryRunLogLine(from: context)
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
         let dryRunCPRDisplayPath = Song.displayDryRunPath(dryRunPath, homeDirectory: homeDirectory)
-        let dryRunLogDisplayLine = dryRunLogLine.map {
-            DiagnosticsPathRedactor.redactPathsInText($0, homeDirectory: homeDirectory)
-        }
+        let (dryRunLogLine, dryRunLogDisplayLine) = dryRunLogEvidence(
+            cprPath: dryRunPath,
+            context: context,
+            homeDirectory: homeDirectory
+        )
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
 
         let core = CoreFlowOutcome(
@@ -222,9 +223,10 @@ extension ArchiveUserFlowSmoke {
 
     static func runRankingLabCheck(
         viewModel: ArchiveBrowserViewModel,
-        diagnostics: ArchiveScanDiagnostics
+        diagnostics: ArchiveScanDiagnostics,
+        scenario: RankingLabScenario
     ) throws -> RankingLabOutcome {
-        guard let rankingLab = viewModel.songs.first(where: { $0.originalFolderName == "Preview Ranking Lab" }) else {
+        guard let rankingLab = viewModel.songs.first(where: { $0.originalFolderName == scenario.folderName }) else {
             throw ArchiveUserFlowSmokeError.rankingLabNotFound
         }
         guard let rankingLabMainPreviewSummary = PreviewRankingExplainability.mainPreviewSummary(for: rankingLab),
@@ -234,19 +236,7 @@ extension ArchiveUserFlowSmoke {
 
         viewModel.selectSong(rankingLab)
         let (exportPath, exportText) = try exportDiagnosticsText(from: viewModel)
-        let exportContainsRankingLabMatch =
-            exportText.contains("selected_song_title=Lab Song")
-            && exportText.contains("main_preview_summary=")
-            && exportText.contains("preview_rank_line=")
-            && exportText.contains("v3")
-            && exportText.contains("preview_ranking_tiebreak_legend=")
-            && exportText.contains("too_short_non_main=")
-            && exportText.contains("songs_with_too_short=")
-            && exportText.contains(
-                "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav"
-            )
-            && exportText.contains("preview_ranking_scan_callout=")
-            && exportText.contains("preview_ranking_selected_header=")
+        let exportContainsRankingLabMatch = scenario.exportMustContain.allSatisfy { exportText.contains($0) }
         guard exportContainsRankingLabMatch else {
             throw ArchiveUserFlowSmokeError.rankingLabDiagnosticsExportMissingMatch
         }
@@ -265,18 +255,18 @@ extension ArchiveUserFlowSmoke {
         let rankingLabPanelScanCalloutMatchesExport =
             !panelRankingLabScanCallout.isEmpty
             && panelRankingLabScanCallout == exportRankingLabScanCallout
-            && panelRankingLabScanCallout.contains("too short")
+            && panelRankingLabScanCallout.contains(scenario.scanCalloutSubstring)
         let rankingLabPanelSelectedHeaderMatchesExport =
             !panelRankingLabSelectedHeader.isEmpty
             && panelRankingLabSelectedHeader == exportRankingLabSelectedHeader
-            && panelRankingLabSelectedHeader.contains("Lab Song v3 mix.wav")
+            && panelRankingLabSelectedHeader.contains(scenario.selectedHeaderSubstring)
         guard rankingLabPanelScanCalloutMatchesExport,
               rankingLabPanelSelectedHeaderMatchesExport else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
         guard let rankingLabTooShortBreakdown = diagnostics.previewRankingPanel.tooShortSongBreakdowns.first(
-            where: { $0.displayTitle == "Lab Song" }
+            where: { $0.displayTitle == scenario.tooShortSongTitle }
         ) else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
@@ -284,7 +274,7 @@ extension ArchiveUserFlowSmoke {
         let rankingLabPanelTooShortBreakdownMatchesExport =
             rankingLabTooShortBreakdown.panelMatchesExport(in: exportText)
         guard rankingLabPanelTooShortBreakdownMatchesExport,
-              panelRankingLabTooShortBreakdownLine.contains("Lab Song short clip.wav") else {
+              panelRankingLabTooShortBreakdownLine.contains(scenario.tooShortClipSubstring) else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
@@ -296,7 +286,7 @@ extension ArchiveUserFlowSmoke {
         let rankingLabPanelTiebreakLegendMatchesExport =
             ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegendMatchesExport(in: exportText)
             && panelRankingLabTiebreakLegend == exportRankingLabTiebreakLegend
-            && panelRankingLabTiebreakLegend.contains("CPR version anchor")
+            && panelRankingLabTiebreakLegend.contains(scenario.tiebreakLegendSubstring)
         guard rankingLabPanelTiebreakLegendMatchesExport else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
@@ -314,7 +304,7 @@ extension ArchiveUserFlowSmoke {
                 in: exportText,
                 summary: panelRankingLabMainPreviewSummary
             )
-            && panelRankingLabMainPreviewSummary.contains("Lab Song v3 mix.wav")
+            && scenario.mainPreviewSummarySubstrings.allSatisfy { panelRankingLabMainPreviewSummary.contains($0) }
         let panelRankingLabRankedPreviewLines =
             ArchiveDiagnosticsPreviewRankingPanelContext.selectedSongRankedPreviewLines(for: rankingLab)
         let panelRankingLabRankedPreviewLinesJoined = panelRankingLabRankedPreviewLines.joined(separator: " | ")
@@ -324,13 +314,14 @@ extension ArchiveUserFlowSmoke {
                 in: exportText,
                 lines: panelRankingLabRankedPreviewLines
             )
-            && panelRankingLabRankedPreviewLines.contains(where: { $0.contains("v3") })
+            && panelRankingLabRankedPreviewLines.contains(where: { $0.contains(scenario.rankedPreviewLineSubstring) })
         guard rankingLabPanelMainPreviewSummaryMatchesExport,
               rankingLabPanelRankedPreviewLinesMatchExport else {
             throw ArchiveUserFlowSmokeError.rankingLabPanelPreviewRankingMismatch
         }
 
         return RankingLabOutcome(
+            scenario: scenario,
             mainPreviewSummary: rankingLabMainPreviewSummary,
             exportPath: exportPath,
             exportContainsMatch: exportContainsRankingLabMatch,
@@ -392,6 +383,7 @@ extension ArchiveUserFlowSmoke {
         }
 
         return PreviewTiebreakLabOutcome(
+            scenario: scenario,
             exportPath: exportPath,
             exportContainsTiebreak: exportContainsTiebreak,
             panelHeader: panelHeader,
@@ -517,6 +509,7 @@ extension ArchiveUserFlowSmoke {
         )
 
         return SongSearchScenarioOutcome(
+            scenario: scenario,
             query: scenario.query,
             matchCount: matchCount,
             matchTitle: match.displayTitle,
@@ -559,6 +552,7 @@ extension ArchiveUserFlowSmoke {
         )
 
         return SkippedSearchScenarioOutcome(
+            scenario: scenario,
             query: scenario.query,
             matchCount: viewModel.skippedSearchMatches.count,
             matchLabel: match.entry.label,
@@ -569,3 +563,4 @@ extension ArchiveUserFlowSmoke {
         )
     }
 }
+
