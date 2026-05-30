@@ -289,6 +289,24 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    func setSelectedCollaboratorID(_ id: String?) {
+        mutateBrowseInputs {
+            selectedCollaboratorID = id
+        }
+    }
+
+    /// Updates search text. Pass `immediate: true` for programmatic queries; UI typing uses debounce.
+    func setSearchQuery(_ query: String, immediate: Bool = false) {
+        guard immediate else {
+            searchQuery = query
+            return
+        }
+        suppressBrowseRefresh = true
+        searchQuery = query
+        suppressBrowseRefresh = false
+        recomputeBrowseResults()
+    }
+
     /// Runs an export action and surfaces failures on `statusMessage`.
     func performExport(_ operation: () throws -> Void) {
         do {
@@ -296,11 +314,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         } catch {
             statusMessage = "Export failed: \(error.localizedDescription)"
         }
-    }
-
-    /// Recomputes browse list state from current shelf, search, filters, and sort.
-    func refreshBrowseResults() {
-        recomputeBrowseResults()
     }
 
     func selectSong(_ song: Song) {

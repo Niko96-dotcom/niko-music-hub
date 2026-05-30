@@ -32,7 +32,7 @@ enum ArchiveBrowseProjection {
     }
 
     static func project(_ state: ArchiveBrowseState) -> ArchiveBrowseResult {
-        let shelfSongs = shelfSongs(from: state)
+        let onShelf = shelfSongs(from: state)
         let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let searched: [Song]
@@ -40,11 +40,11 @@ enum ArchiveBrowseProjection {
         let skippedMatches: [SkippedEntrySearchResult]
 
         if trimmed.isEmpty {
-            searched = shelfSongs
+            searched = onShelf
             summaries = [:]
             skippedMatches = []
         } else {
-            let results = MusicSearchIndex(songs: shelfSongs).searchResults(state.searchQuery)
+            let results = MusicSearchIndex(songs: onShelf).searchResults(state.searchQuery)
             searched = results.map(\.song)
             summaries = Dictionary(uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) })
             skippedMatches = SkippedEntrySearchMatcher.search(state.searchQuery, in: state.skippedScanEntries)
