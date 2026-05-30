@@ -86,7 +86,7 @@
       "id": "E",
       "title": "WAV converter — FFmpeg path UX",
       "status": "done",
-      "commit": "pending",
+      "commit": "60f2520",
       "touch_modules": ["FeatureAudioConverter", "AppCore"],
       "acceptance": [
         "When helper health shows FFmpeg green, converter does not nag to pick binary again",
