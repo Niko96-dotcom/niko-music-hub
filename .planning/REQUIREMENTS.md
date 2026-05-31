@@ -21,10 +21,10 @@
 
 ### Shell & Navigation
 
-- [ ] **SH-01**: `AppShellView` uses shell gap 10, centered tool content columns, collapsed-rail hover, default window 1280×820 per spec §4
-- [ ] **SH-02**: `ToolSidebarView` shows icon+label rows, updated header (version not “Local tools”), health strip tokens per spec §5
-- [ ] **SH-03**: `OutputInboxInspectorView` header, empty state, horizontal output cards, context menu / hover drag grip per spec §6
-- [ ] **SH-04**: `ArchiveDesignTokens.swift` deleted; all references use `HubDesignSystem.Colors` per spec §3.3
+- [x] **SH-01**: `AppShellView` uses shell gap 10, centered tool content columns, collapsed-rail hover, default window 1280×820 per spec §4
+- [x] **SH-02**: `ToolSidebarView` shows icon+label rows, updated header (version not “Local tools”), health strip tokens per spec §5
+- [x] **SH-03**: `OutputInboxInspectorView` header, empty state, horizontal output cards, context menu / hover drag grip per spec §6
+- [x] **SH-04**: `ArchiveDesignTokens.swift` deleted; all references use `HubDesignSystem.Colors` per spec §3.3
 
 ### Tool Pages (BPM, Recorder, Converter)
 
@@ -85,10 +85,10 @@ Deferred beyond v1.3.
 | DS-06 | Phase 19 | Complete |
 | DS-07 | Phase 19 | Complete |
 | DS-08 | Phase 19 | Complete |
-| SH-01 | Phase 20 | Pending |
-| SH-02 | Phase 20 | Pending |
-| SH-03 | Phase 20 | Pending |
-| SH-04 | Phase 20 | Pending |
+| SH-01 | Phase 20 | Complete |
+| SH-02 | Phase 20 | Complete |
+| SH-03 | Phase 20 | Complete |
+| SH-04 | Phase 20 | Complete |
 | TOOL-01 | Phase 21 | Pending |
 | TOOL-02 | Phase 21 | Pending |
 | TOOL-03 | Phase 21 | Pending |

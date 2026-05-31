@@ -62,7 +62,7 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 ### 🚧 v1.3 Full UI Redesign
 
 - [x] **Phase 19: Design System Foundation** — Tokens, glass chrome, `HubLabeledButton`, `HubSectionDivider`, shared control updates (Wave 1) (completed 2026-05-31)
-- [ ] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2)
+- [x] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2) (completed 2026-05-31)
 - [ ] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
 - [ ] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b)
 - [ ] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a)
@@ -115,13 +115,13 @@ Plans:
 
 **Key files:** `AppShellView.swift`, `ToolSidebarView.swift`, `OutputInboxInspectorView.swift`, delete `ArchiveDesignTokens.swift` + 16 reference updates
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 20-01-PLAN.md — HubToolContentColumn + AppShell chrome + window default (SH-01)
-- [ ] 20-02-PLAN.md — ToolSidebar header/rows + health strip (SH-02)
-- [ ] 20-03-PLAN.md — OutputInbox header/empty/cards + tests (SH-03)
-- [ ] 20-04-PLAN.md — Delete ArchiveDesignTokens + 15-file migration (SH-04)
+- [x] 20-01-PLAN.md — HubToolContentColumn + AppShell chrome + window default (SH-01)
+- [x] 20-02-PLAN.md — ToolSidebar header/rows + health strip (SH-02)
+- [x] 20-03-PLAN.md — OutputInbox header/empty/cards + tests (SH-03)
+- [x] 20-04-PLAN.md — Delete ArchiveDesignTokens + 15-file migration (SH-04)
 
 ---
 
@@ -247,7 +247,9 @@ Plans:
 | 1–6 | v1.0 | 15/19 | Shipped | 2026-05-11 |
 | 7–10 | v1.1 | 7/7 | Shipped | 2026-05-23 |
 | 11–18 | v1.2 | 9/9 | Shipped | 2026-05-30 |
-| 19–25 | v1.3 | 4/4 | Phase 19 complete | 2026-05-31 |
+| 19 | v1.3 | 4/4 | Complete | 2026-05-31 |
+| 20 | v1.3 | 4/4 | Complete | 2026-05-31 |
+| 21–25 | v1.3 | 0/TBD | Pending | — |
 
 ## Roadmap Notes
 
