@@ -267,18 +267,30 @@ extension ArchiveUserFlowSmoke {
             mainPreviewSummary: rankingLabMainPreviewSummary,
             exportPath: exportPath,
             exportContainsMatch: exportContainsRankingLabMatch,
-            panelScanCallout: panelRankingLabScanCallout,
-            panelScanCalloutMatchesExport: rankingLabPanelScanCalloutMatchesExport,
-            panelSelectedHeader: panelRankingLabSelectedHeader,
-            panelSelectedHeaderMatchesExport: rankingLabPanelSelectedHeaderMatchesExport,
-            panelTooShortBreakdownLine: panelRankingLabTooShortBreakdownLine,
-            panelTooShortBreakdownMatchesExport: rankingLabPanelTooShortBreakdownMatchesExport,
-            panelTiebreakLegend: panelRankingLabTiebreakLegend,
-            panelTiebreakLegendMatchesExport: rankingLabPanelTiebreakLegendMatchesExport,
-            panelMainPreviewSummary: panelRankingLabMainPreviewSummary,
-            panelMainPreviewSummaryMatchesExport: rankingLabPanelMainPreviewSummaryMatchesExport,
-            panelRankedPreviewLines: panelRankingLabRankedPreviewLinesJoined,
-            panelRankedPreviewLinesMatchExport: rankingLabPanelRankedPreviewLinesMatchExport
+            scanCallout: PanelLineExportParity(
+                line: panelRankingLabScanCallout,
+                matchesExport: rankingLabPanelScanCalloutMatchesExport
+            ),
+            selectedHeader: PanelLineExportParity(
+                line: panelRankingLabSelectedHeader,
+                matchesExport: rankingLabPanelSelectedHeaderMatchesExport
+            ),
+            tooShortBreakdown: PanelLineExportParity(
+                line: panelRankingLabTooShortBreakdownLine,
+                matchesExport: rankingLabPanelTooShortBreakdownMatchesExport
+            ),
+            tiebreakLegend: PanelLineExportParity(
+                line: panelRankingLabTiebreakLegend,
+                matchesExport: rankingLabPanelTiebreakLegendMatchesExport
+            ),
+            mainPreviewPanel: PanelLineExportParity(
+                line: panelRankingLabMainPreviewSummary,
+                matchesExport: rankingLabPanelMainPreviewSummaryMatchesExport
+            ),
+            rankedPreviewLines: PanelLineExportParity(
+                line: panelRankingLabRankedPreviewLinesJoined,
+                matchesExport: rankingLabPanelRankedPreviewLinesMatchExport
+            )
         )
         return SmokeRun(id: .rankingLab, evidence: .rankingLab(evidence))
     }
@@ -317,10 +329,8 @@ extension ArchiveUserFlowSmoke {
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTiebreak: exportContainsTiebreak,
-            panelHeader: panelHeader,
-            panelHeaderMatchesExport: panelHeaderMatchesExport,
-            panelCallout: panelCallout,
-            panelCalloutMatchesExport: panelCalloutMatchesExport
+            header: PanelLineExportParity(line: panelHeader, matchesExport: panelHeaderMatchesExport),
+            callout: PanelLineExportParity(line: panelCallout, matchesExport: panelCalloutMatchesExport)
         )
         return SmokeRun(id: .previewTiebreak(logPrefix: scenario.logPrefix), evidence: .previewTiebreak(evidence))
     }
@@ -390,14 +400,10 @@ extension ArchiveUserFlowSmoke {
             sidecarNotes: brokenFolderSidecarNotes,
             exportContainsRequiredSections: exportContainsRequiredSections,
             selectedSongExportPath: exportPath,
-            panelTitleLine: panelTitleLine,
-            panelTitleLineMatchesExport: titleMatches,
-            panelCprLine: panelCprLine,
-            panelCprLineMatchesExport: cprMatches,
-            panelWarningLines: panelWarningLinesJoined,
-            panelWarningLinesMatchExport: warningsMatch,
-            panelNotesLine: panelNotesLine,
-            panelNotesLineMatchesExport: notesMatch
+            titleLine: PanelLineExportParity(line: panelTitleLine, matchesExport: titleMatches),
+            cprLine: PanelLineExportParity(line: panelCprLine, matchesExport: cprMatches),
+            warningLines: PanelLineExportParity(line: panelWarningLinesJoined, matchesExport: warningsMatch),
+            notesLine: PanelLineExportParity(line: panelNotesLine, matchesExport: notesMatch)
         )
         return SmokeRun(id: .brokenFolder, evidence: .brokenFolder(evidence))
     }

@@ -235,10 +235,11 @@ extension ArchiveUserFlowSmoke {
             scenario: scenario,
             exportPath: exportPath,
             exportContainsBadge: exportContainsBadge,
-            panelBadge: panelBadge,
-            panelBadgeMatchesExport: exportContainsBadge,
-            panelGlobalWarningLines: panelGlobalWarningLines,
-            panelGlobalWarningLinesMatchExport: panelGlobalWarningLinesMatchExport
+            badge: PanelLineExportParity(line: panelBadge, matchesExport: exportContainsBadge),
+            globalWarningLines: PanelLineExportParity(
+                line: panelGlobalWarningLines,
+                matchesExport: panelGlobalWarningLinesMatchExport
+            )
         )
         return SmokeRun(id: .invalidRoot, evidence: .invalidRoot(evidence))
     }
@@ -277,13 +278,16 @@ extension ArchiveUserFlowSmoke {
         let panelContext = ArchiveDiagnosticsPanelContext.from(diagnostics)
         let panelFootnote = panelContext.supportSummaryTruncationFootnote ?? ""
 
+        let footnoteMatchesDiagnostics =
+            panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote
         let evidence = SummaryTruncationEvidence(
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTruncation: exportContainsTruncation,
-            panelFootnote: panelFootnote,
-            panelFootnoteMatchesDiagnostics:
-                panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote
+            footnote: PanelLineExportParity(
+                line: panelFootnote,
+                matchesExport: footnoteMatchesDiagnostics
+            )
         )
         return SmokeRun(id: .summaryTruncation, evidence: .summaryTruncation(evidence))
     }

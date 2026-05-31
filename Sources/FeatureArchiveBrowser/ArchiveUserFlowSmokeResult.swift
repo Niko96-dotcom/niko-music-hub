@@ -5,11 +5,19 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
     public let smokeLog: [String: String]
 
     public var core: CoreFlowEvidence {
-        evidence(.coreFlow, as: CoreFlowEvidence.self)
+        guard let run = runs.first(where: { $0.id == .coreFlow }),
+              case .coreFlow(let evidence) = run.evidence else {
+            preconditionFailure("archive smoke harness must include core flow run")
+        }
+        return evidence
     }
 
     public var fixtureDiagnostics: FixtureDiagnosticsEvidence {
-        evidence(.fixtureDiagnostics, as: FixtureDiagnosticsEvidence.self)
+        guard let run = runs.first(where: { $0.id == .fixtureDiagnostics }),
+              case .fixtureDiagnostics(let evidence) = run.evidence else {
+            preconditionFailure("archive smoke harness must include fixture diagnostics run")
+        }
+        return evidence
     }
 
     init(runs: [SmokeRun]) {
@@ -28,20 +36,6 @@ public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
         }
         if dryRunOpen, !core.satisfiesDryRunOpenEvidence() {
             throw ArchiveUserFlowSmokeValidationError.dryRunLogMissing
-        }
-    }
-
-    private func evidence<T>(_ id: SmokeRunID, as type: T.Type) -> T {
-        guard let run = runs.first(where: { $0.id == id }) else {
-            fatalError("missing smoke run: \(id)")
-        }
-        switch run.evidence {
-        case .coreFlow(let evidence) where T.self == CoreFlowEvidence.self:
-            return evidence as! T
-        case .fixtureDiagnostics(let evidence) where T.self == FixtureDiagnosticsEvidence.self:
-            return evidence as! T
-        default:
-            fatalError("unexpected evidence type for \(id)")
         }
     }
 }
