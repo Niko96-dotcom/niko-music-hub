@@ -7,32 +7,45 @@ struct SongCardView: View {
     let isSelected: Bool
     var matchSummary: String?
 
+    private var hasScanWarning: Bool {
+        !song.displayScanWarnings().isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(song.effectiveDisplayTitle)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.primary)
-                .lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(song.effectiveDisplayTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(2)
 
-            if let matchSummary, !matchSummary.isEmpty {
-                Text(matchSummary)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
-                    .lineLimit(1)
+                Spacer(minLength: 4)
+
+                if hasScanWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Colors.warning)
+                        .help(song.displayScanWarnings().joined(separator: " "))
+                }
             }
 
-            if let warningLine = song.displayScanWarnings().first {
-                Text(warningLine)
+            if let subtitle = subtitleLine {
+                Text(subtitle)
                     .font(.system(size: 10))
-                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
 
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact)
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card, selected: isSelected)
+    }
+
+    private var subtitleLine: String? {
+        guard let matchSummary, !matchSummary.isEmpty else { return nil }
+        return matchSummary
     }
 
     private var mainPreviewURL: URL? {

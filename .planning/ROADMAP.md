@@ -65,7 +65,7 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 - [x] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2) (completed 2026-05-31)
 - [x] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
 - [x] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b) (completed 2026-05-31)
-- [ ] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a)
+- [x] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a) (completed 2026-05-31)
 - [ ] **Phase 24: Archive Detail & Panels** — Grouped detail, waveform hero, first-run, sheets, panels (Wave 4b)
 - [ ] **Phase 25: UI Polish & Visual Regression** — Error card, headers, window default, full-page visual pass (Wave 5)
 
@@ -184,7 +184,7 @@ Plans:
 
 **Key files:** `ArchiveSidebarView.swift`, `SongCardView.swift`, `ArchiveBrowserView.swift`, panel views in File Manifest §15
 
-**Plans:** TBD (`/gsd-plan-phase 23`)
+**Plans:** 1/1 complete (`23-01`)
 
 ---
 
