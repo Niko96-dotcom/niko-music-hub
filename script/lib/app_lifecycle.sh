@@ -38,7 +38,11 @@ nmh_build_bundle() {
   cd "$NMH_ROOT_DIR"
 
   local build_dir build_binary
-  build_dir="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --product "$NMH_APP_NAME" --show-bin-path)"
+  build_dir="$(
+    cd "$NMH_ROOT_DIR" || exit 1
+    DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
+      swift build --product "$NMH_APP_NAME" --show-bin-path
+  )"
   build_binary="$build_dir/$NMH_APP_NAME"
 
   rm -rf "$NMH_APP_BUNDLE"
