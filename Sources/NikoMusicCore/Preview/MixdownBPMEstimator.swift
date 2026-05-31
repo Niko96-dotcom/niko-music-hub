@@ -38,16 +38,18 @@ public enum MixdownBPMEstimator {
 
         let hop = max(256, frameCount / 200)
         var peaks: [Int] = []
-        var lastPeak = -Int.max
+        var lastPeak: Int?
         let threshold = peakThreshold(samples: channelData, count: frameCount)
         var index = 0
+        let stride = max(1, hop / 4)
         while index < frameCount {
             let sample = abs(channelData[index])
-            if sample >= threshold && index - lastPeak > hop {
+            let farEnoughFromLastPeak = lastPeak.map { index - $0 > hop } ?? true
+            if sample >= threshold, farEnoughFromLastPeak {
                 peaks.append(index)
                 lastPeak = index
             }
-            index += hop / 4
+            index += stride
         }
         guard peaks.count >= 3 else { return nil }
 
