@@ -10,7 +10,7 @@ struct OutputInboxInspectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Output Inbox")
-                .font(.system(size: 16, weight: .semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Output folder")
@@ -29,7 +29,7 @@ struct OutputInboxInspectorView: View {
                 }
             }
 
-            Divider()
+            Divider().opacity(0.4)
 
             if items.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -52,9 +52,8 @@ struct OutputInboxInspectorView: View {
 
             Spacer()
         }
-        .padding(16)
+        .padding(HubDesignSystem.Spacing.panel)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .hubPanelBackground()
         .onAppear {
             refreshSettings()
             refreshItems()
@@ -137,12 +136,8 @@ struct OutputInboxInspectorView: View {
                 }
             }
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.55))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 }

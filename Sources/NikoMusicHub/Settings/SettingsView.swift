@@ -152,7 +152,7 @@ struct SettingsView: View {
             .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
         .onAppear { refresh() }
     }
 
@@ -345,7 +345,7 @@ private struct SettingsSection<Content: View>: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
 
             if let footer {
                 Text(footer)

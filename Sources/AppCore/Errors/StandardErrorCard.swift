@@ -30,9 +30,8 @@ public struct StandardErrorCard: View {
                 }
             }
         }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(14)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var labelColor: Color {

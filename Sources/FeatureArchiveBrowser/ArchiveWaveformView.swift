@@ -1,3 +1,4 @@
+import AppCore
 import SwiftUI
 
 struct ArchiveWaveformView: View {
@@ -28,8 +29,7 @@ struct ArchiveWaveformView: View {
             )
         }
         .frame(height: 72)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private func drawWaveform(context: inout GraphicsContext, size: CGSize) {

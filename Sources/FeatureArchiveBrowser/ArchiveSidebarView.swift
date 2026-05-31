@@ -46,15 +46,14 @@ struct ArchiveSidebarView: View {
         }
         .padding(compactList ? 10 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(ArchiveDesignTokens.surface)
     }
 
     private var archiveToolbar: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note.house")
-                .font(.system(size: compactList ? 14 : 15, weight: .semibold))
+        HStack(spacing: 8) {
+            Label("Archive", systemImage: "music.note.house")
+                .font(.system(size: compactList ? 14 : 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(ArchiveDesignTokens.textPrimary)
-                .accessibilityLabel("Cubase archive")
+                .labelStyle(.titleAndIcon)
 
             Spacer(minLength: 4)
 
@@ -68,32 +67,39 @@ struct ArchiveSidebarView: View {
                 Task { await viewModel.scan() }
             }
 
-            HubIconButton(
-                systemImage: "plus.circle",
-                accessibilityLabel: "New song",
-                help: "Create a new song folder",
-                isEnabled: !viewModel.roots.isEmpty
-            ) {
-                showNewSongSheet = true
-            }
+            Menu {
+                Button {
+                    showNewSongSheet = true
+                } label: {
+                    Label("New song folder", systemImage: "plus.circle")
+                }
+                .disabled(viewModel.roots.isEmpty)
 
-            HubIconButton(
-                systemImage: "folder.badge.plus",
-                accessibilityLabel: "Add archive root",
-                help: "Add or choose archive roots"
-            ) {
-                onChooseRoot()
-            }
+                Button {
+                    onChooseRoot()
+                } label: {
+                    Label("Add archive root", systemImage: "folder.badge.plus")
+                }
 
-            HubIconButton(
-                systemImage: viewModel.showHiddenSongs ? "eye" : "eye.slash",
-                accessibilityLabel: viewModel.showHiddenSongs ? "Showing hidden songs" : "Hiding hidden songs",
-                help: "Toggle hidden songs in browse",
-                isSelected: viewModel.showHiddenSongs,
-                isToggle: true
-            ) {
-                viewModel.toggleShowHiddenSongs()
+                Divider()
+
+                Button {
+                    viewModel.toggleShowHiddenSongs()
+                } label: {
+                    Label(
+                        viewModel.showHiddenSongs ? "Hide hidden songs" : "Show hidden songs",
+                        systemImage: viewModel.showHiddenSongs ? "eye.slash" : "eye"
+                    )
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
+            .help("Archive actions")
+            .accessibilityLabel("Archive actions")
         }
     }
 
@@ -194,12 +200,9 @@ struct ArchiveSidebarView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.pill)
     }
 
     private var skippedMatchesCallout: some View {
@@ -258,7 +261,7 @@ struct ArchiveSidebarView: View {
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 10) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in
                         Button {
                             viewModel.selectSong(song)
@@ -286,9 +289,8 @@ struct ArchiveSidebarView: View {
                 .foregroundStyle(ArchiveDesignTokens.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 }

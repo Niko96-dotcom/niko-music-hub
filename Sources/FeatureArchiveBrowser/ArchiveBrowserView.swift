@@ -28,7 +28,7 @@ struct ArchiveBrowserView: View {
                     )
                     .frame(width: listWidth)
 
-                    Divider()
+                    Divider().opacity(0.35)
 
                     detailPane
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -47,6 +47,7 @@ struct ArchiveBrowserView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusable()
         .focused($archiveFocused)
+        .focusEffectDisabled()
         .onAppear { archiveFocused = true }
         .onKeyPress("p") {
             guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }

@@ -37,7 +37,7 @@ public struct DownloaderView: View {
             .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
     }
 
     private var header: some View {
@@ -89,8 +89,7 @@ public struct DownloaderView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard()
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
         .disabled(viewModel.downloadState == .downloading)
     }
@@ -211,8 +210,7 @@ public struct DownloaderView: View {
                 .italic()
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard()
     }
 
     private var progressSection: some View {
@@ -245,8 +243,7 @@ public struct DownloaderView: View {
             }
             .frame(maxHeight: 160)
             .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
         }
     }
 
