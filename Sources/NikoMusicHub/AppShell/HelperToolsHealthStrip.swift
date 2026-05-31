@@ -12,15 +12,15 @@ struct HelperToolsHealthStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Helper Tools")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
 
             helperRow(ytDlpStatus)
             helperRow(ffmpegStatus)
 
             if ytDlpStatus.state.needsSetup || ffmpegStatus.state.needsSetup {
                 Text("Install missing helpers with Homebrew to enable downloader and conversion workflows.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -35,12 +35,12 @@ struct HelperToolsHealthStrip: View {
         HStack(spacing: 8) {
             Circle()
                 .fill(status.state.color)
-                .frame(width: 8, height: 8)
+                .frame(width: HubDesignSystem.Size.statusDot, height: HubDesignSystem.Size.statusDot)
             Text(status.label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
             Spacer(minLength: 8)
             Text(status.state.displayText)
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)

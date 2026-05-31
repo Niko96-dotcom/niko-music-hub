@@ -6,6 +6,12 @@ struct ToolSidebarView: View {
     let registry: ToolRegistry
     @Binding var selectedToolID: ToolFeatureID?
 
+    private var appVersionLabel: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        guard let version, !version.isEmpty else { return "" }
+        return "v\(version)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
@@ -13,43 +19,48 @@ struct ToolSidebarView: View {
                     logo
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 26, height: 26)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                         .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Niko Music Hub")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .lineLimit(1)
-                    Text("Local tools")
-                        .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(.secondary)
+                    if !appVersionLabel.isEmpty {
+                        Text(appVersionLabel)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 18)
-            .padding(.bottom, 10)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
 
             Text("Tools")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.quaternary)
                 .textCase(.uppercase)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
 
             ForEach(registry.features.map(\.metadata), id: \.id) { metadata in
                 Button {
                     selectedToolID = metadata.id
                 } label: {
-                    Label(metadata.shortLabel, systemImage: metadata.systemImage)
-                        .font(.system(size: 13, weight: isSelected(metadata) ? .semibold : .medium))
-                        .symbolRenderingMode(.hierarchical)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 12) {
+                        Image(systemName: metadata.systemImage)
+                            .symbolRenderingMode(.hierarchical)
+                            .frame(width: 18, height: 18)
+                        Text(metadata.shortLabel)
+                            .font(.system(size: 13, weight: isSelected(metadata) ? .semibold : .medium))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .hubSidebarNavRow(isSelected: isSelected(metadata))
@@ -62,10 +73,10 @@ struct ToolSidebarView: View {
 
             if let context {
                 HelperToolsHealthStrip(context: context)
-                    .padding(12)
+                    .padding(10)
                     .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 14)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 10)
             }
         }
         .padding(.horizontal, 6)
