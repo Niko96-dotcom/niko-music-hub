@@ -10,7 +10,7 @@ public struct StatusDot: View {
     public var body: some View {
         Circle()
             .fill(color)
-            .frame(width: 8, height: 8)
+            .frame(width: HubDesignSystem.Size.statusDot, height: HubDesignSystem.Size.statusDot)
     }
 
     private var color: Color {
@@ -18,13 +18,13 @@ public struct StatusDot: View {
         case .queued:
             return .secondary
         case .running:
-            return .green
+            return HubDesignSystem.Colors.accent
         case .completed:
-            return .green
+            return HubDesignSystem.Colors.success
         case .failed:
-            return .red
+            return HubDesignSystem.Colors.danger
         case .canceled:
-            return .orange
+            return HubDesignSystem.Colors.warning
         }
     }
 }

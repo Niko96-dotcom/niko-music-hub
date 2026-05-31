@@ -7,6 +7,8 @@ public enum HubIconButtonAppearance: Sendable {
 
 /// Compact control: icon visible, label exposed to VoiceOver and `.help`.
 public struct HubIconButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let systemImage: String
     let accessibilityLabel: String
     var help: String?
@@ -19,6 +21,8 @@ public struct HubIconButton: View {
     var role: ButtonRole?
     var isEnabled: Bool = true
     let action: () -> Void
+
+    @State private var isHovered = false
 
     public init(
         systemImage: String,
@@ -70,28 +74,34 @@ public struct HubIconButton: View {
             } else if isSelected {
                 buttonLabel
                     .buttonStyle(.borderedProminent)
-                    .tint(.accentColor)
+                    .tint(HubDesignSystem.Colors.accent)
             } else {
                 buttonLabel
                     .buttonStyle(.bordered)
+                    .background {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                            .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
+                    }
+                    .onHover(perform: updateHover)
             }
         }
         .controlSize(.small)
         .labelStyle(.iconOnly)
+        .tint(HubDesignSystem.Colors.accent)
     }
 
     private var compactChipButton: some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 28, height: 28)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
                 .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
                 .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
                         .fill(isSelected ? chipColors.selectedFill : chipColors.unselectedFill)
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
                         .strokeBorder(
                             isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
                             lineWidth: isSelected ? 1.5 : 1
@@ -105,9 +115,22 @@ public struct HubIconButton: View {
     private var buttonLabel: some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(
+                    width: HubDesignSystem.Size.iconButtonSize,
+                    height: HubDesignSystem.Size.iconButtonSize
+                )
                 .contentShape(Rectangle())
+        }
+    }
+
+    private func updateHover(_ hovering: Bool) {
+        if reduceMotion {
+            isHovered = hovering
+        } else {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
         }
     }
 }
