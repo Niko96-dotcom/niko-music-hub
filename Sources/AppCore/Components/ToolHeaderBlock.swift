@@ -19,14 +19,14 @@ public struct ToolHeaderBlock: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(HubDesignSystem.Typography.screenTitle())
             Text(statusText)
-                .font(.system(size: 13))
+                .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(statusColor)
                 .lineLimit(2)
         }
-        .frame(maxWidth: 680, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 }

@@ -10,21 +10,21 @@ public struct StandardErrorCard: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HStack(spacing: 6) {
                 Image(systemName: card.icon)
                     .foregroundStyle(labelColor)
                 Text(card.label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(HubDesignSystem.Typography.sectionTitle())
                     .foregroundStyle(labelColor)
             }
 
             Text(card.body)
-                .font(.system(size: 12))
+                .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 8) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 ForEach(card.recoveryActions, id: \.label) { action in
                     recoveryButton(for: action)
                 }
@@ -36,36 +36,42 @@ public struct StandardErrorCard: View {
 
     private var labelColor: Color {
         switch card.category {
-        case .permission:
-            return .orange
-        case .helperTool:
-            return .red
-        case .conversionFile:
-            return .red
-        case .inputURL:
-            return .orange
+        case .permission, .inputURL:
+            return HubDesignSystem.Colors.warning
+        case .helperTool, .conversionFile:
+            return HubDesignSystem.Colors.danger
         }
     }
 
     @ViewBuilder
     private func recoveryButton(for action: AppErrorCard.RecoveryAction) -> some View {
-        switch action.style {
-        case .primary:
-            Button(action.label) {
-                executeRecovery(action.action)
+        let icon = recoveryIcon(for: action.action)
+        let style: HubLabeledButtonStyle = {
+            switch action.style {
+            case .primary: return .primary
+            case .secondary: return .secondary
+            case .destructive: return .secondary
             }
-            .buttonStyle(.borderedProminent)
-        case .secondary:
-            Button(action.label) {
-                executeRecovery(action.action)
-            }
-            .buttonStyle(.bordered)
-        case .destructive:
-            Button(action.label) {
-                executeRecovery(action.action)
-            }
-            .buttonStyle(.bordered)
-            .foregroundStyle(.red)
+        }()
+
+        HubLabeledButton(
+            icon: icon,
+            label: action.label,
+            style: style,
+            role: action.style == .destructive ? .destructive : nil
+        ) {
+            executeRecovery(action.action)
+        }
+    }
+
+    private func recoveryIcon(for action: AppErrorCard.RecoveryActionType) -> String {
+        switch action {
+        case .openSystemSettings: return "gear"
+        case .tryAgain: return "arrow.clockwise"
+        case .dismiss: return "xmark"
+        case .chooseToolPath: return "folder"
+        case .revealInFinder: return "folder"
+        case .openTerminal: return "terminal"
         }
     }
 
@@ -76,11 +82,7 @@ public struct StandardErrorCard: View {
         switch action {
         case .openSystemSettings:
             SystemPrivacySettings.openSystemAudioRecordingSettings()
-        case .tryAgain, .dismiss:
-            break
-        case .chooseToolPath:
-            break
-        case .revealInFinder:
+        case .tryAgain, .dismiss, .chooseToolPath, .revealInFinder:
             break
         case .openTerminal:
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
