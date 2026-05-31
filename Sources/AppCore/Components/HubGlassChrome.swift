@@ -30,12 +30,12 @@ public struct HubShellBackground: View {
     private var ambientColors: [Color] {
         if colorScheme == .dark {
             return [
-                Color(red: 0.14, green: 0.16, blue: 0.22).opacity(0.55),
+                Color(red: 0.12, green: 0.13, blue: 0.19).opacity(0.65),
                 Color.clear
             ]
         }
         return [
-            Color(red: 0.88, green: 0.92, blue: 0.98).opacity(0.9),
+            Color(red: 0.90, green: 0.93, blue: 0.98).opacity(0.85),
             Color.clear
         ]
     }
@@ -43,12 +43,12 @@ public struct HubShellBackground: View {
     private var secondaryAmbientColors: [Color] {
         if colorScheme == .dark {
             return [
-                Color(red: 0.10, green: 0.14, blue: 0.18).opacity(0.45),
+                Color(red: 0.08, green: 0.10, blue: 0.15).opacity(0.50),
                 Color.clear
             ]
         }
         return [
-            Color(red: 0.94, green: 0.96, blue: 1.0).opacity(0.7),
+            Color(red: 0.95, green: 0.97, blue: 1.0).opacity(0.75),
             Color.clear
         ]
     }
@@ -79,14 +79,18 @@ public struct HubGlassPanel: ViewModifier {
                         shape
                             .fill(
                                 LinearGradient(
-                                    colors: [HubDesignSystem.glassInnerHighlight, .clear],
+                                    colors: [panelTopHighlight, .clear],
                                     startPoint: .top,
                                     endPoint: .center
                                 )
                             )
                             .allowsHitTesting(false)
                     }
-                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.10), radius: 14, y: 5)
+                    .shadow(
+                        color: .black.opacity(colorScheme == .dark ? 0.40 : 0.10),
+                        radius: 18,
+                        y: 6
+                    )
             }
     }
 
@@ -95,57 +99,82 @@ public struct HubGlassPanel: ViewModifier {
             ? Color.white.opacity(0.04)
             : Color.white.opacity(0.35)
     }
+
+    private var panelTopHighlight: Color {
+        colorScheme == .dark
+            ? HubDesignSystem.glassInnerHighlight
+            : Color.white.opacity(0.04)
+    }
 }
 
 /// Bounded elevated card (lists, tap surface, inbox rows).
 public struct HubGlassCard: ViewModifier {
-  private let cornerRadius: CGFloat
-  private let selected: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
-  public init(cornerRadius: CGFloat = HubDesignSystem.Radius.card, selected: Bool = false) {
-    self.cornerRadius = cornerRadius
-    self.selected = selected
-  }
+    private let cornerRadius: CGFloat
+    private let selected: Bool
 
-  public func body(content: Content) -> some View {
-    content
-      .background {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        shape
-          .fill(.thinMaterial)
-          .overlay {
-            shape.strokeBorder(
-              selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
-              lineWidth: selected ? 1.25 : 0.5
-            )
-          }
-          .shadow(color: .black.opacity(selected ? 0.10 : 0.05), radius: selected ? 6 : 3, y: 1)
-      }
-  }
+    public init(cornerRadius: CGFloat = HubDesignSystem.Radius.card, selected: Bool = false) {
+        self.cornerRadius = cornerRadius
+        self.selected = selected
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .background {
+                let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                shape
+                    .fill(.thinMaterial)
+                    .overlay {
+                        shape.strokeBorder(
+                            selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
+                            lineWidth: selected ? 1.25 : 0.5
+                        )
+                    }
+                    .overlay(alignment: .top) {
+                        shape
+                            .fill(
+                                LinearGradient(
+                                    colors: [cardTopHighlight, .clear],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                            .allowsHitTesting(false)
+                    }
+                    .shadow(color: .black.opacity(selected ? 0.10 : 0.05), radius: selected ? 6 : 3, y: 1)
+            }
+    }
+
+    private var cardTopHighlight: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.06)
+            : Color.white.opacity(0.02)
+    }
 }
 
 /// Sidebar / nav row selection — soft glass pill, not a solid accent slab.
 public struct HubSidebarNavRow: ViewModifier {
-  let isSelected: Bool
+    let isSelected: Bool
 
-  public init(isSelected: Bool) {
-    self.isSelected = isSelected
-  }
+    public init(isSelected: Bool) {
+        self.isSelected = isSelected
+    }
 
-  public func body(content: Content) -> some View {
-    content
-      .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-      .background {
-        if isSelected {
-          RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-            .fill(HubDesignSystem.selectedRowFill)
-            .overlay {
-              RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .strokeBorder(HubDesignSystem.selectedRowStroke, lineWidth: 1)
+    public func body(content: Content) -> some View {
+        content
+            .foregroundStyle(isSelected ? HubDesignSystem.Colors.accent : Color.primary)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                        .fill(HubDesignSystem.selectedRowFill)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                                .strokeBorder(HubDesignSystem.selectedRowStroke, lineWidth: 1)
+                        }
+                }
             }
-        }
-      }
-  }
+    }
 }
 
 // MARK: - Legacy aliases
