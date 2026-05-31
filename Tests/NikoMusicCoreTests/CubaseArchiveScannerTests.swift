@@ -52,6 +52,44 @@ final class CubaseArchiveScannerTests: XCTestCase {
         )
     }
 
+    func testScansRootLevelCPRFilesAsSongs() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let project = root.appendingPathComponent("Loose Project.cpr")
+        FileManager.default.createFile(atPath: project.path, contents: Data("fixture".utf8))
+        let looseAudio = root.appendingPathComponent("loose.wav")
+        FileManager.default.createFile(atPath: looseAudio.path, contents: Data("fixture".utf8))
+
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [root])
+
+        let song = try XCTUnwrap(result.songs.first { $0.displayTitle == "Loose Project" })
+        XCTAssertEqual(song.projectVersions.map(\.fileName), ["Loose Project.cpr"])
+        XCTAssertEqual(song.latestCPR?.filePath.standardizedFileURL, project.standardizedFileURL)
+        XCTAssertFalse(result.skippedEntries.contains { $0.label == "Loose Project.cpr" })
+        XCTAssertTrue(result.skippedEntries.contains { $0.label == "loose.wav" })
+    }
+
+    func testGroupsRootLevelCPRVersionsByProjectTitle() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        FileManager.default.createFile(
+            atPath: root.appendingPathComponent("Loose Project v1.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: root.appendingPathComponent("Loose Project v2.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [root])
+
+        let song = try XCTUnwrap(result.songs.first { $0.displayTitle == "Loose Project" })
+        XCTAssertEqual(result.songs.count, 1)
+        XCTAssertEqual(Set(song.projectVersions.map(\.fileName)), ["Loose Project v1.cpr", "Loose Project v2.cpr"])
+    }
+
     func testNeonHookHasMultipleCPRFiles() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()
@@ -78,5 +116,12 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertTrue(titles.contains("Neon Hook"))
         XCTAssertTrue(titles.contains("Extra Archive Song"))
         XCTAssertGreaterThan(result.songs.count, 9)
+    }
+
+    private func makeTemporaryRoot() throws -> URL {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubScanner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
     }
 }

@@ -147,7 +147,10 @@ public final class DownloaderUseCase: @unchecked Sendable {
                 }
 
                 if result.exitCode != 0 {
-                    throw DownloadUseCaseError.downloadFailed(result.standardError)
+                    let message = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+                    throw DownloadUseCaseError.downloadFailed(
+                        message.isEmpty ? "yt-dlp exited with code \(result.exitCode)." : message
+                    )
                 }
 
                 if result.outputURLs.isEmpty {

@@ -72,6 +72,37 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
     }
 
+    func testAddingRootStartsScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
+        viewModel.roots = []
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubAutoScan-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = root.appendingPathComponent("Auto Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songFolder.appendingPathComponent("Auto Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        viewModel.addRoot(root)
+        let deadline = Date().addingTimeInterval(2)
+        while viewModel.songs.isEmpty, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Auto Song"])
+        XCTAssertTrue(viewModel.statusMessage?.contains("1 songs") == true)
+    }
+
     func testDevArchiveRootEnvBootstrapsWithoutPersistingOrCompletingOnboarding() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
@@ -533,6 +564,42 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.songs.count, 1)
         XCTAssertEqual(viewModel.songs.first?.displayTitle, "Cached Song")
         XCTAssertTrue(viewModel.statusMessage?.contains("cache") == true)
+    }
+
+    func testLaunchWithSavedRootAndNoCacheStartsScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubLaunchScan-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = root.appendingPathComponent("Launch Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songFolder.appendingPathComponent("Launch Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        let deadline = Date().addingTimeInterval(2)
+        while viewModel.songs.isEmpty, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Launch Song"])
     }
 
     func testFirstRunOnboardingWhenRootsEmpty() throws {

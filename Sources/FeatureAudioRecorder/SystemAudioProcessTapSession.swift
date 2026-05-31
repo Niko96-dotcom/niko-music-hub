@@ -61,18 +61,25 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         guard let tapAudioFormat = AVAudioFormat(streamDescription: streamDescription) else {
             throw RecorderError.apiError("Unsupported tap audio format")
         }
+        let aggregateNominalSampleRate = try? readNominalSampleRate(deviceID: aggregateDeviceID)
+        let captureAudioFormat = RecorderCaptureFormatResolver.resolve(
+            tapFormat: tapAudioFormat,
+            aggregateNominalSampleRate: aggregateNominalSampleRate
+        )
 
         let activeWriter = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
         let destinationFormat = activeWriter.processingFormat
 
-        tapFormat = tapAudioFormat
+        tapFormat = captureAudioFormat
         outputFormat = destinationFormat
-        converter = AVAudioConverter(from: tapAudioFormat, to: destinationFormat)
+        converter = AVAudioConverter(from: captureAudioFormat, to: destinationFormat)
         writer = activeWriter
         diagnostics = RecorderDiagnosticsAccumulator(
             outputDeviceUID: outputDeviceUID,
             tapSampleRate: tapAudioFormat.sampleRate,
-            tapChannelCount: Int(tapAudioFormat.channelCount)
+            tapChannelCount: Int(tapAudioFormat.channelCount),
+            captureSampleRate: captureAudioFormat.sampleRate,
+            outputSampleRate: destinationFormat.sampleRate
         )
 
         isRunning = true
@@ -230,6 +237,21 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         return uid as String
     }
 
+    private func readNominalSampleRate(deviceID: AudioObjectID) throws -> Double {
+        var sampleRate = Float64(0)
+        var size = UInt32(MemoryLayout<Float64>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
+        guard status == noErr, sampleRate > 0 else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not read aggregate sample rate")
+        }
+        return sampleRate
+    }
+
     private func installIOProc(deviceID: AudioObjectID) throws {
         var procID: AudioDeviceIOProcID?
         let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, ioQueue) { [weak self] _, inputData, _, outputData, _ in
@@ -357,6 +379,27 @@ private final class ConverterInputState: @unchecked Sendable {
     var didProvideInput = false
 }
 
+enum RecorderCaptureFormatResolver {
+    static func resolve(
+        tapFormat: AVAudioFormat,
+        aggregateNominalSampleRate: Double?
+    ) -> AVAudioFormat {
+        guard let aggregateNominalSampleRate,
+              aggregateNominalSampleRate > 0,
+              abs(aggregateNominalSampleRate - tapFormat.sampleRate) > 0.5,
+              let resolved = AVAudioFormat(
+                  commonFormat: tapFormat.commonFormat,
+                  sampleRate: aggregateNominalSampleRate,
+                  channels: tapFormat.channelCount,
+                  interleaved: tapFormat.isInterleaved
+              )
+        else {
+            return tapFormat
+        }
+        return resolved
+    }
+}
+
 private final class RecorderDiagnosticsAccumulator: @unchecked Sendable {
     enum CallbackSource {
         case input
@@ -367,6 +410,8 @@ private final class RecorderDiagnosticsAccumulator: @unchecked Sendable {
     private var outputDeviceUID: String
     private var tapSampleRate: Double
     private var tapChannelCount: Int
+    private var captureSampleRate: Double
+    private var outputSampleRate: Double
     private var ioCallbackCount = 0
     private var inputBufferCallbackCount = 0
     private var outputBufferCallbackCount = 0
@@ -380,11 +425,15 @@ private final class RecorderDiagnosticsAccumulator: @unchecked Sendable {
     init(
         outputDeviceUID: String = "",
         tapSampleRate: Double = 0,
-        tapChannelCount: Int = 0
+        tapChannelCount: Int = 0,
+        captureSampleRate: Double = 0,
+        outputSampleRate: Double = 0
     ) {
         self.outputDeviceUID = outputDeviceUID
         self.tapSampleRate = tapSampleRate
         self.tapChannelCount = tapChannelCount
+        self.captureSampleRate = captureSampleRate
+        self.outputSampleRate = outputSampleRate
     }
 
     func recordIOCallback(source: CallbackSource) {
@@ -442,6 +491,8 @@ private final class RecorderDiagnosticsAccumulator: @unchecked Sendable {
             outputDeviceUID: outputDeviceUID,
             tapSampleRate: tapSampleRate,
             tapChannelCount: tapChannelCount,
+            captureSampleRate: captureSampleRate,
+            outputSampleRate: outputSampleRate,
             ioCallbackCount: ioCallbackCount,
             inputBufferCallbackCount: inputBufferCallbackCount,
             outputBufferCallbackCount: outputBufferCallbackCount,

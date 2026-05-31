@@ -8,6 +8,22 @@ public struct CPRVersionDetector: @unchecked Sendable {
         self.fileManager = fileManager
     }
 
+    func detectImmediateVersions(in folder: URL) throws -> [ProjectVersion] {
+        let children = try fileManager.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        var versions: [ProjectVersion] = []
+        for child in children {
+            if let version = try projectVersionIfSupported(at: child) {
+                versions.append(version)
+            }
+        }
+        return versions.sorted { $0.modifiedAt > $1.modifiedAt }
+    }
+
     public func detectVersions(in songFolder: URL) throws -> [ProjectVersion] {
         guard let enumerator = fileManager.enumerator(
             at: songFolder,
@@ -19,25 +35,9 @@ public struct CPRVersionDetector: @unchecked Sendable {
 
         var versions: [ProjectVersion] = []
         for case let fileURL as URL in enumerator {
-            let ext = fileURL.pathExtension.lowercased()
-            guard ext == Self.supportedExtension else { continue }
-            let name = fileURL.lastPathComponent.lowercased()
-            if name.hasSuffix(".bak.cpr") || name.contains(".bak.") {
-                continue
+            if let version = try projectVersionIfSupported(at: fileURL) {
+                versions.append(version)
             }
-
-            let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
-            guard values.isRegularFile == true else { continue }
-            let modified = values.contentModificationDate ?? .distantPast
-            let versionNumber = Self.parseVersionNumber(from: fileURL.lastPathComponent)
-            versions.append(
-                ProjectVersion(
-                    filePath: fileURL,
-                    fileName: fileURL.lastPathComponent,
-                    modifiedAt: modified,
-                    detectedVersionNumber: versionNumber
-                )
-            )
         }
 
         return versions.sorted { $0.modifiedAt > $1.modifiedAt }
@@ -45,6 +45,26 @@ public struct CPRVersionDetector: @unchecked Sendable {
 
     public func latestCPR(from versions: [ProjectVersion]) -> ProjectVersion? {
         versions.max(by: { $0.modifiedAt < $1.modifiedAt })
+    }
+
+    private func projectVersionIfSupported(at fileURL: URL) throws -> ProjectVersion? {
+        let ext = fileURL.pathExtension.lowercased()
+        guard ext == Self.supportedExtension else { return nil }
+        let name = fileURL.lastPathComponent.lowercased()
+        if name.hasSuffix(".bak.cpr") || name.contains(".bak.") {
+            return nil
+        }
+
+        let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+        guard values.isRegularFile == true else { return nil }
+        let modified = values.contentModificationDate ?? .distantPast
+        let versionNumber = Self.parseVersionNumber(from: fileURL.lastPathComponent)
+        return ProjectVersion(
+            filePath: fileURL,
+            fileName: fileURL.lastPathComponent,
+            modifiedAt: modified,
+            detectedVersionNumber: versionNumber
+        )
     }
 
     static func parseVersionNumber(from fileName: String) -> Int? {

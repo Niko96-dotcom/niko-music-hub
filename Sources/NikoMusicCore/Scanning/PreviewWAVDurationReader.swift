@@ -1,6 +1,12 @@
 import Foundation
 
 enum PreviewWAVDurationReader {
+    static func shouldReadDuration(for fileURL: URL) -> Bool {
+        guard fileURL.pathExtension.lowercased() == "wav" else { return false }
+        let path = fileURL.standardizedFileURL.path
+        return !path.contains("/Library/CloudStorage/")
+    }
+
     static func durationSeconds(for fileURL: URL) -> Double? {
         guard fileURL.pathExtension.lowercased() == "wav" else { return nil }
         guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }

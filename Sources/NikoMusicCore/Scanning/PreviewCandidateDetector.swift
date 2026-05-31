@@ -3,9 +3,25 @@ import Foundation
 public struct PreviewCandidateDetector: @unchecked Sendable {
     private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aiff", "aif", "flac"]
     private let fileManager: FileManager
+    private let shouldReadDuration: @Sendable (URL) -> Bool
+    private let durationReader: @Sendable (URL) -> Double?
 
     public init(fileManager: FileManager = .default) {
+        self.init(
+            fileManager: fileManager,
+            shouldReadDuration: PreviewWAVDurationReader.shouldReadDuration,
+            durationReader: PreviewWAVDurationReader.durationSeconds
+        )
+    }
+
+    init(
+        fileManager: FileManager = .default,
+        shouldReadDuration: @escaping @Sendable (URL) -> Bool,
+        durationReader: @escaping @Sendable (URL) -> Double?
+    ) {
         self.fileManager = fileManager
+        self.shouldReadDuration = shouldReadDuration
+        self.durationReader = durationReader
     }
 
     public func detectCandidates(in songFolder: URL) throws -> [PreviewCandidate] {
@@ -29,7 +45,7 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             let fileName = fileURL.lastPathComponent
             let detectedRole = Self.detectedRole(from: fileName)
             let version = PreviewFilenameParser.parseVersionNumber(from: fileName)
-            let duration = PreviewWAVDurationReader.durationSeconds(for: fileURL)
+            let duration = shouldReadDuration(fileURL) ? durationReader(fileURL) : nil
             candidates.append(
                 PreviewCandidate(
                     filePath: fileURL,

@@ -44,22 +44,30 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                 includingPropertiesForKeys: [.isDirectoryKey],
                 options: [.skipsHiddenFiles]
             )
+            let rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+            let rootLevelCPRPaths = Set(rootLevelVersions.map { $0.filePath.standardizedFileURL.path })
+            songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
 
             for child in children {
                 let values = try child.resourceValues(forKeys: [.isDirectoryKey])
-                guard values.isDirectory == true else {
-                    skippedEntries.append(
-                        SkippedScanEntry(
-                            kind: .nonFolderAtRoot,
-                            label: child.lastPathComponent,
-                            reason: SkippedScanEntry.standardNonFolderAtRootReason
-                        )
-                    )
+                if values.isDirectory == true {
+                    if let song = try scanSongFolder(child) {
+                        songs.append(song)
+                    }
                     continue
                 }
-                if let song = try scanSongFolder(child) {
-                    songs.append(song)
+
+                if rootLevelCPRPaths.contains(child.standardizedFileURL.path) {
+                    continue
                 }
+
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .nonFolderAtRoot,
+                        label: child.lastPathComponent,
+                        reason: SkippedScanEntry.standardNonFolderAtRootReason
+                    )
+                )
             }
         }
 
@@ -74,6 +82,33 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             globalWarnings: globalWarnings,
             skippedEntries: skippedEntries
         )
+    }
+
+    private func rootLevelSongs(from versions: [ProjectVersion]) -> [Song] {
+        let grouped = Dictionary(grouping: versions, by: rootLevelSongKey)
+        return grouped.values.compactMap { versions in
+            let sorted = versions.sorted { $0.modifiedAt > $1.modifiedAt }
+            guard let latest = cprDetector.latestCPR(from: sorted) else { return nil }
+            let title = titleResolver.bestTitle(from: sorted)
+                ?? latest.fileName.replacingOccurrences(of: ".cpr", with: "", options: [.caseInsensitive])
+            return Song(
+                folderPath: latest.filePath,
+                originalFolderName: latest.fileName,
+                displayTitle: title,
+                projectVersions: sorted,
+                previewCandidates: [],
+                latestCPR: latest
+            )
+        }
+    }
+
+    private func rootLevelSongKey(for version: ProjectVersion) -> String {
+        let title = titleResolver.bestTitle(from: [version])
+            ?? version.fileName.replacingOccurrences(of: ".cpr", with: "", options: [.caseInsensitive])
+        return title
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func scanSongFolder(_ folder: URL) throws -> Song? {

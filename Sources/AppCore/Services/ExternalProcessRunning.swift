@@ -39,6 +39,14 @@ public protocol ExternalProcessRunning: Sendable {
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult
 }
 
+public protocol StreamingExternalProcessRunning: ExternalProcessRunning {
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult
+}
+
 public enum ExternalProcessError: LocalizedError, Equatable, Sendable {
     case timedOut(executable: String, seconds: TimeInterval)
 
@@ -50,17 +58,33 @@ public enum ExternalProcessError: LocalizedError, Equatable, Sendable {
     }
 }
 
-public struct FoundationExternalProcessRunner: ExternalProcessRunning {
+public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
     public init() {}
 
     public func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    public func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
         guard let timeoutSeconds = request.timeoutSeconds else {
-            return try await runProcess(request)
+            return try await runProcess(
+                request,
+                onStandardOutput: onStandardOutput,
+                onStandardError: onStandardError
+            )
         }
 
         return try await withThrowingTaskGroup(of: ExternalProcessResult.self) { group in
             group.addTask {
-                try await runProcess(request)
+                try await runProcess(
+                    request,
+                    onStandardOutput: onStandardOutput,
+                    onStandardError: onStandardError
+                )
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
@@ -76,7 +100,11 @@ public struct FoundationExternalProcessRunner: ExternalProcessRunning {
         }
     }
 
-    private func runProcess(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+    private func runProcess(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
         let process = Process()
         process.executableURL = request.executableURL
         process.arguments = request.arguments
@@ -92,10 +120,18 @@ public struct FoundationExternalProcessRunner: ExternalProcessRunning {
         let errorData = LockedProcessData()
 
         outputPipe.fileHandleForReading.readabilityHandler = { handle in
-            outputData.append(handle.availableData)
+            let data = handle.availableData
+            outputData.append(data)
+            if let chunk = String(data: data, encoding: .utf8), !chunk.isEmpty {
+                onStandardOutput(chunk)
+            }
         }
         errorPipe.fileHandleForReading.readabilityHandler = { handle in
-            errorData.append(handle.availableData)
+            let data = handle.availableData
+            errorData.append(data)
+            if let chunk = String(data: data, encoding: .utf8), !chunk.isEmpty {
+                onStandardError(chunk)
+            }
         }
 
         let completion = LockedProcessCompletion()
@@ -105,8 +141,16 @@ public struct FoundationExternalProcessRunner: ExternalProcessRunning {
                 process.terminationHandler = { terminatedProcess in
                     outputPipe.fileHandleForReading.readabilityHandler = nil
                     errorPipe.fileHandleForReading.readabilityHandler = nil
-                    outputData.append(outputPipe.fileHandleForReading.availableData)
-                    errorData.append(errorPipe.fileHandleForReading.availableData)
+                    let remainingOutput = outputPipe.fileHandleForReading.availableData
+                    let remainingError = errorPipe.fileHandleForReading.availableData
+                    outputData.append(remainingOutput)
+                    errorData.append(remainingError)
+                    if let chunk = String(data: remainingOutput, encoding: .utf8), !chunk.isEmpty {
+                        onStandardOutput(chunk)
+                    }
+                    if let chunk = String(data: remainingError, encoding: .utf8), !chunk.isEmpty {
+                        onStandardError(chunk)
+                    }
 
                     completion.resume(
                         continuation,

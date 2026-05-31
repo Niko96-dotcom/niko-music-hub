@@ -93,6 +93,55 @@ final class WAVRecorderWriterTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
+    func testCaptureFormatResolverUsesAggregateSampleRate() throws {
+        let tapFormat = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48_000,
+            channels: 2,
+            interleaved: false
+        ))
+
+        let resolved = RecorderCaptureFormatResolver.resolve(
+            tapFormat: tapFormat,
+            aggregateNominalSampleRate: 44_100
+        )
+
+        XCTAssertEqual(resolved.sampleRate, 44_100)
+        XCTAssertEqual(resolved.channelCount, 2)
+        XCTAssertEqual(resolved.commonFormat, tapFormat.commonFormat)
+        XCTAssertEqual(resolved.isInterleaved, tapFormat.isInterleaved)
+    }
+
+    func testCaptureFormatResolverKeepsTapRateWhenAggregateRateMatches() throws {
+        let tapFormat = try XCTUnwrap(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 44_100,
+            channels: 2,
+            interleaved: false
+        ))
+
+        let resolved = RecorderCaptureFormatResolver.resolve(
+            tapFormat: tapFormat,
+            aggregateNominalSampleRate: 44_100
+        )
+
+        XCTAssertTrue(resolved === tapFormat)
+    }
+
+    func testRecorderDiagnosticsSummaryIncludesCaptureAndOutputRates() {
+        let diagnostics = RecorderDiagnostics(
+            outputDeviceUID: "device",
+            tapSampleRate: 48_000,
+            tapChannelCount: 2,
+            captureSampleRate: 44_100,
+            outputSampleRate: 44_100
+        )
+
+        XCTAssertTrue(diagnostics.summary.contains("tap=48000Hz/2ch"))
+        XCTAssertTrue(diagnostics.summary.contains("capture=44100Hz"))
+        XCTAssertTrue(diagnostics.summary.contains("output=44100Hz"))
+    }
+
     func testFilenameOverride() throws {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
         let filename = useCase.generateOutputFilename(override: "My Recording.wav")
