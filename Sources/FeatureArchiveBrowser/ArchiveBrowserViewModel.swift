@@ -31,8 +31,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var missingAudioReport: MissingAudioReport?
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
 
-    private let scanner = CubaseArchiveScanner()
+    private let catalog: ArchiveCatalogCoordinator
     private let browseRefreshDriver: ArchiveBrowseRefreshDriver
+    private var bpmEstimateTask: Task<Void, Never>?
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
@@ -60,6 +61,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
+        self.catalog = ArchiveCatalogCoordinator(
+            archiveIndexStore: archiveIndexStore,
+            songMetadataStore: songMetadataStore,
+            collaboratorStore: collaboratorStore,
+            diagnostics: context.diagnostics
+        )
         self.browseRefreshDriver = ArchiveBrowseRefreshDriver(debounceNanoseconds: browseSearchDebounceNanoseconds)
         let dryRunOnly = runtime.dryRunOpen
         self.opener = MusicItemOpener(
@@ -252,15 +259,19 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func refreshBPMEstimate(for song: Song) {
+        bpmEstimateTask?.cancel()
         guard mixdownBPMBySongID[song.id] == nil,
               let id = song.mainPreviewCandidateID,
               let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else { return }
         let songID = song.id
-        Task {
+        bpmEstimateTask = Task {
             let estimate = await Task.detached(priority: .utility) {
                 MixdownBPMEstimator.estimate(url: url)
             }.value
-            guard let estimate, mixdownBPMBySongID[songID] == nil else { return }
+            guard !Task.isCancelled,
+                  let estimate,
+                  selectedSong?.id == songID,
+                  mixdownBPMBySongID[songID] == nil else { return }
             mixdownBPMBySongID[songID] = estimate
         }
     }
@@ -354,10 +365,7 @@ extension ArchiveBrowserViewModel {
         defer { isScanning = false }
         do {
             let scannedAt = Date()
-            let scanner = scanner
-            let result = try await Task.detached(priority: .userInitiated) {
-                try scanner.scan(roots: rootsSnapshot)
-            }.value
+            let result = try await catalog.performScanDetached(roots: rootsSnapshot)
             applyScanResult(result, roots: rootsSnapshot, scannedAt: scannedAt)
         } catch {
             recordScanFailure(error)
@@ -368,7 +376,7 @@ extension ArchiveBrowserViewModel {
         guard let rootsSnapshot = beginScan() else { return }
         defer { isScanning = false }
         do {
-            let result = try scanner.scan(roots: rootsSnapshot)
+            let result = try catalog.performScanSynchronously(roots: rootsSnapshot)
             applyScanResult(result, roots: rootsSnapshot, scannedAt: Date())
         } catch {
             recordScanFailure(error)
@@ -394,46 +402,30 @@ extension ArchiveBrowserViewModel {
     }
 
     private func applyScanResult(_ result: ScanResult, roots: [URL], scannedAt: Date) {
-        let built = ArchiveScanDiagnosticsBuilder.build(
-            result: result,
-            roots: roots,
-            scannedAt: scannedAt
-        )
+        let built = catalog.buildDiagnostics(result: result, roots: roots, scannedAt: scannedAt)
         mutateCatalog {
-            songs = mergeUserMetadata(into: result.songs)
+            songs = catalog.mergeUserMetadata(into: result.songs, collaborators: collaborators)
             scanDiagnostics = built
             statusMessage = built.compactSummaryLine
         }
         diagnostics.log(.info, built.summaryLine)
-        persistCachedIndex(roots: roots, scannedAt: scannedAt)
-        persistUserMetadata(for: songs)
+        catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: scannedAt)
+        catalog.persistUserMetadata(for: songs)
     }
 
     private func loadCachedIndexIfAvailable() {
-        guard let archiveIndexStore else { return }
-        guard let snapshot = try? archiveIndexStore.loadLatest() else { return }
-        guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return }
+        guard let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators) else { return }
         mutateCatalog {
-            songs = mergeUserMetadata(into: snapshot.songs)
+            songs = cached.songs
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
-            let relative = formatter.localizedString(for: snapshot.scannedAt, relativeTo: Date())
-            statusMessage = "Loaded \(snapshot.songs.count) songs from cache (\(relative)). Scan to refresh."
+            let relative = formatter.localizedString(for: cached.scannedAt, relativeTo: Date())
+            statusMessage = "Loaded \(cached.songs.count) songs from cache (\(relative)). Scan to refresh."
         }
     }
 
     private func persistCachedIndex(roots: [URL], scannedAt: Date) {
-        guard let archiveIndexStore else { return }
-        let snapshot = ArchiveIndexSnapshot(
-            roots: roots.map { $0.standardizedFileURL.path },
-            songs: songs,
-            scannedAt: scannedAt
-        )
-        do {
-            try archiveIndexStore.save(snapshot)
-        } catch {
-            diagnostics.log(.error, "Archive cache save failed: \(error)")
-        }
+        catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: scannedAt)
     }
 
     private func restartArchiveRootWatching() {
@@ -450,12 +442,6 @@ extension ArchiveBrowserViewModel {
 // MARK: - Metadata
 
 extension ArchiveBrowserViewModel {
-    private enum MetadataRankingRefresh {
-        case none
-        case previewAuto
-        case cprAuto
-    }
-
     func updateVirtualTitle(for song: Song, title: String) {
         guard var updated = latestSong(matching: song) else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -561,7 +547,7 @@ extension ArchiveBrowserViewModel {
 
     func createNewSong(request: NewSongRequest) throws -> Song {
         var created = try NewSongFolderCreator.create(request: request)
-        created = mergeUserMetadata(into: [created]).first ?? created
+        created = catalog.mergeUserMetadata(into: [created], collaborators: collaborators).first ?? created
         mutateCatalog {
             var updatedSongs = songs
             if let index = updatedSongs.firstIndex(where: { $0.id == created.id }) {
@@ -574,7 +560,7 @@ extension ArchiveBrowserViewModel {
             }
             songs = updatedSongs
         }
-        persistUserMetadata(for: [created])
+        catalog.persistUserMetadata(for: [created])
         if !roots.isEmpty {
             persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
         }
@@ -585,38 +571,22 @@ extension ArchiveBrowserViewModel {
 
     private func applyMetadataMerge(
         for song: Song,
-        rankingRefresh: MetadataRankingRefresh = .none,
+        rankingRefresh: ArchiveCatalogCoordinator.MetadataRankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) {
-        guard var scanned = latestSong(matching: song) else { return }
-        var metadata = SongUserMetadata.from(song: scanned)
-        mutate(&metadata, &scanned)
-
-        switch rankingRefresh {
-        case .none:
-            break
-        case .previewAuto:
-            let context = PreviewRankingProjectContext.from(projectVersions: scanned.projectVersions)
-            let ranker = PreviewConfidenceRanker()
-            let ranked = ranker.rank(scanned.previewCandidates, projectContext: context)
-            scanned.previewCandidates = ranked
-            scanned.mainPreviewCandidateID = ranker.mainPreviewID(from: ranked)
-        case .cprAuto:
-            let detector = CPRVersionDetector()
-            scanned.latestCPR = detector.latestCPR(from: scanned.projectVersions)
-        }
-
-        let merged = ArchiveMetadataMerger.merge(
-            scanned: scanned,
-            metadata: metadata,
-            collaboratorsByID: collaboratorsByID()
-        )
+        guard let merged = catalog.mergedSongAfterMetadataEdit(
+            for: song,
+            in: songs,
+            collaborators: collaborators,
+            rankingRefresh: rankingRefresh,
+            mutate: mutate
+        ) else { return }
         commitSongMetadataUpdate(merged)
     }
 
     private func commitSongMetadataUpdate(_ updated: Song) {
         replaceSong(updated)
-        persistUserMetadata(for: [updated])
+        catalog.persistUserMetadata(for: [updated])
         if !roots.isEmpty {
             persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
         }
@@ -639,30 +609,6 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    private func mergeUserMetadata(into scanned: [Song]) -> [Song] {
-        guard songMetadataStore != nil || collaboratorStore != nil else { return scanned }
-        let metadata = (try? songMetadataStore?.loadAll()) ?? [:]
-        let map = collaboratorsByID()
-        return ArchiveMetadataMerger.merge(
-            scanned: scanned,
-            metadataByID: metadata,
-            collaboratorsByID: map
-        )
-    }
-
-    private func collaboratorsByID() -> [String: Collaborator] {
-        Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
-    }
-
-    private func persistUserMetadata(for songs: [Song]) {
-        guard let songMetadataStore, !songs.isEmpty else { return }
-        let items = songs.map { SongUserMetadata.from(song: $0) }
-        do {
-            try songMetadataStore.upsertAll(items)
-        } catch {
-            diagnostics.log(.error, "Song metadata save failed: \(error)")
-        }
-    }
 }
 
 // MARK: - Exports and file actions

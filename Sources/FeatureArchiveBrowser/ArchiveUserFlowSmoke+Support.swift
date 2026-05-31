@@ -198,7 +198,7 @@ extension ArchiveUserFlowSmoke {
         context: ToolContext,
         runtime: MusicHubRuntimeEnvironment,
         homeDirectory: String
-    ) throws -> InvalidRootCheckOutcome {
+    ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.invalidRoot
         let missingRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -231,7 +231,7 @@ extension ArchiveUserFlowSmoke {
                 homeDirectory: homeDirectory
             )
 
-        return InvalidRootCheckOutcome(
+        let evidence = InvalidRootEvidence(
             scenario: scenario,
             exportPath: exportPath,
             exportContainsBadge: exportContainsBadge,
@@ -240,13 +240,14 @@ extension ArchiveUserFlowSmoke {
             panelGlobalWarningLines: panelGlobalWarningLines,
             panelGlobalWarningLinesMatchExport: panelGlobalWarningLinesMatchExport
         )
+        return SmokeRun(id: .invalidRoot, evidence: .invalidRoot(evidence))
     }
 
     static func runSummaryTruncationCheck(
         truncationRoot: URL,
         context: ToolContext,
         runtime: MusicHubRuntimeEnvironment
-    ) throws -> SummaryTruncationCheckOutcome {
+    ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.summaryTruncation
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: truncationRoot.path, isDirectory: &isDirectory),
@@ -276,7 +277,7 @@ extension ArchiveUserFlowSmoke {
         let panelContext = ArchiveDiagnosticsPanelContext.from(diagnostics)
         let panelFootnote = panelContext.supportSummaryTruncationFootnote ?? ""
 
-        return SummaryTruncationCheckOutcome(
+        let evidence = SummaryTruncationEvidence(
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTruncation: exportContainsTruncation,
@@ -284,5 +285,6 @@ extension ArchiveUserFlowSmoke {
             panelFootnoteMatchesDiagnostics:
                 panelFootnote == diagnostics.summaryLineSongWarningTitlesTruncationFootnote
         )
+        return SmokeRun(id: .summaryTruncation, evidence: .summaryTruncation(evidence))
     }
 }
