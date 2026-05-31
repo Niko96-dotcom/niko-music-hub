@@ -29,7 +29,7 @@ struct ArchiveWaveformView: View {
             )
         }
         .frame(height: 72)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
     }
 
     private func drawWaveform(context: inout GraphicsContext, size: CGSize) {

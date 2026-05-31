@@ -234,7 +234,7 @@ public struct AudioRecorderView: View {
                 }
             }
             .padding(12)
-            .hubGlassCard()
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
             .frame(maxWidth: 560)
         }
     }
@@ -253,7 +253,7 @@ public struct AudioRecorderView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
-            .hubGlassCard()
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
             .frame(maxWidth: 560)
         }
     }

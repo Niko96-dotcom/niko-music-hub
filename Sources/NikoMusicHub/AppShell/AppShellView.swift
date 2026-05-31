@@ -4,7 +4,7 @@ import SwiftUI
 struct AppShellView: View {
     private static let showToolSidebarKey = "hub.shell.panels.toolsVisible"
     private static let showOutputInboxKey = "hub.shell.panels.inboxVisible"
-    private static let activeToolMinWidth: CGFloat = 700
+    private static let activeToolMinWidth: CGFloat = 540
 
     let registry: ToolRegistry
     let context: ToolContext
@@ -30,7 +30,7 @@ struct AppShellView: View {
                     registry: registry,
                     selectedToolID: $selectedToolID
                 )
-                .frame(minWidth: 220, idealWidth: 248, maxWidth: 272)
+                .frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
                 .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                 .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
@@ -50,7 +50,7 @@ struct AppShellView: View {
 
             if showOutputInbox {
                 OutputInboxInspectorView(context: context)
-                    .frame(minWidth: 280, idealWidth: 308, maxWidth: 340)
+                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
                     .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                     .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
@@ -70,8 +70,8 @@ struct AppShellView: View {
 
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
-        if showToolSidebar { width += 220 }
-        if showOutputInbox { width += 260 }
+        if showToolSidebar { width += 190 }
+        if showOutputInbox { width += 220 }
         return width
     }
 

@@ -74,7 +74,6 @@ struct ToolSidebarView: View {
             if let context {
                 HelperToolsHealthStrip(context: context)
                     .padding(10)
-                    .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
                     .padding(.horizontal, 8)
                     .padding(.bottom, 10)
             }

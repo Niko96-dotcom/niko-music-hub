@@ -2,55 +2,13 @@ import SwiftUI
 
 // MARK: - Shell & panels
 
-/// Ambient depth behind the three-column shell (not a flat window fill).
+/// Clean flat window fill.
 public struct HubShellBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     public init() {}
 
     public var body: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            RadialGradient(
-                colors: ambientColors,
-                center: .topLeading,
-                startRadius: 40,
-                endRadius: 900
-            )
-            RadialGradient(
-                colors: secondaryAmbientColors,
-                center: .bottomTrailing,
-                startRadius: 60,
-                endRadius: 700
-            )
-        }
-        .ignoresSafeArea()
-    }
-
-    private var ambientColors: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color(red: 0.12, green: 0.13, blue: 0.19).opacity(0.65),
-                Color.clear
-            ]
-        }
-        return [
-            Color(red: 0.90, green: 0.93, blue: 0.98).opacity(0.85),
-            Color.clear
-        ]
-    }
-
-    private var secondaryAmbientColors: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color(red: 0.08, green: 0.10, blue: 0.15).opacity(0.50),
-                Color.clear
-            ]
-        }
-        return [
-            Color(red: 0.95, green: 0.97, blue: 1.0).opacity(0.75),
-            Color.clear
-        ]
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
     }
 }
 
@@ -74,9 +32,9 @@ public struct HubGlassPanel: ViewModifier {
                     shape.strokeBorder(HubDesignSystem.glassStroke, lineWidth: 0.5)
                 }
                 .shadow(
-                    color: .black.opacity(colorScheme == .dark ? 0.34 : 0.08),
-                    radius: 18,
-                    y: 6
+                    color: .black.opacity(colorScheme == .dark ? 0.15 : 0.04),
+                    radius: 8,
+                    y: 3
                 )
         } else {
             materialFallback(content: content, shape: shape)
@@ -108,9 +66,9 @@ public struct HubGlassPanel: ViewModifier {
                             .allowsHitTesting(false)
                     }
                     .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.40 : 0.10),
-                        radius: 18,
-                        y: 6
+                        color: .black.opacity(colorScheme == .dark ? 0.15 : 0.04),
+                        radius: 8,
+                        y: 3
                     )
             }
     }
@@ -163,7 +121,7 @@ public struct HubGlassCard: ViewModifier {
                         lineWidth: selected ? 1.25 : 0.5
                     )
                 }
-                .shadow(color: .black.opacity(selected ? 0.10 : 0.04), radius: selected ? 6 : 3, y: 1)
+                .shadow(color: .black.opacity(selected ? 0.06 : 0.02), radius: selected ? 4 : 2, y: 1)
         } else {
             materialFallback(content: content, shape: shape)
         }
@@ -197,7 +155,7 @@ public struct HubGlassCard: ViewModifier {
                             )
                             .allowsHitTesting(false)
                     }
-                    .shadow(color: .black.opacity(selected ? 0.10 : 0.05), radius: selected ? 6 : 3, y: 1)
+                    .shadow(color: .black.opacity(selected ? 0.06 : 0.02), radius: selected ? 4 : 2, y: 1)
             }
     }
 

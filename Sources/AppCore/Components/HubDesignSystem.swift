@@ -17,12 +17,12 @@ public enum HubDesignSystem {
     // MARK: - Spacing
 
     public enum Spacing {
-        public static let shell: CGFloat = 10
-        public static let panel: CGFloat = 16
-        public static let section: CGFloat = 24
-        public static let cardGap: CGFloat = 8
+        public static let shell: CGFloat = 8
+        public static let panel: CGFloat = 12
+        public static let section: CGFloat = 20
+        public static let cardGap: CGFloat = 6
         public static let controlGap: CGFloat = 8
-        public static let inlineGap: CGFloat = 6
+        public static let inlineGap: CGFloat = 4
     }
 
     // MARK: - Sizes
@@ -33,34 +33,33 @@ public enum HubDesignSystem {
         public static let iconButtonSize: CGFloat = 30
         public static let chipHeight: CGFloat = 26
         public static let statusDot: CGFloat = 7
-        public static let sidebarWidth: ClosedRange<CGFloat> = 200 ... 260
-        public static let inboxWidth: ClosedRange<CGFloat> = 260 ... 320
+        public static let sidebarWidth: ClosedRange<CGFloat> = 190 ... 250
+        public static let inboxWidth: ClosedRange<CGFloat> = 220 ... 300
     }
 
     // MARK: - Colors
 
     public enum Colors {
-        /// Warm indigo accent — hub-owned selection and actions.
-        public static let accent = Color(red: 0.35, green: 0.42, blue: 0.95)
-        public static let accentTint = accent.opacity(0.12)
-        public static let accentDeep = Color(red: 0.28, green: 0.34, blue: 0.82)
-        public static let success = Color(red: 0.30, green: 0.78, blue: 0.48)
-        public static let warning = Color(red: 0.95, green: 0.68, blue: 0.25)
-        public static let danger = Color(red: 0.92, green: 0.34, blue: 0.34)
-        public static let separator = Color.primary.opacity(0.08)
-        public static let cardStroke = Color.primary.opacity(0.07)
-        public static let selectedStroke = accent.opacity(0.35)
+        public static let accent = Color.accentColor
+        public static let accentTint = Color.primary.opacity(0.06)
+        public static let accentDeep = Color.primary.opacity(0.14)
+        public static let success = Color(red: 0.30, green: 0.72, blue: 0.45)
+        public static let warning = Color(red: 0.85, green: 0.62, blue: 0.20)
+        public static let danger = Color(red: 0.82, green: 0.30, blue: 0.30)
+        public static let separator = Color.primary.opacity(0.06)
+        public static let cardStroke = Color.primary.opacity(0.05)
+        public static let selectedStroke = Color.primary.opacity(0.12)
     }
 
     // MARK: - Glass
 
     public static var glassStroke: Color { Colors.cardStroke }
 
-    public static var glassInnerHighlight: Color { Color.white.opacity(0.10) }
+    public static var glassInnerHighlight: Color { Color.white.opacity(0.05) }
 
-    public static var selectedRowFill: Color { Colors.accentTint }
+    public static var selectedRowFill: Color { Color.primary.opacity(0.06) }
 
-    public static var selectedRowStroke: Color { Colors.selectedStroke }
+    public static var selectedRowStroke: Color { Color.primary.opacity(0.10) }
 
     // MARK: - Typography
 

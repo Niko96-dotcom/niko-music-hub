@@ -140,7 +140,7 @@ public struct AudioConverterView: View {
             }
         }
         .padding(10)
-        .hubGlassCard()
+        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -362,8 +362,8 @@ public struct AudioConverterView: View {
                 }
             }
         }
-        .padding(12)
-        .hubGlassCard()
+        .padding(.vertical, 10)
+        .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.sourceURL.lastPathComponent)
         .accessibilityValue(statusText(for: row))

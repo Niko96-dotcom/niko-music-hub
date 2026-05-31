@@ -106,7 +106,7 @@ public struct DownloaderView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .disabled(viewModel.downloadState == .downloading)
     }
 
@@ -247,7 +247,7 @@ public struct DownloaderView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
     }
 
     private var progressSection: some View {
@@ -279,7 +279,7 @@ public struct DownloaderView: View {
             }
             .frame(maxHeight: 140)
             .padding(8)
-            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         }
     }
 
