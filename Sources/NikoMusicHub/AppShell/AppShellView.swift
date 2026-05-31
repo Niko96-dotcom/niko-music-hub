@@ -4,6 +4,7 @@ import SwiftUI
 struct AppShellView: View {
     private static let showToolSidebarKey = "hub.shell.panels.toolsVisible"
     private static let showOutputInboxKey = "hub.shell.panels.inboxVisible"
+    private static let activeToolMinWidth: CGFloat = 700
 
     let registry: ToolRegistry
     let context: ToolContext
@@ -42,7 +43,7 @@ struct AppShellView: View {
             }
 
             activeToolView
-                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .layoutPriority(1)
                 .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                 .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
@@ -68,7 +69,7 @@ struct AppShellView: View {
     }
 
     private var minWindowWidth: CGFloat {
-        var width: CGFloat = 480
+        var width: CGFloat = Self.activeToolMinWidth
         if showToolSidebar { width += 220 }
         if showOutputInbox { width += 260 }
         return width

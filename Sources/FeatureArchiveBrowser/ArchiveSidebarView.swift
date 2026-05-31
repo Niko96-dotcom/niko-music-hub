@@ -53,11 +53,16 @@ struct ArchiveSidebarView: View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Archive")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .layoutPriority(1)
 
             if !viewModel.songs.isEmpty {
                 Text("\(viewModel.songs.count) songs")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous))
