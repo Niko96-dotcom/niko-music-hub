@@ -12,39 +12,43 @@ struct NewSongSheet: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("New song draft")
-                .font(.system(size: 18, weight: .semibold))
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
+            Text("New Song Draft")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
 
             Text("Drafts are created in the app output folder, not inside archive roots.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
 
-            TextField("Song folder name", text: $name)
-                .textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                TextField("Song folder name", text: $name)
+                    .textFieldStyle(.roundedBorder)
 
-            TextField("Note (optional)", text: $note, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(2...4)
+                TextField("Note (optional)", text: $note, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
 
-            if !viewModel.collaborators.isEmpty {
-                Text("Collaborators")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
-                ForEach(viewModel.collaborators) { collaborator in
-                    Toggle(collaborator.displayName, isOn: Binding(
-                        get: { selectedCollaboratorIDs.contains(collaborator.id) },
-                        set: { on in
-                            if on { selectedCollaboratorIDs.insert(collaborator.id) }
-                            else { selectedCollaboratorIDs.remove(collaborator.id) }
-                        }
-                    ))
+                if !viewModel.collaborators.isEmpty {
+                    Text("Collaborators")
+                        .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(viewModel.collaborators) { collaborator in
+                        Toggle(collaborator.displayName, isOn: Binding(
+                            get: { selectedCollaboratorIDs.contains(collaborator.id) },
+                            set: { on in
+                                if on { selectedCollaboratorIDs.insert(collaborator.id) }
+                                else { selectedCollaboratorIDs.remove(collaborator.id) }
+                            }
+                        ))
+                    }
                 }
             }
+            .padding(12)
+            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: 11))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
             }
 
@@ -59,7 +63,7 @@ struct NewSongSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 380)
+        .frame(width: 360)
     }
 
     private func createSong() {
@@ -78,8 +82,6 @@ struct NewSongSheet: View {
             errorMessage = "Enter a song name."
         } catch NewSongFolderCreator.CreationError.invalidName {
             errorMessage = "Use a plain folder name without slashes or parent-folder segments."
-        } catch NewSongFolderCreator.CreationError.archiveRootIsReadOnly {
-            errorMessage = "Archive roots are read-only. Choose an output folder outside the archive."
         } catch {
             errorMessage = error.localizedDescription
         }

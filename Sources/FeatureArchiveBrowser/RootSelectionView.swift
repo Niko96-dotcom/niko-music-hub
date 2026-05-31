@@ -31,7 +31,7 @@ struct RootSelectionView: View {
                     HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "folder.fill")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(HubDesignSystem.Colors.accent)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
                                 .font(.system(size: 11, weight: .medium))
@@ -67,21 +67,13 @@ struct RootSelectionView: View {
 
     @ViewBuilder
     private var addRootButton: some View {
-        if viewModel.roots.isEmpty {
-            HubIconButton(
-                systemImage: "folder.badge.plus",
-                accessibilityLabel: "Add archive root",
-                help: "Choose archive roots",
-                prominent: true,
-                action: onAddRoot
-            )
-        } else {
-            HubIconButton(
-                systemImage: "plus",
-                accessibilityLabel: "Add another root",
-                help: "Add another archive root",
-                action: onAddRoot
-            )
+        HubLabeledButton(
+            icon: viewModel.roots.isEmpty ? "folder.badge.plus" : "plus",
+            label: viewModel.roots.isEmpty ? "Add Root" : "Add Another",
+            style: viewModel.roots.isEmpty ? .primary : .secondary,
+            help: "Choose archive roots"
+        ) {
+            onAddRoot()
         }
     }
 }
