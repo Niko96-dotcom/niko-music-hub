@@ -15,4 +15,11 @@ public extension View {
             .padding(.bottom, HubToolLayout.bottomPadding)
             .padding(.top, HubToolLayout.topPadding)
     }
+
+    /// Centers tool content in a max-width column with shared shell padding (spec §4.2).
+    func hubToolContentColumn() -> some View {
+        hubToolContentPadding()
+            .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
+    }
 }
