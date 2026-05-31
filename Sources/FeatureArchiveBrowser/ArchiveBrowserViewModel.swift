@@ -255,8 +255,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         guard mixdownBPMBySongID[song.id] == nil,
               let id = song.mainPreviewCandidateID,
               let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else { return }
-        if let estimate = MixdownBPMEstimator.estimate(url: url) {
-            mixdownBPMBySongID[song.id] = estimate
+        let songID = song.id
+        Task {
+            let estimate = await Task.detached(priority: .utility) {
+                MixdownBPMEstimator.estimate(url: url)
+            }.value
+            guard let estimate, mixdownBPMBySongID[songID] == nil else { return }
+            mixdownBPMBySongID[songID] = estimate
         }
     }
 
