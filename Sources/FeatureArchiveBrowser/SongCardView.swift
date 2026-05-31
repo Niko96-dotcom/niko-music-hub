@@ -12,18 +12,18 @@ struct SongCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(song.effectiveDisplayTitle)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.primary)
-                    .lineLimit(2)
+                    .lineLimit(1)
 
                 Spacer(minLength: 4)
 
                 if hasScanWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Colors.warning)
                         .help(song.displayScanWarnings().joined(separator: " "))
                 }
@@ -33,12 +33,13 @@ struct SongCardView: View {
                 Text(subtitle)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact)
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .hubGlassCard(
             cornerRadius: HubDesignSystem.Radius.card,
