@@ -1311,7 +1311,7 @@ fi
 
 for required_text in \
   "Niko Music Hub" \
-  "Cubase Archive" \
+  "Archive Browser" \
   "Start with an archive root" \
   "Add an archive root" \
   "Output Inbox" \

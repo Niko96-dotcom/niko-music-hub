@@ -252,9 +252,16 @@ func dumpAX(_ element: AXUIElement, depth: Int) {
     let role = stringAttribute(element, kAXRoleAttribute)
     let title = stringAttribute(element, kAXTitleAttribute)
     let value = stringAttribute(element, kAXValueAttribute)
+    let description = stringAttribute(element, kAXDescriptionAttribute)
+    let identifier = stringAttribute(element, kAXIdentifierAttribute)
 
-    if !title.isEmpty || !value.isEmpty {
-        print("\(String(repeating: "  ", count: depth))\(role) title=\(title) value=\(value)")
+    if !title.isEmpty || !value.isEmpty || !description.isEmpty || !identifier.isEmpty {
+        var line = "\(String(repeating: "  ", count: depth))\(role)"
+        if !title.isEmpty { line += " title=\(title)" }
+        if !value.isEmpty { line += " value=\(value)" }
+        if !description.isEmpty { line += " description=\(description)" }
+        if !identifier.isEmpty { line += " id=\(identifier)" }
+        print(line)
     }
 
     for child in axChildren(of: element) {
