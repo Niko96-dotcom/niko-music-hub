@@ -11,12 +11,12 @@ struct ArchiveCollaboratorAddressBookView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Collaborators")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             if viewModel.collaborators.isEmpty {
                 Text("No collaborators yet.")
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
             } else {
                 ForEach(viewModel.collaborators) { collaborator in
                     Text(collaborator.displayName)

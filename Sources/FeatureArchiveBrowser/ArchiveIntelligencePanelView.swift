@@ -9,7 +9,7 @@ struct ArchiveIntelligencePanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Intelligence (read-only)")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             if !viewModel.pendingCollaboratorSuggestions.isEmpty {
                 Text("Collaborator suggestions")
@@ -46,7 +46,7 @@ struct ArchiveIntelligencePanelView: View {
                 ForEach(viewModel.duplicateSongHints.prefix(3)) { hint in
                     Text(hint.displayTitles.joined(separator: " · "))
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.warning)
+                        .foregroundStyle(HubDesignSystem.Colors.warning)
                         .lineLimit(2)
                 }
             }
@@ -55,12 +55,12 @@ struct ArchiveIntelligencePanelView: View {
                 if !missing.noPreview.isEmpty {
                     Text("No preview: \(missing.noPreview.count) song(s)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
                 if !missing.noCPR.isEmpty {
                     Text("No CPR: \(missing.noCPR.count) song(s)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
 

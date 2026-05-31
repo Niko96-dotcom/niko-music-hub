@@ -9,14 +9,14 @@ struct ArchiveFirstRunView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Start with an archive root")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
 
             Text(
                 "Choose the folder that contains your Cubase song/project folders. "
                     + "Niko Music Hub scans read-only — your song folders on disk are never renamed or moved."
             )
             .font(.system(size: 14))
-            .foregroundStyle(ArchiveDesignTokens.textSecondary)
+            .foregroundStyle(Color.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -24,7 +24,7 @@ struct ArchiveFirstRunView: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text("You can add more archive roots later from the sidebar.")
                     .font(.system(size: 12))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
             }
 
             HubIconButton(

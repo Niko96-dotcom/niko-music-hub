@@ -32,7 +32,7 @@ struct ArchiveSidebarMorePanel: View {
                     .font(.system(size: 11))
                 Text(health.summary)
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(1)
             }
         }

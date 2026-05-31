@@ -34,14 +34,14 @@ struct ArchiveDiagnosticsPanelView: View {
             HStack(spacing: 8) {
                 Text("Scan diagnostics")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 if let badge = panelContext.rootHealthBadge {
                     Text(badge)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(ArchiveDesignTokens.accent)
+                        .foregroundStyle(HubDesignSystem.Colors.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(ArchiveDesignTokens.accent.opacity(0.12))
+                        .background(HubDesignSystem.Colors.accent.opacity(0.12))
                         .clipShape(Capsule())
                         .accessibilityIdentifier(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)
                 }
@@ -56,24 +56,24 @@ struct ArchiveDiagnosticsPanelView: View {
 
             Text("Support summary")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
             Text(panelContext.supportSummaryLine)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
                 .textSelection(.enabled)
                 .lineLimit(4)
 
             if let footnote = panelContext.supportSummaryTruncationFootnote {
                 Text(footnote)
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(2)
             }
 
             if let searchContext {
                 Text("Active search")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Text(
                     ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
                         query: searchContext.query,
@@ -81,7 +81,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                 )
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.accent)
+                .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 ForEach(searchContext.matches, id: \.displayTitle) { match in
                     let matchLine = ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
@@ -90,7 +90,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                     Text("• \(matchLine)")
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -100,14 +100,14 @@ struct ArchiveDiagnosticsPanelView: View {
                 let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: selectedSong)
                 Text("Selected song")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Text(
                     ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
                         displayTitle: selectedContext.displayTitle
                     )
                 )
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.accent)
+                .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 Text(
                     ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(
@@ -115,7 +115,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                 )
                 .font(.system(size: 10))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
                 .lineLimit(3)
                 .textSelection(.enabled)
                 ForEach(selectedContext.warningLines, id: \.self) { warning in
@@ -123,7 +123,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         "• \(ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: warning))"
                     )
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -132,7 +132,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: notes)
                     )
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -141,7 +141,7 @@ struct ArchiveDiagnosticsPanelView: View {
             if let skippedSearchContext {
                 Text("Active skipped search")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Text(
                     ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
                         query: skippedSearchContext.query,
@@ -149,7 +149,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                 )
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.accent)
+                .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 ForEach(skippedSearchContext.matches, id: \.label) { match in
                     let matchLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
@@ -158,7 +158,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                     Text("• \(matchLine)")
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -167,7 +167,7 @@ struct ArchiveDiagnosticsPanelView: View {
             if let callout = diagnostics.previewRankingPanel.scanHeaderCallout {
                 Text(callout)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
                     .lineLimit(3)
             }
 
@@ -175,11 +175,11 @@ struct ArchiveDiagnosticsPanelView: View {
             if !tooShortBreakdowns.isEmpty {
                 Text("Too short previews (not main)")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 ForEach(tooShortBreakdowns, id: \.displayTitle) { breakdown in
                     Text("• \(breakdown.panelDisplayLine)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(3)
                 }
             }
@@ -189,23 +189,23 @@ struct ArchiveDiagnosticsPanelView: View {
             ) {
                 Text(selectedHeader)
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(4)
             }
 
             Text("Last scan: \(Self.scanTimeFormatter.string(from: diagnostics.scannedAt))")
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             let displayRoots = diagnostics.displayRootPaths()
             if !displayRoots.isEmpty {
                 Text("Archive roots")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 ForEach(displayRoots, id: \.self) { root in
                     Text("• \(root)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(2)
                 }
             }
@@ -231,7 +231,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         "Warning: \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
                     )
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.warning)
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -241,7 +241,7 @@ struct ArchiveDiagnosticsPanelView: View {
             if !displaySkipped.isEmpty {
                 Text("Skipped at roots (\(displaySkipped.count))")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 ForEach(Array(displaySkipped.enumerated()), id: \.offset) { _, entry in
                     let skippedLine = ArchiveDiagnosticsSkippedEntriesPanelContext.panelLine(
                         label: entry.label,
@@ -249,7 +249,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     )
                     Text("• \(skippedLine)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(2)
                 }
             }
@@ -258,17 +258,17 @@ struct ArchiveDiagnosticsPanelView: View {
             if !displaySongWarnings.isEmpty {
                 Text("Songs with warnings (\(displaySongWarnings.count))")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 ForEach(displaySongWarnings.prefix(5), id: \.displayTitle) { summary in
                     Text("• \(summary.displayTitle)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(1)
                 }
                 if displaySongWarnings.count > 5 {
                     Text("…and \(displaySongWarnings.count - 5) more (use Export)")
                         .font(.system(size: 10))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
         }
@@ -279,11 +279,11 @@ struct ArchiveDiagnosticsPanelView: View {
         HStack {
             Text(label)
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
             Spacer()
             Text(value)
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
         }
     }
 }

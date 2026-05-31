@@ -1,3 +1,4 @@
+import AppCore
 import SwiftUI
 
 struct ArchiveWaveformHeroView: View {
@@ -30,7 +31,7 @@ struct ArchiveWaveformHeroView: View {
                     Image(systemName: playback.isPlaying(url) ? "pause.fill" : "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(ArchiveDesignTokens.accent)
+                .tint(HubDesignSystem.Colors.accent)
                 .disabled(url == nil)
 
                 Button("+5s") {
@@ -41,7 +42,7 @@ struct ArchiveWaveformHeroView: View {
 
                 Text(label ?? url?.lastPathComponent ?? "No preview")
                     .font(.system(size: 12))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }

@@ -11,7 +11,7 @@ struct ArchiveHealthReportView: View {
             if !compact {
                 Text("Archive health")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
             }
             healthRow("Songs", value: "\(report.totalSongs)", icon: "music.note.list")
             if report.missingPreview > 0 {
@@ -35,15 +35,15 @@ struct ArchiveHealthReportView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
                 .frame(width: 14)
             Text(label)
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
             Spacer()
             Text(value)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
         }
     }
 }
