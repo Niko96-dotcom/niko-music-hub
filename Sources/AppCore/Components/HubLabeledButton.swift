@@ -42,11 +42,21 @@ public struct HubLabeledButton: View {
         Group {
             switch style {
             case .primary:
-                labeledButton
-                    .buttonStyle(.borderedProminent)
+                if #available(macOS 26.0, *) {
+                    labeledButton
+                        .buttonStyle(.glassProminent)
+                } else {
+                    labeledButton
+                        .buttonStyle(.borderedProminent)
+                }
             case .secondary:
-                labeledButton
-                    .buttonStyle(.bordered)
+                if #available(macOS 26.0, *) {
+                    labeledButton
+                        .buttonStyle(.glass)
+                } else {
+                    labeledButton
+                        .buttonStyle(.bordered)
+                }
             case .ghost:
                 labeledButton
                     .buttonStyle(.plain)

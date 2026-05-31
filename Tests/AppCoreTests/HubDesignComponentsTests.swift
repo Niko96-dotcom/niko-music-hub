@@ -31,9 +31,31 @@ final class HubDesignComponentsTests: XCTestCase {
             "#available(macOS 26.0, *)",
             ".glassEffect(.regular",
             "GlassEffectContainer",
+            ".interactive(",
+            "HubGlassChip",
             "materialFallback",
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing Liquid Glass source: \($0)")
+        }
+    }
+
+    func testHubButtonsUseNativeGlassStylesWhenAvailable() throws {
+        let iconSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubIconButton.swift",
+            encoding: .utf8
+        )
+        let labeledSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubLabeledButton.swift",
+            encoding: .utf8
+        )
+
+        [
+            ".buttonStyle(.glassProminent)",
+            ".buttonStyle(.glass)",
+            "#available(macOS 26.0, *)",
+        ].forEach { required in
+            XCTAssertTrue(iconSource.contains(required), "Missing icon button glass source: \(required)")
+            XCTAssertTrue(labeledSource.contains(required), "Missing labeled button glass source: \(required)")
         }
     }
 }

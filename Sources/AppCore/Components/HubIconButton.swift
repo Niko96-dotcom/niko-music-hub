@@ -68,21 +68,30 @@ public struct HubIconButton: View {
     @ViewBuilder
     private var toolbarButton: some View {
         Group {
-            if prominent {
-                buttonLabel
-                    .buttonStyle(.borderedProminent)
-            } else if isSelected {
-                buttonLabel
-                    .buttonStyle(.borderedProminent)
-                    .tint(HubDesignSystem.Colors.accent)
+            if #available(macOS 26.0, *) {
+                if prominent || isSelected {
+                    buttonLabel
+                        .buttonStyle(.glassProminent)
+                } else {
+                    buttonLabel
+                        .buttonStyle(.glass)
+                }
             } else {
-                buttonLabel
-                    .buttonStyle(.bordered)
-                    .background {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                            .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
-                    }
-                    .onHover(perform: updateHover)
+                if prominent {
+                    buttonLabel
+                        .buttonStyle(.borderedProminent)
+                } else if isSelected {
+                    buttonLabel
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    buttonLabel
+                        .buttonStyle(.bordered)
+                        .background {
+                            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                                .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
+                        }
+                        .onHover(perform: updateHover)
+                }
             }
         }
         .controlSize(.small)
@@ -95,18 +104,7 @@ public struct HubIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
-                .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
-                .background {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                        .fill(isSelected ? chipColors.selectedFill : chipColors.unselectedFill)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                        .strokeBorder(
-                            isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
-                            lineWidth: isSelected ? 1.5 : 1
-                        )
-                }
+                .hubGlassChip(isSelected: isSelected, colors: chipColors)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

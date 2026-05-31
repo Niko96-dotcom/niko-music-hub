@@ -40,7 +40,11 @@ struct SongCardView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card, selected: isSelected)
+        .hubGlassCard(
+            cornerRadius: HubDesignSystem.Radius.card,
+            selected: isSelected,
+            interactive: true
+        )
     }
 
     private var subtitleLine: String? {
