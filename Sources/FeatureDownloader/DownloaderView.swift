@@ -17,12 +17,12 @@ public struct DownloaderView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
                 header
-                urlInput
-                formatSelectionSection
+                urlInputRow
+                formatChipStrip
                 if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .downloading {
-                    trustInfo
+                    trustInfoCard
                 }
                 if viewModel.downloadState == .downloading {
                     progressSection
@@ -31,27 +31,27 @@ public struct DownloaderView: View {
                 if case let .failed(message) = viewModel.downloadState {
                     errorSection(message: message)
                 }
-                Spacer(minLength: 0)
             }
             .hubToolContentPadding()
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(DownloaderCopy.toolLabel, systemImage: "arrow.down.circle")
-                .font(.system(size: 16, weight: .semibold))
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text(DownloaderCopy.toolLabel)
+                .font(HubDesignSystem.Typography.screenTitle())
 
             Text(headerStatus)
-                .font(.system(size: 13))
+                .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var headerStatus: String {
@@ -71,177 +71,213 @@ public struct DownloaderView: View {
         }
     }
 
-    private var formatSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(DownloaderCopy.formatLabel)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+    private var urlInputRow: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            Image(systemName: "link")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.tertiary)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    mediaKindPicker
-                    secondaryFormatPicker
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    mediaKindPicker
-                    secondaryFormatPicker
-                }
-            }
-        }
-        .padding(12)
-        .hubGlassCard()
-        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
-        .disabled(viewModel.downloadState == .downloading)
-    }
-
-    private var mediaKindPicker: some View {
-        Picker(DownloaderCopy.mediaKindLabel, selection: $viewModel.formatSelection.mediaKind) {
-            Text("Audio only").tag(DownloadMediaKind.audioOnly)
-            Text("Video + audio").tag(DownloadMediaKind.videoWithAudio)
-        }
-        .pickerStyle(.menu)
-        .onChange(of: viewModel.formatSelection.mediaKind) { _, _ in
-            viewModel.persistFormatSelection()
-        }
-    }
-
-    @ViewBuilder
-    private var secondaryFormatPicker: some View {
-        switch viewModel.formatSelection.mediaKind {
-        case .audioOnly:
-            Picker(DownloaderCopy.audioFormatLabel, selection: $viewModel.formatSelection.audioContainer) {
-                Text("Best available").tag(DownloadAudioContainer.best)
-                Text("WAV").tag(DownloadAudioContainer.wav)
-                Text("MP3").tag(DownloadAudioContainer.mp3)
-                Text("M4A").tag(DownloadAudioContainer.m4a)
-            }
-            .pickerStyle(.menu)
-            .onChange(of: viewModel.formatSelection.audioContainer) { _, _ in
-                viewModel.persistFormatSelection()
-            }
-        case .videoWithAudio:
-            Picker(DownloaderCopy.videoQualityLabel, selection: $viewModel.formatSelection.videoQuality) {
-                Text("MP4 (360p)").tag(DownloadVideoQuality.mp4_360)
-                Text("MP4 (720p)").tag(DownloadVideoQuality.mp4_720)
-                Text("Best quality").tag(DownloadVideoQuality.best)
-            }
-            .pickerStyle(.menu)
-            .onChange(of: viewModel.formatSelection.videoQuality) { _, _ in
-                viewModel.persistFormatSelection()
-            }
-        }
-    }
-
-    private var urlInput: some View {
-        VStack(alignment: .leading, spacing: 8) {
             TextField(DownloaderCopy.urlPlaceholder, text: $viewModel.urlText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
                 .onChange(of: viewModel.urlText) { _, _ in
                     viewModel.urlTextDidChange()
                 }
 
-            HStack {
-                if let fileName = viewModel.detectedFileName {
-                    Text(fileName)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            HubLabeledButton(
+                icon: "arrow.down.circle",
+                label: DownloaderCopy.download,
+                style: .primary,
+                help: "Download from URL",
+                isEnabled: viewModel.downloadState == .readyToDownload
+            ) {
+                viewModel.startDownload()
+            }
+
+            Button {
+                viewModel.clearInput()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .help(DownloaderCopy.clear)
+            .disabled(viewModel.downloadState == .downloading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+        .disabled(viewModel.downloadState == .downloading)
+    }
+
+    private var formatChipStrip: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
+                    formatStripContent
                 }
-
-                Spacer()
-
-                HubIconButton(
-                    systemImage: "arrow.down.circle",
-                    accessibilityLabel: DownloaderCopy.download,
-                    help: "Download from URL",
-                    prominent: true,
-                    isEnabled: viewModel.downloadState == .readyToDownload
-                ) {
-                    viewModel.startDownload()
-                }
-
-                HubIconButton(
-                    systemImage: "xmark",
-                    accessibilityLabel: DownloaderCopy.clear,
-                    help: "Clear URL and reset",
-                    isEnabled: viewModel.downloadState != .downloading
-                ) {
-                    viewModel.clearInput()
+                VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                    formatStripContent
                 }
             }
+
+            if let fileName = viewModel.detectedFileName {
+                Text(fileName)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .disabled(viewModel.downloadState == .downloading)
+    }
+
+    private var formatStripContent: some View {
+        Group {
+            Text("Download as:")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
+
+            DownloaderTextChip(
+                title: "Audio only",
+                isSelected: viewModel.formatSelection.mediaKind == .audioOnly
+            ) {
+                viewModel.formatSelection.mediaKind = .audioOnly
+                viewModel.persistFormatSelection()
+            }
+
+            DownloaderTextChip(
+                title: "Video + audio",
+                isSelected: viewModel.formatSelection.mediaKind == .videoWithAudio
+            ) {
+                viewModel.formatSelection.mediaKind = .videoWithAudio
+                viewModel.persistFormatSelection()
+            }
+
+            Text("Format:")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            secondaryFormatMenuChip
         }
     }
 
-    private var trustInfo: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(DownloaderCopy.sourceLabel):")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+    @ViewBuilder
+    private var secondaryFormatMenuChip: some View {
+        switch viewModel.formatSelection.mediaKind {
+        case .audioOnly:
+            Menu {
+                Picker(DownloaderCopy.audioFormatLabel, selection: $viewModel.formatSelection.audioContainer) {
+                    Text("Best available").tag(DownloadAudioContainer.best)
+                    Text("WAV").tag(DownloadAudioContainer.wav)
+                    Text("MP3").tag(DownloadAudioContainer.mp3)
+                    Text("M4A").tag(DownloadAudioContainer.m4a)
+                }
+                .onChange(of: viewModel.formatSelection.audioContainer) { _, _ in
+                    viewModel.persistFormatSelection()
+                }
+            } label: {
+                DownloaderChipLabel(title: audioFormatChipTitle)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        case .videoWithAudio:
+            Menu {
+                Picker(DownloaderCopy.videoQualityLabel, selection: $viewModel.formatSelection.videoQuality) {
+                    Text("MP4 (360p)").tag(DownloadVideoQuality.mp4_360)
+                    Text("MP4 (720p)").tag(DownloadVideoQuality.mp4_720)
+                    Text("Best quality").tag(DownloadVideoQuality.best)
+                }
+                .onChange(of: viewModel.formatSelection.videoQuality) { _, _ in
+                    viewModel.persistFormatSelection()
+                }
+            } label: {
+                DownloaderChipLabel(title: videoFormatChipTitle)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
+    private var audioFormatChipTitle: String {
+        switch viewModel.formatSelection.audioContainer {
+        case .best: return "Best"
+        case .wav: return "WAV"
+        case .mp3: return "MP3"
+        case .m4a: return "M4A"
+        }
+    }
+
+    private var videoFormatChipTitle: String {
+        switch viewModel.formatSelection.videoQuality {
+        case .mp4_360: return "MP4 360p"
+        case .mp4_720: return "MP4 720p"
+        case .best: return "Best"
+        }
+    }
+
+    private var trustInfoCard: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
+            Label("Download details", systemImage: "shield.lefthalf.filled")
+                .font(HubDesignSystem.Typography.sectionTitle())
+                .foregroundStyle(HubDesignSystem.Colors.accent)
+
+            LabeledContent(DownloaderCopy.sourceLabel) {
                 Text(viewModel.urlText)
-                    .font(.system(size: 12))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
 
-            HStack {
-                Text("\(DownloaderCopy.formatLabel):")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+            LabeledContent(DownloaderCopy.formatLabel) {
                 Text(viewModel.formatSelection.summaryLabel)
-                    .font(.system(size: 12))
                     .lineLimit(1)
             }
 
-            HStack {
-                Text("\(DownloaderCopy.destinationLabel):")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+            LabeledContent(DownloaderCopy.destinationLabel) {
                 Text(viewModel.outputFolder.path)
-                    .font(.system(size: 12))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
 
             Text(DownloaderCopy.trustNotice)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 10))
                 .italic()
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .hubGlassCard()
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var progressSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             ProgressView(value: viewModel.progress)
-                .frame(maxWidth: 320)
-                .tint(Color.accentColor)
+                .tint(HubDesignSystem.Colors.accent)
 
             Text("\(Int(viewModel.progress * 100))% complete")
-                .font(.system(size: 12))
+                .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(.secondary)
         }
     }
 
     private var logArea: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Text("Log")
-                .font(.system(size: 12, weight: .semibold))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(.secondary)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(viewModel.logEntries, id: \.self) { entry in
                         Text(entry)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(HubDesignSystem.Typography.mono(size: 10))
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 160)
+            .frame(maxHeight: 140)
             .padding(8)
             .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
         }
@@ -290,5 +326,60 @@ public struct DownloaderView: View {
                 AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
             ]
         )
+    }
+}
+
+// MARK: - Chip helpers
+
+private struct DownloaderTextChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(isSelected ? HubDesignSystem.Colors.accent : .primary)
+                .padding(.horizontal, 10)
+                .frame(height: HubDesignSystem.Size.chipHeight)
+                .background {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                        .fill(isSelected ? HubDesignSystem.Colors.accentTint : Color.primary.opacity(0.04))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? HubDesignSystem.Colors.selectedStroke : HubDesignSystem.Colors.cardStroke,
+                            lineWidth: isSelected ? 1.5 : 1
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct DownloaderChipLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(HubDesignSystem.Typography.caption())
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(HubDesignSystem.Colors.accent)
+        .padding(.horizontal, 10)
+        .frame(height: HubDesignSystem.Size.chipHeight)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                .fill(HubDesignSystem.Colors.accentTint)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                .strokeBorder(HubDesignSystem.Colors.selectedStroke, lineWidth: 1.5)
+        }
     }
 }

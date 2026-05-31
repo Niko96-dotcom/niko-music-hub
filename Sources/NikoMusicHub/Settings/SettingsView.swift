@@ -15,10 +15,14 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
                 header
 
-                SettingsSection(title: "General", footer: "Opens Niko Music Hub when you sign in to this Mac.") {
+                SettingsSection(
+                    title: "General",
+                    importance: .high,
+                    footer: "Opens Niko Music Hub when you sign in to this Mac."
+                ) {
                     Toggle("Open at login", isOn: $launchAtLogin)
                         .toggleStyle(.switch)
                         .onChange(of: launchAtLogin) { _, enabled in
@@ -26,30 +30,33 @@ struct SettingsView: View {
                         }
                     if let launchAtLoginError {
                         Text(launchAtLoginError)
-                            .font(.system(size: 12))
+                            .font(HubDesignSystem.Typography.bodySmall())
                             .foregroundStyle(.red)
                     }
                 }
 
                 SettingsSection(
                     title: "Output",
+                    importance: .high,
                     footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
                 ) {
                     pathRow(
                         label: "Output folder",
                         path: settings.outputFolder.url.path
                     )
-                    HStack(spacing: 8) {
-                        HubIconButton(
-                            systemImage: "folder.badge.gearshape",
-                            accessibilityLabel: "Choose output folder",
+                    HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                        HubLabeledButton(
+                            icon: "folder.badge.gearshape",
+                            label: "Choose Folder",
+                            style: .secondary,
                             help: "Pick where exports and recordings are saved"
                         ) {
                             chooseOutputFolder()
                         }
-                        HubIconButton(
-                            systemImage: "folder",
-                            accessibilityLabel: "Reveal output folder in Finder",
+                        HubLabeledButton(
+                            icon: "folder",
+                            label: "Reveal in Finder",
+                            style: .ghost,
                             help: "Show output folder in Finder"
                         ) {
                             context.fileActions.revealInFinder(settings.outputFolder.url)
@@ -59,6 +66,7 @@ struct SettingsView: View {
 
                 SettingsSection(
                     title: "Cubase archive",
+                    importance: .high,
                     footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
                 ) {
                     archiveRootsSection
@@ -66,6 +74,7 @@ struct SettingsView: View {
 
                 SettingsSection(
                     title: "Audio conversion",
+                    importance: .medium,
                     footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
                 ) {
                     LabeledContent("Sample rate") {
@@ -79,7 +88,11 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsSection(title: "Recording", footer: "Maximum length for system-audio capture sessions.") {
+                SettingsSection(
+                    title: "Recording",
+                    importance: .medium,
+                    footer: "Maximum length for system-audio capture sessions."
+                ) {
                     Picker("Max duration", selection: maxRecordingBinding) {
                         ForEach(recordingDurationChoices, id: \.self) { minutes in
                             Text("\(minutes) minutes").tag(minutes)
@@ -91,17 +104,18 @@ struct SettingsView: View {
 
                 SettingsSection(
                     title: "Privacy & recording",
+                    importance: .low,
                     footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
                 ) {
                     Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    HubIconButton(
-                        systemImage: "lock.shield",
-                        accessibilityLabel: "Open system audio recording settings",
-                        help: "Open Screen & System Audio Recording in System Settings",
-                        prominent: true
+                    HubLabeledButton(
+                        icon: "lock.shield",
+                        label: "Open System Settings",
+                        style: .primary,
+                        help: "Open Screen & System Audio Recording in System Settings"
                     ) {
                         SystemPrivacySettings.openSystemAudioRecordingSettings()
                     }
@@ -109,6 +123,7 @@ struct SettingsView: View {
 
                 SettingsSection(
                     title: "Helper tools",
+                    importance: .low,
                     footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
                 ) {
                     helperPathRow(label: "FFmpeg", url: settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
@@ -125,7 +140,7 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsSection(title: "About") {
+                SettingsSection(title: "About", importance: .low) {
                     LabeledContent("App") {
                         Text("Niko Music Hub")
                     }
@@ -135,23 +150,22 @@ struct SettingsView: View {
                         }
                     }
                     Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let saveError {
                     Text(saveError)
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(.red)
                 }
-
-                Spacer(minLength: 0)
             }
             .hubToolContentPadding()
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
         .onAppear { refresh() }
     }
@@ -160,17 +174,21 @@ struct SettingsView: View {
     private var archiveRootsSection: some View {
         if archiveViewModel.roots.isEmpty {
             Text("No archive roots yet. Add the folder that contains your Cubase song folders.")
-                .font(.system(size: 12))
+                .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             ForEach(archiveViewModel.roots, id: \.path) { root in
-                HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(HubDesignSystem.Colors.accent)
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
                         Text(root.path)
-                            .font(.system(size: 11))
+                            .font(HubDesignSystem.Typography.caption())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -187,24 +205,25 @@ struct SettingsView: View {
                 }
             }
         }
-        HubIconButton(
-            systemImage: "folder.badge.plus",
-            accessibilityLabel: "Add archive root",
+        HubLabeledButton(
+            icon: "folder.badge.plus",
+            label: "Add Root",
+            style: .secondary,
             help: "Choose a Cubase projects folder to scan",
-            prominent: archiveViewModel.roots.isEmpty,
             action: addArchiveRoot
         )
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Settings", systemImage: "gearshape")
-                .font(.system(size: 16, weight: .semibold))
-            Text("Hub-wide preferences for startup, output, archive roots, and helper tools.")
-                .font(.system(size: 13))
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text("Settings")
+                .font(HubDesignSystem.Typography.screenTitle())
+            Text("Hub-wide preferences for startup, output, and tools.")
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var maxRecordingBinding: Binding<Int> {
@@ -220,9 +239,9 @@ struct SettingsView: View {
     private func pathRow(label: String, path: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(HubDesignSystem.Typography.caption().weight(.medium))
             Text(path)
-                .font(.system(size: 11))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .truncationMode(.middle)
@@ -235,37 +254,31 @@ struct SettingsView: View {
         prompt: String,
         onSet: @escaping (URL?) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-            if let path = url?.path {
-                Text(path)
-                    .font(.system(size: 11))
+        LabeledContent(label) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Text(url?.path ?? "Auto-detect")
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-            } else {
-                Text("Auto-detect")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: 8) {
-                HubIconButton(
-                    systemImage: "folder",
-                    accessibilityLabel: "Browse for \(label)",
-                    help: "Choose \(label) executable"
-                ) {
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                Button("Choose…") {
                     guard let chosen = context.fileActions.chooseExecutable(prompt: prompt) else { return }
                     onSet(chosen)
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
                 if url != nil {
-                    HubIconButton(
-                        systemImage: "xmark",
-                        accessibilityLabel: "Clear \(label) path",
-                        help: "Use auto-detect for \(label)"
-                    ) {
+                    Button {
                         onSet(nil)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
                     }
+                    .buttonStyle(.plain)
+                    .help("Use auto-detect for \(label)")
                 }
             }
         }
@@ -325,34 +338,79 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Settings section
+
+private enum SettingsSectionImportance {
+    case high
+    case medium
+    case low
+}
+
 private struct SettingsSection<Content: View>: View {
     let title: String
+    var importance: SettingsSectionImportance = .high
     var footer: String?
     @ViewBuilder let content: Content
 
-    init(title: String, footer: String? = nil, @ViewBuilder content: () -> Content) {
+    init(
+        title: String,
+        importance: SettingsSectionImportance = .high,
+        footer: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
         self.title = title
+        self.importance = importance
         self.footer = footer
         self.content = content()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
-            VStack(alignment: .leading, spacing: 12) {
-                content
+                .font(HubDesignSystem.Typography.sectionTitle())
+                .foregroundStyle(importance == .low ? .secondary : .primary)
+
+            Group {
+                switch importance {
+                case .high, .medium:
+                    VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                        content
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                            .fill(cardFill)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                            .strokeBorder(HubDesignSystem.Colors.cardStroke, lineWidth: 1)
+                    }
+                case .low:
+                    VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                        content
+                    }
+                    .padding(.leading, 4)
+                }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
 
             if let footer {
                 Text(footer)
-                    .font(.system(size: 11))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    private var cardFill: Color {
+        switch importance {
+        case .high:
+            return Color.primary.opacity(0.03)
+        case .medium:
+            return Color.primary.opacity(0.02)
+        case .low:
+            return .clear
         }
     }
 }

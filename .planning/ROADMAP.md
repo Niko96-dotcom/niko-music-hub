@@ -63,8 +63,8 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 
 - [x] **Phase 19: Design System Foundation** — Tokens, glass chrome, `HubLabeledButton`, `HubSectionDivider`, shared control updates (Wave 1) (completed 2026-05-31)
 - [x] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2) (completed 2026-05-31)
-- [ ] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
-- [ ] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b)
+- [x] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
+- [x] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b) (completed 2026-05-31)
 - [ ] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a)
 - [ ] **Phase 24: Archive Detail & Panels** — Grouped detail, waveform hero, first-run, sheets, panels (Wave 4b)
 - [ ] **Phase 25: UI Polish & Visual Regression** — Error card, headers, window default, full-page visual pass (Wave 5)
@@ -141,7 +141,7 @@ Plans:
 
 **Key files:** `BPMTapperView.swift`, `AudioRecorderView.swift`, `AudioConverterView.swift`
 
-**Plans:** TBD (`/gsd-plan-phase 21`)
+**Plans:** 1/1 complete (`21-01`)
 
 ---
 
@@ -160,7 +160,10 @@ Plans:
 
 **Key files:** `DownloaderView.swift`, `SettingsView.swift`, `SettingsSection` updates
 
-**Plans:** TBD (`/gsd-plan-phase 22`)
+**Plans:** 1/1 complete (`22-01`)
+
+Plans:
+- [x] 22-01-PLAN.md — Downloader glass row + chips; Settings hierarchy + labeled actions
 
 ---
 
@@ -249,7 +252,8 @@ Plans:
 | 11–18 | v1.2 | 9/9 | Shipped | 2026-05-30 |
 | 19 | v1.3 | 4/4 | Complete | 2026-05-31 |
 | 20 | v1.3 | 4/4 | Complete | 2026-05-31 |
-| 21–25 | v1.3 | 0/TBD | Pending | — |
+| 21 | v1.3 | 1/1 | Complete | 2026-05-31 |
+| 22–25 | v1.3 | 0/TBD | Pending | — |
 
 ## Roadmap Notes
 

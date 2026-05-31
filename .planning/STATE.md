@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Full UI Redesign
 status: executing
-last_updated: "2026-05-31T20:40:00.000Z"
-last_activity: 2026-05-31 — Phase 20 shell & navigation executed (4/4 plans)
+last_updated: "2026-05-31T22:30:00.000Z"
+last_activity: 2026-05-31 — Phase 22 downloader & settings UI executed
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 29
+  completed_phases: 4
+  total_plans: 10
+  completed_plans: 10
+  percent: 57
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: `.planning/PROJECT.md` (updated 2026-05-31 for v1.3)
 
 ## Current Position
 
-Phase: 21 — Tool UI BPM/Recorder/Converter (next)
+Phase: 23 — Archive Browse & Sidebar (next)
 Plan: —
-Status: Phase 20 complete — ready for phase 21
-Last activity: 2026-05-31 — Phase 20 shell & navigation shipped
+Status: Phase 22 complete — ready for phase 23
+Last activity: 2026-05-31 — Phase 22 downloader & settings UI shipped
 
 ## Shipped (v1.2)
 
