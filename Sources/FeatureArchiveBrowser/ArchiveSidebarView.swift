@@ -252,6 +252,12 @@ struct ArchiveSidebarView: View {
                 body: "Scan loads songs from your roots.",
                 systemImage: "music.note.list"
             )
+        } else if viewModel.songs.isEmpty && viewModel.isScanning {
+            archiveEmptyState(
+                title: "Scanning archive",
+                body: "Loading projects from your roots.",
+                systemImage: "arrow.triangle.2.circlepath"
+            )
         } else if viewModel.filteredSongs.isEmpty {
             archiveEmptyState(
                 title: "No matches",

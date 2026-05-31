@@ -78,6 +78,8 @@ public struct RecorderDiagnostics: Equatable, Sendable {
     public let outputDeviceUID: String
     public let tapSampleRate: Double
     public let tapChannelCount: Int
+    public let captureSampleRate: Double
+    public let outputSampleRate: Double
     public let ioCallbackCount: Int
     public let inputBufferCallbackCount: Int
     public let outputBufferCallbackCount: Int
@@ -92,6 +94,8 @@ public struct RecorderDiagnostics: Equatable, Sendable {
         outputDeviceUID: String,
         tapSampleRate: Double,
         tapChannelCount: Int,
+        captureSampleRate: Double = 0,
+        outputSampleRate: Double = 0,
         ioCallbackCount: Int = 0,
         inputBufferCallbackCount: Int = 0,
         outputBufferCallbackCount: Int = 0,
@@ -105,6 +109,8 @@ public struct RecorderDiagnostics: Equatable, Sendable {
         self.outputDeviceUID = outputDeviceUID
         self.tapSampleRate = tapSampleRate
         self.tapChannelCount = tapChannelCount
+        self.captureSampleRate = captureSampleRate
+        self.outputSampleRate = outputSampleRate
         self.ioCallbackCount = ioCallbackCount
         self.inputBufferCallbackCount = inputBufferCallbackCount
         self.outputBufferCallbackCount = outputBufferCallbackCount
@@ -117,7 +123,7 @@ public struct RecorderDiagnostics: Equatable, Sendable {
     }
 
     public var summary: String {
-        "callbacks=\(ioCallbackCount), inputCallbacks=\(inputBufferCallbackCount), outputCallbacks=\(outputBufferCallbackCount), zeroBuffers=\(zeroBufferCallbackCount), inputFrames=\(inputFrameCount), convertedFrames=\(convertedFrameCount), writtenFrames=\(writtenFrameCount), converterErrors=\(converterErrorCount), writeErrors=\(writeErrorCount), tap=\(Int(tapSampleRate))Hz/\(tapChannelCount)ch, outputDevice=\(outputDeviceUID)"
+        "callbacks=\(ioCallbackCount), inputCallbacks=\(inputBufferCallbackCount), outputCallbacks=\(outputBufferCallbackCount), zeroBuffers=\(zeroBufferCallbackCount), inputFrames=\(inputFrameCount), convertedFrames=\(convertedFrameCount), writtenFrames=\(writtenFrameCount), converterErrors=\(converterErrorCount), writeErrors=\(writeErrorCount), tap=\(Int(tapSampleRate))Hz/\(tapChannelCount)ch, capture=\(Int(captureSampleRate))Hz, output=\(Int(outputSampleRate))Hz, outputDevice=\(outputDeviceUID)"
     }
 }
 

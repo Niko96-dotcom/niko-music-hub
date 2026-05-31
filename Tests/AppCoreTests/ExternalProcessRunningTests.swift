@@ -64,6 +64,31 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertEqual(result.standardError.count, 200000)
     }
 
+    func testFoundationRunnerStreamsOutputBeforeCompletion() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let runner = FoundationExternalProcessRunner()
+        let streamed = LockedStringArray()
+
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: perlURL,
+                arguments: ["-e", "$|=1; print \"first\\n\"; select undef, undef, undef, 0.05; print STDERR \"warn\\n\"; print \"second\\n\";"]
+            ),
+            onStandardOutput: { chunk in
+                streamed.append(chunk)
+            },
+            onStandardError: { chunk in
+                streamed.append(chunk)
+            }
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(streamed.joined().contains("first"))
+        XCTAssertTrue(streamed.joined().contains("warn"))
+        XCTAssertTrue(result.standardOutput.contains("second"))
+    }
+
     func testNoShellExecutionStringsAppearInRunnerSource() throws {
         let source = try String(
             contentsOfFile: "Sources/AppCore/Services/ExternalProcessRunning.swift",
@@ -73,5 +98,22 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertFalse(source.contains("\"/bin/sh\""))
         XCTAssertFalse(source.contains("\"sh\", \"-c\""))
         XCTAssertFalse(source.contains("shell"))
+    }
+}
+
+private final class LockedStringArray: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String] = []
+
+    func append(_ value: String) {
+        lock.withLock {
+            values.append(value)
+        }
+    }
+
+    func joined() -> String {
+        lock.withLock {
+            values.joined()
+        }
     }
 }

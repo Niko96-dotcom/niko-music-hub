@@ -66,6 +66,57 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(helperTools.ytDlp, ytDlp)
     }
 
+    func testLoadsLegacySettingsMissingArchiveOnboardingFlag() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let legacyJSON = """
+        {
+          "helperTools": {},
+          "outputFolder": {
+            "url": "file:///Users/niko/Music/Niko%20Music%20Hub/Inbox/"
+          },
+          "archiveRoots": [
+            { "path": "/Users/niko/Music/00_Cubase Project" }
+          ],
+          "maxRecordingDurationMinutes": 30,
+          "audioPreset": {
+            "bitDepth": 24,
+            "channelCount": 2,
+            "channelMode": "preserveMonoStereo",
+            "sampleRate": 44100
+          }
+        }
+        """
+        userDefaults.set(Data(legacyJSON.utf8), forKey: "nikoMusicHub.settings")
+
+        let settings = try UserDefaultsSettingsStore(userDefaults: userDefaults).loadSettings()
+
+        XCTAssertEqual(settings.outputFolder.url.path, "/Users/niko/Music/Niko Music Hub/Inbox")
+        XCTAssertEqual(settings.archiveRoots.map(\.path), ["/Users/niko/Music/00_Cubase Project"])
+        XCTAssertFalse(settings.archiveOnboardingCompleted)
+        XCTAssertEqual(settings.audioPreset.sampleRate, 44100)
+        XCTAssertEqual(settings.audioPreset.bitDepth, 24)
+        XCTAssertEqual(settings.audioPreset.channelMode, .preserveMonoStereo)
+    }
+
+    func testLoadsLegacyAudioPresetMissingChannelMode() throws {
+        let data = Data("""
+        {
+          "sampleRate": 48000,
+          "bitDepth": 16,
+          "channelCount": 1
+        }
+        """.utf8)
+
+        let preset = try JSONDecoder().decode(AudioPreset.self, from: data)
+
+        XCTAssertEqual(preset.sampleRate, 48000)
+        XCTAssertEqual(preset.bitDepth, 16)
+        XCTAssertEqual(preset.channelCount, 1)
+        XCTAssertEqual(preset.channelMode, .mono)
+    }
+
     private func makeStore(suiteName: String = UUID().uuidString, reset: Bool = false) -> UserDefaultsSettingsStore {
         let userDefaults = UserDefaults(suiteName: suiteName)!
         if reset {

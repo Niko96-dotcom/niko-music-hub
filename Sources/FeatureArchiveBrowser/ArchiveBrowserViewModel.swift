@@ -75,7 +75,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         loadCollaborators()
         refreshFirstRunState()
         restartArchiveRootWatching()
-        loadCachedIndexIfAvailable()
+        let loadedCache = loadCachedIndexIfAvailable()
+        if archiveRootWatcher != nil, !loadedCache, !roots.isEmpty, !runtime.usesFixtureRoot {
+            statusMessage = "Scanning archive..."
+            Task { await scan() }
+        }
     }
 
     func loadRootsFromSettings() {
@@ -156,6 +160,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             persistRoots()
             restartArchiveRootWatching()
             refreshFirstRunState()
+            statusMessage = "Scanning archive..."
+            Task { await scan() }
         }
     }
 
@@ -395,6 +401,7 @@ extension ArchiveBrowserViewModel {
         }
         guard !isScanning else { return nil }
         isScanning = true
+        statusMessage = "Scanning archive..."
         return roots
     }
 
@@ -418,8 +425,9 @@ extension ArchiveBrowserViewModel {
         catalog.persistUserMetadata(for: songs)
     }
 
-    private func loadCachedIndexIfAvailable() {
-        guard let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators) else { return }
+    @discardableResult
+    private func loadCachedIndexIfAvailable() -> Bool {
+        guard let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators) else { return false }
         mutateCatalog {
             songs = cached.songs
             let formatter = RelativeDateTimeFormatter()
@@ -427,6 +435,7 @@ extension ArchiveBrowserViewModel {
             let relative = formatter.localizedString(for: cached.scannedAt, relativeTo: Date())
             statusMessage = "Loaded \(cached.songs.count) songs from cache (\(relative)). Scan to refresh."
         }
+        return true
     }
 
     private func restartArchiveRootWatching() {

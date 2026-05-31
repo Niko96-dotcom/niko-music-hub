@@ -94,6 +94,7 @@ public struct YtDlpDownloader: DownloadRunning {
         args.append(contentsOf: formatArgs.extraArguments)
         args.append(contentsOf: [
             "--progress-template", "download:%progress",
+            "--print", "after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s",
             "-o", outputPath,
             request.sourceURL.absoluteString,
         ])
@@ -105,63 +106,24 @@ public struct YtDlpDownloader: DownloadRunning {
         )
 
         do {
-            let result = try await runner.run(processRequest)
-
-            var outputURLs: [URL] = []
-            let lines = result.standardOutput.split(whereSeparator: \.isNewline)
-            for line in lines {
-                let str = String(line)
-                progressHandler(str)
-
-                if str.contains("[download] Destination:") {
-                    let pathPart = str.components(separatedBy: "Destination:").last?.trimmingCharacters(in: .whitespaces) ?? ""
-                    if !pathPart.isEmpty {
-                        let parsedURL = URL(fileURLWithPath: pathPart)
-                        // yt-dlp may show absolute or relative paths in Destination line
-                        let candidates = [parsedURL, request.outputDirectory.appendingPathComponent(pathPart)]
-                        for url in candidates where !outputURLs.contains(url) {
-                            if fileManager.fileExists(atPath: url.path) {
-                                outputURLs.append(url)
-                                break
-                            }
-                        }
-                    }
-                }
-
-                if str.contains("[Merger] Merging formats into") {
-                    if let quotedRange = str.range(of: "\"(.*)\"", options: .regularExpression) {
-                        let quotedPath = String(str[quotedRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-                        let fileURL = URL(fileURLWithPath: quotedPath)
-                        if fileURL.path.hasPrefix("/") || fileURL.path.hasPrefix("~") {
-                            if fileManager.fileExists(atPath: fileURL.path) {
-                                outputURLs.append(fileURL)
-                            }
-                        } else {
-                            let mergedURL = request.outputDirectory.appendingPathComponent(quotedPath)
-                            if fileManager.fileExists(atPath: mergedURL.path) {
-                                outputURLs.append(mergedURL)
-                            }
-                        }
-                    }
-                }
-
+            let collector = YtDlpOutputCollector(
+                outputDirectory: request.outputDirectory,
+                fileManager: fileManager,
+                progressHandler: progressHandler
+            )
+            let result: ExternalProcessResult
+            if let streamingRunner = runner as? any StreamingExternalProcessRunning {
+                result = try await streamingRunner.run(
+                    processRequest,
+                    onStandardOutput: { collector.consume($0) },
+                    onStandardError: { collector.consume($0) }
+                )
+            } else {
+                result = try await runner.run(processRequest)
+                collector.consume(result.standardOutput)
+                collector.consume(result.standardError)
             }
-
-            if outputURLs.isEmpty && result.exitCode == 0 {
-                if let first = lines.first(where: { String($0).contains("[download]") }) {
-                    let str = String(first)
-                    if let destIdx = str.range(of: "Destination:") {
-                        let pathPart = str[destIdx.upperBound...].trimmingCharacters(in: .whitespaces)
-                        let relativeURL = URL(fileURLWithPath: String(pathPart))
-                        let absoluteURL = request.outputDirectory.appendingPathComponent(pathPart)
-                        if fileManager.fileExists(atPath: absoluteURL.path) {
-                            outputURLs.append(absoluteURL)
-                        } else if fileManager.fileExists(atPath: relativeURL.path) {
-                            outputURLs.append(relativeURL)
-                        }
-                    }
-                }
-            }
+            let outputURLs = collector.finish()
 
             return DownloadResult(
                 outputURLs: outputURLs,
@@ -184,5 +146,129 @@ public struct YtDlpDownloader: DownloadRunning {
             return nil
         }
         return min(max(value, 0), 100)
+    }
+
+    static func outputPathCandidates(from line: String) -> [String] {
+        if line.hasPrefix("NIKO_MUSIC_HUB_FILE:") {
+            let path = String(line.dropFirst("NIKO_MUSIC_HUB_FILE:".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? [] : [path]
+        }
+
+        let markerPatterns = [
+            #"\[download\]\s+Destination:\s+(.+)$"#,
+            #"\[ExtractAudio\]\s+Destination:\s+(.+)$"#,
+            #"\[Merger\]\s+Merging formats into\s+\"(.+)\""#,
+            #"\[MoveFiles\]\s+Moving file\s+\".+\"\s+to\s+\"(.+)\""#,
+        ]
+        for pattern in markerPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+                  match.numberOfRanges >= 2,
+                  let range = Range(match.range(at: 1), in: line) else {
+                continue
+            }
+            let path = String(line[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? [] : [path]
+        }
+
+        let alreadyDownloadedPattern = #"\[download\]\s+(.+)\s+has already been downloaded"#
+        if let regex = try? NSRegularExpression(pattern: alreadyDownloadedPattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+           match.numberOfRanges >= 2,
+           let range = Range(match.range(at: 1), in: line) {
+            let path = String(line[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? [] : [path]
+        }
+
+        return []
+    }
+}
+
+private final class YtDlpOutputCollector: @unchecked Sendable {
+    private let outputDirectory: URL
+    private let fileManager: FileManager
+    private let progressHandler: @Sendable (String) -> Void
+    private let lock = NSLock()
+    private var pending = ""
+    private var candidatePaths: [String] = []
+
+    init(
+        outputDirectory: URL,
+        fileManager: FileManager,
+        progressHandler: @escaping @Sendable (String) -> Void
+    ) {
+        self.outputDirectory = outputDirectory
+        self.fileManager = fileManager
+        self.progressHandler = progressHandler
+    }
+
+    func consume(_ chunk: String) {
+        guard !chunk.isEmpty else { return }
+        let lines = lock.withLock {
+            pending += chunk
+            return drainCompleteLines()
+        }
+        for line in lines {
+            process(line)
+        }
+    }
+
+    func finish() -> [URL] {
+        let finalLines = lock.withLock {
+            let remaining = pending
+            pending = ""
+            return remaining.isEmpty ? [] : [remaining]
+        }
+        for line in finalLines {
+            process(line)
+        }
+
+        return lock.withLock {
+            var resolved: [URL] = []
+            for path in candidatePaths {
+                for url in urls(for: path) where !resolved.contains(url) {
+                    if fileManager.fileExists(atPath: url.path) {
+                        resolved.append(url)
+                        break
+                    }
+                }
+            }
+            return resolved
+        }
+    }
+
+    private func process(_ line: String) {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        progressHandler(trimmed)
+        let paths = YtDlpDownloader.outputPathCandidates(from: trimmed)
+        guard !paths.isEmpty else { return }
+        lock.withLock {
+            for path in paths where !candidatePaths.contains(path) {
+                candidatePaths.append(path)
+            }
+        }
+    }
+
+    private func drainCompleteLines() -> [String] {
+        var lines: [String] = []
+        while let newline = pending.firstIndex(where: \.isNewline) {
+            let line = String(pending[..<newline])
+            lines.append(line)
+            pending.removeSubrange(...newline)
+        }
+        return lines
+    }
+
+    private func urls(for path: String) -> [URL] {
+        let expanded = (path as NSString).expandingTildeInPath
+        if expanded.hasPrefix("/") {
+            return [URL(fileURLWithPath: expanded)]
+        }
+        return [
+            outputDirectory.appendingPathComponent(path),
+            URL(fileURLWithPath: path),
+        ]
     }
 }
