@@ -1,4 +1,5 @@
 import AppCore
+import AppKit
 import SwiftUI
 
 struct OutputInboxInspectorView: View {
@@ -6,40 +7,14 @@ struct OutputInboxInspectorView: View {
 
     @State private var items: [OutputInboxItem] = []
     @State private var outputFolder: URL = AppSettings.default.outputFolder.url
+    @State private var hoveredItemID: OutputInboxItem.ID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Output Inbox")
-                .font(HubDesignSystem.Typography.sectionTitle())
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Output folder")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text(displayPath(outputFolder))
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                HubIconButton(
-                    systemImage: "folder.badge.gearshape",
-                    accessibilityLabel: "Choose output folder",
-                    help: "Pick where converted and recorded files are saved"
-                ) {
-                    chooseOutputFolder()
-                }
-            }
-
-            Divider().opacity(0.4)
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
+            headerBlock
 
             if items.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No outputs saved yet")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("WAVs, recordings, and downloads show up here.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                emptyState
             } else {
                 List(items) { item in
                     itemRow(item)
@@ -50,7 +25,7 @@ struct OutputInboxInspectorView: View {
                 .listStyle(.plain)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(HubDesignSystem.Spacing.panel)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -62,6 +37,47 @@ struct OutputInboxInspectorView: View {
             refreshSettings()
             refreshItems()
         }
+    }
+
+    private var headerBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Output")
+                    .font(HubDesignSystem.Typography.sectionTitle())
+                Spacer(minLength: 8)
+                HubIconButton(
+                    systemImage: "folder.badge.gearshape",
+                    accessibilityLabel: "Choose output folder",
+                    help: "Pick where converted and recorded files are saved"
+                ) {
+                    chooseOutputFolder()
+                }
+            }
+            Text(displayPath(outputFolder))
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            VStack(spacing: 8) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.quaternary)
+                Text("No outputs yet")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Converted files, recordings, and\ndownloads appear here.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func refreshSettings() {
@@ -92,11 +108,10 @@ struct OutputInboxInspectorView: View {
     @ViewBuilder
     private func itemRow(_ item: OutputInboxItem) -> some View {
         let card = itemCard(item)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
 
         if OutputHandoff.dragFileURL(for: item) != nil {
             card
-                .hubDragAffordance()
                 .onDrag {
                     guard let dragURL = OutputHandoff.dragFileURL(for: item) else {
                         return NSItemProvider()
@@ -110,34 +125,79 @@ struct OutputInboxInspectorView: View {
     }
 
     private func itemCard(_ item: OutputInboxItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(item.fileURL.lastPathComponent)
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(2)
+        let isHovered = hoveredItemID == item.id
+        let revealable = OutputHandoff.isRevealable(item)
 
-            if item.status == .failed {
-                Text("Failed")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-            } else if item.status == .missing {
-                Text("File missing — choose Output Folder if you moved the inbox.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        return HStack(alignment: .center, spacing: 10) {
+            fileIcon(for: item.fileURL)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.fileURL.lastPathComponent)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                statusLine(for: item)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            if OutputHandoff.isRevealable(item) {
-                HubIconButton(
-                    systemImage: "folder",
-                    accessibilityLabel: "Reveal in Finder",
-                    help: "Show file in Finder"
-                ) {
+            if isHovered, OutputHandoff.dragFileURL(for: item) != nil {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+        .onHover { hovering in
+            hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
+        }
+        .onTapGesture {
+            guard revealable else { return }
+            context.fileActions.revealInFinder(item.fileURL)
+        }
+        .contextMenu {
+            if revealable {
+                Button("Reveal in Finder") {
                     context.fileActions.revealInFinder(item.fileURL)
+                }
+                Button("Open") {
+                    NSWorkspace.shared.open(item.fileURL)
                 }
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+    }
+
+    @ViewBuilder
+    private func statusLine(for item: OutputInboxItem) -> some View {
+        if item.status == .failed {
+            Text("Failed")
+                .font(.system(size: 10))
+                .foregroundStyle(.red)
+        } else if item.status == .missing {
+            Text("File missing — choose Output Folder if you moved the inbox.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        } else {
+            Text(item.status == .available ? "Ready" : "Pending")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func fileIcon(for url: URL) -> some View {
+        let symbol: String
+        switch url.pathExtension.lowercased() {
+        case "wav":
+            symbol = "waveform"
+        case "mp4":
+            symbol = "film"
+        default:
+            symbol = "doc"
+        }
+        return Image(systemName: symbol)
+            .font(.system(size: 14))
+            .foregroundStyle(.secondary)
+            .frame(width: 22, height: 22)
     }
 }
