@@ -98,6 +98,8 @@ struct ArchiveBrowserView: View {
                     .foregroundStyle(HubDesignSystem.Colors.accent)
                 Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
                     .font(HubDesignSystem.Typography.screenTitle())
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 if viewModel.roots.isEmpty {
                     Text("Scan a root to browse songs here.")
                         .font(HubDesignSystem.Typography.body())
