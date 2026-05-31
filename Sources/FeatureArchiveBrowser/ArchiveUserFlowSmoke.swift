@@ -12,7 +12,7 @@ public enum ArchiveUserFlowSmoke {
         let viewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
 
         let searchQuery = ArchiveUserFlowSmokeScenarios.coreSearchQuery
-        let (searchMatchCount, core) = try runCoreFlow(
+        let (searchMatchCount, coreRun) = try runCoreFlow(
             fixtureRoot: fixtureRoot,
             context: context,
             viewModel: viewModel
@@ -40,27 +40,15 @@ public enum ArchiveUserFlowSmoke {
             scenario: ArchiveUserFlowSmokeScenarios.rankingLab
         )
 
-        let tiebreakByPrefix = try Dictionary(
-            uniqueKeysWithValues: ArchiveUserFlowSmokeScenarios.previewTiebreakLabs.map { scenario in
-                (
-                    scenario.logPrefix,
-                    try runPreviewTiebreakLab(viewModel: viewModel, scenario: scenario)
-                )
-            }
-        )
-        let tiebreakLabs = PreviewTiebreakLabSuite(byLogPrefix: tiebreakByPrefix)
+        let tiebreakRuns = try ArchiveUserFlowSmokeScenarios.previewTiebreakLabs.map { scenario in
+            try runPreviewTiebreakLab(viewModel: viewModel, scenario: scenario)
+        }
 
         let brokenFolder = try runBrokenFolderCheck(viewModel: viewModel)
 
-        let searchByPrefix = try Dictionary(
-            uniqueKeysWithValues: ArchiveUserFlowSmokeScenarios.songSearches.map { scenario in
-                (
-                    scenario.logPrefix,
-                    try runSongSearchScenario(viewModel: viewModel, scenario: scenario)
-                )
-            }
-        )
-        let searches = SongSearchResults(byLogPrefix: searchByPrefix)
+        let songSearchRuns = try ArchiveUserFlowSmokeScenarios.songSearches.map { scenario in
+            try runSongSearchScenario(viewModel: viewModel, scenario: scenario)
+        }
 
         let skippedSearch = try runSkippedSearchScenario(
             viewModel: viewModel,
@@ -81,17 +69,19 @@ public enum ArchiveUserFlowSmoke {
             runtime: runtime
         )
 
-        return ArchiveUserFlowSmokeResult(
-            core: core,
-            primarySearch: primarySearch,
-            fixtureDiagnostics: fixtureDiagnostics,
-            rankingLab: rankingLab,
-            tiebreakLabs: tiebreakLabs,
-            brokenFolder: brokenFolder,
-            searches: searches,
-            skippedSearch: skippedSearch,
-            invalidRoot: invalidRoot,
-            summaryTruncation: summaryTruncation
-        )
+        var runs: [SmokeRun] = [
+            coreRun,
+            primarySearch,
+            fixtureDiagnostics,
+            rankingLab,
+            brokenFolder,
+            skippedSearch,
+            invalidRoot,
+            summaryTruncation,
+        ]
+        runs.append(contentsOf: tiebreakRuns)
+        runs.append(contentsOf: songSearchRuns)
+
+        return ArchiveUserFlowSmokeResult(runs: runs)
     }
 }

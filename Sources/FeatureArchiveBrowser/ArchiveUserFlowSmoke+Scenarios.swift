@@ -8,7 +8,7 @@ extension ArchiveUserFlowSmoke {
         fixtureRoot: URL,
         context: ToolContext,
         viewModel: ArchiveBrowserViewModel
-    ) throws -> (searchMatchCount: Int, CoreFlowOutcome) {
+    ) throws -> (searchMatchCount: Int, SmokeRun) {
         let policy = ReadOnlyArchivePolicy()
         let writeProbeDenied = policy.writeProbeDenied(under: fixtureRoot)
         let treeBefore = try snapshotArchiveTree(at: fixtureRoot)
@@ -39,8 +39,8 @@ extension ArchiveUserFlowSmoke {
         )
         let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
 
-        let core = CoreFlowOutcome(
-            userFlow: "scan_search_open",
+        let coreEvidence = CoreFlowEvidence(
+            userFlow: ArchiveUserFlowSmokeScenarios.coreFlow.userFlow,
             songCount: viewModel.songs.count,
             writeProbeDenied: writeProbeDenied,
             archiveTreeUnchanged: treeBefore == treeAfter,
@@ -51,14 +51,14 @@ extension ArchiveUserFlowSmoke {
             dryRunLogDisplayLine: dryRunLogDisplayLine,
             searchMatchSummary: searchMatchSummary
         )
-        return (searchMatchCount, core)
+        return (searchMatchCount, SmokeRun(id: .coreFlow, evidence: .coreFlow(coreEvidence)))
     }
 
     static func runPrimarySearchExportCheck(
         viewModel: ArchiveBrowserViewModel,
         searchQuery: String,
         searchMatchCount: Int
-    ) throws -> PrimarySearchExportOutcome {
+    ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.primarySearch
         let (exportPath, exportText) = try exportDiagnosticsText(from: viewModel)
         let exportContainsSearchMatch = exportText.contains(scenario.exportMatchSubstring)
@@ -76,7 +76,7 @@ extension ArchiveUserFlowSmoke {
             requiredSummarySubstrings: scenario.panelSummarySubstrings
         )
 
-        return PrimarySearchExportOutcome(
+        let evidence = PrimarySearchEvidence(
             scenario: scenario,
             query: searchQuery,
             matchCount: searchMatchCount,
@@ -86,13 +86,14 @@ extension ArchiveUserFlowSmoke {
             exportSummaryLine: diagnosticsExportSummaryLine,
             panel: panel
         )
+        return SmokeRun(id: .primarySearch, evidence: .primarySearch(evidence))
     }
 
     static func runFixtureDiagnosticsCheck(
         viewModel: ArchiveBrowserViewModel,
         exportText: String,
         homeDirectory: String
-    ) throws -> FixtureDiagnosticsOutcome {
+    ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.fixtureDiagnostics
         guard let diagnostics = viewModel.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMissing
@@ -167,7 +168,7 @@ extension ArchiveUserFlowSmoke {
             .replacingOccurrences(of: "summary_line=", with: "")
         let panelMatchesExport = panelSupportSummary == exportSummaryValue
 
-        return FixtureDiagnosticsOutcome(
+        let evidence = FixtureDiagnosticsEvidence(
             scenario: scenario,
             songCount: diagnostics.songCount,
             skippedCount: diagnostics.skippedEntries.count,
@@ -183,13 +184,14 @@ extension ArchiveUserFlowSmoke {
             panelSupportSummary: panelSupportSummary,
             panelMatchesExportSummary: panelMatchesExport
         )
+        return SmokeRun(id: .fixtureDiagnostics, evidence: .fixtureDiagnostics(evidence))
     }
 
     static func runRankingLabCheck(
         viewModel: ArchiveBrowserViewModel,
         diagnostics: ArchiveScanDiagnostics,
         scenario: RankingLabScenario
-    ) throws -> RankingLabOutcome {
+    ) throws -> SmokeRun {
         guard let rankingLab = viewModel.songs.first(where: { $0.originalFolderName == scenario.folderName }) else {
             throw ArchiveUserFlowSmokeError.rankingLabNotFound
         }
@@ -260,7 +262,7 @@ extension ArchiveUserFlowSmoke {
                 lines: panelRankingLabRankedPreviewLines
             )
 
-        return RankingLabOutcome(
+        let evidence = RankingLabEvidence(
             scenario: scenario,
             mainPreviewSummary: rankingLabMainPreviewSummary,
             exportPath: exportPath,
@@ -278,12 +280,13 @@ extension ArchiveUserFlowSmoke {
             panelRankedPreviewLines: panelRankingLabRankedPreviewLinesJoined,
             panelRankedPreviewLinesMatchExport: rankingLabPanelRankedPreviewLinesMatchExport
         )
+        return SmokeRun(id: .rankingLab, evidence: .rankingLab(evidence))
     }
 
     static func runPreviewTiebreakLab(
         viewModel: ArchiveBrowserViewModel,
         scenario: PreviewTiebreakLabScenario
-    ) throws -> PreviewTiebreakLabOutcome {
+    ) throws -> SmokeRun {
         guard let song = viewModel.songs.first(where: { $0.originalFolderName == scenario.folderName }) else {
             throw ArchiveUserFlowSmokeError.previewTiebreakLabNotFound(scenario.logPrefix)
         }
@@ -310,7 +313,7 @@ extension ArchiveUserFlowSmoke {
             !panelCallout.isEmpty
             && panelCallout == exportCallout
 
-        return PreviewTiebreakLabOutcome(
+        let evidence = PreviewTiebreakEvidence(
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTiebreak: exportContainsTiebreak,
@@ -319,9 +322,10 @@ extension ArchiveUserFlowSmoke {
             panelCallout: panelCallout,
             panelCalloutMatchesExport: panelCalloutMatchesExport
         )
+        return SmokeRun(id: .previewTiebreak(logPrefix: scenario.logPrefix), evidence: .previewTiebreak(evidence))
     }
 
-    static func runBrokenFolderCheck(viewModel: ArchiveBrowserViewModel) throws -> BrokenFolderOutcome {
+    static func runBrokenFolderCheck(viewModel: ArchiveBrowserViewModel) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.brokenFolder
         guard let broken = viewModel.songs.first(where: { $0.displayTitle == scenario.displayTitle }) else {
             throw ArchiveUserFlowSmokeError.brokenFolderNotFound
@@ -380,7 +384,7 @@ extension ArchiveUserFlowSmoke {
                 )
         } ?? false
 
-        return BrokenFolderOutcome(
+        let evidence = BrokenFolderEvidence(
             scenario: scenario,
             displayWarnings: brokenFolderDisplayWarnings,
             sidecarNotes: brokenFolderSidecarNotes,
@@ -395,12 +399,13 @@ extension ArchiveUserFlowSmoke {
             panelNotesLine: panelNotesLine,
             panelNotesLineMatchesExport: notesMatch
         )
+        return SmokeRun(id: .brokenFolder, evidence: .brokenFolder(evidence))
     }
 
     static func runSongSearchScenario(
         viewModel: ArchiveBrowserViewModel,
         scenario: SongSearchScenario
-    ) throws -> SongSearchScenarioOutcome {
+    ) throws -> SmokeRun {
         viewModel.setSearchQuery(scenario.query, immediate: true)
         guard let match = viewModel.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.songSearchNoMatch(scenario.logPrefix)
@@ -422,7 +427,7 @@ extension ArchiveUserFlowSmoke {
             requiredSummarySubstrings: scenario.summarySubstrings
         )
 
-        return SongSearchScenarioOutcome(
+        let evidence = SongSearchEvidence(
             scenario: scenario,
             query: scenario.query,
             matchCount: matchCount,
@@ -432,12 +437,13 @@ extension ArchiveUserFlowSmoke {
             exportContainsMatch: exportContainsMatch,
             panel: panel
         )
+        return SmokeRun(id: .songSearch(logPrefix: scenario.logPrefix), evidence: .songSearch(evidence))
     }
 
     static func runSkippedSearchScenario(
         viewModel: ArchiveBrowserViewModel,
         scenario: SkippedSearchScenario
-    ) throws -> SkippedSearchScenarioOutcome {
+    ) throws -> SmokeRun {
         viewModel.setSearchQuery(scenario.query, immediate: true)
         guard let match = viewModel.skippedSearchMatches.first else {
             throw ArchiveUserFlowSmokeError.skippedSearchNoMatch
@@ -458,7 +464,7 @@ extension ArchiveUserFlowSmoke {
             requiredSummarySubstrings: scenario.summarySubstrings
         )
 
-        return SkippedSearchScenarioOutcome(
+        let evidence = SkippedSearchEvidence(
             scenario: scenario,
             query: scenario.query,
             matchCount: matchCount,
@@ -468,5 +474,6 @@ extension ArchiveUserFlowSmoke {
             exportContainsMatch: exportContainsMatch,
             panel: panel
         )
+        return SmokeRun(id: .skippedSearch, evidence: .skippedSearch(evidence))
     }
 }
