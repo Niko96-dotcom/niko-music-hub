@@ -61,6 +61,7 @@ struct AppShellView: View {
                 }
             }
         }
+        .hubGlassGroup(spacing: HubDesignSystem.Spacing.shell)
         .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .background(HubShellBackground())

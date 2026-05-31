@@ -20,6 +20,22 @@ final class HubDesignComponentsTests: XCTestCase {
             XCTAssertNoThrow(try hostView(button, size: CGSize(width: 120, height: 40)))
         }
     }
+
+    func testHubGlassChromeKeepsNativeGlassAndFallbackPaths() throws {
+        let source = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubGlassChrome.swift",
+            encoding: .utf8
+        )
+
+        [
+            "#available(macOS 26.0, *)",
+            ".glassEffect(.regular",
+            "GlassEffectContainer",
+            "materialFallback",
+        ].forEach {
+            XCTAssertTrue(source.contains($0), "Missing Liquid Glass source: \($0)")
+        }
+    }
 }
 
 @MainActor

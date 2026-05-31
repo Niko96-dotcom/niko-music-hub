@@ -54,7 +54,7 @@ public struct HubShellBackground: View {
     }
 }
 
-/// Frosted column (sidebar, inbox, tool well). Avoid unbounded `glassEffect` on full-height stacks.
+/// Frosted column (sidebar, inbox, tool well).
 public struct HubGlassPanel: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -65,9 +65,30 @@ public struct HubGlassPanel: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: shape)
+                .overlay {
+                    shape.strokeBorder(HubDesignSystem.glassStroke, lineWidth: 0.5)
+                }
+                .shadow(
+                    color: .black.opacity(colorScheme == .dark ? 0.34 : 0.08),
+                    radius: 18,
+                    y: 6
+                )
+        } else {
+            materialFallback(content: content, shape: shape)
+        }
+    }
+
+    private func materialFallback(
+        content: Content,
+        shape: RoundedRectangle
+    ) -> some View {
         content
             .background {
-                let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 ZStack {
                     shape.fill(.thickMaterial)
                     shape.fill(panelTint)
@@ -120,9 +141,29 @@ public struct HubGlassCard: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: shape)
+                .overlay {
+                    shape.strokeBorder(
+                        selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
+                        lineWidth: selected ? 1.25 : 0.5
+                    )
+                }
+                .shadow(color: .black.opacity(selected ? 0.10 : 0.04), radius: selected ? 6 : 3, y: 1)
+        } else {
+            materialFallback(content: content, shape: shape)
+        }
+    }
+
+    private func materialFallback(
+        content: Content,
+        shape: RoundedRectangle
+    ) -> some View {
         content
             .background {
-                let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 shape
                     .fill(.thinMaterial)
                     .overlay {
@@ -150,6 +191,25 @@ public struct HubGlassCard: ViewModifier {
         colorScheme == .dark
             ? Color.white.opacity(0.06)
             : Color.white.opacity(0.02)
+    }
+}
+
+/// Groups nearby custom glass surfaces so macOS 26+ can sample them together.
+public struct HubGlassGroup: ViewModifier {
+    private let spacing: CGFloat?
+
+    public init(spacing: CGFloat? = nil) {
+        self.spacing = spacing
+    }
+
+    public func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -212,6 +272,10 @@ public extension View {
 
     func hubGlassCard(cornerRadius: CGFloat = HubDesignSystem.Radius.card, selected: Bool = false) -> some View {
         modifier(HubGlassCard(cornerRadius: cornerRadius, selected: selected))
+    }
+
+    func hubGlassGroup(spacing: CGFloat? = nil) -> some View {
+        modifier(HubGlassGroup(spacing: spacing))
     }
 
     func hubSidebarNavRow(isSelected: Bool) -> some View {
