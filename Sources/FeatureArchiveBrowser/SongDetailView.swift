@@ -10,18 +10,20 @@ struct SongDetailView: View {
     @State private var virtualTitleDraft = ""
     @State private var appNoteDraft = ""
     @State private var aliasesDraft = ""
+    @State private var detailsExpanded = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            metadataSection
-            collaboratorsSection
-            previewSection
-            bpmSection
-            actionsSection
-            cprListSection
-            alternatePreviewsSection
-            hideSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
+                heroSection
+                metadataCard
+                previewCard
+                actionsSection
+                detailsSection
+                hideSection
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear {
             syncDrafts(from: song)
             heroPlayback.prepare(url: mainPreviewURL)
@@ -37,20 +39,25 @@ struct SongDetailView: View {
         }
     }
 
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(song.effectiveDisplayTitle)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Color.primary)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
 
-            Text("Folder on disk: \(song.originalFolderName)")
+            Text("Folder: \(song.originalFolderName)")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var metadataCard: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            sectionTitle("Metadata")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Display title")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(.secondary)
                 TextField("Virtual title (app only)", text: $virtualTitleDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { commitVirtualTitle() }
@@ -58,8 +65,8 @@ struct SongDetailView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Aliases (comma-separated, searchable)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(.secondary)
                 TextField("e.g. rave hook, neon v2", text: $aliasesDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { commitAliases() }
@@ -67,46 +74,128 @@ struct SongDetailView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Song note (app-owned)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(.secondary)
                 TextField("Your note", text: $appNoteDraft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
                     .onSubmit { commitAppNote() }
             }
+        }
+        .padding(12)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+    }
 
-            if song.hasStems {
-                Text("Stems detected")
-                    .font(.system(size: 10, weight: .medium))
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            HStack {
+                sectionTitle("Main preview")
+                Spacer()
+                Text(song.previewSelectionMode == .manual ? "Manual" : "Auto")
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.accent)
             }
 
-            if let warning = song.displayScanWarnings().first {
-                Text(warning)
-                    .font(.system(size: 11))
-                    .foregroundStyle(HubDesignSystem.Colors.warning)
-                    .lineLimit(3)
+            ArchiveWaveformHeroView(
+                url: mainPreviewURL,
+                label: mainPreviewLabel,
+                playback: heroPlayback
+            )
+
+            if song.previewSelectionMode == .manual {
+                HubLabeledButton(
+                    icon: "arrow.uturn.backward",
+                    label: "Revert to Auto",
+                    style: .secondary,
+                    help: "Use automatic preview selection again"
+                ) {
+                    viewModel.revertPreviewToAuto(for: song)
+                }
+            }
+        }
+        .padding(12)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+    }
+
+    private var actionsSection: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                HubLabeledButton(
+                    icon: "pianokeys",
+                    label: "Open in Cubase",
+                    style: .primary,
+                    help: "Open latest CPR (O)"
+                ) {
+                    try? viewModel.openLatestCPR(for: song)
+                }
+
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Reveal in Finder",
+                    style: .secondary,
+                    help: "Reveal CPR or folder (F)",
+                    isEnabled: viewModel.preferredRevealURL(for: song) != nil
+                ) {
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+                }
+
+                HubLabeledButton(
+                    icon: "square.and.arrow.down",
+                    label: "Save Metadata",
+                    style: .secondary,
+                    help: "Save display title, aliases, and note"
+                ) {
+                    commitVirtualTitle()
+                    commitAliases()
+                    commitAppNote()
+                }
             }
 
-            if let notes = song.displaySidecarNotes() {
-                Text("Sidecar notes.txt: \(notes)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.secondary)
-                    .lineLimit(4)
-            }
+            Text("P preview · O Cubase · F Finder · D detail")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
         }
     }
 
+    private var detailsSection: some View {
+        DisclosureGroup(isExpanded: $detailsExpanded) {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
+                collaboratorsSection
+                bpmSection
+                cprListSection
+                alternatePreviewsSection
+                supplementalInfoSection
+            }
+            .padding(.top, 8)
+        } label: {
+            sectionTitle("Details")
+        }
+        .padding(12)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+    }
+
+    private var hideSection: some View {
+        Toggle("Hide song from browse", isOn: Binding(
+            get: { song.isIgnored },
+            set: { viewModel.setSongHidden(song, hidden: $0) }
+        ))
+        .font(HubDesignSystem.Typography.bodySmall())
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+    }
+
     private var collaboratorsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Collaborators")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            sectionTitle("Collaborators")
 
             if viewModel.collaborators.isEmpty {
                 Text("Add collaborators in the More panel at the bottom of the sidebar.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(.secondary)
             } else {
                 ForEach(viewModel.collaborators) { collaborator in
                     Toggle(collaborator.displayName, isOn: Binding(
@@ -126,185 +215,124 @@ struct SongDetailView: View {
     @ViewBuilder
     private var bpmSection: some View {
         if let estimate = viewModel.bpmEstimate(for: song) {
-            Text("Mixdown BPM: \(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
-        }
-    }
-
-    private var previewSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Main preview")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
-                Spacer()
-                Text(song.previewSelectionMode == .manual ? "Manual" : "Auto")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(HubDesignSystem.Colors.accent)
+            LabeledContent("Mixdown BPM") {
+                Text("\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
+                    .font(HubDesignSystem.Typography.caption())
             }
-
-            ArchiveWaveformHeroView(
-                url: mainPreviewURL,
-                label: mainPreviewLabel,
-                playback: heroPlayback
-            )
-
-            if song.previewSelectionMode == .manual {
-                Button {
-                    viewModel.revertPreviewToAuto(for: song)
-                } label: {
-                    Label("Revert to auto preview", systemImage: "arrow.uturn.backward")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
-
-    private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                HubIconButton(
-                    systemImage: "pianokeys",
-                    accessibilityLabel: "Open in Cubase",
-                    help: "Open latest CPR (O)",
-                    prominent: true
-                ) {
-                    try? viewModel.openLatestCPR(for: song)
-                }
-
-                HubIconButton(
-                    systemImage: "folder",
-                    accessibilityLabel: "Reveal in Finder",
-                    help: "Reveal CPR or folder (F)",
-                    isEnabled: viewModel.preferredRevealURL(for: song) != nil
-                ) {
-                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
-                }
-
-                HubIconButton(
-                    systemImage: "square.and.arrow.down",
-                    accessibilityLabel: "Save metadata",
-                    help: "Save display title, aliases, and note"
-                ) {
-                    commitVirtualTitle()
-                    commitAliases()
-                    commitAppNote()
-                }
-            }
-            Text("P preview · O Cubase · F Finder · D detail")
-                .font(.system(size: 10))
-                .foregroundStyle(Color.secondary)
         }
     }
 
     private var cprListSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HStack {
-                Text("CPR versions")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                sectionTitle("CPR versions")
                 Spacer()
                 Text(song.cprSelectionMode == .manual ? "Manual main" : "Auto main")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.accent)
             }
 
             if song.projectVersions.isEmpty {
                 Text("No CPR project files found")
-                    .font(.system(size: 11))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
             } else {
                 ForEach(song.projectVersions, id: \.id) { version in
-                    let isMain = song.effectiveLatestCPR?.id == version.id
-                    let isIgnored = song.ignoredCPRVersionIDs.contains(version.id)
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(version.fileName)
-                                .font(.system(size: 11, weight: isMain ? .semibold : .regular))
-                                .foregroundStyle(isIgnored ? Color.secondary : Color.primary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            if isMain {
-                                Text("Main")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(HubDesignSystem.Colors.accent)
-                            }
-                            if isIgnored {
-                                Text("Hidden")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(Color.secondary)
-                            }
-                        }
-                        Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.secondary)
-                        if !isIgnored {
-                            HStack(spacing: 6) {
-                                HubIconButton(
-                                    systemImage: "star",
-                                    accessibilityLabel: "Set as main CPR",
-                                    help: "Use this CPR version as main"
-                                ) {
-                                    viewModel.setManualMainCPR(for: song, versionID: version.id)
-                                }
-                                HubIconButton(
-                                    systemImage: "eye.slash",
-                                    accessibilityLabel: "Hide CPR version",
-                                    help: "Hide this CPR from browse"
-                                ) {
-                                    viewModel.ignoreCPRVersion(for: song, versionID: version.id)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.vertical, 2)
+                    cprVersionRow(version)
                 }
                 if song.cprSelectionMode == .manual {
-                    Button {
+                    HubLabeledButton(
+                        icon: "arrow.uturn.backward",
+                        label: "Auto CPR",
+                        style: .secondary,
+                        help: "Revert to automatic CPR selection"
+                    ) {
                         viewModel.revertCPRToAuto(for: song)
-                    } label: {
-                        Label("Auto CPR", systemImage: "arrow.uturn.backward")
-                            .font(.system(size: 11))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
             }
         }
+    }
+
+    private func cprVersionRow(_ version: ProjectVersion) -> some View {
+        let isMain = song.effectiveLatestCPR?.id == version.id
+        let isIgnored = song.ignoredCPRVersionIDs.contains(version.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(version.fileName)
+                    .font(HubDesignSystem.Typography.caption().weight(isMain ? .semibold : .regular))
+                    .foregroundStyle(isIgnored ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if isMain {
+                    Text("Main")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(HubDesignSystem.Colors.accent)
+                }
+                if isIgnored {
+                    Text("Hidden")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
+            if !isIgnored {
+                HStack(spacing: 6) {
+                    HubLabeledButton(
+                        icon: "star",
+                        label: "Set Main",
+                        style: .ghost,
+                        help: "Use this CPR version as main"
+                    ) {
+                        viewModel.setManualMainCPR(for: song, versionID: version.id)
+                    }
+                    HubLabeledButton(
+                        icon: "eye.slash",
+                        label: "Hide",
+                        style: .ghost,
+                        help: "Hide this CPR from browse"
+                    ) {
+                        viewModel.ignoreCPRVersion(for: song, versionID: version.id)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder
     private var alternatePreviewsSection: some View {
         let alternates = rankedPreviews.filter { $0.id != song.mainPreviewCandidateID }
         if !alternates.isEmpty {
-            Text("Preview candidates")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                sectionTitle("Preview candidates")
 
-            ForEach(alternates, id: \.id) { candidate in
-                VStack(alignment: .leading, spacing: 6) {
-                    ArchiveMiniPlayerView(
-                        url: candidate.filePath,
-                        style: .full,
-                        label: candidate.fileName
-                    )
-                    HStack(spacing: 6) {
-                        HubIconButton(
-                            systemImage: "star",
-                            accessibilityLabel: "Set as main preview",
-                            help: "Use this file as the main preview"
-                        ) {
-                            viewModel.setManualMainPreview(for: song, candidateID: candidate.id)
-                        }
-                        HubIconButton(
-                            systemImage: "eye.slash",
-                            accessibilityLabel: "Ignore preview",
-                            help: "Hide this preview candidate"
-                        ) {
-                            viewModel.ignorePreviewCandidate(for: song, candidateID: candidate.id)
+                ForEach(alternates, id: \.id) { candidate in
+                    VStack(alignment: .leading, spacing: 6) {
+                        ArchiveMiniPlayerView(
+                            url: candidate.filePath,
+                            style: .full,
+                            label: candidate.fileName
+                        )
+                        HStack(spacing: 6) {
+                            HubLabeledButton(
+                                icon: "star",
+                                label: "Set Main",
+                                style: .ghost,
+                                help: "Use this file as the main preview"
+                            ) {
+                                viewModel.setManualMainPreview(for: song, candidateID: candidate.id)
+                            }
+                            HubLabeledButton(
+                                icon: "eye.slash",
+                                label: "Ignore",
+                                style: .ghost,
+                                help: "Hide this preview candidate"
+                            ) {
+                                viewModel.ignorePreviewCandidate(for: song, candidateID: candidate.id)
+                            }
                         }
                     }
                 }
@@ -312,12 +340,27 @@ struct SongDetailView: View {
         }
     }
 
-    private var hideSection: some View {
-        Toggle("Hide song from browse", isOn: Binding(
-            get: { song.isIgnored },
-            set: { viewModel.setSongHidden(song, hidden: $0) }
-        ))
-        .font(.system(size: 11))
+    @ViewBuilder
+    private var supplementalInfoSection: some View {
+        if song.hasStems {
+            Text("Stems detected")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Colors.accent)
+        }
+
+        if let warning = song.displayScanWarnings().first {
+            Text(warning)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .lineLimit(3)
+        }
+
+        if let notes = song.displaySidecarNotes() {
+            Text("Sidecar notes.txt: \(notes)")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+        }
     }
 
     private var rankedPreviews: [PreviewCandidate] {

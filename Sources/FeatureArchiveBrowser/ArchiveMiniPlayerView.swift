@@ -39,7 +39,7 @@ struct ArchiveMiniPlayerView: View {
                 if style == .full, playback.duration > 0 {
                     Spacer(minLength: 4)
                     Text(timeLabel(current: playback.currentTime, total: playback.duration))
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(Color.secondary)
                 }
             }

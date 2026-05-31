@@ -18,11 +18,14 @@ struct ArchiveWaveformHeroView: View {
                 playback.seek(to: fraction * playback.duration, url: url)
             }
 
-            HStack(spacing: 8) {
-                Button("−5s") {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Button {
                     playback.seekRelative(-5, url: url)
+                } label: {
+                    Image(systemName: "gobackward.5")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
                 .disabled(url == nil)
 
                 Button {
@@ -32,19 +35,32 @@ struct ArchiveWaveformHeroView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(HubDesignSystem.Colors.accent)
+                .controlSize(.small)
                 .disabled(url == nil)
 
-                Button("+5s") {
+                Button {
                     playback.seekRelative(5, url: url)
+                } label: {
+                    Image(systemName: "goforward.5")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
                 .disabled(url == nil)
 
-                Text(label ?? url?.lastPathComponent ?? "No preview")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(label ?? url?.lastPathComponent ?? "No preview")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if playback.duration > 0 {
+                        Text(timeLabel(current: playback.currentTime, total: playback.duration))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
         .task(id: url?.path) {
@@ -54,5 +70,16 @@ struct ArchiveWaveformHeroView: View {
             }
             peaks = await WaveformPeakLoader.loadPeaks(from: url)
         }
+    }
+
+    private func timeLabel(current: TimeInterval, total: TimeInterval) -> String {
+        "\(formatTime(current))/\(formatTime(total))"
+    }
+
+    private func formatTime(_ interval: TimeInterval) -> String {
+        let seconds = max(0, Int(interval.rounded()))
+        let minutes = seconds / 60
+        let remainder = seconds % 60
+        return String(format: "%d:%02d", minutes, remainder)
     }
 }

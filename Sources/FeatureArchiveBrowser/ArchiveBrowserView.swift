@@ -41,6 +41,7 @@ struct ArchiveBrowserView: View {
                     Color.black.opacity(0.35)
                         .ignoresSafeArea()
                     ArchiveFirstRunView(viewModel: viewModel, onChooseRoot: chooseRoot)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -85,24 +86,22 @@ struct ArchiveBrowserView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let song = viewModel.selectedSong {
-            ScrollView {
-                SongDetailView(song: song, viewModel: viewModel)
-                    .padding(20)
-            }
-            .focusable()
-            .focused($detailFocused)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            SongDetailView(song: song, viewModel: viewModel)
+                .padding(20)
+                .focusable()
+                .focused($detailFocused)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "music.note.house")
                     .font(.system(size: 30))
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
                 Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(HubDesignSystem.Typography.screenTitle())
                 if viewModel.roots.isEmpty {
                     Text("Scan a root to browse songs here.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.body())
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
