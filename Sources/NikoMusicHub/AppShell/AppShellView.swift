@@ -33,7 +33,7 @@ struct AppShellView: View {
                 .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                 .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
-                collapsedRail(
+                CollapsedSidebarRail(
                     systemImage: "sidebar.left",
                     accessibilityLabel: "Show tools sidebar"
                 ) {
@@ -42,7 +42,7 @@ struct AppShellView: View {
             }
 
             activeToolView
-                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .layoutPriority(1)
                 .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                 .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
@@ -53,7 +53,7 @@ struct AppShellView: View {
                     .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                     .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
-                collapsedRail(
+                CollapsedSidebarRail(
                     systemImage: "sidebar.right",
                     accessibilityLabel: "Show output inbox"
                 ) {
@@ -80,6 +80,7 @@ struct AppShellView: View {
                 showToolSidebar.toggle()
             } label: {
                 Image(systemName: "sidebar.left")
+                    .symbolRenderingMode(.hierarchical)
             }
             .help(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
             .accessibilityLabel(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
@@ -88,27 +89,11 @@ struct AppShellView: View {
                 showOutputInbox.toggle()
             } label: {
                 Image(systemName: "sidebar.right")
+                    .symbolRenderingMode(.hierarchical)
             }
             .help(showOutputInbox ? "Hide output inbox" : "Show output inbox")
             .accessibilityLabel(showOutputInbox ? "Hide output inbox" : "Show output inbox")
         }
-    }
-
-    private func collapsedRail(
-        systemImage: String,
-        accessibilityLabel: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(maxHeight: .infinity)
-                .frame(width: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
-        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
     }
 
     @ViewBuilder
@@ -125,10 +110,49 @@ struct AppShellView: View {
                         .font(HubDesignSystem.Typography.body())
                         .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(24)
             }
         }
+        .hubToolContentColumn()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .toolbar { shellToolbar }
+    }
+}
+
+private struct CollapsedSidebarRail: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let systemImage: String
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .frame(maxHeight: .infinity)
+                .frame(width: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous)
+                .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
+        }
+        .onHover(perform: updateHover)
+        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+    }
+
+    private func updateHover(_ hovering: Bool) {
+        if reduceMotion {
+            isHovered = hovering
+        } else {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }

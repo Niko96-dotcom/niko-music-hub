@@ -15,7 +15,7 @@ struct NikoMusicHubApp: App {
             )
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1_420, height: 860)
+        .defaultSize(width: 1_280, height: 820)
         .commands {
             AboutCommand()
         }
