@@ -35,7 +35,7 @@ enum WaveformPeakLoader {
             let sampleCount = length / MemoryLayout<Int16>.size
             dataPointer.withMemoryRebound(to: Int16.self, capacity: sampleCount) { pointer in
                 for index in 0..<sampleCount {
-                    let normalized = Float(abs(pointer[index])) / Float(Int16.max)
+                    let normalized = min(Float(abs(Int(pointer[index]))) / Float(Int16.max), 1)
                     samples.append(normalized)
                 }
             }
