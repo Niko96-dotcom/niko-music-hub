@@ -115,7 +115,13 @@ Plans:
 
 **Key files:** `AppShellView.swift`, `ToolSidebarView.swift`, `OutputInboxInspectorView.swift`, delete `ArchiveDesignTokens.swift` + 16 reference updates
 
-**Plans:** TBD (`/gsd-plan-phase 20`)
+**Plans:** 4 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — HubToolContentColumn + AppShell chrome + window default (SH-01)
+- [ ] 20-02-PLAN.md — ToolSidebar header/rows + health strip (SH-02)
+- [ ] 20-03-PLAN.md — OutputInbox header/empty/cards + tests (SH-03)
+- [ ] 20-04-PLAN.md — Delete ArchiveDesignTokens + 15-file migration (SH-04)
 
 ---
 
