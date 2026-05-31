@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - Validation protocol
@@ -44,20 +45,20 @@ extension SmokeEvidence: SmokeValidatedEvidence {
 
 // MARK: - Shared panel/export parity
 
-struct PanelLineExportParity: Sendable, Equatable {
+struct SmokeLineValidation: Sendable, Equatable {
     let line: String
-    let matchesExport: Bool
+    let isValid: Bool
 
-    static let empty = PanelLineExportParity(line: "", matchesExport: false)
+    static let empty = SmokeLineValidation(line: "", isValid: false)
 
     func satisfies(nonempty: Bool = true, contains substrings: [String]) -> Bool {
         if nonempty, line.isEmpty { return false }
-        guard matchesExport else { return false }
+        guard isValid else { return false }
         return substrings.allSatisfy { line.contains($0) }
     }
 
     func satisfiesExact(_ expected: String) -> Bool {
-        !line.isEmpty && line == expected && matchesExport
+        !line.isEmpty && line == expected && isValid
     }
 }
 
@@ -172,21 +173,21 @@ extension PrimarySearchEvidence: SmokeValidatedEvidence {
 
 extension FixtureDiagnosticsEvidence: SmokeValidatedEvidence {
     func satisfiesScenario() -> Bool {
-        let healthBadgeParity = PanelLineExportParity(
+        let healthBadgeParity = SmokeLineValidation(
             line: healthBadge,
-            matchesExport: healthBadgeMatchesExport
+            isValid: healthBadgeMatchesExport
         )
-        let skippedParity = PanelLineExportParity(
+        let skippedParity = SmokeLineValidation(
             line: skippedPanelLines,
-            matchesExport: skippedPanelLinesMatchExport
+            isValid: skippedPanelLinesMatchExport
         )
-        let warningsParity = PanelLineExportParity(
+        let warningsParity = SmokeLineValidation(
             line: songWarningsPanelLines,
-            matchesExport: songWarningsPanelLinesMatchExport
+            isValid: songWarningsPanelLinesMatchExport
         )
-        let supportParity = PanelLineExportParity(
+        let supportParity = SmokeLineValidation(
             line: panelSupportSummary,
-            matchesExport: panelMatchesExportSummary
+            isValid: panelMatchesExportSummary
         )
         return songCount >= scenario.minimumSongCount
             && skippedCount >= scenario.minimumSkippedCount
@@ -234,17 +235,17 @@ extension RankingLabEvidence: SmokeValidatedEvidence {
         log["diagnostics_export_ranking_path"] = exportPath
         log["diagnostics_export_ranking_match"] = String(exportContainsMatch)
         log["diagnostics_panel_ranking_scan_callout"] = scanCallout.line
-        log["diagnostics_panel_ranking_scan_callout_match"] = String(scanCallout.matchesExport)
+        log["diagnostics_panel_ranking_scan_callout_match"] = String(scanCallout.isValid)
         log["diagnostics_panel_ranking_selected_header"] = selectedHeader.line
-        log["diagnostics_panel_ranking_selected_header_match"] = String(selectedHeader.matchesExport)
+        log["diagnostics_panel_ranking_selected_header_match"] = String(selectedHeader.isValid)
         log["diagnostics_panel_ranking_too_short_breakdown"] = tooShortBreakdown.line
-        log["diagnostics_panel_ranking_too_short_breakdown_match"] = String(tooShortBreakdown.matchesExport)
+        log["diagnostics_panel_ranking_too_short_breakdown_match"] = String(tooShortBreakdown.isValid)
         log["diagnostics_panel_ranking_tiebreak_legend"] = tiebreakLegend.line
-        log["diagnostics_panel_ranking_tiebreak_legend_match"] = String(tiebreakLegend.matchesExport)
+        log["diagnostics_panel_ranking_tiebreak_legend_match"] = String(tiebreakLegend.isValid)
         log["diagnostics_panel_ranking_main_preview_summary"] = mainPreviewPanel.line
-        log["diagnostics_panel_ranking_main_preview_summary_match"] = String(mainPreviewPanel.matchesExport)
+        log["diagnostics_panel_ranking_main_preview_summary_match"] = String(mainPreviewPanel.isValid)
         log["diagnostics_panel_ranking_preview_rank_lines"] = rankedPreviewLines.line
-        log["diagnostics_panel_ranking_preview_rank_lines_match"] = String(rankedPreviewLines.matchesExport)
+        log["diagnostics_panel_ranking_preview_rank_lines_match"] = String(rankedPreviewLines.isValid)
     }
 }
 
@@ -267,13 +268,13 @@ extension BrokenFolderEvidence: SmokeValidatedEvidence {
         log["broken_folder_notes"] = sidecarNotes ?? ""
         log["diagnostics_export_broken_selected_path"] = selectedSongExportPath
         log["diagnostics_panel_selected_song_title_line"] = titleLine.line
-        log["diagnostics_panel_selected_song_title_line_match"] = String(titleLine.matchesExport)
+        log["diagnostics_panel_selected_song_title_line_match"] = String(titleLine.isValid)
         log["diagnostics_panel_selected_song_cpr_line"] = cprLine.line
-        log["diagnostics_panel_selected_song_cpr_line_match"] = String(cprLine.matchesExport)
+        log["diagnostics_panel_selected_song_cpr_line_match"] = String(cprLine.isValid)
         log["diagnostics_panel_selected_song_warning_lines"] = warningLines.line
-        log["diagnostics_panel_selected_song_warning_lines_match"] = String(warningLines.matchesExport)
+        log["diagnostics_panel_selected_song_warning_lines_match"] = String(warningLines.isValid)
         log["diagnostics_panel_selected_song_notes_line"] = notesLine.line
-        log["diagnostics_panel_selected_song_notes_line_match"] = String(notesLine.matchesExport)
+        log["diagnostics_panel_selected_song_notes_line_match"] = String(notesLine.isValid)
     }
 }
 
@@ -363,10 +364,10 @@ extension PreviewTiebreakEvidence: SmokeValidatedEvidence {
         log["diagnostics_export_\(exportStem)_match"] = String(exportContainsTiebreak)
         if let headerStem = scenario.panelHeaderStem, !header.line.isEmpty {
             log["diagnostics_panel_\(headerStem)_header"] = header.line
-            log["diagnostics_panel_\(headerStem)_header_match"] = String(header.matchesExport)
+            log["diagnostics_panel_\(headerStem)_header_match"] = String(header.isValid)
         }
         log["diagnostics_panel_\(calloutStem)_callout"] = callout.line
-        log["diagnostics_panel_\(calloutStem)_callout_match"] = String(callout.matchesExport)
+        log["diagnostics_panel_\(calloutStem)_callout_match"] = String(callout.isValid)
     }
 }
 
@@ -382,10 +383,10 @@ extension InvalidRootEvidence: SmokeValidatedEvidence {
         log["diagnostics_export_invalid_root_path"] = exportPath
         log["diagnostics_export_invalid_root_badge_match"] = String(exportContainsBadge)
         log["diagnostics_panel_invalid_root_badge"] = badge.line
-        log["diagnostics_panel_invalid_root_badge_matches_export"] = String(badge.matchesExport)
+        log["diagnostics_panel_invalid_root_badge_matches_export"] = String(badge.isValid)
         log["diagnostics_panel_invalid_root_global_warning_lines"] = globalWarningLines.line
         log["diagnostics_panel_invalid_root_global_warning_lines_match"] =
-            String(globalWarningLines.matchesExport)
+            String(globalWarningLines.isValid)
     }
 }
 
@@ -400,6 +401,7 @@ extension SummaryTruncationEvidence: SmokeValidatedEvidence {
         log["diagnostics_export_summary_truncation_path"] = exportPath
         log["diagnostics_export_summary_truncation_match"] = String(exportContainsTruncation)
         log["diagnostics_panel_summary_truncation_footnote"] = footnote.line
-        log["diagnostics_panel_summary_truncation_footnote_match"] = String(footnote.matchesExport)
+        log["diagnostics_panel_summary_truncation_footnote_match"] = String(footnote.isValid)
     }
 }
+#endif

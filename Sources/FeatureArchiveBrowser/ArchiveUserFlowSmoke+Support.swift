@@ -1,3 +1,4 @@
+#if DEBUG
 import AppCore
 import Foundation
 import NikoMusicCore
@@ -235,10 +236,10 @@ extension ArchiveUserFlowSmoke {
             scenario: scenario,
             exportPath: exportPath,
             exportContainsBadge: exportContainsBadge,
-            badge: PanelLineExportParity(line: panelBadge, matchesExport: exportContainsBadge),
-            globalWarningLines: PanelLineExportParity(
+            badge: SmokeLineValidation(line: panelBadge, isValid: exportContainsBadge),
+            globalWarningLines: SmokeLineValidation(
                 line: panelGlobalWarningLines,
-                matchesExport: panelGlobalWarningLinesMatchExport
+                isValid: panelGlobalWarningLinesMatchExport
             )
         )
         return SmokeRun(id: .invalidRoot, evidence: .invalidRoot(evidence))
@@ -284,11 +285,12 @@ extension ArchiveUserFlowSmoke {
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTruncation: exportContainsTruncation,
-            footnote: PanelLineExportParity(
+            footnote: SmokeLineValidation(
                 line: panelFootnote,
-                matchesExport: footnoteMatchesDiagnostics
+                isValid: footnoteMatchesDiagnostics
             )
         )
         return SmokeRun(id: .summaryTruncation, evidence: .summaryTruncation(evidence))
     }
 }
+#endif

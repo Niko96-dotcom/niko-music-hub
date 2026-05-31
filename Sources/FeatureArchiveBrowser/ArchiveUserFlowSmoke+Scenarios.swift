@@ -1,3 +1,4 @@
+#if DEBUG
 import AppCore
 import Foundation
 import NikoMusicCore
@@ -267,29 +268,29 @@ extension ArchiveUserFlowSmoke {
             mainPreviewSummary: rankingLabMainPreviewSummary,
             exportPath: exportPath,
             exportContainsMatch: exportContainsRankingLabMatch,
-            scanCallout: PanelLineExportParity(
+            scanCallout: SmokeLineValidation(
                 line: panelRankingLabScanCallout,
-                matchesExport: rankingLabPanelScanCalloutMatchesExport
+                isValid: rankingLabPanelScanCalloutMatchesExport
             ),
-            selectedHeader: PanelLineExportParity(
+            selectedHeader: SmokeLineValidation(
                 line: panelRankingLabSelectedHeader,
-                matchesExport: rankingLabPanelSelectedHeaderMatchesExport
+                isValid: rankingLabPanelSelectedHeaderMatchesExport
             ),
-            tooShortBreakdown: PanelLineExportParity(
+            tooShortBreakdown: SmokeLineValidation(
                 line: panelRankingLabTooShortBreakdownLine,
-                matchesExport: rankingLabPanelTooShortBreakdownMatchesExport
+                isValid: rankingLabPanelTooShortBreakdownMatchesExport
             ),
-            tiebreakLegend: PanelLineExportParity(
+            tiebreakLegend: SmokeLineValidation(
                 line: panelRankingLabTiebreakLegend,
-                matchesExport: rankingLabPanelTiebreakLegendMatchesExport
+                isValid: rankingLabPanelTiebreakLegendMatchesExport
             ),
-            mainPreviewPanel: PanelLineExportParity(
+            mainPreviewPanel: SmokeLineValidation(
                 line: panelRankingLabMainPreviewSummary,
-                matchesExport: rankingLabPanelMainPreviewSummaryMatchesExport
+                isValid: rankingLabPanelMainPreviewSummaryMatchesExport
             ),
-            rankedPreviewLines: PanelLineExportParity(
+            rankedPreviewLines: SmokeLineValidation(
                 line: panelRankingLabRankedPreviewLinesJoined,
-                matchesExport: rankingLabPanelRankedPreviewLinesMatchExport
+                isValid: rankingLabPanelRankedPreviewLinesMatchExport
             )
         )
         return SmokeRun(id: .rankingLab, evidence: .rankingLab(evidence))
@@ -329,8 +330,8 @@ extension ArchiveUserFlowSmoke {
             scenario: scenario,
             exportPath: exportPath,
             exportContainsTiebreak: exportContainsTiebreak,
-            header: PanelLineExportParity(line: panelHeader, matchesExport: panelHeaderMatchesExport),
-            callout: PanelLineExportParity(line: panelCallout, matchesExport: panelCalloutMatchesExport)
+            header: SmokeLineValidation(line: panelHeader, isValid: panelHeaderMatchesExport),
+            callout: SmokeLineValidation(line: panelCallout, isValid: panelCalloutMatchesExport)
         )
         return SmokeRun(id: .previewTiebreak(logPrefix: scenario.logPrefix), evidence: .previewTiebreak(evidence))
     }
@@ -400,10 +401,10 @@ extension ArchiveUserFlowSmoke {
             sidecarNotes: brokenFolderSidecarNotes,
             exportContainsRequiredSections: exportContainsRequiredSections,
             selectedSongExportPath: exportPath,
-            titleLine: PanelLineExportParity(line: panelTitleLine, matchesExport: titleMatches),
-            cprLine: PanelLineExportParity(line: panelCprLine, matchesExport: cprMatches),
-            warningLines: PanelLineExportParity(line: panelWarningLinesJoined, matchesExport: warningsMatch),
-            notesLine: PanelLineExportParity(line: panelNotesLine, matchesExport: notesMatch)
+            titleLine: SmokeLineValidation(line: panelTitleLine, isValid: titleMatches),
+            cprLine: SmokeLineValidation(line: panelCprLine, isValid: cprMatches),
+            warningLines: SmokeLineValidation(line: panelWarningLinesJoined, isValid: warningsMatch),
+            notesLine: SmokeLineValidation(line: panelNotesLine, isValid: notesMatch)
         )
         return SmokeRun(id: .brokenFolder, evidence: .brokenFolder(evidence))
     }
@@ -483,3 +484,4 @@ extension ArchiveUserFlowSmoke {
         return SmokeRun(id: .skippedSearch, evidence: .skippedSearch(evidence))
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - Run identity
@@ -101,12 +102,12 @@ struct RankingLabEvidence: Sendable, Equatable {
     let mainPreviewSummary: String
     let exportPath: String
     let exportContainsMatch: Bool
-    let scanCallout: PanelLineExportParity
-    let selectedHeader: PanelLineExportParity
-    let tooShortBreakdown: PanelLineExportParity
-    let tiebreakLegend: PanelLineExportParity
-    let mainPreviewPanel: PanelLineExportParity
-    let rankedPreviewLines: PanelLineExportParity
+    let scanCallout: SmokeLineValidation
+    let selectedHeader: SmokeLineValidation
+    let tooShortBreakdown: SmokeLineValidation
+    let tiebreakLegend: SmokeLineValidation
+    let mainPreviewPanel: SmokeLineValidation
+    let rankedPreviewLines: SmokeLineValidation
 }
 
 struct BrokenFolderEvidence: Sendable, Equatable {
@@ -115,10 +116,10 @@ struct BrokenFolderEvidence: Sendable, Equatable {
     let sidecarNotes: String?
     let exportContainsRequiredSections: Bool
     let selectedSongExportPath: String
-    let titleLine: PanelLineExportParity
-    let cprLine: PanelLineExportParity
-    let warningLines: PanelLineExportParity
-    let notesLine: PanelLineExportParity
+    let titleLine: SmokeLineValidation
+    let cprLine: SmokeLineValidation
+    let warningLines: SmokeLineValidation
+    let notesLine: SmokeLineValidation
 }
 
 struct SongSearchEvidence: Sendable, Equatable {
@@ -147,21 +148,22 @@ struct PreviewTiebreakEvidence: Sendable, Equatable {
     let scenario: PreviewTiebreakLabScenario
     let exportPath: String
     let exportContainsTiebreak: Bool
-    let header: PanelLineExportParity
-    let callout: PanelLineExportParity
+    let header: SmokeLineValidation
+    let callout: SmokeLineValidation
 }
 
 struct InvalidRootEvidence: Sendable, Equatable {
     let scenario: InvalidRootScenario
     let exportPath: String
     let exportContainsBadge: Bool
-    let badge: PanelLineExportParity
-    let globalWarningLines: PanelLineExportParity
+    let badge: SmokeLineValidation
+    let globalWarningLines: SmokeLineValidation
 }
 
 struct SummaryTruncationEvidence: Sendable, Equatable {
     let scenario: SummaryTruncationScenario
     let exportPath: String
     let exportContainsTruncation: Bool
-    let footnote: PanelLineExportParity
+    let footnote: SmokeLineValidation
 }
+#endif

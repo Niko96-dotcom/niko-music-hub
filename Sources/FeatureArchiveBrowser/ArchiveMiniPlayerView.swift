@@ -221,10 +221,10 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         guard let player else { return }
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self else { return }
             let seconds = CMTimeGetSeconds(time)
-            if seconds.isFinite {
-                self.currentTime = seconds
+            guard seconds.isFinite else { return }
+            Task { @MainActor [weak self] in
+                self?.currentTime = seconds
             }
         }
     }

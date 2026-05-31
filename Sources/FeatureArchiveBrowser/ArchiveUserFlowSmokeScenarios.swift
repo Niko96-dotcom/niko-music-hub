@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - Scenario tables (single source of truth for smoke expectations)
@@ -243,6 +244,7 @@ enum ArchiveUserFlowSmokeScenarios {
         ),
     ]
 }
+#endif
 
 struct CoreFlowScenario: Sendable, Equatable {
     let userFlow: String

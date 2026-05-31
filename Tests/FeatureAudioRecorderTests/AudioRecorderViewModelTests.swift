@@ -1,6 +1,5 @@
 import AppCore
 import AVFAudio
-import FeatureAudioConverter
 import XCTest
 @testable import FeatureAudioRecorder
 

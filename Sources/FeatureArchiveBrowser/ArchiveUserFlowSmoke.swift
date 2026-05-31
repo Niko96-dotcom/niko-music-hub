@@ -1,3 +1,4 @@
+#if DEBUG
 import AppCore
 import Foundation
 import NikoMusicCore
@@ -85,3 +86,4 @@ public enum ArchiveUserFlowSmoke {
         return ArchiveUserFlowSmokeResult(runs: runs)
     }
 }
+#endif

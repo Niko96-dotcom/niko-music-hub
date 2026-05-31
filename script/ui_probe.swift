@@ -240,14 +240,25 @@ func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String {
 }
 
 func axChildren(of element: AXUIElement) -> [AXUIElement] {
+    axElements(of: element, attribute: kAXChildrenAttribute)
+}
+
+func axElements(of element: AXUIElement, attribute: String) -> [AXUIElement] {
     var value: CFTypeRef?
-    let result = AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value)
+    let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
     guard result == .success, let array = value as? [AXUIElement] else { return [] }
     return array
 }
 
+func axElement(of element: AXUIElement, attribute: String) -> AXUIElement? {
+    var value: CFTypeRef?
+    let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+    guard result == .success, let value else { return nil }
+    return (value as! AXUIElement)
+}
+
 func dumpAX(_ element: AXUIElement, depth: Int) {
-    guard depth <= 6 else { return }
+    guard depth <= 10 else { return }
 
     let role = stringAttribute(element, kAXRoleAttribute)
     let title = stringAttribute(element, kAXTitleAttribute)
@@ -289,7 +300,17 @@ do {
 
     switch options.mode {
     case .axDump:
-        dumpAX(AXUIElementCreateApplication(pid), depth: 0)
+        let app = AXUIElementCreateApplication(pid)
+        dumpAX(app, depth: 0)
+        if let focusedWindow = axElement(of: app, attribute: kAXFocusedWindowAttribute) {
+            dumpAX(focusedWindow, depth: 1)
+        }
+        if let mainWindow = axElement(of: app, attribute: kAXMainWindowAttribute) {
+            dumpAX(mainWindow, depth: 1)
+        }
+        for window in axElements(of: app, attribute: kAXWindowsAttribute) {
+            dumpAX(window, depth: 1)
+        }
         exit(0)
 
     case .checkVisible, .capture:

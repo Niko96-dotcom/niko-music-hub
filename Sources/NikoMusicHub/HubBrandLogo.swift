@@ -6,6 +6,7 @@ enum HubBrandLogo {
         image(named: "AppLogo-48", extension: "png").map(Image.init(nsImage:))
     }
 
+    @MainActor
     static func installApplicationIcon() {
         guard let icon = applicationIcon else { return }
         NSApp.applicationIconImage = icon

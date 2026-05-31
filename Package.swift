@@ -69,7 +69,7 @@ let package = Package(
         ),
         .target(
             name: "FeatureAudioRecorder",
-            dependencies: ["AppCore", "FeatureAudioConverter"]
+            dependencies: ["AppCore"]
         ),
         .target(
             name: "FeatureDownloader",
@@ -109,7 +109,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FeatureAudioRecorderTests",
-            dependencies: ["FeatureAudioRecorder", "FeatureAudioConverter", "AppCore"]
+            dependencies: ["FeatureAudioRecorder", "AppCore"]
         ),
         .testTarget(
             name: "FeatureDownloaderTests",

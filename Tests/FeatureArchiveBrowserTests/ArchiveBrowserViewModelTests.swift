@@ -72,7 +72,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
     }
 
-    func testDevArchiveRootEnvBootstrapsWhenSettingsEmpty() async throws {
+    func testDevArchiveRootEnvBootstrapsWithoutPersistingOrCompletingOnboarding() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -92,10 +92,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
 
         XCTAssertEqual(viewModel.roots.map(\.path), [devRoot.standardizedFileURL.path])
-        XCTAssertEqual(
-            try store.loadSettings().archiveRoots.map(\.path),
-            [devRoot.standardizedFileURL.path]
-        )
+        XCTAssertTrue(try store.loadSettings().archiveRoots.isEmpty)
+        XCTAssertFalse(try store.loadSettings().archiveOnboardingCompleted)
     }
 
     func testNormalLaunchFiltersFixtureTempAndMissingRootsFromSavedSettings() async throws {
@@ -540,9 +538,6 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
     func testFirstRunOnboardingWhenRootsEmpty() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
-        if ArchiveDefaultRootPolicy.bootstrapRoot() != nil {
-            throw XCTSkip("Developer bootstrap root is present on this machine.")
-        }
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         userDefaults.removePersistentDomain(forName: suiteName)
@@ -699,6 +694,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             .appendingPathComponent("new-song-vm-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-vm-drafts-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: draftRoot) }
 
         let databaseURL = root.appendingPathComponent("index.sqlite")
         let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
@@ -709,10 +707,39 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
         viewModel.roots = [root]
         let created = try viewModel.createNewSong(
-            request: NewSongRequest(name: "CI Song", root: root, appNote: "test")
+            request: NewSongRequest(name: "CI Song", root: draftRoot, appNote: "test")
         )
         XCTAssertEqual(created.originalFolderName, "CI Song")
+        XCTAssertTrue(created.folderPath.path.hasPrefix(draftRoot.path))
         XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
+    }
+
+    func testCreateNewSongRejectsArchiveRootDestination() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN") }
+
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-archive-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: archiveRoot) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [archiveRoot]
+
+        XCTAssertThrowsError(
+            try viewModel.createNewSong(
+                request: NewSongRequest(name: "Should Not Write", root: archiveRoot)
+            )
+        ) { error in
+            XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .archiveRootIsReadOnly)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: archiveRoot.appendingPathComponent("Should Not Write", isDirectory: true).path
+        ))
     }
 
     func testSidebarMorePanelSummaryAndVisibility() async throws {

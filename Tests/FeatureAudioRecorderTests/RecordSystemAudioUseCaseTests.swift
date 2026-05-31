@@ -1,4 +1,4 @@
-import FeatureAudioConverter
+import AppCore
 import XCTest
 @testable import FeatureAudioRecorder
 
@@ -26,6 +26,21 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
         let filename = useCase.generateOutputFilename(override: "Custom Name.wav")
         XCTAssertEqual(filename, "Custom Name.wav")
+    }
+
+    func testFilenameOverrideCannotEscapeOutputDirectory() throws {
+        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
+        let outputDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-safe-\(UUID().uuidString)", isDirectory: true)
+
+        let resolved = useCase.resolvedOutputURL(config: .init(
+            outputURL: outputDirectory,
+            preset: .cubaseDefault,
+            filenameOverride: "../Outside.wav"
+        ))
+
+        XCTAssertEqual(resolved.deletingLastPathComponent().standardizedFileURL, outputDirectory.standardizedFileURL)
+        XCTAssertEqual(resolved.lastPathComponent, "Outside.wav")
     }
 
     func testGenerateOutputFilenameWithoutOverride() throws {

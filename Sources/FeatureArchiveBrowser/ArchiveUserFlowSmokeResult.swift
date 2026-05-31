@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 public struct ArchiveUserFlowSmokeResult: Sendable, Equatable {
@@ -44,3 +45,4 @@ public enum ArchiveUserFlowSmokeValidationError: Error, Equatable, Sendable {
     case evidenceIncomplete
     case dryRunLogMissing
 }
+#endif

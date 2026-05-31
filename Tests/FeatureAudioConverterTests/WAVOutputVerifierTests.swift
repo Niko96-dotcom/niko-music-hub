@@ -1,4 +1,5 @@
 import AVFoundation
+import AppCore
 import FeatureAudioConverter
 import XCTest
 

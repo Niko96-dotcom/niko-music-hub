@@ -2,6 +2,8 @@ import AppCore
 import Foundation
 
 public struct DownloadRequest: Equatable, Sendable {
+    public static let defaultOutputTemplate = "%(title)s [%(id)s].%(ext)s"
+
     public var ytDlpURL: URL
     public var sourceURL: URL
     public var outputDirectory: URL
@@ -12,7 +14,7 @@ public struct DownloadRequest: Equatable, Sendable {
         ytDlpURL: URL,
         sourceURL: URL,
         outputDirectory: URL,
-        outputTemplate: String = "%(title)s.%(ext)s",
+        outputTemplate: String = Self.defaultOutputTemplate,
         formatSelection: DownloadFormatSelection = .default
     ) {
         self.ytDlpURL = ytDlpURL
@@ -82,7 +84,7 @@ public struct YtDlpDownloader: DownloadRunning {
         let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: request.formatSelection)
         var args: [String] = [
             "--newline",
-            "--force-overwrites",
+            "--no-overwrites",
             "--socket-timeout", "30",
             "--retries", "1",
             "--fragment-retries", "1",
