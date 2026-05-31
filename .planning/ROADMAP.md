@@ -61,7 +61,7 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 
 ### 🚧 v1.3 Full UI Redesign
 
-- [ ] **Phase 19: Design System Foundation** — Tokens, glass chrome, `HubLabeledButton`, `HubSectionDivider`, shared control updates (Wave 1)
+- [x] **Phase 19: Design System Foundation** — Tokens, glass chrome, `HubLabeledButton`, `HubSectionDivider`, shared control updates (Wave 1) (completed 2026-05-31)
 - [ ] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2)
 - [ ] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
 - [ ] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b)
@@ -88,13 +88,13 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 
 **Key files:** `HubDesignSystem.swift`, `HubGlassChrome.swift`, `HubLabeledButton.swift` (new), `HubSectionDivider.swift` (new), `HubIconButton.swift`, `StatusDot.swift`, `HubToolLayout.swift`, `HubCompactChipColors.swift`
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 19-01-PLAN.md — HubDesignSystem §3.1 tokens + unit tests (DS-01)
-- [ ] 19-02-PLAN.md — HubGlassChrome gradients, shadow, highlights (DS-02)
-- [ ] 19-03-PLAN.md — HubLabeledButton + HubSectionDivider + tests (DS-03, DS-04)
-- [ ] 19-04-PLAN.md — Icon button, StatusDot, ToolLayout, chip merge (DS-05–DS-08)
+- [x] 19-01-PLAN.md — HubDesignSystem §3.1 tokens + unit tests (DS-01)
+- [x] 19-02-PLAN.md — HubGlassChrome gradients, shadow, highlights (DS-02)
+- [x] 19-03-PLAN.md — HubLabeledButton + HubSectionDivider + tests (DS-03, DS-04)
+- [x] 19-04-PLAN.md — Icon button, StatusDot, ToolLayout, chip merge (DS-05–DS-08)
 
 ---
 
@@ -241,7 +241,7 @@ Plans:
 | 1–6 | v1.0 | 15/19 | Shipped | 2026-05-11 |
 | 7–10 | v1.1 | 7/7 | Shipped | 2026-05-23 |
 | 11–18 | v1.2 | 9/9 | Shipped | 2026-05-30 |
-| 19–25 | v1.3 | 4/TBD | Phase 19 planned | — |
+| 19–25 | v1.3 | 4/4 | Phase 19 complete | 2026-05-31 |
 
 ## Roadmap Notes
 
