@@ -46,6 +46,7 @@ struct ArchiveSidebarView: View {
         }
         .padding(compactList ? 10 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
     }
 
     private var archiveToolbar: some View {
@@ -187,14 +188,7 @@ struct ArchiveSidebarView: View {
             .foregroundStyle(HubDesignSystem.Colors.accent)
             .padding(.horizontal, 10)
             .frame(height: HubDesignSystem.Size.chipHeight)
-            .background {
-                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                    .fill(HubDesignSystem.Colors.accentTint)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                    .strokeBorder(HubDesignSystem.Colors.selectedStroke, lineWidth: 1.5)
-            }
+            .hubGlassChip(isSelected: true, colors: .archive)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -228,7 +222,7 @@ struct ArchiveSidebarView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(minHeight: 34)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.pill)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.pill, interactive: true)
     }
 
     private var skippedMatchesCallout: some View {
@@ -288,6 +282,7 @@ struct ArchiveSidebarView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
             }
         }
     }

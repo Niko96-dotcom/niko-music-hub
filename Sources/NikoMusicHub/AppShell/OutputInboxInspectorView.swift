@@ -147,7 +147,7 @@ struct OutputInboxInspectorView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row, interactive: revealable)
         .onHover { hovering in
             hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
         }

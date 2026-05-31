@@ -23,6 +23,7 @@ struct SongDetailView: View {
                 hideSection
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
         }
         .onAppear {
             syncDrafts(from: song)

@@ -134,10 +134,16 @@ public struct HubGlassCard: ViewModifier {
 
     private let cornerRadius: CGFloat
     private let selected: Bool
+    private let interactive: Bool
 
-    public init(cornerRadius: CGFloat = HubDesignSystem.Radius.card, selected: Bool = false) {
+    public init(
+        cornerRadius: CGFloat = HubDesignSystem.Radius.card,
+        selected: Bool = false,
+        interactive: Bool = false
+    ) {
         self.cornerRadius = cornerRadius
         self.selected = selected
+        self.interactive = interactive
     }
 
     public func body(content: Content) -> some View {
@@ -145,7 +151,12 @@ public struct HubGlassCard: ViewModifier {
 
         if #available(macOS 26.0, *) {
             content
-                .glassEffect(.regular, in: shape)
+                .glassEffect(
+                    .regular
+                        .tint(selected ? HubDesignSystem.Colors.accent.opacity(0.12) : nil)
+                        .interactive(interactive),
+                    in: shape
+                )
                 .overlay {
                     shape.strokeBorder(
                         selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
@@ -166,6 +177,9 @@ public struct HubGlassCard: ViewModifier {
             .background {
                 shape
                     .fill(.thinMaterial)
+                    .overlay {
+                        shape.fill(selected ? HubDesignSystem.selectedRowFill : Color.clear)
+                    }
                     .overlay {
                         shape.strokeBorder(
                             selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
@@ -191,6 +205,62 @@ public struct HubGlassCard: ViewModifier {
         colorScheme == .dark
             ? Color.white.opacity(0.06)
             : Color.white.opacity(0.02)
+    }
+}
+
+/// Shared compact control chip with native glass on macOS 26+ and the same metrics elsewhere.
+public struct HubGlassChip: ViewModifier {
+    private let isSelected: Bool
+    private let colors: HubCompactChipColors
+    private let cornerRadius: CGFloat
+    private let interactive: Bool
+
+    public init(
+        isSelected: Bool,
+        colors: HubCompactChipColors = .default,
+        cornerRadius: CGFloat = HubDesignSystem.Radius.chip,
+        interactive: Bool = true
+    ) {
+        self.isSelected = isSelected
+        self.colors = colors
+        self.cornerRadius = cornerRadius
+        self.interactive = interactive
+    }
+
+    public func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        if #available(macOS 26.0, *) {
+            content
+                .foregroundStyle(isSelected ? colors.selectedForeground : colors.unselectedForeground)
+                .background {
+                    shape.fill(isSelected ? colors.selectedFill.opacity(0.72) : colors.unselectedFill)
+                }
+                .glassEffect(
+                    .regular
+                        .tint(isSelected ? colors.selectedFill.opacity(0.16) : nil)
+                        .interactive(interactive),
+                    in: shape
+                )
+                .overlay {
+                    shape.strokeBorder(
+                        isSelected ? colors.selectedStroke : colors.unselectedStroke,
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+                }
+        } else {
+            content
+                .foregroundStyle(isSelected ? colors.selectedForeground : colors.unselectedForeground)
+                .background {
+                    shape.fill(isSelected ? colors.selectedFill : colors.unselectedFill)
+                }
+                .overlay {
+                    shape.strokeBorder(
+                        isSelected ? colors.selectedStroke : colors.unselectedStroke,
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+                }
+        }
     }
 }
 
@@ -270,8 +340,28 @@ public extension View {
         modifier(HubGlassPanel(cornerRadius: cornerRadius))
     }
 
-    func hubGlassCard(cornerRadius: CGFloat = HubDesignSystem.Radius.card, selected: Bool = false) -> some View {
-        modifier(HubGlassCard(cornerRadius: cornerRadius, selected: selected))
+    func hubGlassCard(
+        cornerRadius: CGFloat = HubDesignSystem.Radius.card,
+        selected: Bool = false,
+        interactive: Bool = false
+    ) -> some View {
+        modifier(HubGlassCard(cornerRadius: cornerRadius, selected: selected, interactive: interactive))
+    }
+
+    func hubGlassChip(
+        isSelected: Bool,
+        colors: HubCompactChipColors = .default,
+        cornerRadius: CGFloat = HubDesignSystem.Radius.chip,
+        interactive: Bool = true
+    ) -> some View {
+        modifier(
+            HubGlassChip(
+                isSelected: isSelected,
+                colors: colors,
+                cornerRadius: cornerRadius,
+                interactive: interactive
+            )
+        )
     }
 
     func hubGlassGroup(spacing: CGFloat? = nil) -> some View {
