@@ -38,8 +38,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
     private let diagnostics: Diagnostics
-    private let archiveIndexStore: (any ArchiveIndexStoring)?
-    private let songMetadataStore: (any SongUserMetadataStoring)?
     private let collaboratorStore: (any CollaboratorStoring)?
     private let archiveRootWatcher: (any ArchiveRootWatching)?
     private let runtime: MusicHubRuntimeEnvironment
@@ -56,8 +54,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
         self.fileActions = context.fileActions
-        self.archiveIndexStore = archiveIndexStore
-        self.songMetadataStore = songMetadataStore
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
@@ -424,10 +420,6 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    private func persistCachedIndex(roots: [URL], scannedAt: Date) {
-        catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: scannedAt)
-    }
-
     private func restartArchiveRootWatching() {
         guard let archiveRootWatcher else { return }
         let rootsSnapshot = roots
@@ -562,7 +554,11 @@ extension ArchiveBrowserViewModel {
         }
         catalog.persistUserMetadata(for: [created])
         if !roots.isEmpty {
-            persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
+            catalog.persistCachedIndex(
+                roots: roots,
+                songs: songs,
+                scannedAt: scanDiagnostics?.scannedAt ?? Date()
+            )
         }
         selectSong(created)
         try openLatestCPR(for: created)
@@ -571,10 +567,10 @@ extension ArchiveBrowserViewModel {
 
     private func applyMetadataMerge(
         for song: Song,
-        rankingRefresh: ArchiveCatalogCoordinator.MetadataRankingRefresh = .none,
+        rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) {
-        guard let merged = catalog.mergedSongAfterMetadataEdit(
+        guard let merged = ArchiveSongMetadataEditor.mergedSongAfterEdit(
             for: song,
             in: songs,
             collaborators: collaborators,
@@ -588,7 +584,11 @@ extension ArchiveBrowserViewModel {
         replaceSong(updated)
         catalog.persistUserMetadata(for: [updated])
         if !roots.isEmpty {
-            persistCachedIndex(roots: roots, scannedAt: scanDiagnostics?.scannedAt ?? Date())
+            catalog.persistCachedIndex(
+                roots: roots,
+                songs: songs,
+                scannedAt: scanDiagnostics?.scannedAt ?? Date()
+            )
         }
     }
 
