@@ -178,11 +178,6 @@ public struct AudioRecorderView: View {
 
     private var settingsSection: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Text("Max Duration")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 560, alignment: .leading)
-
             Picker("Max Duration", selection: $viewModel.maxDurationMinutes) {
                 Text("5 min").tag(5)
                 Text("10 min").tag(10)

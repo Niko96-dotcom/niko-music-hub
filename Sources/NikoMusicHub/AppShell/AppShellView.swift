@@ -112,9 +112,9 @@ struct AppShellView: View {
                         .font(HubDesignSystem.Typography.body())
                         .foregroundStyle(.secondary)
                 }
+                .hubToolContentColumn()
             }
         }
-        .hubToolContentColumn()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .toolbar { shellToolbar }
     }

@@ -52,12 +52,8 @@ public struct BPMTapperView: View {
             Text("BPM Tapper")
                 .font(HubDesignSystem.Typography.screenTitle())
 
-            Text("Tap the pad or press Space")
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(.secondary)
-
             Text(viewModel.statusText)
-                .font(HubDesignSystem.Typography.bodySmall())
+                .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(statusColor)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -139,7 +135,7 @@ public struct BPMTapperView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 560, minHeight: 240)
+        .frame(maxWidth: 560, minHeight: 160)
         .scaleEffect(tapSurfacePressed ? 0.98 : 1)
         .contentShape(Rectangle())
         .focusable()
