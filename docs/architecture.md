@@ -63,7 +63,7 @@ SwiftUI feature module.
 | `ArchiveBrowserViewModel.swift` | Scan state, selection, search query |
 | `SongDetailView.swift` | CPR list, previews, actions |
 | `PreviewPlayerView.swift` | AVPlayer wrapper; v0.1 simple play/pause |
-| `ArchiveDesignTokens.swift` | SwiftUI colors/type from DESIGN_SYSTEM |
+| `HubDesignSystem.Colors` (AppCore) | Shared hub accent/warning/semantic colors for archive UI |
 
 Depends on: `AppCore`, `NikoMusicCore`.
 

@@ -1,3 +1,4 @@
+import AppCore
 import AVFoundation
 import NikoMusicCore
 import SwiftUI
@@ -26,12 +27,12 @@ struct ArchiveMiniPlayerView: View {
                         .frame(width: style == .compact ? 24 : 28, height: style == .compact ? 24 : 28)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(ArchiveDesignTokens.accent)
+                .tint(HubDesignSystem.Colors.accent)
                 .disabled(url == nil)
 
                 Text(displayLabel)
                     .font(.system(size: style == .compact ? 11 : 12))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -39,7 +40,7 @@ struct ArchiveMiniPlayerView: View {
                     Spacer(minLength: 4)
                     Text(timeLabel(current: playback.currentTime, total: playback.duration))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
 
@@ -86,7 +87,7 @@ struct ArchiveMiniPlayerView: View {
                 GeometryReader { geometry in
                     let x = CGFloat(hook / duration) * geometry.size.width
                     Rectangle()
-                        .fill(ArchiveDesignTokens.accent.opacity(0.85))
+                        .fill(HubDesignSystem.Colors.accent.opacity(0.85))
                         .frame(width: 2, height: geometry.size.height + 4)
                         .offset(x: max(0, x - 1))
                 }

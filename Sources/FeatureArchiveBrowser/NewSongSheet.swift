@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -17,7 +18,7 @@ struct NewSongSheet: View {
 
             Text("Drafts are created in the app output folder, not inside archive roots.")
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             TextField("Song folder name", text: $name)
                 .textFieldStyle(.roundedBorder)
@@ -29,7 +30,7 @@ struct NewSongSheet: View {
             if !viewModel.collaborators.isEmpty {
                 Text("Collaborators")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 ForEach(viewModel.collaborators) { collaborator in
                     Toggle(collaborator.displayName, isOn: Binding(
                         get: { selectedCollaboratorIDs.contains(collaborator.id) },
@@ -44,7 +45,7 @@ struct NewSongSheet: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.warning)
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
             }
 
             HStack {
@@ -53,7 +54,7 @@ struct NewSongSheet: View {
                 Spacer()
                 Button("Create Draft") { createSong() }
                     .buttonStyle(.borderedProminent)
-                    .tint(ArchiveDesignTokens.accent)
+                    .tint(HubDesignSystem.Colors.accent)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

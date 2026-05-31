@@ -12,7 +12,7 @@ struct RootSelectionView: View {
                 HStack {
                     Text("Archive roots")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                     Spacer()
                     addRootButton
                 }
@@ -21,7 +21,7 @@ struct RootSelectionView: View {
             if viewModel.roots.isEmpty {
                 Text("Choose the folder that contains your Cubase song folders.")
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if compact {
                     addRootButton
@@ -31,7 +31,7 @@ struct RootSelectionView: View {
                     HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "folder.fill")
                             .font(.system(size: 11))
-                            .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                            .foregroundStyle(Color.secondary)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
                                 .font(.system(size: 11, weight: .medium))
@@ -39,7 +39,7 @@ struct RootSelectionView: View {
                             if !compact {
                                 Text(ArchiveRootDisplayPolicy.displayPath(root))
                                     .font(.system(size: 10))
-                                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                                    .foregroundStyle(Color.secondary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }

@@ -41,16 +41,16 @@ struct SongDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(song.effectiveDisplayTitle)
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
 
             Text("Folder on disk: \(song.originalFolderName)")
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Display title")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 TextField("Virtual title (app only)", text: $virtualTitleDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { commitVirtualTitle() }
@@ -59,7 +59,7 @@ struct SongDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Aliases (comma-separated, searchable)")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 TextField("e.g. rave hook, neon v2", text: $aliasesDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { commitAliases() }
@@ -68,7 +68,7 @@ struct SongDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Song note (app-owned)")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 TextField("Your note", text: $appNoteDraft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
@@ -78,20 +78,20 @@ struct SongDetailView: View {
             if song.hasStems {
                 Text("Stems detected")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
             }
 
             if let warning = song.displayScanWarnings().first {
                 Text(warning)
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.warning)
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
                     .lineLimit(3)
             }
 
             if let notes = song.displaySidecarNotes() {
                 Text("Sidecar notes.txt: \(notes)")
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(4)
             }
         }
@@ -101,12 +101,12 @@ struct SongDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Collaborators")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             if viewModel.collaborators.isEmpty {
                 Text("Add collaborators in the More panel at the bottom of the sidebar.")
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
             } else {
                 ForEach(viewModel.collaborators) { collaborator in
                     Toggle(collaborator.displayName, isOn: Binding(
@@ -128,7 +128,7 @@ struct SongDetailView: View {
         if let estimate = viewModel.bpmEstimate(for: song) {
             Text("Mixdown BPM: \(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
         }
     }
 
@@ -137,11 +137,11 @@ struct SongDetailView: View {
             HStack {
                 Text("Main preview")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Spacer()
                 Text(song.previewSelectionMode == .manual ? "Manual" : "Auto")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
             }
 
             ArchiveWaveformHeroView(
@@ -196,7 +196,7 @@ struct SongDetailView: View {
             }
             Text("P preview · O Cubase · F Finder · D detail")
                 .font(.system(size: 10))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
         }
     }
 
@@ -205,17 +205,17 @@ struct SongDetailView: View {
             HStack {
                 Text("CPR versions")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Spacer()
                 Text(song.cprSelectionMode == .manual ? "Manual main" : "Auto main")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
             }
 
             if song.projectVersions.isEmpty {
                 Text("No CPR project files found")
                     .font(.system(size: 11))
-                    .foregroundStyle(ArchiveDesignTokens.warning)
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
             } else {
                 ForEach(song.projectVersions, id: \.id) { version in
                     let isMain = song.effectiveLatestCPR?.id == version.id
@@ -224,23 +224,23 @@ struct SongDetailView: View {
                         HStack {
                             Text(version.fileName)
                                 .font(.system(size: 11, weight: isMain ? .semibold : .regular))
-                                .foregroundStyle(isIgnored ? ArchiveDesignTokens.textSecondary : ArchiveDesignTokens.textPrimary)
+                                .foregroundStyle(isIgnored ? Color.secondary : Color.primary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             if isMain {
                                 Text("Main")
                                     .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(ArchiveDesignTokens.accent)
+                                    .foregroundStyle(HubDesignSystem.Colors.accent)
                             }
                             if isIgnored {
                                 Text("Hidden")
                                     .font(.system(size: 9))
-                                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                                    .foregroundStyle(Color.secondary)
                             }
                         }
                         Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
                             .font(.system(size: 10))
-                            .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                            .foregroundStyle(Color.secondary)
                         if !isIgnored {
                             HStack(spacing: 6) {
                                 HubIconButton(
@@ -282,7 +282,7 @@ struct SongDetailView: View {
         if !alternates.isEmpty {
             Text("Preview candidates")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
 
             ForEach(alternates, id: \.id) { candidate in
                 VStack(alignment: .leading, spacing: 6) {

@@ -14,7 +14,7 @@ struct ArchiveWaveformView: View {
                 }
                 if progress > 0, progress.isFinite {
                     Rectangle()
-                        .fill(ArchiveDesignTokens.accent.opacity(0.9))
+                        .fill(HubDesignSystem.Colors.accent.opacity(0.9))
                         .frame(width: 2)
                         .offset(x: CGFloat(progress) * geometry.size.width)
                 }
@@ -48,7 +48,7 @@ struct ArchiveWaveformView: View {
             let played = Double(index) / Double(peaks.count) <= progress
             context.fill(
                 Path(roundedRect: rect, cornerSize: CGSize(width: 1, height: 1)),
-                with: .color(played ? ArchiveDesignTokens.accent : Color.secondary.opacity(0.55))
+                with: .color(played ? HubDesignSystem.Colors.accent : Color.secondary.opacity(0.55))
             )
         }
     }

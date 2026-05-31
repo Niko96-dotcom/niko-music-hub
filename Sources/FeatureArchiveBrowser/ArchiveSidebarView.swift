@@ -29,7 +29,7 @@ struct ArchiveSidebarView: View {
             if let status = viewModel.statusMessage {
                 Text(status)
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                     .lineLimit(2)
             }
 
@@ -52,7 +52,7 @@ struct ArchiveSidebarView: View {
         HStack(spacing: 8) {
             Label("Archive", systemImage: "music.note.house")
                 .font(.system(size: compactList ? 14 : 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(ArchiveDesignTokens.textPrimary)
+                .foregroundStyle(Color.primary)
                 .labelStyle(.titleAndIcon)
 
             Spacer(minLength: 4)
@@ -107,7 +107,7 @@ struct ArchiveSidebarView: View {
         if viewModel.roots.isEmpty {
             Text("Add an archive root to begin.")
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             DisclosureGroup(isExpanded: $sidebarUI.rootsSectionExpanded) {
@@ -116,10 +116,10 @@ struct ArchiveSidebarView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                     Text("\(viewModel.roots.count) root\(viewModel.roots.count == 1 ? "" : "s")")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             .onChange(of: viewModel.roots.count) { _, count in
@@ -191,7 +191,7 @@ struct ArchiveSidebarView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
             TextField("Search", text: Binding(
                 get: { viewModel.searchQuery },
                 set: { viewModel.setSearchQuery($0) }
@@ -208,11 +208,11 @@ struct ArchiveSidebarView: View {
         VStack(alignment: .leading, spacing: 4) {
             Label("\(viewModel.skippedSearchMatches.count) skipped", systemImage: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
             ForEach(Array(viewModel.skippedSearchMatches.prefix(2).enumerated()), id: \.offset) { _, match in
                 Text(match.entry.label)
                     .font(.system(size: 10))
-                    .foregroundStyle(ArchiveDesignTokens.accent)
+                    .foregroundStyle(HubDesignSystem.Colors.accent)
                     .lineLimit(1)
             }
         }
@@ -291,7 +291,7 @@ struct ArchiveSidebarView: View {
                 .font(.system(size: 12, weight: .semibold))
             Text(body)
                 .font(.system(size: 11))
-                .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                .foregroundStyle(Color.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)

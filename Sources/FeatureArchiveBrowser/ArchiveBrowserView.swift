@@ -32,10 +32,10 @@ struct ArchiveBrowserView: View {
 
                     detailPane
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(ArchiveDesignTokens.background)
+                        .background(Color.clear)
                         .clipped()
                 }
-                .background(ArchiveDesignTokens.background)
+                .background(Color.clear)
 
                 if viewModel.needsFirstRunOnboarding {
                     Color.black.opacity(0.35)
@@ -96,13 +96,13 @@ struct ArchiveBrowserView: View {
             VStack(spacing: 10) {
                 Image(systemName: "music.note.house")
                     .font(.system(size: 30))
-                    .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                    .foregroundStyle(Color.secondary)
                 Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
                     .font(.system(size: 18, weight: .semibold))
                 if viewModel.roots.isEmpty {
                     Text("Scan a root to browse songs here.")
                         .font(.system(size: 13))
-                        .foregroundStyle(ArchiveDesignTokens.textSecondary)
+                        .foregroundStyle(Color.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
