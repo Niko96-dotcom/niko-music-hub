@@ -1,9 +1,11 @@
 import AppCore
+import AppKit
 import SwiftUI
 
 public struct AudioRecorderView: View {
     let context: ToolContext
     @StateObject private var viewModel: AudioRecorderViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(context: ToolContext) {
         self.context = context
@@ -23,112 +25,163 @@ public struct AudioRecorderView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
+                saveConfirmationBanner
                 header
                 filenameDisplay
-                meterSection
                 timeDisplay
+                meterSection
                 controlSection
                 settingsSection
                 errorSection
                 permissionSection
                 incompatibleSection
-                saveConfirmationSection
             }
             .hubToolContentPadding()
-            .frame(maxWidth: 640, alignment: .topLeading)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
+        .task(id: viewModel.showSaveConfirmation) {
+            guard viewModel.showSaveConfirmation else { return }
+            try? await Task.sleep(for: .seconds(5))
+            if viewModel.showSaveConfirmation {
+                viewModel.dismissSaveConfirmation()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var saveConfirmationBanner: some View {
+        if viewModel.showSaveConfirmation, let url = viewModel.lastRecordedURL {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Label("Recording saved", systemImage: "checkmark.circle.fill")
+                    .font(HubDesignSystem.Typography.body())
+                    .foregroundStyle(HubDesignSystem.Colors.success)
+
+                Spacer(minLength: 8)
+
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Reveal",
+                    style: .secondary
+                ) {
+                    context.fileActions.revealInFinder(url)
+                }
+
+                HubLabeledButton(
+                    icon: "arrow.up.forward.app",
+                    label: "Open",
+                    style: .secondary
+                ) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(HubDesignSystem.Colors.success.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .frame(maxWidth: 560)
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Audio Recorder", systemImage: "waveform.circle")
-                .font(.system(size: 16, weight: .semibold))
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text("Audio Recorder")
+                .font(HubDesignSystem.Typography.screenTitle())
 
             Text(statusText)
-                .font(.system(size: 13))
+                .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(statusColor)
         }
+        .frame(maxWidth: 560)
     }
 
     private var filenameDisplay: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        Group {
             if viewModel.filenameOverride.isEmpty {
                 Text("Recording \(Date().formatted(date: .complete, time: .omitted)).wav")
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
             } else {
                 Text(viewModel.filenameOverride)
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.primary)
             }
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 560)
     }
 
     private var meterSection: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.thinMaterial)
-                .frame(height: 12)
+        GeometryReader { geometry in
+            let peak = viewModel.currentLevel?.peak ?? 0
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+                    .frame(height: 8)
 
-            GeometryReader { geometry in
-                HStack(spacing: 2) {
-                    if let level = viewModel.currentLevel {
-                        Rectangle()
-                            .fill(meterColor(for: level.peak))
-                            .frame(width: CGFloat(level.peak) * geometry.size.width)
-                    }
-                    Spacer(minLength: 0)
-                }
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(meterGradient(for: peak))
+                    .frame(width: max(0, CGFloat(peak) * geometry.size.width), height: 8)
             }
-            .frame(height: 12)
         }
-        .opacity(viewModel.isRecording ? 1.0 : 0.0)
+        .frame(height: 8)
+        .frame(maxWidth: 560)
+        .shadow(
+            color: viewModel.isRecording ? HubDesignSystem.Colors.success.opacity(0.3) : .clear,
+            radius: 4
+        )
+        .opacity(viewModel.isRecording ? 1 : 0.35)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: viewModel.currentLevel?.peak)
     }
 
     private var timeDisplay: some View {
         Text(formatElapsedTime(viewModel.elapsedTime))
-            .font(.system(size: 32, weight: .medium, design: .monospaced))
+            .font(HubDesignSystem.Typography.display())
             .monospacedDigit()
-            .foregroundStyle(viewModel.isRecording ? .primary : .secondary)
+            .foregroundStyle(viewModel.isRecording ? .primary : .tertiary)
+            .frame(maxWidth: 560)
     }
 
     private var controlSection: some View {
-        HStack(spacing: 12) {
-            Button {
+        Button {
+            if viewModel.isRecording {
+                Task { await viewModel.stopRecording() }
+            } else {
+                Task { await viewModel.startRecording() }
+            }
+        } label: {
+            HStack(spacing: 8) {
                 if viewModel.isRecording {
-                    Task { await viewModel.stopRecording() }
-                } else {
-                    Task { await viewModel.startRecording() }
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 10, height: 10)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                            value: viewModel.isRecording
+                        )
                 }
-            } label: {
                 Label(
                     viewModel.isRecording ? "Stop" : "Record",
                     systemImage: viewModel.isRecording ? "stop.fill" : "record.circle"
                 )
             }
-            .buttonStyle(.bordered)
-            .tint(viewModel.isRecording ? .red : nil)
-            .disabled(viewModel.recordingState == .stopping)
-            .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
-
-            if viewModel.isRecording {
-                Circle()
-                    .fill(.red)
-                    .frame(width: 12, height: 12)
-                    .opacity(viewModel.isRecording ? 1.0 : 0.0)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: viewModel.isRecording)
-            }
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(.red)
+        .disabled(viewModel.recordingState == .stopping)
+        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
     }
 
     private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Max Duration")
-                .font(.system(size: 12, weight: .medium))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: 560, alignment: .leading)
 
             Picker("Max Duration", selection: $viewModel.maxDurationMinutes) {
                 Text("5 min").tag(5)
@@ -140,13 +193,17 @@ public struct AudioRecorderView: View {
             }
             .pickerStyle(.segmented)
             .disabled(viewModel.isRecording)
+            .frame(maxWidth: 560)
         }
+        .padding(.top, HubDesignSystem.Spacing.section)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
     private var errorSection: some View {
         if case .error(let error) = viewModel.recordingState {
             errorCard(for: error)
+                .frame(maxWidth: 560)
         }
     }
 
@@ -156,27 +213,26 @@ public struct AudioRecorderView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("Permission Required", systemImage: "lock.shield")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(HubDesignSystem.Colors.danger)
 
                 Text("Audio Recorder captures your Mac's system audio (not your microphone). In System Settings, enable Niko Music Hub under Screen & System Audio Recording.")
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 8) {
-                    HubIconButton(
-                        systemImage: "lock.shield",
-                        accessibilityLabel: "Open system audio recording settings",
-                        help: "Open Screen & System Audio Recording in System Settings"
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(
+                        icon: "lock.shield",
+                        label: "Open Settings",
+                        style: .secondary
                     ) {
                         SystemPrivacySettings.openSystemAudioRecordingSettings()
                     }
 
-                    HubIconButton(
-                        systemImage: "arrow.clockwise",
-                        accessibilityLabel: "Try again",
-                        help: "Request recording permission again",
-                        prominent: true
+                    HubLabeledButton(
+                        icon: "arrow.clockwise",
+                        label: "Try Again",
+                        style: .primary
                     ) {
                         Task { await viewModel.requestPermission() }
                     }
@@ -184,6 +240,7 @@ public struct AudioRecorderView: View {
             }
             .padding(12)
             .hubGlassCard()
+            .frame(maxWidth: 560)
         }
     }
 
@@ -196,42 +253,13 @@ public struct AudioRecorderView: View {
                     .foregroundStyle(.secondary)
 
                 Text("Audio Recorder requires macOS 14.2 or later. Current version: \(version). Please upgrade macOS or use an external audio interface.")
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
             .hubGlassCard()
-        }
-    }
-
-    @ViewBuilder
-    private var saveConfirmationSection: some View {
-        if viewModel.showSaveConfirmation, let url = viewModel.lastRecordedURL {
-            HStack(spacing: 12) {
-                Text("Recording saved")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.green)
-
-                HubIconButton(
-                    systemImage: "folder",
-                    accessibilityLabel: "Reveal in Finder",
-                    help: "Show recording in Finder"
-                ) {
-                    context.fileActions.revealInFinder(url)
-                }
-
-                HubIconButton(
-                    systemImage: "arrow.up.forward.app",
-                    accessibilityLabel: "Open recording",
-                    help: "Open recording file"
-                ) {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            .padding(12)
-            .background(Color.green.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 560)
         }
     }
 
@@ -342,22 +370,24 @@ public struct AudioRecorderView: View {
         case .idle:
             return .secondary
         case .permissionNeeded, .incompatibleMacOS:
-            return .orange
+            return HubDesignSystem.Colors.warning
         case .recording, .stopping:
-            return .green
+            return HubDesignSystem.Colors.success
         case .error:
-            return .red
+            return HubDesignSystem.Colors.danger
         }
     }
 
-    private func meterColor(for peak: Float) -> Color {
+    private func meterGradient(for peak: Float) -> LinearGradient {
+        let colors: [Color]
         if peak > 0.9 {
-            return .red
+            colors = [HubDesignSystem.Colors.warning, HubDesignSystem.Colors.danger]
         } else if peak > 0.7 {
-            return .yellow
+            colors = [HubDesignSystem.Colors.success, HubDesignSystem.Colors.warning]
         } else {
-            return .green
+            colors = [HubDesignSystem.Colors.success, HubDesignSystem.Colors.success.opacity(0.85)]
         }
+        return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
     }
 
     private func formatElapsedTime(_ interval: TimeInterval) -> String {

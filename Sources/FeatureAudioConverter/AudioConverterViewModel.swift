@@ -363,7 +363,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
-    private static func sampleRateLabel(for sampleRate: Int) -> String {
+    static func sampleRateLabel(for sampleRate: Int) -> String {
         switch sampleRate {
         case 44100:
             return "44.1 kHz"
@@ -378,7 +378,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
-    private static func channelModeLabel(for channelMode: AudioChannelMode) -> String {
+    static func channelModeLabel(for channelMode: AudioChannelMode) -> String {
         switch channelMode {
         case .preserveMonoStereo:
             return "Preserve mono/stereo"

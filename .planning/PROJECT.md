@@ -10,9 +10,11 @@ Repeated production chores outside Cubase should become fast, local, reliable, a
 
 ## Current Milestone
 
-**None** — v1.2 Cubase Archive Recall shipped 2026-05-30. Start next scope with `/gsd-new-milestone`.
+**None** — v1.3 Full UI Redesign shipped 2026-05-31. Start next scope with `/gsd-new-milestone`.
 
-**Last shipped (v1.2):** Archive persistence, metadata core, smart shelves, waveform player, browse/collaborators, filters/BPM polish, new song flow, read-only intelligence (CP-01–CP-18).
+**Last shipped (v1.3):** Design system + glass shell, tool page redesign (BPM, recorder, converter, downloader, settings), archive browse/detail UI, shared error-card polish (`docs/UI-REDESIGN-PLAN.md`).
+
+**Prior (v1.2):** Archive persistence, metadata core, smart shelves, waveform player, browse/collaborators, filters/BPM polish, new song flow, read-only intelligence (CP-01–CP-18).
 
 ## Requirements
 
@@ -46,6 +48,16 @@ Repeated production chores outside Cubase should become fast, local, reliable, a
 - ✓ New song folder flow — v1.2 Phase 17
 - ✓ Read-only intelligence + JSON export — v1.2 Phase 18
 
+### Validated (v1.3)
+
+- ✓ Design system foundation (DS-01–DS-08) — Phase 19
+- ✓ Shell & navigation (SH-01–SH-04) — Phase 20
+- ✓ Tool UI: BPM, recorder, converter (TOOL-01–TOOL-03) — Phase 21
+- ✓ Tool UI: downloader, settings (TOOL-04–TOOL-05) — Phase 22
+- ✓ Archive browse & sidebar (ARCH-01–ARCH-03) — Phase 23
+- ✓ Archive detail & panels (ARCH-04–ARCH-06) — Phase 24
+- ✓ UI polish & visual regression (POL-01, POL-02; QA-03 visual UAT deferred) — Phase 25
+
 ### Active
 
 (none — define in next milestone)
@@ -68,9 +80,9 @@ The spark is a real repeated workflow: leaving Cubase for tiny utilities like an
 
 Current local environment checks found Swift 6.3, FFmpeg 8.1 at `/opt/homebrew/bin/ffmpeg`, and yt-dlp 2026.03.17 at `/opt/homebrew/bin/yt-dlp`. Those installed tools are useful for development, but the app design should not assume every future machine has them installed without a visible health check or install path.
 
-**Current State (after v1.2):**
+**Current State (after v1.3):**
 
-v1.0–v1.2 shipped on `main`. Archive browser is the primary new product surface; tool hub (BPM, converter, recorder, downloader) remains modular via `ToolFeature`. `./script/ci.sh` and `./script/e2e_user_smoke.sh` are the local gates.
+v1.0–v1.3 shipped on `main`. UI follows `docs/UI-REDESIGN-PLAN.md`. Archive browser and tool hub remain modular via `ToolFeature`. `./script/ci.sh` and `./script/e2e_user_smoke.sh` are the local gates.
 
 **Known follow-ups:**
 - v1.1 phases 7–10: human UAT items still in VERIFICATION.md (`human_needed`)
@@ -122,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-30 — milestone v1.2 Cubase Archive Recall shipped*
+*Last updated: 2026-05-31 — milestone v1.3 Full UI Redesign shipped*

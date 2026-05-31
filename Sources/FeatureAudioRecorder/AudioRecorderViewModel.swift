@@ -168,4 +168,8 @@ public final class AudioRecorderViewModel: ObservableObject {
         elapsedTime = 0
         currentLevel = nil
     }
+
+    public func dismissSaveConfirmation() {
+        showSaveConfirmation = false
+    }
 }

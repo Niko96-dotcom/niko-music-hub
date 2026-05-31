@@ -21,7 +21,7 @@ public struct AudioConverterView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
                 header
                 intakeSurface
                 presetStrip
@@ -30,9 +30,10 @@ public struct AudioConverterView: View {
                 Spacer(minLength: 0)
             }
             .hubToolContentPadding()
-            .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
         .fileImporter(
             isPresented: $fileImporterVisible,
@@ -46,58 +47,63 @@ public struct AudioConverterView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("WAV Converter", systemImage: "waveform")
-                .font(.system(size: 16, weight: .semibold))
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text("WAV Converter")
+                .font(HubDesignSystem.Typography.screenTitle())
 
             Text(headerStatus)
-                .font(.system(size: 13))
+                .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             if viewModel.isConverting {
                 ProgressView(value: viewModel.overallProgress)
                     .frame(maxWidth: 320)
-                    .tint(Color.accentColor)
+                    .tint(HubDesignSystem.Colors.accent)
             }
         }
-        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var intakeSurface: some View {
         ZStack {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                .fill(.thinMaterial)
+                .fill(dropTargeted ? HubDesignSystem.Colors.accentTint : Color.primary.opacity(0.02))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
                         .stroke(
-                            dropTargeted ? Color.accentColor : Color.secondary.opacity(0.35),
-                            lineWidth: dropTargeted ? 2 : 1
+                            dropTargeted ? HubDesignSystem.Colors.accent : HubDesignSystem.Colors.separator,
+                            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
                         )
                 }
 
-            VStack(spacing: 8) {
-                Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
-                    .font(.system(size: 16, weight: .semibold))
+            VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Image(systemName: "arrow.down.doc")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.quaternary)
 
-                Text("Add M4A, MP3, WAV, AIFF, or FLAC files. Outputs use the current WAV preset and appear here after verification.")
-                    .font(.system(size: 13))
+                Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
+                    .font(.system(size: 15, weight: .semibold))
+
+                Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HubIconButton(
-                    systemImage: "plus",
-                    accessibilityLabel: "Add audio files",
-                    help: "Choose files to convert"
+                HubLabeledButton(
+                    icon: "plus",
+                    label: "Choose Files",
+                    style: .secondary
                 ) {
                     fileImporterVisible = true
                 }
             }
             .padding(24)
         }
-        .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, minHeight: 160, alignment: .center)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, minHeight: 180)
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $dropTargeted,
@@ -112,15 +118,16 @@ public struct AudioConverterView: View {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "waveform")
                     .foregroundStyle(.secondary)
-                Text(viewModel.presetSummaryText)
                     .font(.system(size: 13))
-                    .monospacedDigit()
+
+                presetValueSummary
+
                 Spacer(minLength: 8)
-                HubIconButton(
-                    systemImage: "slider.horizontal.3",
-                    accessibilityLabel: "Edit WAV preset",
-                    help: "Sample rate, bit depth, and channels",
-                    isSelected: presetEditorVisible
+
+                HubLabeledButton(
+                    icon: "slider.horizontal.3",
+                    label: "Edit Preset",
+                    style: .secondary
                 ) {
                     presetEditorVisible.toggle()
                 }
@@ -132,9 +139,24 @@ public struct AudioConverterView: View {
                 presetEditor
             }
         }
-        .padding(12)
+        .padding(10)
         .hubGlassCard()
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
+    }
+
+    private var presetValueSummary: some View {
+        HStack(spacing: 6) {
+            Text(AudioConverterViewModel.sampleRateLabel(for: viewModel.currentAudioPreset.sampleRate))
+                .font(HubDesignSystem.Typography.mono())
+            Text("|")
+                .foregroundStyle(.tertiary)
+            Text("\(viewModel.currentAudioPreset.bitDepth)-bit")
+                .font(HubDesignSystem.Typography.mono())
+            Text("|")
+                .foregroundStyle(.tertiary)
+            Text(AudioConverterViewModel.channelModeLabel(for: viewModel.currentAudioPreset.channelMode))
+                .font(HubDesignSystem.Typography.mono())
+        }
     }
 
     private var presetEditor: some View {
@@ -210,21 +232,28 @@ public struct AudioConverterView: View {
 
     private var actionRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                HubIconButton(
-                    systemImage: "plus",
-                    accessibilityLabel: "Add audio files",
-                    help: "Choose files to convert to WAV"
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                HubLabeledButton(
+                    icon: "plus",
+                    label: "Add Files",
+                    style: .secondary
                 ) {
                     fileImporterVisible = true
                 }
 
-                convertButton
+                HubLabeledButton(
+                    icon: "waveform.badge.plus",
+                    label: "Convert",
+                    style: .primary,
+                    isEnabled: viewModel.canConvertToWAV
+                ) {
+                    viewModel.startConversion()
+                }
 
-                HubIconButton(
-                    systemImage: "stop.fill",
-                    accessibilityLabel: "Stop after current file",
-                    help: "Finish the current file, then stop the batch",
+                HubLabeledButton(
+                    icon: "stop.fill",
+                    label: "Stop",
+                    style: .secondary,
                     isEnabled: viewModel.canRequestStopAfterCurrent
                 ) {
                     viewModel.requestStopAfterCurrent()
@@ -233,24 +262,11 @@ public struct AudioConverterView: View {
 
             ForEach(viewModel.notices, id: \.self) { notice in
                 Text(notice)
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var convertButton: some View {
-        HubIconButton(
-            systemImage: "waveform.badge.plus",
-            accessibilityLabel: "Convert to WAV",
-            help: "Convert queued files to Cubase-ready WAV",
-            prominent: true,
-            isEnabled: viewModel.canConvertToWAV
-        ) {
-            viewModel.startConversion()
-        }
     }
 
     private var batchRows: some View {
@@ -291,9 +307,11 @@ public struct AudioConverterView: View {
                         .truncationMode(.middle)
 
                     if let sourceType = row.sourceType {
-                        Text(sourceType.rawValue.uppercased())
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                        sourceTypeBadge(sourceType.rawValue.uppercased())
+                    }
+
+                    if let converterPathLabel = row.converterPathLabel {
+                        sourceTypeBadge(converterPathLabel == "FFmpeg" ? "FFmpeg" : "Native")
                     }
                 }
 
@@ -311,19 +329,13 @@ public struct AudioConverterView: View {
                 if row.state == .converting {
                     ProgressView(value: row.progress)
                         .frame(maxWidth: 220)
-                        .tint(Color.accentColor)
+                        .tint(HubDesignSystem.Colors.accent)
                 }
             }
 
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 8) {
-                if let converterPathLabel = row.converterPathLabel {
-                    Text(converterPathLabel == "FFmpeg" ? "FFmpeg" : "Native")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-
                 if row.recoveryActionTitle == "Choose FFmpeg" {
                     Button("Choose FFmpeg") {
                         Task { @MainActor in
@@ -355,6 +367,15 @@ public struct AudioConverterView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.sourceURL.lastPathComponent)
         .accessibilityValue(statusText(for: row))
+    }
+
+    private func sourceTypeBadge(_ label: String) -> some View {
+        Text(label)
+            .font(HubDesignSystem.Typography.micro())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(HubDesignSystem.Colors.accent.opacity(0.1))
+            .clipShape(Capsule())
     }
 
     private func statusDot(for state: AudioConverterRowState) -> some View {
@@ -402,7 +423,7 @@ public struct AudioConverterView: View {
         case .unsupported:
             return .orange
         case .converting:
-            return .accentColor
+            return HubDesignSystem.Colors.accent
         case .queued, .skipped:
             return .secondary
         }

@@ -228,9 +228,10 @@ final class AudioConverterViewModelTests: XCTestCase {
         [
             "WAV Converter",
             "Drop audio files to convert",
-            "Add audio files",
-            "Convert to WAV",
-            "Stop after current file",
+            "Choose Files",
+            "Add Files",
+            "Convert",
+            "Stop",
             "viewModel.presetSummaryText",
             "Ready for WAV conversion",
             "Verified WAV ready",
@@ -248,7 +249,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         )
 
         [
-            "Edit WAV preset",
+            "Edit Preset",
             "Picker(\"Sample rate\"",
             "Picker(\"Bit depth\"",
             "Picker(\"Channel handling\"",

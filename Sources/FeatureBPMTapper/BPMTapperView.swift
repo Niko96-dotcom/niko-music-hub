@@ -8,6 +8,8 @@ public struct BPMTapperView: View {
     @FocusState private var tapSurfaceFocused: Bool
     @State private var clearHistoryConfirmationVisible = false
     @State private var copiedHistoryEntryID: UUID?
+    @State private var tapSurfacePressed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         context: ToolContext,
@@ -19,15 +21,16 @@ public struct BPMTapperView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
                 header
                 tapWorkflow
                 historySection
             }
             .hubToolContentPadding()
-            .frame(maxWidth: 640, alignment: .topLeading)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
         .onAppear {
             try? viewModel.loadHistory()
@@ -45,53 +48,59 @@ public struct BPMTapperView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("BPM Tapper", systemImage: "metronome")
-                .font(HubDesignSystem.Typography.sectionTitle())
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text("BPM Tapper")
+                .font(HubDesignSystem.Typography.screenTitle())
+
+            Text("Tap the pad or press Space")
+                .font(HubDesignSystem.Typography.body())
+                .foregroundStyle(.secondary)
 
             Text(viewModel.statusText)
-                .font(.system(size: 13))
+                .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(statusColor)
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: 560, alignment: .leading)
+        .frame(maxWidth: 560)
     }
 
     private var tapWorkflow: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: HubDesignSystem.Spacing.panel) {
             bpmReadout
             adjustmentPicker
             tapSurface
             actionRow
         }
-        .frame(minWidth: 320, idealWidth: 440, maxWidth: 560, alignment: .leading)
+        .frame(maxWidth: 560)
     }
 
     private var bpmReadout: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+        VStack(spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(displayedBPMText)
-                    .font(.system(size: 40, weight: .semibold))
+                    .font(HubDesignSystem.Typography.display())
                     .monospacedDigit()
                     .accessibilityLabel("Current BPM")
 
                 Text("BPM")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tertiary)
             }
 
             Text(progressText)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(.tertiary)
 
             if let originalContextText {
                 Text(originalContextText)
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(minHeight: 68, alignment: .leading)
+        .frame(minHeight: 80)
+        .frame(maxWidth: .infinity)
     }
 
     private var adjustmentPicker: some View {
@@ -115,32 +124,33 @@ public struct BPMTapperView: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
                         .strokeBorder(
-                            tapSurfaceFocused ? Color.accentColor : HubDesignSystem.glassStroke,
+                            tapSurfaceFocused ? HubDesignSystem.Colors.accent : HubDesignSystem.glassStroke,
                             lineWidth: tapSurfaceFocused ? 2 : 0.5
                         )
                 }
 
             VStack(spacing: 8) {
                 Text("Tap Tempo")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
 
-                Text(viewModel.statusText)
-                    .font(.system(size: 12))
+                Text("Tap or press Space")
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
             }
             .padding(16)
         }
-        .frame(minWidth: 320, idealWidth: 440, minHeight: 180, idealHeight: 220)
+        .frame(maxWidth: 560, minHeight: 240)
+        .scaleEffect(tapSurfacePressed ? 0.98 : 1)
         .contentShape(Rectangle())
         .focusable()
         .focused($tapSurfaceFocused)
         .onTapGesture {
+            animateTapPress()
             viewModel.recordTap()
             tapSurfaceFocused = true
         }
         .onKeyPress(.space) {
+            animateTapPress()
             viewModel.recordTap()
             return .handled
         }
@@ -154,56 +164,56 @@ public struct BPMTapperView: View {
     }
 
     private var actionRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                HubIconButton(
-                    systemImage: "doc.on.doc",
-                    accessibilityLabel: "Copy BPM",
-                    help: "Copy current BPM to clipboard",
+        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                HubLabeledButton(
+                    icon: "doc.on.doc",
+                    label: "Copy BPM",
+                    style: .secondary,
                     isEnabled: viewModel.displayedBPM != nil
                 ) {
                     copiedHistoryEntryID = nil
                     viewModel.copyDisplayedBPM()
                 }
 
-                HubIconButton(
-                    systemImage: "bookmark.fill",
-                    accessibilityLabel: "Save BPM",
-                    help: "Save current BPM to history",
-                    prominent: true,
+                HubLabeledButton(
+                    icon: "bookmark.fill",
+                    label: "Save BPM",
+                    style: .primary,
                     isEnabled: viewModel.displayedBPM != nil
                 ) {
                     copiedHistoryEntryID = nil
                     viewModel.saveDisplayedBPM()
                 }
 
-                HubIconButton(
-                    systemImage: "arrow.counterclockwise",
-                    accessibilityLabel: "Reset taps",
-                    help: "Clear current tap run",
+                HubLabeledButton(
+                    icon: "arrow.counterclockwise",
+                    label: "Reset",
+                    style: .secondary,
                     isEnabled: viewModel.hasStartedRun
                 ) {
                     viewModel.resetTaps()
                     tapSurfaceFocused = true
                 }
             }
+            .frame(maxWidth: .infinity)
 
             inlineMessages
         }
     }
 
     private var inlineMessages: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 4) {
             if let copyConfirmation = viewModel.copyConfirmation {
                 Text(copyConfirmation)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.success)
             }
 
             if let saveConfirmation = viewModel.saveConfirmation {
                 Text(saveConfirmation)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.success)
             }
 
             if viewModel.errorText != nil {
@@ -228,38 +238,45 @@ public struct BPMTapperView: View {
                 StandardErrorCard(card: card)
             }
         }
-        .frame(minHeight: 18, alignment: .leading)
+        .frame(minHeight: 18)
+        .frame(maxWidth: .infinity)
     }
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: HubDesignSystem.Spacing.panel) {
             Divider()
+                .overlay(HubDesignSystem.Colors.separator)
 
             Text("Recent Tempos")
-                .font(.system(size: 16, weight: .semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
+                .frame(maxWidth: .infinity)
 
             if viewModel.historyEntries.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
                     Text("No tempos saved yet")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(HubDesignSystem.Typography.body())
+                        .fontWeight(.semibold)
 
                     Text("Saved BPM results will appear here with their time and adjustment mode. Tap a tempo, then Save BPM to keep it for this session.")
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: 560)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: HubDesignSystem.Spacing.cardGap) {
                     ForEach(viewModel.historyEntries) { entry in
                         historyRow(entry)
                     }
                 }
+                .frame(maxWidth: 560)
             }
 
-            HubIconButton(
-                systemImage: "trash",
-                accessibilityLabel: "Clear history",
-                help: "Remove all saved tempos",
+            HubLabeledButton(
+                icon: "trash",
+                label: "Clear History",
+                style: .secondary,
                 role: .destructive,
                 isEnabled: !viewModel.historyEntries.isEmpty
             ) {
@@ -267,7 +284,8 @@ public struct BPMTapperView: View {
                 clearHistoryConfirmationVisible = true
             }
         }
-        .frame(minWidth: 320, idealWidth: 440, maxWidth: 560, alignment: .leading)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
     }
 
     private func historyRow(_ entry: BPMHistoryEntry) -> some View {
@@ -279,12 +297,12 @@ public struct BPMTapperView: View {
                         .monospacedDigit()
 
                     Text("BPM")
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(.secondary)
                 }
 
                 Text(historyContext(for: entry))
-                    .font(.system(size: 12))
+                    .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -303,13 +321,22 @@ public struct BPMTapperView: View {
 
                 if copiedHistoryEntryID == entry.id {
                     Text("BPM copied")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.green)
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Colors.success)
                 }
             }
         }
         .padding(12)
         .hubGlassCard()
+    }
+
+    private func animateTapPress() {
+        guard !reduceMotion else { return }
+        tapSurfacePressed = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            tapSurfacePressed = false
+        }
     }
 
     private var displayedBPMText: String {
@@ -333,7 +360,7 @@ public struct BPMTapperView: View {
     private var statusColor: Color {
         switch viewModel.statusKind {
         case .longPauseReset, .outlierIgnored:
-            return .orange
+            return HubDesignSystem.Colors.warning
         default:
             return .secondary
         }
