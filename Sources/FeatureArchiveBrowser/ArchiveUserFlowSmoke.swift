@@ -40,24 +40,26 @@ public enum ArchiveUserFlowSmoke {
             scenario: ArchiveUserFlowSmokeScenarios.rankingLab
         )
 
-        var tiebreakByPrefix: [String: PreviewTiebreakLabOutcome] = [:]
-        for scenario in ArchiveUserFlowSmokeScenarios.previewTiebreakLabs {
-            tiebreakByPrefix[scenario.logPrefix] = try runPreviewTiebreakLab(
-                viewModel: viewModel,
-                scenario: scenario
-            )
-        }
+        let tiebreakByPrefix = try Dictionary(
+            uniqueKeysWithValues: ArchiveUserFlowSmokeScenarios.previewTiebreakLabs.map { scenario in
+                (
+                    scenario.logPrefix,
+                    try runPreviewTiebreakLab(viewModel: viewModel, scenario: scenario)
+                )
+            }
+        )
         let tiebreakLabs = PreviewTiebreakLabSuite(byLogPrefix: tiebreakByPrefix)
 
         let brokenFolder = try runBrokenFolderCheck(viewModel: viewModel)
 
-        var searchByPrefix: [String: SongSearchScenarioOutcome] = [:]
-        for scenario in ArchiveUserFlowSmokeScenarios.songSearches {
-            searchByPrefix[scenario.logPrefix] = try runSongSearchScenario(
-                viewModel: viewModel,
-                scenario: scenario
-            )
-        }
+        let searchByPrefix = try Dictionary(
+            uniqueKeysWithValues: ArchiveUserFlowSmokeScenarios.songSearches.map { scenario in
+                (
+                    scenario.logPrefix,
+                    try runSongSearchScenario(viewModel: viewModel, scenario: scenario)
+                )
+            }
+        )
         let searches = SongSearchResults(byLogPrefix: searchByPrefix)
 
         let skippedSearch = try runSkippedSearchScenario(

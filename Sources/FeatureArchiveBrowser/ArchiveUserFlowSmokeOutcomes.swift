@@ -1,207 +1,5 @@
 import Foundation
 
-// MARK: - Scenario tables
-
-enum ArchiveUserFlowSmokeScenarios {
-    static let coreSearchQuery = "neon hk"
-
-    static let rankingLab = RankingLabScenario(
-        folderName: "Preview Ranking Lab",
-        exportMustContain: [
-            "selected_song_title=Lab Song",
-            "main_preview_summary=",
-            "preview_rank_line=",
-            "v3",
-            "preview_ranking_tiebreak_legend=",
-            "too_short_non_main=",
-            "songs_with_too_short=",
-            "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav",
-            "preview_ranking_scan_callout=",
-            "preview_ranking_selected_header=",
-        ],
-        tooShortSongTitle: "Lab Song",
-        tooShortClipSubstring: "Lab Song short clip.wav",
-        scanCalloutSubstring: "too short",
-        selectedHeaderSubstring: "Lab Song v3 mix.wav",
-        tiebreakLegendSubstring: "CPR version anchor",
-        mainPreviewSummarySubstrings: ["v3", "wav", "Lab Song v3 mix.wav"],
-        rankedPreviewLineSubstring: "v3"
-    )
-
-    static let songSearches: [SongSearchScenario] = [
-        SongSearchScenario(
-            logPrefix: "warning_search",
-            diagnosticsExportStem: "warning",
-            diagnosticsPanelStem: "warning",
-            query: "project",
-            expectedDisplayTitle: "Broken Folder Example",
-            summarySubstrings: ["scan warning", "project"],
-            exportMustContain: ["search_match title=Broken Folder Example"],
-            minimumMatchCount: 1
-        ),
-        SongSearchScenario(
-            logPrefix: "fuzzy_warning_search",
-            diagnosticsExportStem: "fuzzy_warning",
-            diagnosticsPanelStem: "fuzzy_warning",
-            query: "ncpr fnd",
-            expectedDisplayTitle: "Broken Folder Example",
-            summarySubstrings: ["fuzzy scan warning", "ncpr", "fnd"],
-            exportMustContain: [
-                "search_match title=Broken Folder Example",
-                "fuzzy scan warning",
-            ],
-            minimumMatchCount: 1
-        ),
-        SongSearchScenario(
-            logPrefix: "notes_search",
-            diagnosticsExportStem: "notes",
-            diagnosticsPanelStem: "notes",
-            query: "nts nly",
-            expectedDisplayTitle: "Broken Folder Example",
-            summarySubstrings: ["fuzzy song note", "nts", "nly"],
-            exportMustContain: [
-                "search_match title=Broken Folder Example",
-                "fuzzy song note",
-            ],
-            minimumMatchCount: 1
-        ),
-        SongSearchScenario(
-            logPrefix: "folder_search",
-            diagnosticsExportStem: "folder",
-            diagnosticsPanelStem: "folder",
-            query: "brkn fld",
-            expectedDisplayTitle: "Broken Folder Example",
-            summarySubstrings: ["fuzzy folder", "brkn", "fld"],
-            exportMustContain: [
-                "search_match title=Broken Folder Example",
-                "fuzzy folder",
-            ],
-            minimumMatchCount: 1
-        ),
-        SongSearchScenario(
-            logPrefix: "cpr_search",
-            diagnosticsExportStem: "cpr",
-            diagnosticsPanelStem: "cpr",
-            query: "neohkv2",
-            expectedDisplayTitle: "Neon Hook",
-            summarySubstrings: ["fuzzy CPR file", "neohkv2"],
-            exportMustContain: [
-                "search_match title=Neon Hook",
-                "fuzzy CPR file",
-            ],
-            minimumMatchCount: 1
-        ),
-        SongSearchScenario(
-            logPrefix: "preview_search",
-            diagnosticsExportStem: "preview",
-            diagnosticsPanelStem: "preview",
-            query: "ranking lab v3 mx",
-            expectedDisplayTitle: "Lab Song",
-            summarySubstrings: ["fuzzy preview file", "v3", "mx"],
-            exportMustContain: [
-                "search_match title=Lab Song",
-                "fuzzy preview file",
-            ],
-            minimumMatchCount: 1
-        ),
-    ]
-
-    static let skippedSearch = SkippedSearchScenario(
-        logPrefix: "skipped_search",
-        query: "lse fle",
-        expectedLabel: "LOOSE_FILE.txt",
-        summarySubstrings: ["fuzzy skipped label"],
-        exportMustContain: ["skipped_search_match label=LOOSE_FILE.txt"]
-    )
-
-    static let previewTiebreakLabs: [PreviewTiebreakLabScenario] = [
-        PreviewTiebreakLabScenario(
-            logPrefix: "tiebreak",
-            exportStem: "tiebreak",
-            panelCalloutStem: "duration_tiebreak",
-            panelHeaderStem: "duration_tiebreak",
-            folderName: "Equal Score Duration Tiebreak",
-            exportMustContain: [
-                "selected_song_title=Tie Song",
-                "preview_rank_tiebreak=Equal score — longer preview",
-                "Tie Song mix long.wav",
-            ],
-            requiresHeader: true,
-            calloutSubstring: "Equal score — longer preview"
-        ),
-        PreviewTiebreakLabScenario(
-            logPrefix: "version_tiebreak",
-            exportStem: "version_tiebreak",
-            panelCalloutStem: "version_tiebreak",
-            panelHeaderStem: nil,
-            folderName: "Equal Score Version Tiebreak",
-            exportMustContain: [
-                "selected_song_title=Tie Song",
-                "preview_rank_tiebreak=Equal score — version v3 beat v2",
-                "Tie Song v3 mix.wav",
-            ],
-            requiresHeader: false,
-            calloutSubstring: "Equal score — version v3 beat v2"
-        ),
-        PreviewTiebreakLabScenario(
-            logPrefix: "extension_tiebreak",
-            exportStem: "extension_tiebreak",
-            panelCalloutStem: "extension_tiebreak",
-            panelHeaderStem: nil,
-            folderName: "Equal Score Extension Tiebreak",
-            exportMustContain: [
-                "selected_song_title=Tie Song",
-                "preview_rank_tiebreak=Equal score — preferred flac over mp3",
-                "Tie Song mix.flac",
-            ],
-            requiresHeader: false,
-            calloutSubstring: "Equal score — preferred flac over mp3"
-        ),
-    ]
-}
-
-struct RankingLabScenario: Sendable, Equatable {
-    let folderName: String
-    let exportMustContain: [String]
-    let tooShortSongTitle: String
-    let tooShortClipSubstring: String
-    let scanCalloutSubstring: String
-    let selectedHeaderSubstring: String
-    let tiebreakLegendSubstring: String
-    let mainPreviewSummarySubstrings: [String]
-    let rankedPreviewLineSubstring: String
-}
-
-struct SongSearchScenario: Sendable, Equatable {
-    let logPrefix: String
-    let diagnosticsExportStem: String
-    let diagnosticsPanelStem: String
-    let query: String
-    let expectedDisplayTitle: String
-    let summarySubstrings: [String]
-    let exportMustContain: [String]
-    let minimumMatchCount: Int
-}
-
-struct SkippedSearchScenario: Sendable, Equatable {
-    let logPrefix: String
-    let query: String
-    let expectedLabel: String
-    let summarySubstrings: [String]
-    let exportMustContain: [String]
-}
-
-struct PreviewTiebreakLabScenario: Sendable, Equatable {
-    let logPrefix: String
-    let exportStem: String
-    let panelCalloutStem: String
-    let panelHeaderStem: String?
-    let folderName: String
-    let exportMustContain: [String]
-    let requiresHeader: Bool
-    let calloutSubstring: String
-}
-
 // MARK: - Outcomes
 
 public struct SearchPanelParity: Sendable, Equatable {
@@ -209,6 +7,13 @@ public struct SearchPanelParity: Sendable, Equatable {
     let queryLineMatchesExport: Bool
     let matchLinesJoined: String
     let matchLinesMatchExport: Bool
+
+    static let empty = SearchPanelParity(
+        queryLine: "",
+        queryLineMatchesExport: false,
+        matchLinesJoined: "",
+        matchLinesMatchExport: false
+    )
 }
 
 public struct SongSearchScenarioOutcome: Sendable, Equatable {
@@ -279,7 +84,10 @@ public struct SkippedSearchScenarioOutcome: Sendable, Equatable {
             && panel.queryLineMatchesExport
             && !panel.matchLinesJoined.isEmpty
             && panel.matchLinesJoined.contains(scenario.expectedLabel)
-            && panel.matchLinesJoined.localizedCaseInsensitiveContains("fuzzy skipped label")
+            && scenario.summarySubstrings.allSatisfy {
+                panel.matchLinesJoined.localizedCaseInsensitiveContains($0)
+                    || panel.matchLinesJoined.contains($0)
+            }
             && panel.matchLinesMatchExport
     }
 
@@ -312,6 +120,25 @@ public struct CoreFlowOutcome: Sendable, Equatable {
     public let dryRunLogDisplayLine: String
     public let searchMatchSummary: String
 
+    func satisfiesScenario() -> Bool {
+        let scenario = ArchiveUserFlowSmokeScenarios.coreFlow
+        return userFlow == scenario.userFlow
+            && selectedTitle == scenario.selectedTitle
+            && writeProbeDenied
+            && archiveTreeUnchanged
+            && scenario.searchMatchSummarySubstrings.allSatisfy {
+                searchMatchSummary.localizedCaseInsensitiveContains($0)
+            }
+            && dryRunCPRPath.contains(scenario.cprPathContains)
+            && dryRunCPRPath.hasSuffix(scenario.cprPathSuffix)
+    }
+
+    func satisfiesDryRunOpenEvidence() -> Bool {
+        let title = ArchiveUserFlowSmokeScenarios.coreFlow.selectedTitle
+        return dryRunLogDisplayLine.contains(title)
+            && dryRunLogDisplayLine.contains(".cpr")
+    }
+
     func appendSmokeLog(into log: inout [String: String]) {
         log["user_flow"] = userFlow
         log["songs"] = String(songCount)
@@ -324,6 +151,7 @@ public struct CoreFlowOutcome: Sendable, Equatable {
 }
 
 public struct PrimarySearchExportOutcome: Sendable, Equatable {
+    let scenario: PrimarySearchScenario
     let query: String
     let matchCount: Int
     let exportPath: String
@@ -331,6 +159,26 @@ public struct PrimarySearchExportOutcome: Sendable, Equatable {
     let exportContainsSummaryLine: Bool
     let exportSummaryLine: String
     let panel: SearchPanelParity
+
+    func satisfiesScenario() -> Bool {
+        query == scenario.query
+            && matchCount == scenario.expectedMatchCount
+            && !exportPath.isEmpty
+            && exportContainsMatch
+            && exportContainsSummaryLine
+            && !exportSummaryLine.isEmpty
+            && scenario.exportSummaryLineSubstrings.allSatisfy { exportSummaryLine.contains($0) }
+            && !panel.queryLine.isEmpty
+            && panel.queryLine.contains(scenario.query)
+            && panel.queryLineMatchesExport
+            && !panel.matchLinesJoined.isEmpty
+            && panel.matchLinesJoined.contains(scenario.panelMatchTitle)
+            && scenario.panelSummarySubstrings.allSatisfy {
+                panel.matchLinesJoined.localizedCaseInsensitiveContains($0)
+                    || panel.matchLinesJoined.contains($0)
+            }
+            && panel.matchLinesMatchExport
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["search_query"] = query
@@ -347,6 +195,7 @@ public struct PrimarySearchExportOutcome: Sendable, Equatable {
 }
 
 public struct FixtureDiagnosticsOutcome: Sendable, Equatable {
+    let scenario: FixtureDiagnosticsScenario
     let songCount: Int
     let skippedCount: Int
     let healthBadge: String
@@ -360,6 +209,26 @@ public struct FixtureDiagnosticsOutcome: Sendable, Equatable {
     let countsPanelMatchExport: Bool
     let panelSupportSummary: String
     let panelMatchesExportSummary: Bool
+
+    func satisfiesScenario() -> Bool {
+        songCount >= scenario.minimumSongCount
+            && skippedCount >= scenario.minimumSkippedCount
+            && !healthBadge.isEmpty
+            && scenario.healthBadgeSubstrings.allSatisfy { healthBadge.contains($0) }
+            && healthBadgeMatchesExport
+            && !skippedPanelLines.isEmpty
+            && scenario.skippedPanelSubstrings.allSatisfy { skippedPanelLines.contains($0) }
+            && skippedPanelLinesMatchExport
+            && !songWarningsPanelLines.isEmpty
+            && scenario.songWarningsPanelSubstrings.allSatisfy { songWarningsPanelLines.contains($0) }
+            && songWarningsPanelLinesMatchExport
+            && countsPanelSongsValue == scenario.expectedCountsSongsValue
+            && countsPanelSongWarningsValue == scenario.expectedCountsSongWarningsValue
+            && countsPanelMatchExport
+            && !panelSupportSummary.isEmpty
+            && scenario.supportSummarySubstrings.allSatisfy { panelSupportSummary.contains($0) }
+            && panelMatchesExportSummary
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["diagnostics_songs"] = String(songCount)
@@ -471,8 +340,10 @@ public struct PreviewTiebreakLabOutcome: Sendable, Equatable {
 }
 
 public struct BrokenFolderOutcome: Sendable, Equatable {
+    let scenario: BrokenFolderScenario
     let displayWarnings: [String]
     let sidecarNotes: String?
+    let exportContainsRequiredSections: Bool
     let selectedSongExportPath: String
     let panelTitleLine: String
     let panelTitleLineMatchesExport: Bool
@@ -482,6 +353,23 @@ public struct BrokenFolderOutcome: Sendable, Equatable {
     let panelWarningLinesMatchExport: Bool
     let panelNotesLine: String
     let panelNotesLineMatchesExport: Bool
+
+    func satisfiesScenario() -> Bool {
+        displayWarnings.contains(where: {
+            $0.localizedCaseInsensitiveContains(scenario.displayWarningContains)
+        })
+            && sidecarNotes == scenario.sidecarNotes
+            && exportContainsRequiredSections
+            && !selectedSongExportPath.isEmpty
+            && panelTitleLine == scenario.displayTitle
+            && panelTitleLineMatchesExport
+            && panelCprLine.contains(scenario.cprLineSubstring)
+            && panelCprLineMatchesExport
+            && panelWarningLines.contains(scenario.warningLineSubstring)
+            && panelWarningLinesMatchExport
+            && panelNotesLine.contains(scenario.notesLineSubstring)
+            && panelNotesLineMatchesExport
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["broken_folder_warnings"] = displayWarnings.joined(separator: "; ")
@@ -499,12 +387,24 @@ public struct BrokenFolderOutcome: Sendable, Equatable {
 }
 
 public struct InvalidRootCheckOutcome: Sendable, Equatable {
+    let scenario: InvalidRootScenario
     let exportPath: String
     let exportContainsBadge: Bool
     let panelBadge: String
     let panelBadgeMatchesExport: Bool
     let panelGlobalWarningLines: String
     let panelGlobalWarningLinesMatchExport: Bool
+
+    func satisfiesScenario() -> Bool {
+        !exportPath.isEmpty
+            && exportContainsBadge
+            && !panelBadge.isEmpty
+            && scenario.badgeSubstrings.allSatisfy { panelBadge.contains($0) }
+            && panelBadgeMatchesExport
+            && !panelGlobalWarningLines.isEmpty
+            && panelGlobalWarningLines.contains(scenario.globalWarningSubstring)
+            && panelGlobalWarningLinesMatchExport
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["diagnostics_export_invalid_root_path"] = exportPath
@@ -518,10 +418,18 @@ public struct InvalidRootCheckOutcome: Sendable, Equatable {
 }
 
 public struct SummaryTruncationCheckOutcome: Sendable, Equatable {
+    let scenario: SummaryTruncationScenario
     let exportPath: String
     let exportContainsTruncation: Bool
     let panelFootnote: String
     let panelFootnoteMatchesDiagnostics: Bool
+
+    func satisfiesScenario() -> Bool {
+        !exportPath.isEmpty
+            && exportContainsTruncation
+            && panelFootnote == scenario.expectedFootnote
+            && panelFootnoteMatchesDiagnostics
+    }
 
     func appendSmokeLog(into log: inout [String: String]) {
         log["diagnostics_export_summary_truncation_path"] = exportPath
@@ -539,10 +447,13 @@ public struct SongSearchResults: Sendable, Equatable {
     }
 
     public subscript(logPrefix: String) -> SongSearchScenarioOutcome {
-        guard let outcome = byLogPrefix[logPrefix] else {
-            preconditionFailure("Missing song search outcome for log prefix \(logPrefix)")
+        byLogPrefix[logPrefix]!
+    }
+
+    func satisfiesAllScenarios() -> Bool {
+        ArchiveUserFlowSmokeScenarios.songSearches.allSatisfy { scenario in
+            byLogPrefix[scenario.logPrefix]?.satisfiesScenario() == true
         }
-        return outcome
     }
 }
 
@@ -554,9 +465,12 @@ public struct PreviewTiebreakLabSuite: Sendable, Equatable {
     }
 
     public subscript(logPrefix: String) -> PreviewTiebreakLabOutcome {
-        guard let outcome = byLogPrefix[logPrefix] else {
-            preconditionFailure("Missing preview tiebreak outcome for log prefix \(logPrefix)")
+        byLogPrefix[logPrefix]!
+    }
+
+    func satisfiesAllScenarios() -> Bool {
+        ArchiveUserFlowSmokeScenarios.previewTiebreakLabs.allSatisfy { scenario in
+            byLogPrefix[scenario.logPrefix]?.satisfiesScenario() == true
         }
-        return outcome
     }
 }
