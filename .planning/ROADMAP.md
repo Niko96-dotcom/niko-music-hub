@@ -241,7 +241,7 @@ Plans:
 | 1–6 | v1.0 | 15/19 | Shipped | 2026-05-11 |
 | 7–10 | v1.1 | 7/7 | Shipped | 2026-05-23 |
 | 11–18 | v1.2 | 9/9 | Shipped | 2026-05-30 |
-| 19–25 | v1.3 | 0/TBD | Not started | — |
+| 19–25 | v1.3 | 4/TBD | Phase 19 planned | — |
 
 ## Roadmap Notes
 
