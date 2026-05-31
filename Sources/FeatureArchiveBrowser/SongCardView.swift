@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -29,17 +30,9 @@ struct SongCardView: View {
 
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact)
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    isSelected ? ArchiveDesignTokens.accent : Color.primary.opacity(0.08),
-                    lineWidth: isSelected ? 2 : 1
-                )
-        }
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card, selected: isSelected)
     }
 
     private var mainPreviewURL: URL? {

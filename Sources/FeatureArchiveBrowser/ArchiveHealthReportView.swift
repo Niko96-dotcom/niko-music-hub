@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -27,8 +28,7 @@ struct ArchiveHealthReportView: View {
             }
         }
         .padding(compact ? 6 : 10)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func healthRow(_ label: String, value: String, icon: String) -> some View {

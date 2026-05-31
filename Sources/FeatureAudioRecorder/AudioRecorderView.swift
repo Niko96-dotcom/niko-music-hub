@@ -40,7 +40,7 @@ public struct AudioRecorderView: View {
             .frame(maxWidth: 640, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
     }
 
     private var header: some View {
@@ -70,8 +70,8 @@ public struct AudioRecorderView: View {
 
     private var meterSection: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(.thinMaterial)
                 .frame(height: 12)
 
             GeometryReader { geometry in
@@ -184,8 +184,7 @@ public struct AudioRecorderView: View {
                 }
             }
             .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .hubGlassCard()
         }
     }
 
@@ -203,8 +202,7 @@ public struct AudioRecorderView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .hubGlassCard()
         }
     }
 

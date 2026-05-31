@@ -28,7 +28,7 @@ public struct BPMTapperView: View {
             .frame(maxWidth: 640, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
         .onAppear {
             try? viewModel.loadHistory()
             tapSurfaceFocused = true
@@ -47,7 +47,7 @@ public struct BPMTapperView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("BPM Tapper", systemImage: "metronome")
-                .font(.system(size: 16, weight: .semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
 
             Text(viewModel.statusText)
                 .font(.system(size: 13))
@@ -110,11 +110,14 @@ public struct BPMTapperView: View {
 
     private var tapSurface: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                .fill(.thinMaterial)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(tapSurfaceFocused ? Color.accentColor : Color.secondary.opacity(0.35), lineWidth: 2)
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                        .strokeBorder(
+                            tapSurfaceFocused ? Color.accentColor : HubDesignSystem.glassStroke,
+                            lineWidth: tapSurfaceFocused ? 2 : 0.5
+                        )
                 }
 
             VStack(spacing: 8) {
@@ -306,8 +309,7 @@ public struct BPMTapperView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard()
     }
 
     private var displayedBPMText: String {

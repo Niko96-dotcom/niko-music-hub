@@ -38,8 +38,7 @@ struct ArchiveFirstRunView: View {
         }
         .padding(32)
         .frame(maxWidth: 480, alignment: .leading)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.shell)
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
     }
 }

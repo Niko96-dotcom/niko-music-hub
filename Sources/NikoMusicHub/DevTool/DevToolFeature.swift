@@ -77,7 +77,7 @@ struct DevToolDetailView: View {
         .padding(.bottom, 24)
         .padding(.top, 56)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
         .onAppear {
             refreshState()
         }

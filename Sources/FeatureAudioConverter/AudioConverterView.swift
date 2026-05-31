@@ -33,7 +33,7 @@ public struct AudioConverterView: View {
             .frame(minWidth: 320, idealWidth: 640, maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.clear)
         .fileImporter(
             isPresented: $fileImporterVisible,
             allowedContentTypes: allowedAudioTypes,
@@ -67,8 +67,8 @@ public struct AudioConverterView: View {
 
     private var intakeSurface: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                .fill(.thinMaterial)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(
@@ -133,8 +133,7 @@ public struct AudioConverterView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard()
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -352,8 +351,7 @@ public struct AudioConverterView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.sourceURL.lastPathComponent)
         .accessibilityValue(statusText(for: row))

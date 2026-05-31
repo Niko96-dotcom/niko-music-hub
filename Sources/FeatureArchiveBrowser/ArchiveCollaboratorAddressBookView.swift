@@ -1,3 +1,4 @@
+import AppCore
 import NikoMusicCore
 import SwiftUI
 
@@ -28,7 +29,6 @@ struct ArchiveCollaboratorAddressBookView: View {
             }
         }
         .padding(8)
-        .background(ArchiveDesignTokens.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 }

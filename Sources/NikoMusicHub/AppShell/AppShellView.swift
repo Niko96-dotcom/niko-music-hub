@@ -22,15 +22,16 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: HubDesignSystem.Spacing.shell) {
             if showToolSidebar {
                 ToolSidebarView(
                     context: context,
                     registry: registry,
                     selectedToolID: $selectedToolID
                 )
-                .frame(minWidth: 220, idealWidth: 240, maxWidth: 270)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(minWidth: 220, idealWidth: 248, maxWidth: 272)
+                .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
                 collapsedRail(
                     systemImage: "sidebar.left",
@@ -43,13 +44,14 @@ struct AppShellView: View {
             activeToolView
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .toolbar { shellToolbar }
+                .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
 
             if showOutputInbox {
                 OutputInboxInspectorView(context: context)
-                    .frame(minWidth: 280, idealWidth: 300, maxWidth: 340)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(minWidth: 280, idealWidth: 308, maxWidth: 340)
+                    .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                    .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
             } else {
                 collapsedRail(
                     systemImage: "sidebar.right",
@@ -59,9 +61,9 @@ struct AppShellView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(HubShellBackground())
     }
 
     private var minWindowWidth: CGFloat {
@@ -101,30 +103,32 @@ struct AppShellView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(maxHeight: .infinity)
-                .frame(width: 28)
+                .frame(width: 32)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
     }
 
     @ViewBuilder
     private var activeToolView: some View {
-        if let selectedToolID,
-           let feature = registry.features.first(where: { $0.metadata.id == selectedToolID }) {
-            feature.makeView(context: context)
-        } else {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("No tools registered")
-                    .font(.system(size: 22, weight: .semibold))
-                Text("Register a ToolFeature in the composition root.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+        Group {
+            if let selectedToolID,
+               let feature = registry.features.first(where: { $0.metadata.id == selectedToolID }) {
+                feature.makeView(context: context)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("No tools registered")
+                        .font(HubDesignSystem.Typography.screenTitle())
+                    Text("Register a ToolFeature in the composition root.")
+                        .font(HubDesignSystem.Typography.body())
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(24)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(24)
-            .background(Color(nsColor: .windowBackgroundColor))
         }
+        .toolbar { shellToolbar }
     }
 }

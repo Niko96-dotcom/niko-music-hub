@@ -7,47 +7,52 @@ struct ToolSidebarView: View {
     @Binding var selectedToolID: ToolFeatureID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 if let logo = HubBrandLogo.sidebar {
                     logo
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: 28, height: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                         .accessibilityHidden(true)
                 }
-                Text("Niko Music Hub")
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Niko Music Hub")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                    Text("Local tools")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            .padding(.top, 18)
+            .padding(.bottom, 10)
 
             Text("Tools")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
                 .padding(.horizontal, 16)
+                .padding(.bottom, 4)
 
             ForEach(registry.features.map(\.metadata), id: \.id) { metadata in
                 Button {
                     selectedToolID = metadata.id
                 } label: {
                     Label(metadata.shortLabel, systemImage: metadata.systemImage)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13, weight: isSelected(metadata) ? .semibold : .medium))
+                        .symbolRenderingMode(.hierarchical)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 9)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(selectedToolID == metadata.id ? Color.white : Color.primary)
-                .background {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(selectedToolID == metadata.id ? Color.accentColor : Color.clear)
-                }
+                .hubSidebarNavRow(isSelected: isSelected(metadata))
                 .accessibilityLabel(metadata.displayName)
                 .accessibilityValue(metadata.shortLabel)
                 .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
@@ -57,12 +62,17 @@ struct ToolSidebarView: View {
 
             if let context {
                 HelperToolsHealthStrip(context: context)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 16)
+                    .padding(12)
+                    .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 14)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .hubPanelBackground()
+    }
+
+    private func isSelected(_ metadata: ToolMetadata) -> Bool {
+        selectedToolID == metadata.id
     }
 }
