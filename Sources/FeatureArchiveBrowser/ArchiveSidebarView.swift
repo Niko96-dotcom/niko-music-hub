@@ -10,14 +10,14 @@ struct ArchiveSidebarView: View {
     let onChooseRoot: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
             archiveToolbar
 
             rootsSection
 
-            shelfPicker
+            shelfAndBrowseChipStrip
+
             collaboratorShelfPicker
-            browseControls
 
             searchField
                 .disabled(viewModel.songs.isEmpty)
@@ -28,8 +28,8 @@ struct ArchiveSidebarView: View {
 
             if let status = viewModel.statusMessage {
                 Text(status)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
 
@@ -49,11 +49,18 @@ struct ArchiveSidebarView: View {
     }
 
     private var archiveToolbar: some View {
-        HStack(spacing: 8) {
-            Label("Archive", systemImage: "music.note.house")
-                .font(.system(size: compactList ? 14 : 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color.primary)
-                .labelStyle(.titleAndIcon)
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            Text("Archive")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+
+            if !viewModel.songs.isEmpty {
+                Text("\(viewModel.songs.count) songs")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous))
+            }
 
             Spacer(minLength: 4)
 
@@ -91,9 +98,9 @@ struct ArchiveSidebarView: View {
                     )
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "plus")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 28, height: 28)
+                    .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
@@ -106,8 +113,8 @@ struct ArchiveSidebarView: View {
     private var rootsSection: some View {
         if viewModel.roots.isEmpty {
             Text("Add an archive root to begin.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             DisclosureGroup(isExpanded: $sidebarUI.rootsSectionExpanded) {
@@ -116,10 +123,10 @@ struct ArchiveSidebarView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(.secondary)
                     Text("\(viewModel.roots.count) root\(viewModel.roots.count == 1 ? "" : "s")")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.caption().weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
             }
             .onChange(of: viewModel.roots.count) { _, count in
@@ -128,6 +135,70 @@ struct ArchiveSidebarView: View {
                 }
             }
         }
+    }
+
+    private var shelfAndBrowseChipStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ArchiveSmartShelf.allCases, id: \.self) { shelf in
+                    ArchiveShelfChip(
+                        title: shelf.sidebarChipTitle,
+                        isSelected: viewModel.selectedShelf == shelf
+                    ) {
+                        viewModel.selectShelf(shelf)
+                    }
+                    .disabled(viewModel.songs.isEmpty)
+                }
+
+                sortMenuChip
+
+                ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
+                    HubIconButton.archiveBrowseFilter(
+                        filter: filter,
+                        isSelected: viewModel.browseFilter.contains(filter),
+                        isEnabled: !viewModel.songs.isEmpty
+                    ) {
+                        viewModel.toggleBrowseFilter(filter)
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .disabled(viewModel.songs.isEmpty)
+    }
+
+    private var sortMenuChip: some View {
+        Menu {
+            Picker("Sort", selection: Binding(
+                get: { viewModel.sortMode },
+                set: { viewModel.setSortMode($0) }
+            )) {
+                ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(viewModel.sortMode.title)
+                    .font(HubDesignSystem.Typography.caption())
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(HubDesignSystem.Colors.accent)
+            .padding(.horizontal, 10)
+            .frame(height: HubDesignSystem.Size.chipHeight)
+            .background {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    .fill(HubDesignSystem.Colors.accentTint)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    .strokeBorder(HubDesignSystem.Colors.selectedStroke, lineWidth: 1.5)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(viewModel.songs.isEmpty)
     }
 
     @ViewBuilder
@@ -147,94 +218,30 @@ struct ArchiveSidebarView: View {
         }
     }
 
-    @ViewBuilder
-    private var browseControls: some View {
-        let sortPicker = Picker("Sort", selection: Binding(
-            get: { viewModel.sortMode },
-            set: { viewModel.setSortMode($0) }
-        )) {
-            ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
-                Text(mode.title).tag(mode)
-            }
-        }
-        .labelsHidden()
-        .disabled(viewModel.songs.isEmpty)
-
-        if compactList {
-            HStack(spacing: 6) {
-                sortPicker.pickerStyle(.menu)
-                browseFilterButtons
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                sortPicker.pickerStyle(.segmented)
-                browseFilterButtons
-            }
-        }
-    }
-
-    private var browseFilterButtons: some View {
-        HStack(spacing: 6) {
-            ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
-                HubIconButton.archiveBrowseFilter(
-                    filter: filter,
-                    isSelected: viewModel.browseFilter.contains(filter),
-                    isEnabled: !viewModel.songs.isEmpty
-                ) {
-                    viewModel.toggleBrowseFilter(filter)
-                }
-            }
-        }
-    }
-
     private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.secondary)
-            TextField("Search", text: Binding(
-                get: { viewModel.searchQuery },
-                set: { viewModel.setSearchQuery($0) }
-            ))
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-        }
+        TextField("Search songs", text: Binding(
+            get: { viewModel.searchQuery },
+            set: { viewModel.setSearchQuery($0) }
+        ))
+        .textFieldStyle(.plain)
+        .font(HubDesignSystem.Typography.body())
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
+        .frame(minHeight: 34)
         .hubGlassCard(cornerRadius: HubDesignSystem.Radius.pill)
     }
 
     private var skippedMatchesCallout: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label("\(viewModel.skippedSearchMatches.count) skipped", systemImage: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
             ForEach(Array(viewModel.skippedSearchMatches.prefix(2).enumerated()), id: \.offset) { _, match in
                 Text(match.entry.label)
-                    .font(.system(size: 10))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.accent)
                     .lineLimit(1)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var shelfPicker: some View {
-        let picker = Picker("Shelf", selection: Binding(
-            get: { viewModel.selectedShelf },
-            set: { viewModel.selectShelf($0) }
-        )) {
-            ForEach(ArchiveSmartShelf.allCases, id: \.self) { shelf in
-                Text(shelf.title).tag(shelf)
-            }
-        }
-        .labelsHidden()
-        .disabled(viewModel.songs.isEmpty)
-
-        if compactList {
-            picker.pickerStyle(.menu)
-        } else {
-            picker.pickerStyle(.segmented)
         }
     }
 
@@ -266,7 +273,7 @@ struct ArchiveSidebarView: View {
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 6) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in
                         Button {
                             viewModel.selectSong(song)
@@ -288,10 +295,10 @@ struct ArchiveSidebarView: View {
     private func archiveEmptyState(title: String, body: String, systemImage: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .semibold))
+                .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
             Text(body)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
