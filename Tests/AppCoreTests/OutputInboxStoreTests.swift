@@ -108,6 +108,7 @@ final class OutputInboxStoreTests: XCTestCase {
             "OutputHandoff.dragFileURL",
             "NSItemProvider(contentsOf:",
             "Reveal in Finder",
+            "contextMenu",
             ".onDrag",
             "contentShape",
             "Drag the file to your DAW or Finder",
