@@ -227,7 +227,7 @@ struct ArchiveSidebarView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(minHeight: 34)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.pill, interactive: true)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.pill, style: .continuous))
     }
 
     private var skippedMatchesCallout: some View {
@@ -303,6 +303,6 @@ struct ArchiveSidebarView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row)
+        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
     }
 }

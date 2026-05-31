@@ -2,11 +2,11 @@ import SwiftUI
 
 /// Shared tool-pane spacing so every tab aligns with the shell chrome.
 public enum HubToolLayout {
-    public static let horizontalPadding: CGFloat = 24
-    public static let bottomPadding: CGFloat = 24
-    public static let topPadding: CGFloat = 16
-    public static let sectionSpacing: CGFloat = 24
-    public static let maxContentWidth: CGFloat = 680
+    public static let horizontalPadding: CGFloat = 16
+    public static let bottomPadding: CGFloat = 16
+    public static let topPadding: CGFloat = 12
+    public static let sectionSpacing: CGFloat = 20
+    public static let maxContentWidth: CGFloat = 640
 }
 
 public extension View {

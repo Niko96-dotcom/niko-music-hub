@@ -83,8 +83,7 @@ struct SongDetailView: View {
                     .onSubmit { commitAppNote() }
             }
         }
-        .padding(12)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .padding(.vertical, 8)
     }
 
     private var previewCard: some View {
@@ -114,8 +113,7 @@ struct SongDetailView: View {
                 }
             }
         }
-        .padding(12)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .padding(.vertical, 8)
     }
 
     private var actionsSection: some View {
@@ -171,8 +169,7 @@ struct SongDetailView: View {
         } label: {
             sectionTitle("Details")
         }
-        .padding(12)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .padding(.vertical, 8)
     }
 
     private var hideSection: some View {

@@ -41,10 +41,9 @@ struct SongCardView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(
-            cornerRadius: HubDesignSystem.Radius.card,
-            selected: isSelected,
-            interactive: true
+        .background(
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(isSelected ? Color.primary.opacity(0.08) : Color.clear)
         )
     }
 

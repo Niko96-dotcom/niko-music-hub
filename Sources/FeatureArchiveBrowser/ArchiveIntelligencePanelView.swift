@@ -74,6 +74,5 @@ struct ArchiveIntelligencePanelView: View {
             }
         }
         .padding(10)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 }

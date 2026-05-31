@@ -145,9 +145,13 @@ struct OutputInboxInspectorView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(10)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.row, interactive: revealable)
+        .background(
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+        )
         .onHover { hovering in
             hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
         }

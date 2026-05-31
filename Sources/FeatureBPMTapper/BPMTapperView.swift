@@ -322,8 +322,8 @@ public struct BPMTapperView: View {
                 }
             }
         }
-        .padding(12)
-        .hubGlassCard()
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
     }
 
     private func animateTapPress() {

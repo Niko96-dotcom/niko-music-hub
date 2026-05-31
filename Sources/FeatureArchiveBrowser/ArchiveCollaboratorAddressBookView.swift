@@ -29,6 +29,5 @@ struct ArchiveCollaboratorAddressBookView: View {
             }
         }
         .padding(8)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 }
