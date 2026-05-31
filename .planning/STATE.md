@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Full UI Redesign
-status: executing
+status: milestone_complete_pending_audit
 last_updated: "2026-05-31T22:30:00.000Z"
 last_activity: 2026-05-31 — Phase 22 downloader & settings UI executed
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
-  percent: 71
+  completed_phases: 7
+  total_plans: 13
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: `.planning/PROJECT.md` (updated 2026-05-31 for v1.3)
 
 ## Current Position
 
-Phase: 23 — Archive Browse & Sidebar (next)
+Phase: —
 Plan: —
-Status: Phase 22 complete — ready for phase 23
-Last activity: 2026-05-31 — Phase 22 downloader & settings UI shipped
+Status: v1.3 phases 19–25 complete — run `/gsd-audit-milestone` then `/gsd-complete-milestone`
+Last activity: 2026-05-31 — Phase 25 polish; v1.3 UI redesign executed via autonomous
 
 ## Shipped (v1.2)
 
@@ -54,7 +54,8 @@ Items acknowledged at v1.2 milestone close (2026-05-30):
 
 ## Operator Next Steps
 
-- `/gsd-autonomous` — execute phases 19–25 (discuss → plan → execute)
+- `/gsd-audit-milestone` — close v1.3 Full UI Redesign
+- `/gsd-complete-milestone` — archive milestone after audit
 - Spec reference: `docs/UI-REDESIGN-PLAN.md`
 - Optional: `/gsd-autonomous --interactive` for discuss questions inline
 - Producer Mac UAT for phases 7–10 still deferred from v1.1

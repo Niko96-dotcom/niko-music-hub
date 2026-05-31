@@ -9,7 +9,7 @@
 - ✅ **v1.0 MVP** — Phases 1-6 (shipped 2026-05-11)
 - ✅ **v1.1 Production-Ready Tools** — Phases 7-10 (shipped 2026-05-23)
 - ✅ **v1.2 Cubase Archive Recall** — Phases 11-18 (shipped 2026-05-30)
-- 🚧 **v1.3 Full UI Redesign** — Phases 19-25 (in progress)
+- ✅ **v1.3 Full UI Redesign** — Phases 19-25 (shipped 2026-05-31)
 
 **Spec:** `docs/UI-REDESIGN-PLAN.md`  
 **Requirements:** `.planning/REQUIREMENTS.md`  
@@ -66,8 +66,8 @@ Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP
 - [x] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
 - [x] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b) (completed 2026-05-31)
 - [x] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a) (completed 2026-05-31)
-- [ ] **Phase 24: Archive Detail & Panels** — Grouped detail, waveform hero, first-run, sheets, panels (Wave 4b)
-- [ ] **Phase 25: UI Polish & Visual Regression** — Error card, headers, window default, full-page visual pass (Wave 5)
+- [x] **Phase 24: Archive Detail & Panels** — Grouped detail, waveform hero, first-run, sheets, panels (Wave 4b) (completed 2026-05-31)
+- [x] **Phase 25: UI Polish & Visual Regression** — Error card, headers, window default, full-page visual pass (Wave 5) (completed 2026-05-31)
 
 ## Phase Details (v1.3)
 
