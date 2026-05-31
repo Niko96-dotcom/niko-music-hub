@@ -71,9 +71,8 @@ struct ArchiveSidebarView: View {
                 Button {
                     showNewSongSheet = true
                 } label: {
-                    Label("New song folder", systemImage: "plus.circle")
+                    Label("New song draft", systemImage: "plus.circle")
                 }
-                .disabled(viewModel.roots.isEmpty)
 
                 Button {
                     onChooseRoot()

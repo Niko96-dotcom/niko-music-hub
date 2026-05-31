@@ -27,13 +27,24 @@ public enum NewSongFolderCreator {
 
     public static func create(
         request: NewSongRequest,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        protectedRoots: [URL] = []
     ) throws -> Song {
         let trimmed = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw CreationError.emptyName
         }
-        let songFolder = request.root.appendingPathComponent(trimmed, isDirectory: true)
+        guard isSafeFolderName(trimmed) else {
+            throw CreationError.invalidName
+        }
+        let destinationRoot = request.root.standardizedFileURL
+        guard !protectedRoots.contains(where: { destinationRoot.isEqualToOrDescendant(of: $0) }) else {
+            throw CreationError.archiveRootIsReadOnly
+        }
+        let songFolder = destinationRoot.appendingPathComponent(trimmed, isDirectory: true).standardizedFileURL
+        guard songFolder.isDescendant(of: destinationRoot) else {
+            throw CreationError.invalidName
+        }
         guard !fileManager.fileExists(atPath: songFolder.path) else {
             throw CreationError.folderExists
         }
@@ -60,6 +71,11 @@ public enum NewSongFolderCreator {
         )
         song.sidecarNotes = request.appNote
         return song
+    }
+
+    private static func isSafeFolderName(_ name: String) -> Bool {
+        guard name != ".", name != ".." else { return false }
+        return name.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\")) == nil
     }
 
     private static func copyTemplate(
@@ -89,6 +105,22 @@ public enum NewSongFolderCreator {
 
     public enum CreationError: Error, Equatable {
         case emptyName
+        case invalidName
         case folderExists
+        case archiveRootIsReadOnly
+    }
+}
+
+private extension URL {
+    func isDescendant(of ancestor: URL) -> Bool {
+        let path = standardizedFileURL.path
+        let ancestorPath = ancestor.standardizedFileURL.path
+        return path.hasPrefix(ancestorPath + "/")
+    }
+
+    func isEqualToOrDescendant(of ancestor: URL) -> Bool {
+        let path = standardizedFileURL.path
+        let ancestorPath = ancestor.standardizedFileURL.path
+        return path == ancestorPath || path.hasPrefix(ancestorPath + "/")
     }
 }

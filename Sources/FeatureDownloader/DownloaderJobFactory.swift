@@ -7,7 +7,7 @@ public struct DownloaderJobFactory: Sendable {
     public func makeJobOptions(
         sourceURL: URL,
         outputDirectory: URL,
-        fileNameTemplate: String = "%(title)s.%(ext)s",
+        fileNameTemplate: String = DownloadRequest.defaultOutputTemplate,
         formatSelection: DownloadFormatSelection = .default,
         retries: Int = 3
     ) -> DownloadJobOptions {

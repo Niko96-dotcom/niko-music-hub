@@ -54,6 +54,24 @@ final class YtDlpDownloaderTests: XCTestCase {
         XCTAssertEqual(runner.lastRequest?.arguments.contains("-f"), true)
         XCTAssertEqual(runner.lastRequest?.timeoutSeconds, 90)
     }
+
+    func testDownloadDoesNotForceOverwriteExistingOutputs() async throws {
+        let runner = CapturingRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: FileManager.default.temporaryDirectory
+        )
+
+        _ = try await downloader.download(request) { _ in }
+
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        XCTAssertFalse(arguments.contains("--force-overwrites"))
+        XCTAssertTrue(arguments.contains("--no-overwrites"))
+        let outputFlagIndex = try XCTUnwrap(arguments.firstIndex(of: "-o"))
+        XCTAssertTrue(arguments[outputFlagIndex + 1].contains("%(id)s"))
+    }
 }
 
 private struct NonZeroExitRunner: ExternalProcessRunning {

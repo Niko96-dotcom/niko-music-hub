@@ -12,8 +12,12 @@ struct NewSongSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("New song")
+            Text("New song draft")
                 .font(.system(size: 18, weight: .semibold))
+
+            Text("Drafts are created in the app output folder, not inside archive roots.")
+                .font(.system(size: 11))
+                .foregroundStyle(ArchiveDesignTokens.textSecondary)
 
             TextField("Song folder name", text: $name)
                 .textFieldStyle(.roundedBorder)
@@ -47,10 +51,10 @@ struct NewSongSheet: View {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
                 Spacer()
-                Button("Create") { createSong() }
+                Button("Create Draft") { createSong() }
                     .buttonStyle(.borderedProminent)
                     .tint(ArchiveDesignTokens.accent)
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.roots.isEmpty)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
@@ -58,13 +62,9 @@ struct NewSongSheet: View {
     }
 
     private func createSong() {
-        guard let root = viewModel.roots.first else {
-            errorMessage = "Add an archive root first."
-            return
-        }
         let request = NewSongRequest(
             name: name,
-            root: root,
+            root: viewModel.newSongDraftRoot,
             collaboratorIDs: Array(selectedCollaboratorIDs),
             appNote: note.isEmpty ? nil : note
         )
@@ -75,6 +75,10 @@ struct NewSongSheet: View {
             errorMessage = "A folder with that name already exists."
         } catch NewSongFolderCreator.CreationError.emptyName {
             errorMessage = "Enter a song name."
+        } catch NewSongFolderCreator.CreationError.invalidName {
+            errorMessage = "Use a plain folder name without slashes or parent-folder segments."
+        } catch NewSongFolderCreator.CreationError.archiveRootIsReadOnly {
+            errorMessage = "Archive roots are read-only. Choose an output folder outside the archive."
         } catch {
             errorMessage = error.localizedDescription
         }

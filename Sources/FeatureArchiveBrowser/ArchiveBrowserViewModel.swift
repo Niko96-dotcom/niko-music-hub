@@ -118,14 +118,18 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         needsFirstRunOnboarding = false
     }
 
+    var newSongDraftRoot: URL {
+        let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
+            ?? StoredFolderLocation.defaultOutputFolder
+        return outputFolder.appendingPathComponent("New Song Drafts", isDirectory: true)
+    }
+
     private func applyBootstrapRootWhenEmpty() {
         if runtime.usesIsolatedSettingsSuite {
             return
         }
         guard roots.isEmpty, let bootstrap = ArchiveDefaultRootPolicy.bootstrapRoot(runtime: runtime) else { return }
         roots = [bootstrap]
-        persistRoots()
-        completeArchiveOnboarding()
     }
 
     func persistRoots() {
@@ -236,7 +240,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func loadCollaborators() {
         guard let collaboratorStore else { return }
-        collaborators = (try? collaboratorStore.loadAll()) ?? []
+        do {
+            collaborators = try collaboratorStore.loadAll()
+        } catch {
+            diagnostics.log(.error, "Collaborator load failed: \(error)")
+            collaborators = []
+        }
     }
 
     func upsertCollaborator(name: String) -> Collaborator? {
@@ -435,35 +444,37 @@ extension ArchiveBrowserViewModel {
 
 extension ArchiveBrowserViewModel {
     func updateVirtualTitle(for song: Song, title: String) {
-        guard var updated = latestSong(matching: song) else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.virtualTitle = trimmed.isEmpty ? nil : trimmed
-        commitSongMetadataUpdate(updated)
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.virtualTitle = trimmed.isEmpty ? nil : trimmed
+        }
     }
 
     func updateAppNote(for song: Song, note: String) {
-        guard var updated = latestSong(matching: song) else { return }
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.appNote = trimmed.isEmpty ? nil : trimmed
-        commitSongMetadataUpdate(updated)
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.appNote = trimmed.isEmpty ? nil : trimmed
+        }
     }
 
     func updateAliases(for song: Song, aliasesText: String) {
-        guard var updated = latestSong(matching: song) else { return }
         let aliases = aliasesText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        updated.aliases = aliases
-        commitSongMetadataUpdate(updated)
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.aliases = aliases
+        }
     }
 
     func setManualMainPreview(for song: Song, candidateID: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        guard updated.previewCandidates.contains(where: { $0.id == candidateID }) else { return }
-        updated.previewSelectionMode = .manual
-        updated.mainPreviewCandidateID = candidateID
-        commitSongMetadataUpdate(updated)
+        guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
+            return
+        }
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.previewSelectionMode = .manual
+            metadata.manualMainPreviewID = candidateID
+        }
     }
 
     func revertPreviewToAuto(for song: Song) {
@@ -490,12 +501,13 @@ extension ArchiveBrowserViewModel {
     }
 
     func setManualMainCPR(for song: Song, versionID: String) {
-        guard var updated = latestSong(matching: song) else { return }
-        guard updated.visibleProjectVersions.contains(where: { $0.id == versionID }) else { return }
-        updated.cprSelectionMode = .manual
-        updated.manualMainCPRID = versionID
-        updated.latestCPR = updated.visibleProjectVersions.first(where: { $0.id == versionID })
-        commitSongMetadataUpdate(updated)
+        guard songs.first(where: { $0.id == song.id })?.visibleProjectVersions.contains(where: { $0.id == versionID }) == true else {
+            return
+        }
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.cprSelectionMode = .manual
+            metadata.manualMainCPRID = versionID
+        }
     }
 
     func revertCPRToAuto(for song: Song) {
@@ -520,25 +532,22 @@ extension ArchiveBrowserViewModel {
     }
 
     func setSongHidden(_ song: Song, hidden: Bool) {
-        guard var updated = latestSong(matching: song) else { return }
-        updated.isIgnored = hidden
-        commitSongMetadataUpdate(updated)
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.isIgnored = hidden
+        }
         if hidden, selectedSong?.id == song.id {
             selectedSong = nil
         }
     }
 
     func assignCollaborators(to song: Song, collaboratorIDs: [String]) {
-        guard var updated = latestSong(matching: song) else { return }
-        updated.collaboratorIDs = collaboratorIDs
-        updated.collaboratorNames = collaboratorIDs.compactMap { id in
-            collaborators.first(where: { $0.id == id })?.displayName
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.collaboratorIDs = collaboratorIDs
         }
-        commitSongMetadataUpdate(updated)
     }
 
     func createNewSong(request: NewSongRequest) throws -> Song {
-        var created = try NewSongFolderCreator.create(request: request)
+        var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)
         created = catalog.mergeUserMetadata(into: [created], collaborators: collaborators).first ?? created
         mutateCatalog {
             var updatedSongs = songs
@@ -590,10 +599,6 @@ extension ArchiveBrowserViewModel {
                 scannedAt: scanDiagnostics?.scannedAt ?? Date()
             )
         }
-    }
-
-    private func latestSong(matching song: Song) -> Song? {
-        songs.first { $0.id == song.id }
     }
 
     private func replaceSong(_ updated: Song) {

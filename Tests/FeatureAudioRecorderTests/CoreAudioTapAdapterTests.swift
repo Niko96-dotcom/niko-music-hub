@@ -1,4 +1,4 @@
-import FeatureAudioConverter
+import AppCore
 import XCTest
 @testable import FeatureAudioRecorder
 

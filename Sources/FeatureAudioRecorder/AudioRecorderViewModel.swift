@@ -1,6 +1,5 @@
 import AppCore
 import AVFAudio
-import FeatureAudioConverter
 import Foundation
 
 public enum RecordingDisplayState: Equatable {

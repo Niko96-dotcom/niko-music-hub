@@ -53,6 +53,30 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(try store.listItems().first?.status, .missing)
     }
 
+    func testConcurrentAddsPreserveEveryItem() async throws {
+        let store = try makeStore()
+        let baseDirectory = temporaryDirectory()
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0..<40 {
+                group.addTask {
+                    let item = OutputInboxItem(
+                        fileURL: baseDirectory.appendingPathComponent("item-\(index).wav"),
+                        sourceToolID: "stress",
+                        status: .available,
+                        metadata: ["index": "\(index)"]
+                    )
+                    try store.addItem(item)
+                }
+            }
+            try await group.waitForAll()
+        }
+
+        let indexes = try store.listItems().compactMap { $0.metadata["index"] }.sorted()
+        XCTAssertEqual(indexes.count, 40)
+        XCTAssertEqual(Set(indexes).count, 40)
+    }
+
     func testRefreshAvailabilityDoesNotNotifyWhenItemsAreUnchanged() throws {
         let store = try makeStore()
         let item = OutputInboxItem(

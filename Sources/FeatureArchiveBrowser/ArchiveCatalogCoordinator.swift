@@ -40,7 +40,13 @@ struct ArchiveCatalogCoordinator {
         collaborators: [Collaborator]
     ) -> [Song] {
         guard songMetadataStore != nil || collaboratorStore != nil else { return scanned }
-        let metadata = (try? songMetadataStore?.loadAll()) ?? [:]
+        let metadata: [String: SongUserMetadata]
+        do {
+            metadata = try songMetadataStore?.loadAll() ?? [:]
+        } catch {
+            diagnostics.log(.error, "Song metadata load failed: \(error)")
+            metadata = [:]
+        }
         let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
         return ArchiveMetadataMerger.merge(
             scanned: scanned,
@@ -54,7 +60,14 @@ struct ArchiveCatalogCoordinator {
         collaborators: [Collaborator]
     ) -> (songs: [Song], scannedAt: Date)? {
         guard let archiveIndexStore else { return nil }
-        guard let snapshot = try? archiveIndexStore.loadLatest() else { return nil }
+        let snapshot: ArchiveIndexSnapshot?
+        do {
+            snapshot = try archiveIndexStore.loadLatest()
+        } catch {
+            diagnostics.log(.error, "Archive cache load failed: \(error)")
+            return nil
+        }
+        guard let snapshot else { return nil }
         guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return nil }
         let songs = mergeUserMetadata(into: snapshot.songs, collaborators: collaborators)
         return (songs, snapshot.scannedAt)

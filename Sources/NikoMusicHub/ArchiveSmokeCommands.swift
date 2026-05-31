@@ -1,3 +1,4 @@
+#if DEBUG
 import AppCore
 import FeatureArchiveBrowser
 import Foundation
@@ -72,3 +73,4 @@ private struct SmokeNoopFileActions: FileActions {
     func chooseExecutable(prompt: String) -> URL? { nil }
     func revealInFinder(_ url: URL) {}
 }
+#endif

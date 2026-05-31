@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
@@ -41,3 +42,4 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case skippedSearchDiagnosticsExportMissingMatch
     case skippedSearchPanelActiveSkippedSearchMismatch
 }
+#endif

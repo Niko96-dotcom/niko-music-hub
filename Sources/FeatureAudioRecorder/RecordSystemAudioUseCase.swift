@@ -59,11 +59,23 @@ public final class RecordSystemAudioUseCase: Sendable {
 
     public func generateOutputFilename(override: String?) -> String {
         if let override = override, !override.isEmpty {
-            return override
+            let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
+            let basename = URL(fileURLWithPath: trimmed).lastPathComponent
+            return basename.isEmpty ? defaultOutputFilename() : ensureWAVExtension(basename)
         }
+        return defaultOutputFilename()
+    }
+
+    private func defaultOutputFilename() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
         return "Recording \(formatter.string(from: Date())).wav"
+    }
+
+    private func ensureWAVExtension(_ filename: String) -> String {
+        let url = URL(fileURLWithPath: filename)
+        guard url.pathExtension.isEmpty else { return filename }
+        return "\(filename).wav"
     }
 
     private func resolveFilenameCollision(url: URL) -> URL {

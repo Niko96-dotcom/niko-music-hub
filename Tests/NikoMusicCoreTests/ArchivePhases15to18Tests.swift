@@ -124,6 +124,24 @@ final class ArchivePhases15to18Tests: XCTestCase {
         ))
     }
 
+    func testNewSongCreatorRejectsNamesThatEscapeDestinationRoot() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-contained-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertThrowsError(
+            try NewSongFolderCreator.create(
+                request: NewSongRequest(name: "../Outside", root: root)
+            )
+        ) { error in
+            XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .invalidName)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: root.deletingLastPathComponent().appendingPathComponent("Outside").path
+        ))
+    }
+
     func testExportIndexJSON() throws {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/export", isDirectory: true),

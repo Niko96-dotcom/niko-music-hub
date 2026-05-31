@@ -25,7 +25,9 @@ struct NikoMusicHubApp: App {
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         UILaunchTool.applyFromLaunchArguments()
+        #if DEBUG
         _ = ArchiveSmokeCommands.runIfRequested()
+        #endif
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

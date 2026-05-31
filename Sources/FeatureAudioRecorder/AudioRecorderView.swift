@@ -1,5 +1,4 @@
 import AppCore
-import FeatureAudioConverter
 import SwiftUI
 
 public struct AudioRecorderView: View {

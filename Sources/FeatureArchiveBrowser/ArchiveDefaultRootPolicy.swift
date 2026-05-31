@@ -3,9 +3,7 @@ import Foundation
 
 /// Seeds a first archive root for local development when settings are empty.
 enum ArchiveDefaultRootPolicy {
-    static let developerCubaseProjectsPath = "/Users/niko/Music/00_Cubase Project"
-
-    /// Optional bootstrap root when the user has not chosen any public roots yet.
+    /// Optional bootstrap root when the user has explicitly provided one for this run.
     static func bootstrapRoot(
         fileManager: FileManager = .default,
         runtime: MusicHubRuntimeEnvironment = .current
@@ -14,12 +12,7 @@ enum ArchiveDefaultRootPolicy {
            fileManager.directoryExists(at: url) {
             return url
         }
-        #if DEBUG
-        let url = URL(fileURLWithPath: developerCubaseProjectsPath, isDirectory: true).standardizedFileURL
-        return fileManager.directoryExists(at: url) ? url : nil
-        #else
         return nil
-        #endif
     }
 }
 
