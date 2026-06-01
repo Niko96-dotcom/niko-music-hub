@@ -1,0 +1,16 @@
+.build/
+.swiftpm/
+DerivedData/
+dist/
+.DS_Store
+.ai/
+.codex/
+.planning/
+.playwright-mcp/
+*.xcresult
+*.log
+.env
+.env.*
+*.secret
+*.key
+*.pem

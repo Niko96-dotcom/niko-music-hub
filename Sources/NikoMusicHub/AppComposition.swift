@@ -1,0 +1,77 @@
+import AppCore
+import AppKit
+import FeatureArchiveBrowser
+import FeatureAudioConverter
+import FeatureBPMTapper
+import FeatureAudioRecorder
+import FeatureDownloader
+import Foundation
+
+struct AppComposition {
+    let registry: ToolRegistry
+    let context: ToolContext
+
+    static func make() -> AppComposition {
+        var features: [any ToolFeature] = [
+            ArchiveBrowserFeature(),
+            BPMTapperFeature(),
+            AudioConverterFeature(),
+            AudioRecorderFeature(),
+            DownloaderFeature()
+        ]
+        if ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SHOW_DEV_TOOL"] == "1" {
+            features.append(DevToolFeature())
+        }
+        let registry = try! ToolRegistry(features: features)
+        let context = ToolContext(
+            registeredToolCount: features.count,
+            settingsStore: Self.makeSettingsStore(),
+            outputInboxStore: JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL()),
+            jobRunner: JobRunner(),
+            fileActions: AppKitFileActions(),
+            diagnostics: ConsoleDiagnostics()
+        )
+
+        return AppComposition(registry: registry, context: context)
+    }
+
+    private static func makeSettingsStore() -> SettingsStore {
+        if let suiteName = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_SETTINGS_SUITE"],
+           !suiteName.isEmpty,
+           let defaults = UserDefaults(suiteName: suiteName) {
+            defaults.removePersistentDomain(forName: suiteName)
+            return UserDefaultsSettingsStore(userDefaults: defaults)
+        }
+        return UserDefaultsSettingsStore()
+    }
+}
+
+private enum AppPaths {
+    static func outputInboxStoreURL() -> URL {
+        let supportDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+
+        return supportDirectory
+            .appendingPathComponent("Niko Music Hub", isDirectory: true)
+            .appendingPathComponent("output-inbox.json", isDirectory: false)
+    }
+}
+
+private struct AppKitFileActions: FileActions {
+    @MainActor
+    func chooseOutputFolder() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose Output Folder"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    @MainActor
+    func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}

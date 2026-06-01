@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a product improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should Niko Music Hub do?
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety fit
+      options:
+        - label: This can work without renaming, moving, deleting, or rewriting archive files.
+          required: true
+        - label: This can be tested with generated fixtures or synthetic files.
+          required: true
