@@ -91,7 +91,7 @@ for required_text in \
   "Start with an archive root" \
   "Add an archive root" \
   "Output Inbox" \
-  "Choose the folder that contains your Cubase song/project folders"; do
+  "Choose the folder that contains your Cubase song folders."; do
   if ! grep -Fq "$required_text" "$PUBLIC_UI_TEXT"; then
     echo "E2E failed: public first-run UI missing: $required_text" >&2
     exit 1

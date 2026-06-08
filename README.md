@@ -6,6 +6,30 @@ Native macOS SwiftUI app for music-production chores around Cubase: browse a loc
 
 The app is local-first. Archive scanning is read-only by default: it never renames, moves, deletes, or rewrites real Cubase/music files.
 
+## Local dev flow
+
+If you do not want to think like a developer, use the friendly front door:
+
+```bash
+./script/dev.sh run
+```
+
+Or double-click `Run Niko Music Hub.command` in Finder. Both paths build a fresh `dist/NikoMusicHub.app`, stop any old running copy, and open the new one.
+
+To check whether this Mac and repo are ready:
+
+```bash
+./script/dev.sh doctor
+```
+
+To prove everything important is green:
+
+```bash
+./script/dev.sh check
+```
+
+See `docs/local-dev-flow.md` for the full no-dev workflow.
+
 ## Build and run
 
 Requirements:
@@ -23,6 +47,12 @@ Produces `dist/NikoMusicHub.app`. The first launch starts clean: add the folder 
 Codex is wired to the same command through `.codex/environments/environment.toml`, so the app Run button builds a fresh bundle and launches Niko Music Hub.
 
 ## Local gates
+
+```bash
+./script/dev.sh check
+```
+
+Equivalent manual gates:
 
 ```bash
 ./script/ci.sh

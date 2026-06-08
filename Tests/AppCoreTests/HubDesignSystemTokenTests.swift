@@ -10,9 +10,9 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Radius.button, 8)
     }
 
-    func testSpacingTokensMatchSpec() {
-        XCTAssertEqual(HubDesignSystem.Spacing.shell, 10)
-        XCTAssertEqual(HubDesignSystem.Spacing.section, 24)
+    func testSpacingTokensMatchCompactSpec() {
+        XCTAssertEqual(HubDesignSystem.Spacing.shell, 8)
+        XCTAssertEqual(HubDesignSystem.Spacing.section, 20)
     }
 
     func testSizeTokensMatchSpec() {
@@ -20,12 +20,14 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
     }
 
-    func testAccentColorMatchesWarmIndigo() {
+    func testAccentColorUsesSystemAccent() {
         let components = rgbaComponents(HubDesignSystem.Colors.accent)
+        let systemComponents = rgbaComponents(.accentColor)
         XCTAssertNotNil(components)
-        XCTAssertEqual(Double(components!.red), 0.35, accuracy: 0.02)
-        XCTAssertEqual(Double(components!.green), 0.42, accuracy: 0.02)
-        XCTAssertEqual(Double(components!.blue), 0.95, accuracy: 0.02)
+        XCTAssertNotNil(systemComponents)
+        XCTAssertEqual(Double(components!.red), Double(systemComponents!.red), accuracy: 0.02)
+        XCTAssertEqual(Double(components!.green), Double(systemComponents!.green), accuracy: 0.02)
+        XCTAssertEqual(Double(components!.blue), Double(systemComponents!.blue), accuracy: 0.02)
     }
 
     func testSelectedRowTokensUseAccentNotSystemAccent() {

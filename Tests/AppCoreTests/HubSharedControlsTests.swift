@@ -5,8 +5,8 @@ import XCTest
 
 final class HubSharedControlsTests: XCTestCase {
     func testHubToolLayoutConstants() {
-        XCTAssertEqual(HubToolLayout.maxContentWidth, 680)
-        XCTAssertEqual(HubToolLayout.topPadding, 16)
+        XCTAssertEqual(HubToolLayout.maxContentWidth, 640)
+        XCTAssertEqual(HubToolLayout.topPadding, 12)
     }
 
     func testStatusDotUsesSevenPointFrame() throws {
