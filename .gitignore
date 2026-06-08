@@ -4,5 +4,7 @@ DerivedData/
 dist/
 .DS_Store
 .ai/runs/
+.ai/ui-review-*.png
+.ai/ui-review-tabs/
 *.xcresult
 *.log

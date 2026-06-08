@@ -16,7 +16,7 @@ struct AppComposition {
     static func make() -> AppComposition {
         let runtime = MusicHubRuntimeEnvironment.current
         let settingsStore = Self.makeSettingsStore(runtime: runtime)
-        let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL())
+        let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL(runtime: runtime))
         let jobRunner = JobRunner()
         let fileActions = AppKitFileActions()
         let diagnostics = ConsoleDiagnostics()
@@ -33,7 +33,7 @@ struct AppComposition {
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics
         )
-        let archiveDatabaseURL = AppPaths.archiveIndexStoreURL()
+        let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
         let archiveIndexStore = try? SQLiteArchiveIndexStore(databaseURL: archiveDatabaseURL)
         let songMetadataStore = try? SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
         let collaboratorStore = try? SQLiteCollaboratorStore(databaseURL: archiveDatabaseURL)
@@ -77,19 +77,41 @@ struct AppComposition {
 }
 
 private enum AppPaths {
-    static func outputInboxStoreURL() -> URL {
+    static func outputInboxStoreURL(runtime: MusicHubRuntimeEnvironment = .current) -> URL {
+        supportDirectory(runtime: runtime)
+            .appendingPathComponent("output-inbox.json", isDirectory: false)
+    }
+
+    static func archiveIndexStoreURL(runtime: MusicHubRuntimeEnvironment = .current) -> URL {
+        supportDirectory(runtime: runtime)
+            .appendingPathComponent("archive-index.sqlite", isDirectory: false)
+    }
+
+    private static func supportDirectory(runtime: MusicHubRuntimeEnvironment) -> URL {
         let supportDirectory = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
 
-        return supportDirectory
+        let appDirectory = supportDirectory
             .appendingPathComponent("Niko Music Hub", isDirectory: true)
-            .appendingPathComponent("output-inbox.json", isDirectory: false)
+
+        guard let suiteName = runtime.settingsSuiteName else {
+            return appDirectory
+        }
+
+        return appDirectory
+            .appendingPathComponent("Isolated", isDirectory: true)
+            .appendingPathComponent(sanitizedPathComponent(suiteName), isDirectory: true)
     }
 
-    static func archiveIndexStoreURL() -> URL {
-        SQLiteArchiveIndexStore.defaultStoreURL()
+    private static func sanitizedPathComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
+        let scalars = value.unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        }
+        let sanitized = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: ".-"))
+        return sanitized.isEmpty ? "isolated" : sanitized
     }
 }
 

@@ -42,7 +42,7 @@ struct OutputInboxInspectorView: View {
     private var headerBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Output")
+                Text("Output Inbox")
                     .font(HubDesignSystem.Typography.sectionTitle())
                 Spacer(minLength: 8)
                 HubIconButton(
