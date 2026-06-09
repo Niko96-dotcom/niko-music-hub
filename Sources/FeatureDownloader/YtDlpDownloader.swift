@@ -9,19 +9,25 @@ public struct DownloadRequest: Equatable, Sendable {
     public var outputDirectory: URL
     public var outputTemplate: String
     public var formatSelection: DownloadFormatSelection
+    public var ffmpegLocationURL: URL?
+    public var helperSearchDirectories: [URL]
 
     public init(
         ytDlpURL: URL,
         sourceURL: URL,
         outputDirectory: URL,
         outputTemplate: String = Self.defaultOutputTemplate,
-        formatSelection: DownloadFormatSelection = .default
+        formatSelection: DownloadFormatSelection = .default,
+        ffmpegLocationURL: URL? = nil,
+        helperSearchDirectories: [URL] = []
     ) {
         self.ytDlpURL = ytDlpURL
         self.sourceURL = sourceURL
         self.outputDirectory = outputDirectory
         self.outputTemplate = outputTemplate
         self.formatSelection = formatSelection
+        self.ffmpegLocationURL = ffmpegLocationURL
+        self.helperSearchDirectories = helperSearchDirectories
     }
 }
 
@@ -92,6 +98,9 @@ public struct YtDlpDownloader: DownloadRunning {
             "-f", formatArgs.formatSelector,
         ]
         args.append(contentsOf: formatArgs.extraArguments)
+        if let ffmpegLocationURL = request.ffmpegLocationURL {
+            args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])
+        }
         args.append(contentsOf: [
             "--progress-template", "download:%progress",
             "--print", "after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s",
@@ -102,6 +111,9 @@ public struct YtDlpDownloader: DownloadRunning {
         let processRequest = ExternalProcessRequest(
             executableURL: request.ytDlpURL,
             arguments: args,
+            environment: DownloaderHelperToolResolver.processEnvironment(
+                helperSearchDirectories: request.helperSearchDirectories
+            ),
             timeoutSeconds: 90
         )
 

@@ -21,6 +21,32 @@ final class YtDlpFormatArgumentIntegrationTests: XCTestCase {
         XCTAssertTrue(arguments.contains("mp3"))
         XCTAssertTrue(arguments.contains("bestaudio/best"))
     }
+
+    func testDownloadPassesExplicitFFmpegLocationAndHelperPathForAudioPostProcessing() async throws {
+        let runner = CapturingRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let helperDirectory = URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true)
+        let request = DownloadRequest(
+            ytDlpURL: helperDirectory.appendingPathComponent("yt-dlp"),
+            sourceURL: URL(string: "https://example.com/audio")!,
+            outputDirectory: FileManager.default.temporaryDirectory,
+            formatSelection: DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav),
+            ffmpegLocationURL: helperDirectory,
+            helperSearchDirectories: [helperDirectory]
+        )
+
+        _ = try await downloader.download(request) { _ in }
+
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        let locationIndex = try XCTUnwrap(arguments.firstIndex(of: "--ffmpeg-location"))
+        XCTAssertEqual(arguments[locationIndex + 1], helperDirectory.path)
+        XCTAssertTrue(arguments.contains("--extract-audio"))
+        XCTAssertTrue(arguments.contains("wav"))
+
+        let environment = try XCTUnwrap(runner.lastRequest?.environment)
+        let path = try XCTUnwrap(environment["PATH"])
+        XCTAssertTrue(path.split(separator: ":").contains(Substring(helperDirectory.path)))
+    }
 }
 
 private final class CapturingRunner: ExternalProcessRunning, @unchecked Sendable {

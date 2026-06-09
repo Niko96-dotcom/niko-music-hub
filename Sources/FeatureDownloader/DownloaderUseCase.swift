@@ -88,6 +88,7 @@ public final class DownloaderUseCase: @unchecked Sendable {
         let simulateRequest = ExternalProcessRequest(
             executableURL: ytDlpURL,
             arguments: ["--simulate", "--print", "%(title)s", url.absoluteString],
+            environment: DownloaderHelperToolResolver.processEnvironment(settings: settings.helperTools),
             timeoutSeconds: 30
         )
 
@@ -136,7 +137,9 @@ public final class DownloaderUseCase: @unchecked Sendable {
                     sourceURL: url,
                     outputDirectory: options.outputDirectory,
                     outputTemplate: options.fileNameTemplate,
-                    formatSelection: options.formatSelection
+                    formatSelection: options.formatSelection,
+                    ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools),
+                    helperSearchDirectories: DownloaderHelperToolResolver.helperSearchDirectories(settings: settings.helperTools)
                 )
 
                 let result = try await downloader.download(request) { line in

@@ -117,6 +117,53 @@ final class DownloaderUseCaseTests: XCTestCase {
         )
     }
 
+    func testAudioPostProcessingRequestCarriesConfiguredFFmpegLocationAndHelperPath() async throws {
+        let outputURL = URL(fileURLWithPath: "/tmp/out/Sample.wav")
+        let downloader = CapturingDownloader(outputURLs: [outputURL])
+        let jobRunner = JobRunner()
+        let helperDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("downloader-helper-tools-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: helperDirectory) }
+        _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("ffmpeg").path, contents: Data())
+        _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("ffprobe").path, contents: Data())
+        _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("yt-dlp").path, contents: Data())
+        let settings = AppSettings(
+            outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
+            helperTools: HelperToolSettings(
+                ffmpeg: helperDirectory.appendingPathComponent("ffmpeg"),
+                ffprobe: helperDirectory.appendingPathComponent("ffprobe"),
+                ytDlp: helperDirectory.appendingPathComponent("yt-dlp")
+            )
+        )
+        let useCase = DownloaderUseCase(
+            downloader: downloader,
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                fileExists: { _ in true }
+            ),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(settings: settings),
+            simulateRunner: AvailableVersionRunner()
+        )
+
+        let url = URL(string: "https://example.com/audio")!
+        let job = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                formatSelection: DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav)
+            )
+        )
+
+        let completed = try await waitForJob(job.id, in: jobRunner)
+        XCTAssertEqual(completed.state, .completed)
+        let request = try XCTUnwrap(downloader.requests.first)
+        XCTAssertEqual(request.ffmpegLocationURL, helperDirectory)
+        XCTAssertTrue(request.helperSearchDirectories.contains(helperDirectory))
+    }
+
     private func waitForJob(_ id: Job.ID, in runner: JobRunner) async throws -> Job {
         for _ in 0..<50 {
             if let job = runner.job(id: id), job.state == .completed || job.state == .failed {
@@ -175,6 +222,36 @@ private struct SuccessfulDownloader: DownloadRunning {
     }
 }
 
+private final class CapturingDownloader: DownloadRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let outputURLs: [URL]
+    private var storedRequests: [DownloadRequest] = []
+
+    var requests: [DownloadRequest] {
+        lock.withLock { storedRequests }
+    }
+
+    init(outputURLs: [URL]) {
+        self.outputURLs = outputURLs
+    }
+
+    func download(
+        _ request: DownloadRequest,
+        progressHandler: @escaping @Sendable (String) -> Void
+    ) async throws -> DownloadResult {
+        lock.withLock {
+            storedRequests.append(request)
+        }
+        progressHandler("[download] 100.0% of 1.0MiB in 00:01")
+        return DownloadResult(
+            outputURLs: outputURLs,
+            sourceURL: request.sourceURL,
+            exitCode: 0,
+            standardError: ""
+        )
+    }
+}
+
 private final class SpyJobRunner: JobRunning, @unchecked Sendable {
     private(set) var enqueueCount = 0
 
@@ -194,11 +271,13 @@ private final class SpyJobRunner: JobRunning, @unchecked Sendable {
 }
 
 private struct FixtureSettingsStore: SettingsStore {
+    var settings = AppSettings(
+        outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
+        helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"))
+    )
+
     func loadSettings() throws -> AppSettings {
-        AppSettings(
-            outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
-            helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp"))
-        )
+        settings
     }
 
     func saveSettings(_ settings: AppSettings) throws {}
