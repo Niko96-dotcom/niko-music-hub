@@ -38,6 +38,28 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(updated.metadata["note"], "ready")
     }
 
+    func testNewestItemsAppearFirst() throws {
+        let store = try makeStore()
+        let older = OutputInboxItem(
+            fileURL: try makeExistingFile(named: "older.wav"),
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 100),
+            status: .available
+        )
+        let newer = OutputInboxItem(
+            fileURL: try makeExistingFile(named: "newer.wav"),
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 200),
+            status: .available
+        )
+
+        try store.addItem(older)
+        try store.addItem(newer)
+
+        let items = try store.listItems()
+        XCTAssertEqual(items.map(\.fileURL.lastPathComponent), ["newer.wav", "older.wav"])
+    }
+
     func testMarksMissingFiles() throws {
         let store = try makeStore()
         let missingURL = temporaryDirectory().appendingPathComponent("missing.wav")
