@@ -16,6 +16,9 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     public func listItems() throws -> [OutputInboxItem] {
         try lock.withLock {
             try loadItems()
+                .sorted { lhs, rhs in
+                    lhs.createdAt > rhs.createdAt
+                }
         }
     }
 
