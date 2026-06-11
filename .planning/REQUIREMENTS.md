@@ -1,113 +1,102 @@
-# Requirements: Outside Cubase Hub
+# Requirements: Niko Music Hub
 
-**Defined:** 2026-05-31
-**Milestone:** v1.3 Full UI Redesign
+**Defined:** 2026-06-11
+**Milestone:** v1.4 Downloader Reliability
 **Core Value:** Repeated production chores outside Cubase should become fast, local, reliable, and drag-and-drop ready for a Cubase project.
 
-**Source spec:** `docs/UI-REDESIGN-PLAN.md` (handoff-ready; implementation order Waves 1–5)
+**Source research:** `.planning/research/SUMMARY.md`
+**Source audit:** 2026-06-11 downloader audit attached to `$gsd-new-milestone`
 
-## v1.3 Requirements
+## v1.4 Requirements
 
-### Design System & Shared Components
+### Command Truth
 
-- [x] **DS-01**: `HubDesignSystem` exposes new radius, spacing, size, color, and typography tokens per spec §3.1
-- [x] **DS-02**: `HubGlassChrome` uses refined shell gradients, panel shadow, card inner highlight, and sidebar row tokens per spec §3.2
-- [x] **DS-03**: `HubLabeledButton` exists with primary/secondary/ghost styles for icon+label actions per spec §13.1
-- [x] **DS-04**: `HubSectionDivider` replaces invisible `Divider().opacity(0.4)` for major section breaks per spec §13.6
-- [x] **DS-05**: `HubIconButton` is 30×30 with hover accent tint; reserved for contextually obvious icon-only actions per spec §13.2
-- [x] **DS-06**: `StatusDot` uses 7px size and `HubDesignSystem.Colors` semantic states per spec §13.3
-- [x] **DS-07**: `HubToolLayout` spacing and `maxContentWidth` 680 match spec §13.5
-- [x] **DS-08**: `HubCompactChipColors` includes merged `.archive` variant; `HubCompactChipColors+Archive.swift` removed per spec §3.3 / §7.6
+- [ ] **CMD-01**: User sees real downloader progress from the app's actual `yt-dlp` command.
+- [ ] **CMD-02**: Long valid downloads are not killed solely because they exceed 90 seconds.
+- [ ] **CMD-03**: Stalled downloads fail with a clear stall/timeout message after no meaningful output or progress.
+- [ ] **CMD-04**: Downloader preflight validates the selected format path and prevents accidental playlist expansion.
+- [ ] **CMD-05**: Downloader output collection survives split UTF-8 chunks and still finds final output files.
 
-### Shell & Navigation
+### Helper Health
 
-- [x] **SH-01**: `AppShellView` uses shell gap 10, centered tool content columns, collapsed-rail hover, default window 1280×820 per spec §4
-- [x] **SH-02**: `ToolSidebarView` shows icon+label rows, updated header (version not “Local tools”), health strip tokens per spec §5
-- [x] **SH-03**: `OutputInboxInspectorView` header, empty state, horizontal output cards, context menu / hover drag grip per spec §6
-- [x] **SH-04**: `ArchiveDesignTokens.swift` deleted; all references use `HubDesignSystem.Colors` per spec §3.3
+- [ ] **HLTH-01**: User can see when `yt-dlp` is missing, unusable, available, or outdated.
+- [ ] **HLTH-02**: Outdated `yt-dlp` guidance tells the user how to update through the app's existing helper flow.
+- [ ] **HLTH-03**: Retry behavior matches real transient failures, including "timed out" wording and common network failures.
+- [ ] **HLTH-04**: Downloader jobs use human-readable titles instead of generic URL path fragments like `watch`.
 
-### Tool Pages (BPM, Recorder, Converter)
+### Output Contract
 
-- [ ] **TOOL-01**: BPM Tapper — centered layout, display typography, 240px tap target, labeled Copy/Save/Reset, history divider per spec §8
-- [ ] **TOOL-02**: Audio Recorder — hero 56pt timer, gradient meter with glow, prominent Record/Stop, save toast banner per spec §10
-- [ ] **TOOL-03**: WAV Converter — dashed drop zone, visible preset strip, labeled Add/Convert/Stop, batch row badges per spec §9
+- [ ] **OUT-01**: Completed downloader jobs pass output file URLs as structured data to inbox ingestion.
+- [ ] **OUT-02**: Downloader inbox ingestion no longer depends on synthetic `[download] Destination:` log lines.
+- [ ] **OUT-03**: Diagnostic logs remain useful for debugging without becoming the source of truth for output files.
 
-### Tool Pages (Downloader & Settings)
+### Media Handoff
 
-- [ ] **TOOL-04**: Downloader — glass URL field with inline Download/Clear, format chips, trust card with `LabeledContent` per spec §11
-- [ ] **TOOL-05**: Settings — section hierarchy (critical/config/info), labeled archive/helper actions, centered max 640 per spec §12
+- [ ] **HAND-01**: User can reveal safe completed downloader media files in Finder.
+- [ ] **HAND-02**: User can open safe completed downloader media files from the output inbox.
+- [ ] **HAND-03**: User can drag safe completed downloader media files from the output inbox to Finder/Cubase-compatible targets.
+- [ ] **HAND-04**: Output inbox shows appropriate icons/status for common downloader media types such as MP3, M4A, MP4, and WEBM.
+- [ ] **HAND-05**: WAV verification remains strict for converter/recorder outputs while downloader media uses an explicit safe media allowlist.
 
-### Archive Browser — Browse & Sidebar
+### Real UAT
 
-- [ ] **ARCH-01**: Archive sidebar toolbar (count badge, scan/+), horizontal shelf chips, sort chip menu, search field per spec §7.1
-- [ ] **ARCH-02**: `SongCardView` tighter hierarchy, warning icon, compact mini-player per spec §7.1
-- [ ] **ARCH-03**: Archive feature views migrated off deleted design tokens (`ArchiveBrowserView`, panels, health, more, root selection) per File Manifest
-
-### Archive Browser — Detail & Onboarding
-
-- [ ] **ARCH-04**: `SongDetailView` grouped sections (hero, metadata card, preview, labeled actions, collapsible Details) per spec §7.2
-- [ ] **ARCH-05**: `ArchiveWaveformHeroView` SF Symbol seek controls; `ArchiveFirstRunView` centered welcome modal per spec §7.2–7.3
-- [ ] **ARCH-06**: `ArchiveMiniPlayerView`, `NewSongSheet`, collaborator/intelligence/diagnostics views use shared accent tokens per spec §7.4–7.5
-
-### Polish & Verification
-
-- [ ] **POL-01**: `StandardErrorCard` recovery actions use `HubLabeledButton`; `ToolHeaderBlock` uses typography tokens per spec §13.4
-- [ ] **POL-02**: Accessibility preserved — every control keeps labels/help; no regression in VoiceOver labels from v1.2
-- [ ] **QA-03**: `./script/ci.sh` and `./script/e2e_user_smoke.sh` green after each phase; milestone close includes visual pass of all tools + archive per spec §14 Wave 5
+- [ ] **UAT-01**: v1.4 includes deterministic tests for progress markers, stall handling, helper health, structured output handoff, and media handoff.
+- [ ] **UAT-02**: v1.4 includes opt-in/live downloader verification that exercises real `yt-dlp` behavior beyond the previous 18-second happy path.
+- [ ] **UAT-03**: v1.4 verification proves helper-path behavior from app-like stripped environments still works.
+- [ ] **UAT-04**: Milestone close includes documented evidence for downloader success, failure, progress, and media handoff flows.
 
 ## Future Requirements
 
-Deferred beyond v1.3.
+Deferred beyond v1.4.
 
-- **VIS-01**: Custom empty-state illustrations (spec notes icon+text only for this milestone)
-- **VIS-02**: Custom brand font beyond SF system + rounded variants
-- **ANIM-01**: Tap-surface scale animation on BPM pad (spec §8.3 — optional polish if time)
+- **PLAY-01**: Playlist/channel batch download workflows.
+- **UPD-01**: Bundled helper updater inside the app.
+- **AUTH-01**: Auth/cookie/browser-profile flows for sites that require login.
+- **DIAG-01**: Per-site advanced remediation suggestions.
 
-## Out of Scope (v1.3)
+## Out of Scope (v1.4)
 
 | Feature | Reason |
 |---------|--------|
-| New product features / CP-19+ backlog | UI-only milestone; behavior unchanged unless required for layout |
-| macOS App Store / distribution | Unchanged from prior milestones |
-| Rewriting archive intelligence algorithms | Token/layout migration only |
-| Web or iOS targets | macOS SwiftUI only |
-| Changing audio/download/conversion logic | Visual and component layer only |
+| Circumventing paywalls, DRM, or site restrictions | Existing product boundary remains unchanged. |
+| Replacing yt-dlp with an embedded Python runtime | Violates native-product boundary and adds packaging risk. |
+| Playlist/channel UX | Single-URL reliability must become boring first. |
+| Bundled helper auto-update | Useful later, but Homebrew/helper guidance is enough for v1.4. |
+| New archive-browser intelligence | v1.4 is scoped to downloader reliability and output handoff. |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DS-01 | Phase 19 | Complete |
-| DS-02 | Phase 19 | Complete |
-| DS-03 | Phase 19 | Complete |
-| DS-04 | Phase 19 | Complete |
-| DS-05 | Phase 19 | Complete |
-| DS-06 | Phase 19 | Complete |
-| DS-07 | Phase 19 | Complete |
-| DS-08 | Phase 19 | Complete |
-| SH-01 | Phase 20 | Complete |
-| SH-02 | Phase 20 | Complete |
-| SH-03 | Phase 20 | Complete |
-| SH-04 | Phase 20 | Complete |
-| TOOL-01 | Phase 21 | Pending |
-| TOOL-02 | Phase 21 | Pending |
-| TOOL-03 | Phase 21 | Pending |
-| TOOL-04 | Phase 22 | Pending |
-| TOOL-05 | Phase 22 | Pending |
-| ARCH-01 | Phase 23 | Pending |
-| ARCH-02 | Phase 23 | Pending |
-| ARCH-03 | Phase 23 | Pending |
-| ARCH-04 | Phase 24 | Pending |
-| ARCH-05 | Phase 24 | Pending |
-| ARCH-06 | Phase 24 | Pending |
-| POL-01 | Phase 25 | Pending |
-| POL-02 | Phase 25 | Pending |
-| QA-03 | Phase 25 | Pending |
+| CMD-01 | TBD | Pending |
+| CMD-02 | TBD | Pending |
+| CMD-03 | TBD | Pending |
+| CMD-04 | TBD | Pending |
+| CMD-05 | TBD | Pending |
+| HLTH-01 | TBD | Pending |
+| HLTH-02 | TBD | Pending |
+| HLTH-03 | TBD | Pending |
+| HLTH-04 | TBD | Pending |
+| OUT-01 | TBD | Pending |
+| OUT-02 | TBD | Pending |
+| OUT-03 | TBD | Pending |
+| HAND-01 | TBD | Pending |
+| HAND-02 | TBD | Pending |
+| HAND-03 | TBD | Pending |
+| HAND-04 | TBD | Pending |
+| HAND-05 | TBD | Pending |
+| UAT-01 | TBD | Pending |
+| UAT-02 | TBD | Pending |
+| UAT-03 | TBD | Pending |
+| UAT-04 | TBD | Pending |
 
 **Coverage:**
-- v1.3 requirements: 26 total
-- Mapped to phases: 26
-- Unmapped: 0 ✓
+- v1.4 requirements: 21 total
+- Mapped to phases: 0
+- Unmapped: 21
 
 ---
-*Requirements defined: 2026-05-31 from `docs/UI-REDESIGN-PLAN.md`*
+*Requirements defined: 2026-06-11 from `.planning/research/SUMMARY.md`*
+*Last updated: 2026-06-11 after v1.4 requirement approval*
