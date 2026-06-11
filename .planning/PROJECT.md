@@ -1,4 +1,4 @@
-# Outside Cubase Hub
+# Niko Music Hub
 
 ## What This Is
 
@@ -8,9 +8,17 @@ Niko Music Hub is a local macOS app for production chores outside Cubase — BPM
 
 Repeated production chores outside Cubase should become fast, local, reliable, and drag-and-drop ready for a Cubase project.
 
-## Current Milestone
+## Current Milestone: v1.4 Downloader Reliability
 
-**None** — v1.3 Full UI Redesign shipped 2026-05-31. Start next scope with `/gsd-new-milestone`.
+**Goal:** Make the downloader trustworthy for real daily use by replacing brittle timeout/progress behavior with reality-tested downloads, clearer helper health, correct media handoff, and user-style verification.
+
+**Target features:**
+- Real `yt-dlp` progress reporting from parseable progress markers instead of mocked `[download]` lines.
+- Long-download handling that removes the 90-second total kill timer and uses stall-aware protection where needed.
+- `yt-dlp`/FFmpeg health that detects outdated tools, gives upgrade guidance, validates selected formats, and retries the failures it claims are retryable.
+- Downloader output handoff for producer-useful media types such as MP3, M4A, MP4, and WEBM through reveal/open/drag flows.
+- Structured download result handoff from jobs to the output inbox instead of regex-parsing log text back into file URLs.
+- Real invocation/UAT coverage for long or slow downloads, helper-path scenarios, progress parsing, and media handoff.
 
 **Last shipped (v1.3):** Design system + glass shell, tool page redesign (BPM, recorder, converter, downloader, settings), archive browse/detail UI, shared error-card polish (`docs/UI-REDESIGN-PLAN.md`).
 
@@ -60,7 +68,13 @@ Repeated production chores outside Cubase should become fast, local, reliable, a
 
 ### Active
 
-(none — define in next milestone)
+- [ ] Downloader reports real `yt-dlp` progress from the app's actual command invocation.
+- [ ] Downloads are not killed solely because they take longer than 90 seconds.
+- [ ] Helper health surfaces stale `yt-dlp` and gives clear upgrade/install guidance.
+- [ ] Download simulation validates the selected format path and avoids playlist surprises.
+- [ ] Completed downloader media can be revealed, opened, and dragged from the output inbox when safe.
+- [ ] Downloader jobs pass structured output file URLs to the inbox without log regex round-tripping.
+- [ ] Downloader UAT covers real-world behavior beyond the 18-second happy path.
 
 ### Out of Scope
 
@@ -84,9 +98,14 @@ Current local environment checks found Swift 6.3, FFmpeg 8.1 at `/opt/homebrew/b
 
 v1.0–v1.3 shipped on `main`. UI follows `docs/UI-REDESIGN-PLAN.md`. Archive browser and tool hub remain modular via `ToolFeature`. `./script/ci.sh` and `./script/e2e_user_smoke.sh` are the local gates.
 
+**v1.4 source audit:**
+
+The 2026-06-11 downloader audit found that the app architecture is sound, but the downloader shipped with mock-reality drift. The failure cluster is concentrated around a 90-second total timeout, no parseable real progress output, stale helper detection that never reports outdated `yt-dlp`, WAV-only output handoff that leaves downloaded media as dead-end inbox rows, and structured output data flattened into logs then parsed back with regex.
+
 **Known follow-ups:**
 - v1.1 phases 7–10: human UAT items still in VERIFICATION.md (`human_needed`)
 - v1.2 tech debt: FSEvents full rescan (CP-02), optional new-song template UI, CPR plugin summary deferred — see `.planning/milestones/v1.2-MILESTONE-AUDIT.md`
+- v1.4 downloader audit: UTF-8 streaming chunk loss, retry text mismatch, video format selector fallback, no busy timeout in SQLite stores, and FSEvents watcher locking are known follow-ups to triage while scoping requirements.
 - P3 (CP-19+): multi-DAW, cloud sync, AI search — out of scope until new milestone
 
 ## Constraints
@@ -95,7 +114,7 @@ v1.0–v1.3 shipped on `main`. UI follows `docs/UI-REDESIGN-PLAN.md`. Archive br
 - **Audio capture**: Prefer Apple's Core Audio taps for audio-only internal capture on macOS 14.2+ - this matches the need better than recording the screen just to get sound.
 - **Permissions**: The app must explain and request system audio/screen audio permissions clearly - silent failure is unacceptable for recording.
 - **File output**: WAV exports must be Cubase-friendly, with explicit sample rate, channel count, and bit depth choices.
-- **Downloader**: yt-dlp integration must be isolated behind a service boundary and avoid shell string interpolation - URLs and arguments must be passed safely.
+- **Downloader**: yt-dlp integration must be isolated behind a service boundary and avoid shell string interpolation - URLs and arguments must be passed safely, progress must come from real `yt-dlp` output, and long downloads must not fail only because they are long.
 - **Conversion**: Use native AVFoundation/AVFAudio when it covers the format, and FFmpeg as an adapter for broader format support.
 - **Architecture**: New tools must register through a feature boundary rather than being hard-coded into one large view model.
 - **Distribution**: If bundling yt-dlp or FFmpeg later, licensing and update behavior must be reviewed before release packaging.
@@ -115,6 +134,9 @@ v1.0–v1.3 shipped on `main`. UI follows `docs/UI-REDESIGN-PLAN.md`. Archive br
 | OutputHandoff gates drag/reveal — only .available existing .wav files | Keeps shared output inbox and future recorder outputs on one handoff safety policy. | Validated in Phase 3 |
 | v1.1 phases require VERIFICATION.md before close | Phases 5–6 shipped without verification; gaps must not repeat | ✓ Applied Phases 7–10 |
 | Native Swift archive recall in NikoMusicCore + FeatureArchiveBrowser | Port MacBook reference behaviors; read-only toward music roots | ✓ v1.2 |
+| Treat downloader reliability as v1.4 milestone scope | The audit found interacting real-world failures that green tests missed; fixing them coherently is safer than another narrow patch. | — Pending |
+| Use real helper output as the downloader source of truth | Mocked `[download]` lines hid that the app's actual `yt-dlp` invocation emits no progress; requirements and tests must cover the real command shape. | — Pending |
+| Keep downloader media handoff explicit and safe | WAV-only handoff is correct for converter/recorder outputs but breaks downloaded MP3/M4A/MP4 workflows. | — Pending |
 
 ## Evolution
 
@@ -134,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-31 — milestone v1.3 Full UI Redesign shipped*
+*Last updated: 2026-06-11 — milestone v1.4 Downloader Reliability started*

@@ -1,38 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Full UI Redesign
-status: milestone_complete_pending_audit
-last_updated: "2026-05-31T22:30:00.000Z"
-last_activity: 2026-05-31 — Phase 22 downloader & settings UI executed
+milestone: v1.4
+milestone_name: Downloader Reliability
+status: planning
+last_updated: "2026-06-11T20:11:23.830Z"
+last_activity: 2026-06-11
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-05-31 for v1.3)
+See: `.planning/PROJECT.md` (updated 2026-06-11 for v1.4)
 
 **Core value:** Fast, local, reliable production chores outside Cubase — plus Cubase archive recall (browse, metadata, intelligence).
 
-**Current focus:** v1.3 Full UI Redesign — run `/gsd-autonomous`
+**Current focus:** v1.4 Downloader Reliability — define requirements and roadmap from the 2026-06-11 downloader audit.
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.3 phases 19–25 complete — run `/gsd-audit-milestone` then `/gsd-complete-milestone`
-Last activity: 2026-05-31 — Phase 25 polish; v1.3 UI redesign executed via autonomous
+Status: Defining requirements
+Last activity: 2026-06-11 — Milestone v1.4 started
 
-## Shipped (v1.2)
+## Shipped
 
-Phases 11–18: persistence, metadata, shelves, waveform, collaborators, filters/BPM, new song, read-only intelligence. Audit: `.planning/milestones/v1.2-MILESTONE-AUDIT.md`.
+v1.0–v1.3 are shipped on `main`. v1.3 completed phases 19–25 for the full UI redesign. v1.2 archived phases 11–18 for persistence, metadata, shelves, waveform, collaborators, filters/BPM, new song, and read-only intelligence. Audit: `.planning/milestones/v1.2-MILESTONE-AUDIT.md`.
 
 ## Gates
 
@@ -54,8 +54,6 @@ Items acknowledged at v1.2 milestone close (2026-05-30):
 
 ## Operator Next Steps
 
-- `/gsd-audit-milestone` — close v1.3 Full UI Redesign
-- `/gsd-complete-milestone` — archive milestone after audit
-- Spec reference: `docs/UI-REDESIGN-PLAN.md`
-- Optional: `/gsd-autonomous --interactive` for discuss questions inline
-- Producer Mac UAT for phases 7–10 still deferred from v1.1
+- Finish `$gsd-new-milestone` requirements and roadmap for v1.4 Downloader Reliability.
+- Next executable phase will continue after Phase 25 once `.planning/ROADMAP.md` is generated.
+- Producer Mac UAT for downloader behavior is part of the v1.4 scope.
