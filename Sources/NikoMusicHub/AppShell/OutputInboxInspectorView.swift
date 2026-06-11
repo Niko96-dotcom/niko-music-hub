@@ -194,8 +194,14 @@ struct OutputInboxInspectorView: View {
         switch url.pathExtension.lowercased() {
         case "wav":
             symbol = "waveform"
+        case "mp3":
+            symbol = "music.note"
+        case "m4a":
+            symbol = "music.note.list"
         case "mp4":
             symbol = "film"
+        case "webm":
+            symbol = "play.rectangle"
         default:
             symbol = "doc"
         }

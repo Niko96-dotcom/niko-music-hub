@@ -85,7 +85,7 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(jobRunner.enqueueCount, 1)
     }
 
-    func testCompletedDownloadLogsDestinationForOutputInbox() async throws {
+    func testCompletedDownloadSetsStructuredOutputURLs() async throws {
         let outputURL = URL(fileURLWithPath: "/tmp/out/Me at the zoo.webm")
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
@@ -110,11 +110,86 @@ final class DownloaderUseCaseTests: XCTestCase {
 
         let completed = try await waitForJob(job.id, in: jobRunner)
         XCTAssertEqual(completed.state, .completed)
-        XCTAssertTrue(
-            completed.logEntries.contains {
-                $0.message == "[download] Destination: \(outputURL.path)"
-            }
+        XCTAssertEqual(completed.outputFileURLs, [outputURL])
+    }
+
+    func testSimulateSuccessUsesTitleForJobName() async throws {
+        let simulateRunner = TitleSimulateRunner(title: "Me at the zoo")
+        let jobRunner = SpyJobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                fileExists: { _ in true }
+            ),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: simulateRunner
         )
+
+        let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out")
+            )
+        )
+
+        XCTAssertEqual(jobRunner.lastTitle, "Download: Me at the zoo")
+    }
+
+    func testIsRetryableIncludesTimedOutWording() {
+        let error = DownloadUseCaseError.downloadFailed("ERROR: timed out")
+        XCTAssertTrue(DownloaderUseCase.isRetryableForTesting(error: error))
+    }
+
+    func testSimulateUsesFormatSelectionAndNoPlaylist() async throws {
+        let simulateRunner = CapturingSimulateRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                fileExists: { _ in true }
+            ),
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: simulateRunner
+        )
+
+        let url = URL(string: "https://example.com/watch?v=ok")!
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                formatSelection: DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav)
+            )
+        )
+
+        let wavArgs = try XCTUnwrap(simulateRunner.lastRequest?.arguments)
+        XCTAssertTrue(wavArgs.contains("--simulate"))
+        XCTAssertTrue(wavArgs.contains("--no-playlist"))
+        XCTAssertTrue(wavArgs.contains("--extract-audio"))
+        XCTAssertTrue(wavArgs.contains("wav"))
+        XCTAssertEqual(simulateRunner.lastRequest?.timeoutSeconds, 30)
+
+        simulateRunner.reset()
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                formatSelection: DownloadFormatSelection(mediaKind: .videoWithAudio, videoQuality: .mp4_720)
+            )
+        )
+        let videoArgs = try XCTUnwrap(simulateRunner.lastRequest?.arguments)
+        XCTAssertTrue(videoArgs.contains { $0.contains("height<=720") })
+        XCTAssertTrue(videoArgs.contains("--no-playlist"))
+    }
+
+    func testParseProgressFromNIKOProgressMarker() {
+        XCTAssertEqual(DownloaderUseCase.parseProgress(from: "NIKO_PROGRESS: 50.0%"), 0.5)
     }
 
     func testAudioPostProcessingRequestCarriesConfiguredFFmpegLocationAndHelperPath() async throws {
@@ -175,6 +250,24 @@ final class DownloaderUseCaseTests: XCTestCase {
     }
 }
 
+private final class CapturingSimulateRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: ExternalProcessRequest?
+
+    var lastRequest: ExternalProcessRequest? {
+        lock.withLock { request }
+    }
+
+    func reset() {
+        lock.withLock { request = nil }
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        lock.withLock { self.request = request }
+        return ExternalProcessResult(exitCode: 0, standardOutput: "Sample Title", standardError: "")
+    }
+}
+
 private final class SimulateFailureRunner: ExternalProcessRunning, @unchecked Sendable {
     private(set) var runCount = 0
 
@@ -194,7 +287,7 @@ private struct AvailableVersionRunner: ExternalProcessRunning {
         if request.arguments.contains("--simulate") {
             return ExternalProcessResult(exitCode: 0, standardOutput: "Sample Title", standardError: "")
         }
-        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.03.17", standardError: "")
+        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.06.09", standardError: "")
     }
 }
 
@@ -252,8 +345,21 @@ private final class CapturingDownloader: DownloadRunning, @unchecked Sendable {
     }
 }
 
+private struct TitleSimulateRunner: ExternalProcessRunning {
+    let title: String
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        if request.arguments.contains("--simulate") {
+            return ExternalProcessResult(exitCode: 0, standardOutput: title, standardError: "")
+        }
+        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.06.09", standardError: "")
+    }
+}
+
 private final class SpyJobRunner: JobRunning, @unchecked Sendable {
+    private let lock = NSLock()
     private(set) var enqueueCount = 0
+    private(set) var lastTitle: String?
 
     func listJobs() -> [Job] { [] }
     func job(id: Job.ID) -> Job? { nil }
@@ -263,11 +369,22 @@ private final class SpyJobRunner: JobRunning, @unchecked Sendable {
         sourceToolID: ToolFeatureID,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
-        enqueueCount += 1
+        lock.withLock {
+            enqueueCount += 1
+            lastTitle = title
+        }
         return Job(sourceToolID: sourceToolID, title: title)
     }
 
     func cancelJob(id: Job.ID) {}
+}
+
+private extension NSLock {
+    func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
+    }
 }
 
 private struct FixtureSettingsStore: SettingsStore {

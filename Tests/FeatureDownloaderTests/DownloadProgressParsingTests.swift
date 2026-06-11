@@ -2,6 +2,16 @@
 import XCTest
 
 final class DownloadProgressParsingTests: XCTestCase {
+    func testParsesNIKOProgressMarker() {
+        XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: "NIKO_PROGRESS: 45.2%"), 45.2)
+        XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: "NIKO_PROGRESS:100%"), 100.0)
+        XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: "NIKO_PROGRESS: 10.0%"), 10.0)
+    }
+
+    func testParseNormalizedProgressFromNIKOProgressMarker() {
+        XCTAssertEqual(DownloaderUseCase.parseProgress(from: "NIKO_PROGRESS: 45.2%") ?? -1, 0.452, accuracy: 0.0001)
+    }
+
     func testParsesProgressPercentage() {
         let line = "[download] 45.2% of 12.5M at 1.2MiB/s ETA 00:10"
         XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: line), 45.2)

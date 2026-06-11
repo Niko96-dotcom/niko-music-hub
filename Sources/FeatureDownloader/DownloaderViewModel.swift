@@ -106,7 +106,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 downloadState = .failed(DownloaderCopy.unsupportedURL)
                 statusMessage = nil
             case let .outdated(current, minimumExpected):
-                downloadState = .failed("yt-dlp version \(current) is outdated. Expected \(minimumExpected) or higher.")
+                downloadState = .failed(DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected))
                 statusMessage = nil
             }
         } catch {
@@ -176,16 +176,8 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private func addToInbox(job: Job, sourceURLString: String) async {
         guard let sourceURL = URL(string: sourceURLString) else { return }
 
-        var foundURLs: [URL] = []
-        for entry in job.logEntries {
-            let msg = entry.message
-            if msg.contains("[download] Destination:") {
-                let pathPart = msg.components(separatedBy: "Destination:").last?.trimmingCharacters(in: .whitespaces) ?? ""
-                let url = URL(fileURLWithPath: pathPart)
-                if FileManager.default.fileExists(atPath: url.path) {
-                    foundURLs.append(url)
-                }
-            }
+        let foundURLs = job.outputFileURLs.filter {
+            FileManager.default.fileExists(atPath: $0.path)
         }
 
         self.outputURLs = foundURLs

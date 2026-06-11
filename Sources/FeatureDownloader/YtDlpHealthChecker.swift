@@ -11,6 +11,7 @@ public enum YtDlpAvailability: Equatable, Sendable {
 public struct YtDlpHealthChecker: Sendable {
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
+    private let referenceDate: Date
 
     public static let homebrewPaths: [String] = [
         "/opt/homebrew/bin/yt-dlp",
@@ -22,10 +23,12 @@ public struct YtDlpHealthChecker: Sendable {
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
-        }
+        },
+        referenceDate: Date = Date()
     ) {
         self.runner = runner
         self.fileExists = fileExists
+        self.referenceDate = referenceDate
     }
 
     public func availability(settings: HelperToolSettings) async -> YtDlpAvailability {
@@ -48,7 +51,14 @@ public struct YtDlpHealthChecker: Sendable {
             guard result.exitCode == 0 else {
                 return .unusable(message: diagnosticMessage(from: result))
             }
-            return .available(version: versionLine(from: result.standardOutput))
+            let version = versionLine(from: result.standardOutput)
+            if YtDlpVersionPolicy.isStale(version: version, referenceDate: referenceDate) {
+                return .outdated(
+                    current: version,
+                    minimumExpected: YtDlpVersionPolicy.minimumExpectedVersion(referenceDate: referenceDate)
+                )
+            }
+            return .available(version: version)
         } catch {
             return .unusable(message: error.localizedDescription)
         }

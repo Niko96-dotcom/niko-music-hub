@@ -18,6 +18,9 @@ public enum DownloaderCopy {
     public static let videoQualityLabel = "Video quality"
 
     public static let missingYtDlp = "yt-dlp is required. Choose yt-dlp in Settings."
+    public static func outdatedYtDlp(current: String, minimumExpected: String) -> String {
+        "yt-dlp \(current) is outdated (expected \(minimumExpected) or newer). Open Settings → Helper Tools and update yt-dlp with Homebrew, then verify the path."
+    }
     public static let unsupportedURL = "This URL is not supported or yt-dlp could not access it."
     public static let downloadFailedError = "Download failed"
     public static let retryableError = "Download failed (will retry): "

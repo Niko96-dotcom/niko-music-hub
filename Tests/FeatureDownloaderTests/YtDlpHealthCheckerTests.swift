@@ -25,16 +25,34 @@ final class YtDlpHealthCheckerTests: XCTestCase {
     }
 
     func testAvailableWhenVersionCommandSucceeds() async {
+        let reference = Date(timeIntervalSince1970: 1_800_000_000)
         let settings = HelperToolSettings(ytDlp: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"))
         let checker = YtDlpHealthChecker(
-            runner: AlwaysSucceedingRunner(output: "2024.03.17\n"),
-            fileExists: { _ in true }
+            runner: AlwaysSucceedingRunner(output: "2027.01.01\n"),
+            fileExists: { _ in true },
+            referenceDate: reference
         )
         let result = await checker.availability(settings: settings)
         guard case let .available(version) = result else {
             return XCTFail("Expected .available, got \(result)")
         }
-        XCTAssertEqual(version, "2024.03.17")
+        XCTAssertEqual(version, "2027.01.01")
+    }
+
+    func testOutdatedWhenVersionOlderThan90Days() async {
+        let reference = Date(timeIntervalSince1970: 1_800_000_000)
+        let settings = HelperToolSettings(ytDlp: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"))
+        let checker = YtDlpHealthChecker(
+            runner: AlwaysSucceedingRunner(output: "2024.01.01\n"),
+            fileExists: { _ in true },
+            referenceDate: reference
+        )
+        let result = await checker.availability(settings: settings)
+        guard case let .outdated(current, minimumExpected) = result else {
+            return XCTFail("Expected .outdated, got \(result)")
+        }
+        XCTAssertEqual(current, "2024.01.01")
+        XCTAssertFalse(minimumExpected.isEmpty)
     }
 
     func testUnusableWhenProcessThrows() async {

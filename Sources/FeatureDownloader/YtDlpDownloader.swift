@@ -76,37 +76,21 @@ public protocol DownloadRunning: Sendable {
 
 public struct YtDlpDownloader: DownloadRunning {
     private let runner: any ExternalProcessRunning
+    private let stallClock: any DownloadStallClock
+    private let stallCheckIntervalNanoseconds: UInt64
 
     public init(
-        runner: any ExternalProcessRunning = FoundationExternalProcessRunner()
+        runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        stallClock: any DownloadStallClock = SystemDownloadStallClock(),
+        stallCheckIntervalNanoseconds: UInt64 = 5_000_000_000
     ) {
         self.runner = runner
+        self.stallClock = stallClock
+        self.stallCheckIntervalNanoseconds = stallCheckIntervalNanoseconds
     }
 
     public func download(_ request: DownloadRequest, progressHandler: @escaping @Sendable (String) -> Void) async throws -> DownloadResult {
-        let fileManager = FileManager.default
-        let outputPath = request.outputDirectory.appendingPathComponent(request.outputTemplate).path
-
-        let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: request.formatSelection)
-        var args: [String] = [
-            "--newline",
-            "--no-overwrites",
-            "--socket-timeout", "30",
-            "--retries", "1",
-            "--fragment-retries", "1",
-            "--extractor-retries", "1",
-            "-f", formatArgs.formatSelector,
-        ]
-        args.append(contentsOf: formatArgs.extraArguments)
-        if let ffmpegLocationURL = request.ffmpegLocationURL {
-            args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])
-        }
-        args.append(contentsOf: [
-            "--progress-template", "download:%progress",
-            "--print", "after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s",
-            "-o", outputPath,
-            request.sourceURL.absoluteString,
-        ])
+        let args = YtDlpDownloadCommandBuilder.downloadArguments(for: request)
 
         let processRequest = ExternalProcessRequest(
             executableURL: request.ytDlpURL,
@@ -114,50 +98,83 @@ public struct YtDlpDownloader: DownloadRunning {
             environment: DownloaderHelperToolResolver.processEnvironment(
                 helperSearchDirectories: request.helperSearchDirectories
             ),
-            timeoutSeconds: 90
+            timeoutSeconds: nil
         )
 
-        do {
-            let collector = YtDlpOutputCollector(
-                outputDirectory: request.outputDirectory,
-                fileManager: fileManager,
-                progressHandler: progressHandler
-            )
-            let result: ExternalProcessResult
-            if let streamingRunner = runner as? any StreamingExternalProcessRunning {
-                result = try await streamingRunner.run(
-                    processRequest,
-                    onStandardOutput: { collector.consume($0) },
-                    onStandardError: { collector.consume($0) }
-                )
-            } else {
-                result = try await runner.run(processRequest)
-                collector.consume(result.standardOutput)
-                collector.consume(result.standardError)
-            }
-            let outputURLs = collector.finish()
+        let stallMonitor = DownloadStallMonitor(clock: stallClock)
+        stallMonitor.recordActivity()
+        let runner = self.runner
+        let outputDirectory = request.outputDirectory
+        let sourceURL = request.sourceURL
+        let stallCheckIntervalNanoseconds = self.stallCheckIntervalNanoseconds
 
-            return DownloadResult(
-                outputURLs: outputURLs,
-                sourceURL: request.sourceURL,
-                exitCode: result.exitCode,
-                standardError: result.standardError
-            )
+        do {
+            return try await withThrowingTaskGroup(of: DownloadResult.self) { group in
+                group.addTask {
+                    try await Self.pollForStall(
+                        monitor: stallMonitor,
+                        intervalNanoseconds: stallCheckIntervalNanoseconds
+                    )
+                    throw DownloadError.downloadFailed(DownloadStallMonitor.stallErrorMessage)
+                }
+
+                group.addTask {
+                    let collector = YtDlpOutputCollector(
+                        outputDirectory: outputDirectory,
+                        fileManager: .default,
+                        progressHandler: progressHandler,
+                        onActivity: { stallMonitor.recordActivity() }
+                    )
+                    let result: ExternalProcessResult
+                    if let streamingRunner = runner as? any StreamingExternalProcessRunning {
+                        result = try await streamingRunner.run(
+                            processRequest,
+                            onStandardOutput: { collector.consume($0) },
+                            onStandardError: { collector.consume($0) }
+                        )
+                    } else {
+                        result = try await runner.run(processRequest)
+                        collector.consume(result.standardOutput)
+                        collector.consume(result.standardError)
+                    }
+                    let outputURLs = collector.finish()
+
+                    return DownloadResult(
+                        outputURLs: outputURLs,
+                        sourceURL: sourceURL,
+                        exitCode: result.exitCode,
+                        standardError: result.standardError
+                    )
+                }
+
+                guard let downloadResult = try await group.next() else {
+                    throw DownloadError.downloadFailed("Download did not produce a result.")
+                }
+                group.cancelAll()
+                return downloadResult
+            }
+        } catch let error as DownloadError {
+            throw error
         } catch {
             throw DownloadError.downloadFailed(error.localizedDescription)
         }
     }
 
-    static func parseProgressPercentage(from line: String) -> Double? {
-        guard line.contains("[download]") else { return nil }
-        let pattern = "(\\d+\\.?\\d*)%"
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-              let range = Range(match.range(at: 1), in: line),
-              let value = Double(line[range]) else {
-            return nil
+    private static func pollForStall(
+        monitor: DownloadStallMonitor,
+        intervalNanoseconds: UInt64
+    ) async throws {
+        while !Task.isCancelled {
+            try await Task.sleep(nanoseconds: intervalNanoseconds)
+            if monitor.checkStalled() {
+                return
+            }
         }
-        return min(max(value, 0), 100)
+        throw CancellationError()
+    }
+
+    static func parseProgressPercentage(from line: String) -> Double? {
+        DownloaderProgressParsing.parseProgressPercentage(from: line)
     }
 
     static func outputPathCandidates(from line: String) -> [String] {
@@ -194,93 +211,5 @@ public struct YtDlpDownloader: DownloadRunning {
         }
 
         return []
-    }
-}
-
-private final class YtDlpOutputCollector: @unchecked Sendable {
-    private let outputDirectory: URL
-    private let fileManager: FileManager
-    private let progressHandler: @Sendable (String) -> Void
-    private let lock = NSLock()
-    private var pending = ""
-    private var candidatePaths: [String] = []
-
-    init(
-        outputDirectory: URL,
-        fileManager: FileManager,
-        progressHandler: @escaping @Sendable (String) -> Void
-    ) {
-        self.outputDirectory = outputDirectory
-        self.fileManager = fileManager
-        self.progressHandler = progressHandler
-    }
-
-    func consume(_ chunk: String) {
-        guard !chunk.isEmpty else { return }
-        let lines = lock.withLock {
-            pending += chunk
-            return drainCompleteLines()
-        }
-        for line in lines {
-            process(line)
-        }
-    }
-
-    func finish() -> [URL] {
-        let finalLines = lock.withLock {
-            let remaining = pending
-            pending = ""
-            return remaining.isEmpty ? [] : [remaining]
-        }
-        for line in finalLines {
-            process(line)
-        }
-
-        return lock.withLock {
-            var resolved: [URL] = []
-            for path in candidatePaths {
-                for url in urls(for: path) where !resolved.contains(url) {
-                    if fileManager.fileExists(atPath: url.path) {
-                        resolved.append(url)
-                        break
-                    }
-                }
-            }
-            return resolved
-        }
-    }
-
-    private func process(_ line: String) {
-        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        progressHandler(trimmed)
-        let paths = YtDlpDownloader.outputPathCandidates(from: trimmed)
-        guard !paths.isEmpty else { return }
-        lock.withLock {
-            for path in paths where !candidatePaths.contains(path) {
-                candidatePaths.append(path)
-            }
-        }
-    }
-
-    private func drainCompleteLines() -> [String] {
-        var lines: [String] = []
-        while let newline = pending.firstIndex(where: \.isNewline) {
-            let line = String(pending[..<newline])
-            lines.append(line)
-            pending.removeSubrange(...newline)
-        }
-        return lines
-    }
-
-    private func urls(for path: String) -> [URL] {
-        let expanded = (path as NSString).expandingTildeInPath
-        if expanded.hasPrefix("/") {
-            return [URL(fileURLWithPath: expanded)]
-        }
-        return [
-            outputDirectory.appendingPathComponent(path),
-            URL(fileURLWithPath: path),
-        ]
     }
 }
