@@ -32,7 +32,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        HubBrandLogo.installApplicationIcon()
         NSApp.activate(ignoringOtherApps: true)
     }
 }
