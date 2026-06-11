@@ -1,8 +1,9 @@
 # Roadmap: Niko Music Hub
 
-**Created:** 2026-05-04  
-**Granularity:** Standard  
-**Current milestone:** v1.3 Full UI Redesign (Phases 19–25)
+**Created:** 2026-05-04
+**Updated:** 2026-06-11
+**Granularity:** Standard
+**Current milestone:** v1.4 Downloader Reliability (Phases 26–29)
 
 ## Milestones
 
@@ -10,22 +11,23 @@
 - ✅ **v1.1 Production-Ready Tools** — Phases 7-10 (shipped 2026-05-23)
 - ✅ **v1.2 Cubase Archive Recall** — Phases 11-18 (shipped 2026-05-30)
 - ✅ **v1.3 Full UI Redesign** — Phases 19-25 (shipped 2026-05-31)
+- 🚧 **v1.4 Downloader Reliability** — Phases 26-29
 
-**Spec:** `docs/UI-REDESIGN-PLAN.md`  
-**Requirements:** `.planning/REQUIREMENTS.md`  
-**Milestone context:** `.planning/MILESTONE-CONTEXT.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Research:** `.planning/research/SUMMARY.md`
+**Source audit:** 2026-06-11 downloader audit
 
 ## Phases
 
 <details>
 <summary>✅ v1.0 MVP (Phases 1-6) — SHIPPED 2026-05-11</summary>
 
-- [x] Phase 1: App Foundation and Tool Architecture (3/3 plans) — completed 2026-05-04
-- [x] Phase 2: BPM Tapper (3/3 plans) — completed 2026-05-04
-- [x] Phase 3: Cubase-Ready WAV Conversion (5/5 plans) — completed 2026-05-05
-- [x] Phase 4: Internal Audio Recorder (4/4 plans) — completed 2026-05-11
-- [x] Phase 5: Downloader Hub (4/4 plans) — completed 2026-05-11
-- [x] Phase 6: Integration Polish and Extensibility Check (4/4 plans) — completed 2026-05-11
+- [x] Phase 1: App Foundation and Tool Architecture
+- [x] Phase 2: BPM Tapper
+- [x] Phase 3: Cubase-Ready WAV Conversion
+- [x] Phase 4: Internal Audio Recorder
+- [x] Phase 5: Downloader Hub
+- [x] Phase 6: Integration Polish and Extensibility Check
 
 Archive: `.planning/milestones/v1.0-phases/`, `.planning/milestones/v1.0-ROADMAP.md`
 
@@ -34,10 +36,10 @@ Archive: `.planning/milestones/v1.0-phases/`, `.planning/milestones/v1.0-ROADMAP
 <details>
 <summary>✅ v1.1 Production-Ready Tools (Phases 7-10) — SHIPPED 2026-05-23</summary>
 
-- [x] Phase 7: Downloader Reliability & Error Surfacing (3/3 plans)
-- [x] Phase 8: Real Core Audio Capture & Recorder UAT (2/2 plans, human UAT pending)
-- [x] Phase 9: Converter & Output Inbox Handoff UAT (1/1 plan, human UAT pending)
-- [x] Phase 10: Hub Polish, Helper Health & Verification Discipline (1/1 plan, human UAT pending)
+- [x] Phase 7: Downloader Reliability & Error Surfacing
+- [x] Phase 8: Real Core Audio Capture & Recorder UAT
+- [x] Phase 9: Converter & Output Inbox Handoff UAT
+- [x] Phase 10: Hub Polish, Helper Health & Verification Discipline
 
 Archive: `.planning/milestones/v1.1-phases/`
 
@@ -46,220 +48,154 @@ Archive: `.planning/milestones/v1.1-phases/`
 <details>
 <summary>✅ v1.2 Cubase Archive Recall (Phases 11-18) — SHIPPED 2026-05-30</summary>
 
-- [x] Phase 11: Archive Persistence (2/2 plans)
-- [x] Phase 12: Metadata Core (2/2 plans)
-- [x] Phase 13: Smart Shelves (1/1 plan)
-- [x] Phase 14: Waveform Player (1/1 plan)
-- [x] Phase 15: Browse & Collaborators (2/2 plans)
-- [x] Phase 16: Filters, BPM & Polish (1/1 plan)
-- [x] Phase 17: New Song Flow (1/1 plan)
-- [x] Phase 18: Read-Only Intelligence (1/1 plan)
+- [x] Phase 11: Archive Persistence
+- [x] Phase 12: Metadata Core
+- [x] Phase 13: Smart Shelves
+- [x] Phase 14: Waveform Player
+- [x] Phase 15: Browse & Collaborators
+- [x] Phase 16: Filters, BPM & Polish
+- [x] Phase 17: New Song Flow
+- [x] Phase 18: Read-Only Intelligence
 
 Archive: `.planning/milestones/v1.2-phases/`, `.planning/milestones/v1.2-ROADMAP.md`
 
 </details>
 
-### 🚧 v1.3 Full UI Redesign
+<details>
+<summary>✅ v1.3 Full UI Redesign (Phases 19-25) — SHIPPED 2026-05-31</summary>
 
-- [x] **Phase 19: Design System Foundation** — Tokens, glass chrome, `HubLabeledButton`, `HubSectionDivider`, shared control updates (Wave 1) (completed 2026-05-31)
-- [x] **Phase 20: Shell & Navigation** — App shell, sidebar, output inbox, delete `ArchiveDesignTokens` (Wave 2) (completed 2026-05-31)
-- [x] **Phase 21: Tool UI — BPM, Recorder, Converter** — Centered/spacious tool layouts, labeled actions (Wave 3a)
-- [x] **Phase 22: Tool UI — Downloader & Settings** — Glass URL field, chips, settings hierarchy (Wave 3b) (completed 2026-05-31)
-- [x] **Phase 23: Archive Browse & Sidebar** — Toolbar, shelf chips, song cards, token migration (Wave 4a) (completed 2026-05-31)
-- [x] **Phase 24: Archive Detail & Panels** — Grouped detail, waveform hero, first-run, sheets, panels (Wave 4b) (completed 2026-05-31)
-- [x] **Phase 25: UI Polish & Visual Regression** — Error card, headers, window default, full-page visual pass (Wave 5) (completed 2026-05-31)
+- [x] Phase 19: Design System Foundation
+- [x] Phase 20: Shell & Navigation
+- [x] Phase 21: Tool UI — BPM, Recorder, Converter
+- [x] Phase 22: Tool UI — Downloader & Settings
+- [x] Phase 23: Archive Browse & Sidebar
+- [x] Phase 24: Archive Detail & Panels
+- [x] Phase 25: UI Polish & Visual Regression
 
-## Phase Details (v1.3)
+Phase working docs currently remain under `.planning/phases/`.
 
-### Phase 19: Design System Foundation
+</details>
 
-**Goal:** Land shared design tokens and components so later phases only compose UI — no ad-hoc colors or mystery icon buttons.
+### 🚧 v1.4 Downloader Reliability
 
-**Depends on:** v1.2 complete
+- [ ] **Phase 26: Downloader Command Truth** — Real progress markers, format-aware simulate, no fixed total download timeout, stall handling, UTF-8-safe output collection.
+- [ ] **Phase 27: Helper Health and Output Contract** — Outdated helper detection, update guidance, retry/title fixes, structured output URL handoff.
+- [ ] **Phase 28: Media Handoff and Downloader UX Finish** — Safe reveal/open/drag for downloader media and inbox media affordance polish.
+- [ ] **Phase 29: Real-World Downloader UAT** — Deterministic coverage plus opt-in/live downloader evidence for progress, helper paths, success, failure, and media handoff.
 
-**Requirements:** DS-01, DS-02, DS-03, DS-04, DS-05, DS-06, DS-07, DS-08
+## Phase Details (v1.4)
+
+### Phase 26: Downloader Command Truth
+
+**Goal:** The downloader command path tells the truth: real progress appears, selected formats are preflighted, long valid downloads are not killed by a stopwatch, and output collection is resilient.
+
+**Depends on:** v1.4 requirements/research
+
+**Requirements:** CMD-01, CMD-02, CMD-03, CMD-04, CMD-05
 
 **Success criteria:**
-1. `HubDesignSystem` matches spec §3.1 (radius, spacing, colors, typography).
-2. `HubGlassChrome` gradient/shadow/card highlight per spec §3.2.
-3. `HubLabeledButton` and `HubSectionDivider` compile and are usable from AppCore.
-4. `HubIconButton`, `StatusDot`, `HubToolLayout`, `HubCompactChipColors` updated; archive chip extension merged.
-5. `./script/ci.sh` green (no consumer view changes required yet).
+1. `YtDlpDownloader` emits explicit parseable progress markers from the real command, and `DownloaderUseCase` updates job progress from those markers.
+2. Actual downloads no longer set the fixed 90-second total process timeout.
+3. A deterministic stall detector fails silent/stuck downloads with a clear message.
+4. Simulate/preflight uses the selected format arguments and `--no-playlist`.
+5. Streaming output collection handles split UTF-8 and/or reparses final stdout/stderr so final file markers are not lost.
 
-**Key files:** `HubDesignSystem.swift`, `HubGlassChrome.swift`, `HubLabeledButton.swift` (new), `HubSectionDivider.swift` (new), `HubIconButton.swift`, `StatusDot.swift`, `HubToolLayout.swift`, `HubCompactChipColors.swift`
+**Key files:** `YtDlpDownloader.swift`, `DownloaderUseCase.swift`, `ExternalProcessRunning.swift`, `DownloadFormatSelection.swift`, `Tests/FeatureDownloaderTests/*`, `Tests/AppCoreTests/*`
 
-**Plans:** 4/4 plans complete
-
-Plans:
-- [x] 19-01-PLAN.md — HubDesignSystem §3.1 tokens + unit tests (DS-01)
-- [x] 19-02-PLAN.md — HubGlassChrome gradients, shadow, highlights (DS-02)
-- [x] 19-03-PLAN.md — HubLabeledButton + HubSectionDivider + tests (DS-03, DS-04)
-- [x] 19-04-PLAN.md — Icon button, StatusDot, ToolLayout, chip merge (DS-05–DS-08)
+**Research flags:** Pick exact stall window during planning and keep it testable without sleeping in real time.
 
 ---
 
-### Phase 20: Shell & Navigation
+### Phase 27: Helper Health and Output Contract
 
-**Goal:** App chrome feels like one cohesive glass surface; archive token file removed.
+**Goal:** The app classifies downloader helper health accurately and moves completed file URLs through a structured contract instead of diagnostic logs.
 
-**Depends on:** Phase 19
+**Depends on:** Phase 26
 
-**Requirements:** SH-01, SH-02, SH-03, SH-04
+**Requirements:** HLTH-01, HLTH-02, HLTH-03, HLTH-04, OUT-01, OUT-02, OUT-03
 
 **Success criteria:**
-1. Three-column shell spacing 10px; tool content centered in column; window default 1280×820.
-2. Sidebar rows show icon + label; health strip uses new tokens.
-3. Output inbox header/cards/empty state per spec §6.
-4. `ArchiveDesignTokens.swift` deleted; project builds with `HubDesignSystem.Colors` only.
-5. `./script/ci.sh` green.
+1. `YtDlpHealthChecker` can return missing, unusable, available, and outdated states, including date-like version tests.
+2. User-facing copy points stale helpers to the existing helper update flow.
+3. Retry classification covers real transient messages including `timed out`, socket/read timeouts, connection resets, temporary failures, and HTTP 5xx errors.
+4. Downloader jobs use meaningful titles based on metadata/preflight output instead of URL path fragments like `watch`.
+5. Completed downloader output URLs are passed to inbox ingestion through typed data; removing synthetic `[download] Destination:` logs does not break inbox creation.
+6. Diagnostic logs remain available for debugging and verification, but are not the source of truth.
 
-**Key files:** `AppShellView.swift`, `ToolSidebarView.swift`, `OutputInboxInspectorView.swift`, delete `ArchiveDesignTokens.swift` + 16 reference updates
+**Key files:** `YtDlpHealthChecker.swift`, `DownloaderUseCase.swift`, `DownloaderJobFactory.swift`, `JobRunner.swift`, `OutputInboxStore.swift`, `DownloaderCopy.swift`, `Tests/FeatureDownloaderTests/*`, `Tests/AppCoreTests/*`
 
-**Plans:** 4/4 plans complete
-
-Plans:
-- [x] 20-01-PLAN.md — HubToolContentColumn + AppShell chrome + window default (SH-01)
-- [x] 20-02-PLAN.md — ToolSidebar header/rows + health strip (SH-02)
-- [x] 20-03-PLAN.md — OutputInbox header/empty/cards + tests (SH-03)
-- [x] 20-04-PLAN.md — Delete ArchiveDesignTokens + 15-file migration (SH-04)
+**Research flags:** Choose staleness policy during planning: 60 days, 90 days, or latest-known-release delta.
 
 ---
 
-### Phase 21: Tool UI — BPM, Recorder, Converter
+### Phase 28: Media Handoff and Downloader UX Finish
 
-**Goal:** Production tools match page-specific density — hero readouts, labeled actions, refined drop/meter UX.
+**Goal:** Completed downloader media is useful from the Output Inbox: reveal, open, drag, and scan at a glance without weakening WAV safety for converter/recorder outputs.
 
-**Depends on:** Phase 20
+**Depends on:** Phase 27
 
-**Requirements:** TOOL-01, TOOL-02, TOOL-03
+**Requirements:** HAND-01, HAND-02, HAND-03, HAND-04, HAND-05
 
 **Success criteria:**
-1. BPM Tapper centered layout, 56pt display, labeled Copy/Save/Reset, larger tap pad.
-2. Recorder hero timer, gradient meter, prominent Record/Stop, save toast.
-3. Converter dashed drop zone, preset strip, labeled Add/Convert/Stop, batch badges.
-4. `./script/ci.sh` green.
+1. Output handoff allows safe completed downloader media extensions such as MP3, M4A, MP4, and WEBM.
+2. Converter/recorder WAV verification remains strict and does not regress.
+3. Output Inbox context menu and tap/drag behavior work for allowed downloader media.
+4. Output Inbox icons/status distinguish common audio and video media types.
+5. Tests cover both allowed downloader media and disallowed/missing/pending files.
 
-**Key files:** `BPMTapperView.swift`, `AudioRecorderView.swift`, `AudioConverterView.swift`
+**Key files:** `OutputHandoff.swift`, `OutputInboxInspectorView.swift`, `OutputInboxItem.swift`, `FeatureDownloader` job integration, `Tests/AppCoreTests/OutputHandoffTests.swift`, app shell tests
 
-**Plans:** 1/1 complete (`21-01`)
+**Research flags:** Decide whether WEBM is drag-ready or reveal/open only during planning.
 
 ---
 
-### Phase 22: Tool UI — Downloader & Settings
+### Phase 29: Real-World Downloader UAT
 
-**Goal:** Downloader and Settings match glass aesthetic and labeled-action rules.
+**Goal:** Close the mock-reality gap with documented proof that downloader reliability works in the app and in app-like environments.
 
-**Depends on:** Phase 21
+**Depends on:** Phase 28
 
-**Requirements:** TOOL-04, TOOL-05
+**Requirements:** UAT-01, UAT-02, UAT-03, UAT-04
 
 **Success criteria:**
-1. Downloader glass URL row with inline Download; format chips; trust card layout.
-2. Settings section hierarchy and labeled helper/archive actions.
-3. `./script/ci.sh` green.
+1. Deterministic automated tests cover progress markers, stall handling, helper health, structured output handoff, and media handoff.
+2. Opt-in/live downloader verification exercises real `yt-dlp` behavior beyond the previous 18-second happy path.
+3. Helper-path verification covers an app-like stripped environment and confirms `--ffmpeg-location` still fixes post-processing.
+4. UAT evidence documents success, failure, progress, stale helper guidance, and media handoff flows.
+5. `./script/ci.sh` and `./script/e2e_user_smoke.sh` are green before milestone close.
 
-**Key files:** `DownloaderView.swift`, `SettingsView.swift`, `SettingsSection` updates
+**Key files:** `script/ci.sh`, `script/e2e_user_smoke.sh`, new/updated downloader smoke script, `docs/` UAT evidence, `Tests/FeatureDownloaderTests/*`
 
-**Plans:** 1/1 complete (`22-01`)
-
-Plans:
-- [x] 22-01-PLAN.md — Downloader glass row + chips; Settings hierarchy + labeled actions
+**Research flags:** Pick stable legal live URLs and keep live network checks opt-in so local CI remains deterministic.
 
 ---
 
-### Phase 23: Archive Browse & Sidebar
-
-**Goal:** Archive list/browse surfaces are scannable — chips, cards, toolbar — with full token migration.
-
-**Depends on:** Phase 22
-
-**Requirements:** ARCH-01, ARCH-02, ARCH-03
-
-**Success criteria:**
-1. Sidebar toolbar, horizontal shelf chips, sort chip menu, search field per spec §7.1.
-2. Song cards tighter with warning icon and compact player.
-3. `ArchiveBrowserView` and secondary panels use shared accent tokens (no archive-only token file).
-4. Delete `HubCompactChipColors+Archive.swift` when merge complete.
-5. `./script/ci.sh` green.
-
-**Key files:** `ArchiveSidebarView.swift`, `SongCardView.swift`, `ArchiveBrowserView.swift`, panel views in File Manifest §15
-
-**Plans:** 1/1 complete (`23-01`)
-
----
-
-### Phase 24: Archive Detail & Panels
-
-**Goal:** Song detail reads in grouped sections; onboarding and waveform controls match spec.
-
-**Depends on:** Phase 23
-
-**Requirements:** ARCH-04, ARCH-05, ARCH-06
-
-**Success criteria:**
-1. `SongDetailView` sectioned layout with collapsible Details and labeled primary actions.
-2. Waveform hero SF Symbol seek buttons; centered first-run modal.
-3. Mini player, new song sheet, collaborator/intelligence/diagnostics views token-aligned.
-4. `./script/ci.sh` and `./script/e2e_user_smoke.sh` green.
-
-**Key files:** `SongDetailView.swift`, `ArchiveWaveformHeroView.swift`, `ArchiveFirstRunView.swift`, `ArchiveMiniPlayerView.swift`, `NewSongSheet.swift`, related archive panels
-
-**Plans:** TBD (`/gsd-plan-phase 24`)
-
----
-
-### Phase 25: UI Polish & Visual Regression
-
-**Goal:** Close remaining shared components and verify every page at default and wide window sizes.
-
-**Depends on:** Phase 24
-
-**Requirements:** POL-01, POL-02, QA-03
-
-**Success criteria:**
-1. `StandardErrorCard` and `ToolHeaderBlock` use new components/tokens.
-2. `NikoMusicHubApp` default window size updated.
-3. Manual visual checklist: shell, all five tools, archive browse + detail, settings — light/dark if applicable.
-4. Accessibility spot-check: primary actions have visible labels; existing a11y identifiers preserved.
-5. `./script/ci.sh` and `./script/e2e_user_smoke.sh` green.
-
-**Key files:** `StandardErrorCard.swift`, `ToolHeaderBlock.swift`, `NikoMusicHubApp.swift`, `HubDragAffordance.swift` (hover-only grip)
-
-**Plans:** TBD (`/gsd-plan-phase 25`)
-
----
-
-## Requirement Coverage (v1.3)
+## Requirement Coverage (v1.4)
 
 | Phase | Requirements | Count |
 |-------|--------------|-------|
-| Phase 19 | DS-01–DS-08 | 8 |
-| Phase 20 | SH-01–SH-04 | 4 |
-| Phase 21 | TOOL-01–TOOL-03 | 3 |
-| Phase 22 | TOOL-04–TOOL-05 | 2 |
-| Phase 23 | ARCH-01–ARCH-03 | 3 |
-| Phase 24 | ARCH-04–ARCH-06 | 3 |
-| Phase 25 | POL-01, POL-02, QA-03 | 3 |
+| Phase 26 | CMD-01–CMD-05 | 5 |
+| Phase 27 | HLTH-01–HLTH-04, OUT-01–OUT-03 | 7 |
+| Phase 28 | HAND-01–HAND-05 | 5 |
+| Phase 29 | UAT-01–UAT-04 | 4 |
 
-**Coverage check:** 26 / 26 v1.3 requirements mapped.
+**Coverage check:** 21 / 21 v1.4 requirements mapped.
 
 ## Progress
 
-| Phase | Milestone | Plans | Status | Completed |
-|-------|-----------|-------|--------|-----------|
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
 | 1–6 | v1.0 | 15/19 | Shipped | 2026-05-11 |
 | 7–10 | v1.1 | 7/7 | Shipped | 2026-05-23 |
-| 11–18 | v1.2 | 9/9 | Shipped | 2026-05-30 |
-| 19 | v1.3 | 4/4 | Complete | 2026-05-31 |
-| 20 | v1.3 | 4/4 | Complete | 2026-05-31 |
-| 21 | v1.3 | 1/1 | Complete | 2026-05-31 |
-| 22–25 | v1.3 | 0/TBD | Pending | — |
+| 11–18 | v1.2 | 11/11 | Shipped | 2026-05-30 |
+| 19–25 | v1.3 | 13/13 | Shipped | 2026-05-31 |
+| 26. Downloader Command Truth | v1.4 | 0/TBD | Pending | — |
+| 27. Helper Health and Output Contract | v1.4 | 0/TBD | Pending | — |
+| 28. Media Handoff and Downloader UX Finish | v1.4 | 0/TBD | Pending | — |
+| 29. Real-World Downloader UAT | v1.4 | 0/TBD | Pending | — |
 
-## Roadmap Notes
+## Next Up
 
-- v1.3 is **visual-only** — follow `docs/UI-REDESIGN-PLAN.md` implementation order; phases map to Waves 1–5.
-- Autonomous: `/gsd-autonomous` runs discuss → plan → execute for phases 19–25.
-- Frontend phases: autonomous mode may generate `*-UI-SPEC.md` and run UI review audits.
+**Phase 26: Downloader Command Truth** — make the real `yt-dlp` command, progress parser, timeout policy, preflight, and output collection trustworthy.
 
----
-*Last updated: 2026-05-31 — v1.3 milestone opened*
+`$gsd-plan-phase 26`

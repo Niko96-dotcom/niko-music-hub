@@ -70,33 +70,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CMD-01 | TBD | Pending |
-| CMD-02 | TBD | Pending |
-| CMD-03 | TBD | Pending |
-| CMD-04 | TBD | Pending |
-| CMD-05 | TBD | Pending |
-| HLTH-01 | TBD | Pending |
-| HLTH-02 | TBD | Pending |
-| HLTH-03 | TBD | Pending |
-| HLTH-04 | TBD | Pending |
-| OUT-01 | TBD | Pending |
-| OUT-02 | TBD | Pending |
-| OUT-03 | TBD | Pending |
-| HAND-01 | TBD | Pending |
-| HAND-02 | TBD | Pending |
-| HAND-03 | TBD | Pending |
-| HAND-04 | TBD | Pending |
-| HAND-05 | TBD | Pending |
-| UAT-01 | TBD | Pending |
-| UAT-02 | TBD | Pending |
-| UAT-03 | TBD | Pending |
-| UAT-04 | TBD | Pending |
+| CMD-01 | Phase 26 | Pending |
+| CMD-02 | Phase 26 | Pending |
+| CMD-03 | Phase 26 | Pending |
+| CMD-04 | Phase 26 | Pending |
+| CMD-05 | Phase 26 | Pending |
+| HLTH-01 | Phase 27 | Pending |
+| HLTH-02 | Phase 27 | Pending |
+| HLTH-03 | Phase 27 | Pending |
+| HLTH-04 | Phase 27 | Pending |
+| OUT-01 | Phase 27 | Pending |
+| OUT-02 | Phase 27 | Pending |
+| OUT-03 | Phase 27 | Pending |
+| HAND-01 | Phase 28 | Pending |
+| HAND-02 | Phase 28 | Pending |
+| HAND-03 | Phase 28 | Pending |
+| HAND-04 | Phase 28 | Pending |
+| HAND-05 | Phase 28 | Pending |
+| UAT-01 | Phase 29 | Pending |
+| UAT-02 | Phase 29 | Pending |
+| UAT-03 | Phase 29 | Pending |
+| UAT-04 | Phase 29 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-11 from `.planning/research/SUMMARY.md`*
-*Last updated: 2026-06-11 after v1.4 requirement approval*
+*Last updated: 2026-06-11 after v1.4 roadmap creation*
