@@ -41,7 +41,33 @@ final class OutputHandoffTests: XCTestCase {
         XCTAssertNil(OutputHandoff.dragFileURL(for: item))
     }
 
-    func testNonWAVAvailableItemIsNotDragReady() throws {
+    func testDownloaderMP3IsHandoffReady() throws {
+        let fileURL = try makeExistingFile(named: "track.mp3")
+        let item = OutputInboxItem(
+            fileURL: fileURL,
+            sourceToolID: "downloader",
+            status: .available
+        )
+
+        XCTAssertTrue(OutputHandoff.isRevealable(item))
+        XCTAssertTrue(OutputHandoff.isDragReady(item))
+        XCTAssertEqual(OutputHandoff.dragFileURL(for: item), fileURL)
+    }
+
+    func testDownloaderWEBMIsRevealOnly() throws {
+        let fileURL = try makeExistingFile(named: "clip.webm")
+        let item = OutputInboxItem(
+            fileURL: fileURL,
+            sourceToolID: "downloader",
+            status: .available
+        )
+
+        XCTAssertTrue(OutputHandoff.isRevealable(item))
+        XCTAssertFalse(OutputHandoff.isDragReady(item))
+        XCTAssertNil(OutputHandoff.dragFileURL(for: item))
+    }
+
+    func testNonWAVConverterItemIsNotDragReady() throws {
         let fileURL = try makeExistingFile(named: "source.m4a")
         let item = OutputInboxItem(
             fileURL: fileURL,

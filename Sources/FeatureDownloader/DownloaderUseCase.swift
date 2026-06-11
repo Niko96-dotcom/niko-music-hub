@@ -74,7 +74,9 @@ public final class DownloaderUseCase: @unchecked Sendable {
         case let .unusable(message):
             throw DownloadUseCaseError.ytDlpUnavailable(message)
         case let .outdated(current, minimumExpected):
-            throw DownloadUseCaseError.ytDlpUnavailable("yt-dlp version \(current) is outdated. Expected \(minimumExpected) or higher.")
+            throw DownloadUseCaseError.ytDlpUnavailable(
+                DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected)
+            )
         case .available:
             break
         }
@@ -84,19 +86,25 @@ public final class DownloaderUseCase: @unchecked Sendable {
             throw DownloadUseCaseError.ytDlpUnavailable("yt-dlp path is not set in Settings and auto-detection failed.")
         }
 
-        // Use --simulate to validate URL without actually downloading
         let simulateRequest = ExternalProcessRequest(
             executableURL: ytDlpURL,
-            arguments: ["--simulate", "--print", "%(title)s", url.absoluteString],
+            arguments: YtDlpDownloadCommandBuilder.simulateArguments(
+                formatSelection: options.formatSelection,
+                sourceURL: url,
+                ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools)
+            ),
             environment: DownloaderHelperToolResolver.processEnvironment(settings: settings.helperTools),
             timeoutSeconds: 30
         )
 
+        let simulateTitle: String
         do {
             let result = try await simulateRunner.run(simulateRequest)
             if result.exitCode != 0 {
                 throw DownloadUseCaseError.downloadFailed(Self.ytDlpFailureMessage(from: result))
             }
+            let title = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            simulateTitle = title.isEmpty ? Self.fallbackJobTitle(for: url) : title
         } catch let error as DownloadUseCaseError {
             throw error
         } catch {
@@ -108,7 +116,7 @@ public final class DownloaderUseCase: @unchecked Sendable {
         let capturedOptions = options
 
         let job = jobRunner.enqueue(
-            title: "Download: \(url.lastPathComponent)",
+            title: "Download: \(simulateTitle)",
             sourceToolID: ToolFeatureID("downloader")
         ) { progress in
             try await capturedUseCase.downloadWithRetry(
@@ -160,8 +168,9 @@ public final class DownloaderUseCase: @unchecked Sendable {
                     throw DownloadUseCaseError.outputNotFound
                 }
 
+                progress.setOutputFileURLs(result.outputURLs)
                 for outputURL in result.outputURLs {
-                    progress.log("[download] Destination: \(outputURL.path)")
+                    progress.log("Output file: \(outputURL.path)")
                 }
                 progress.update(progress: 1, message: "Downloaded")
 
@@ -184,22 +193,37 @@ public final class DownloaderUseCase: @unchecked Sendable {
         throw lastError ?? DownloadUseCaseError.downloadFailed("Unknown error after \(options.retries) retries")
     }
 
-    private static func parseProgress(from line: String) -> Double? {
-        guard line.contains("[download]") else { return nil }
-        let pattern = "(\\d+\\.?\\d*)%"
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-              let range = Range(match.range(at: 1), in: line),
-              let value = Double(line[range]) else {
-            return nil
-        }
-        return min(max(value / 100.0, 0), 1)
+    static func parseProgress(from line: String) -> Double? {
+        DownloaderProgressParsing.parseNormalizedProgress(from: line)
+    }
+
+    static func isRetryableForTesting(error: Error) -> Bool {
+        isRetryable(error: error)
     }
 
     private static func isRetryable(error: Error) -> Bool {
         let message = error.localizedDescription.lowercased()
-        let retryablePatterns = ["http error 5", "connection reset", "connection timed out", "temporary failure", "timeout"]
+        let retryablePatterns = [
+            "http error 5",
+            "connection reset",
+            "connection timed out",
+            "timed out",
+            "socket timeout",
+            "read timed out",
+            "temporary failure",
+            "timeout",
+            "errno 54",
+            "errno 60",
+        ]
         return retryablePatterns.contains { message.contains($0) }
+    }
+
+    private static func fallbackJobTitle(for url: URL) -> String {
+        let path = url.path
+        if path == "/watch" || path.isEmpty || url.lastPathComponent == "watch" {
+            return url.host ?? "media"
+        }
+        return url.lastPathComponent
     }
 
     static func ytDlpFailureMessage(from result: ExternalProcessResult) -> String {

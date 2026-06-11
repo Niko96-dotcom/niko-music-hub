@@ -28,6 +28,7 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
     public var progress: Double
     public var message: String
     public var logEntries: [JobLogEntry]
+    public var outputFileURLs: [URL]
     public var createdAt: Date
     public var startedAt: Date?
     public var finishedAt: Date?
@@ -40,6 +41,7 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
         progress: Double = 0,
         message: String = "",
         logEntries: [JobLogEntry] = [],
+        outputFileURLs: [URL] = [],
         createdAt: Date = Date(),
         startedAt: Date? = nil,
         finishedAt: Date? = nil
@@ -51,6 +53,7 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
         self.progress = progress
         self.message = message
         self.logEntries = logEntries
+        self.outputFileURLs = outputFileURLs
         self.createdAt = createdAt
         self.startedAt = startedAt
         self.finishedAt = finishedAt

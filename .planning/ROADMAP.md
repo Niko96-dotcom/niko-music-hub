@@ -78,9 +78,9 @@ Phase working docs currently remain under `.planning/phases/`.
 
 ### 🚧 v1.4 Downloader Reliability
 
-- [ ] **Phase 26: Downloader Command Truth** — Real progress markers, format-aware simulate, no fixed total download timeout, stall handling, UTF-8-safe output collection.
-- [ ] **Phase 27: Helper Health and Output Contract** — Outdated helper detection, update guidance, retry/title fixes, structured output URL handoff.
-- [ ] **Phase 28: Media Handoff and Downloader UX Finish** — Safe reveal/open/drag for downloader media and inbox media affordance polish.
+- [x] **Phase 26: Downloader Command Truth** — Real progress markers, format-aware simulate, no fixed total download timeout, stall handling, UTF-8-safe output collection.
+- [x] **Phase 27: Helper Health and Output Contract** — Outdated helper detection, update guidance, retry/title fixes, structured output URL handoff.
+- [x] **Phase 28: Media Handoff and Downloader UX Finish** — Safe reveal/open/drag for downloader media and inbox media affordance polish.
 - [ ] **Phase 29: Real-World Downloader UAT** — Deterministic coverage plus opt-in/live downloader evidence for progress, helper paths, success, failure, and media handoff.
 
 ## Phase Details (v1.4)
@@ -103,6 +103,13 @@ Phase working docs currently remain under `.planning/phases/`.
 **Key files:** `YtDlpDownloader.swift`, `DownloaderUseCase.swift`, `ExternalProcessRunning.swift`, `DownloadFormatSelection.swift`, `Tests/FeatureDownloaderTests/*`, `Tests/AppCoreTests/*`
 
 **Research flags:** Pick exact stall window during planning and keep it testable without sleeping in real time.
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — NIKO_PROGRESS template + parser alignment; remove 90s download timeout (CMD-01, CMD-02)
+- [ ] 26-02-PLAN.md — Stall detection with injectable 120s clock (CMD-03)
+- [ ] 26-03-PLAN.md — Format-aware simulate + UTF-8 output collection + CMD test matrix (CMD-04, CMD-05)
 
 ---
 
@@ -189,13 +196,13 @@ Phase working docs currently remain under `.planning/phases/`.
 | 7–10 | v1.1 | 7/7 | Shipped | 2026-05-23 |
 | 11–18 | v1.2 | 11/11 | Shipped | 2026-05-30 |
 | 19–25 | v1.3 | 13/13 | Shipped | 2026-05-31 |
-| 26. Downloader Command Truth | v1.4 | 0/TBD | Pending | — |
-| 27. Helper Health and Output Contract | v1.4 | 0/TBD | Pending | — |
-| 28. Media Handoff and Downloader UX Finish | v1.4 | 0/TBD | Pending | — |
+| 26. Downloader Command Truth | v1.4 | 3/3 | Complete | 2026-06-11 |
+| 27. Helper Health and Output Contract | v1.4 | 1/1 | Complete | 2026-06-11 |
+| 28. Media Handoff and Downloader UX Finish | v1.4 | 1/1 | Complete | 2026-06-11 |
 | 29. Real-World Downloader UAT | v1.4 | 0/TBD | Pending | — |
 
 ## Next Up
 
-**Phase 26: Downloader Command Truth** — make the real `yt-dlp` command, progress parser, timeout policy, preflight, and output collection trustworthy.
+**Phase 29: Real-World Downloader UAT** — deterministic coverage plus opt-in/live downloader evidence.
 
-`$gsd-plan-phase 26`
+`$gsd-plan-phase 29`

@@ -3,13 +3,16 @@ import Foundation
 public struct JobProgress: Sendable {
     private let updateHandler: @Sendable (Double, String?) -> Void
     private let logHandler: @Sendable (String) -> Void
+    private let outputHandler: @Sendable ([URL]) -> Void
 
     public init(
         updateHandler: @escaping @Sendable (Double, String?) -> Void,
-        logHandler: @escaping @Sendable (String) -> Void
+        logHandler: @escaping @Sendable (String) -> Void,
+        outputHandler: @escaping @Sendable ([URL]) -> Void = { _ in }
     ) {
         self.updateHandler = updateHandler
         self.logHandler = logHandler
+        self.outputHandler = outputHandler
     }
 
     public func update(progress: Double, message: String? = nil) {
@@ -18,6 +21,10 @@ public struct JobProgress: Sendable {
 
     public func log(_ message: String) {
         logHandler(message)
+    }
+
+    public func setOutputFileURLs(_ urls: [URL]) {
+        outputHandler(urls)
     }
 }
 
@@ -65,6 +72,11 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             logHandler: { [weak self] message in
                 self?.updateJob(id: job.id) { current in
                     current.logEntries.append(JobLogEntry(message: message))
+                }
+            },
+            outputHandler: { [weak self] urls in
+                self?.updateJob(id: job.id) { current in
+                    current.outputFileURLs = urls
                 }
             }
         )

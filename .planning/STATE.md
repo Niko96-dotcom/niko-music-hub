@@ -7,10 +7,10 @@ last_updated: "2026-06-11T20:30:00.000Z"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
+  percent: 75
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: `.planning/PROJECT.md` (updated 2026-06-11 for v1.4)
 
 ## Current Position
 
-Phase: 26 — Downloader Command Truth
+Phase: 29 — Real-World Downloader UAT
 Plan: —
-Status: Roadmap ready
-Last activity: 2026-06-11 — v1.4 roadmap approved
+Status: Ready for planning
+Last activity: 2026-06-11 — Phases 26–28 complete; Phase 29 UAT remaining
 
 ## Shipped
 

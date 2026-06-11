@@ -52,7 +52,27 @@ final class YtDlpDownloaderTests: XCTestCase {
             true
         )
         XCTAssertEqual(runner.lastRequest?.arguments.contains("-f"), true)
-        XCTAssertEqual(runner.lastRequest?.timeoutSeconds, 90)
+        XCTAssertNil(runner.lastRequest?.timeoutSeconds)
+        XCTAssertEqual(runner.lastRequest?.arguments.contains("--progress"), true)
+        XCTAssertEqual(runner.lastRequest?.arguments.contains("--no-playlist"), true)
+        XCTAssertTrue(runner.lastRequest?.arguments.contains(YtDlpDownloadCommandBuilder.progressTemplate) ?? false)
+    }
+
+    func testDownloadEmitsNIKOProgressTemplate() async throws {
+        let runner = CapturingRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: FileManager.default.temporaryDirectory
+        )
+
+        _ = try await downloader.download(request) { _ in }
+
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        XCTAssertTrue(arguments.contains("--progress"))
+        XCTAssertTrue(arguments.contains("--progress-template"))
+        XCTAssertTrue(arguments.contains(YtDlpDownloadCommandBuilder.progressTemplate))
     }
 
     func testDownloadDoesNotForceOverwriteExistingOutputs() async throws {
@@ -95,8 +115,63 @@ final class YtDlpDownloaderTests: XCTestCase {
 
         let capturedProgress = progressLines.values()
         XCTAssertEqual(result.outputURLs, [outputURL])
-        XCTAssertTrue(capturedProgress.contains { $0.contains("10.0%") })
-        XCTAssertTrue(capturedProgress.contains { $0.contains("Destination:") })
+        XCTAssertTrue(capturedProgress.contains { $0.contains("NIKO_PROGRESS:") })
+        XCTAssertTrue(capturedProgress.contains { $0.contains("NIKO_MUSIC_HUB_FILE:") })
+    }
+
+    func testStallAfterSilenceFailsWithLockedMessage() async throws {
+        let clock = FakeDownloadStallClock(start: Date())
+        let runner = SilentStreamingRunner()
+        let downloader = YtDlpDownloader(
+            runner: runner,
+            stallClock: clock,
+            stallCheckIntervalNanoseconds: 10_000_000
+        )
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: FileManager.default.temporaryDirectory
+        )
+
+        let task = Task {
+            try await downloader.download(request) { _ in }
+        }
+        try await Task.sleep(nanoseconds: 30_000_000)
+        clock.advance(by: 121)
+        do {
+            _ = try await task.value
+            XCTFail("Expected stall failure")
+        } catch let error as DownloadError {
+            guard case let .downloadFailed(message) = error else {
+                XCTFail("Unexpected error: \(error)")
+                return
+            }
+            XCTAssertTrue(message.contains("Download stalled — no progress for 2 minutes"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testProgressResetsStallClock() async throws {
+        let clock = FakeDownloadStallClock(start: Date())
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stall-reset-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        let runner = DelayedProgressStreamingRunner(outputURL: outputURL, clock: clock)
+        let downloader = YtDlpDownloader(
+            runner: runner,
+            stallClock: clock,
+            stallCheckIntervalNanoseconds: 10_000_000
+        )
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: FileManager.default.temporaryDirectory
+        )
+
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertEqual(result.outputURLs, [outputURL])
     }
 
     func testOutputPathCandidatesCoverYtDlpFinalPathLines() {
@@ -116,23 +191,6 @@ final class YtDlpDownloaderTests: XCTestCase {
             YtDlpDownloader.outputPathCandidates(from: "[download] relative/final.mp4 has already been downloaded"),
             ["relative/final.mp4"]
         )
-    }
-}
-
-private final class LockedStringArray: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [String] = []
-
-    func append(_ value: String) {
-        lock.withLock {
-            storage.append(value)
-        }
-    }
-
-    func values() -> [String] {
-        lock.withLock {
-            storage
-        }
     }
 }
 
@@ -158,6 +216,49 @@ private final class CapturingRunner: ExternalProcessRunning, @unchecked Sendable
     }
 }
 
+private final class SilentStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        while !Task.isCancelled {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        throw CancellationError()
+    }
+}
+
+private final class DelayedProgressStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {
+    let outputURL: URL
+    let clock: FakeDownloadStallClock
+
+    init(outputURL: URL, clock: FakeDownloadStallClock) {
+        self.outputURL = outputURL
+        self.clock = clock
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        clock.advance(by: 60)
+        onStandardOutput("NIKO_PROGRESS: 5.0%\n")
+        onStandardOutput("NIKO_MUSIC_HUB_FILE:\(outputURL.path)\n")
+        FileManager.default.createFile(atPath: outputURL.path, contents: Data("download".utf8))
+        return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+    }
+}
+
 private final class StreamingDestinationRunner: StreamingExternalProcessRunning, @unchecked Sendable {
     let outputURL: URL
 
@@ -175,8 +276,8 @@ private final class StreamingDestinationRunner: StreamingExternalProcessRunning,
         onStandardOutput: @escaping @Sendable (String) -> Void,
         onStandardError: @escaping @Sendable (String) -> Void
     ) async throws -> ExternalProcessResult {
-        onStandardOutput("[download] 10.0% of 1.0MiB at 1.0MiB/s ETA 00:01\n")
-        onStandardOutput("[download] Destination: \(outputURL.path)\n")
+        onStandardOutput("NIKO_PROGRESS: 10.0%\n")
+        onStandardOutput("NIKO_MUSIC_HUB_FILE:\(outputURL.path)\n")
         FileManager.default.createFile(atPath: outputURL.path, contents: Data("download".utf8))
         return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
     }
