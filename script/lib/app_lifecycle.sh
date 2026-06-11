@@ -7,6 +7,8 @@ NMH_ROOT_DIR="$(cd "$NMH_SCRIPT_DIR/.." && pwd)"
 
 NMH_APP_NAME="${NMH_APP_NAME:-NikoMusicHub}"
 NMH_BUNDLE_ID="${NMH_BUNDLE_ID:-local.niko-music-hub.app}"
+NMH_MARKETING_VERSION="${NMH_MARKETING_VERSION:-1.4}"
+NMH_BUILD_VERSION="${NMH_BUILD_VERSION:-4}"
 NMH_MIN_SYSTEM_VERSION="${NMH_MIN_SYSTEM_VERSION:-14.2}"
 NMH_LAUNCH_WAIT_SEC="${NMH_LAUNCH_WAIT_SEC:-8}"
 NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-Niko Music Hub}"
@@ -81,9 +83,9 @@ nmh_build_bundle() {
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0</string>
+  <string>$NMH_MARKETING_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>$NMH_BUILD_VERSION</string>
   <key>LSMultipleInstancesSupported</key>
   <false/>
   <key>LSMinimumSystemVersion</key>

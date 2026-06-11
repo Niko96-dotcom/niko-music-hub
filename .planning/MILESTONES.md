@@ -1,5 +1,28 @@
 # Milestones
 
+## v1.4 Downloader Reliability — 2026-06-11
+
+**Status:** ✅ SHIPPED  
+**Phases:** 26–29 (4 phases)  
+**Requirements:** 21/21
+
+### Key Accomplishments
+
+1. Real `NIKO_PROGRESS` markers, stall detection, no fixed 90s download kill (Phase 26)
+2. Outdated yt-dlp guidance, structured `outputFileURLs`, retry/title fixes (Phase 27)
+3. Downloader media reveal/drag allowlist in Output Inbox (Phase 28)
+4. UAT matrix, opt-in live smoke, evidence doc (Phase 29)
+
+### Archives
+
+- Roadmap: `.planning/milestones/v1.4-ROADMAP.md`
+- Requirements: `.planning/milestones/v1.4-REQUIREMENTS.md`
+- Phases: `.planning/milestones/v1.4-phases/`
+- Audit: `.planning/milestones/v1.4-MILESTONE-AUDIT.md`
+- UAT: `docs/downloader-v1.4-uat.md`
+
+---
+
 ## v1.2 Cubase Archive Recall — 2026-05-30
 
 **Status:** ✅ SHIPPED  

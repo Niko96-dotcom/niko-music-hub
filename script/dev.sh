@@ -147,6 +147,7 @@ Helpful when something is weird:
   ./script/dev.sh stop      Stop any running Niko Music Hub instance.
   ./script/dev.sh clean     Delete generated build output.
   ./script/dev.sh helpers   Install/update ffmpeg and yt-dlp with Homebrew.
+  ./script/dev.sh live-downloader  Opt-in real yt-dlp smoke (needs NIKO_MUSIC_HUB_LIVE_DOWNLOADER=1).
 
 Finder shortcuts:
   Double-click "Run Niko Music Hub.command" to build and launch.
@@ -214,6 +215,7 @@ doctor() {
   check_script ./script/build_and_run.sh
   check_script ./script/ci.sh
   check_script ./script/e2e_user_smoke.sh
+  check_script ./script/downloader_live_smoke.sh
   check_script ./script/capture_window_proof.sh
 
   if [[ -f .codex/environments/environment.toml ]] &&
@@ -300,6 +302,9 @@ case "${1:-help}" in
     ;;
   smoke)
     ./script/e2e_user_smoke.sh
+    ;;
+  live-downloader)
+    NIKO_MUSIC_HUB_LIVE_DOWNLOADER="${NIKO_MUSIC_HUB_LIVE_DOWNLOADER:-1}" ./script/downloader_live_smoke.sh
     ;;
   logs)
     ./script/build_and_run.sh --logs
