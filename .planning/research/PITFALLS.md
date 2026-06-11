@@ -1,183 +1,169 @@
 # Pitfalls Research
 
-**Domain:** Native macOS music-production utility hub
-**Researched:** 2026-05-04
-**Confidence:** MEDIUM-HIGH
+**Domain:** yt-dlp downloader hardening in a native macOS app
+**Researched:** 2026-06-11
+**Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: System Audio Capture Fails Late
+### Pitfall 1: Progress That Cannot Appear
 
 **What goes wrong:**
-The app shell and UI get polished, but internal audio recording fails because permissions, macOS version, output routing, or API behavior were not proven.
+The UI waits for progress lines that the real yt-dlp invocation never emits.
 
 **Why it happens:**
-Desktop audio capture looks like a UI feature, but the hard part is the OS integration.
+Tests use fabricated `[download] 45%` lines while the command uses `--print after_move:...`, which changes output behavior and can leave only final printed lines.
 
 **How to avoid:**
-Build a minimal Core Audio tap to WAV proof early, including permission copy, failure states, and a real playable WAV output.
+Pass `--progress` and an explicit progress template such as `download:NIKO_PROGRESS:%(progress._percent_str)s`. Parse only `NIKO_PROGRESS:` for UI progress.
 
 **Warning signs:**
-Recorder UI exists before a verified WAV file; errors say only "failed"; no macOS version check.
+Progress bar stays at 0% while Terminal proves the download is active.
 
 **Phase to address:**
-Phase 4 at latest, with a technical proof earlier if Phase 1 planning finds uncertainty.
+First v1.4 implementation phase.
 
 ---
 
-### Pitfall 2: External Tool Commands Become Unsafe or Untestable
+### Pitfall 2: Total Timeout Kills Valid Work
 
 **What goes wrong:**
-yt-dlp/FFmpeg commands are built as shell strings inside UI code, causing path bugs, escaping bugs, and poor tests.
+Long/slow downloads are terminated after 90 seconds even when healthy.
 
 **Why it happens:**
-Command-line tools are quick to prototype and easy to let leak through the app.
+The same timeout model is used for short health/simulate calls and full media downloads.
 
 **How to avoid:**
-Use `Process` with explicit executable URL and argument array. Keep command construction in adapters with unit tests.
+Keep fixed timeouts on health/simulate. For downloads, track last output/progress time and fail only after a stall window.
 
 **Warning signs:**
-Code contains `sh -c`, string-concatenated URLs, or command snippets in view models.
+Short videos pass; longer videos, WAV extraction, 720p merges, or throttled connections fail "sometimes."
 
 **Phase to address:**
-Phase 1 and Phase 3.
+First v1.4 implementation phase, after real progress markers.
 
 ---
 
-### Pitfall 3: WAV Output Is Technically Valid But Annoying in Cubase
+### Pitfall 3: Logs Become The Data Plane
 
 **What goes wrong:**
-WAV files import but have wrong sample rate, bit depth, channels, clipping, or names, creating work inside Cubase.
+The downloader writes synthetic destination log lines, then UI code regex-parses logs back into file URLs.
 
 **Why it happens:**
-Conversion is treated as "any WAV" instead of "production-ready WAV".
+Job logging was convenient before the output-inbox contract needed richer media handoff.
 
 **How to avoid:**
-Create project output presets, verify WAV headers, and expose sample rate/bit depth/channel settings.
+Pass output URLs through a typed result/handoff path. Keep logs as diagnostics only.
 
 **Warning signs:**
-No tests inspect output format; no default preset; user has to rename every output manually.
+Changing log copy breaks inbox ingestion; output rows appear without reveal/open/drag actions.
 
 **Phase to address:**
-Phase 3 and Phase 4.
+Second v1.4 implementation phase.
 
 ---
 
-### Pitfall 4: Feature Hub Becomes a Hard-Coded Dashboard
+### Pitfall 4: Helper Health Exists But Does Not Warn
 
 **What goes wrong:**
-Adding the next idea requires editing navigation, state, settings, job UI, and output code in multiple places.
+yt-dlp is stale enough to fail on site extractor changes, but the app reports it as available.
 
 **Why it happens:**
-The first three tools feel small enough to wire directly.
+`YtDlpAvailability.outdated` exists, but `YtDlpHealthChecker.availability` never emits it.
 
 **How to avoid:**
-Create a feature registry, shared tool context, and common job/output services before building all tools.
+Parse date-like version tags, compare to a staleness policy, and show update guidance. On this machine, local yt-dlp is `2026.03.17`; latest checked release is `2026.06.09`.
 
 **Warning signs:**
-Each feature owns its own progress UI; sidebar has hard-coded cases; settings are feature-specific globals.
+Terminal `brew upgrade yt-dlp` fixes failures the app classified as random downloader errors.
 
 **Phase to address:**
-Phase 1.
+Second v1.4 implementation phase.
 
 ---
 
-### Pitfall 5: Downloader Scope Crosses Legal or Trust Boundaries
+### Pitfall 5: Format Validation Does Not Match Download
 
 **What goes wrong:**
-The app appears to encourage downloading restricted material or hides what yt-dlp is doing.
+Preflight succeeds while the selected real format later fails.
 
 **Why it happens:**
-Downloader convenience can blur source rights and site rules.
+Simulation omits selected `-f` and post-processing args, and does not force single-video behavior with `--no-playlist`.
 
 **How to avoid:**
-Use explicit URL input, show source/output details, and document that downloads are for material the user has rights to access and save.
+Simulate the selected format path and add `--no-playlist` unless/ until playlist UX is intentionally scoped.
 
 **Warning signs:**
-"Download anything" language, browser-cookie automation in v1, or silent retries against protected sources.
+Changing from MP3 to MP4 or 720p changes failure behavior after enqueue, not during preflight.
 
 **Phase to address:**
-Phase 5.
+First or second v1.4 implementation phase.
+
+---
+
+### Pitfall 6: UTF-8 Streaming Drops Lines
+
+**What goes wrong:**
+A split multibyte character makes a streaming chunk fail UTF-8 decoding; if that chunk contains the final file marker, the app reports no output files.
+
+**Why it happens:**
+`ExternalProcessRunning` converts each pipe chunk independently instead of using an incremental decoder or parsing the full accumulated output as fallback.
+
+**How to avoid:**
+Buffer bytes until valid UTF-8 boundaries, or always re-parse `ExternalProcessResult.standardOutput` and `standardError` at process end.
+
+**Warning signs:**
+Failures correlate with titles containing non-ASCII characters.
+
+**Phase to address:**
+First v1.4 implementation phase if touching process streaming; otherwise second.
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Start with no feature registry | Faster first view | Every new tool rewrites shell/navigation patterns | Never; registry can be tiny. |
-| Use one global settings object for all tools | Easy access | Settings become tangled and hard to migrate | Only for shared app-level settings. |
-| Assume Homebrew paths | Quick local development | Breaks on other machines and Intel/Apple Silicon differences | Acceptable only with visible health checks. |
-| Skip output metadata | Saves persistence work | Output inbox cannot show source, format, or job status | Only for throwaway proof code. |
+| Assert source strings in tests | Fast to write | Does not prove behavior | Only as a guardrail next to behavioral tests. |
+| One output handoff policy | Simple API | Blocks media outputs | Not acceptable for v1.4. |
+| `try?` store errors | Quiet UI | Data loss or silent stale state | Only for best-effort refresh, with diagnostics. |
+| Premerged-only MP4 selectors | Simple output extension | Lower quality/fallback surprises on modern sites | Accept only as one explicit "compatibility" option, not the 720p default. |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Core Audio taps | Missing Info.plist usage description or version gating. | Add permission text, version check, and explicit error states. |
-| yt-dlp | Treating all stderr as failure. | Parse process exit status and progress carefully. |
-| FFmpeg | Assuming one command fits all audio inputs. | Build requests from explicit presets and inspect output. |
-| App Sandbox | Expecting arbitrary file access. | Use user-selected folders or defer sandboxed distribution. |
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Running conversion/download on main actor | UI freezes during long jobs. | Job runner uses async background work. | Immediately with large files. |
-| Loading full audio into memory | High memory use or crashes. | Stream buffers when converting/recording. | Long recordings or batch conversion. |
-| Unbounded parallel jobs | CPU/disk saturation. | Queue with concurrency limits and cancellation. | Multiple downloads/conversions. |
-
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Shell interpolation with URLs/paths | Injection or broken commands. | `Process` executable + args only. |
-| Silent helper binary updates | Trust and integrity risk. | Show version, source, and update action; verify where possible. |
-| Capturing audio without clear state | Privacy/trust issue. | Obvious recording indicator, duration, and stop control. |
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Generic error messages | User cannot recover mid-session. | "FFmpeg not found", "permission denied", "unsupported source" with next action. |
-| Hiding output files | Dragging into Cubase stays annoying. | Shared output inbox with reveal and drag-out. |
-| Over-explaining in the UI | App feels like docs, not a tool. | Clear controls, terse labels, detailed errors only when needed. |
-| Too much chrome around tiny tools | BPM tapper feels slower than the website. | Compact, keyboard-friendly tool panels. |
+| yt-dlp progress | Parse normal stdout | Use `--progress-template` markers. |
+| yt-dlp update state | Only check executable exists | Run `--version`, parse date, and guide update. |
+| FFmpeg path | Assume app `PATH` matches Terminal | Continue using `--ffmpeg-location` and resolver environment. |
+| Output inbox | Reveal only WAV | Tool-aware media allowlist. |
+| Retry logic | Match only one timeout wording | Include `timed out`, socket/read timeout, connection reset, HTTP 5xx, temporary failures. |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **BPM tapper:** Often missing reset/half/double/copy - verify each is one action.
-- [ ] **Recorder:** Often missing real system audio proof - verify a playable WAV from computer audio.
-- [ ] **Converter:** Often missing output format inspection - verify sample rate, bit depth, channels.
-- [ ] **Downloader:** Often missing helper health and legal scope - verify tool version and explicit URL workflow.
-- [ ] **Output inbox:** Often missing drag-out - verify generated WAV can be dragged into another app/Finder.
-- [ ] **Architecture:** Often missing a second feature registration test - verify a dummy feature can be added without shell edits.
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Audio capture path fails | MEDIUM-HIGH | Spike ScreenCaptureKit fallback or virtual-device path before adding recorder polish. |
-| Helper packaging becomes blocked | MEDIUM | Keep external-tool health check and document install path; defer bundled distribution. |
-| Architecture becomes coupled | MEDIUM | Extract feature registry and ports before adding the next feature. |
-| WAV specs wrong | LOW-MEDIUM | Add output inspection tests and preset-driven conversion. |
+- [ ] **Progress:** The progress test uses the same marker emitted by the real command.
+- [ ] **Timeout:** There is no fixed total timeout on actual downloads.
+- [ ] **Health:** The stale yt-dlp path shows user-facing update guidance.
+- [ ] **Simulation:** Simulate includes selected format args and `--no-playlist`.
+- [ ] **Output:** Inbox receives typed output URLs without log parsing.
+- [ ] **Handoff:** MP3/M4A/MP4/WEBM can be revealed/opened/dragged when safe.
+- [ ] **UAT:** A real network downloader check covers a longer or throttled case, not only an 18-second video.
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Hard-coded feature hub | Phase 1 | Add dummy feature through registry. |
-| WAV output mismatch | Phase 3 | Inspect converted WAV headers. |
-| System audio capture fails late | Phase 4 | Record internal audio to a playable WAV. |
-| Unsafe command construction | Phase 3 and Phase 5 | Unit-test argv arrays; no shell interpolation. |
-| Downloader trust/legal ambiguity | Phase 5 | Explicit source URL and rights-aware UI copy. |
+| Progress cannot appear | Phase 26 | Captured command args include `--progress-template`; parser accepts `NIKO_PROGRESS:`; UI progress advances. |
+| Total timeout kills work | Phase 26 | Tests prove no 90-second request timeout for downloads and stall timeout behavior is covered. |
+| Logs as data plane | Phase 27 | Output inbox tests fail if synthetic log-line parsing is removed from the job path. |
+| Helper health dead code | Phase 27 | Date-version tests cover available/outdated/unusable states. |
+| Format mismatch | Phase 26 or 27 | Simulate request contains selected format args and `--no-playlist`. |
+| Missing UAT | Final v1.4 phase | Evidence file includes real/live or opt-in network verification. |
 
 ## Sources
 
-- https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps - Audio capture permission/version gotchas.
-- https://support.apple.com/en-lamr/guide/mac-help/mchl592e5686/mac - User-facing screen/system audio recording permission context.
-- https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox - File access constraints.
-- https://github.com/yt-dlp/yt-dlp/blob/master/README.md - Downloader dependencies, release files, and update behavior.
-- https://ffmpeg.org/ffmpeg.html - FFmpeg conversion behavior and argument model.
+- 2026-06-11 downloader audit.
+- Official yt-dlp README: https://github.com/yt-dlp/yt-dlp.
+- Local helper version checks and local source/test inspection.
 
 ---
-*Pitfalls research for: Native macOS music-production utility hub*
-*Researched: 2026-05-04*
+*Pitfalls research for: v1.4 Downloader Reliability*
+*Researched: 2026-06-11*

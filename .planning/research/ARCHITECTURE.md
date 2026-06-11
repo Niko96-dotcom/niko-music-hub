@@ -1,246 +1,161 @@
 # Architecture Research
 
-**Domain:** Native macOS music-production utility hub
-**Researched:** 2026-05-04
-**Confidence:** HIGH for modular app architecture, MEDIUM for final audio capture adapter details
+**Domain:** Reliable external-helper download pipeline in a native macOS app
+**Researched:** 2026-06-11
+**Confidence:** HIGH
 
 ## Standard Architecture
 
 ### System Overview
 
 ```text
-+--------------------------------------------------------------+
-|                         SwiftUI App Shell                    |
-|  Sidebar / Toolbar / Settings / Shared Job + Output Views    |
-+---------------------------+----------------------------------+
-                            |
-                            v
-+--------------------------------------------------------------+
-|                         Feature Registry                     |
-|  BPMTapperFeature | ConverterFeature | RecorderFeature | ... |
-+---------------------------+----------------------------------+
-                            |
-                            v
-+--------------------------------------------------------------+
-|                           Use Cases                          |
-|  TapTempo | ConvertAudio | RecordSystemAudio | DownloadURL   |
-+---------------------------+----------------------------------+
-                            |
-                            v
-+--------------------------------------------------------------+
-|                       Service Ports                          |
-| AudioCapturePort | AudioConvertPort | DownloadPort | Files   |
-+---------------------------+----------------------------------+
-                            |
-                            v
-+--------------------------------------------------------------+
-|                         Adapters                             |
-| CoreAudioTap | AVAudioFile | FFmpegProcess | YTDLPProcess    |
-+--------------------------------------------------------------+
-                            |
-                            v
-+--------------------------------------------------------------+
-|                  Local Files, Output Inbox, Logs             |
-+--------------------------------------------------------------+
+SwiftUI DownloaderView / OutputInboxInspectorView
+        |
+DownloaderViewModel
+        |
+DownloaderUseCase
+        |--------------------------|
+        |                          |
+YtDlpHealthChecker          JobRunner / JobProgress
+        |                          |
+YtDlpDownloader             structured completion result
+        |                          |
+FoundationExternalProcessRunner    |
+        |                          |
+yt-dlp + FFmpeg/ffprobe      OutputInboxStore
+                                   |
+                              OutputHandoff
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| App Shell | Navigation, window, settings, shared output/job surfaces. | SwiftUI views plus AppKit bridges where needed. |
-| Feature Registry | Declares available tools and their metadata/view factories. | `ToolFeature` protocol and static registration at app launch. |
-| Use Cases | Tool-specific behavior without UI or process details. | Pure Swift types with injected ports. |
-| Service Ports | Stable interfaces for side effects. | Protocols for download, conversion, recording, files, logging. |
-| Adapters | Concrete implementation of external APIs/tools. | Core Audio, AVFAudio, FFmpeg `Process`, yt-dlp `Process`. |
-| Output Inbox | Generated file tracking, reveal, drag-out, preview metadata. | Local JSON/SQLite-lite store plus file-system folder. |
-| Job Runner | Background execution with progress/events/cancellation. | Async/await tasks and observable job state. |
+| Component | Responsibility | Current State | v1.4 Direction |
+|-----------|----------------|---------------|----------------|
+| `DownloaderView` / `DownloaderViewModel` | User input, format selection, status display | Good UI shell, but progress is only as truthful as backend | Keep UI mostly stable; make progress/helper states real. |
+| `DownloaderUseCase` | Simulate, enqueue, retry, progress parse, output handoff | Simulate omits format args; retry matching is brittle; output URLs are logged back into text | Split command result data from logs; match transient errors precisely. |
+| `YtDlpDownloader` | Build yt-dlp command, run process, collect output paths/progress | Uses argument arrays, but has 90-second timeout and invalid progress template | Use explicit progress markers, no total download timeout, full-output fallback. |
+| `FoundationExternalProcessRunner` | Run helper tools and stream stdout/stderr | Total timeout support; chunk-level UTF-8 decoding can drop split multibyte sequences | Add UTF-8-safe streaming decoder or fallback parser contract. |
+| `YtDlpHealthChecker` | Missing/unusable helper detection | `outdated` enum exists but never emitted | Implement date/version policy and upgrade message. |
+| `OutputHandoff` | Decide reveal/drag readiness | WAV-only policy | Keep WAV verification for converter/recorder; add tool/media-aware downloader policy. |
 
 ## Recommended Project Structure
 
 ```text
-OutsideCubaseHub/
-├── AGENTS.md
-├── Package.swift or Xcode project
-├── Sources/
-│   ├── OutsideCubaseHubApp/
-│   │   ├── OutsideCubaseHubApp.swift
-│   │   ├── AppShell/
-│   │   └── Settings/
-│   ├── AppCore/
-│   │   ├── Features/
-│   │   ├── Jobs/
-│   │   ├── Files/
-│   │   └── Diagnostics/
-│   ├── FeatureBPMTapper/
-│   ├── FeatureConverter/
-│   ├── FeatureRecorder/
-│   ├── FeatureDownloader/
-│   └── Infrastructure/
-│       ├── Audio/
-│       ├── ExternalTools/
-│       └── Persistence/
-└── Tests/
-    ├── AppCoreTests/
-    ├── FeatureBPMTapperTests/
-    ├── FeatureConverterTests/
-    └── InfrastructureTests/
+Sources/
+├── FeatureDownloader/
+│   ├── YtDlpDownloader.swift          # command construction, progress markers, output collection
+│   ├── DownloaderUseCase.swift        # simulate, retry, job handoff
+│   ├── YtDlpHealthChecker.swift       # version/staleness guidance
+│   ├── DownloadFormatSelection.swift  # format selectors and extra args
+│   └── DownloaderJobFactory.swift     # candidate for structured output result wiring
+├── AppCore/
+│   ├── Services/ExternalProcessRunning.swift
+│   ├── Jobs/JobRunner.swift
+│   └── OutputInbox/OutputHandoff.swift
+└── NikoMusicHub/AppShell/
+    └── OutputInboxInspectorView.swift
 ```
 
 ### Structure Rationale
 
-- **AppCore:** Shared contracts and primitives stay small and stable.
-- **Feature modules:** New tools can be added without touching existing tool internals.
-- **Infrastructure:** Side-effect-heavy code is isolated behind ports.
-- **Tests by module:** BPM math, command construction, output metadata, and conversion settings can be verified separately.
+- Keep command-specific logic in `FeatureDownloader`; AppCore should know only generic process/job/output concepts.
+- Extend AppCore handoff policy through explicit media/tool semantics rather than adding downloader UI special cases.
+- Keep helper process execution generic, but make streaming decoding safe enough for all features.
 
 ## Architectural Patterns
 
-### Pattern 1: Feature Module Registration
+### Pattern 1: Explicit Machine-Readable Helper Output
 
-**What:** Every tool exposes a consistent metadata and view/use-case boundary.
-**When to use:** For all tools, even the tiny BPM tapper.
-**Trade-offs:** Slight upfront structure, much lower future friction.
+**What:** Configure yt-dlp to emit stable marker lines such as `NIKO_PROGRESS:` and `NIKO_MUSIC_HUB_FILE:`.
 
-```swift
-protocol ToolFeature {
-    var id: ToolFeatureID { get }
-    var title: String { get }
-    var capability: ToolCapability { get }
-    @MainActor func makeView(context: ToolContext) -> AnyView
-}
-```
+**When to use:** Any UI state or data transfer that depends on helper output.
 
-### Pattern 2: Ports and Adapters
+**Trade-offs:** Slightly more command construction complexity, much less parser fragility.
 
-**What:** Use cases depend on protocols, not `Process`, Core Audio, or FFmpeg directly.
-**When to use:** Anything that touches files, permissions, audio devices, network, or helper tools.
-**Trade-offs:** More files, but simpler tests and replacement.
+### Pattern 2: Job Result Data Plane Separate From Logs
 
-```swift
-protocol AudioConverter {
-    func convert(_ request: ConversionRequest) async throws -> ConversionResult
-}
-```
+**What:** A job can log human-readable lines, but output file URLs should travel through typed completion metadata or a downloader-specific completion callback.
 
-### Pattern 3: Job Runner With Events
+**When to use:** Output inbox ingestion, reveal/open/drag state, future automation.
 
-**What:** Long-running work reports progress, logs, completion, and cancellation through one shared model.
-**When to use:** Downloads, conversion, recording, and batch work.
-**Trade-offs:** Needs careful UI-state handling, but prevents each tool inventing its own progress system.
+**Trade-offs:** Requires a small AppCore or downloader boundary change. Removes regex round-tripping.
 
-### Pattern 4: Output Inbox as Product Surface
+### Pattern 3: Timeout By Stall, Not By Duration
 
-**What:** Generated files are not just saved; they become first-class output items with metadata and actions.
-**When to use:** Every file-producing feature.
-**Trade-offs:** Requires a small persistence layer, but makes drag/drop into Cubase pleasant.
+**What:** Health/simulate commands can have fixed timeouts; downloads should fail only when no output/progress occurs for a configured stall window.
+
+**When to use:** Long-running external downloads with legitimate slow/large cases.
+
+**Trade-offs:** More state to track in the runner/use case, but aligns with real user expectations.
 
 ## Data Flow
-
-### BPM Tapper Flow
-
-```text
-User tap/click/space
-    -> BPMTapperViewModel
-    -> TapTempoUseCase
-    -> TempoEstimator
-    -> BPM result + history item
-```
-
-### Conversion Flow
-
-```text
-Dropped audio files
-    -> ConvertAudioUseCase
-    -> AudioConverter port
-    -> AVAudio adapter or FFmpeg adapter
-    -> WAV file
-    -> Output Inbox
-```
-
-### Recording Flow
-
-```text
-Record button
-    -> Permission check
-    -> RecordSystemAudioUseCase
-    -> CoreAudioTap adapter
-    -> WAV writer
-    -> Output Inbox
-```
 
 ### Download Flow
 
 ```text
-URL input
-    -> Validate/normalize URL
-    -> DownloadURLUseCase
-    -> YTDLPProcess adapter
-    -> Progress events
-    -> Output Inbox
+User enters URL + format
+    -> simulate selected format with --simulate --no-playlist
+    -> enqueue job
+    -> run yt-dlp with explicit progress/file markers
+    -> stream progress to JobProgress
+    -> collect output URLs as structured data
+    -> write OutputInboxItem(s)
+    -> OutputHandoff exposes safe reveal/open/drag actions
 ```
 
-## Scaling Considerations
+### Helper Health Flow
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| Personal local use | File-based output metadata and in-process jobs are enough. |
-| Many batch jobs | Add job persistence and queue recovery after app restart. |
-| Public distribution | Add signed helper management, update checks, notarization, and license review. |
-
-### Scaling Priorities
-
-1. **First bottleneck:** Long-running jobs blocking the UI. Use async job runner from the start.
-2. **Second bottleneck:** Feature coupling. Keep feature modules honest before adding more tools.
-3. **Third bottleneck:** Helper tool drift. Add explicit health checks and version display.
-
-## Anti-Patterns
-
-### Anti-Pattern 1: UI Owns External Tool Commands
-
-**What people do:** Build command arrays directly in SwiftUI views.
-**Why it's wrong:** Hard to test, insecure, and brittle when options grow.
-**Do this instead:** Use downloader/converter use cases and process adapters.
-
-### Anti-Pattern 2: Recording Polish Before Capture Proof
-
-**What people do:** Design a beautiful recorder UI before proving system audio capture works.
-**Why it's wrong:** The riskiest part is permission/API behavior, not buttons.
-**Do this instead:** Build a minimal capture-to-WAV path early.
-
-### Anti-Pattern 3: "Temporary" Hard-Coded Tool List
-
-**What people do:** Hard-code BPM/converter/downloader views in the sidebar.
-**Why it's wrong:** It trains the codebase against the user's explicit extensibility goal.
-**Do this instead:** Register tools through `ToolFeature`.
+```text
+Settings/helper resolver
+    -> locate yt-dlp
+    -> run --version
+    -> parse date/version
+    -> compare with app staleness policy and latest-known/update guidance
+    -> display missing/unusable/outdated/available state
+```
 
 ## Integration Points
 
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| yt-dlp | `Process` adapter with explicit args and parsed progress output. | Avoid shell interpolation; show version and update guidance. |
-| FFmpeg | `Process` adapter for fallback conversion and metadata probing. | Parse failures into user-facing errors. |
-| Core Audio | Native adapter behind `AudioCapturePort`. | Requires permission flow and early proof. |
-| Finder | AppKit/NSWorkspace integration. | Reveal output, drag file URLs, open output folder. |
-
-### Internal Boundaries
-
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| Feature -> Use Case | Direct dependency injection | Feature owns UI, use case owns behavior. |
-| Use Case -> Adapter | Protocol | Tests use fakes. |
-| Job Runner -> UI | Observable job events | One progress/error model across tools. |
-| Output Inbox -> Features | Shared service | File-producing features append output items. |
+| Swift app -> yt-dlp | `Process` executable URL + argument array | Preserve no-shell guarantee. |
+| yt-dlp -> Swift app | stdout/stderr streaming and final result | Use explicit markers and UTF-8-safe buffering. |
+| Downloader -> OutputInbox | Structured output URLs | Avoid logs as data. |
+| OutputInbox -> Finder/Cubase | `NSWorkspace`, `NSItemProvider` | Allow media types intentionally; verify files exist and are available. |
+| App -> Homebrew/user updates | `./script/dev.sh helpers` and Settings copy | App can suggest commands, not silently mutate helper tools unless a future update manager is built. |
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Quiet Helper With Fake Progress Expectations
+
+**What people do:** Use `--print`/quiet behavior and still test parser against normal `[download]` progress.
+
+**Why it is wrong:** Tests and UI disagree with the real command.
+
+**Do this instead:** Force progress output and parse an app-owned marker.
+
+### Anti-Pattern 2: One Handoff Rule For All Tools
+
+**What people do:** Require WAV verification for every output.
+
+**Why it is wrong:** Correct for converter/recorder, wrong for downloader media.
+
+**Do this instead:** Make handoff policy aware of output type/source tool while keeping conservative file-exists checks.
+
+### Anti-Pattern 3: Delete Evidence During Milestone Setup
+
+**What people do:** Clear tracked phase dirs that are not archived.
+
+**Why it is wrong:** Loses planning history.
+
+**Do this instead:** Leave v1.3 phase dirs until the proper milestone archive path exists.
 
 ## Sources
 
-- https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps - Audio capture adapter boundary.
-- https://developer.apple.com/documentation/avfaudio/avaudiofile - WAV/native audio file implementation context.
-- https://github.com/yt-dlp/yt-dlp/blob/master/README.md - Downloader helper integration context.
-- https://ffmpeg.org/ffmpeg.html - FFmpeg process adapter behavior.
+- Official yt-dlp README embedding guidance: https://github.com/yt-dlp/yt-dlp#embedding-yt-dlp.
+- Local code: `YtDlpDownloader.swift`, `DownloaderUseCase.swift`, `ExternalProcessRunning.swift`, `OutputHandoff.swift`.
+- Local docs: `.planning/PROJECT.md`, `docs/public-release-real-uat-2026-05-26.md`.
 
 ---
-*Architecture research for: Native macOS music-production utility hub*
-*Researched: 2026-05-04*
+*Architecture research for: v1.4 Downloader Reliability*
+*Researched: 2026-06-11*

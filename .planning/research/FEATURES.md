@@ -1,8 +1,8 @@
 # Feature Research
 
-**Domain:** Native macOS music-production utility hub
-**Researched:** 2026-05-04
-**Confidence:** MEDIUM-HIGH
+**Domain:** Downloader reliability inside Niko Music Hub
+**Researched:** 2026-06-11
+**Confidence:** HIGH
 
 ## Feature Landscape
 
@@ -10,129 +10,107 @@
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| BPM tapper | The user already uses a web tapper repeatedly. | LOW | Needs tap input, reset, average, half/double tempo, copy/save. |
-| Internal audio recording to WAV | Core requested workflow: capture computer audio and drag WAV into Cubase. | HIGH | Permission-heavy and should be validated early. |
-| M4A to WAV conversion | Common Cubase prep chore named by user. | MEDIUM | Use native conversion where possible, FFmpeg fallback for robustness. |
-| Website download queue | User explicitly linked yt-dlp as desired class of workflow. | MEDIUM | Needs URL input, progress, output, and safe error reporting. |
-| Output inbox | All tools produce files that should be easy to drag into Cubase. | MEDIUM | Shared file list, reveal in Finder, preview/playback, drag-out. |
-| Tool health checks | External helper tools can be missing/outdated. | MEDIUM | Show yt-dlp/FFmpeg availability, version, and next action. |
-| Modular app shell | User explicitly wants new ideas to be easy. | MEDIUM | Feature registry, isolated state, shared services. |
+| Real progress during downloads | A producer needs to know a download is alive, especially for long mixes/sets | MEDIUM | Use explicit `NIKO_PROGRESS:` markers from `--progress-template`; update the progress parser and tests. |
+| Long valid downloads complete | A 5-minute video, long mix, or slow network should not fail because a stopwatch hit 90 seconds | MEDIUM | Keep health/simulate bounded, but replace download total timeout with stall protection. |
+| Concrete helper health | yt-dlp extractors drift quickly as sites change | MEDIUM | Detect missing, unusable, and stale versions; show upgrade guidance. |
+| Format-aware simulation | Preflight must validate the same format path the real download will use | LOW | Simulate should include selected format args and `--no-playlist`. |
+| Useful media handoff | Downloaded MP3/M4A/MP4/WEBM should be revealable/openable/draggable where safe | MEDIUM | Extend `OutputHandoff` without weakening WAV verification for converter/recorder outputs. |
+| Structured output file handoff | Job logs are not a reliable data structure | MEDIUM | Return output URLs through job completion metadata or an explicit downloader result handoff. |
+| Real downloader UAT | Green tests should represent actual command behavior | HIGH | Include opt-in network/live tests plus deterministic fixture runners. |
 
 ### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Cubase project preset | WAV output matches the current project sample rate/bit depth. | LOW-MEDIUM | Prevents subtle import friction. |
-| Clipboard URL intake | Paste/copy a URL and queue it quickly without opening Terminal. | LOW | Keep permission and privacy simple; no global clipboard watcher in v1 unless explicitly enabled. |
-| Source notes and naming templates | Downloaded/recorded files stay traceable. | MEDIUM | Useful for sample provenance and session organization. |
-| One-click sample prep chain | Convert, normalize, trim silence, and name in one operation. | HIGH | Defer until base converter is stable. |
-| BPM/key/loudness analysis | Adds production value beyond utility wrapping. | HIGH | Good future module once WAV pipeline exists. |
-| Global quick capture | Start capture while focused in another app. | MEDIUM-HIGH | Requires global shortcuts and careful permission UX. |
+| Producer-first output inbox | Files are immediately useful for Cubase/Finder handoff | MEDIUM | Distinguish audio/video/document icons and actions. |
+| Trustworthy progress and diagnostics | User can tell "still downloading" from "broken" without opening Terminal | MEDIUM | Progress, last output time, retries, and helper health should be visible in the existing UI language. |
+| Helper-path resilience | App-launched environment behaves like Terminal-launched environment | MEDIUM | Preserve recent resolver work for stripped `PATH` and `--ffmpeg-location`. |
+| Safe local-only downloader policy | Clear boundary around allowed content and no shell interpolation | LOW | Keep product copy and architecture aligned with existing out-of-scope policy. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Full browser inside the app | Convenient for downloads. | Expands scope, privacy surface, and maintenance burden. | Paste URL or drag URL into downloader. |
-| Everything in one dashboard view | Looks simple initially. | Becomes hard to add tools cleanly. | Sidebar/tool registry with shared job output. |
-| Auto-download whatever is playing | Feels magical. | Raises consent, legality, and reliability issues. | Explicit URL input and user-owned material. |
-| Full waveform editor | Nice for trimming. | Duplicates DAW/editor functionality. | Simple preview plus future trim/fade module. |
+| Force all downloads to WAV | Cubase-friendly audio sounds appealing | Can be slow/lossy/unwanted for videos and ignores user-selected MP3/M4A/MP4 | Keep explicit media choices; only verify WAV where a WAV was requested. |
+| Always use highest quality | Sounds like "best" | Can explode size/time and require merging on every video | Offer bounded choices and clear "best" option. |
+| Hide helper complexity | Cleaner UI | Leaves the user stuck when yt-dlp is stale or FFmpeg is missing | Quiet default with visible health details when needed. |
+| Retrying every failure | Seems robust | Permanent extractor/availability errors waste time | Retry only network/stall/transient failures with matching messages. |
 
 ## Feature Dependencies
 
 ```text
-Feature Registry
-    -> App Shell
-    -> Tool Surfaces
+Progress marker command args
+    -> Progress parser
+        -> Stall detector
+            -> Long-download reliability
 
-Output Inbox
-    -> Conversion
-    -> Recording
-    -> Downloader
+Format-aware simulate
+    -> Better error surfacing
+        -> User trust/UAT
 
-Tool Health Checks
-    -> Downloader
-    -> FFmpeg fallback conversion
+Structured DownloadResult
+    -> Output inbox ingestion
+        -> Media handoff policy
+            -> Reveal/open/drag UI
 
-Project Audio Preset
-    -> Conversion
-    -> Recording WAV export
-
-System Audio Permission
-    -> Internal Recording
+Helper health stale detection
+    -> Update guidance
+        -> Better support flow
 ```
 
 ### Dependency Notes
 
-- **Feature Registry before tools:** Every tool should plug into the same shell instead of creating bespoke navigation/state.
-- **Output Inbox before file-producing tools:** Conversion, recording, and downloads all need consistent output behavior.
-- **Tool Health before downloader:** yt-dlp and FFmpeg failures should be understandable before the user queues a job.
-- **Project Preset before WAV polish:** The app needs one source of truth for sample rate, bit depth, and output naming.
+- Progress markers must land before stall detection; otherwise the app cannot distinguish silence from legitimate long downloads.
+- Format-aware simulate should land before broad UAT; otherwise UAT can pass a path that the selected format never uses.
+- Structured result handoff should land before media handoff UI; otherwise the UI is still fed by regex-parsed logs.
+- Helper health can be phased independently but should precede final UAT so stale-version guidance is visible during real use.
 
 ## MVP Definition
 
-### Launch With (v1)
+### Launch With (v1.4)
 
-- [ ] App shell with feature registry and shared output inbox.
-- [ ] BPM tapper that works offline and replaces the website.
-- [ ] M4A/common audio to WAV conversion with project preset.
-- [ ] Internal system audio recording to WAV.
-- [ ] yt-dlp-backed URL download workflow with progress/errors.
-- [ ] Tool health/settings screen for FFmpeg and yt-dlp.
+- [ ] Real progress marker command and parser.
+- [ ] No total 90-second download kill timer.
+- [ ] Stall-aware failure for truly stuck downloads.
+- [ ] Stale/missing/unusable yt-dlp health states with update guidance.
+- [ ] Format-aware simulate with `--no-playlist`.
+- [ ] Structured output URLs into the inbox.
+- [ ] Media handoff allowlist for downloader outputs.
+- [ ] Downloader UAT proving long/slow/progress/helper-path behavior.
 
-### Add After Validation (v1.x)
+### Add After Validation
 
-- [ ] Playback preview for output files.
-- [ ] Naming templates with BPM/source/date tokens.
-- [ ] Clipboard URL intake.
-- [ ] Simple trim silence and fade in/out.
-- [ ] Global keyboard shortcut for quick capture.
+- [ ] Richer per-site diagnostics and suggested remedies.
+- [ ] Optional nightly-channel yt-dlp guidance for extractor-breakage cases.
+- [ ] Playlist/channel workflows, only after single-URL reliability is boring.
 
-### Future Consideration (v2+)
+### Future Consideration
 
-- [ ] BPM/key detection from audio files.
-- [ ] Loudness/RMS/peak analysis.
-- [ ] Batch sample-prep chains.
-- [ ] Cubase project folder watcher.
-- [ ] Stem separation or AI-assisted cleanup.
+- [ ] Bundled helper tooling and update manager.
+- [ ] Download archive/history.
+- [ ] Auth/cookies/browser-profile flows for supported legal downloads.
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Feature registry/app shell | HIGH | MEDIUM | P1 |
-| BPM tapper | HIGH | LOW | P1 |
-| M4A to WAV conversion | HIGH | MEDIUM | P1 |
-| Internal audio recording | HIGH | HIGH | P1 |
-| yt-dlp downloader | HIGH | MEDIUM | P1 |
-| Output inbox | HIGH | MEDIUM | P1 |
-| Tool health checks | MEDIUM | MEDIUM | P1 |
-| Naming templates | MEDIUM | MEDIUM | P2 |
-| Clipboard URL intake | MEDIUM | LOW | P2 |
-| Key/loudness analysis | MEDIUM | HIGH | P3 |
-
-**Priority key:**
-- P1: Must have for launch
-- P2: Should have, add when possible
-- P3: Nice to have, future consideration
-
-## Competitor Feature Analysis
-
-| Feature | Existing Habit/Tool | Limitation | Our Approach |
-|---------|---------------------|------------|--------------|
-| BPM tapper | beatsperminuteonline.com | Requires leaving app/browser, no integration with output/project context. | Offline native tapper with save/copy/history. |
-| Downloads | Terminal yt-dlp | Powerful but not production-session friendly. | Controlled queue with presets and output inbox. |
-| Conversion | FFmpeg/online converters/misc apps | Scattered workflow, inconsistent output specs. | Cubase-oriented WAV presets and batch output. |
-| Internal recording | System/third-party workarounds | Permission and routing friction. | Native app flow with explicit permission and WAV export. |
+| Real progress markers | HIGH | MEDIUM | P1 |
+| Remove total timeout / add stall timeout | HIGH | MEDIUM | P1 |
+| Format-aware simulate | HIGH | LOW | P1 |
+| Stale helper health | HIGH | MEDIUM | P1 |
+| Structured output handoff | HIGH | MEDIUM | P1 |
+| Media handoff allowlist | HIGH | MEDIUM | P1 |
+| Live downloader UAT | HIGH | HIGH | P1 |
+| Playlist workflows | MEDIUM | HIGH | P3 |
+| Bundled helper updater | MEDIUM | HIGH | P3 |
 
 ## Sources
 
-- User prompt - repeated workflows and desired hub shape.
-- https://www.beatsperminuteonline.com/?i=1 - Existing BPM tapper reference.
-- https://github.com/yt-dlp/yt-dlp/blob/master/README.md - Downloader capabilities and dependency expectations.
-- https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps - System audio capture approach.
-- https://ffmpeg.org/ffmpeg.html - Conversion/post-processing tool behavior.
+- 2026-06-11 downloader audit pasted into this thread.
+- Official yt-dlp README: https://github.com/yt-dlp/yt-dlp.
+- Local UAT: `docs/public-release-real-uat-2026-05-26.md`.
+- Local code/tests: `Sources/FeatureDownloader/*`, `Sources/AppCore/OutputInbox/*`, `Tests/FeatureDownloaderTests/*`.
 
 ---
-*Feature research for: Native macOS music-production utility hub*
-*Researched: 2026-05-04*
+*Feature research for: v1.4 Downloader Reliability*
+*Researched: 2026-06-11*

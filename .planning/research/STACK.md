@@ -1,8 +1,8 @@
 # Stack Research
 
-**Domain:** Native macOS music-production utility hub
-**Researched:** 2026-05-04
-**Confidence:** HIGH for native macOS stack, MEDIUM for final helper-tool packaging
+**Domain:** Native macOS downloader reliability for a local music-production hub
+**Researched:** 2026-06-11
+**Confidence:** HIGH
 
 ## Recommended Stack
 
@@ -10,96 +10,76 @@
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Swift | 6.3 locally installed | App, domain logic, adapters, tests | Best fit for native macOS APIs, file handling, permissions, and long-lived maintainability. |
-| SwiftUI | macOS 14.2+ target, current SDK during implementation | Main UI shell and tool surfaces | Good for a focused desktop utility with sidebar navigation, settings, drag/drop, and progress views. |
-| AppKit interop | macOS native | Finder reveal, file panels, drag-out behavior, window/menu details | SwiftUI alone may be thin for polished macOS file workflows. |
-| Core Audio process taps | macOS 14.2+ | Internal/system audio capture | Apple's audio-only route for capturing outgoing audio from processes or groups of processes. |
-| AVFAudio / AVFoundation | Current Apple frameworks | Audio file reading/writing and native conversion | `AVAudioFile` reads/writes through `AVAudioPCMBuffer`, which fits WAV export and testable conversion paths. |
-| FFmpeg | 8.1 locally installed | Broad conversion fallback and media post-processing | Covers formats and edge cases native frameworks may not handle. Keep behind an adapter. |
-| yt-dlp | 2026.03.17 locally installed | Website media/file download backend | Mature downloader for thousands of supported sites; integrate as an external tool, not UI logic. |
+| Swift / SwiftUI / AppKit interop | Swift 6.3 local toolchain | Native macOS app and output handoff UI | Already validated in Niko Music Hub; best fit for local files, drag/drop, permissions, and helper process control. |
+| yt-dlp | Local: 2026.03.17; latest checked: 2026.06.09 | Site extraction, media download, format selection, post-processing hooks | The app already integrates yt-dlp safely through argument arrays. v1.4 should harden the real command path, not replace it. |
+| FFmpeg / ffprobe | Local: FFmpeg 8.1 | Merge separate audio/video streams and extract audio containers | yt-dlp strongly recommends ffmpeg/ffprobe for merging and post-processing; Niko Music Hub already resolves helper paths. |
+| AppCore job/output infrastructure | Existing repo modules | Job progress, output inbox, reveal/open/drag handoff | Reuse existing `JobRunner`, `OutputInboxStore`, `OutputHandoff`, and `FileActions` rather than adding another downloader-specific queue. |
 
 ### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| UniformTypeIdentifiers | macOS framework | File type filtering for WAV, M4A, MP3, AIFF, URLs | Drag/drop, import panels, and output validation. |
-| OSLog | macOS framework | Structured diagnostics | Long-running jobs, helper tool failures, permission problems. |
-| XCTest | Swift toolchain | Unit/integration tests | BPM calculations, command construction, conversion outputs, feature registration. |
-| ScreenCaptureKit | macOS 12.3+ / current | Possible fallback or comparison path for system audio capture | Use only if Core Audio taps do not satisfy the exact capture workflow. |
+| Foundation `Process` | macOS system API | Launch yt-dlp/ffmpeg without shell interpolation | Keep the current `Process.executableURL` + argument-array pattern. |
+| Foundation `Pipe` / streaming callbacks | macOS system API | Capture progress, stderr, final output paths | Needs UTF-8-safe incremental decoding and full-result fallback parsing. |
+| SQLite | Existing archive stores | Persist archive metadata | Not central to downloader, but research flags busy-timeout as shared reliability debt if v1.4 touches stores. |
 
 ### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| Swift Package Manager | Package boundaries and tests | Use separate targets for core, features, and adapters where helpful. |
-| Homebrew FFmpeg and yt-dlp | Development-time helper tools | Local machine already has both; app should still detect missing tools. |
-| Git / GSD planning docs | Roadmap and context continuity | Planning files are committed for traceability. |
+| `yt-dlp --help` | Verify installed option support | Local help confirms `--progress`, `--progress-template`, `--print`, `--no-playlist`, `--ffmpeg-location`, and `--socket-timeout`. |
+| `yt-dlp --version` | Health check and stale version detection | Version strings are date-like release tags. Compare against an app policy threshold and surface update guidance. |
+| `./script/ci.sh` | Local truth gate | Must stay green after each phase. |
+| `./script/e2e_user_smoke.sh` | User-style smoke | Extend or complement with downloader-specific real invocation/UAT where network is intentionally enabled. |
+| `./script/dev.sh helpers` | Install/update helper tools | Existing user-facing command already routes to Homebrew helper updates. |
 
-## Installation
+## Installation / Update Guidance
 
 ```bash
-# Development helper tools already present locally, but these are the expected install commands.
-brew install ffmpeg yt-dlp
+# User-facing existing path
+./script/dev.sh helpers
 
-# Swift is provided by Xcode / command line tools.
-swift --version
+# Manual equivalent on this machine
+brew upgrade yt-dlp ffmpeg
+
+# Inspect current helpers
+yt-dlp --version
+ffmpeg -version
 ```
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| SwiftUI + AppKit interop | Electron | Use Electron only if the app becomes cross-platform and gives up on deep native audio integration. |
-| Core Audio process taps | BlackHole/Soundflower-style loopback device | Use a virtual audio device only if Apple's capture APIs fail for the target workflow. |
-| Native AVFAudio first | FFmpeg-only conversion | Use FFmpeg-only if native conversion cannot consistently produce desired WAV specs. |
-| yt-dlp CLI adapter | Embedding yt-dlp as a Python library | Embed only if command-line process control becomes too limiting. |
+| Keep yt-dlp CLI adapter | Embed yt-dlp Python API | Only if CLI output becomes insufficient. It would add Python/runtime packaging complexity that violates the product boundary. |
+| Parse explicit `--progress-template` markers | Parse normal yt-dlp stdout | Avoid. Official docs say embedding callers should not parse normal stdout because it can change. |
+| Structured download result model | Re-parse job log lines | Avoid. Logs are human/audit output, not the data plane. |
+| App policy stale check | Rely only on yt-dlp's own warning | Use both if possible. The app should surface stale helper state before obscure extractor failures reach the user. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| One huge SwiftUI view model | Makes future tools painful to add and test. | Feature registry plus separate use cases/services. |
-| Shell string command construction | URL/file paths can break or become unsafe. | `Process` with explicit executable URL and argument array. |
-| Unreviewed bundling of FFmpeg/yt-dlp binaries | Licensing, updates, and notarization need deliberate handling. | Development-time external tools first; packaging decision later. |
-| Full DAW feature creep | Duplicates Cubase and delays the useful companion workflow. | Small utilities that hand files back to Cubase. |
-
-## Stack Patterns by Variant
-
-**If the first milestone is for personal local use only:**
-- Use externally installed `ffmpeg` and `yt-dlp` with visible health checks.
-- Because it avoids packaging/licensing friction while validating the workflow.
-
-**If the app is packaged for others later:**
-- Add a Tool Manager that downloads/verifies helpers or documents required installs.
-- Because downloader/converter helper ownership affects licensing, updates, signing, and support.
-
-**If macOS 14.2+ is acceptable:**
-- Use Core Audio taps for internal audio capture.
-- Because the user wants audio, not screen recording.
-
-**If older macOS support becomes mandatory:**
-- Re-evaluate ScreenCaptureKit and virtual audio device fallback options.
-- Because Core Audio process taps require macOS 14.2+.
+| `/bin/sh -c` downloader invocation | Shell interpolation risk with arbitrary URLs and output templates | `Process.executableURL` plus explicit argument arrays. |
+| Total-duration kill timer for downloads | Long valid downloads fail solely because they are long | Stall-aware timeout based on lack of output/progress, while preserving bounded simulate/health calls. |
+| Mock-only progress tests | They can pass while the real command emits no parseable progress | Tests that assert actual command args plus parser fixtures matching `NIKO_PROGRESS:` lines. |
+| WAV-only handoff for all inbox items | Downloader outputs are often MP3/M4A/MP4/WEBM and become dead-end rows | Tool-aware media handoff policy with explicit safe extension allowlists. |
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|-----------------|-------|
-| Core Audio process taps | macOS 14.2+ | Requires `NSAudioCaptureUsageDescription` and system audio recording permission. |
-| yt-dlp standalone macOS executable | macOS 10.15+ per project README | Current README lists `yt-dlp_macos` as the recommended macOS standalone executable. |
-| yt-dlp Python install | Python 3.10+ CPython | README lists Python 3.10+ support for current versions. |
-| yt-dlp post-processing | FFmpeg and ffprobe highly recommended | Required for many merge/post-processing tasks. |
-| AVAudioFile | macOS AVFAudio | Reads/writes sequentially using `AVAudioPCMBuffer`. |
+| yt-dlp CLI | FFmpeg / ffprobe | Required for best video+audio merging and audio extraction. `--ffmpeg-location` may be a binary or containing directory. |
+| yt-dlp progress output | Swift streaming pipes | Use `--progress --progress-template "download:NIKO_PROGRESS:%(progress._percent_str)s"` or equivalent explicit marker. |
+| yt-dlp format selection | FFmpeg merge | Modern 720p video often requires separate video+audio formats; prefer `bv*+ba/b` style selectors or `-S res:720` patterns over premerged-only selectors. |
 
 ## Sources
 
-- https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps - Core Audio process tap approach and macOS 14.2+ requirement.
-- https://developer.apple.com/documentation/ScreenCaptureKit/capturing-screen-content-in-macos - ScreenCaptureKit audio capture behavior and fallback context.
-- https://developer.apple.com/documentation/avfaudio/avaudiofile - Native audio file read/write model.
-- https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox - Sandboxed file access constraints.
-- https://github.com/yt-dlp/yt-dlp/blob/master/README.md - yt-dlp install, release files, dependencies, and update behavior.
-- https://ffmpeg.org/ffmpeg.html - FFmpeg conversion/post-processing command behavior.
+- Official yt-dlp README: https://github.com/yt-dlp/yt-dlp - update channels, helper dependencies, format selection, embedding guidance.
+- Official yt-dlp latest release: https://github.com/yt-dlp/yt-dlp/releases/tag/2026.06.09 - latest checked release on 2026-06-11.
+- Local `yt-dlp --help` and `yt-dlp --version` - installed option/version verification.
+- Local code: `Sources/FeatureDownloader/YtDlpDownloader.swift`, `DownloaderUseCase.swift`, `YtDlpHealthChecker.swift`, `DownloadFormatSelection.swift`.
 
 ---
-*Stack research for: Native macOS music-production utility hub*
-*Researched: 2026-05-04*
+*Stack research for: v1.4 Downloader Reliability*
+*Researched: 2026-06-11*
