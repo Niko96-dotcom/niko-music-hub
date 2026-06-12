@@ -42,8 +42,28 @@ public final class RecordSystemAudioUseCase: Sendable {
         return resolveFilenameCollision(url: finalURL)
     }
 
-    public func execute(config: Config) async throws -> RecorderResult {
+    public func prepareOutputURL(config: Config) throws -> URL {
         let finalURL = resolvedOutputURL(config: config)
+        try ensureOutputDirectoryExists(for: finalURL)
+        return finalURL
+    }
+
+    public func ensureOutputDirectoryExists(for fileURL: URL) throws {
+        let outputDirectory = fileURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(
+                at: outputDirectory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw RecorderError.writeError(
+                "Could not create output folder \(outputDirectory.path): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    public func execute(config: Config) async throws -> RecorderResult {
+        let finalURL = try prepareOutputURL(config: config)
 
         let stream = try await capturePort.startRecording(
             outputURL: finalURL,

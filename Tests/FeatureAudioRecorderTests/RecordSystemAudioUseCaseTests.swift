@@ -43,6 +43,21 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         XCTAssertEqual(resolved.lastPathComponent, "Outside.wav")
     }
 
+    func testEnsureOutputDirectoryCreatesMissingParent() throws {
+        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-ensure-dir-\(UUID().uuidString)", isDirectory: true)
+        let outputDirectory = root.appendingPathComponent("Nested", isDirectory: true)
+        let fileURL = outputDirectory.appendingPathComponent("Recording.wav")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try useCase.ensureOutputDirectoryExists(for: fileURL)
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputDirectory.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
     func testGenerateOutputFilenameWithoutOverride() throws {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
         let filename = useCase.generateOutputFilename(override: nil)

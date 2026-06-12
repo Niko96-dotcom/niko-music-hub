@@ -31,6 +31,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let useCase: RecordSystemAudioUseCase
     private let outputURL: URL
     private let outputInboxStore: any OutputInboxStore
+    private var isStartInFlight = false
 
     public init(
         capturePort: AudioCapturePort,
@@ -45,6 +46,16 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
 
     public func startRecording() async {
+        guard !isStartInFlight,
+              recordingState != .recording,
+              recordingState != .stopping
+        else {
+            return
+        }
+
+        isStartInFlight = true
+        defer { isStartInFlight = false }
+
         let permission = await capturePort.checkPermission()
         guard case .authorized = permission else {
             recordingState = .permissionNeeded
@@ -74,7 +85,19 @@ public final class AudioRecorderViewModel: ObservableObject {
             maxDuration: maxDuration,
             filenameOverride: filenameOverride.isEmpty ? nil : filenameOverride
         )
-        let fileURL = useCase.resolvedOutputURL(config: config)
+        let fileURL: URL
+        do {
+            fileURL = try useCase.prepareOutputURL(config: config)
+        } catch let recorderError as RecorderError {
+            recordingState = .error(recorderError)
+            error = recorderError
+            return
+        } catch {
+            let wrapped = RecorderError.writeError(error.localizedDescription)
+            recordingState = .error(wrapped)
+            self.error = wrapped
+            return
+        }
 
         recordingTask = Task {
             do {
@@ -89,6 +112,12 @@ public final class AudioRecorderViewModel: ObservableObject {
                     elapsedTime = level.elapsedTime
                     currentLevel = level
                 }
+
+                if !Task.isCancelled, recordingState == .recording {
+                    Task { @MainActor [weak self] in
+                        await self?.stopRecording()
+                    }
+                }
             } catch let recorderError as RecorderError {
                 recordingState = .error(recorderError)
                 error = recorderError
@@ -101,22 +130,32 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
 
     public func stopRecording() async {
+        await stopRecording(awaitingCurrentTask: true)
+    }
+
+    private func stopRecording(awaitingCurrentTask: Bool) async {
         guard recordingState == .recording else { return }
         recordingState = .stopping
+        let taskToAwait = recordingTask
+
         do {
             let result = try await capturePort.stopRecording()
-            recordingTask?.cancel()
-            await recordingTask?.value
+            taskToAwait?.cancel()
+            if awaitingCurrentTask {
+                await taskToAwait?.value
+            }
             recordingTask = nil
             try await finalizeRecording(result)
         } catch let recorderError as RecorderError {
-            recordingTask?.cancel()
+            taskToAwait?.cancel()
             recordingTask = nil
+            currentLevel = nil
             recordingState = .error(recorderError)
             error = recorderError
         } catch {
-            recordingTask?.cancel()
+            taskToAwait?.cancel()
             recordingTask = nil
+            currentLevel = nil
             let wrapped = RecorderError.verificationFailed(error.localizedDescription)
             recordingState = .error(wrapped)
             self.error = wrapped
@@ -137,14 +176,20 @@ public final class AudioRecorderViewModel: ObservableObject {
             bitDepth: result.bitDepth,
             channelCount: result.channelCount
         )
-        _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
-        let file = try AVAudioFile(forReading: result.outputURL)
-        guard file.length > 0 else {
-            var message = "Recording contained no audio frames."
-            if let diagnostics = result.diagnostics {
-                message += " CoreAudio diagnostics: \(diagnostics.summary)."
+
+        do {
+            _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
+            let file = try AVAudioFile(forReading: result.outputURL)
+            guard file.length > 0 else {
+                var message = "Recording contained no audio frames."
+                if let diagnostics = result.diagnostics {
+                    message += " CoreAudio diagnostics: \(diagnostics.summary)."
+                }
+                throw RecorderError.verificationFailed(message)
             }
-            throw RecorderError.verificationFailed(message)
+        } catch {
+            try? FileManager.default.removeItem(at: result.outputURL)
+            throw error
         }
 
         let item = OutputInboxItem(
