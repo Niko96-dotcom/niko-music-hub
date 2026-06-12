@@ -2,16 +2,33 @@ import AppCore
 import CoreAudio
 import Foundation
 
+protocol SystemAudioRecordingSession: AnyObject, Sendable {
+    func start(
+        outputURL: URL,
+        preset: AudioPreset,
+        maxDuration: TimeInterval?,
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
+    ) throws
+    func stop() throws -> RecorderResult
+}
+
 public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     private var _isRecording = false
-    private var session: SystemAudioProcessTapSession?
+    private var session: (any SystemAudioRecordingSession)?
     private var levelContinuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
     private var preset: AudioPreset?
+    private let sessionFactory: @Sendable () -> any SystemAudioRecordingSession
 
     public var recording: Bool { _isRecording }
 
-    public init() {}
+    public init() {
+        self.sessionFactory = { SystemAudioProcessTapSession() }
+    }
+
+    init(sessionFactory: @escaping @Sendable () -> any SystemAudioRecordingSession) {
+        self.sessionFactory = sessionFactory
+    }
 
     private func macOSVersion() -> (major: Int, minor: Int) {
         let version = ProcessInfo.processInfo.operatingSystemVersion
@@ -69,7 +86,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         self.outputURL = outputURL
         self.preset = preset
 
-        let tapSession = SystemAudioProcessTapSession()
+        let tapSession = sessionFactory()
         session = tapSession
 
         let (stream, continuation) = AsyncStream.makeStream(of: RecorderAudioLevel.self)
@@ -86,18 +103,9 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                     Task { try? await self?.stopRecording() }
                 }
             }
-        } catch let error as SystemAudioTapError {
-            resetRecordingState()
-            continuation.finish()
-            throw RecorderError.apiError(error.localizedDescription)
-        } catch let error as RecorderError {
-            resetRecordingState()
-            continuation.finish()
-            throw error
         } catch {
-            resetRecordingState()
-            continuation.finish()
-            throw RecorderError.apiError(error.localizedDescription)
+            cleanupAfterFailedStart(outputURL: outputURL, continuation: continuation)
+            throw mapRecordingError(error)
         }
 
         return stream
@@ -109,21 +117,23 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         }
 
         guard let tapSession = session else {
+            let continuation = levelContinuation
+            resetRecordingState()
+            continuation?.finish()
             throw RecorderError.apiError("Recording session not initialized")
         }
 
-        let result: RecorderResult
-        do {
-            result = try tapSession.stop()
-        } catch let error as SystemAudioTapError {
-            throw RecorderError.apiError(error.localizedDescription)
+        let continuation = levelContinuation
+        defer {
+            resetRecordingState()
+            continuation?.finish()
         }
 
-        let continuation = levelContinuation
-        resetRecordingState()
-        continuation?.finish()
-
-        return result
+        do {
+            return try tapSession.stop()
+        } catch {
+            throw mapRecordingError(error)
+        }
     }
 
     private func resetRecordingState() {
@@ -132,5 +142,24 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         outputURL = nil
         preset = nil
         levelContinuation = nil
+    }
+
+    private func cleanupAfterFailedStart(
+        outputURL: URL,
+        continuation: AsyncStream<RecorderAudioLevel>.Continuation
+    ) {
+        resetRecordingState()
+        continuation.finish()
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    private func mapRecordingError(_ error: Error) -> RecorderError {
+        if let error = error as? RecorderError {
+            return error
+        }
+        if let error = error as? SystemAudioTapError {
+            return RecorderError.apiError(error.localizedDescription)
+        }
+        return RecorderError.apiError(error.localizedDescription)
     }
 }

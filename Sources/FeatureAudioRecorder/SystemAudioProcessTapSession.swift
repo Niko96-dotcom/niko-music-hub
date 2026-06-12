@@ -16,7 +16,7 @@ enum SystemAudioTapError: LocalizedError {
 }
 
 /// Manages a Core Audio process tap + private aggregate device for system-wide capture (macOS 14.2+).
-final class SystemAudioProcessTapSession: @unchecked Sendable {
+final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecordingSession {
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
@@ -24,7 +24,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
     private var outputFormat: AVAudioFormat?
     private var converter: AVAudioConverter?
     private var writer: WAVRecorderWriter?
-    private var levelHandler: ((RecorderAudioLevel) -> Void)?
+    private var levelHandler: (@Sendable (RecorderAudioLevel) -> Void)?
     private var maxDuration: TimeInterval?
     private var recordingStart: Date?
     private let ioQueue = DispatchQueue(label: "NikoMusicHub.SystemAudioProcessTapSession.io", qos: .userInitiated)
@@ -40,83 +40,145 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         outputURL: URL,
         preset: AudioPreset,
         maxDuration: TimeInterval?,
-        onLevel: @escaping (RecorderAudioLevel) -> Void
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
     ) throws {
-        guard !isRunning else {
+        guard !isSessionRunning else {
             throw RecorderError.apiError("Recording session already active")
         }
 
-        levelHandler = onLevel
-        self.maxDuration = maxDuration
-        recordingStart = Date()
+        do {
+            stateLock.lock()
+            levelHandler = onLevel
+            self.maxDuration = maxDuration
+            recordingStart = Date()
+            stateLock.unlock()
 
-        let processTap = try createProcessTap()
-        tapID = processTap.id
-        let outputDeviceUID = try readDefaultSystemOutputDeviceUID()
-        let tapUID = processTap.uid
-        aggregateDeviceID = try createAggregateDevice(tapUID: tapUID, outputDeviceUID: outputDeviceUID)
-        try attachTapToAggregateDevice(tapUID: tapUID, aggregateDeviceID: aggregateDeviceID)
+            let processTap = try createProcessTap()
+            tapID = processTap.id
+            let outputDeviceUID = try readDefaultSystemOutputDeviceUID()
+            let tapUID = processTap.uid
+            aggregateDeviceID = try createAggregateDevice(tapUID: tapUID, outputDeviceUID: outputDeviceUID)
+            try attachTapToAggregateDevice(tapUID: tapUID, aggregateDeviceID: aggregateDeviceID)
 
-        let streamDescription = try readTapStreamDescription(tapID: tapID)
-        guard let tapAudioFormat = AVAudioFormat(streamDescription: streamDescription) else {
-            throw RecorderError.apiError("Unsupported tap audio format")
+            let streamDescription = try readTapStreamDescription(tapID: tapID)
+            guard let tapAudioFormat = AVAudioFormat(streamDescription: streamDescription) else {
+                throw RecorderError.apiError("Unsupported tap audio format")
+            }
+            let aggregateNominalSampleRate = try? readNominalSampleRate(deviceID: aggregateDeviceID)
+            let captureAudioFormat = RecorderCaptureFormatResolver.resolve(
+                tapFormat: tapAudioFormat,
+                aggregateNominalSampleRate: aggregateNominalSampleRate
+            )
+
+            let activeWriter = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
+            let destinationFormat = activeWriter.processingFormat
+
+            stateLock.lock()
+            tapFormat = captureAudioFormat
+            outputFormat = destinationFormat
+            converter = AVAudioConverter(from: captureAudioFormat, to: destinationFormat)
+            writer = activeWriter
+            diagnostics = RecorderDiagnosticsAccumulator(
+                outputDeviceUID: outputDeviceUID,
+                tapSampleRate: tapAudioFormat.sampleRate,
+                tapChannelCount: Int(tapAudioFormat.channelCount),
+                captureSampleRate: captureAudioFormat.sampleRate,
+                outputSampleRate: destinationFormat.sampleRate
+            )
+            stateLock.unlock()
+
+            setRunning(true)
+            try installIOProc(deviceID: aggregateDeviceID)
+            try startDevice(deviceID: aggregateDeviceID)
+        } catch {
+            tearDownAfterFailedStart(outputURL: outputURL)
+            throw error
         }
-        let aggregateNominalSampleRate = try? readNominalSampleRate(deviceID: aggregateDeviceID)
-        let captureAudioFormat = RecorderCaptureFormatResolver.resolve(
-            tapFormat: tapAudioFormat,
-            aggregateNominalSampleRate: aggregateNominalSampleRate
-        )
-
-        let activeWriter = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
-        let destinationFormat = activeWriter.processingFormat
-
-        tapFormat = captureAudioFormat
-        outputFormat = destinationFormat
-        converter = AVAudioConverter(from: captureAudioFormat, to: destinationFormat)
-        writer = activeWriter
-        diagnostics = RecorderDiagnosticsAccumulator(
-            outputDeviceUID: outputDeviceUID,
-            tapSampleRate: tapAudioFormat.sampleRate,
-            tapChannelCount: Int(tapAudioFormat.channelCount),
-            captureSampleRate: captureAudioFormat.sampleRate,
-            outputSampleRate: destinationFormat.sampleRate
-        )
-
-        isRunning = true
-        try installIOProc(deviceID: aggregateDeviceID)
-        try startDevice(deviceID: aggregateDeviceID)
     }
 
     func stop() throws -> RecorderResult {
-        guard isRunning else {
+        let wasRunning = stopRunningFlag()
+        guard wasRunning || hasWriter else {
             throw RecorderError.apiError("No active recording")
         }
 
         stopIODeviceOnly()
-        isRunning = false
 
-        guard let activeWriter = writer else {
+        let (activeWriter, activeDiagnostics) = writerAndDiagnostics()
+        guard let activeWriter else {
+            clearRecordingResources()
+            destroyTapAndAggregate()
             throw RecorderError.writeError("Recorder writer not initialized")
         }
 
-        diagnostics.setWrittenFrameCount(activeWriter.writtenFrameCount)
-        let result = try activeWriter.finalize(diagnostics: diagnostics.snapshot())
-        self.writer = nil
+        do {
+            activeDiagnostics.setWrittenFrameCount(activeWriter.writtenFrameCount)
+            let result = try activeWriter.finalize(diagnostics: activeDiagnostics.snapshot())
+            clearRecordingResources()
+            destroyTapAndAggregate()
+            return result
+        } catch {
+            clearRecordingResources()
+            destroyTapAndAggregate()
+            throw error
+        }
+    }
+
+    private func tearDown() {
+        setRunning(false)
+        stopIODeviceOnly()
+        destroyTapAndAggregate()
+        clearRecordingResources()
+    }
+
+    private func tearDownAfterFailedStart(outputURL: URL) {
+        tearDown()
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    private var isSessionRunning: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return isRunning
+    }
+
+    private var hasWriter: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return writer != nil
+    }
+
+    private func setRunning(_ running: Bool) {
+        stateLock.lock()
+        isRunning = running
+        stateLock.unlock()
+    }
+
+    private func stopRunningFlag() -> Bool {
+        stateLock.lock()
+        let wasRunning = isRunning
+        isRunning = false
+        stateLock.unlock()
+        return wasRunning
+    }
+
+    private func writerAndDiagnostics() -> (WAVRecorderWriter?, RecorderDiagnosticsAccumulator) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return (writer, diagnostics)
+    }
+
+    private func clearRecordingResources() {
+        stateLock.lock()
+        writer = nil
         converter = nil
         tapFormat = nil
         outputFormat = nil
         levelHandler = nil
         maxDuration = nil
         recordingStart = nil
-
-        destroyTapAndAggregate()
-        return result
-    }
-
-    private func tearDown() {
-        stopIODeviceOnly()
-        destroyTapAndAggregate()
-        isRunning = false
+        diagnostics = RecorderDiagnosticsAccumulator()
+        stateLock.unlock()
     }
 
     private func stopIODeviceOnly() {
@@ -256,10 +318,10 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         var procID: AudioDeviceIOProcID?
         let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, ioQueue) { [weak self] _, inputData, _, outputData, _ in
             if inputData.pointee.mNumberBuffers > 0 {
-                self?.diagnostics.recordIOCallback(source: .input)
+                self?.recordIOCallback(source: .input)
                 self?.handleAudio(bufferList: inputData)
             } else {
-                self?.diagnostics.recordIOCallback(source: .output)
+                self?.recordIOCallback(source: .output)
                 self?.handleAudio(bufferList: UnsafePointer(outputData))
             }
         }
@@ -279,6 +341,13 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         }
     }
 
+    private func recordIOCallback(source: RecorderDiagnosticsAccumulator.CallbackSource) {
+        stateLock.lock()
+        let activeDiagnostics = diagnostics
+        stateLock.unlock()
+        activeDiagnostics.recordIOCallback(source: source)
+    }
+
     private func handleAudio(bufferList inputData: UnsafePointer<AudioBufferList>?) {
         stateLock.lock()
         guard isRunning,
@@ -291,25 +360,28 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
             stateLock.unlock()
             return
         }
+        let activeDiagnostics = diagnostics
+        let activeLevelHandler = levelHandler
+        let activeMaxDuration = maxDuration
         stateLock.unlock()
 
         let bufferList = inputData.pointee
         guard bufferList.mNumberBuffers > 0 else {
-            diagnostics.recordZeroBuffer()
+            activeDiagnostics.recordZeroBuffer()
             return
         }
 
         guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: tapFormat, bufferListNoCopy: inputData, deallocator: nil) else {
-            diagnostics.recordZeroBuffer()
+            activeDiagnostics.recordZeroBuffer()
             return
         }
-        diagnostics.recordInputFrames(Int64(inputBuffer.frameLength))
+        activeDiagnostics.recordInputFrames(Int64(inputBuffer.frameLength))
 
         let frameCapacity = AVAudioFrameCount(
             Double(inputBuffer.frameLength) * outputFormat.sampleRate / tapFormat.sampleRate
         ) + 32
         guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: frameCapacity) else {
-            diagnostics.recordZeroBuffer()
+            activeDiagnostics.recordZeroBuffer()
             return
         }
 
@@ -326,33 +398,31 @@ final class SystemAudioProcessTapSession: @unchecked Sendable {
         }
         converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputBlock)
         if error != nil {
-            diagnostics.recordConverterError()
+            activeDiagnostics.recordConverterError()
             return
         }
         if convertedBuffer.frameLength == 0 {
-            diagnostics.recordZeroBuffer()
+            activeDiagnostics.recordZeroBuffer()
             return
         }
-        diagnostics.recordConvertedFrames(Int64(convertedBuffer.frameLength))
+        activeDiagnostics.recordConvertedFrames(Int64(convertedBuffer.frameLength))
 
         do {
             try writer.writeBuffer(convertedBuffer)
         } catch {
-            diagnostics.recordWriteError()
+            activeDiagnostics.recordWriteError()
             return
         }
-        diagnostics.setWrittenFrameCount(writer.writtenFrameCount)
+        activeDiagnostics.setWrittenFrameCount(writer.writtenFrameCount)
 
         let peak = meterPeak(from: inputBuffer)
         let average = peak * 0.6
         let elapsed = writer.currentTime
         let level = RecorderAudioLevel(peak: peak, average: average, elapsedTime: elapsed)
-        levelHandler?(level)
+        activeLevelHandler?(level)
 
-        if let maxDuration, elapsed >= maxDuration {
-            stateLock.lock()
-            isRunning = false
-            stateLock.unlock()
+        if let activeMaxDuration, elapsed >= activeMaxDuration {
+            setRunning(false)
             if let ioProcID, aggregateDeviceID != kAudioObjectUnknown {
                 AudioDeviceStop(aggregateDeviceID, ioProcID)
             }

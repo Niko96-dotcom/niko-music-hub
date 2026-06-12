@@ -11,6 +11,7 @@ public final class WAVRecorderWriter: @unchecked Sendable {
     private var accumulatedDuration: TimeInterval = 0
     private var _writtenFrameCount: AVAudioFramePosition = 0
     private var _isRecording = false
+    private let lock = NSLock()
 
     public init(outputURL: URL, preset: AudioPreset) throws {
         self.outputURL = outputURL
@@ -33,6 +34,9 @@ public final class WAVRecorderWriter: @unchecked Sendable {
     }
 
     public func writeBuffer(_ buffer: AVAudioPCMBuffer) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard _isRecording, let audioFile = audioFile else {
             return
         }
@@ -41,6 +45,9 @@ public final class WAVRecorderWriter: @unchecked Sendable {
     }
 
     public func finalize(diagnostics: RecorderDiagnostics? = nil) throws -> RecorderResult {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard _isRecording else {
             throw RecorderError.writeError("Recorder is not active")
         }
@@ -67,15 +74,21 @@ public final class WAVRecorderWriter: @unchecked Sendable {
     }
 
     public var currentTime: TimeInterval {
+        lock.lock()
+        defer { lock.unlock() }
         guard let start = startTime else { return 0 }
         return Date().timeIntervalSince(start)
     }
 
     public var writtenFrameCount: Int64 {
-        Int64(_writtenFrameCount)
+        lock.lock()
+        defer { lock.unlock() }
+        return Int64(_writtenFrameCount)
     }
 
     public var isRecording: Bool {
-        _isRecording
+        lock.lock()
+        defer { lock.unlock() }
+        return _isRecording
     }
 }

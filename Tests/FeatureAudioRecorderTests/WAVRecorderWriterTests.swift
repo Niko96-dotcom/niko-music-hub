@@ -93,6 +93,25 @@ final class WAVRecorderWriterTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
+    func testWriteAfterFinalizeDoesNotChangeFrameCount() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("test_write_after_finalize_\(UUID().uuidString).wav")
+
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        let format = writer.processingFormat
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 256))
+        buffer.frameLength = 256
+
+        try writer.writeBuffer(buffer)
+        let result = try writer.finalize()
+        try writer.writeBuffer(buffer)
+
+        XCTAssertFalse(writer.isRecording)
+        XCTAssertEqual(writer.writtenFrameCount, result.frameCount)
+
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
     func testCaptureFormatResolverUsesAggregateSampleRate() throws {
         let tapFormat = try XCTUnwrap(AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
