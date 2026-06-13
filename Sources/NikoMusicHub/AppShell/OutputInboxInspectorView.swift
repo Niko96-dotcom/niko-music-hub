@@ -85,6 +85,9 @@ struct OutputInboxInspectorView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -102,7 +105,7 @@ struct OutputInboxInspectorView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
     }
 
     private func refreshSettings() {
@@ -188,9 +191,10 @@ struct OutputInboxInspectorView: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.row,
+            intent: itemIntent(for: item, isHovered: isHovered),
+            interactive: revealable
         )
         .onHover { hovering in
             hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
@@ -216,17 +220,30 @@ struct OutputInboxInspectorView: View {
         if item.status == .failed {
             Text("Failed")
                 .font(.system(size: 10))
-                .foregroundStyle(.red)
+                .foregroundStyle(HubDesignSystem.Colors.danger)
         } else if item.status == .missing {
             Text("File missing — choose Output Folder if you moved the inbox.")
                 .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Colors.warning)
                 .lineLimit(2)
         } else {
             Text(item.status == .available ? "Ready" : "Pending")
                 .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(item.status == .available ? HubDesignSystem.Colors.success : Color.secondary)
         }
+    }
+
+    private func itemIntent(for item: OutputInboxItem, isHovered: Bool) -> HubLiquidSurfaceIntent {
+        if item.status == .failed {
+            return .error
+        }
+        if item.status == .missing {
+            return .warning
+        }
+        if isHovered {
+            return .hover
+        }
+        return .normal
     }
 
     private func fileIcon(for url: URL) -> some View {

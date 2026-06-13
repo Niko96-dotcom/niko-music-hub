@@ -2,9 +2,13 @@ import AppCore
 import SwiftUI
 
 struct ToolSidebarView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var context: ToolContext? = nil
     let registry: ToolRegistry
     @Binding var selectedToolID: ToolFeatureID?
+
+    @State private var hoveredToolID: ToolFeatureID?
 
     private var appVersionLabel: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -58,12 +62,20 @@ struct ToolSidebarView: View {
                             .font(.system(size: 13, weight: isSelected(metadata) ? .semibold : .medium))
                             .lineLimit(1)
                     }
+                    .foregroundStyle(rowForeground(for: metadata))
                     .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .leading)
                     .padding(.horizontal, 10)
-                    .contentShape(Rectangle())
+                    .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+                    .hubLiquidCard(
+                        cornerRadius: HubDesignSystem.Radius.row,
+                        intent: rowIntent(for: metadata),
+                        interactive: true
+                    )
                 }
                 .buttonStyle(.plain)
-                .hubSidebarNavRow(isSelected: isSelected(metadata))
+                .onHover { hovering in
+                    updateHover(hovering, toolID: metadata.id)
+                }
                 .accessibilityLabel(metadata.displayName)
                 .accessibilityValue(metadata.shortLabel)
                 .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
@@ -73,7 +85,6 @@ struct ToolSidebarView: View {
 
             if let context {
                 HelperToolsHealthStrip(context: context)
-                    .padding(10)
                     .padding(.horizontal, 8)
                     .padding(.bottom, 10)
             }
@@ -84,5 +95,34 @@ struct ToolSidebarView: View {
 
     private func isSelected(_ metadata: ToolMetadata) -> Bool {
         selectedToolID == metadata.id
+    }
+
+    private func isHovered(_ metadata: ToolMetadata) -> Bool {
+        hoveredToolID == metadata.id
+    }
+
+    private func rowIntent(for metadata: ToolMetadata) -> HubLiquidSurfaceIntent {
+        if isSelected(metadata) {
+            return .selected
+        }
+        if isHovered(metadata) {
+            return .hover
+        }
+        return .normal
+    }
+
+    private func rowForeground(for metadata: ToolMetadata) -> Color {
+        isSelected(metadata) ? HubDesignSystem.Colors.accent : Color.primary
+    }
+
+    private func updateHover(_ hovering: Bool, toolID: ToolFeatureID) {
+        let nextID: ToolFeatureID? = hovering ? toolID : (hoveredToolID == toolID ? nil : hoveredToolID)
+        if reduceMotion {
+            hoveredToolID = nextID
+        } else {
+            withAnimation(.easeInOut(duration: HubDesignSystem.Liquid.Motion.duration(reduceMotion: reduceMotion))) {
+                hoveredToolID = nextID
+            }
+        }
     }
 }

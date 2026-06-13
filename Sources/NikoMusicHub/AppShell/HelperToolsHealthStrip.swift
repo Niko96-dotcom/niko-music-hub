@@ -25,7 +25,9 @@ struct HelperToolsHealthStrip: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: stripIntent)
         .task {
             await refresh()
         }
@@ -41,10 +43,21 @@ struct HelperToolsHealthStrip: View {
             Spacer(minLength: 8)
             Text(status.state.displayText)
                 .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(status.state.foreground)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(status.label) \(status.state.displayText)")
+    }
+
+    private var stripIntent: HubLiquidSurfaceIntent {
+        let states = [ytDlpStatus.state, ffmpegStatus.state]
+        if states.contains(where: \.isError) {
+            return .error
+        }
+        if states.contains(where: \.isWarning) {
+            return .warning
+        }
+        return .normal
     }
 
     private func refresh() async {
@@ -111,16 +124,47 @@ private enum HelperState {
         }
     }
 
+    var isWarning: Bool {
+        switch self {
+        case .outdated:
+            return true
+        case .checking, .available, .missing, .unusable:
+            return false
+        }
+    }
+
+    var isError: Bool {
+        switch self {
+        case .missing, .unusable:
+            return true
+        case .checking, .available, .outdated:
+            return false
+        }
+    }
+
     var color: Color {
         switch self {
         case .checking:
             return .secondary
         case .available:
-            return .green
+            return HubDesignSystem.Colors.success
         case .missing, .unusable:
-            return .red
+            return HubDesignSystem.Colors.danger
         case .outdated:
-            return .orange
+            return HubDesignSystem.Colors.warning
+        }
+    }
+
+    var foreground: Color {
+        switch self {
+        case .checking:
+            return .secondary
+        case .available:
+            return HubDesignSystem.Colors.success
+        case .missing, .unusable:
+            return HubDesignSystem.Colors.danger
+        case .outdated:
+            return HubDesignSystem.Colors.warning
         }
     }
 }

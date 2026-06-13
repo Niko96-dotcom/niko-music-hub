@@ -36,7 +36,7 @@ struct AppShellView: View {
                         selectedToolID: $selectedToolID
                     )
                     .frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
-                    .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                    .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
                     .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
                 } else {
                     CollapsedSidebarRail(
@@ -50,13 +50,13 @@ struct AppShellView: View {
                 activeToolView
                     .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .layoutPriority(1)
-                    .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                    .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
                     .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
 
                 if showOutputInbox {
                     OutputInboxInspectorView(context: context)
                         .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
-                        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                        .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
                         .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
                 } else {
                     CollapsedSidebarRail(
@@ -121,7 +121,7 @@ struct AppShellView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
         }
     }
 
@@ -177,19 +177,20 @@ private struct CollapsedSidebarRail: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous)
-                .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
-        }
+        .foregroundStyle(isHovered ? HubDesignSystem.Colors.accent : Color.primary)
         .onHover(perform: updateHover)
-        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+        .hubLiquidPanel(
+            cornerRadius: HubDesignSystem.Radius.shell,
+            intent: isHovered ? .hover : .normal,
+            interactive: true
+        )
     }
 
     private func updateHover(_ hovering: Bool) {
         if reduceMotion {
             isHovered = hovering
         } else {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.easeInOut(duration: HubDesignSystem.Liquid.Motion.duration(reduceMotion: reduceMotion))) {
                 isHovered = hovering
             }
         }
