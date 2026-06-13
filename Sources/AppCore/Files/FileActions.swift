@@ -12,6 +12,10 @@ public protocol FileActions: Sendable {
     @MainActor
     func chooseExecutable(prompt: String) -> URL?
 
+    /// Opens a file picker for an audio file.
+    @MainActor
+    func chooseAudioFile(prompt: String) -> URL?
+
     @MainActor
     func revealInFinder(_ url: URL)
 }

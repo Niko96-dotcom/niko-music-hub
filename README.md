@@ -1,6 +1,6 @@
 # Niko Music Hub
 
-Native macOS SwiftUI app for music-production chores around Cubase: browse a local Cubase archive, tap tempos, convert audio to Cubase-ready WAV, record system audio, download media, and collect generated files in one output inbox.
+Native macOS SwiftUI app for music-production chores around Cubase: browse a local Cubase archive, tap tempos, convert audio to Cubase-ready WAV, record system audio, download media, separate stems locally, and collect generated files in one output inbox.
 
 ![Niko Music Hub first-run screen](docs/assets/niko-music-hub-first-run.png)
 
@@ -99,6 +99,7 @@ Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broke
 | WAV Converter | Drag or choose audio files, convert to Cubase-ready WAV presets, and hand verified outputs to the inbox. |
 | Recorder | Capture system audio on supported macOS versions and save recordings to the selected output folder. |
 | Downloader | Download supported URLs through `yt-dlp` into the shared output folder. |
+| Stem Separation | Split audio into vocals/drums/bass/other stems locally using `demucs-mlx`. |
 | Output Inbox | Shows generated files from registered tools with reveal/drag-out actions. |
 
 ## Safety
@@ -113,6 +114,7 @@ Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broke
 - GitHub Actions are not configured; local gates are the source of truth.
 - System-audio recording depends on macOS support and local privacy permission.
 - `ffmpeg` and `yt-dlp` are optional external tools. The app shows compact helper health, but installing or updating them is still a user action.
+- `demucs-mlx` is an optional external tool for stem separation. See `docs/user-guide-stem-separation.md`.
 - The archive browser is intentionally local-only and does not manage files inside real Cubase archives.
 
 ## Automation

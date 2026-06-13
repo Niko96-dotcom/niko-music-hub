@@ -31,5 +31,6 @@ private struct NoopTestFileActions: FileActions {
     func chooseOutputFolder() -> URL? { nil }
     func chooseDirectory(prompt: String) -> URL? { nil }
     func chooseExecutable(prompt: String) -> URL? { nil }
+    func chooseAudioFile(prompt: String) -> URL? { nil }
     func revealInFinder(_ url: URL) {}
 }

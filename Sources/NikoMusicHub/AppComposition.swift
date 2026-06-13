@@ -1,11 +1,13 @@
 import AppCore
 import AppKit
 import FeatureArchiveBrowser
+import UniformTypeIdentifiers
 import NikoMusicCore
 import FeatureAudioConverter
 import FeatureBPMTapper
 import FeatureAudioRecorder
 import FeatureDownloader
+import FeatureStemSeparation
 import Foundation
 
 struct AppComposition {
@@ -24,7 +26,7 @@ struct AppComposition {
         let diagnostics = ConsoleDiagnostics()
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
         let showsDevTool = runtime.showsDevTool
-        let registeredToolCount = showsDevTool ? 6 : 5
+        let registeredToolCount = showsDevTool ? 7 : 6
         var persistenceIssues: [PersistenceIssue] = []
         let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
         let archiveIndexStore: (any ArchiveIndexStoring)? = Self.makeSQLiteStore(
@@ -79,6 +81,7 @@ struct AppComposition {
             AudioConverterFeature(),
             AudioRecorderFeature(),
             DownloaderFeature(),
+            StemSeparationFeature(),
             SettingsFeature(archiveViewModel: archiveViewModel)
         ]
         if showsDevTool {
@@ -180,6 +183,18 @@ private struct AppKitFileActions: FileActions {
         panel.allowsMultipleSelection = false
         panel.prompt = prompt
         panel.message = prompt
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    @MainActor
+    func chooseAudioFile(prompt: String) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = prompt
+        panel.message = prompt
+        panel.allowedContentTypes = [.audio]
         return panel.runModal() == .OK ? panel.url : nil
     }
 

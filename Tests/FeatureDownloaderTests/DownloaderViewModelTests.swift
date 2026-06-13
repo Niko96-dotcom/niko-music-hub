@@ -278,6 +278,9 @@ private struct FixtureFileActions: FileActions {
     func chooseExecutable(prompt: String) -> URL? { nil }
 
     @MainActor
+    func chooseAudioFile(prompt: String) -> URL? { nil }
+
+    @MainActor
     func revealInFinder(_ url: URL) {}
 }
 

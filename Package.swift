@@ -36,6 +36,10 @@ let package = Package(
             name: "FeatureArchiveBrowser",
             targets: ["FeatureArchiveBrowser"]
         ),
+        .library(
+            name: "FeatureStemSeparation",
+            targets: ["FeatureStemSeparation"]
+        ),
         .executable(
             name: "NikoMusicHub",
             targets: ["NikoMusicHub"]
@@ -79,6 +83,10 @@ let package = Package(
             name: "FeatureArchiveBrowser",
             dependencies: ["AppCore", "NikoMusicCore"]
         ),
+        .target(
+            name: "FeatureStemSeparation",
+            dependencies: ["AppCore"]
+        ),
         .executableTarget(
             name: "NikoMusicHub",
             dependencies: [
@@ -88,7 +96,8 @@ let package = Package(
                 "FeatureBPMTapper",
                 "FeatureAudioConverter",
                 "FeatureAudioRecorder",
-                "FeatureDownloader"
+                "FeatureDownloader",
+                "FeatureStemSeparation"
             ]
         ),
         .testTarget(
@@ -118,6 +127,13 @@ let package = Package(
         .testTarget(
             name: "FeatureArchiveBrowserTests",
             dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore"]
+        ),
+        .testTarget(
+            name: "FeatureStemSeparationTests",
+            dependencies: ["FeatureStemSeparation", "AppCore"],
+            resources: [
+                .process("Fixtures")
+            ]
         )
     ]
 )
