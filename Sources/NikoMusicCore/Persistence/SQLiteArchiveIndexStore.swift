@@ -39,7 +39,15 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
                 throw StoreError.prepare(message(db))
             }
-            guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+            let stepResult = sqlite3_step(statement)
+            switch stepResult {
+            case SQLITE_ROW:
+                break
+            case SQLITE_DONE:
+                return nil
+            default:
+                throw StoreError.step(message(db))
+            }
             guard let rootsCString = sqlite3_column_text(statement, 0),
                   let songsCString = sqlite3_column_text(statement, 1),
                   let scannedCString = sqlite3_column_text(statement, 2) else {
@@ -120,6 +128,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
             throw StoreError.open(message(db))
         }
+        sqlite3_busy_timeout(db, 5_000)
         defer { sqlite3_close(db) }
         return try body(db)
     }

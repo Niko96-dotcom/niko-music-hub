@@ -23,7 +23,16 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
             }
             var result: [Collaborator] = []
             let formatter = ISO8601DateFormatter()
-            while sqlite3_step(statement) == SQLITE_ROW {
+            while true {
+                let stepResult = sqlite3_step(statement)
+                switch stepResult {
+                case SQLITE_ROW:
+                    break
+                case SQLITE_DONE:
+                    return result
+                default:
+                    throw StoreError.step(message(db))
+                }
                 guard let idCString = sqlite3_column_text(statement, 0),
                       let nameCString = sqlite3_column_text(statement, 1) else { continue }
                 let id = String(cString: idCString)
@@ -32,7 +41,6 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
                 let updatedAt = formatter.date(from: updatedText) ?? Date()
                 result.append(Collaborator(id: id, displayName: name, updatedAt: updatedAt))
             }
-            return result
         }
     }
 
@@ -98,6 +106,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
         guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
             throw StoreError.open(message(db))
         }
+        sqlite3_busy_timeout(db, 5_000)
         defer { sqlite3_close(db) }
         return try body(db)
     }

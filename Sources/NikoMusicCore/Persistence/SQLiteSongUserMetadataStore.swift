@@ -36,7 +36,16 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 throw StoreError.prepare(message(db))
             }
             var result: [String: SongUserMetadata] = [:]
-            while sqlite3_step(statement) == SQLITE_ROW {
+            while true {
+                let stepResult = sqlite3_step(statement)
+                switch stepResult {
+                case SQLITE_ROW:
+                    break
+                case SQLITE_DONE:
+                    return result
+                default:
+                    throw StoreError.step(message(db))
+                }
                 guard let idCString = sqlite3_column_text(statement, 0) else { continue }
                 let songID = String(cString: idCString)
                 let virtualTitle = optionalText(statement, column: 1)
@@ -75,7 +84,6 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                     updatedAt: updatedAt
                 )
             }
-            return result
         }
     }
 
@@ -195,11 +203,19 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
         guard sqlite3_prepare_v2(db, "PRAGMA table_info(song_metadata);", -1, &statement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
-        while sqlite3_step(statement) == SQLITE_ROW {
+        while true {
+            let stepResult = sqlite3_step(statement)
+            switch stepResult {
+            case SQLITE_ROW:
+                break
+            case SQLITE_DONE:
+                return false
+            default:
+                throw StoreError.step(message(db))
+            }
             guard let cString = sqlite3_column_text(statement, 1) else { continue }
             if String(cString: cString) == name { return true }
         }
-        return false
     }
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
@@ -207,6 +223,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
         guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
             throw StoreError.open(message(db))
         }
+        sqlite3_busy_timeout(db, 5_000)
         defer { sqlite3_close(db) }
         return try body(db)
     }
