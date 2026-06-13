@@ -37,7 +37,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public private(set) var outputURLs: [URL] = []
 
     private let context: ToolContext
-    private let useCase: DownloaderUseCase
+    private let useCase: any DownloaderUseCaseRunning
     private let jobFactory: DownloaderJobFactory
     private let healthChecker: YtDlpHealthChecker
     private var observeTask: Task<Void, Never>?
@@ -46,7 +46,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     public init(
         context: ToolContext,
-        useCase: DownloaderUseCase,
+        useCase: any DownloaderUseCaseRunning,
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
         jobFactory: DownloaderJobFactory = DownloaderJobFactory(),
         formatSelection: DownloadFormatSelection? = nil
@@ -117,28 +117,40 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     public func startDownload() {
         guard case .readyToDownload = downloadState,
-              let url = URL(string: urlText) else {
+              let sourceURL = URL(string: urlText) else {
             return
         }
 
+        let settings: AppSettings
+        do {
+            settings = try context.settingsStore.loadSettings()
+        } catch {
+            downloadState = .failed(error.localizedDescription)
+            statusMessage = nil
+            return
+        }
+
+        let capturedFormatSelection = formatSelection
+        let options = jobFactory.makeJobOptions(
+            sourceURL: sourceURL,
+            outputDirectory: settings.outputFolder.url,
+            formatSelection: capturedFormatSelection
+        )
+
         logEntries = []
         progress = 0
+        outputURLs = []
+        errorMessage = nil
+        job = nil
+        persistFormatSelection()
+        downloadState = .downloading
+        statusMessage = DownloaderCopy.downloading
 
-        Task {
+        Task { @MainActor in
             do {
-                let settings = try context.settingsStore.loadSettings()
-                persistFormatSelection()
-                let options = jobFactory.makeJobOptions(
-                    sourceURL: url,
-                    outputDirectory: settings.outputFolder.url,
-                    formatSelection: formatSelection
-                )
-
-                downloadState = .downloading
-                statusMessage = "Downloading..."
-                let observedJob = try await useCase.simulateAndEnqueue(url: url, options: options)
+                let observedJob = try await useCase.simulateAndEnqueue(url: sourceURL, options: options)
                 self.job = observedJob
-                observeJob(id: observedJob.id)
+                observeJob(id: observedJob.id, sourceURL: sourceURL)
             } catch {
                 downloadState = .failed(error.localizedDescription)
                 statusMessage = nil
@@ -146,7 +158,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func observeJob(id: Job.ID) {
+    private func observeJob(id: Job.ID, sourceURL: URL) {
         observeTask?.cancel()
         observeTask = Task { @MainActor in
             while let job = context.jobRunner.job(id: id) {
@@ -156,7 +168,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 if job.state == .completed {
                     self.downloadState = .completed
                     self.statusMessage = "Downloaded"
-                    await self.addToInbox(job: job, sourceURLString: self.urlText)
+                    await self.addToInbox(job: job, sourceURL: sourceURL)
                     break
                 } else if job.state == .failed {
                     self.downloadState = .failed(job.message)
@@ -173,15 +185,14 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func addToInbox(job: Job, sourceURLString: String) async {
-        guard let sourceURL = URL(string: sourceURLString) else { return }
-
+    private func addToInbox(job: Job, sourceURL: URL) async {
         let foundURLs = job.outputFileURLs.filter {
-            FileManager.default.fileExists(atPath: $0.path)
+            Self.regularFileExists(at: $0)
         }
 
         self.outputURLs = foundURLs
 
+        var handoffFailures: [String] = []
         for outputURL in foundURLs {
             let item = OutputInboxItem(
                 fileURL: outputURL,
@@ -189,7 +200,17 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 status: .available,
                 metadata: ["dlSourceURL": sourceURL.absoluteString]
             )
-            try? context.outputInboxStore.addItem(item)
+            do {
+                try context.outputInboxStore.addItem(item)
+            } catch {
+                handoffFailures.append(error.localizedDescription)
+            }
+        }
+
+        if let firstFailure = handoffFailures.first {
+            errorMessage = DownloaderCopy.outputInboxHandoffWarning(firstFailure)
+        } else {
+            errorMessage = nil
         }
     }
 
@@ -219,5 +240,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     public var outputFolder: URL {
         let settings = (try? context.settingsStore.loadSettings()) ?? .default
         return settings.outputFolder.url
+    }
+
+    private static func regularFileExists(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return exists && !isDirectory.boolValue
     }
 }

@@ -28,6 +28,9 @@ public struct DownloaderView: View {
                     progressSection
                     logArea
                 }
+                if viewModel.downloadState == .completed, let message = viewModel.errorMessage {
+                    handoffWarningSection(message: message)
+                }
                 if case let .failed(message) = viewModel.downloadState {
                     errorSection(message: message)
                 }
@@ -290,6 +293,16 @@ public struct DownloaderView: View {
                 viewModel.retryAfterFailure()
             }
         }
+    }
+
+    private func handoffWarningSection(message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(HubDesignSystem.Typography.bodySmall())
+            .foregroundStyle(HubDesignSystem.Colors.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
     }
 
     private static func errorCard(for message: String) -> AppErrorCard {

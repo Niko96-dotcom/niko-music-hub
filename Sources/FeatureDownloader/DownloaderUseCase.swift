@@ -43,7 +43,11 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
     }
 }
 
-public final class DownloaderUseCase: @unchecked Sendable {
+public protocol DownloaderUseCaseRunning: Sendable {
+    func simulateAndEnqueue(url: URL, options: DownloadJobOptions) async throws -> Job
+}
+
+public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Sendable {
     private let downloader: any DownloadRunning
     private let healthChecker: YtDlpHealthChecker
     private let jobRunner: any JobRunning

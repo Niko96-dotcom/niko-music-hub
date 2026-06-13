@@ -100,6 +100,32 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(vm.showSaveConfirmation)
     }
 
+    func testInboxAddFailureKeepsRecordingSuccessWithWarning() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-handoff-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: true)
+        let inbox = ThrowingOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        let recordedURL = try XCTUnwrap(vm.lastRecordedURL)
+        XCTAssertEqual(vm.recordingState, .idle)
+        XCTAssertTrue(vm.showSaveConfirmation)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recordedURL.path))
+        XCTAssertTrue(vm.handoffWarningMessage?.contains("Output Inbox") == true)
+    }
+
     func testStartRecordingCreatesMissingOutputDirectoryAndAddsInboxItem() async throws {
         let tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-missing-parent-\(UUID().uuidString)", isDirectory: true)
@@ -584,4 +610,21 @@ private final class InMemoryOutputInboxStore: OutputInboxStore, @unchecked Senda
     func addItem(_ item: OutputInboxItem) throws { items.append(item) }
     func updateItem(_ item: OutputInboxItem) throws {}
     func refreshAvailability() throws {}
+}
+
+private struct ThrowingOutputInboxStore: OutputInboxStore {
+    func listItems() throws -> [OutputInboxItem] { [] }
+    func addItem(_ item: OutputInboxItem) throws {
+        throw FixtureOutputInboxError.forced
+    }
+    func updateItem(_ item: OutputInboxItem) throws {}
+    func refreshAvailability() throws {}
+}
+
+private enum FixtureOutputInboxError: LocalizedError {
+    case forced
+
+    var errorDescription: String? {
+        "forced inbox failure"
+    }
 }

@@ -57,10 +57,19 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
             let outcome: BatchAudioConversionOutcome
             do {
                 let result = try await converter.convert(request)
-                try addOutputInboxItem(for: file, result: result)
+                let status: BatchAudioConversionStatus
+                do {
+                    try addOutputInboxItem(for: file, result: result)
+                    status = .verified(result)
+                } catch {
+                    status = .verifiedWithHandoffWarning(
+                        result,
+                        message: handoffFailureMessage(for: error)
+                    )
+                }
                 outcome = BatchAudioConversionOutcome(
                     file: file,
-                    status: .verified(result),
+                    status: status,
                     fileProgress: 1,
                     overallProgress: overallProgress(completed: index + 1, total: files.count)
                 )
@@ -125,6 +134,10 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         }
         return error.localizedDescription
     }
+
+    private func handoffFailureMessage(for error: Error) -> String {
+        "Verified WAV ready, but Output Inbox could not save the handoff. \(failureMessage(for: error))"
+    }
 }
 
 public final class StopAfterCurrentController: @unchecked Sendable {
@@ -163,6 +176,7 @@ public struct BatchAudioConversionFile: Identifiable, Equatable, Sendable {
 public enum BatchAudioConversionStatus: Equatable, Sendable {
     case converting
     case verified(ConversionResult)
+    case verifiedWithHandoffWarning(ConversionResult, message: String)
     case failed(message: String)
     case skipped
 }

@@ -157,6 +157,52 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(converter.requests.map(\.sourceURL), [first])
     }
 
+    func testStartConversionSetsBusySynchronouslyAndRejectsDuplicateStarts() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let converter = RecordingViewModelConverter { request in
+            try? await Task.sleep(for: .milliseconds(80))
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([source])
+
+        viewModel.startConversion()
+
+        XCTAssertTrue(viewModel.isConverting)
+        viewModel.startConversion()
+        try await waitUntil { converter.requests.count == 1 }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(converter.requests.count, 1)
+        try await waitUntil { !viewModel.isConverting }
+    }
+
+    func testInboxAddFailureLeavesRowVerifiedWithWarning() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let converter = RecordingViewModelConverter { request in
+            makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            outputInboxStore: ThrowingFixtureOutputInboxStore()
+        )
+        viewModel.addFileURLs([source])
+
+        _ = await viewModel.convertQueuedRows()
+
+        let row = try XCTUnwrap(viewModel.rows.first)
+        XCTAssertEqual(row.state, .verified)
+        XCTAssertEqual(row.statusText, AudioConverterCopy.verifiedWithHandoffWarning)
+        XCTAssertEqual(viewModel.statusText, AudioConverterCopy.verifiedWithHandoffWarning)
+        XCTAssertNotNil(row.outputURL)
+    }
+
     func testEditingWAVPresetPersistsAndUpdatesPresetSummary() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -280,6 +326,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             makeResult(for: request)
         },
         settingsStore: FixtureSettingsStore? = nil,
+        outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
         ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
     ) -> AudioConverterViewModel {
         let settingsStore = settingsStore ?? FixtureSettingsStore(
@@ -288,7 +335,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: settingsStore,
-            outputInboxStore: FixtureOutputInboxStore(),
+            outputInboxStore: outputInboxStore,
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
             diagnostics: FixtureDiagnostics()
@@ -357,6 +404,23 @@ private struct FixtureOutputInboxStore: OutputInboxStore {
     func refreshAvailability() throws {}
 }
 
+private struct ThrowingFixtureOutputInboxStore: OutputInboxStore {
+    func listItems() throws -> [OutputInboxItem] { [] }
+    func addItem(_ item: OutputInboxItem) throws {
+        throw FixtureOutputInboxError.forced
+    }
+    func updateItem(_ item: OutputInboxItem) throws {}
+    func refreshAvailability() throws {}
+}
+
+private enum FixtureOutputInboxError: LocalizedError {
+    case forced
+
+    var errorDescription: String? {
+        "forced inbox failure"
+    }
+}
+
 private struct FixtureJobRunner: JobRunning {
     func listJobs() -> [Job] { [] }
     func job(id: Job.ID) -> Job? { nil }
@@ -423,4 +487,15 @@ private extension NSLock {
         defer { unlock() }
         return try body()
     }
+}
+
+private func waitUntil(
+    timeoutAttempts: Int = 50,
+    _ predicate: @escaping @MainActor () -> Bool
+) async throws {
+    for _ in 0..<timeoutAttempts {
+        if await predicate() { return }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTFail("Timed out waiting for condition")
 }

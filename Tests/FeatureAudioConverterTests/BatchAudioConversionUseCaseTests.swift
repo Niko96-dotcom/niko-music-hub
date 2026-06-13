@@ -103,6 +103,31 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         XCTAssertEqual(item.metadata["sourceType"], "m4a")
     }
 
+    func testInboxAddFailureReturnsVerifiedHandoffWarning() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = makeBatchFile(named: "Verified.m4a", type: .m4a, in: directory)
+        let inbox = RecordingOutputInboxStore(addError: FixtureOutputInboxError.forced)
+        let converter = RecordingBatchConverter { request in
+            makeResult(for: request, converterPath: .ffmpeg)
+        }
+        let useCase = makeUseCase(directory: directory, inbox: inbox, converter: converter)
+
+        let outcomes = try await useCase.convert(
+            files: [file],
+            stopController: StopAfterCurrentController()
+        )
+
+        XCTAssertEqual(outcomes.count, 1)
+        guard case let .verifiedWithHandoffWarning(result, message) = outcomes[0].status else {
+            return XCTFail("Expected verified handoff warning, got \(outcomes[0].status)")
+        }
+        XCTAssertEqual(result.outputURL.pathExtension, "wav")
+        XCTAssertTrue(message.contains("Output Inbox"))
+        XCTAssertEqual(inbox.items.count, 0)
+    }
+
     private func makeUseCase(
         directory: URL,
         inbox: RecordingOutputInboxStore,
@@ -165,7 +190,12 @@ private struct FixtureSettingsStore: SettingsStore {
 
 private final class RecordingOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     private let lock = NSLock()
+    private let addError: Error?
     private var storedItems: [OutputInboxItem] = []
+
+    init(addError: Error? = nil) {
+        self.addError = addError
+    }
 
     var items: [OutputInboxItem] {
         lock.withLock { storedItems }
@@ -176,6 +206,9 @@ private final class RecordingOutputInboxStore: OutputInboxStore, @unchecked Send
     }
 
     func addItem(_ item: OutputInboxItem) throws {
+        if let addError {
+            throw addError
+        }
         lock.withLock {
             storedItems.append(item)
         }
@@ -184,6 +217,14 @@ private final class RecordingOutputInboxStore: OutputInboxStore, @unchecked Send
     func updateItem(_ item: OutputInboxItem) throws {}
 
     func refreshAvailability() throws {}
+}
+
+private enum FixtureOutputInboxError: LocalizedError {
+    case forced
+
+    var errorDescription: String? {
+        "forced inbox failure"
+    }
 }
 
 private final class RecordingBatchConverter: AudioConverting, @unchecked Sendable {

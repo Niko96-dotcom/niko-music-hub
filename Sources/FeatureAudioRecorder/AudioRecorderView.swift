@@ -55,27 +55,36 @@ public struct AudioRecorderView: View {
     @ViewBuilder
     private var saveConfirmationBanner: some View {
         if viewModel.showSaveConfirmation, let url = viewModel.lastRecordedURL {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Label("Recording saved", systemImage: "checkmark.circle.fill")
-                    .font(HubDesignSystem.Typography.body())
-                    .foregroundStyle(HubDesignSystem.Colors.success)
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    Label("Recording saved", systemImage: "checkmark.circle.fill")
+                        .font(HubDesignSystem.Typography.body())
+                        .foregroundStyle(HubDesignSystem.Colors.success)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                HubLabeledButton(
-                    icon: "folder",
-                    label: "Reveal",
-                    style: .secondary
-                ) {
-                    context.fileActions.revealInFinder(url)
+                    HubLabeledButton(
+                        icon: "folder",
+                        label: "Reveal",
+                        style: .secondary
+                    ) {
+                        context.fileActions.revealInFinder(url)
+                    }
+
+                    HubLabeledButton(
+                        icon: "arrow.up.forward.app",
+                        label: "Open",
+                        style: .secondary
+                    ) {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
 
-                HubLabeledButton(
-                    icon: "arrow.up.forward.app",
-                    label: "Open",
-                    style: .secondary
-                ) {
-                    NSWorkspace.shared.open(url)
+                if let warning = viewModel.handoffWarningMessage {
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Colors.warning)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.horizontal, 12)

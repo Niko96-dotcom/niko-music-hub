@@ -26,6 +26,9 @@ public enum DownloaderCopy {
     public static let retryableError = "Download failed (will retry): "
     public static let permanentError = "Download failed (permanent): "
     public static let partialCleanup = "Partial download cleaned up."
+    public static func outputInboxHandoffWarning(_ reason: String) -> String {
+        "Downloaded, but Output Inbox could not save the handoff. \(reason)"
+    }
 
     public static let download = "Download"
     public static let clear = "Clear"

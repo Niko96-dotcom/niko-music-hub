@@ -21,6 +21,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var error: RecorderError?
     @Published public private(set) var lastRecordedURL: URL?
     @Published public private(set) var showSaveConfirmation = false
+    @Published public private(set) var handoffWarningMessage: String?
 
     public var isRecording: Bool {
         recordingState == .recording
@@ -73,6 +74,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         elapsedTime = 0
         currentLevel = nil
         error = nil
+        handoffWarningMessage = nil
         showSaveConfirmation = false
 
         let maxDuration: TimeInterval? = maxDurationMinutes > 0
@@ -205,7 +207,12 @@ public final class AudioRecorderViewModel: ObservableObject {
                 "channels": "\(result.channelCount)"
             ]
         )
-        try outputInboxStore.addItem(item)
+        do {
+            try outputInboxStore.addItem(item)
+            handoffWarningMessage = nil
+        } catch {
+            handoffWarningMessage = Self.handoffWarningMessage(for: error)
+        }
 
         lastRecordedURL = result.outputURL
         showSaveConfirmation = true
@@ -216,5 +223,10 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     public func dismissSaveConfirmation() {
         showSaveConfirmation = false
+        handoffWarningMessage = nil
+    }
+
+    private static func handoffWarningMessage(for error: Error) -> String {
+        "Recording saved, but Output Inbox could not save the handoff. \(error.localizedDescription)"
     }
 }

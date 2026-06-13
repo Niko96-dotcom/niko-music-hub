@@ -73,15 +73,28 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public func startConversion() {
-        guard canConvertToWAV else { return }
+        guard !isConverting else { return }
+        let files = queuedConversionFiles()
+        guard !files.isEmpty else { return }
+
+        let controller = beginConversionRun()
         conversionTask = Task { @MainActor in
-            _ = await convertQueuedRows()
+            _ = await performConversion(files: files, controller: controller)
         }
     }
 
     @discardableResult
     public func convertQueuedRows() async -> [BatchAudioConversionOutcome] {
-        let files = rows.compactMap { row -> BatchAudioConversionFile? in
+        guard !isConverting else { return [] }
+        let files = queuedConversionFiles()
+        guard !files.isEmpty else { return [] }
+
+        let controller = beginConversionRun()
+        return await performConversion(files: files, controller: controller)
+    }
+
+    private func queuedConversionFiles() -> [BatchAudioConversionFile] {
+        rows.compactMap { row -> BatchAudioConversionFile? in
             guard row.state == .queued,
                   let sourceType = row.sourceType else {
                 return nil
@@ -92,14 +105,21 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 sourceType: sourceType
             )
         }
-        guard !files.isEmpty else { return [] }
+    }
 
+    private func beginConversionRun() -> StopAfterCurrentController {
         let controller = StopAfterCurrentController()
         stopController = controller
         isConverting = true
         statusText = AudioConverterCopy.converting
         overallProgress = 0
+        return controller
+    }
 
+    private func performConversion(
+        files: [BatchAudioConversionFile],
+        controller: StopAfterCurrentController
+    ) async -> [BatchAudioConversionOutcome] {
         do {
             let outcomes = try await batchUseCase.convert(
                 files: files,
@@ -299,6 +319,18 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 converterPathLabel: result.converterPath.displayName,
                 recoveryActionTitle: nil
             )
+        case let .verifiedWithHandoffWarning(result, _):
+            guard row.state == .queued || row.state == .converting else {
+                return nil
+            }
+            return row.updated(
+                state: .verified,
+                statusText: AudioConverterCopy.verifiedWithHandoffWarning,
+                progress: update.fileProgress,
+                outputURL: result.outputURL,
+                converterPathLabel: result.converterPath.displayName,
+                recoveryActionTitle: nil
+            )
         case let .failed(message):
             guard row.state == .queued || row.state == .converting else {
                 return nil
@@ -347,7 +379,11 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func refreshStatusText() {
-        if rows.contains(where: { $0.state == .verified }) {
+        if rows.contains(where: {
+            $0.state == .verified && $0.statusText == AudioConverterCopy.verifiedWithHandoffWarning
+        }) {
+            statusText = AudioConverterCopy.verifiedWithHandoffWarning
+        } else if rows.contains(where: { $0.state == .verified }) {
             statusText = AudioConverterCopy.verified
         } else {
             statusText = AudioConverterCopy.ready
@@ -484,6 +520,7 @@ public enum AudioConverterCopy {
     public static let ready = "Ready for WAV conversion"
     public static let converting = "Converting to Cubase-ready WAV"
     public static let verified = "Verified WAV ready"
+    public static let verifiedWithHandoffWarning = "Verified WAV ready, but Output Inbox could not save the handoff."
     public static let unsupported = "This file type is not supported in Phase 3. Add M4A, MP3, WAV, AIFF, or FLAC instead."
     public static let missingFFmpeg = "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
     public static let verificationFailed = "WAV verification failed. The source file was left untouched; check the output preset and try again."
