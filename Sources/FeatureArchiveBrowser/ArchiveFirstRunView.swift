@@ -42,7 +42,7 @@ struct ArchiveFirstRunView: View {
         .padding(28)
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.shell)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.shell)
         .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
     }
 }

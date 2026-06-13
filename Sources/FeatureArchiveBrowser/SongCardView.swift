@@ -41,9 +41,10 @@ struct SongCardView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(isSelected ? Color.primary.opacity(0.08) : Color.clear)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.row,
+            intent: isSelected ? .selected : .normal,
+            interactive: true
         )
     }
 

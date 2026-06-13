@@ -18,50 +18,30 @@ struct ArchiveWaveformHeroView: View {
                 playback.seek(to: fraction * playback.duration, url: url)
             }
 
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Button {
-                    playback.seekRelative(-5, url: url)
-                } label: {
-                    Image(systemName: "gobackward.5")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(url == nil)
-
-                Button {
+            HubTransportBar(
+                style: .full,
+                title: label ?? url?.lastPathComponent ?? "No preview",
+                subtitle: "Main preview",
+                isPlaying: playback.isPlaying(url),
+                currentTime: playback.currentTime,
+                duration: playback.duration,
+                isEnabled: url != nil,
+                markerProgress: hookProgress,
+                volumeLevel: 1,
+                showsSkipControls: true,
+                onPlayPause: {
                     playback.toggle(at: url)
-                } label: {
-                    Image(systemName: playback.isPlaying(url) ? "pause.fill" : "play.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(HubDesignSystem.Colors.accent)
-                .controlSize(.small)
-                .disabled(url == nil)
-
-                Button {
+                },
+                onSeekBackward: {
+                    playback.seekRelative(-5, url: url)
+                },
+                onSeekForward: {
                     playback.seekRelative(5, url: url)
-                } label: {
-                    Image(systemName: "goforward.5")
+                },
+                onSeek: { seconds in
+                    playback.seek(to: seconds, url: url)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(url == nil)
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(label ?? url?.lastPathComponent ?? "No preview")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if playback.duration > 0 {
-                        Text(timeLabel(current: playback.currentTime, total: playback.duration))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
+            )
         }
         .task(id: url?.path) {
             guard let url else {
@@ -72,14 +52,13 @@ struct ArchiveWaveformHeroView: View {
         }
     }
 
-    private func timeLabel(current: TimeInterval, total: TimeInterval) -> String {
-        "\(formatTime(current))/\(formatTime(total))"
-    }
-
-    private func formatTime(_ interval: TimeInterval) -> String {
-        let seconds = max(0, Int(interval.rounded()))
-        let minutes = seconds / 60
-        let remainder = seconds % 60
-        return String(format: "%d:%02d", minutes, remainder)
+    private var hookProgress: Double? {
+        guard let hook = playback.hookTime,
+              playback.duration > 0,
+              hook > 0,
+              hook < playback.duration else {
+            return nil
+        }
+        return hook / playback.duration
     }
 }

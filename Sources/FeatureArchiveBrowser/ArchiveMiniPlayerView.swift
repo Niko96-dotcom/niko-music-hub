@@ -17,37 +17,24 @@ struct ArchiveMiniPlayerView: View {
     @ObservedObject private var coordinator = ArchivePlaybackCoordinator.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: style == .compact ? 4 : 8) {
-            HStack(spacing: 8) {
-                Button {
-                    playback.toggle(at: url)
-                } label: {
-                    Image(systemName: playback.isPlaying(url) ? "pause.fill" : "play.fill")
-                        .font(.system(size: style == .compact ? 11 : 13, weight: .semibold))
-                        .frame(width: style == .compact ? 24 : 28, height: style == .compact ? 24 : 28)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(HubDesignSystem.Colors.accent)
-                .disabled(url == nil)
-
-                Text(displayLabel)
-                    .font(.system(size: style == .compact ? 11 : 12))
-                    .foregroundStyle(Color.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                if style == .full, playback.duration > 0 {
-                    Spacer(minLength: 4)
-                    Text(timeLabel(current: playback.currentTime, total: playback.duration))
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(Color.secondary)
-                }
+        HubTransportBar(
+            style: style.transportStyle,
+            title: displayLabel,
+            subtitle: style == .full ? "Preview" : nil,
+            isPlaying: playback.isPlaying(url),
+            currentTime: playback.currentTime,
+            duration: playback.duration,
+            isEnabled: url != nil,
+            markerProgress: hookProgress,
+            volumeLevel: style == .full ? 1 : nil,
+            showsSurface: style == .full,
+            onPlayPause: {
+                playback.toggle(at: url)
+            },
+            onSeek: { seconds in
+                playback.seek(to: seconds, url: url)
             }
-
-            if url != nil, playback.duration > 0 {
-                slider
-            }
-        }
+        )
         .onChange(of: url) { _, newURL in
             playback.prepare(url: newURL)
         }
@@ -69,42 +56,26 @@ struct ArchiveMiniPlayerView: View {
         return url?.lastPathComponent ?? "No preview"
     }
 
-    @ViewBuilder
-    private var slider: some View {
-        let hook = playback.hookTime ?? 0
-        let duration = max(playback.duration, 0.1)
-        ZStack(alignment: .leading) {
-            Slider(
-                value: Binding(
-                    get: { playback.currentTime },
-                    set: { playback.seek(to: $0, url: url) }
-                ),
-                in: 0...duration
-            )
-            .controlSize(style == .compact ? .mini : .small)
-
-            if hook > 0, hook < duration, style == .full {
-                GeometryReader { geometry in
-                    let x = CGFloat(hook / duration) * geometry.size.width
-                    Rectangle()
-                        .fill(HubDesignSystem.Colors.accent.opacity(0.85))
-                        .frame(width: 2, height: geometry.size.height + 4)
-                        .offset(x: max(0, x - 1))
-                }
-                .allowsHitTesting(false)
-            }
+    private var hookProgress: Double? {
+        guard style == .full,
+              let hook = playback.hookTime,
+              playback.duration > 0,
+              hook > 0,
+              hook < playback.duration else {
+            return nil
         }
-        .frame(height: style == .compact ? 16 : 22)
+        return hook / playback.duration
     }
+}
 
-    private func timeLabel(current: Double, total: Double) -> String {
-        "\(formatTime(current)) / \(formatTime(total))"
-    }
-
-    private func formatTime(_ value: Double) -> String {
-        guard value.isFinite, value >= 0 else { return "0:00" }
-        let whole = Int(value.rounded(.down))
-        return String(format: "%d:%02d", whole / 60, whole % 60)
+private extension ArchiveMiniPlayerStyle {
+    var transportStyle: HubTransportBarStyle {
+        switch self {
+        case .compact:
+            return .compact
+        case .full:
+            return .full
+        }
     }
 }
 

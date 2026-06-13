@@ -83,7 +83,8 @@ struct SongDetailView: View {
                     .onSubmit { commitAppNote() }
             }
         }
-        .padding(.vertical, 8)
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var previewCard: some View {
@@ -113,7 +114,8 @@ struct SongDetailView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: .selected)
     }
 
     private var actionsSection: some View {
@@ -154,6 +156,8 @@ struct SongDetailView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
         }
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var detailsSection: some View {
@@ -169,7 +173,8 @@ struct SongDetailView: View {
         } label: {
             sectionTitle("Details")
         }
-        .padding(.vertical, 8)
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var hideSection: some View {
@@ -178,6 +183,8 @@ struct SongDetailView: View {
             set: { viewModel.setSongHidden(song, hidden: $0) }
         ))
         .font(HubDesignSystem.Typography.bodySmall())
+        .padding(10)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: song.isIgnored ? .warning : .normal)
     }
 
     private func sectionTitle(_ title: String) -> some View {
@@ -297,7 +304,11 @@ struct SongDetailView: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(8)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.row,
+            intent: isIgnored ? .disabled : (isMain ? .selected : .normal)
+        )
     }
 
     @ViewBuilder
@@ -333,6 +344,8 @@ struct SongDetailView: View {
                             }
                         }
                     }
+                    .padding(8)
+                    .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
                 }
             }
         }

@@ -41,8 +41,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         .foregroundStyle(HubDesignSystem.Colors.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(HubDesignSystem.Colors.accent.opacity(0.12))
-                        .clipShape(Capsule())
+                        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip, intent: .selected)
                         .accessibilityIdentifier(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)
                 }
                 Spacer()
@@ -273,6 +272,7 @@ struct ArchiveDiagnosticsPanelView: View {
             }
         }
         .padding(10)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func diagnosticRow(_ label: String, value: String) -> some View {

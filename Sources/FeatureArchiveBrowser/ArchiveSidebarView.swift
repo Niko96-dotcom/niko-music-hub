@@ -65,7 +65,7 @@ struct ArchiveSidebarView: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous))
+                    .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip)
             }
 
             Spacer(minLength: 4)
@@ -227,7 +227,10 @@ struct ArchiveSidebarView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(minHeight: 34)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.pill, style: .continuous))
+        .hubGlassField(
+            intent: viewModel.songs.isEmpty ? .disabled : .normal,
+            minHeight: 34
+        )
     }
 
     private var skippedMatchesCallout: some View {
@@ -240,8 +243,10 @@ struct ArchiveSidebarView: View {
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.accent)
                     .lineLimit(1)
-            }
+                }
         }
+        .padding(10)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
     }
 
     @ViewBuilder
@@ -303,6 +308,6 @@ struct ArchiveSidebarView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 }
