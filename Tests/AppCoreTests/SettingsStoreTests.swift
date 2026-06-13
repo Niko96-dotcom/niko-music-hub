@@ -100,6 +100,28 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(settings.audioPreset.channelMode, .preserveMonoStereo)
     }
 
+    func testCorruptSettingsDataThrows() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(Data("not-json".utf8), forKey: "nikoMusicHub.settings")
+
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+        XCTAssertThrowsError(try store.loadSettings())
+    }
+
+    func testSettingsViewSurfacesLoadErrorsAndBlocksSaveFallback() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("settingsLoadError"))
+        XCTAssertTrue(source.contains("Settings were not saved"))
+        XCTAssertFalse(source.contains("(try? context.settingsStore.loadSettings()) ?? .default"))
+    }
+
     func testLoadsLegacyAudioPresetMissingChannelMode() throws {
         let data = Data("""
         {

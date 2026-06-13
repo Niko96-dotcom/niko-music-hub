@@ -121,6 +121,30 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(try store.listItems().first?.status, .missing)
     }
 
+    func testCorruptInboxJSONThrows() throws {
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        try FileManager.default.createDirectory(
+            at: storeURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("{not-json".utf8).write(to: storeURL)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+
+        XCTAssertThrowsError(try store.listItems())
+    }
+
+    func testOutputInboxInspectorSurfacesLoadErrors() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("inboxError"))
+        XCTAssertTrue(source.contains("settingsError"))
+        XCTAssertFalse(source.contains("(try? context.outputInboxStore.listItems()) ?? []"))
+        XCTAssertFalse(source.contains("try? context.outputInboxStore.refreshAvailability()"))
+    }
+
     func testRefreshAvailabilityTreatsDirectoriesAsMissing() throws {
         let store = try makeStore()
         let directoryURL = temporaryDirectory().appendingPathComponent("not-a-file.wav", isDirectory: true)

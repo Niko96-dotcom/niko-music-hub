@@ -8,12 +8,16 @@ struct OutputInboxInspectorView: View {
     @State private var items: [OutputInboxItem] = []
     @State private var outputFolder: URL = AppSettings.default.outputFolder.url
     @State private var hoveredItemID: OutputInboxItem.ID?
+    @State private var settingsError: String?
+    @State private var inboxError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
             headerBlock
 
-            if items.isEmpty {
+            if let inboxError {
+                errorState(message: inboxError)
+            } else if items.isEmpty {
                 emptyState
             } else {
                 List(items) { item in
@@ -58,6 +62,12 @@ struct OutputInboxInspectorView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(.tertiary)
+            if let settingsError {
+                Text(settingsError)
+                    .font(.system(size: 10))
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                    .lineLimit(2)
+            }
         }
     }
 
@@ -80,13 +90,42 @@ struct OutputInboxInspectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func errorState(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Output Inbox could not be loaded", systemImage: "externaldrive.badge.exclamationmark")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+    }
+
     private func refreshSettings() {
-        outputFolder = ((try? context.settingsStore.loadSettings()) ?? .default).outputFolder.url
+        do {
+            outputFolder = try context.settingsStore.loadSettings().outputFolder.url
+            settingsError = nil
+        } catch {
+            outputFolder = AppSettings.default.outputFolder.url
+            settingsError = "Settings could not be loaded."
+            context.diagnostics.log(.error, "Output Inbox settings load failed: \(error)")
+        }
     }
 
     private func refreshItems() {
-        try? context.outputInboxStore.refreshAvailability()
-        items = (try? context.outputInboxStore.listItems()) ?? []
+        do {
+            try context.outputInboxStore.refreshAvailability()
+            items = try context.outputInboxStore.listItems()
+            inboxError = nil
+        } catch {
+            items = []
+            inboxError = error.localizedDescription
+            context.diagnostics.log(.error, "Output Inbox load failed: \(error)")
+        }
     }
 
     private func chooseOutputFolder() {
@@ -97,7 +136,8 @@ struct OutputInboxInspectorView: View {
             }
             refreshSettings()
         } catch {
-            context.diagnostics.log(.error, "Could not save output folder")
+            settingsError = "Output folder could not be saved."
+            context.diagnostics.log(.error, "Could not save output folder: \(error)")
         }
     }
 

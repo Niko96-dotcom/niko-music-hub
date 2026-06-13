@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var settings: AppSettings = .default
     @State private var launchAtLogin = false
     @State private var launchAtLoginError: String?
+    @State private var settingsLoadError: String?
     @State private var saveError: String?
 
     private let recordingDurationChoices = [15, 30, 45, 60, 90, 120]
@@ -17,6 +18,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(spacing: HubDesignSystem.Spacing.section) {
                 header
+                settingsLoadErrorBanner
 
                 SettingsSection(
                     title: "General",
@@ -49,7 +51,8 @@ struct SettingsView: View {
                             icon: "folder.badge.gearshape",
                             label: "Choose Folder",
                             style: .secondary,
-                            help: "Pick where exports and recordings are saved"
+                            help: "Pick where exports and recordings are saved",
+                            isEnabled: settingsLoadError == nil
                         ) {
                             chooseOutputFolder()
                         }
@@ -99,6 +102,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .disabled(settingsLoadError != nil)
                     .frame(maxWidth: 280, alignment: .leading)
                 }
 
@@ -226,6 +230,19 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
+    private var settingsLoadErrorBanner: some View {
+        if let settingsLoadError {
+            Label(settingsLoadError, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        }
+    }
+
     private var maxRecordingBinding: Binding<Int> {
         Binding(
             get: { settings.maxRecordingDurationMinutes },
@@ -269,6 +286,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .disabled(settingsLoadError != nil)
 
                 if url != nil {
                     Button {
@@ -279,6 +297,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Use auto-detect for \(label)")
+                    .disabled(settingsLoadError != nil)
                 }
             }
         }
@@ -293,13 +312,24 @@ struct SettingsView: View {
     }
 
     private func refresh() {
-        settings = (try? context.settingsStore.loadSettings()) ?? .default
+        do {
+            settings = try context.settingsStore.loadSettings()
+            settingsLoadError = nil
+        } catch {
+            settings = .default
+            settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
+            context.diagnostics.log(.error, "Settings load failed: \(error)")
+        }
         launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
         saveError = nil
     }
 
     private func persistSettings() {
+        guard settingsLoadError == nil else {
+            saveError = "Settings were not saved because the current settings could not be loaded."
+            return
+        }
         do {
             try context.settingsStore.saveSettings(settings)
             saveError = nil
@@ -327,6 +357,10 @@ struct SettingsView: View {
     }
 
     private func chooseOutputFolder() {
+        guard settingsLoadError == nil else {
+            saveError = "Settings were not saved because the current settings could not be loaded."
+            return
+        }
         guard let folder = context.fileActions.chooseOutputFolder() else { return }
         settings.outputFolder = StoredFolderLocation(url: folder)
         persistSettings()
