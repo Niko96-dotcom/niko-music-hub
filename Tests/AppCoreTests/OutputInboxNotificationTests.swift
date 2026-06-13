@@ -25,6 +25,42 @@ final class OutputInboxNotificationTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 
+    func testAddItemNotificationPostsOnMainThreadWhenAddedOffMainThread() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let storeURL = tempDir.appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+        let notification = expectation(description: "Output Inbox notification delivered")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .outputInboxDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            XCTAssertTrue(Thread.isMainThread)
+            notification.fulfill()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        let item = OutputInboxItem(
+            id: UUID(),
+            fileURL: tempDir.appendingPathComponent("background.wav"),
+            sourceToolID: ToolFeatureID("test"),
+            createdAt: Date(),
+            status: .available
+        )
+
+        try await Task.detached(priority: .background) {
+            try store.addItem(item)
+        }.value
+
+        await fulfillment(of: [notification], timeout: 1.0)
+    }
+
     func testRefreshAvailabilityDoesNotPostWhenStatusesAreUnchanged() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

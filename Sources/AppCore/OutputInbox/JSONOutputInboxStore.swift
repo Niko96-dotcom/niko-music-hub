@@ -25,7 +25,24 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     public func addItem(_ item: OutputInboxItem) throws {
         try lock.withLock {
             var items = try loadItems()
-            items.append(item)
+            if let index = items.firstIndex(where: { existing in
+                existing.fileURL.standardizedFileURL == item.fileURL.standardizedFileURL
+                    && existing.sourceToolID == item.sourceToolID
+            }) {
+                let existing = items[index]
+                items[index] = OutputInboxItem(
+                    id: existing.id,
+                    fileURL: item.fileURL.standardizedFileURL,
+                    sourceToolID: item.sourceToolID,
+                    createdAt: existing.createdAt,
+                    status: item.status,
+                    metadata: item.metadata
+                )
+            } else {
+                var item = item
+                item.fileURL = item.fileURL.standardizedFileURL
+                items.append(item)
+            }
             try save(items)
         }
         notifyChanged()
@@ -49,7 +66,7 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
             let items = try loadItems()
             let refreshed = items.map { item in
                 var copy = item
-                if !fileManager.fileExists(atPath: item.fileURL.path) {
+                if !regularFileExists(at: item.fileURL) {
                     copy.status = .missing
                 } else if item.status == .pending || item.status == .missing {
                     copy.status = .available
@@ -83,8 +100,20 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
         try data.write(to: storageURL, options: .atomic)
     }
 
+    private func regularFileExists(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return exists && !isDirectory.boolValue
+    }
+
     private func notifyChanged() {
-        NotificationCenter.default.post(name: .outputInboxDidChange, object: nil)
+        if Thread.isMainThread {
+            NotificationCenter.default.post(name: .outputInboxDidChange, object: nil)
+        } else {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .outputInboxDidChange, object: nil)
+            }
+        }
     }
 }
 

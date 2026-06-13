@@ -2,8 +2,8 @@ import Foundation
 
 public enum OutputHandoff {
     private static let downloaderToolID = "downloader"
-    private static let downloaderRevealExtensions: Set<String> = ["mp3", "m4a", "mp4", "webm"]
-    private static let downloaderDragExtensions: Set<String> = ["mp3", "m4a", "mp4"]
+    private static let downloaderRevealExtensions: Set<String> = ["mp3", "m4a", "mp4", "wav", "webm"]
+    private static let downloaderDragExtensions: Set<String> = ["mp3", "m4a", "mp4", "wav"]
 
     /// Returns true when the output can be opened in Finder as a ready handoff file.
     public static func isRevealable(

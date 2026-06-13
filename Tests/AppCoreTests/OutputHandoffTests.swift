@@ -54,6 +54,35 @@ final class OutputHandoffTests: XCTestCase {
         XCTAssertEqual(OutputHandoff.dragFileURL(for: item), fileURL)
     }
 
+    func testDownloaderWAVIsRevealOpenAndDragReady() throws {
+        let fileURL = try makeExistingFile(named: "downloaded.wav")
+        let item = OutputInboxItem(
+            fileURL: fileURL,
+            sourceToolID: "downloader",
+            status: .available
+        )
+
+        XCTAssertTrue(OutputHandoff.isRevealable(item))
+        XCTAssertTrue(OutputHandoff.isOpenable(item))
+        XCTAssertTrue(OutputHandoff.isDragReady(item))
+        XCTAssertEqual(OutputHandoff.dragFileURL(for: item), fileURL)
+    }
+
+    func testDownloaderWAVDirectoryIsNotHandoffReady() throws {
+        let directoryURL = temporaryDirectory().appendingPathComponent("directory.wav", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let item = OutputInboxItem(
+            fileURL: directoryURL,
+            sourceToolID: "downloader",
+            status: .available
+        )
+
+        XCTAssertFalse(OutputHandoff.isRevealable(item))
+        XCTAssertFalse(OutputHandoff.isOpenable(item))
+        XCTAssertFalse(OutputHandoff.isDragReady(item))
+        XCTAssertNil(OutputHandoff.dragFileURL(for: item))
+    }
+
     func testDownloaderWEBMIsRevealOnly() throws {
         let fileURL = try makeExistingFile(named: "clip.webm")
         let item = OutputInboxItem(

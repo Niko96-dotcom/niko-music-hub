@@ -38,6 +38,52 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(updated.metadata["note"], "ready")
     }
 
+    func testAddItemDedupesByStandardizedFileURLAndSourceTool() throws {
+        let store = try makeStore()
+        let fileURL = try makeExistingFile(named: "dupe.wav")
+        let alternateURL = fileURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("subfolder")
+            .appendingPathComponent("..")
+            .appendingPathComponent(fileURL.lastPathComponent)
+        let first = OutputInboxItem(
+            fileURL: fileURL,
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 100),
+            status: .pending,
+            metadata: ["version": "first"]
+        )
+        let second = OutputInboxItem(
+            fileURL: alternateURL,
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 200),
+            status: .available,
+            metadata: ["version": "second"]
+        )
+
+        try store.addItem(first)
+        try store.addItem(second)
+
+        var items = try store.listItems()
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].id, first.id)
+        XCTAssertEqual(items[0].createdAt, first.createdAt)
+        XCTAssertEqual(items[0].fileURL.standardizedFileURL, fileURL.standardizedFileURL)
+        XCTAssertEqual(items[0].status, .available)
+        XCTAssertEqual(items[0].metadata["version"], "second")
+
+        let otherTool = OutputInboxItem(
+            fileURL: alternateURL,
+            sourceToolID: "other-tool",
+            status: .available
+        )
+        try store.addItem(otherTool)
+
+        items = try store.listItems()
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(Set(items.map(\.sourceToolID.rawValue)), ["dev-tool", "other-tool"])
+    }
+
     func testNewestItemsAppearFirst() throws {
         let store = try makeStore()
         let older = OutputInboxItem(
@@ -65,6 +111,22 @@ final class OutputInboxStoreTests: XCTestCase {
         let missingURL = temporaryDirectory().appendingPathComponent("missing.wav")
         let item = OutputInboxItem(
             fileURL: missingURL,
+            sourceToolID: "dev-tool",
+            status: .available
+        )
+
+        try store.addItem(item)
+        try store.refreshAvailability()
+
+        XCTAssertEqual(try store.listItems().first?.status, .missing)
+    }
+
+    func testRefreshAvailabilityTreatsDirectoriesAsMissing() throws {
+        let store = try makeStore()
+        let directoryURL = temporaryDirectory().appendingPathComponent("not-a-file.wav", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let item = OutputInboxItem(
+            fileURL: directoryURL,
             sourceToolID: "dev-tool",
             status: .available
         )
