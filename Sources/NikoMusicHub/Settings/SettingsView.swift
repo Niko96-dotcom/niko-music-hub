@@ -31,9 +31,7 @@ struct SettingsView: View {
                             setLaunchAtLogin(enabled)
                         }
                     if let launchAtLoginError {
-                        Text(launchAtLoginError)
-                            .font(HubDesignSystem.Typography.bodySmall())
-                            .foregroundStyle(.red)
+                        inlineWarning(launchAtLoginError)
                     }
                 }
 
@@ -159,12 +157,9 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if let saveError {
-                    Text(saveError)
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(.red)
-                }
+                saveErrorBanner
             }
+            .hubGlassGroup(spacing: HubDesignSystem.Spacing.section)
             .hubToolContentPadding()
             .frame(maxWidth: HubToolLayout.maxContentWidth)
             .frame(maxWidth: .infinity)
@@ -183,30 +178,7 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             ForEach(archiveViewModel.roots, id: \.path) { root in
-                HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(HubDesignSystem.Colors.accent)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
-                            .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                        Text(root.path)
-                            .font(HubDesignSystem.Typography.caption())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Spacer(minLength: 8)
-                    HubIconButton(
-                        systemImage: "trash",
-                        accessibilityLabel: "Remove archive root",
-                        help: "Remove \(root.lastPathComponent) from scan list",
-                        role: .destructive
-                    ) {
-                        archiveViewModel.removeRoot(root)
-                    }
-                }
+                archiveRootRow(root)
             }
         }
         HubLabeledButton(
@@ -239,7 +211,20 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+        }
+    }
+
+    @ViewBuilder
+    private var saveErrorBanner: some View {
+        if let saveError {
+            Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Colors.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .error)
         }
     }
 
@@ -263,6 +248,38 @@ struct SettingsView: View {
                 .lineLimit(2)
                 .truncationMode(.middle)
         }
+        .padding(10)
+        .hubGlassField(minHeight: 48)
+    }
+
+    private func archiveRootRow(_ root: URL) -> some View {
+        HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(HubDesignSystem.Colors.accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
+                    .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+                Text(root.path)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            HubIconButton(
+                systemImage: "trash",
+                accessibilityLabel: "Remove archive root",
+                help: "Remove \(root.lastPathComponent) from scan list",
+                role: .destructive
+            ) {
+                archiveViewModel.removeRoot(root)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func helperPathRow(
@@ -300,7 +317,19 @@ struct SettingsView: View {
                     .disabled(settingsLoadError != nil)
                 }
             }
+            .padding(8)
+            .hubGlassField(minHeight: 40)
         }
+    }
+
+    private func inlineWarning(_ message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(HubDesignSystem.Typography.bodySmall())
+            .foregroundStyle(HubDesignSystem.Colors.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
     }
 
     private func channelModeLabel(_ mode: AudioChannelMode) -> String {
@@ -404,29 +433,12 @@ private struct SettingsSection<Content: View>: View {
                 .font(HubDesignSystem.Typography.sectionTitle())
                 .foregroundStyle(importance == .low ? .secondary : .primary)
 
-            Group {
-                switch importance {
-                case .high, .medium:
-                    VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-                        content
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                            .fill(cardFill)
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                            .strokeBorder(HubDesignSystem.Colors.cardStroke, lineWidth: 1)
-                    }
-                case .low:
-                    VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-                        content
-                    }
-                    .padding(.leading, 4)
-                }
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                content
             }
+            .padding(sectionPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: sectionIntent)
 
             if let footer {
                 Text(footer)
@@ -437,14 +449,19 @@ private struct SettingsSection<Content: View>: View {
         }
     }
 
-    private var cardFill: Color {
+    private var sectionIntent: HubLiquidSurfaceIntent {
         switch importance {
-        case .high:
-            return Color.primary.opacity(0.03)
-        case .medium:
-            return Color.primary.opacity(0.02)
+        case .high, .medium, .low:
+            return .normal
+        }
+    }
+
+    private var sectionPadding: CGFloat {
+        switch importance {
+        case .high, .medium:
+            return 12
         case .low:
-            return .clear
+            return 10
         }
     }
 }

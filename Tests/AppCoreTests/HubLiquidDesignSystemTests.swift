@@ -22,6 +22,11 @@ final class HubLiquidDesignSystemTests: XCTestCase {
             "func hubLiquidPanel",
             "func hubLiquidCard",
             "func hubGlassField",
+            "colorSchemeContrast",
+            "accessibilityReduceMotion",
+            "highContrast: colorSchemeContrast == .increased",
+            "if #available(macOS 26.0, *), !accessibility.reduceTransparency",
+            ".interactive(interactive && !reduceMotion)",
         ].forEach { required in
             XCTAssertTrue(appCoreSource.contains(required), "Missing AppCore Liquid source: \(required)")
         }
@@ -32,6 +37,25 @@ final class HubLiquidDesignSystemTests: XCTestCase {
         XCTAssertNoThrow(try hostView(Text("Panel").padding().hubLiquidPanel(), size: CGSize(width: 240, height: 80)))
         XCTAssertNoThrow(try hostView(Text("Card").padding().hubLiquidCard(intent: .selected), size: CGSize(width: 240, height: 80)))
         XCTAssertNoThrow(try hostView(Text("Field").padding(.horizontal, 8).hubGlassField(), size: CGSize(width: 240, height: 48)))
+    }
+
+    func testLiquidAccessibilityFallbackTokensStrengthenReadableSurfaces() {
+        let reduceTransparency = HubDesignSystem.Liquid.AccessibilityFallback.reduceTransparency
+        let highContrast = HubDesignSystem.Liquid.AccessibilityFallback.highContrast
+
+        XCTAssertTrue(reduceTransparency.reduceTransparency)
+        XCTAssertTrue(highContrast.highContrast)
+        XCTAssertGreaterThan(
+            HubDesignSystem.Liquid.Stroke.width(for: .selected, accessibility: highContrast),
+            HubDesignSystem.Liquid.Stroke.width(for: .selected)
+        )
+        XCTAssertNotNil(NSColor(
+            HubDesignSystem.Liquid.SurfaceFill.opaqueTint(
+                for: .card,
+                intent: .warning,
+                colorScheme: .dark
+            )
+        ).usingColorSpace(.sRGB))
     }
 
     func testFeatureModulesDoNotDeclareLocalLiquidGlassSystem() throws {

@@ -5,6 +5,7 @@ public typealias HubLiquidSurfaceIntent = HubDesignSystem.Liquid.Intent
 /// Full-shell Liquid Studio Glass backdrop for the app frame.
 public struct HubLiquidBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.colorScheme) private var colorScheme
 
     public init() {}
@@ -48,7 +49,7 @@ public struct HubLiquidBackdrop: View {
     private var liquidAccessibility: HubDesignSystem.Liquid.AccessibilityFallback {
         HubDesignSystem.Liquid.AccessibilityFallback(
             reduceTransparency: reduceTransparency,
-            highContrast: false
+            highContrast: colorSchemeContrast == .increased
         )
     }
 }
@@ -137,7 +138,9 @@ public struct HubGlassField: ViewModifier {
 }
 
 private struct HubLiquidSurface: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.colorScheme) private var colorScheme
 
     let level: HubDesignSystem.Liquid.SurfaceLevel
@@ -149,7 +152,7 @@ private struct HubLiquidSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let accessibility = liquidAccessibility
 
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), !accessibility.reduceTransparency {
             content
                 .opacity(intent == .disabled ? 0.62 : 1)
                 .glassEffect(
@@ -162,7 +165,7 @@ private struct HubLiquidSurface: ViewModifier {
                                 accessibility: accessibility
                             )
                         )
-                        .interactive(interactive),
+                        .interactive(interactive && !reduceMotion),
                     in: shape
                 )
                 .overlay {
@@ -228,7 +231,7 @@ private struct HubLiquidSurface: ViewModifier {
     private var liquidAccessibility: HubDesignSystem.Liquid.AccessibilityFallback {
         HubDesignSystem.Liquid.AccessibilityFallback(
             reduceTransparency: reduceTransparency,
-            highContrast: false
+            highContrast: colorSchemeContrast == .increased
         )
     }
 
