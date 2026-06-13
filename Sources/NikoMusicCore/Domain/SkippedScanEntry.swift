@@ -3,6 +3,7 @@ import Foundation
 public enum SkippedScanEntryKind: String, Sendable, Codable, Equatable {
     case nonFolderAtRoot
     case invalidRoot
+    case unreadableChild
 }
 
 public struct SkippedScanEntry: Sendable, Equatable, Codable {

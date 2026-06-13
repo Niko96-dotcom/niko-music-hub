@@ -39,20 +39,69 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                 continue
             }
 
-            let children = try fileManager.contentsOfDirectory(
-                at: standardizedRoot,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-            let rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+            let children: [URL]
+            do {
+                children = try fileManager.contentsOfDirectory(
+                    at: standardizedRoot,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+            } catch {
+                let message = "Could not read root: \(standardizedRoot.path)"
+                globalWarnings.append(message)
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .invalidRoot,
+                        label: standardizedRoot.path,
+                        reason: "Could not read root: \(error.localizedDescription)"
+                    )
+                )
+                continue
+            }
+            let rootLevelVersions: [ProjectVersion]
+            do {
+                rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+            } catch {
+                globalWarnings.append("Could not read root-level CPR files: \(standardizedRoot.path)")
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .unreadableChild,
+                        label: standardizedRoot.lastPathComponent,
+                        reason: "Could not read root-level CPR files: \(error.localizedDescription)"
+                    )
+                )
+                rootLevelVersions = []
+            }
             let rootLevelCPRPaths = Set(rootLevelVersions.map { $0.filePath.standardizedFileURL.path })
             songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
 
             for child in children {
-                let values = try child.resourceValues(forKeys: [.isDirectoryKey])
+                let values: URLResourceValues
+                do {
+                    values = try child.resourceValues(forKeys: [.isDirectoryKey])
+                } catch {
+                    skippedEntries.append(
+                        SkippedScanEntry(
+                            kind: .unreadableChild,
+                            label: child.lastPathComponent,
+                            reason: "Could not read entry: \(error.localizedDescription)"
+                        )
+                    )
+                    continue
+                }
                 if values.isDirectory == true {
-                    if let song = try scanSongFolder(child) {
-                        songs.append(song)
+                    do {
+                        if let song = try scanSongFolder(child) {
+                            songs.append(song)
+                        }
+                    } catch {
+                        skippedEntries.append(
+                            SkippedScanEntry(
+                                kind: .unreadableChild,
+                                label: child.lastPathComponent,
+                                reason: "Could not scan folder: \(error.localizedDescription)"
+                            )
+                        )
                     }
                     continue
                 }
@@ -114,6 +163,9 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     private func scanSongFolder(_ folder: URL) throws -> Song? {
         let folderName = folder.lastPathComponent
         var warnings: [String] = []
+        guard fileManager.isReadableFile(atPath: folder.path) else {
+            throw ScanError.unreadableFolder(folder.path)
+        }
 
         let versions = try cprDetector.detectVersions(in: folder)
         if versions.isEmpty {
@@ -144,5 +196,16 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             mainPreviewCandidateID: mainPreviewID,
             latestCPR: latest
         )
+    }
+
+    private enum ScanError: LocalizedError {
+        case unreadableFolder(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .unreadableFolder(let path):
+                "Folder is not readable: \(path)"
+            }
+        }
     }
 }

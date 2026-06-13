@@ -62,10 +62,15 @@ public enum NewSongFolderCreator {
             let notesURL = songFolder.appendingPathComponent("notes.txt")
             try note.write(to: notesURL, atomically: true, encoding: .utf8)
         }
+        let cprDetector = CPRVersionDetector(fileManager: fileManager)
+        let versions = try cprDetector.detectVersions(in: songFolder)
+        let latest = cprDetector.latestCPR(from: versions)
         var song = Song(
             folderPath: songFolder,
             originalFolderName: trimmed,
             displayTitle: trimmed,
+            projectVersions: versions,
+            latestCPR: latest,
             appNote: request.appNote,
             collaboratorIDs: request.collaboratorIDs
         )
@@ -83,13 +88,17 @@ public enum NewSongFolderCreator {
         into songFolder: URL,
         fileManager: FileManager
     ) throws {
+        let standardizedTemplate = template.standardizedFileURL
         guard let enumerator = fileManager.enumerator(
-            at: template,
+            at: standardizedTemplate,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else { return }
         for case let item as URL in enumerator {
-            let relative = item.path.replacingOccurrences(of: template.path + "/", with: "")
+            let item = item.standardizedFileURL
+            let templatePrefix = standardizedTemplate.path + "/"
+            guard item.path.hasPrefix(templatePrefix) else { continue }
+            let relative = String(item.path.dropFirst(templatePrefix.count))
             let destination = songFolder.appendingPathComponent(relative)
             let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             if isDir {

@@ -996,6 +996,68 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
     }
 
+    func testCreateNewSongOpensTemplateCPRDryRun() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN") }
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-archive-\(UUID().uuidString)", isDirectory: true)
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-drafts-\(UUID().uuidString)", isDirectory: true)
+        let templateRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-template-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: templateRoot, withIntermediateDirectories: true)
+        let templateCPR = templateRoot.appendingPathComponent("Starter.cpr")
+        FileManager.default.createFile(atPath: templateCPR.path, contents: Data("fixture".utf8))
+        defer {
+            try? FileManager.default.removeItem(at: archiveRoot)
+            try? FileManager.default.removeItem(at: draftRoot)
+            try? FileManager.default.removeItem(at: templateRoot)
+        }
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [archiveRoot]
+
+        let created = try viewModel.createNewSong(
+            request: NewSongRequest(name: "Template Song", root: draftRoot, templateFolder: templateRoot)
+        )
+
+        XCTAssertEqual(created.effectiveLatestCPR?.fileName, "Starter.cpr")
+        XCTAssertTrue(viewModel.lastDryRunLog?.hasSuffix("Template Song/Starter.cpr") == true)
+    }
+
+    func testCreateNewSongWithoutCPRExplainsCreatedDraft() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN") }
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-explain-archive-\(UUID().uuidString)", isDirectory: true)
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-explain-drafts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: archiveRoot)
+            try? FileManager.default.removeItem(at: draftRoot)
+        }
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [archiveRoot]
+
+        let created = try viewModel.createNewSong(
+            request: NewSongRequest(name: "No CPR Yet", root: draftRoot)
+        )
+
+        XCTAssertNil(created.effectiveLatestCPR)
+        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertTrue(viewModel.statusMessage?.contains("Created draft No CPR Yet") == true)
+        XCTAssertTrue(viewModel.statusMessage?.contains("No CPR project file yet") == true)
+    }
+
     func testCreateNewSongRejectsArchiveRootDestination() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)

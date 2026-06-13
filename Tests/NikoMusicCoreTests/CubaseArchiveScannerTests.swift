@@ -118,6 +118,30 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertGreaterThan(result.songs.count, 9)
     }
 
+    func testUnreadableImmediateChildIsSkippedWhileSiblingsScan() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let goodSong = root.appendingPathComponent("Good Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: goodSong, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: goodSong.appendingPathComponent("Good Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        let unreadable = root.appendingPathComponent("Unreadable Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: unreadable, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unreadable.path) }
+
+        let result = try CubaseArchiveScanner().scan(roots: [root])
+
+        XCTAssertEqual(result.songs.map(\.displayTitle), ["Good Song"])
+        let skipped = try XCTUnwrap(result.skippedEntries.first { $0.label == "Unreadable Song" })
+        XCTAssertEqual(skipped.kind, .unreadableChild)
+        XCTAssertTrue(skipped.reason.contains("Could not scan folder"))
+        let matches = SkippedEntrySearchMatcher.search("Unreadable", in: result.skippedEntries)
+        XCTAssertEqual(matches.first?.entry.label, "Unreadable Song")
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubScanner-\(UUID().uuidString)", isDirectory: true)

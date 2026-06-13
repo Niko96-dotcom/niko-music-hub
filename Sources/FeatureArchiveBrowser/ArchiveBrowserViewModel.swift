@@ -720,7 +720,13 @@ extension ArchiveBrowserViewModel {
             }
         }
         selectSong(created)
-        try openLatestCPR(for: created)
+        if created.effectiveLatestCPR != nil {
+            try openLatestCPR(for: created)
+        } else {
+            setStatusMessage(
+                "Created draft \(created.originalFolderName). No CPR project file yet; folder is ready at \(created.folderPath.path)."
+            )
+        }
         return created
     }
 
