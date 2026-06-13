@@ -89,8 +89,7 @@ public struct AudioRecorderView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(HubDesignSystem.Colors.success.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .selected)
             .frame(maxWidth: 560)
         }
     }
@@ -124,19 +123,12 @@ public struct AudioRecorderView: View {
     }
 
     private var meterSection: some View {
-        GeometryReader { geometry in
-            let peak = viewModel.currentLevel?.peak ?? 0
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-                    .frame(height: 8)
-
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(meterGradient(for: peak))
-                    .frame(width: max(0, CGFloat(peak) * geometry.size.width), height: 8)
-            }
-        }
-        .frame(height: 8)
+        HubWaveformSurface(
+            peaks: meterPeaks,
+            progress: Double(viewModel.currentLevel?.peak ?? 0),
+            variant: .meter,
+            isEnabled: viewModel.isRecording
+        )
         .frame(maxWidth: 560)
         .shadow(
             color: viewModel.isRecording ? HubDesignSystem.Colors.success.opacity(0.3) : .clear,
@@ -151,7 +143,12 @@ public struct AudioRecorderView: View {
             .font(HubDesignSystem.Typography.display())
             .monospacedDigit()
             .foregroundStyle(viewModel.isRecording ? .primary : .tertiary)
+            .padding(14)
             .frame(maxWidth: 560)
+            .hubLiquidCard(
+                cornerRadius: HubDesignSystem.Radius.card,
+                intent: viewModel.isRecording ? .selected : .normal
+            )
     }
 
     private var controlSection: some View {
@@ -183,6 +180,8 @@ public struct AudioRecorderView: View {
         .tint(.red)
         .disabled(viewModel.recordingState == .stopping)
         .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: viewModel.isRecording ? .warning : .normal)
     }
 
     private var settingsSection: some View {
@@ -199,7 +198,8 @@ public struct AudioRecorderView: View {
             .disabled(viewModel.isRecording)
             .frame(maxWidth: 560)
         }
-        .padding(.top, HubDesignSystem.Spacing.section)
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
         .frame(maxWidth: .infinity)
     }
 
@@ -243,7 +243,7 @@ public struct AudioRecorderView: View {
                 }
             }
             .padding(12)
-            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
             .frame(maxWidth: 560)
         }
     }
@@ -262,7 +262,7 @@ public struct AudioRecorderView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
-            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .disabled)
             .frame(maxWidth: 560)
         }
     }
@@ -382,16 +382,15 @@ public struct AudioRecorderView: View {
         }
     }
 
-    private func meterGradient(for peak: Float) -> LinearGradient {
-        let colors: [Color]
-        if peak > 0.9 {
-            colors = [HubDesignSystem.Colors.warning, HubDesignSystem.Colors.danger]
-        } else if peak > 0.7 {
-            colors = [HubDesignSystem.Colors.success, HubDesignSystem.Colors.warning]
-        } else {
-            colors = [HubDesignSystem.Colors.success, HubDesignSystem.Colors.success.opacity(0.85)]
+    private var meterPeaks: [Double] {
+        let peak = Double(viewModel.currentLevel?.peak ?? 0)
+        guard peak > 0 else {
+            return HubMediaSurfaceFixtures.meterPeaks.map { $0 * 0.08 }
         }
-        return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+        return HubMediaSurfaceFixtures.meterPeaks.enumerated().map { index, value in
+            let pulse = 0.62 + (Double(index % 4) * 0.11)
+            return min(max(value * peak * pulse, 0.03), 1)
+        }
     }
 
     private func formatElapsedTime(_ interval: TimeInterval) -> String {

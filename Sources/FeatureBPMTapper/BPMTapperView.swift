@@ -95,8 +95,10 @@ public struct BPMTapperView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(minHeight: 80)
+        .padding(14)
+        .frame(minHeight: 94)
         .frame(maxWidth: .infinity)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: viewModel.displayedBPM == nil ? .disabled : .selected)
     }
 
     private var adjustmentPicker: some View {
@@ -109,33 +111,28 @@ public struct BPMTapperView: View {
                 .tag(BPMAdjustment.doubleTime)
         }
         .pickerStyle(.segmented)
+        .padding(8)
         .frame(maxWidth: 440)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: viewModel.displayedBPM == nil ? .disabled : .normal)
         .disabled(viewModel.displayedBPM == nil)
     }
 
     private var tapSurface: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                .fill(.thinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                        .strokeBorder(
-                            tapSurfaceFocused ? HubDesignSystem.Colors.accent : HubDesignSystem.glassStroke,
-                            lineWidth: tapSurfaceFocused ? 2 : 0.5
-                        )
-                }
+        VStack(spacing: 8) {
+            Text("Tap Tempo")
+                .font(.system(size: 18, weight: .semibold))
 
-            VStack(spacing: 8) {
-                Text("Tap Tempo")
-                    .font(.system(size: 18, weight: .semibold))
-
-                Text("Tap or press Space")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(16)
+            Text("Tap or press Space")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(.secondary)
         }
+        .padding(16)
         .frame(maxWidth: 560, minHeight: 160)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.card,
+            intent: tapSurfaceFocused ? .selected : .normal,
+            interactive: true
+        )
         .scaleEffect(tapSurfacePressed ? 0.98 : 1)
         .contentShape(Rectangle())
         .focusable()
@@ -196,6 +193,8 @@ public struct BPMTapperView: View {
 
             inlineMessages
         }
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var inlineMessages: some View {
@@ -260,6 +259,8 @@ public struct BPMTapperView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: 560)
+                .padding(14)
+                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: .disabled)
             } else {
                 VStack(spacing: HubDesignSystem.Spacing.cardGap) {
                     ForEach(viewModel.historyEntries) { entry in
@@ -323,7 +324,8 @@ public struct BPMTapperView: View {
             }
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 10)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func animateTapPress() {

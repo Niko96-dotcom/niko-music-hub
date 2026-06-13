@@ -109,7 +109,10 @@ public struct DownloaderView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .hubGlassField(
+            intent: viewModel.downloadState == .downloading ? .disabled : .normal,
+            minHeight: 44
+        )
         .disabled(viewModel.downloadState == .downloading)
     }
 
@@ -132,6 +135,8 @@ public struct DownloaderView: View {
                     .truncationMode(.middle)
             }
         }
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
         .disabled(viewModel.downloadState == .downloading)
     }
 
@@ -250,7 +255,7 @@ public struct DownloaderView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private var progressSection: some View {
@@ -262,6 +267,8 @@ public struct DownloaderView: View {
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(.secondary)
         }
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .selected)
     }
 
     private var logArea: some View {
@@ -282,7 +289,7 @@ public struct DownloaderView: View {
             }
             .frame(maxHeight: 140)
             .padding(8)
-            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
         }
     }
 
@@ -302,7 +309,7 @@ public struct DownloaderView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
     }
 
     private static func errorCard(for message: String) -> AppErrorCard {
@@ -353,20 +360,9 @@ private struct DownloaderTextChip: View {
         Button(action: action) {
             Text(title)
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(isSelected ? HubDesignSystem.Colors.accent : .primary)
                 .padding(.horizontal, 10)
                 .frame(height: HubDesignSystem.Size.chipHeight)
-                .background {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                        .fill(isSelected ? HubDesignSystem.Colors.accentTint : Color.primary.opacity(0.04))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                        .strokeBorder(
-                            isSelected ? HubDesignSystem.Colors.selectedStroke : HubDesignSystem.Colors.cardStroke,
-                            lineWidth: isSelected ? 1.5 : 1
-                        )
-                }
+                .hubGlassChip(isSelected: isSelected)
         }
         .buttonStyle(.plain)
     }
@@ -383,16 +379,8 @@ private struct DownloaderChipLabel: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
-        .foregroundStyle(HubDesignSystem.Colors.accent)
         .padding(.horizontal, 10)
         .frame(height: HubDesignSystem.Size.chipHeight)
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                .fill(HubDesignSystem.Colors.accentTint)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                .strokeBorder(HubDesignSystem.Colors.selectedStroke, lineWidth: 1.5)
-        }
+        .hubGlassChip(isSelected: true)
     }
 }

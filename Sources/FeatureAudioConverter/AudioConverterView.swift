@@ -68,42 +68,42 @@ public struct AudioConverterView: View {
     }
 
     private var intakeSurface: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                .fill(dropTargeted ? HubDesignSystem.Colors.accentTint : Color.primary.opacity(0.02))
-                .overlay {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                        .stroke(
-                            dropTargeted ? HubDesignSystem.Colors.accent : HubDesignSystem.Colors.separator,
-                            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                        )
-                }
+        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            Image(systemName: "arrow.down.doc")
+                .font(.system(size: 28))
+                .foregroundStyle(.quaternary)
 
-            VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Image(systemName: "arrow.down.doc")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.quaternary)
+            Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
+                .font(.system(size: 15, weight: .semibold))
 
-                Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
-                    .font(.system(size: 15, weight: .semibold))
+            Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-                Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HubLabeledButton(
-                    icon: "plus",
-                    label: "Choose Files",
-                    style: .secondary
-                ) {
-                    fileImporterVisible = true
-                }
+            HubLabeledButton(
+                icon: "plus",
+                label: "Choose Files",
+                style: .secondary
+            ) {
+                fileImporterVisible = true
             }
-            .padding(24)
         }
+        .padding(24)
         .frame(maxWidth: HubToolLayout.maxContentWidth, minHeight: 180)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.card,
+            intent: dropTargeted ? .selected : .normal,
+            interactive: true
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
+                .stroke(
+                    dropTargeted ? HubDesignSystem.Colors.accent : HubDesignSystem.Colors.separator,
+                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                )
+        }
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $dropTargeted,
@@ -140,7 +140,7 @@ public struct AudioConverterView: View {
             }
         }
         .padding(10)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -266,6 +266,8 @@ public struct AudioConverterView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .padding(12)
+        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -363,7 +365,12 @@ public struct AudioConverterView: View {
             }
         }
         .padding(.vertical, 10)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 10)
+        .hubLiquidCard(
+            cornerRadius: HubDesignSystem.Radius.row,
+            intent: rowSurfaceIntent(for: row.state),
+            interactive: verifiedOutputURL != nil
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.sourceURL.lastPathComponent)
         .accessibilityValue(statusText(for: row))
@@ -374,8 +381,7 @@ public struct AudioConverterView: View {
             .font(HubDesignSystem.Typography.micro())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(HubDesignSystem.Colors.accent.opacity(0.1))
-            .clipShape(Capsule())
+            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip, intent: .selected)
     }
 
     private func statusDot(for state: AudioConverterRowState) -> some View {
@@ -417,15 +423,30 @@ public struct AudioConverterView: View {
     private func statusColor(for state: AudioConverterRowState) -> Color {
         switch state {
         case .verified:
-            return .green
+            return HubDesignSystem.Colors.success
         case .failed:
-            return .red
+            return HubDesignSystem.Colors.danger
         case .unsupported:
-            return .orange
+            return HubDesignSystem.Colors.warning
         case .converting:
             return HubDesignSystem.Colors.accent
         case .queued, .skipped:
             return .secondary
+        }
+    }
+
+    private func rowSurfaceIntent(for state: AudioConverterRowState) -> HubLiquidSurfaceIntent {
+        switch state {
+        case .verified:
+            return .selected
+        case .failed:
+            return .error
+        case .unsupported:
+            return .warning
+        case .skipped:
+            return .disabled
+        case .queued, .converting:
+            return .normal
         }
     }
 
