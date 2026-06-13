@@ -51,6 +51,30 @@ final class HubDesignSystemTokenTests: XCTestCase {
         _ = HubDesignSystem.Typography.micro()
         _ = HubDesignSystem.Typography.mono()
     }
+
+    func testLiquidStudioGlassTokensExposeFoundationScale() {
+        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.allCases, [.backdrop, .panel, .card, .field, .chip])
+        XCTAssertEqual(HubDesignSystem.Liquid.Intent.allCases, [.normal, .hover, .selected, .disabled, .warning, .error])
+        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.panel.cornerRadius, HubDesignSystem.Radius.panel)
+        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.chip.cornerRadius, HubDesignSystem.Radius.chip)
+        XCTAssertGreaterThan(HubDesignSystem.Liquid.Depth.shadowRadius(for: .panel), 0)
+        XCTAssertGreaterThan(HubDesignSystem.Liquid.Stroke.width(for: .selected), 1)
+        XCTAssertEqual(
+            HubDesignSystem.Liquid.Motion.duration(reduceMotion: true),
+            HubDesignSystem.Liquid.Motion.disabledResponse
+        )
+    }
+
+    func testLiquidReferenceContractNamesApprovedAndExcludedAssets() {
+        XCTAssertTrue(
+            HubDesignSystem.Reference.approvedAssets.contains("tmp/mythos-reference/contact_sheet.png")
+        )
+        XCTAssertTrue(
+            HubDesignSystem.Reference.approvedAssets.contains("output/imagegen/niko-music-hub-liquid-glass-direction.png")
+        )
+        XCTAssertTrue(HubDesignSystem.Reference.translationNote.contains("MythOS"))
+        XCTAssertTrue(HubDesignSystem.Reference.excludedReference.contains("NeuralNote/laptop"))
+    }
 }
 
 private struct RGBAComponents {

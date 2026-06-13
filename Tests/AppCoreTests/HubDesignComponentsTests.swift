@@ -22,20 +22,26 @@ final class HubDesignComponentsTests: XCTestCase {
     }
 
     func testHubGlassChromeKeepsNativeGlassAndFallbackPaths() throws {
-        let source = try String(
+        let chromeSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubGlassChrome.swift",
             encoding: .utf8
         )
+        let liquidSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubLiquidGlass.swift",
+            encoding: .utf8
+        )
+        let combinedSource = chromeSource + "\n" + liquidSource
 
         [
             "#available(macOS 26.0, *)",
-            ".glassEffect(.regular",
+            ".glassEffect(",
             "GlassEffectContainer",
             ".interactive(",
             "HubGlassChip",
-            "materialFallback",
+            "HubLiquidPanel",
+            "HubLiquidCard",
         ].forEach {
-            XCTAssertTrue(source.contains($0), "Missing Liquid Glass source: \($0)")
+            XCTAssertTrue(combinedSource.contains($0), "Missing Liquid Glass source: \($0)")
         }
     }
 

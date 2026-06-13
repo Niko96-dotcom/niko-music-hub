@@ -7,15 +7,12 @@ public struct HubShellBackground: View {
     public init() {}
 
     public var body: some View {
-        Color(nsColor: .windowBackgroundColor)
-            .ignoresSafeArea()
+        HubLiquidBackdrop()
     }
 }
 
 /// Frosted column (sidebar, inbox, tool well).
 public struct HubGlassPanel: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
     private let cornerRadius: CGFloat
 
     public init(cornerRadius: CGFloat = HubDesignSystem.Radius.panel) {
@@ -23,73 +20,12 @@ public struct HubGlassPanel: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(.regular, in: shape)
-                .overlay {
-                    shape.strokeBorder(HubDesignSystem.glassStroke, lineWidth: 0.5)
-                }
-                .shadow(
-                    color: .black.opacity(colorScheme == .dark ? 0.15 : 0.04),
-                    radius: 8,
-                    y: 3
-                )
-        } else {
-            materialFallback(content: content, shape: shape)
-        }
-    }
-
-    private func materialFallback(
-        content: Content,
-        shape: RoundedRectangle
-    ) -> some View {
-        content
-            .background {
-                ZStack {
-                    shape.fill(.thickMaterial)
-                    shape.fill(panelTint)
-                }
-                    .overlay {
-                        shape.strokeBorder(HubDesignSystem.glassStroke, lineWidth: 0.5)
-                    }
-                    .overlay(alignment: .top) {
-                        shape
-                            .fill(
-                                LinearGradient(
-                                    colors: [panelTopHighlight, .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
-                            .allowsHitTesting(false)
-                    }
-                    .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.15 : 0.04),
-                        radius: 8,
-                        y: 3
-                    )
-            }
-    }
-
-    private var panelTint: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.04)
-            : Color.white.opacity(0.35)
-    }
-
-    private var panelTopHighlight: Color {
-        colorScheme == .dark
-            ? HubDesignSystem.glassInnerHighlight
-            : Color.white.opacity(0.04)
+        content.modifier(HubLiquidPanel(cornerRadius: cornerRadius))
     }
 }
 
 /// Bounded elevated card (lists, tap surface, inbox rows).
 public struct HubGlassCard: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
     private let cornerRadius: CGFloat
     private let selected: Bool
     private let interactive: Bool
@@ -105,64 +41,13 @@ public struct HubGlassCard: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(
-                    .regular
-                        .tint(selected ? HubDesignSystem.Colors.accent.opacity(0.12) : nil)
-                        .interactive(interactive),
-                    in: shape
-                )
-                .overlay {
-                    shape.strokeBorder(
-                        selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
-                        lineWidth: selected ? 1.25 : 0.5
-                    )
-                }
-                .shadow(color: .black.opacity(selected ? 0.06 : 0.02), radius: selected ? 4 : 2, y: 1)
-        } else {
-            materialFallback(content: content, shape: shape)
-        }
-    }
-
-    private func materialFallback(
-        content: Content,
-        shape: RoundedRectangle
-    ) -> some View {
-        content
-            .background {
-                shape
-                    .fill(.thinMaterial)
-                    .overlay {
-                        shape.fill(selected ? HubDesignSystem.selectedRowFill : Color.clear)
-                    }
-                    .overlay {
-                        shape.strokeBorder(
-                            selected ? HubDesignSystem.selectedRowStroke : HubDesignSystem.glassStroke,
-                            lineWidth: selected ? 1.25 : 0.5
-                        )
-                    }
-                    .overlay(alignment: .top) {
-                        shape
-                            .fill(
-                                LinearGradient(
-                                    colors: [cardTopHighlight, .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
-                            .allowsHitTesting(false)
-                    }
-                    .shadow(color: .black.opacity(selected ? 0.06 : 0.02), radius: selected ? 4 : 2, y: 1)
-            }
-    }
-
-    private var cardTopHighlight: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.06)
-            : Color.white.opacity(0.02)
+        content.modifier(
+            HubLiquidCard(
+                cornerRadius: cornerRadius,
+                intent: selected ? .selected : .normal,
+                interactive: interactive
+            )
+        )
     }
 }
 
