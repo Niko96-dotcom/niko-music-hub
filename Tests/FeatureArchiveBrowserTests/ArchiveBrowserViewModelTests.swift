@@ -287,6 +287,123 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.selectedSong)
     }
 
+    func testRemoveRootClearsRootBoundArchiveState() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let selected = try XCTUnwrap(viewModel.songs.first)
+        viewModel.selectSong(selected)
+        viewModel.setSearchQuery("project", immediate: true)
+        viewModel.toggleBrowseFilter(.hasWarnings)
+        XCTAssertFalse(viewModel.filteredSongs.isEmpty)
+        viewModel.selectShelf(.recentlyBounced)
+        viewModel.refreshIntelligence()
+
+        XCTAssertFalse(viewModel.songs.isEmpty)
+        XCTAssertNotNil(viewModel.scanDiagnostics)
+        XCTAssertNotNil(viewModel.selectedSong)
+        XCTAssertFalse(viewModel.searchQuery.isEmpty)
+
+        viewModel.removeRoot(CubaseFixtures.archiveRoot)
+
+        XCTAssertTrue(viewModel.roots.isEmpty)
+        XCTAssertTrue(viewModel.songs.isEmpty)
+        XCTAssertTrue(viewModel.filteredSongs.isEmpty)
+        XCTAssertTrue(viewModel.searchMatchSummaries.isEmpty)
+        XCTAssertTrue(viewModel.skippedSearchMatches.isEmpty)
+        XCTAssertNil(viewModel.selectedSong)
+        XCTAssertNil(viewModel.scanDiagnostics)
+        XCTAssertNil(viewModel.statusMessage)
+        XCTAssertEqual(viewModel.searchQuery, "")
+        XCTAssertEqual(viewModel.selectedShelf, .allSongs)
+        XCTAssertTrue(viewModel.browseFilter.isEmpty)
+        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.duplicateSongHints.isEmpty)
+        XCTAssertNil(viewModel.missingAudioReport)
+    }
+
+    func testRemoveOneRootClearsCatalogAndPersistsRemainingRoot() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+        let buildDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+        let firstRoot = buildDir.appendingPathComponent("NikoMusicHubRemoveRootA-\(UUID().uuidString)", isDirectory: true)
+        let secondRoot = buildDir.appendingPathComponent("NikoMusicHubRemoveRootB-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: firstRoot)
+            try? FileManager.default.removeItem(at: secondRoot)
+        }
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [firstRoot, secondRoot]
+        viewModel.clearScanResults()
+
+        viewModel.removeRoot(firstRoot)
+
+        XCTAssertEqual(viewModel.roots.map(\.path), [secondRoot.standardizedFileURL.path])
+        XCTAssertTrue(viewModel.songs.isEmpty)
+        XCTAssertTrue(viewModel.filteredSongs.isEmpty)
+        XCTAssertEqual(viewModel.statusMessage, "Archive roots changed. Scan to refresh.")
+        XCTAssertEqual(
+            try settingsStore.loadSettings().archiveRoots.map(\.path),
+            [secondRoot.standardizedFileURL.path]
+        )
+    }
+
+    func testStaleScanResultIsIgnoredAfterRootRemoval() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stale-scan-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let indexStore = RecordingArchiveIndexStore()
+        var continuation: CheckedContinuation<ScanResult, Error>?
+        let staleSong = Song(
+            folderPath: root.appendingPathComponent("Stale Song", isDirectory: true),
+            originalFolderName: "Stale Song",
+            displayTitle: "Stale Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in
+                try await withCheckedThrowingContinuation { pending in
+                    continuation = pending
+                }
+            }
+        )
+        viewModel.roots = [root]
+
+        let scanTask = Task { await viewModel.scan() }
+        let deadline = Date().addingTimeInterval(2)
+        while continuation == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertNotNil(continuation)
+
+        viewModel.removeRoot(root)
+        continuation?.resume(returning: ScanResult(songs: [staleSong], globalWarnings: [], skippedEntries: []))
+        await scanTask.value
+
+        XCTAssertTrue(viewModel.songs.isEmpty)
+        XCTAssertTrue(viewModel.filteredSongs.isEmpty)
+        XCTAssertNil(viewModel.scanDiagnostics)
+        XCTAssertEqual(indexStore.savedSnapshots.count, 0)
+    }
+
     func testSelectShelfByCollaboratorDefaultsCollaboratorAndFilters() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -846,4 +963,16 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertGreaterThan(decoded.songCount, 0)
     }
 
+}
+
+private final class RecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
+    private(set) var savedSnapshots: [ArchiveIndexSnapshot] = []
+
+    func loadLatest() throws -> ArchiveIndexSnapshot? { nil }
+
+    func save(_ snapshot: ArchiveIndexSnapshot) throws {
+        savedSnapshots.append(snapshot)
+    }
+
+    func clear() throws {}
 }
