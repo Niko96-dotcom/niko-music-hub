@@ -58,23 +58,23 @@ struct ArchiveCatalogCoordinator {
     func loadCachedSongs(
         roots: [URL],
         collaborators: [Collaborator]
-    ) -> (songs: [Song], scannedAt: Date)? {
-        guard let archiveIndexStore else { return nil }
+    ) -> ArchiveCacheLoadResult {
+        guard let archiveIndexStore else { return .empty }
         let snapshot: ArchiveIndexSnapshot?
         do {
             snapshot = try archiveIndexStore.loadLatest()
         } catch {
             diagnostics.log(.error, "Archive cache load failed: \(error)")
-            return nil
+            return .failed("Archive cache could not be loaded: \(error.localizedDescription)")
         }
-        guard let snapshot else { return nil }
-        guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return nil }
+        guard let snapshot else { return .empty }
+        guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return .empty }
         let songs = mergeUserMetadata(into: snapshot.songs, collaborators: collaborators)
-        return (songs, snapshot.scannedAt)
+        return .loaded(songs: songs, scannedAt: snapshot.scannedAt)
     }
 
-    func persistCachedIndex(roots: [URL], songs: [Song], scannedAt: Date) {
-        guard let archiveIndexStore else { return }
+    func persistCachedIndex(roots: [URL], songs: [Song], scannedAt: Date) -> String? {
+        guard let archiveIndexStore else { return nil }
         let snapshot = ArchiveIndexSnapshot(
             roots: roots.map { $0.standardizedFileURL.path },
             songs: songs,
@@ -84,16 +84,26 @@ struct ArchiveCatalogCoordinator {
             try archiveIndexStore.save(snapshot)
         } catch {
             diagnostics.log(.error, "Archive cache save failed: \(error)")
+            return "Archive cache could not be saved: \(error.localizedDescription)"
         }
+        return nil
     }
 
-    func persistUserMetadata(for songs: [Song]) {
-        guard let songMetadataStore, !songs.isEmpty else { return }
+    func persistUserMetadata(for songs: [Song]) -> String? {
+        guard let songMetadataStore, !songs.isEmpty else { return nil }
         let items = songs.map { SongUserMetadata.from(song: $0) }
         do {
             try songMetadataStore.upsertAll(items)
         } catch {
             diagnostics.log(.error, "Song metadata save failed: \(error)")
+            return "Song metadata could not be saved: \(error.localizedDescription)"
         }
+        return nil
     }
+}
+
+enum ArchiveCacheLoadResult {
+    case loaded(songs: [Song], scannedAt: Date)
+    case empty
+    case failed(String)
 }

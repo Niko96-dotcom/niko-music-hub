@@ -404,6 +404,104 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(indexStore.savedSnapshots.count, 0)
     }
 
+    func testArchiveRootPersistenceFailureIsVisible() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("root-save-failure-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = ThrowingSettingsStore(throwOnUpdate: true)
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [], globalWarnings: [], skippedEntries: []) }
+        )
+
+        viewModel.addRoot(root)
+
+        XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
+        XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
+    }
+
+    func testArchiveCacheLoadFailureIsVisibleOnLaunch() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubCacheLoadRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try settingsStore.saveSettings(AppSettings(archiveRoots: [StoredArchiveRoot(path: root.path)]))
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveIndexStore: ThrowingArchiveIndexStore(throwOnLoad: true)
+        )
+
+        XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
+        XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be loaded") == true)
+    }
+
+    func testArchiveCacheSaveFailureIsVisibleAfterSuccessfulScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cache-save-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let song = Song(
+            folderPath: root.appendingPathComponent("Cache Song", isDirectory: true),
+            originalFolderName: "Cache Song",
+            displayTitle: "Cache Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: ThrowingArchiveIndexStore(throwOnSave: true),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [song], globalWarnings: [], skippedEntries: []) }
+        )
+        viewModel.roots = [root]
+
+        await viewModel.scan()
+
+        XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Cache Song"])
+        XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be saved") == true)
+    }
+
+    func testMetadataSaveFailureIsVisibleWithoutDiscardingEdit() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+        let metadataStore = ThrowingSongUserMetadataStore(throwOnSave: true)
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
+
+        viewModel.updateVirtualTitle(for: song, title: "Visible Edit")
+
+        let edited = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertEqual(edited.effectiveDisplayTitle, "Visible Edit")
+        XCTAssertTrue(viewModel.statusMessage?.contains("Song metadata could not be saved") == true)
+    }
+
+    func testArchivePersistenceSourceDoesNotSwallowRootSettingsWrites() throws {
+        let source = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("try? settingsStore.updateSettings"))
+    }
+
     func testSelectShelfByCollaboratorDefaultsCollaboratorAndFilters() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -975,4 +1073,75 @@ private final class RecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked 
     }
 
     func clear() throws {}
+}
+
+private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
+    let throwOnLoad: Bool
+    let throwOnSave: Bool
+
+    init(throwOnLoad: Bool = false, throwOnSave: Bool = false) {
+        self.throwOnLoad = throwOnLoad
+        self.throwOnSave = throwOnSave
+    }
+
+    func loadLatest() throws -> ArchiveIndexSnapshot? {
+        if throwOnLoad { throw TestPersistenceError.forced }
+        return nil
+    }
+
+    func save(_ snapshot: ArchiveIndexSnapshot) throws {
+        if throwOnSave { throw TestPersistenceError.forced }
+    }
+
+    func clear() throws {}
+}
+
+private final class ThrowingSongUserMetadataStore: SongUserMetadataStoring, @unchecked Sendable {
+    let throwOnSave: Bool
+
+    init(throwOnSave: Bool = false) {
+        self.throwOnSave = throwOnSave
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] { [:] }
+
+    func upsert(_ metadata: SongUserMetadata) throws {
+        if throwOnSave { throw TestPersistenceError.forced }
+    }
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {
+        if throwOnSave { throw TestPersistenceError.forced }
+    }
+}
+
+private final class ThrowingSettingsStore: SettingsStore, @unchecked Sendable {
+    private var settings: AppSettings
+    private let throwOnUpdate: Bool
+
+    init(settings: AppSettings = .default, throwOnUpdate: Bool = false) {
+        self.settings = settings
+        self.throwOnUpdate = throwOnUpdate
+    }
+
+    func loadSettings() throws -> AppSettings {
+        settings
+    }
+
+    func saveSettings(_ settings: AppSettings) throws {
+        if throwOnUpdate { throw TestPersistenceError.forced }
+        self.settings = settings
+    }
+
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
+        if throwOnUpdate { throw TestPersistenceError.forced }
+        update(&settings)
+    }
+}
+
+private enum TestPersistenceError: LocalizedError {
+    case forced
+
+    var errorDescription: String? {
+        "forced persistence failure"
+    }
 }

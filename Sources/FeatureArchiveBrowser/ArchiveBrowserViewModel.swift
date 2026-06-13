@@ -50,6 +50,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let archiveRootWatcher: (any ArchiveRootWatching)?
     private let runtime: MusicHubRuntimeEnvironment
     private let scanOverride: (([URL]) async throws -> ScanResult)?
+    private var statusBaseMessage: String?
+    private var persistenceWarningMessage: String?
 
     public convenience init(
         context: ToolContext,
@@ -109,7 +111,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         restartArchiveRootWatching()
         let loadedCache = loadCachedIndexIfAvailable()
         if archiveRootWatcher != nil, !loadedCache, !roots.isEmpty, !runtime.usesFixtureRoot {
-            statusMessage = "Scanning archive..."
+            setStatusMessage("Scanning archive...")
             Task { await scan() }
         }
     }
@@ -119,12 +121,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             roots = [fixtureRoot]
             return
         }
-        if let settings = try? settingsStore.loadSettings() {
+        do {
+            let settings = try settingsStore.loadSettings()
             let loadedRoots = settings.archiveRoots.map(\.url)
             roots = ArchiveRootDisplayPolicy.publicRoots(from: loadedRoots)
             if roots.map(\.path) != loadedRoots.map(\.path) {
                 persistRoots()
             }
+        } catch {
+            recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")
+            diagnostics.log(.error, "Archive settings load failed: \(error)")
         }
         applyBootstrapRootWhenEmpty()
         refreshFirstRunState()
@@ -148,8 +154,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func completeArchiveOnboarding() {
-        try? settingsStore.updateSettings { settings in
-            settings.archiveOnboardingCompleted = true
+        do {
+            try settingsStore.updateSettings { settings in
+                settings.archiveOnboardingCompleted = true
+            }
+        } catch {
+            recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
+            diagnostics.log(.error, "Archive onboarding save failed: \(error)")
         }
         needsFirstRunOnboarding = false
     }
@@ -170,8 +181,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func persistRoots() {
         let snapshot = roots
-        try? settingsStore.updateSettings { settings in
-            settings.archiveRoots = snapshot.map { StoredArchiveRoot(path: $0.path) }
+        do {
+            try settingsStore.updateSettings { settings in
+                settings.archiveRoots = snapshot.map { StoredArchiveRoot(path: $0.path) }
+            }
+        } catch {
+            recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
+            diagnostics.log(.error, "Archive roots save failed: \(error)")
         }
     }
 
@@ -192,7 +208,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             persistRoots()
             restartArchiveRootWatching()
             refreshFirstRunState()
-            statusMessage = "Scanning archive..."
+            setStatusMessage("Scanning archive...")
             Task { await scan() }
         }
     }
@@ -268,6 +284,22 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         )
         duplicateSongHints = ArchiveIntelligence.duplicateSongHints(songs: songs)
         missingAudioReport = ArchiveIntelligence.missingAudioReport(songs: songs)
+    }
+
+    private func setStatusMessage(_ message: String?) {
+        statusBaseMessage = message
+        statusMessage = combinedStatusMessage(base: message)
+    }
+
+    private func recordPersistenceWarning(_ warning: String) {
+        persistenceWarningMessage = warning
+        statusMessage = combinedStatusMessage(base: statusBaseMessage)
+    }
+
+    private func combinedStatusMessage(base: String?) -> String? {
+        guard let persistenceWarningMessage else { return base }
+        guard let base, !base.isEmpty else { return persistenceWarningMessage }
+        return "\(base) \(persistenceWarningMessage)"
     }
 
     func acceptCollaboratorSuggestion(_ suggestion: CollaboratorSuggestion) {
@@ -439,20 +471,20 @@ extension ArchiveBrowserViewModel {
 
     private func beginScan() -> ScanRequest? {
         guard !roots.isEmpty else {
-            statusMessage = "Add at least one archive root."
+            setStatusMessage("Add at least one archive root.")
             return nil
         }
         guard !isScanning else { return nil }
         isScanning = true
         activeScanGeneration = rootGeneration
-        statusMessage = "Scanning archive..."
+        setStatusMessage("Scanning archive...")
         return ScanRequest(roots: roots, generation: rootGeneration)
     }
 
     private func recordScanFailure(_ error: Error) {
         mutateCatalog {
             scanDiagnostics = nil
-            statusMessage = "Scan failed: \(error.localizedDescription)"
+            setStatusMessage("Scan failed: \(error.localizedDescription)")
         }
         diagnostics.log(.error, statusMessage ?? "scan failed")
     }
@@ -462,11 +494,15 @@ extension ArchiveBrowserViewModel {
         mutateCatalog {
             songs = catalog.mergeUserMetadata(into: result.songs, collaborators: collaborators)
             scanDiagnostics = built
-            statusMessage = built.compactSummaryLine
+            setStatusMessage(built.compactSummaryLine)
         }
         diagnostics.log(.info, built.summaryLine)
-        catalog.persistCachedIndex(roots: request.roots, songs: songs, scannedAt: scannedAt)
-        catalog.persistUserMetadata(for: songs)
+        if let warning = catalog.persistCachedIndex(roots: request.roots, songs: songs, scannedAt: scannedAt) {
+            recordPersistenceWarning(warning)
+        }
+        if let warning = catalog.persistUserMetadata(for: songs) {
+            recordPersistenceWarning(warning)
+        }
     }
 
     private func performScanDetached(roots: [URL]) async throws -> ScanResult {
@@ -496,6 +532,7 @@ extension ArchiveBrowserViewModel {
 
     private func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         browseRefreshDriver.cancelPendingDebounce()
+        persistenceWarningMessage = nil
         songs = []
         filteredSongs = []
         searchMatchSummaries = [:]
@@ -512,18 +549,24 @@ extension ArchiveBrowserViewModel {
         duplicateSongHints = []
         missingAudioReport = nil
         mixdownBPMBySongID = [:]
-        statusMessage = nextStatusMessage
+        setStatusMessage(nextStatusMessage)
     }
 
     @discardableResult
     private func loadCachedIndexIfAvailable() -> Bool {
-        guard let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators) else { return false }
+        let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators)
+        guard case .loaded(let songs, let scannedAt) = cached else {
+            if case .failed(let warning) = cached {
+                recordPersistenceWarning(warning)
+            }
+            return false
+        }
         mutateCatalog {
-            songs = cached.songs
+            self.songs = songs
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
-            let relative = formatter.localizedString(for: cached.scannedAt, relativeTo: Date())
-            statusMessage = "Loaded \(cached.songs.count) songs from cache (\(relative)). Scan to refresh."
+            let relative = formatter.localizedString(for: scannedAt, relativeTo: Date())
+            setStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
         }
         return true
     }
@@ -664,13 +707,17 @@ extension ArchiveBrowserViewModel {
             }
             songs = updatedSongs
         }
-        catalog.persistUserMetadata(for: [created])
+        if let warning = catalog.persistUserMetadata(for: [created]) {
+            recordPersistenceWarning(warning)
+        }
         if !roots.isEmpty {
-            catalog.persistCachedIndex(
+            if let warning = catalog.persistCachedIndex(
                 roots: roots,
                 songs: songs,
                 scannedAt: scanDiagnostics?.scannedAt ?? Date()
-            )
+            ) {
+                recordPersistenceWarning(warning)
+            }
         }
         selectSong(created)
         try openLatestCPR(for: created)
@@ -694,13 +741,17 @@ extension ArchiveBrowserViewModel {
 
     private func commitSongMetadataUpdate(_ updated: Song) {
         replaceSong(updated)
-        catalog.persistUserMetadata(for: [updated])
+        if let warning = catalog.persistUserMetadata(for: [updated]) {
+            recordPersistenceWarning(warning)
+        }
         if !roots.isEmpty {
-            catalog.persistCachedIndex(
+            if let warning = catalog.persistCachedIndex(
                 roots: roots,
                 songs: songs,
                 scannedAt: scanDiagnostics?.scannedAt ?? Date()
-            )
+            ) {
+                recordPersistenceWarning(warning)
+            }
         }
     }
 
@@ -727,7 +778,7 @@ extension ArchiveBrowserViewModel {
         do {
             try operation()
         } catch {
-            statusMessage = "Export failed: \(error.localizedDescription)"
+            setStatusMessage("Export failed: \(error.localizedDescription)")
         }
     }
 
@@ -740,7 +791,7 @@ extension ArchiveBrowserViewModel {
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: songs)
         try data.write(to: destination)
         lastIndexExportPath = destination.path
-        statusMessage = "Exported index JSON (\(songs.count) songs)."
+        setStatusMessage("Exported index JSON (\(songs.count) songs).")
         diagnostics.log(.info, "Exported archive index to \(destination.path)")
     }
 
@@ -770,7 +821,7 @@ extension ArchiveBrowserViewModel {
 
     func exportDiagnostics() throws {
         guard let scanDiagnostics else {
-            statusMessage = "Scan the archive before exporting diagnostics."
+            setStatusMessage("Scan the archive before exporting diagnostics.")
             return
         }
         let destination = try ArchiveExportPaths.stampedFileURL(
