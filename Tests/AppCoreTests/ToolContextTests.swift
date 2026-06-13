@@ -11,6 +11,7 @@ final class ToolContextTests: XCTestCase {
         XCTAssertEqual(settings.outputFolder.url.lastPathComponent, "Inbox")
         XCTAssertTrue(try context.outputInboxStore.listItems().isEmpty)
         XCTAssertTrue(context.jobRunner.listJobs().isEmpty)
+        XCTAssertTrue(context.persistenceIssues.isEmpty)
     }
 
     @MainActor
@@ -21,6 +22,41 @@ final class ToolContextTests: XCTestCase {
         _ = feature.makeView(context: context)
 
         XCTAssertEqual(feature.metadata.id, "context-aware")
+    }
+
+    func testContextRetainsPersistenceIssues() {
+        let issue = PersistenceIssue(
+            id: "archive-index",
+            title: "Archive cache unavailable",
+            message: "sqlite open failed"
+        )
+        let context = ToolContext.testFixture(persistenceIssues: [issue])
+
+        XCTAssertEqual(context.persistenceIssues, [issue])
+    }
+
+    func testAppShellUsesInjectedPreferencesInsteadOfAppStorage() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppShell/AppShellView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("@AppStorage"))
+        XCTAssertTrue(source.contains("context.preferences.bool"))
+        XCTAssertTrue(source.contains("context.preferences.set"))
+    }
+
+    func testAppCompositionCapturesSQLiteStartupIssues() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppComposition.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("try? SQLiteArchiveIndexStore"))
+        XCTAssertFalse(source.contains("try? SQLiteSongUserMetadataStore"))
+        XCTAssertFalse(source.contains("try? SQLiteCollaboratorStore"))
+        XCTAssertTrue(source.contains("persistenceIssues"))
+        XCTAssertTrue(source.contains("makeSQLiteStore"))
     }
 }
 
@@ -40,14 +76,15 @@ private struct ContextAwareFeature: ToolFeature {
 }
 
 private extension ToolContext {
-    static func testFixture() -> ToolContext {
+    static func testFixture(persistenceIssues: [PersistenceIssue] = []) -> ToolContext {
         ToolContext(
             registeredToolCount: 2,
             settingsStore: FixtureSettingsStore(),
             outputInboxStore: FixtureOutputInboxStore(),
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: FixtureDiagnostics(),
+            persistenceIssues: persistenceIssues
         )
     }
 }

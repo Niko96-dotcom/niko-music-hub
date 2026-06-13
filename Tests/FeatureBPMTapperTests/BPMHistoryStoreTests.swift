@@ -1,3 +1,4 @@
+import AppCore
 import FeatureBPMTapper
 import XCTest
 
@@ -58,6 +59,36 @@ final class BPMHistoryStoreTests: XCTestCase {
         try store.clearEntries()
 
         XCTAssertEqual(try store.listEntries(), [])
+    }
+
+    func testPersistsSavedEntryThroughPreferenceStore() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
+        let store = UserDefaultsBPMHistoryStore(preferences: preferences)
+        let entry = BPMHistoryEntry(
+            bpm: 90,
+            rawTappedBPM: 180,
+            adjustment: .halfTime,
+            timestamp: Date(timeIntervalSince1970: 30)
+        )
+
+        try store.addEntry(entry)
+
+        let reloaded = UserDefaultsBPMHistoryStore(preferences: preferences)
+        XCTAssertEqual(try reloaded.listEntries(), [entry])
+    }
+
+    func testBPMTapperFeatureUsesContextPreferences() throws {
+        let source = try String(
+            contentsOfFile: "Sources/FeatureBPMTapper/BPMTapperFeature.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("context.preferences"))
+        XCTAssertFalse(source.contains("UserDefaultsBPMHistoryStore()"))
     }
 
     private func makeStore(

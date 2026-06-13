@@ -92,17 +92,55 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.errorMessage?.contains("Output Inbox") == true)
     }
 
+    func testFormatSelectionLoadsFromInjectedPreferences() throws {
+        let suiteName = "DownloaderViewModelTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let originalStandard = UserDefaults.standard.data(forKey: "downloader.formatSelection")
+        defer {
+            if let originalStandard {
+                UserDefaults.standard.set(originalStandard, forKey: "downloader.formatSelection")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "downloader.formatSelection")
+            }
+        }
+        UserDefaults.standard.set(
+            try JSONEncoder().encode(DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .mp3)),
+            forKey: "downloader.formatSelection"
+        )
+        let preferences = UserDefaultsPreferenceStore(userDefaults: defaults)
+        preferences.set(
+            try JSONEncoder().encode(DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav)),
+            forKey: "downloader.formatSelection"
+        )
+
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            preferences: preferences
+        )
+
+        XCTAssertEqual(viewModel.formatSelection.mediaKind, .audioOnly)
+        XCTAssertEqual(viewModel.formatSelection.audioContainer, .wav)
+    }
+
     private func makeViewModel(
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
         useCase: FakeDownloaderUseCase,
         jobRunner: any JobRunning,
-        outputInboxStore: any OutputInboxStore
+        outputInboxStore: any OutputInboxStore,
+        preferences: any PreferenceStore = UserDefaultsPreferenceStore()
     ) -> DownloaderViewModel {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: FixtureSettingsStore(settings: AppSettings(
                 outputFolder: StoredFolderLocation(url: outputFolder)
             )),
+            preferences: preferences,
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),

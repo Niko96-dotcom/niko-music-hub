@@ -42,7 +42,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private let healthChecker: YtDlpHealthChecker
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
-    private let formatSelectionDefaultsKey = "downloader.formatSelection"
+    private static let formatSelectionDefaultsKey = "downloader.formatSelection"
 
     public init(
         context: ToolContext,
@@ -55,11 +55,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         self.useCase = useCase
         self.healthChecker = healthChecker
         self.jobFactory = jobFactory
-        self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection()
+        self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection(preferences: context.preferences)
     }
 
-    private static func loadPersistedFormatSelection() -> DownloadFormatSelection {
-        guard let data = UserDefaults.standard.data(forKey: "downloader.formatSelection"),
+    private static func loadPersistedFormatSelection(preferences: any PreferenceStore) -> DownloadFormatSelection {
+        guard let data = preferences.data(forKey: formatSelectionDefaultsKey),
               let decoded = try? JSONDecoder().decode(DownloadFormatSelection.self, from: data)
         else {
             return .default
@@ -69,7 +69,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     public func persistFormatSelection() {
         guard let data = try? JSONEncoder().encode(formatSelection) else { return }
-        UserDefaults.standard.set(data, forKey: formatSelectionDefaultsKey)
+        context.preferences.set(data, forKey: Self.formatSelectionDefaultsKey)
     }
 
     public func urlTextDidChange() {

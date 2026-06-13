@@ -10,8 +10,8 @@ struct AppShellView: View {
     let context: ToolContext
 
     @State private var selectedToolID: ToolFeatureID?
-    @AppStorage(Self.showToolSidebarKey) private var showToolSidebar = true
-    @AppStorage(Self.showOutputInboxKey) private var showOutputInbox = true
+    @State private var showToolSidebar: Bool
+    @State private var showOutputInbox: Bool
 
     init(registry: ToolRegistry, context: ToolContext) {
         self.registry = registry
@@ -20,49 +20,55 @@ struct AppShellView: View {
             .flatMap { registry.feature(for: $0)?.metadata.id }
             ?? registry.preferredDefaultFeatureID
         _selectedToolID = State(initialValue: initialToolID)
+        _showToolSidebar = State(initialValue: context.preferences.bool(forKey: Self.showToolSidebarKey) ?? true)
+        _showOutputInbox = State(initialValue: context.preferences.bool(forKey: Self.showOutputInboxKey) ?? true)
     }
 
     var body: some View {
-        HStack(spacing: HubDesignSystem.Spacing.shell) {
-            if showToolSidebar {
-                ToolSidebarView(
-                    context: context,
-                    registry: registry,
-                    selectedToolID: $selectedToolID
-                )
-                .frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
-                .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
-                .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
-            } else {
-                CollapsedSidebarRail(
-                    systemImage: "sidebar.left",
-                    accessibilityLabel: "Show tools sidebar"
-                ) {
-                    showToolSidebar = true
-                }
-            }
+        VStack(spacing: HubDesignSystem.Spacing.shell) {
+            persistenceIssueBanner
 
-            activeToolView
-                .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .layoutPriority(1)
-                .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
-                .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
-
-            if showOutputInbox {
-                OutputInboxInspectorView(context: context)
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+            HStack(spacing: HubDesignSystem.Spacing.shell) {
+                if showToolSidebar {
+                    ToolSidebarView(
+                        context: context,
+                        registry: registry,
+                        selectedToolID: $selectedToolID
+                    )
+                    .frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
                     .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
                     .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
-            } else {
-                CollapsedSidebarRail(
-                    systemImage: "sidebar.right",
-                    accessibilityLabel: "Show output inbox"
-                ) {
-                    showOutputInbox = true
+                } else {
+                    CollapsedSidebarRail(
+                        systemImage: "sidebar.left",
+                        accessibilityLabel: "Show tools sidebar"
+                    ) {
+                        setToolSidebarVisible(true)
+                    }
+                }
+
+                activeToolView
+                    .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .layoutPriority(1)
+                    .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                    .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
+
+                if showOutputInbox {
+                    OutputInboxInspectorView(context: context)
+                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+                        .hubGlassPanel(cornerRadius: HubDesignSystem.Radius.shell)
+                        .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
+                } else {
+                    CollapsedSidebarRail(
+                        systemImage: "sidebar.right",
+                        accessibilityLabel: "Show output inbox"
+                    ) {
+                        setOutputInboxVisible(true)
+                    }
                 }
             }
+            .hubGlassGroup(spacing: HubDesignSystem.Spacing.shell)
         }
-        .hubGlassGroup(spacing: HubDesignSystem.Spacing.shell)
         .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .background(HubShellBackground())
@@ -79,7 +85,7 @@ struct AppShellView: View {
     private var shellToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             Button {
-                showToolSidebar.toggle()
+                setToolSidebarVisible(!showToolSidebar)
             } label: {
                 Image(systemName: "sidebar.left")
                     .symbolRenderingMode(.hierarchical)
@@ -88,7 +94,7 @@ struct AppShellView: View {
             .accessibilityLabel(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
 
             Button {
-                showOutputInbox.toggle()
+                setOutputInboxVisible(!showOutputInbox)
             } label: {
                 Image(systemName: "sidebar.right")
                     .symbolRenderingMode(.hierarchical)
@@ -96,6 +102,37 @@ struct AppShellView: View {
             .help(showOutputInbox ? "Hide output inbox" : "Show output inbox")
             .accessibilityLabel(showOutputInbox ? "Hide output inbox" : "Show output inbox")
         }
+    }
+
+    @ViewBuilder
+    private var persistenceIssueBanner: some View {
+        if !context.persistenceIssues.isEmpty {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+                Label("Persistence running in degraded mode", systemImage: "externaldrive.badge.exclamationmark")
+                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                ForEach(context.persistenceIssues) { issue in
+                    Text("\(issue.title): \(issue.message)")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        }
+    }
+
+    private func setToolSidebarVisible(_ visible: Bool) {
+        showToolSidebar = visible
+        context.preferences.set(visible, forKey: Self.showToolSidebarKey)
+    }
+
+    private func setOutputInboxVisible(_ visible: Bool) {
+        showOutputInbox = visible
+        context.preferences.set(visible, forKey: Self.showOutputInboxKey)
     }
 
     @ViewBuilder

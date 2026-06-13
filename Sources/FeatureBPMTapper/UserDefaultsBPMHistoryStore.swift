@@ -1,14 +1,23 @@
+import AppCore
 import Foundation
 
 public struct UserDefaultsBPMHistoryStore: BPMHistoryStore, @unchecked Sendable {
-    private let userDefaults: UserDefaults
+    private let preferences: any PreferenceStore
     private let key: String
 
     public init(
         userDefaults: UserDefaults = .standard,
         key: String = "outsideCubaseHub.bpmHistory"
     ) {
-        self.userDefaults = userDefaults
+        self.preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
+        self.key = key
+    }
+
+    public init(
+        preferences: any PreferenceStore,
+        key: String = "outsideCubaseHub.bpmHistory"
+    ) {
+        self.preferences = preferences
         self.key = key
     }
 
@@ -26,11 +35,11 @@ public struct UserDefaultsBPMHistoryStore: BPMHistoryStore, @unchecked Sendable 
     }
 
     public func clearEntries() throws {
-        userDefaults.removeObject(forKey: key)
+        preferences.removeObject(forKey: key)
     }
 
     private func loadEntries() throws -> [BPMHistoryEntry] {
-        guard let data = userDefaults.data(forKey: key) else {
+        guard let data = preferences.data(forKey: key) else {
             return []
         }
 
@@ -39,6 +48,6 @@ public struct UserDefaultsBPMHistoryStore: BPMHistoryStore, @unchecked Sendable 
 
     private func saveEntries(_ entries: [BPMHistoryEntry]) throws {
         let data = try JSONEncoder().encode(entries)
-        userDefaults.set(data, forKey: key)
+        preferences.set(data, forKey: key)
     }
 }

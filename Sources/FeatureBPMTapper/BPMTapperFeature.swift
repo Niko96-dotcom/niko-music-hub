@@ -17,7 +17,7 @@ public struct BPMTapperFeature: ToolFeature {
         AnyView(BPMTapperView(
             context: context,
             viewModel: BPMTapperViewModel(
-                historyStore: UserDefaultsBPMHistoryStore(),
+                historyStore: UserDefaultsBPMHistoryStore(preferences: context.preferences),
                 clipboard: PasteboardBPMClipboard()
             )
         ))

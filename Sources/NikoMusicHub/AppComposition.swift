@@ -15,7 +15,9 @@ struct AppComposition {
     @MainActor
     static func make() -> AppComposition {
         let runtime = MusicHubRuntimeEnvironment.current
-        let settingsStore = Self.makeSettingsStore(runtime: runtime)
+        let userDefaults = Self.makeUserDefaults(runtime: runtime)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults)
+        let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
         let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL(runtime: runtime))
         let jobRunner = JobRunner()
         let fileActions = AppKitFileActions()
@@ -23,20 +25,41 @@ struct AppComposition {
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
         let showsDevTool = runtime.showsDevTool
         let registeredToolCount = showsDevTool ? 6 : 5
+        var persistenceIssues: [PersistenceIssue] = []
+        let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
+        let archiveIndexStore: (any ArchiveIndexStoring)? = Self.makeSQLiteStore(
+            id: "archive-index-store",
+            title: "Archive cache unavailable",
+            issues: &persistenceIssues
+        ) {
+            try SQLiteArchiveIndexStore(databaseURL: archiveDatabaseURL)
+        }
+        let songMetadataStore: (any SongUserMetadataStoring)? = Self.makeSQLiteStore(
+            id: "song-metadata-store",
+            title: "Song metadata unavailable",
+            issues: &persistenceIssues
+        ) {
+            try SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
+        }
+        let collaboratorStore: (any CollaboratorStoring)? = Self.makeSQLiteStore(
+            id: "collaborator-store",
+            title: "Collaborators unavailable",
+            issues: &persistenceIssues
+        ) {
+            try SQLiteCollaboratorStore(databaseURL: archiveDatabaseURL)
+        }
 
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
+            preferences: preferences,
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: fileActions,
             launchAtLogin: launchAtLogin,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            persistenceIssues: persistenceIssues
         )
-        let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
-        let archiveIndexStore = try? SQLiteArchiveIndexStore(databaseURL: archiveDatabaseURL)
-        let songMetadataStore = try? SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
-        let collaboratorStore = try? SQLiteCollaboratorStore(databaseURL: archiveDatabaseURL)
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
             ? NoopArchiveRootWatcher()
@@ -66,13 +89,31 @@ struct AppComposition {
         return AppComposition(registry: registry, context: context)
     }
 
-    private static func makeSettingsStore(runtime: MusicHubRuntimeEnvironment) -> SettingsStore {
+    private static func makeUserDefaults(runtime: MusicHubRuntimeEnvironment) -> UserDefaults {
         if let suiteName = runtime.settingsSuiteName,
            let defaults = UserDefaults(suiteName: suiteName) {
             defaults.removePersistentDomain(forName: suiteName)
-            return UserDefaultsSettingsStore(userDefaults: defaults)
+            return defaults
         }
-        return UserDefaultsSettingsStore()
+        return .standard
+    }
+
+    private static func makeSQLiteStore<Store>(
+        id: String,
+        title: String,
+        issues: inout [PersistenceIssue],
+        make: () throws -> Store
+    ) -> Store? {
+        do {
+            return try make()
+        } catch {
+            issues.append(PersistenceIssue(
+                id: id,
+                title: title,
+                message: String(describing: error)
+            ))
+            return nil
+        }
     }
 }
 
