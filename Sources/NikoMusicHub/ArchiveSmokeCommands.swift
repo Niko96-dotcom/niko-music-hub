@@ -10,19 +10,25 @@ enum ArchiveSmokeCommands {
             return false
         }
 
-        let fixtureRootPath = runtime.fixtureRootURL?.path
-            ?? defaultFixtureRoot()
-        let fixtureRoot = URL(fileURLWithPath: fixtureRootPath, isDirectory: true)
-
-        do {
-            try MainActor.assumeIsolated {
+        Task { @MainActor in
+            do {
+                let fixtureRootPath = runtime.fixtureRootURL?.path
+                    ?? defaultFixtureRoot()
+                let fixtureRoot = URL(fileURLWithPath: fixtureRootPath, isDirectory: true)
                 try runUserFlowSmoke(fixtureRoot: fixtureRoot, runtime: runtime)
+                let recorderLog = try await RecorderOutputInboxSmoke.run()
+                for key in recorderLog.keys.sorted() {
+                    guard let value = recorderLog[key] else { continue }
+                    print("[niko-music-hub-smoke] \(key)=\(value)")
+                }
+                print("[niko-music-hub-smoke] ok")
+                exit(0)
+            } catch {
+                fputs("smoke failed: \(error)\n", stderr)
+                exit(1)
             }
-            exit(0)
-        } catch {
-            fputs("smoke failed: \(error)\n", stderr)
-            exit(1)
         }
+        return true
     }
 
     @MainActor
@@ -57,7 +63,6 @@ enum ArchiveSmokeCommands {
             print(result.core.dryRunLogDisplayLine)
         }
 
-        print("[niko-music-hub-smoke] ok")
     }
 
     private static func defaultFixtureRoot() -> String {

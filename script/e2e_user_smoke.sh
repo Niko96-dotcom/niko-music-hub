@@ -46,7 +46,11 @@ for required_marker in \
   "[niko-music-hub-smoke] ok" \
   "write_probe_denied=true" \
   "archive_unchanged=true" \
-  "[dry-run] open CPR:"; do
+  "[dry-run] open CPR:" \
+  "recorder_user_flow=record_stop_inbox" \
+  "recorder_output_inbox_items=1" \
+  "recorder_output_drag_ready=true" \
+  "recorder_output_source=audio-recorder"; do
   if ! grep -Fq "$required_marker" "$LOG_FILE"; then
     echo "E2E failed: archive smoke missing marker: $required_marker" >&2
     exit 1
