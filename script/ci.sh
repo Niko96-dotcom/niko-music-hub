@@ -21,10 +21,18 @@ swift test \
   --skip 'RecorderIntegrationTests/testRecordingCapturesRealSystemAudio' \
   --skip 'RecorderIntegrationTests/testRecordingProducesOutputInboxItem'
 
-if swift package describe --type json | /usr/bin/python3 -c 'import json,sys; data=json.load(sys.stdin); print(any(t.get("name") == "NikoMusicCoreSelfTest" for t in data.get("targets", [])))' | grep -q True; then
-  echo "== NikoMusicCoreSelfTest =="
-  swift run NikoMusicCoreSelfTest
-else
-  echo "== NikoMusicCoreSelfTest =="
-  echo "not implemented yet; executor must add it before v0.1 is done"
-fi
+echo "== recorder deterministic gate =="
+swift test --filter 'AudioRecorderViewModelTests/testMaxDurationAutoFinishFinalizesWAVAndInboxItem'
+
+echo "== NikoMusicCoreSelfTest =="
+swift package describe --type json | /usr/bin/python3 -c '
+import json
+import sys
+data = json.load(sys.stdin)
+products = {product.get("name") for product in data.get("products", [])}
+targets = {target.get("name") for target in data.get("targets", [])}
+if "NikoMusicCoreSelfTest" not in products or "NikoMusicCoreSelfTest" not in targets:
+    print("critical self-test missing: NikoMusicCoreSelfTest product/target", file=sys.stderr)
+    sys.exit(1)
+'
+swift run NikoMusicCoreSelfTest

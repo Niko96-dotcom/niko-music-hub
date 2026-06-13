@@ -177,6 +177,38 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertNotNil(vm.lastRecordedURL)
     }
 
+    func testMaxDurationAutoFinishFinalizesWAVAndInboxItem() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-max-duration-deterministic-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = NaturalEndCapturePort()
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+        vm.maxDurationMinutes = 1
+
+        await vm.startRecording()
+        try await waitUntil { vm.showSaveConfirmation }
+
+        let receivedMaxDuration = try XCTUnwrap(port.receivedMaxDuration)
+        XCTAssertEqual(receivedMaxDuration, 60, accuracy: 0.001)
+        XCTAssertEqual(port.stopCallCount, 1)
+        XCTAssertEqual(vm.recordingState, .idle)
+        let recordedURL = try XCTUnwrap(vm.lastRecordedURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recordedURL.path))
+        XCTAssertEqual(recordedURL.pathExtension.lowercased(), "wav")
+        let item = try XCTUnwrap(try inbox.listItems().first)
+        XCTAssertEqual(item.sourceToolID.rawValue, "audio-recorder")
+        XCTAssertEqual(item.status, .available)
+        XCTAssertEqual(item.fileURL.standardizedFileURL, recordedURL.standardizedFileURL)
+    }
+
     func testDuplicateStartsOnlyStartCaptureOnce() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-duplicate-start-\(UUID().uuidString)", isDirectory: true)
@@ -476,6 +508,7 @@ private final class NaturalEndCapturePort: AudioCapturePort, @unchecked Sendable
     private var outputURL: URL?
     var recording = false
     var stopCallCount = 0
+    var receivedMaxDuration: TimeInterval?
 
     func checkPermission() async -> RecorderPermissionState { .authorized }
     func requestPermission() async -> RecorderPermissionState { .authorized }
@@ -483,6 +516,7 @@ private final class NaturalEndCapturePort: AudioCapturePort, @unchecked Sendable
 
     func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
         self.outputURL = outputURL
+        receivedMaxDuration = maxDuration
         recording = true
         return AsyncStream { continuation in
             Task {
