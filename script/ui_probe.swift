@@ -6,6 +6,7 @@ enum ProbeMode {
     case checkVisible
     case capture(path: String, minBytes: Int)
     case axDump
+    case selfTestMalformedAX
 }
 
 struct Options {
@@ -33,6 +34,7 @@ func usage() {
           --require-nonempty-capture   with --capture: fail if file is missing or smaller than --min-capture-bytes
           --min-capture-bytes N        minimum PNG size for --require-nonempty-capture (default: 4096)
           --ax-dump                    print accessibility tree for the target pid
+          --self-test-malformed-ax     verify malformed AX values do not crash element handling
 
         Exit codes:
           0 success
@@ -109,6 +111,9 @@ func parseOptions(_ args: [String]) throws -> Options {
             minCaptureBytes = value
         case "--ax-dump":
             options.mode = .axDump
+            sawMode = true
+        case "--self-test-malformed-ax":
+            options.mode = .selfTestMalformedAX
             sawMode = true
         case "-h", "--help":
             usage()
@@ -254,7 +259,25 @@ func axElement(of element: AXUIElement, attribute: String) -> AXUIElement? {
     var value: CFTypeRef?
     let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
     guard result == .success, let value else { return nil }
-    return (value as! AXUIElement)
+    return axElementValue(value)
+}
+
+func axElementValue(_ value: CFTypeRef?) -> AXUIElement? {
+    guard let value else { return nil }
+    guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    return unsafeBitCast(value, to: AXUIElement.self)
+}
+
+func runMalformedAXSelfTest() -> Bool {
+    let malformedValues: [CFTypeRef] = [
+        NSNumber(value: 42),
+        "not an accessibility element" as CFString
+    ]
+    for value in malformedValues where axElementValue(value) != nil {
+        return false
+    }
+    let appElement = AXUIElementCreateApplication(getpid())
+    return axElementValue(appElement) != nil && axElementValue(nil) == nil
 }
 
 func dumpAX(_ element: AXUIElement, depth: Int) {
@@ -282,6 +305,15 @@ func dumpAX(_ element: AXUIElement, depth: Int) {
 
 do {
     let options = try parseOptions(CommandLine.arguments)
+    if case .selfTestMalformedAX = options.mode {
+        guard runMalformedAXSelfTest() else {
+            fputs("malformed AX self-test failed\n", stderr)
+            exit(1)
+        }
+        print("malformed AX self-test ok")
+        exit(0)
+    }
+
     guard let pid = resolvePID(options: options) else {
         fputs("process not running: \(options.appName)\n", stderr)
         exit(1)
@@ -347,7 +379,11 @@ do {
             exit(0)
         case .axDump:
             fatalError("unreachable")
+        case .selfTestMalformedAX:
+            fatalError("unreachable")
         }
+    case .selfTestMalformedAX:
+        fatalError("unreachable")
     }
 } catch let error as ValidationError {
     fputs("\(error.message)\n", stderr)

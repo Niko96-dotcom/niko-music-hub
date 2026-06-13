@@ -24,6 +24,9 @@ swift test \
 echo "== recorder deterministic gate =="
 swift test --filter 'AudioRecorderViewModelTests/testMaxDurationAutoFinishFinalizesWAVAndInboxItem'
 
+echo "== ui probe malformed AX self-test =="
+swift script/ui_probe.swift --self-test-malformed-ax
+
 echo "== NikoMusicCoreSelfTest =="
 swift package describe --type json | /usr/bin/python3 -c '
 import json
