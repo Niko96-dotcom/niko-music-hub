@@ -42,7 +42,7 @@ private struct StubToolFeature: ToolFeature {
     let metadata: ToolMetadata
     init(id: String) {
         metadata = ToolMetadata(
-            id: ToolFeatureID(rawValue: id),
+            id: ToolFeatureID(id),
             displayName: id,
             shortLabel: id,
             systemImage: "gearshape",
