@@ -13,6 +13,7 @@ import Foundation
 struct AppComposition {
     let registry: ToolRegistry
     let context: ToolContext
+    let router: QuickAccessRouter
 
     @MainActor
     static func make() -> AppComposition {
@@ -89,7 +90,8 @@ struct AppComposition {
         }
         let registry = try! ToolRegistry(features: features)
 
-        return AppComposition(registry: registry, context: context)
+        let quickAccessRouter = QuickAccessRouter()
+        return AppComposition(registry: registry, context: context, router: quickAccessRouter)
     }
 
     private static func makeUserDefaults(runtime: MusicHubRuntimeEnvironment) -> UserDefaults {

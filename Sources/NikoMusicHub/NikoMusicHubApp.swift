@@ -11,7 +11,8 @@ struct NikoMusicHubApp: App {
         WindowGroup {
             AppShellView(
                 registry: composition.registry,
-                context: composition.context
+                context: composition.context,
+                router: composition.router
             )
         }
         .windowResizability(.contentMinSize)
