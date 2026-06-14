@@ -39,4 +39,13 @@ public final class QuickAccessRouter: ObservableObject {
     public func clearRevealOutputInbox() {
         revealOutputInbox = false
     }
+
+    /// Reset the selected tool ID to `nil` after it has been consumed by the view.
+    /// `AppShellView` calls this inside `.onChange(of: router.selectedToolID)` so
+    /// that a repeated `openTool` command for the same ID transitions
+    /// `selectedToolID` from the ID → `nil` → the ID again, ensuring `.onChange`
+    /// fires on every command even when consecutive commands name the same tool.
+    public func clearSelectedToolID() {
+        selectedToolID = nil
+    }
 }

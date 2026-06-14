@@ -76,6 +76,7 @@ struct AppShellView: View {
         .onChange(of: router.selectedToolID) { _, newID in
             if let newID {
                 selectedToolID = newID
+                router.clearSelectedToolID()  // reset so the same ID fires again next time
             }
         }
         .onChange(of: router.revealOutputInbox) { _, reveal in
