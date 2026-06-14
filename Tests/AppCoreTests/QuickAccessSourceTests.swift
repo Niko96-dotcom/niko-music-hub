@@ -13,6 +13,9 @@ final class QuickAccessSourceTests: XCTestCase {
             "Sources/AppCore/QuickAccess/QuickAccessResolver.swift",
             "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
         ]
+        guard FileManager.default.fileExists(atPath: files[0]) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
         for path in files {
             let source = try String(contentsOfFile: path, encoding: .utf8)
             XCTAssertFalse(
@@ -25,10 +28,11 @@ final class QuickAccessSourceTests: XCTestCase {
     // MARK: - No OutputHandoff reference in router (HAND-04)
 
     func testQuickAccessRouterDoesNotReferenceOutputHandoff() throws {
-        let source = try String(
-            contentsOfFile: "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
-            encoding: .utf8
-        )
+        let path = "Sources/AppCore/QuickAccess/QuickAccessRouter.swift"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
+        let source = try String(contentsOfFile: path, encoding: .utf8)
         XCTAssertFalse(
             source.contains("OutputHandoff"),
             "QuickAccessRouter must not reference OutputHandoff — HAND-04 boundary"
@@ -41,6 +45,9 @@ final class QuickAccessSourceTests: XCTestCase {
         let files = [
             "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
         ]
+        guard FileManager.default.fileExists(atPath: files[0]) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
         for path in files {
             let source = try String(contentsOfFile: path, encoding: .utf8)
             XCTAssertFalse(
