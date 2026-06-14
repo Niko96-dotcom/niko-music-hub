@@ -73,6 +73,20 @@ struct AppShellView: View {
         }
         .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
+        .onAppear {
+            // Drain any pending router state that was set while the window was absent
+            // (closed-window case). The menu bar action may fire router.execute() before
+            // openWindow() recreates this view; onChange only fires on transitions AFTER
+            // subscription, so state set before appearance would be silently dropped.
+            if let toolID = router.selectedToolID {
+                selectedToolID = toolID
+                router.clearSelectedToolID()
+            }
+            if router.revealOutputInbox {
+                setOutputInboxVisible(true)
+                router.clearRevealOutputInbox()
+            }
+        }
         .onChange(of: router.selectedToolID) { _, newID in
             if let newID {
                 selectedToolID = newID
