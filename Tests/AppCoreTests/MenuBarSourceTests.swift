@@ -88,6 +88,43 @@ final class MenuBarSourceTests: XCTestCase {
         )
     }
 
+    // MARK: - NikoMusicHubApp MenuBarExtra presence (MBAR-01, MBAR-02)
+
+    func testNikoMusicHubAppContainsMenuBarExtra() throws {
+        let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
+        let source = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("MenuBarExtra"),
+            "NikoMusicHubApp.swift must contain MenuBarExtra — MBAR-01 acceptance gate"
+        )
+        XCTAssertTrue(
+            source.contains(".menuBarExtraStyle(.menu)"),
+            "NikoMusicHubApp.swift must apply .menuBarExtraStyle(.menu) — MBAR-02 compact native menu"
+        )
+        XCTAssertTrue(
+            source.contains("accessibilityLabel(\"Niko Music Hub\")"),
+            "Menu bar icon must have accessibility label 'Niko Music Hub'"
+        )
+    }
+
+    func testNikoMusicHubAppUsesLabelClosureInitNotPrimarySceneForm() throws {
+        let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
+        let source = try String(contentsOfFile: path, encoding: .utf8)
+        // The label: { } closure form is required; the string "MenuBarExtra(" with an inline
+        // string title is the forbidden primary-scene form.
+        // Check for label closure pattern: "} label: {" appears in the scene block.
+        XCTAssertTrue(
+            source.contains("} label: {"),
+            "MenuBarExtra must use the custom label-closure init form — not the primary-scene string-title form (RESEARCH.md Pitfall 1)"
+        )
+    }
+
     // MARK: - NikoMusicHubApp activation policy preserved (MBAR-03)
 
     func testNikoMusicHubAppPreservesActivationPolicy() throws {
