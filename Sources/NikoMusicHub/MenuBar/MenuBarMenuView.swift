@@ -26,7 +26,7 @@ struct MenuBarMenuView: View {
                 // Re-open the main WindowGroup (id "main") if the user closed it —
                 // activate alone does not restore a closed window.
                 openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
             } label: {
                 Label(entry.label, systemImage: entry.systemImage)
             }
