@@ -16,6 +16,11 @@ enum ArchiveSmokeCommands {
                     ?? defaultFixtureRoot()
                 let fixtureRoot = URL(fileURLWithPath: fixtureRootPath, isDirectory: true)
                 try runUserFlowSmoke(fixtureRoot: fixtureRoot, runtime: runtime)
+                let routingLog = try QuickAccessRoutingSmoke.run()
+                for key in routingLog.keys.sorted() {
+                    guard let value = routingLog[key] else { continue }
+                    print("[niko-music-hub-smoke] \(key)=\(value)")
+                }
                 let recorderLog = try await RecorderOutputInboxSmoke.run()
                 for key in recorderLog.keys.sorted() {
                     guard let value = recorderLog[key] else { continue }
