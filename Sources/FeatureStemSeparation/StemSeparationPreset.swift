@@ -5,6 +5,8 @@ public enum StemSeparationPreset: String, CaseIterable, Codable, Sendable, Ident
     case best4
     case experimental6
 
+    public static let defaultPreset: StemSeparationPreset = .best4
+
     public var id: String { rawValue }
 
     public var displayName: String {
@@ -23,7 +25,7 @@ public enum StemSeparationPreset: String, CaseIterable, Codable, Sendable, Ident
         case .fast4:
             return "Fast separation into vocals, drums, bass, and other."
         case .best4:
-            return "Higher quality 4-stem separation; takes longer."
+            return "Fine-tuned 4-stem separation with higher-quality inference."
         case .experimental6:
             return "Experimental separation including guitar and piano."
         }
@@ -37,6 +39,17 @@ public enum StemSeparationPreset: String, CaseIterable, Codable, Sendable, Ident
             return "htdemucs_ft"
         case .experimental6:
             return "htdemucs_6s"
+        }
+    }
+
+    public var demucsQualityArguments: [String] {
+        switch self {
+        case .fast4:
+            return ["--overlap", "0.25"]
+        case .best4:
+            return ["--overlap", "0.50", "--shifts", "2"]
+        case .experimental6:
+            return ["--overlap", "0.35", "--shifts", "1"]
         }
     }
 

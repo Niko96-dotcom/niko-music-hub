@@ -1,4 +1,5 @@
 import AppCore
+import FeatureDownloader
 import SwiftUI
 
 public struct StemSeparationFeature: ToolFeature {
@@ -20,9 +21,22 @@ public struct StemSeparationFeature: ToolFeature {
             outputInboxStore: context.outputInboxStore,
             jobRunner: context.jobRunner
         )
+        let healthChecker = YtDlpHealthChecker()
+        let downloaderUseCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(),
+            healthChecker: healthChecker,
+            jobRunner: context.jobRunner,
+            settingsStore: context.settingsStore
+        )
+        let youtubeWorkflow = YouTubeStemSeparationWorkflow(
+            downloader: YtDlpYouTubeAudioDownloader(useCase: downloaderUseCase),
+            stemService: service,
+            jobRunner: context.jobRunner
+        )
         let viewModel = StemSeparationViewModel(
             context: context,
-            service: service
+            service: service,
+            youtubeWorkflow: youtubeWorkflow
         )
         return AnyView(StemSeparationView(viewModel: viewModel))
     }

@@ -39,7 +39,7 @@ echo "Input: ${INPUT_WAV}"
 echo "Output: ${OUTPUT_DIR}"
 
 start_time=$(date +%s)
-demucs-mlx "${INPUT_WAV}" --out "${OUTPUT_DIR}" --model htdemucs
+demucs-mlx "${INPUT_WAV}" --out "${OUTPUT_DIR}" -n htdemucs --prefetch-tracks 0 --write-workers 1
 end_time=$(date +%s)
 
 elapsed=$((end_time - start_time))
@@ -48,7 +48,7 @@ echo "Elapsed: ${elapsed}s"
 expected=("vocals.wav" "drums.wav" "bass.wav" "other.wav")
 missing=0
 for stem in "${expected[@]}"; do
-    if [[ ! -f "${OUTPUT_DIR}/htdemucs/sine/${stem}" ]]; then
+    if [[ ! -f "${OUTPUT_DIR}/sine/${stem}" ]]; then
         echo "MISSING: ${stem}"
         missing=1
     fi

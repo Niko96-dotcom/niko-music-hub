@@ -47,6 +47,40 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_success_scansCurrentDemucsNestedOutputLayout() async throws {
+        let outputFolder = makeOutputFolder()
+        let inputURL = URL(fileURLWithPath: "/Users/music/input.wav")
+        let nestedFolder = outputFolder.appendingPathComponent("input", isDirectory: true)
+        let request = StemSeparationBackendRequest(
+            inputURL: inputURL,
+            outputFolderURL: outputFolder,
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 0,
+            outputLines: ["Done"],
+            errorLines: [],
+            filesToWrite: [
+                (nestedFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
+                (nestedFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
+                (nestedFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
+                (nestedFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+            ]
+        )
+        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        guard case .success(let folder, let stems) = result else {
+            Issue.record("Expected success, got \(result)")
+            return
+        }
+        #expect(folder == nestedFolder)
+        #expect(stems.count == 4)
+    }
+
+    @Test
     func separate_canceled_returnsCanceledAndDoesNotPublishStems() async {
         let outputFolder = makeOutputFolder()
         let request = StemSeparationBackendRequest(
@@ -84,7 +118,11 @@ struct DemucsMLXBackendTests {
             preset: .fast4
         )
         let settings = HelperToolSettings()
-        let backend = DemucsMLXBackend(settings: settings)
+        let healthChecker = DemucsMLXHealthChecker(fileExists: { _ in false })
+        let backend = DemucsMLXBackend(
+            settings: settings,
+            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker)
+        )
 
         let result = await backend.separate(request: request) { _, _ in }
 

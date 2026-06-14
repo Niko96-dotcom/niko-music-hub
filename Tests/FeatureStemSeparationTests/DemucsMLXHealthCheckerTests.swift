@@ -20,20 +20,19 @@ struct DemucsMLXHealthCheckerTests {
     @Test
     func availability_usesConfiguredPathOverride() async {
         let configuredURL = URL(fileURLWithPath: "/custom/demucs-mlx")
-        let cacheURL = URL(fileURLWithPath: "/custom/cache")
         let runner = FakeRunner(result: .init(
             exitCode: 0,
-            standardOutput: "0.1.2",
+            standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
             standardError: ""
         ))
         let checker = DemucsMLXHealthChecker(
             runner: runner,
-            fileExists: { path in path == configuredURL.path || path == cacheURL.path },
-            modelCacheURL: cacheURL
+            fileExists: { path in path == configuredURL.path }
         )
         let health = await checker.availability(settings: HelperToolSettings(demucsMlx: configuredURL))
-        #expect(health == .ready(version: "0.1.2"))
+        #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
         #expect(runner.lastRequest?.executableURL == configuredURL)
+        #expect(runner.lastRequest?.arguments == ["--list-models"])
     }
 
     @Test
@@ -82,39 +81,34 @@ struct DemucsMLXHealthCheckerTests {
         }
     }
 
-    // MARK: - Model cache
-
     @Test
-    func availability_whenModelCacheMissing_reportsModelCacheMissing() async {
+    func availability_whenExecutableRunsWithoutCachedModels_reportsReady() async {
         let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(
                 exitCode: 0,
-                standardOutput: "0.1.2",
+                standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
                 standardError: ""
             )),
-            fileExists: { path in path == executableURL.path },
-            modelCacheURL: URL(fileURLWithPath: "/missing/cache")
+            fileExists: { path in path == executableURL.path }
         )
         let health = await checker.availability(settings: HelperToolSettings())
-        #expect(health == .modelCacheMissing)
+        #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
     }
 
     @Test
     func availability_whenEverythingAvailable_reportsReady() async {
         let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
-        let cacheURL = URL(fileURLWithPath: "/custom/cache")
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(
                 exitCode: 0,
-                standardOutput: "demucs-mlx 0.1.2",
+                standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
                 standardError: ""
             )),
-            fileExists: { path in path == executableURL.path || path == cacheURL.path },
-            modelCacheURL: cacheURL
+            fileExists: { path in path == executableURL.path }
         )
         let health = await checker.availability(settings: HelperToolSettings())
-        #expect(health == .ready(version: "demucs-mlx 0.1.2"))
+        #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
     }
 }
 

@@ -133,7 +133,13 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         return job
     }
 
-    private func downloadWithRetry(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws {
+    @discardableResult
+    public func download(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws -> [URL] {
+        try await downloadWithRetry(url: url, options: options, progress: progress)
+    }
+
+    @discardableResult
+    private func downloadWithRetry(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws -> [URL] {
         var lastError: Error?
 
         for attempt in 0..<options.retries {
@@ -178,7 +184,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                 }
                 progress.update(progress: 1, message: "Downloaded")
 
-                return
+                return result.outputURLs
             } catch {
                 lastError = error
 

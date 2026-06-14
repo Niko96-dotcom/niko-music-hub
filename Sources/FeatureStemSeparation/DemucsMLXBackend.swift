@@ -120,17 +120,38 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
                 return .failed(message: message)
             }
 
-            switch scanner.scan(outputFolderURL: request.outputFolderURL, expectedRoles: request.preset.expectedStemRoles) {
+            let outputFolderURL = resolvedOutputFolderURL(for: request)
+            switch scanner.scan(outputFolderURL: outputFolderURL, expectedRoles: request.preset.expectedStemRoles) {
             case .failed(let message):
                 return .failed(message: message)
             case .success(let stems):
-                return .success(outputFolderURL: request.outputFolderURL, stems: stems)
+                return .success(outputFolderURL: outputFolderURL, stems: stems)
             }
         } catch is CancellationError {
             return .canceled
         } catch {
             return .failed(message: "Process error: \(error.localizedDescription)")
         }
+    }
+
+    private func resolvedOutputFolderURL(for request: StemSeparationBackendRequest) -> URL {
+        let direct = request.outputFolderURL
+        let trackFolder = direct
+            .appendingPathComponent(request.inputURL.deletingPathExtension().lastPathComponent, isDirectory: true)
+        let nested = direct
+            .appendingPathComponent(request.preset.demucsModelID, isDirectory: true)
+            .appendingPathComponent(request.inputURL.deletingPathExtension().lastPathComponent, isDirectory: true)
+
+        if case .success = scanner.scan(outputFolderURL: direct, expectedRoles: request.preset.expectedStemRoles) {
+            return direct
+        }
+        if case .success = scanner.scan(outputFolderURL: trackFolder, expectedRoles: request.preset.expectedStemRoles) {
+            return trackFolder
+        }
+        if case .success = scanner.scan(outputFolderURL: nested, expectedRoles: request.preset.expectedStemRoles) {
+            return nested
+        }
+        return direct
     }
 
     public func cancel() {

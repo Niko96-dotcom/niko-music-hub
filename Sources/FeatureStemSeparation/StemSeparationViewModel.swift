@@ -5,9 +5,10 @@ import SwiftUI
 
 @MainActor
 public final class StemSeparationViewModel: ObservableObject, @unchecked Sendable {
-    @Published public var selectedPreset: StemSeparationPreset = .fast4
+    @Published public var selectedPreset: StemSeparationPreset = StemSeparationPreset.defaultPreset
     @Published public var outputFolderURL: URL = StoredFolderLocation.defaultOutputFolder
     @Published public var droppedFileURL: URL?
+    @Published public var youtubeURLText = ""
     @Published public private(set) var isRunning = false
     @Published public private(set) var progress = 0.0
     @Published public private(set) var statusMessage = "Drop an audio file to start."
@@ -18,12 +19,18 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     private let context: ToolContext
     private let service: StemSeparationService
+    private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
     private var jobObservationTask: Task<Void, Never>?
     private(set) var currentJobID: Job.ID?
 
-    public init(context: ToolContext, service: StemSeparationService) {
+    public init(
+        context: ToolContext,
+        service: StemSeparationService,
+        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
+    ) {
         self.context = context
         self.service = service
+        self.youtubeWorkflow = youtubeWorkflow
         loadSettings()
     }
 
@@ -33,6 +40,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public var canStart: Bool {
         !isRunning && droppedFileURL != nil
+    }
+
+    public var canStartYouTube: Bool {
+        !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil
     }
 
     public var canCancel: Bool {
@@ -84,6 +95,33 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         observe(job: job)
     }
 
+    public func startYouTubeSeparation() {
+        guard !isRunning else { return }
+        guard let sourceURL = normalizedYouTubeURL() else {
+            errorMessage = "Paste a valid YouTube URL."
+            return
+        }
+        guard let youtubeWorkflow else {
+            errorMessage = "YouTube to stems is unavailable."
+            return
+        }
+
+        let request = YouTubeStemSeparationRequest(
+            sourceURL: sourceURL,
+            outputRootURL: outputFolderURL,
+            preset: selectedPreset
+        )
+
+        isRunning = true
+        progress = 0.0
+        errorMessage = nil
+        statusMessage = "Downloading audio..."
+
+        let job = youtubeWorkflow.startJob(request: request)
+        currentJobID = job.id
+        observe(job: job)
+    }
+
     public func cancelSeparation() {
         guard let id = currentJobID else { return }
         context.jobRunner.cancelJob(id: id)
@@ -92,6 +130,13 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public func clearSelection() {
         droppedFileURL = nil
         statusMessage = "Drop an audio file to start."
+    }
+
+    public func clearYouTubeURL() {
+        youtubeURLText = ""
+        if droppedFileURL == nil {
+            statusMessage = "Drop an audio file to start."
+        }
     }
 
     public func loadResults() {
@@ -176,6 +221,18 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         } catch {
             diagnosticsError(error)
         }
+    }
+
+    private func normalizedYouTubeURL() -> URL? {
+        let trimmed = youtubeURLText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = url.host?.lowercased(),
+              host.contains("youtube.com") || host.contains("youtu.be") else {
+            return nil
+        }
+        return url
     }
 
     private func diagnosticsError(_ error: Error) {

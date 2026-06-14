@@ -12,6 +12,7 @@ public struct StemSeparationView: View {
     public var body: some View {
         VStack(spacing: 16) {
             fileWell
+            youtubeWell
             controls
             progressSection
             errorBanner
@@ -76,6 +77,31 @@ public struct StemSeparationView: View {
                 }
             }
             return true
+        }
+    }
+
+    private var youtubeWell: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "play.rectangle")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+
+            TextField("Paste YouTube URL...", text: $viewModel.youtubeURLText)
+                .textFieldStyle(.roundedBorder)
+                .disabled(viewModel.isRunning)
+
+            Button("Download & Separate") {
+                viewModel.startYouTubeSeparation()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!viewModel.canStartYouTube)
+
+            if !viewModel.youtubeURLText.isEmpty {
+                Button("Clear") {
+                    viewModel.clearYouTubeURL()
+                }
+                .disabled(viewModel.isRunning)
+            }
         }
     }
 

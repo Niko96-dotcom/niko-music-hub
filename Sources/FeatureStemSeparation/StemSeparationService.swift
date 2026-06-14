@@ -21,6 +21,16 @@ public struct StemSeparationService: Sendable {
     @discardableResult
     public func startJob(request: StemSeparationRequest) -> Job {
         let title = request.title ?? defaultTitle(for: request.inputURL)
+        return jobRunner.enqueue(title: title, sourceToolID: Self.toolID) { progress in
+            try await self.separate(request: request, progress: progress)
+        }
+    }
+
+    public func separate(
+        request: StemSeparationRequest,
+        progress: JobProgress
+    ) async throws {
+        let title = request.title ?? defaultTitle(for: request.inputURL)
         let outputFolderURL = uniqueOutputFolder(
             root: request.outputRootURL,
             title: title,
@@ -31,14 +41,11 @@ public struct StemSeparationService: Sendable {
             outputFolderURL: outputFolderURL,
             preset: request.preset
         )
-
-        return jobRunner.enqueue(title: title, sourceToolID: Self.toolID) { progress in
-            try await self.runJob(
-                backendRequest: backendRequest,
-                preset: request.preset,
-                progress: progress
-            )
-        }
+        try await runJob(
+            backendRequest: backendRequest,
+            preset: request.preset,
+            progress: progress
+        )
     }
 
     private func runJob(
@@ -61,9 +68,9 @@ public struct StemSeparationService: Sendable {
         case .failed(let message):
             progress.log("Failed: \(message)")
             throw StemSeparationServiceError(message)
-        case .success(_, _):
+        case .success(let outputFolderURL, _):
             try await handleSuccess(
-                outputFolderURL: backendRequest.outputFolderURL,
+                outputFolderURL: outputFolderURL,
                 preset: preset,
                 progress: progress
             )

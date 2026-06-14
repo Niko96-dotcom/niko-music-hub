@@ -140,6 +140,10 @@ struct SettingsView: View {
                         settings.helperTools.ytDlp = url
                         persistSettings()
                     }
+                    helperPathRow(label: "demucs-mlx", url: settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
+                        settings.helperTools.demucsMlx = url
+                        persistSettings()
+                    }
                 }
 
                 SettingsSection(title: "About", importance: .low) {

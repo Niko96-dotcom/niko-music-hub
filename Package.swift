@@ -85,7 +85,7 @@ let package = Package(
         ),
         .target(
             name: "FeatureStemSeparation",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "FeatureDownloader"]
         ),
         .executableTarget(
             name: "NikoMusicHub",

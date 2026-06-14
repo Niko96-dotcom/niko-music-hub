@@ -19,19 +19,24 @@ public struct DemucsMLXCommandBuilder: Sendable {
         let executableURL: URL
         if let configured = settings.demucsMlx {
             executableURL = configured
-        } else if let detected = DemucsMLXHealthChecker.detectExecutable(fileExists: { _ in false }) {
+        } else if let detected = healthChecker.resolvedExecutableURL(settings: settings) {
             executableURL = detected
         } else {
             throw DemucsMLXCommandBuilderError.missingExecutable
         }
 
-        let arguments: [String] = [
+        var arguments: [String] = [
             backendRequest.inputURL.path,
             "--out",
             backendRequest.outputFolderURL.path,
-            "--model",
-            backendRequest.preset.demucsModelID
+            "-n",
+            backendRequest.preset.demucsModelID,
+            "--prefetch-tracks",
+            "0",
+            "--write-workers",
+            "1"
         ]
+        arguments.append(contentsOf: backendRequest.preset.demucsQualityArguments)
 
         return ExternalProcessRequest(
             executableURL: executableURL,

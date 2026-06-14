@@ -8,26 +8,17 @@ public struct DemucsMLXHealthChecker: Sendable {
         "/usr/local/bin/demucs-mlx"
     ]
 
-    public static let defaultModelCacheURL: URL = {
-        URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".cache", isDirectory: true)
-            .appendingPathComponent("demucs-mlx", isDirectory: true)
-    }()
-
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
-    private let modelCacheURL: URL
 
     public init(
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
-        },
-        modelCacheURL: URL = Self.defaultModelCacheURL
+        }
     ) {
         self.runner = runner
         self.fileExists = fileExists
-        self.modelCacheURL = modelCacheURL
     }
 
     public func availability(settings: HelperToolSettings) async -> StemBackendHealth {
@@ -40,7 +31,7 @@ public struct DemucsMLXHealthChecker: Sendable {
 
         let request = ExternalProcessRequest(
             executableURL: executableURL,
-            arguments: ["--version"]
+            arguments: ["--list-models"]
         )
 
         do {
@@ -49,9 +40,6 @@ public struct DemucsMLXHealthChecker: Sendable {
                 return .unusable(message: diagnosticMessage(from: result))
             }
             let version = versionLine(from: result.standardOutput)
-            guard modelCacheExists() else {
-                return .modelCacheMissing
-            }
             return .ready(version: version)
         } catch {
             return .unusable(message: error.localizedDescription)
@@ -76,15 +64,14 @@ public struct DemucsMLXHealthChecker: Sendable {
         return nil
     }
 
-    private func modelCacheExists() -> Bool {
-        fileExists(modelCacheURL.path)
-    }
-
     private func versionLine(from output: String) -> String {
-        output
+        let firstModel = output
             .split(whereSeparator: \.isNewline)
+            .first?
+            .split(separator: "\t")
             .first
-            .map(String.init) ?? "demucs-mlx"
+            .map(String.init)
+        return firstModel.map { "demucs-mlx (\($0) available)" } ?? "demucs-mlx"
     }
 
     private func diagnosticMessage(from result: ExternalProcessResult) -> String {

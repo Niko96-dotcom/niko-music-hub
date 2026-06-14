@@ -8,7 +8,8 @@ struct StemSeparationViewModelTests {
 
     private func makeViewModel(
         outputInboxStore: OutputInboxStore = FakeOutputInboxStore(),
-        jobRunner: JobRunner = JobRunner()
+        jobRunner: JobRunner = JobRunner(),
+        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
     ) -> StemSeparationViewModel {
         let context = ToolContext(
             registeredToolCount: 7,
@@ -26,7 +27,14 @@ struct StemSeparationViewModelTests {
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner
         )
-        return StemSeparationViewModel(context: context, service: service)
+        return StemSeparationViewModel(context: context, service: service, youtubeWorkflow: youtubeWorkflow)
+    }
+
+    @Test
+    func init_defaultsToQualityPreset() {
+        let vm = makeViewModel()
+
+        #expect(vm.selectedPreset == .best4)
     }
 
     @Test
@@ -57,6 +65,45 @@ struct StemSeparationViewModelTests {
         #expect(vm.currentJobID != nil)
 
         // Wait for completion
+        while vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(vm.results.count == 4)
+    }
+
+    @Test
+    func startYouTubeSeparation_requiresYouTubeURL() {
+        let vm = makeViewModel()
+        vm.youtubeURLText = "https://example.com/song"
+
+        vm.startYouTubeSeparation()
+
+        #expect(vm.errorMessage == "Paste a valid YouTube URL.")
+        #expect(vm.isRunning == false)
+    }
+
+    @Test
+    func startYouTubeSeparation_enqueuesWorkflowJob() async throws {
+        let runner = JobRunner()
+        let inbox = FakeOutputInboxStore()
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: service,
+            jobRunner: runner
+        )
+        let vm = makeViewModel(outputInboxStore: inbox, jobRunner: runner, youtubeWorkflow: workflow)
+        vm.youtubeURLText = "https://youtu.be/test"
+
+        vm.startYouTubeSeparation()
+
+        #expect(vm.isRunning == true)
+        #expect(vm.currentJobID != nil)
+
         while vm.isRunning {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
@@ -157,4 +204,18 @@ private struct FixtureFileActions: FileActions {
 
 private struct FakeDiagnostics: Diagnostics {
     func log(_ level: DiagnosticLevel, _ message: String) {}
+}
+
+private struct FakeViewModelYouTubeAudioDownloader: YouTubeAudioDownloading {
+    func downloadAudio(
+        from sourceURL: URL,
+        to outputDirectory: URL,
+        progress: JobProgress
+    ) async throws -> URL {
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let outputURL = outputDirectory.appendingPathComponent("downloaded.wav")
+        FileManager.default.createFile(atPath: outputURL.path, contents: Data("audio".utf8))
+        progress.update(progress: 1, message: "Downloaded")
+        return outputURL
+    }
 }

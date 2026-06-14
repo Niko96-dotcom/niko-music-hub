@@ -40,6 +40,9 @@ final class MockStemSeparationBackend: StemSeparationBackend, @unchecked Sendabl
             onProgress(Double(index + 1) / Double(filesToWrite.count), "Wrote \(file.1)")
         }
 
+        if case .success(_, let stems) = requestedResult {
+            return .success(outputFolderURL: request.outputFolderURL, stems: stems)
+        }
         return requestedResult
     }
 

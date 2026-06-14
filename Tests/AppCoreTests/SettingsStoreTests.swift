@@ -51,12 +51,14 @@ final class SettingsStoreTests: XCTestCase {
         let ffmpeg = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
         let ffprobe = URL(fileURLWithPath: "/opt/homebrew/bin/ffprobe")
         let ytDlp = URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp")
+        let demucsMlx = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
 
         try store.updateSettings { settings in
             settings.helperTools = HelperToolSettings(
                 ffmpeg: ffmpeg,
                 ffprobe: ffprobe,
-                ytDlp: ytDlp
+                ytDlp: ytDlp,
+                demucsMlx: demucsMlx
             )
         }
 
@@ -64,6 +66,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(helperTools.ffmpeg, ffmpeg)
         XCTAssertEqual(helperTools.ffprobe, ffprobe)
         XCTAssertEqual(helperTools.ytDlp, ytDlp)
+        XCTAssertEqual(helperTools.demucsMlx, demucsMlx)
     }
 
     func testLoadsLegacySettingsMissingArchiveOnboardingFlag() throws {
