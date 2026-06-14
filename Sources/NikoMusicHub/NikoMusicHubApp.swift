@@ -1,3 +1,4 @@
+import AppCore
 import AppKit
 import SwiftUI
 
@@ -8,7 +9,7 @@ struct NikoMusicHubApp: App {
     private let composition = AppComposition.make()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             AppShellView(
                 registry: composition.registry,
                 context: composition.context,
@@ -20,6 +21,17 @@ struct NikoMusicHubApp: App {
         .commands {
             AboutCommand()
         }
+
+        MenuBarExtra {
+            MenuBarMenuView(
+                entries: MenuBarMenuModel.resolvedEntries(registry: composition.registry),
+                router: composition.router
+            )
+        } label: {
+            Image(systemName: "waveform")
+                .accessibilityLabel("Niko Music Hub")
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
