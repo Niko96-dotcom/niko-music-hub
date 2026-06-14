@@ -12,6 +12,11 @@ import SwiftUI
 /// present (UI-SPEC / MBAR-04).
 struct MenuBarMenuView: View {
     let entries: [QuickAccessEntry]
+    // Intentionally a plain stored reference, not @ObservedObject. This view only
+    // dispatches actions via router.execute() — it never reads router state for
+    // display. If a future change needs to reflect router state in menu row
+    // appearance (e.g., a checkmark on the active tool), convert to:
+    // @ObservedObject var router: QuickAccessRouter
     let router: QuickAccessRouter
 
     @Environment(\.openWindow) private var openWindow
