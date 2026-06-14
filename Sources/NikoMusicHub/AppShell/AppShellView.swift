@@ -8,14 +8,16 @@ struct AppShellView: View {
 
     let registry: ToolRegistry
     let context: ToolContext
+    @ObservedObject var router: QuickAccessRouter
 
     @State private var selectedToolID: ToolFeatureID?
     @State private var showToolSidebar: Bool
     @State private var showOutputInbox: Bool
 
-    init(registry: ToolRegistry, context: ToolContext) {
+    init(registry: ToolRegistry, context: ToolContext, router: QuickAccessRouter) {
         self.registry = registry
         self.context = context
+        self.router = router
         let initialToolID = ToolRegistry.initialToolID()
             .flatMap { registry.feature(for: $0)?.metadata.id }
             ?? registry.preferredDefaultFeatureID
@@ -71,6 +73,17 @@ struct AppShellView: View {
         }
         .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
+        .onChange(of: router.selectedToolID) { _, newID in
+            if let newID {
+                selectedToolID = newID
+            }
+        }
+        .onChange(of: router.revealOutputInbox) { _, reveal in
+            if reveal {
+                setOutputInboxVisible(true)
+                router.clearRevealOutputInbox()
+            }
+        }
         .background(HubShellBackground())
     }
 
