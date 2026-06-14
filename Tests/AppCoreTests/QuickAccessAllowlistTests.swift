@@ -50,6 +50,8 @@ final class QuickAccessAllowlistTests: XCTestCase {
         let registry = try makeFullRegistry()
         let resolved = QuickAccessResolver.resolve(entries: QuickAccessEntry.allowlist, registry: registry)
         XCTAssertEqual(resolved.count, 6)
+        // Verify the IDs match the allowlist order exactly — catches duplicates or spurious entries
+        XCTAssertEqual(resolved.map(\.id), QuickAccessEntry.allowlist.map(\.id))
     }
 
     func testMissingOneToolDropsItFromResolved() throws {
