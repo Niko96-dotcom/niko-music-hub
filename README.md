@@ -116,6 +116,7 @@ Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broke
 - `ffmpeg` and `yt-dlp` are optional external tools. The app shows compact helper health, but installing or updating them is still a user action.
 - `demucs-mlx` is an optional external tool for stem separation. See `docs/user-guide-stem-separation.md`.
 - The archive browser is intentionally local-only and does not manage files inside real Cubase archives.
+- Menu bar quick access provides one-click routing to all tools from the macOS status bar. See `docs/menu-bar-quick-access.md` for the entry list and design rationale.
 
 ## Automation
 
