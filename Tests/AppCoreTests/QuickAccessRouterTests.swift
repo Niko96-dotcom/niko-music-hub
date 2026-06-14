@@ -74,6 +74,31 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertFalse(router.revealOutputInbox)
     }
 
+    // MARK: - clearSelectedToolID
+
+    func testSelectedToolIDIsNilAfterClear() {
+        let router = QuickAccessRouter()
+        router.execute(.openTool("wav-converter"))
+        XCTAssertEqual(router.selectedToolID, "wav-converter")
+        router.clearSelectedToolID()
+        XCTAssertNil(router.selectedToolID)
+    }
+
+    func testExecuteSameToolIDTwiceAfterClearBothFire() {
+        let router = QuickAccessRouter()
+        router.execute(.openTool("wav-converter"))
+        router.clearSelectedToolID()
+        router.execute(.openTool("wav-converter"))
+        XCTAssertEqual(router.selectedToolID, "wav-converter")
+    }
+
+    func testClearSelectedToolIDIsIdempotentWhenAlreadyNil() {
+        let router = QuickAccessRouter()
+        // selectedToolID is already nil — calling clear must not crash
+        router.clearSelectedToolID()
+        XCTAssertNil(router.selectedToolID)
+    }
+
     // MARK: - HAND-04: router does not call OutputHandoff
 
     func testRouterSourceDoesNotReferenceOutputHandoff() throws {
