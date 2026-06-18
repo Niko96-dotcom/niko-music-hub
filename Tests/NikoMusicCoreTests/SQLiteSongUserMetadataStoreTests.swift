@@ -16,7 +16,8 @@ final class SQLiteSongUserMetadataStoreTests: XCTestCase {
             appNote: "remember this",
             previewSelectionMode: .manual,
             manualMainPreviewID: "preview-1",
-            ignoredPreviewCandidateIDs: ["ignored-1"]
+            ignoredPreviewCandidateIDs: ["ignored-1"],
+            workflowStatus: .prod
         )
         try store.upsert(metadata)
 
@@ -27,6 +28,39 @@ final class SQLiteSongUserMetadataStoreTests: XCTestCase {
         XCTAssertEqual(loaded.previewSelectionMode, .manual)
         XCTAssertEqual(loaded.manualMainPreviewID, "preview-1")
         XCTAssertEqual(loaded.ignoredPreviewCandidateIDs, ["ignored-1"])
+        XCTAssertEqual(loaded.workflowStatus, .prod)
+    }
+
+    func testLegacyDatabaseMigratesWorkflowStatusColumn() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("song-metadata-legacy-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        try executeSQL(
+            """
+            CREATE TABLE song_metadata (
+              song_id TEXT PRIMARY KEY,
+              virtual_title TEXT,
+              aliases_json TEXT NOT NULL DEFAULT '[]',
+              app_note TEXT,
+              preview_selection_mode TEXT NOT NULL DEFAULT 'auto',
+              manual_main_preview_id TEXT,
+              ignored_preview_ids_json TEXT NOT NULL DEFAULT '[]',
+              updated_at TEXT NOT NULL,
+              collaborator_ids_json TEXT NOT NULL DEFAULT '[]',
+              is_ignored INTEGER NOT NULL DEFAULT 0,
+              cpr_selection_mode TEXT NOT NULL DEFAULT 'auto',
+              manual_main_cpr_id TEXT,
+              ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]'
+            );
+            """,
+            databaseURL: databaseURL
+        )
+
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        try store.upsert(SongUserMetadata(songID: "/tmp/legacy", workflowStatus: .waitingFeedback))
+
+        let loaded = try XCTUnwrap(try store.loadAll()["/tmp/legacy"])
+        XCTAssertEqual(loaded.workflowStatus, .waitingFeedback)
     }
 
     func testMalformedAliasJSONThrows() throws {

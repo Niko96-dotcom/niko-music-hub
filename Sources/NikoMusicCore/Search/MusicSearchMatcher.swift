@@ -49,6 +49,12 @@ enum MusicSearchMatcher {
             return (.fuzzyCollaborator, 21)
         }
 
+        if let workflowStatus = song.workflowStatus {
+            let statusText = normalize(workflowStatus.searchableText)
+            if statusText.contains(token) { return (.workflowStatus, 86) }
+            if isSubsequence(token, in: statusText) { return (.fuzzyWorkflowStatus, 21) }
+        }
+
         let folder = normalize(song.originalFolderName)
         if folder.contains(token) { return (.folderName, 60) }
         if isSubsequence(token, in: folder) { return (.fuzzyFolderName, 18) }
@@ -101,6 +107,9 @@ enum MusicSearchMatcher {
         ]
         parts.append(contentsOf: song.aliases)
         parts.append(contentsOf: song.collaboratorNames)
+        if let workflowStatus = song.workflowStatus {
+            parts.append(workflowStatus.searchableText)
+        }
         parts.append(contentsOf: song.projectVersions.map(\.fileName))
         parts.append(contentsOf: song.previewCandidates.map(\.fileName))
         parts.append(contentsOf: song.scanWarnings)

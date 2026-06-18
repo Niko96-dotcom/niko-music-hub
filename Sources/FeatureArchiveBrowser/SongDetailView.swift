@@ -56,6 +56,22 @@ struct SongDetailView: View {
             sectionTitle("Metadata")
 
             VStack(alignment: .leading, spacing: 4) {
+                Text("Workflow status")
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Picker("Workflow status", selection: Binding<ProjectWorkflowStatus?>(
+                    get: { song.workflowStatus },
+                    set: { viewModel.updateWorkflowStatus(for: song, status: $0) }
+                )) {
+                    Text("No Status").tag(nil as ProjectWorkflowStatus?)
+                    ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                        Label(status.displayTitle, systemImage: status.archiveSymbolName)
+                            .tag(status as ProjectWorkflowStatus?)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+
                 Text("Display title")
                     .font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(.secondary)

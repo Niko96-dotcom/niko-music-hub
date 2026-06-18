@@ -158,6 +158,16 @@ struct ArchiveSidebarView: View {
 
                 sortMenuChip
 
+                ForEach(ArchiveBrowseFilter.sidebarStatusFilters, id: \.filter.rawValue) { item in
+                    ArchiveShelfChip(
+                        title: item.title,
+                        isSelected: viewModel.browseFilter.contains(item.filter)
+                    ) {
+                        viewModel.toggleBrowseFilter(item.filter)
+                    }
+                    .disabled(viewModel.songs.isEmpty)
+                }
+
                 ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
                     HubIconButton.archiveBrowseFilter(
                         filter: filter,

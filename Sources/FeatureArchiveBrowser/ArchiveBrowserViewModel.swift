@@ -610,6 +610,12 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    func updateWorkflowStatus(for song: Song, status: ProjectWorkflowStatus?) {
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.workflowStatus = status
+        }
+    }
+
     func setManualMainPreview(for song: Song, candidateID: String) {
         guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
             return

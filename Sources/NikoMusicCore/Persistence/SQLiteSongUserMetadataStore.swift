@@ -29,7 +29,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
             SELECT song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
                    manual_main_preview_id, ignored_preview_ids_json, updated_at,
                    collaborator_ids_json, is_ignored, cpr_selection_mode,
-                   manual_main_cpr_id, ignored_cpr_ids_json
+                   manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
             FROM song_metadata;
             """
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -60,12 +60,14 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 let cprModeRaw = textColumn(statement, column: 10) ?? CPRSelectionMode.auto.rawValue
                 let manualCPRID = optionalText(statement, column: 11)
                 let ignoredCPRJSON = textColumn(statement, column: 12) ?? "[]"
+                let workflowStatusRaw = optionalText(statement, column: 13)
                 let aliases = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
                 let ignoredPreviews = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
                 let collaboratorIDs = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
                 let ignoredCPRs = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
                 let previewMode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
                 let cprMode = CPRSelectionMode(rawValue: cprModeRaw) ?? .auto
+                let workflowStatus = workflowStatusRaw.flatMap(ProjectWorkflowStatus.init(rawValue:))
                 let formatter = ISO8601DateFormatter()
                 let updatedAt = formatter.date(from: updatedText) ?? Date()
                 result[songID] = SongUserMetadata(
@@ -77,6 +79,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                     manualMainPreviewID: manualPreviewID,
                     ignoredPreviewCandidateIDs: ignoredPreviews,
                     collaboratorIDs: collaboratorIDs,
+                    workflowStatus: workflowStatus,
                     isIgnored: isIgnored,
                     cprSelectionMode: cprMode,
                     manualMainCPRID: manualCPRID,
@@ -114,8 +117,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                   song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
                   manual_main_preview_id, ignored_preview_ids_json, updated_at,
                   collaborator_ids_json, is_ignored, cpr_selection_mode,
-                  manual_main_cpr_id, ignored_cpr_ids_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id) DO UPDATE SET
                   virtual_title = excluded.virtual_title,
                   aliases_json = excluded.aliases_json,
@@ -128,7 +131,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                   is_ignored = excluded.is_ignored,
                   cpr_selection_mode = excluded.cpr_selection_mode,
                   manual_main_cpr_id = excluded.manual_main_cpr_id,
-                  ignored_cpr_ids_json = excluded.ignored_cpr_ids_json;
+                  ignored_cpr_ids_json = excluded.ignored_cpr_ids_json,
+                  workflow_status = excluded.workflow_status;
                 """
                 guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
                     throw StoreError.prepare(message(db))
@@ -146,6 +150,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
                 sqlite3_bind_text(statement, 11, item.cprSelectionMode.rawValue, -1, sqliteTransient)
                 bindOptionalText(statement, index: 12, value: item.manualMainCPRID)
                 sqlite3_bind_text(statement, 13, ignoredCPRJSON, -1, sqliteTransient)
+                bindOptionalText(statement, index: 14, value: item.workflowStatus?.rawValue)
                 guard sqlite3_step(statement) == SQLITE_DONE else {
                     throw StoreError.step(message(db))
                 }
@@ -171,7 +176,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
               is_ignored INTEGER NOT NULL DEFAULT 0,
               cpr_selection_mode TEXT NOT NULL DEFAULT 'auto',
               manual_main_cpr_id TEXT,
-              ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]'
+              ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]',
+              workflow_status TEXT
             );
             """
             guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
@@ -188,6 +194,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
             ("cpr_selection_mode", "ALTER TABLE song_metadata ADD COLUMN cpr_selection_mode TEXT NOT NULL DEFAULT 'auto';"),
             ("manual_main_cpr_id", "ALTER TABLE song_metadata ADD COLUMN manual_main_cpr_id TEXT;"),
             ("ignored_cpr_ids_json", "ALTER TABLE song_metadata ADD COLUMN ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]';"),
+            ("workflow_status", "ALTER TABLE song_metadata ADD COLUMN workflow_status TEXT;"),
         ]
         for migration in migrations {
             if try columnExists(migration.column, db: db) { continue }

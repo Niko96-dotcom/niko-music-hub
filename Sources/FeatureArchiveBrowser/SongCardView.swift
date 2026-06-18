@@ -21,6 +21,8 @@ struct SongCardView: View {
 
                 Spacer(minLength: 4)
 
+                ArchiveWorkflowStatusPill(status: song.workflowStatus, compact: true)
+
                 if hasScanWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10, weight: .semibold))

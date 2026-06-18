@@ -983,10 +983,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let neon = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
         viewModel.updateVirtualTitle(for: neon, title: "Electric Neon")
         viewModel.updateAliases(for: neon, aliasesText: "glowstick")
+        viewModel.updateWorkflowStatus(for: neon, status: .waitingFeedback)
         let afterUpdate = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Neon Hook" })
         XCTAssertEqual(afterUpdate.effectiveDisplayTitle, "Electric Neon")
+        XCTAssertEqual(afterUpdate.workflowStatus, .waitingFeedback)
         let storedMeta = try metadataStore.loadAll()
         XCTAssertEqual(storedMeta[neon.id]?.virtualTitle, "Electric Neon")
+        XCTAssertEqual(storedMeta[neon.id]?.workflowStatus, .waitingFeedback)
 
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
         let reloaded = ArchiveBrowserViewModel(
@@ -999,9 +1002,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let merged = try XCTUnwrap(reloaded.songs.first { $0.originalFolderName == "Neon Hook" })
         XCTAssertEqual(merged.effectiveDisplayTitle, "Electric Neon")
         XCTAssertEqual(merged.aliases, ["glowstick"])
+        XCTAssertEqual(merged.workflowStatus, .waitingFeedback)
 
         reloaded.setSearchQuery("glowstick", immediate: true)
         XCTAssertEqual(reloaded.filteredSongs.count, 1)
+
+        reloaded.setSearchQuery("", immediate: true)
+        reloaded.toggleBrowseFilter(.statusWaiting)
+        XCTAssertEqual(reloaded.filteredSongs.map(\.id), [merged.id])
     }
 
     func testManualPreviewSurvivesRescan() async throws {

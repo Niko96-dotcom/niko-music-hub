@@ -8,6 +8,7 @@ struct NewSongSheet: View {
 
     @State private var name = ""
     @State private var note = ""
+    @State private var workflowStatus: ProjectWorkflowStatus? = .songstarterBeat
     @State private var selectedCollaboratorIDs: Set<String> = []
     @State private var errorMessage: String?
 
@@ -27,6 +28,15 @@ struct NewSongSheet: View {
                 TextField("Note (optional)", text: $note, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
+
+                Picker("Status", selection: $workflowStatus) {
+                    Text("No Status").tag(nil as ProjectWorkflowStatus?)
+                    ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                        Label(status.displayTitle, systemImage: status.archiveSymbolName)
+                            .tag(status as ProjectWorkflowStatus?)
+                    }
+                }
+                .pickerStyle(.menu)
 
                 if !viewModel.collaborators.isEmpty {
                     Text("Collaborators")
@@ -71,7 +81,8 @@ struct NewSongSheet: View {
             name: name,
             root: viewModel.newSongDraftRoot,
             collaboratorIDs: Array(selectedCollaboratorIDs),
-            appNote: note.isEmpty ? nil : note
+            appNote: note.isEmpty ? nil : note,
+            workflowStatus: workflowStatus
         )
         do {
             _ = try viewModel.createNewSong(request: request)

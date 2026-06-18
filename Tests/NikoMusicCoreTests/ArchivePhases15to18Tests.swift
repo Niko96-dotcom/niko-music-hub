@@ -106,6 +106,63 @@ final class ArchivePhases15to18Tests: XCTestCase {
         XCTAssertEqual(filtered.map(\.displayTitle), ["n"])
     }
 
+    func testWorkflowStatusFiltersUseUserWorkflowGroups() {
+        let idea = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/idea", isDirectory: true),
+            originalFolderName: "Idea",
+            displayTitle: "Idea",
+            workflowStatus: .songstarterBeat
+        )
+        let prod = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/prod", isDirectory: true),
+            originalFolderName: "Prod",
+            displayTitle: "Prod",
+            workflowStatus: .prod
+        )
+        let waiting = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/waiting", isDirectory: true),
+            originalFolderName: "Waiting",
+            displayTitle: "Waiting",
+            workflowStatus: .waitingFeedback
+        )
+        let done = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/done", isDirectory: true),
+            originalFolderName: "Done",
+            displayTitle: "Done",
+            workflowStatus: .done
+        )
+
+        XCTAssertEqual(
+            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusIdeas).map(\.displayTitle),
+            ["Idea"]
+        )
+        XCTAssertEqual(
+            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusTodos).map(\.displayTitle),
+            ["Prod"]
+        )
+        XCTAssertEqual(
+            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusWaiting).map(\.displayTitle),
+            ["Waiting"]
+        )
+        XCTAssertEqual(
+            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: [.statusIdeas, .statusTodos]).map(\.displayTitle),
+            ["Idea", "Prod"]
+        )
+    }
+
+    func testWorkflowStatusSearchMatchesWaitingLanguage() {
+        let waiting = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/waiting", isDirectory: true),
+            originalFolderName: "Waiting",
+            displayTitle: "Waiting",
+            workflowStatus: .waitingFeedback
+        )
+        let index = MusicSearchIndex(songs: [waiting])
+        let result = index.searchResults("waiting people").first
+        XCTAssertEqual(result?.song.id, waiting.id)
+        XCTAssertTrue(result?.matchSummary.contains("status") == true)
+    }
+
     func testNewSongCreator() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("new-song-\(UUID().uuidString)", isDirectory: true)
@@ -122,6 +179,7 @@ final class ArchivePhases15to18Tests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: song.folderPath.appendingPathComponent("Stems", isDirectory: true).path
         ))
+        XCTAssertEqual(song.workflowStatus, .songstarterBeat)
     }
 
     func testNewSongCreatorRejectsNamesThatEscapeDestinationRoot() throws {
@@ -177,6 +235,7 @@ final class ArchivePhases15to18Tests: XCTestCase {
         let metadata = SongUserMetadata(
             songID: "/tmp/song",
             collaboratorIDs: ["c1"],
+            workflowStatus: .sessionProd,
             isIgnored: true,
             cprSelectionMode: .manual,
             manualMainCPRID: "cpr-1",
@@ -185,6 +244,7 @@ final class ArchivePhases15to18Tests: XCTestCase {
         try store.upsert(metadata)
         let loaded = try XCTUnwrap(try store.loadAll()["/tmp/song"])
         XCTAssertEqual(loaded.collaboratorIDs, ["c1"])
+        XCTAssertEqual(loaded.workflowStatus, .sessionProd)
         XCTAssertTrue(loaded.isIgnored)
         XCTAssertEqual(loaded.cprSelectionMode, .manual)
         XCTAssertEqual(loaded.manualMainCPRID, "cpr-1")

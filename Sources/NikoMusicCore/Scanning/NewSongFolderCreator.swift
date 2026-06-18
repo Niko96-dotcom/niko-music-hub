@@ -5,6 +5,7 @@ public struct NewSongRequest: Sendable, Equatable {
     public let root: URL
     public let collaboratorIDs: [String]
     public let appNote: String?
+    public let workflowStatus: ProjectWorkflowStatus?
     public let templateFolder: URL?
 
     public init(
@@ -12,12 +13,14 @@ public struct NewSongRequest: Sendable, Equatable {
         root: URL,
         collaboratorIDs: [String] = [],
         appNote: String? = nil,
+        workflowStatus: ProjectWorkflowStatus? = .songstarterBeat,
         templateFolder: URL? = nil
     ) {
         self.name = name
         self.root = root
         self.collaboratorIDs = collaboratorIDs
         self.appNote = appNote
+        self.workflowStatus = workflowStatus
         self.templateFolder = templateFolder
     }
 }
@@ -72,7 +75,8 @@ public enum NewSongFolderCreator {
             projectVersions: versions,
             latestCPR: latest,
             appNote: request.appNote,
-            collaboratorIDs: request.collaboratorIDs
+            collaboratorIDs: request.collaboratorIDs,
+            workflowStatus: request.workflowStatus
         )
         song.sidecarNotes = request.appNote
         return song
