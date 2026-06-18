@@ -3,7 +3,7 @@ import Foundation
 public struct SongTitleResolver: Sendable {
     private static let stripTokenSet: Set<String> = [
         "mixdown", "mix", "master", "mastered", "mastering", "bounce", "bounced",
-        "sessin", "session", "sesh", "sbounce",
+        "sessin", "session", "sesh", "seshy", "sbounce",
         "sketch", "sketchy", "sketchyy", "rough", "wip",
         "demo", "demmo", "prod", "production", "produce",
         "preview", "export", "final",
@@ -28,6 +28,12 @@ public struct SongTitleResolver: Sendable {
         let previewTitle = mainPreview.flatMap { inferredTitle(fromPreviewFileName: $0.fileName) }
         let cprTitle = bestTitle(from: projectVersions)
 
+        if let previewTitle,
+           isStrongTitle(previewTitle),
+           mainPreview.map(isTrustworthyPreviewForTitle) == true {
+            return previewTitle
+        }
+
         if let cprTitle, isStrongTitle(cprTitle) {
             if isWeakTitle(previewTitle) || isWeakTitle(folderTitle) {
                 return cprTitle
@@ -35,12 +41,6 @@ public struct SongTitleResolver: Sendable {
             if let previewTitle, isWeakTitle(previewTitle, comparedTo: cprTitle) {
                 return cprTitle
             }
-        }
-
-        if let previewTitle,
-           isStrongTitle(previewTitle),
-           mainPreview.map(isTrustworthyPreviewForTitle) == true {
-            return previewTitle
         }
 
         if isStrongTitle(folderTitle) {

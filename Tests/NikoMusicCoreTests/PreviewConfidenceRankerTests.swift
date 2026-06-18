@@ -333,6 +333,122 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertEqual(ranked.first?.fileName, "demo v0.6.mp3")
     }
 
+    func testNamedDemoBeatsSessionBounceWhenBothAreAvailable() {
+        let sessionBounce = candidate(
+            name: "y so serious session bounce.mp3",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+        let demo = candidate(
+            name: "y so serious demo.mp3",
+            role: .mainMix,
+            modifiedAt: baseDate.addingTimeInterval(60),
+            version: nil,
+            ext: "mp3",
+            duration: 200
+        )
+
+        let ranked = ranker.rank([sessionBounce, demo])
+        XCTAssertEqual(ranked.first?.fileName, "y so serious demo.mp3")
+    }
+
+    func testNamedDemoBeatsVersionishPlaceholderWithCPRAnchor() {
+        let context = PreviewRankingProjectContext(anchorCPRVersion: 3, titleTokens: ["topline", "day"])
+        let placeholder = candidate(
+            name: "VERS 1_03.wav",
+            role: .unknown,
+            modifiedAt: baseDate,
+            version: 3,
+            ext: "wav",
+            duration: 200
+        )
+        let demo = candidate(
+            name: "Hey Summer demo.wav",
+            role: .mainMix,
+            modifiedAt: baseDate.addingTimeInterval(60),
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+
+        let ranked = ranker.rank([placeholder, demo], projectContext: context)
+        XCTAssertEqual(ranked.first?.fileName, "Hey Summer demo.wav")
+        XCTAssertFalse(
+            ranked.first?.confidenceReasons.contains("cpr-anchor:demo-below-project") == true
+        )
+    }
+
+    func testProductionMaturityLadderOrdersPreviewStages() {
+        let sketch = candidate(
+            name: "Song sketch.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+        let sessionBounce = candidate(
+            name: "Song seshy bounce.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+        let demo = candidate(
+            name: "Song demmo.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+        let prod = candidate(
+            name: "Song prod.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+        let mix = candidate(
+            name: "Song mix.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+        let master = candidate(
+            name: "Song master.wav",
+            role: .mainMix,
+            modifiedAt: baseDate,
+            version: nil,
+            ext: "wav",
+            duration: 200
+        )
+
+        let ranked = ranker.rank([sketch, sessionBounce, demo, prod, mix, master])
+
+        XCTAssertEqual(
+            ranked.map(\.fileName),
+            [
+                "Song master.wav",
+                "Song mix.wav",
+                "Song prod.wav",
+                "Song demmo.wav",
+                "Song seshy bounce.wav",
+                "Song sketch.wav",
+            ]
+        )
+        XCTAssertEqual(PreviewProductionMaturity.detect(from: "Song seshy.wav"), .sessionBounce)
+        XCTAssertEqual(PreviewProductionMaturity.detect(from: "Song sesh bounce.wav"), .sessionBounce)
+        XCTAssertEqual(PreviewProductionMaturity.detect(from: "Song session bounce.wav"), .sessionBounce)
+    }
+
     func testConfidenceReasonsAreDeterministicAndOrdered() {
         let main = candidate(
             name: "Demo v2 mixdown.wav",

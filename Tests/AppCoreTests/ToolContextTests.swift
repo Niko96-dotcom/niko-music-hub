@@ -58,6 +58,27 @@ final class ToolContextTests: XCTestCase {
         XCTAssertTrue(source.contains("persistenceIssues"))
         XCTAssertTrue(source.contains("makeSQLiteStore"))
     }
+
+    func testAppCompositionDoesNotEraseIsolatedSettingsOnLaunch() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppComposition.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("removePersistentDomain(forName: suiteName)"))
+    }
+
+    func testArchiveSmokeUsesIsolatedPreferences() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/ArchiveSmokeCommands.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("makeSmokeUserDefaults"))
+        XCTAssertTrue(source.contains("UserDefaultsSettingsStore(userDefaults: smokeDefaults)"))
+        XCTAssertTrue(source.contains("UserDefaultsPreferenceStore(userDefaults: smokeDefaults)"))
+        XCTAssertFalse(source.contains("settingsStore: UserDefaultsSettingsStore(),"))
+    }
 }
 
 private struct ContextAwareFeature: ToolFeature {

@@ -83,7 +83,11 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
         if lower.contains("acapella") || lower.contains("vox only") { return .acapella }
         if lower.contains("stem") { return .stems }
         if lower.contains("master") { return .master }
-        if lower.contains("mixdown") || lower.contains(" mix") || lower.contains("bounce") || lower.contains("preview") {
+        if lower.contains("mixdown")
+            || lower.contains(" mix")
+            || lower.contains("bounce")
+            || lower.contains("preview")
+            || PreviewProductionMaturity.detect(from: fileName) >= .sketch {
             return .mainMix
         }
         return .unknown

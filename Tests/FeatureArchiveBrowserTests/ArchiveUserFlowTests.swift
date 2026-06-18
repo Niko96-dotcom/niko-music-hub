@@ -19,7 +19,11 @@ final class ArchiveUserFlowTests: XCTestCase {
             context: TestToolContext.make()
         )
 
-        XCTAssertNoThrow(try result.validateForE2ESmoke(dryRunOpen: true))
+        let smokeLog = result.smokeLog
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "\n")
+        XCTAssertNoThrow(try result.validateForE2ESmoke(dryRunOpen: true), smokeLog)
 
         XCTAssertGreaterThanOrEqual(result.core.songCount, 4)
         XCTAssertGreaterThanOrEqual(result.fixtureDiagnostics.songCount, 4)

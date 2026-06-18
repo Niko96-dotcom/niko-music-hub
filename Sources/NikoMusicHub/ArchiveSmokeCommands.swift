@@ -41,9 +41,11 @@ enum ArchiveSmokeCommands {
         fixtureRoot: URL,
         runtime: MusicHubRuntimeEnvironment
     ) throws {
+        let smokeDefaults = makeSmokeUserDefaults(runtime: runtime)
         let context = ToolContext(
             registeredToolCount: 1,
-            settingsStore: UserDefaultsSettingsStore(),
+            settingsStore: UserDefaultsSettingsStore(userDefaults: smokeDefaults),
+            preferences: UserDefaultsPreferenceStore(userDefaults: smokeDefaults),
             outputInboxStore: JSONOutputInboxStore(
                 storageURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent("e2e-smoke-inbox-\(UUID().uuidString).json")
@@ -68,6 +70,16 @@ enum ArchiveSmokeCommands {
             print(result.core.dryRunLogDisplayLine)
         }
 
+    }
+
+    private static func makeSmokeUserDefaults(runtime: MusicHubRuntimeEnvironment) -> UserDefaults {
+        let suiteName = runtime.settingsSuiteName
+            ?? "NikoMusicHubE2E.Smoke.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return UserDefaults.standard
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 
     private static func defaultFixtureRoot() -> String {

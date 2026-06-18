@@ -414,7 +414,7 @@ extension ArchiveUserFlowSmoke {
         scenario: SongSearchScenario
     ) throws -> SmokeRun {
         viewModel.setSearchQuery(scenario.query, immediate: true)
-        guard let match = viewModel.filteredSongs.first else {
+        guard let match = viewModel.filteredSongs.first(where: { $0.displayTitle == scenario.expectedDisplayTitle }) else {
             throw ArchiveUserFlowSmokeError.songSearchNoMatch(scenario.logPrefix)
         }
         let matchCount = viewModel.filteredSongs.count

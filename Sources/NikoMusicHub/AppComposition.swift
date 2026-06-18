@@ -97,7 +97,6 @@ struct AppComposition {
     private static func makeUserDefaults(runtime: MusicHubRuntimeEnvironment) -> UserDefaults {
         if let suiteName = runtime.settingsSuiteName,
            let defaults = UserDefaults(suiteName: suiteName) {
-            defaults.removePersistentDomain(forName: suiteName)
             return defaults
         }
         return .standard

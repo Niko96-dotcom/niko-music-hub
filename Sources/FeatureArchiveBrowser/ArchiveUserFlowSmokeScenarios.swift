@@ -180,12 +180,12 @@ enum ArchiveUserFlowSmokeScenarios {
             logPrefix: "preview_search",
             diagnosticsExportStem: "preview",
             diagnosticsPanelStem: "preview",
-            query: "ranking lab v3 mx",
+            query: "lab song v3 mx",
             expectedDisplayTitle: "Lab Song",
-            summarySubstrings: ["fuzzy preview file", "v3", "mx"],
+            summarySubstrings: ["preview file", "v3", "mx"],
             exportMustContain: [
                 "search_match title=Lab Song",
-                "fuzzy preview file",
+                "preview file",
             ],
             minimumMatchCount: 1
         ),

@@ -61,7 +61,14 @@ public enum PreviewProductionMaturity: Int, Sendable, Comparable, CaseIterable {
         (.mix, ["mixdown", "mixed", "mix"]),
         (.prod, ["production", "produce", "prod"]),
         (.demo, ["demmo", "demo"]),
-        (.sessionBounce, ["session bounce", "sess bounce", "sessin bounce", "sbounce", "bounce", "sessin", "sesh"]),
+        (.sessionBounce, [
+            "session bounce", "sessionbounce",
+            "sesh bounce", "seshbounce",
+            "seshy bounce", "seshybounce",
+            "sess bounce", "sessbounce",
+            "sessin bounce", "sessinbounce",
+            "sbounce", "bounce", "sessin", "session", "seshy", "sesh",
+        ]),
         (.sketch, ["sketchyy", "sketchy", "sketch", "rough mix", "rough", "wip", "idea"]),
     ]
 }

@@ -40,6 +40,33 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
+    func testDisplayTitleUsesClearTrustworthyPreviewOverStrongCPRTitle() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/GARDEN OF EDEN SESHY BOUNCE.wav"),
+            fileName: "GARDEN OF EDEN SESHY BOUNCE.wav",
+            folderRole: .mixdown,
+            modifiedAt: .distantPast,
+            detectedRole: .mainMix,
+            confidenceScore: 80
+        )
+        let versions = [
+            ProjectVersion(
+                filePath: URL(fileURLWithPath: "/tmp/x/Winter Last Day Sm Camp.cpr"),
+                fileName: "Winter Last Day Sm Camp.cpr",
+                modifiedAt: .distantPast
+            ),
+        ]
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "Winter Last Day Sm Camp",
+                mainPreview: preview,
+                projectVersions: versions
+            ),
+            "Garden Of Eden"
+        )
+    }
+
     func testDisplayTitlePrefersCPROverWeakFolderAndDemoPreview() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/demo v0.6.mp3"),

@@ -32,7 +32,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var needsFirstRunOnboarding = false
     @Published var collaborators: [Collaborator] = []
     @Published private(set) var showHiddenSongs = false
-    @Published private(set) var sortMode: ArchiveBrowseSortMode = .titleAZ
+    @Published private(set) var sortMode: ArchiveBrowseSortMode = .recentCPR
     @Published private(set) var browseFilter: ArchiveBrowseFilter = []
     @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
     @Published var duplicateSongHints: [DuplicateSongHint] = []
@@ -109,8 +109,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         loadCollaborators()
         refreshFirstRunState()
         restartArchiveRootWatching()
-        let loadedCache = loadCachedIndexIfAvailable()
-        if archiveRootWatcher != nil, !loadedCache, !roots.isEmpty, !runtime.usesFixtureRoot {
+        loadCachedIndexIfAvailable()
+        if archiveRootWatcher != nil, !roots.isEmpty, !runtime.usesFixtureRoot {
             setStatusMessage("Scanning archive...")
             Task { await scan() }
         }
@@ -124,10 +124,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         do {
             let settings = try settingsStore.loadSettings()
             let loadedRoots = settings.archiveRoots.map(\.url)
-            roots = ArchiveRootDisplayPolicy.publicRoots(from: loadedRoots)
-            if roots.map(\.path) != loadedRoots.map(\.path) {
-                persistRoots()
-            }
+            roots = ArchiveRootDisplayPolicy.storedRoots(from: loadedRoots)
         } catch {
             recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")
             diagnostics.log(.error, "Archive settings load failed: \(error)")
@@ -542,7 +539,7 @@ extension ArchiveBrowserViewModel {
         selectedCollaboratorID = nil
         browseFilter = []
         showHiddenSongs = false
-        sortMode = .titleAZ
+        sortMode = .recentCPR
         selectedSong = nil
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []

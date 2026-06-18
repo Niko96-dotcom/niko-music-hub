@@ -11,6 +11,33 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         XCTAssertTrue(candidates.contains { $0.fileName.hasSuffix(".wav") })
     }
 
+    func testDemoFilenameIsDetectedAsMainMix() {
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Hey Summer demo.wav"),
+            .mainMix
+        )
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Garden of Eden demmo.mp3"),
+            .mainMix
+        )
+    }
+
+    func testProductionMaturityFilenameIsDetectedAsMainMix() {
+        [
+            "Garden of Eden seshy.wav",
+            "Garden of Eden sesh bounce.wav",
+            "Garden of Eden sketch.wav",
+            "Garden of Eden prod.wav",
+            "Garden of Eden mix.wav",
+        ].forEach { fileName in
+            XCTAssertEqual(
+                PreviewCandidateDetector.detectedRole(from: fileName),
+                .mainMix,
+                fileName
+            )
+        }
+    }
+
     func testSkipsWAVDurationReadsForCloudStoragePaths() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubPreview-\(UUID().uuidString)", isDirectory: true)

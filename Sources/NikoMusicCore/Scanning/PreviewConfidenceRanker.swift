@@ -178,7 +178,8 @@ public struct PreviewConfidenceRanker: Sendable {
 
         if let projectContext, let anchor = projectContext.anchorCPRVersion, anchor >= 1 {
             let previewVersion = effectiveRankVersion(candidate)
-            if maturity <= .demo {
+            let isExplicitPreV1Preview = PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName) == 0
+            if maturity <= .demo, isExplicitPreV1Preview {
                 score -= 40
                 reasons.append("cpr-anchor:demo-below-project")
             } else if maturity <= .sessionBounce {
