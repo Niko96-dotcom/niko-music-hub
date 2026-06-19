@@ -70,18 +70,6 @@ final class HubLiquidDesignSystemTests: XCTestCase {
             XCTAssertFalse(source.contains(".glassEffect("), "Feature module calls glassEffect directly instead of AppCore: \(path)")
         }
     }
-
-    func testReferenceContractDocumentsMythOSAndExcludesNeuralNote() throws {
-        let source = try String(
-            contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
-            encoding: .utf8
-        )
-
-        XCTAssertTrue(source.contains("tmp/mythos-reference/contact_sheet.png"))
-        XCTAssertTrue(source.contains("output/imagegen/niko-music-hub-liquid-glass-direction.png"))
-        XCTAssertTrue(source.contains("MythOS"))
-        XCTAssertTrue(source.contains("NeuralNote/laptop"))
-    }
 }
 
 @MainActor

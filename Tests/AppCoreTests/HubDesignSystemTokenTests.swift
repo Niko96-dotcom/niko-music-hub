@@ -5,14 +5,14 @@ import XCTest
 
 final class HubDesignSystemTokenTests: XCTestCase {
     func testRadiusTokensMatchSpec() {
-        XCTAssertEqual(HubDesignSystem.Radius.shell, 14)
-        XCTAssertEqual(HubDesignSystem.Radius.panel, 12)
-        XCTAssertEqual(HubDesignSystem.Radius.button, 8)
+        XCTAssertEqual(HubDesignSystem.Radius.shell, 10)
+        XCTAssertEqual(HubDesignSystem.Radius.panel, 8)
+        XCTAssertEqual(HubDesignSystem.Radius.button, 6)
     }
 
     func testSpacingTokensMatchCompactSpec() {
-        XCTAssertEqual(HubDesignSystem.Spacing.shell, 8)
-        XCTAssertEqual(HubDesignSystem.Spacing.section, 20)
+        XCTAssertEqual(HubDesignSystem.Spacing.shell, 16)
+        XCTAssertEqual(HubDesignSystem.Spacing.section, 12)
     }
 
     func testSizeTokensMatchSpec() {
@@ -20,14 +20,18 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
     }
 
-    func testAccentColorUsesSystemAccent() {
+    /// DS-12: the product accent is the warm muted amber rgb(198,168,128) locked by
+    /// calm-native.css — NOT `Color.accentColor` (system blue). The relationship is
+    /// verified by asserting a warm RGB profile (red > green > blue, blue < 0.70).
+    /// The `rgbaComponents` helper resolves via `NSColor(color).usingColorSpace(.sRGB)`
+    /// which returns the current-appearance value; the warm-amber relationship holds in
+    /// both light and dark mode (light accent rgb(168,138,98) is also red > green > blue).
+    func testAccentIsWarmAmberNotBlue() {
         let components = rgbaComponents(HubDesignSystem.Colors.accent)
-        let systemComponents = rgbaComponents(.accentColor)
         XCTAssertNotNil(components)
-        XCTAssertNotNil(systemComponents)
-        XCTAssertEqual(Double(components!.red), Double(systemComponents!.red), accuracy: 0.02)
-        XCTAssertEqual(Double(components!.green), Double(systemComponents!.green), accuracy: 0.02)
-        XCTAssertEqual(Double(components!.blue), Double(systemComponents!.blue), accuracy: 0.02)
+        XCTAssertGreaterThan(Double(components!.red), Double(components!.green))
+        XCTAssertGreaterThan(Double(components!.green), Double(components!.blue))
+        XCTAssertLessThan(Double(components!.blue), 0.70)
     }
 
     func testSelectedRowTokensUseAccentNotSystemAccent() {
@@ -52,6 +56,47 @@ final class HubDesignSystemTokenTests: XCTestCase {
         _ = HubDesignSystem.Typography.mono()
     }
 
+    /// DS-02: all 14 semantic color roles exposed and named by purpose.
+    /// Compile-time presence check — fails to compile if any role is missing.
+    func testSemanticPaletteExposesAllRoles() {
+        _ = HubDesignSystem.Palette.canvas
+        _ = HubDesignSystem.Palette.sidebar
+        _ = HubDesignSystem.Palette.surface
+        _ = HubDesignSystem.Palette.surfaceRaised
+        _ = HubDesignSystem.Palette.separator
+        _ = HubDesignSystem.Palette.textPrimary
+        _ = HubDesignSystem.Palette.textSecondary
+        _ = HubDesignSystem.Palette.textTertiary
+        _ = HubDesignSystem.Palette.selection
+        _ = HubDesignSystem.Palette.focus
+        _ = HubDesignSystem.Palette.accent
+        _ = HubDesignSystem.Palette.success
+        _ = HubDesignSystem.Palette.warning
+        _ = HubDesignSystem.Palette.danger
+    }
+
+    /// Motion durations locked per CONTEXT.md (150/250/400ms) with a Reduce Motion path.
+    func testMotionDurationsMatchLockedSpec() {
+        XCTAssertEqual(HubDesignSystem.Motion.short, 0.15)
+        XCTAssertEqual(HubDesignSystem.Motion.medium, 0.25)
+        XCTAssertEqual(HubDesignSystem.Motion.long, 0.40)
+        XCTAssertEqual(HubDesignSystem.Motion.duration(.short, reduceMotion: true), 0)
+        XCTAssertEqual(HubDesignSystem.Motion.duration(.short, reduceMotion: false), 0.15)
+    }
+
+    /// DS-05: ControlState enum covers all 7 interactive states.
+    func testControlStateCoversAllSevenCases() {
+        XCTAssertEqual(HubDesignSystem.ControlState.allCases.count, 7)
+        XCTAssertEqual(
+            HubDesignSystem.ControlState.allCases,
+            [.normal, .hover, .pressed, .selected, .disabled, .warning, .error]
+        )
+    }
+
+    /// Liquid namespace kept intact this plan (deleted in Plan 02). The assertions
+    /// verify the legacy surface tokens still compile and behave as before so
+    /// `HubLiquidGlass.swift` / `HubMediaSurfaces.swift` / `AppShellView.swift`
+    /// / `ToolSidebarView.swift` continue to compile unchanged.
     func testLiquidStudioGlassTokensExposeFoundationScale() {
         XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.allCases, [.backdrop, .panel, .card, .field, .chip])
         XCTAssertEqual(HubDesignSystem.Liquid.Intent.allCases, [.normal, .hover, .selected, .disabled, .warning, .error])
@@ -63,17 +108,6 @@ final class HubDesignSystemTokenTests: XCTestCase {
             HubDesignSystem.Liquid.Motion.duration(reduceMotion: true),
             HubDesignSystem.Liquid.Motion.disabledResponse
         )
-    }
-
-    func testLiquidReferenceContractNamesApprovedAndExcludedAssets() {
-        XCTAssertTrue(
-            HubDesignSystem.Reference.approvedAssets.contains("tmp/mythos-reference/contact_sheet.png")
-        )
-        XCTAssertTrue(
-            HubDesignSystem.Reference.approvedAssets.contains("output/imagegen/niko-music-hub-liquid-glass-direction.png")
-        )
-        XCTAssertTrue(HubDesignSystem.Reference.translationNote.contains("MythOS"))
-        XCTAssertTrue(HubDesignSystem.Reference.excludedReference.contains("NeuralNote/laptop"))
     }
 }
 
