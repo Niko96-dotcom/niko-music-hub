@@ -9,10 +9,11 @@ final class HubSemanticTokenTests: XCTestCase {
 
     // MARK: DS-02: All semantic token roles exposed
 
-    /// DS-02: all 14 Palette roles + Motion/ControlState/Radius/Spacing/Typography are accessible.
-    /// Compile-time presence check — fails to compile if any role is missing.
+    /// DS-02: all 17 Palette roles + Motion/ControlState/Radius/Spacing/Typography are accessible.
+    /// Compile-time presence check — fails to compile if any role is renamed or removed.
+    /// Every public `Palette` role declared in HubDesignSystem.swift must be listed here.
     func testAllSemanticTokensExposed() {
-        // 14 semantic Palette roles
+        // 17 semantic Palette roles (must match the public roles in HubDesignSystem.Palette)
         _ = HubDesignSystem.Palette.canvas
         _ = HubDesignSystem.Palette.sidebar
         _ = HubDesignSystem.Palette.surface
@@ -22,8 +23,11 @@ final class HubSemanticTokenTests: XCTestCase {
         _ = HubDesignSystem.Palette.textSecondary
         _ = HubDesignSystem.Palette.textTertiary
         _ = HubDesignSystem.Palette.selection
+        _ = HubDesignSystem.Palette.selectionStroke
         _ = HubDesignSystem.Palette.focus
         _ = HubDesignSystem.Palette.accent
+        _ = HubDesignSystem.Palette.accentDeep
+        _ = HubDesignSystem.Palette.accentFill
         _ = HubDesignSystem.Palette.success
         _ = HubDesignSystem.Palette.warning
         _ = HubDesignSystem.Palette.danger
