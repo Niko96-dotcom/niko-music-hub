@@ -5,6 +5,16 @@ final class HubPromotionGateTests: XCTestCase {
     /// it has >=2 real non-domain-specific call sites outside Sources/AppCore/Components/.
     /// Primitives annotated `pendingPromotion` below are exempt because feature surfaces
     /// are UNMIGRATED in Phase 51 (migration happens in Phases 52–56).
+    ///
+    /// The gate is a *two-sided* contract so it cannot rot into a tautology:
+    ///   - promoted primitives (pendingPromotion == false) MUST have >=2 call sites; and
+    ///   - pendingPromotion primitives MUST still have <2 call sites — the moment a
+    ///     migration wave wires up a 2nd call site, this test fails and forces the
+    ///     developer to flip pendingPromotion to false (keeping DS-10 honest).
+    ///
+    /// Call sites are detected on NON-COMMENT lines with word-boundary matching so doc
+    /// comments, string literals, and longer identifiers (e.g. `HubCardView`) are not
+    /// miscounted as call sites.
     func testSharedPrimitivesHaveAtLeastTwoCallSites() throws {
         // Promoted primitives per COMPONENT-MAP.md.
         // Phase 51 call-site reality: features are UNMIGRATED — they still use deprecated
@@ -35,16 +45,26 @@ final class HubPromotionGateTests: XCTestCase {
         let nonComponentFiles = allSourceFiles.filter { !$0.contains("/AppCore/Components/") }
 
         for (name, pendingPromotion) in primitives {
+            // Count files that contain a real call site of `name`: a word-boundary match
+            // on a non-comment line. One count per file (file-presence semantics, matching
+            // the historical metric), but immune to comment/substring false positives.
+            let pattern = try NSRegularExpression(pattern: "\\b\(NSRegularExpression.escapedPattern(for: name))\\b")
             var callSiteCount = 0
             for file in nonComponentFiles {
                 let source = try String(contentsOfFile: file, encoding: .utf8)
-                if source.contains(name) { callSiteCount += 1 }
+                let codeOnly = nonCommentSource(source)
+                let range = NSRange(codeOnly.startIndex..., in: codeOnly)
+                if pattern.firstMatch(in: codeOnly, range: range) != nil {
+                    callSiteCount += 1
+                }
             }
             if pendingPromotion {
-                // pendingPromotion — allowed to have <2 call sites this phase
-                XCTAssertGreaterThanOrEqual(
-                    callSiteCount, 0,
-                    "pendingPromotion primitive \(name) should have >=0 call sites"
+                // Two-sided invariant: a pendingPromotion primitive must STILL be unmigrated.
+                // Once a wave gives it >=2 call sites, this fails and forces the flag flip.
+                XCTAssertLessThan(
+                    callSiteCount, 2,
+                    "\(name) is marked pendingPromotion but now has \(callSiteCount) call sites (>=2) — "
+                        + "it has been migrated; flip its pendingPromotion flag to false (DS-10)."
                 )
             } else {
                 XCTAssertGreaterThanOrEqual(
@@ -54,6 +74,18 @@ final class HubPromotionGateTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// Joins only the non-comment lines of `source`, so identifier searches ignore doc
+    /// comments and `//`/`/* */`-style annotations (the sibling dependency-direction and
+    /// theme-system tests use the same comment-stripping discipline).
+    private func nonCommentSource(_ source: String) -> String {
+        source.components(separatedBy: .newlines)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("/*")
+            }
+            .joined(separator: "\n")
     }
 
     private func swiftFiles(under root: String) throws -> [String] {
