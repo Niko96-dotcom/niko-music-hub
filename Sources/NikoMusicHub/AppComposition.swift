@@ -87,6 +87,9 @@ struct AppComposition {
         ]
         if showsDevTool {
             features.append(DevToolFeature())
+            #if DEBUG
+            features.append(DesignSystemPreviewFeature())
+            #endif
         }
         let registry = try! ToolRegistry(features: features)
 
