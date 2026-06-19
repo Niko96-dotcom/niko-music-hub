@@ -363,7 +363,7 @@ public struct HubWaveformSurface: View {
         case .archivePreview:
             return Color.secondary.opacity(0.58)
         case .meter:
-            return HubDesignSystem.Liquid.Prismatic.cyan.opacity(0.62)
+            return HubDesignSystem.Palette.accent.opacity(0.62)
         case .empty:
             return Color.secondary.opacity(0.30)
         }

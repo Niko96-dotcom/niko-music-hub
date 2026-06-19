@@ -280,20 +280,19 @@ public enum HubDesignSystem {
         case error
     }
 
-    // MARK: - Liquid Studio Glass (LEGACY — kept intact this plan, deprecated in Plan 02, deleted in Phase 57)
+    // MARK: - Liquid Studio Glass (LEGACY — deprecated shims, deleted in Phase 57 — MIG-08/13/14)
     //
-    // The Liquid namespace stays alive so `HubLiquidGlass.swift`, `HubMediaSurfaces.swift`,
-    // `AppShellView.swift`, and `ToolSidebarView.swift` continue to compile unchanged.
-    // Plan 02 introduces deprecated thin-wrapper adapters; Phase 57 deletes the namespace
-    // outright (MIG-08/13/14). DO NOT grow new feature call sites (enforced by the
-    // no-new-call-sites source check landed in a later plan).
+    // Plan 02 deleted the decorative Liquid sub-namespaces (prismatic light, accessibility
+    // fallback struct, depth/shadow, surface fill, stroke) — the deprecated adapters in
+    // `HubLiquidGlass.swift` now delegate to semantic `hubCard()` / `Palette.*`, so those
+    // sub-namespaces have no remaining consumers. `Intent` / `SurfaceLevel` / `Motion` stay
+    // as deprecated shims because feature code still references them via
+    // `HubLiquidSurfaceIntent` (typealias to `ControlState`) and `Liquid.Motion.duration`
+    // (AppShellView / ToolSidebarView, migrated in Phase 52). Phase 57 deletes the namespace
+    // outright. DO NOT grow new feature call sites (enforced by the no-new-call-sites check).
 
-    /// Liquid Studio Glass tokens translated from the local MythOS-style reference.
-    ///
-    /// These values model material, depth, prismatic light, and readable controls for
-    /// Niko Music Hub. They intentionally do not copy MythOS profile-card/butterfly
-    /// content, and the earlier NeuralNote/laptop clip is not a visual reference.
     public enum Liquid {
+        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.Radius.*.")
         public enum SurfaceLevel: CaseIterable, Sendable {
             case backdrop
             case panel
@@ -317,6 +316,7 @@ public enum HubDesignSystem {
             }
         }
 
+        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.ControlState.")
         public enum Intent: CaseIterable, Sendable {
             case normal
             case hover
@@ -326,197 +326,16 @@ public enum HubDesignSystem {
             case error
         }
 
-        public struct AccessibilityFallback: Equatable, Sendable {
-            public let reduceTransparency: Bool
-            public let highContrast: Bool
-
-            public init(
-                reduceTransparency: Bool = false,
-                highContrast: Bool = false
-            ) {
-                self.reduceTransparency = reduceTransparency
-                self.highContrast = highContrast
-            }
-
-            public static let standard = AccessibilityFallback()
-            public static let reduceTransparency = AccessibilityFallback(reduceTransparency: true)
-            public static let highContrast = AccessibilityFallback(highContrast: true)
-        }
-
-        public enum Prismatic {
-            public static let cyan = Color(red: 0.36, green: 0.86, blue: 0.94)
-            public static let violet = Color(red: 0.62, green: 0.48, blue: 0.98)
-            public static let rose = Color(red: 0.96, green: 0.42, blue: 0.70)
-            public static let amber = Color(red: 0.94, green: 0.70, blue: 0.34)
-
-            public static let backdropGlow = [
-                cyan.opacity(0.18),
-                violet.opacity(0.14),
-                rose.opacity(0.10),
-            ]
-        }
-
-        public enum SurfaceFill {
-            public static func tint(
-                for level: SurfaceLevel,
-                intent: Intent = .normal,
-                colorScheme: ColorScheme = .dark,
-                accessibility: AccessibilityFallback = .standard
-            ) -> Color {
-                if accessibility.reduceTransparency {
-                    return opaqueTint(for: level, intent: intent, colorScheme: colorScheme)
-                }
-
-                switch (level, intent) {
-                case (_, .selected):
-                    return Colors.accent.opacity(colorScheme == .dark ? 0.16 : 0.12)
-                case (_, .hover):
-                    return Colors.accentTint
-                case (_, .warning):
-                    return Colors.warning.opacity(colorScheme == .dark ? 0.16 : 0.12)
-                case (_, .error):
-                    return Colors.danger.opacity(colorScheme == .dark ? 0.16 : 0.12)
-                case (_, .disabled):
-                    return Color.primary.opacity(0.025)
-                case (.backdrop, .normal):
-                    return colorScheme == .dark ? Color.white.opacity(0.025) : Color.white.opacity(0.22)
-                case (.panel, .normal):
-                    return colorScheme == .dark ? Color.white.opacity(0.045) : Color.white.opacity(0.34)
-                case (.card, .normal):
-                    return colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.22)
-                case (.field, .normal):
-                    return colorScheme == .dark ? Color.white.opacity(0.030) : Color.white.opacity(0.18)
-                case (.chip, .normal):
-                    return Color.primary.opacity(0.06)
-                }
-            }
-
-            public static func opaqueTint(
-                for level: SurfaceLevel,
-                intent: Intent = .normal,
-                colorScheme: ColorScheme = .dark
-            ) -> Color {
-                switch (level, intent) {
-                case (_, .selected):
-                    return Colors.accent.opacity(colorScheme == .dark ? 0.24 : 0.18)
-                case (_, .warning):
-                    return Colors.warning.opacity(colorScheme == .dark ? 0.24 : 0.18)
-                case (_, .error):
-                    return Colors.danger.opacity(colorScheme == .dark ? 0.24 : 0.18)
-                case (_, .disabled):
-                    return Color.primary.opacity(colorScheme == .dark ? 0.06 : 0.05)
-                case (.backdrop, _):
-                    return colorScheme == .dark
-                        ? Color(red: 0.055, green: 0.060, blue: 0.070)
-                        : Color(nsColor: .windowBackgroundColor)
-                case (.panel, _):
-                    return colorScheme == .dark
-                        ? Color(red: 0.075, green: 0.080, blue: 0.095)
-                        : Color.white.opacity(0.92)
-                case (.card, _), (.field, _), (.chip, _):
-                    return colorScheme == .dark
-                        ? Color(red: 0.095, green: 0.100, blue: 0.115)
-                        : Color.white.opacity(0.86)
-                }
-            }
-        }
-
-        public enum Stroke {
-            public static func color(
-                for intent: Intent = .normal,
-                accessibility: AccessibilityFallback = .standard
-            ) -> Color {
-                if accessibility.highContrast {
-                    switch intent {
-                    case .selected:
-                        return Colors.accent.opacity(0.82)
-                    case .warning:
-                        return Colors.warning.opacity(0.88)
-                    case .error:
-                        return Colors.danger.opacity(0.88)
-                    default:
-                        return Color.primary.opacity(0.36)
-                    }
-                }
-
-                switch intent {
-                case .selected:
-                    return selectedRowStroke
-                case .hover:
-                    return Colors.accent.opacity(0.18)
-                case .warning:
-                    return Colors.warning.opacity(0.42)
-                case .error:
-                    return Colors.danger.opacity(0.44)
-                case .disabled:
-                    return Color.primary.opacity(0.04)
-                case .normal:
-                    return glassStroke
-                }
-            }
-
-            public static func width(
-                for intent: Intent = .normal,
-                accessibility: AccessibilityFallback = .standard
-            ) -> CGFloat {
-                let base: CGFloat = switch intent {
-                case .selected:
-                    1.25
-                case .warning, .error:
-                    1
-                case .hover:
-                    0.75
-                case .normal, .disabled:
-                    0.5
-                }
-
-                return accessibility.highContrast ? base + 0.75 : base
-            }
-        }
-
-        public enum Depth {
-            public static func shadowRadius(
-                for level: SurfaceLevel,
-                intent: Intent = .normal
-            ) -> CGFloat {
-                switch (level, intent) {
-                case (.backdrop, _):
-                    return 0
-                case (.panel, _):
-                    return 8
-                case (.card, .selected):
-                    return 4
-                case (.card, _):
-                    return 2
-                case (.field, _), (.chip, _):
-                    return 1
-                }
-            }
-
-            public static func shadowOpacity(
-                for level: SurfaceLevel,
-                colorScheme: ColorScheme = .dark
-            ) -> Double {
-                switch level {
-                case .backdrop:
-                    return 0
-                case .panel:
-                    return colorScheme == .dark ? 0.15 : 0.04
-                case .card:
-                    return colorScheme == .dark ? 0.06 : 0.02
-                case .field, .chip:
-                    return colorScheme == .dark ? 0.04 : 0.015
-                }
-            }
-        }
-
+        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.Motion.*.")
         public enum Motion {
             public static let quickResponse: Double = 0.15
             public static let standardResponse: Double = 0.22
             public static let disabledResponse: Double = 0
 
+            /// Delegates to the semantic `HubDesignSystem.Motion` short tier (150ms).
+            /// Returns 0 when Reduce Motion is on (A11Y-07).
             public static func duration(reduceMotion: Bool) -> Double {
-                reduceMotion ? disabledResponse : quickResponse
+                HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
             }
         }
     }

@@ -8,27 +8,29 @@ final class HubLiquidDesignSystemTests: XCTestCase {
     func testAppCoreDefinesLiquidPrimitiveNames() throws {
         let appCoreSource = try combinedSource(in: [
             "Sources/AppCore/Components/HubDesignSystem.swift",
+            "Sources/AppCore/Components/HubCard.swift",
             "Sources/AppCore/Components/HubLiquidGlass.swift",
             "Sources/AppCore/Components/HubGlassChrome.swift",
         ])
 
         [
+            // Deprecated adapter types still present (thin wrappers delegating to semantic hubCard).
             "public enum Liquid",
-            "public struct HubLiquidBackdrop",
-            "public struct HubLiquidPanel",
-            "public struct HubLiquidCard",
-            "public struct HubGlassField",
-            "public struct HubGlassChip",
-            "func hubLiquidPanel",
+            "public typealias HubLiquidSurfaceIntent",
+            "@available(*, deprecated",
+            "HubLiquidBackdrop",
+            "HubLiquidPanel",
+            "HubLiquidCard",
+            "HubGlassField",
             "func hubLiquidCard",
             "func hubGlassField",
-            "colorSchemeContrast",
-            "accessibilityReduceMotion",
-            "highContrast: colorSchemeContrast == .increased",
-            "if #available(macOS 26.0, *), !accessibility.reduceTransparency",
-            ".interactive(interactive && !reduceMotion)",
+            // Semantic surface path (DS-08: no .glassEffect in HubCard).
+            "public struct HubCard",
+            "func hubCard",
+            "Palette.surface",
+            "Palette.separator",
         ].forEach { required in
-            XCTAssertTrue(appCoreSource.contains(required), "Missing AppCore Liquid source: \(required)")
+            XCTAssertTrue(appCoreSource.contains(required), "Missing AppCore design-system source: \(required)")
         }
     }
 
@@ -37,25 +39,6 @@ final class HubLiquidDesignSystemTests: XCTestCase {
         XCTAssertNoThrow(try hostView(Text("Panel").padding().hubLiquidPanel(), size: CGSize(width: 240, height: 80)))
         XCTAssertNoThrow(try hostView(Text("Card").padding().hubLiquidCard(intent: .selected), size: CGSize(width: 240, height: 80)))
         XCTAssertNoThrow(try hostView(Text("Field").padding(.horizontal, 8).hubGlassField(), size: CGSize(width: 240, height: 48)))
-    }
-
-    func testLiquidAccessibilityFallbackTokensStrengthenReadableSurfaces() {
-        let reduceTransparency = HubDesignSystem.Liquid.AccessibilityFallback.reduceTransparency
-        let highContrast = HubDesignSystem.Liquid.AccessibilityFallback.highContrast
-
-        XCTAssertTrue(reduceTransparency.reduceTransparency)
-        XCTAssertTrue(highContrast.highContrast)
-        XCTAssertGreaterThan(
-            HubDesignSystem.Liquid.Stroke.width(for: .selected, accessibility: highContrast),
-            HubDesignSystem.Liquid.Stroke.width(for: .selected)
-        )
-        XCTAssertNotNil(NSColor(
-            HubDesignSystem.Liquid.SurfaceFill.opaqueTint(
-                for: .card,
-                intent: .warning,
-                colorScheme: .dark
-            )
-        ).usingColorSpace(.sRGB))
     }
 
     func testFeatureModulesDoNotDeclareLocalLiquidGlassSystem() throws {

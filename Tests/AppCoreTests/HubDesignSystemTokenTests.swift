@@ -93,17 +93,17 @@ final class HubDesignSystemTokenTests: XCTestCase {
         )
     }
 
-    /// Liquid namespace kept intact this plan (deleted in Plan 02). The assertions
-    /// verify the legacy surface tokens still compile and behave as before so
-    /// `HubLiquidGlass.swift` / `HubMediaSurfaces.swift` / `AppShellView.swift`
-    /// / `ToolSidebarView.swift` continue to compile unchanged.
+    /// Liquid namespace deprecated in Plan 02 (deleted in Phase 57). Only
+    /// `Intent` / `SurfaceLevel` / `Motion` remain as deprecated shims — the decorative
+    /// sub-namespaces (Prismatic / AccessibilityFallback / Depth / SurfaceFill / Stroke)
+    /// were deleted because the deprecated adapters now delegate to semantic `hubCard()` /
+    /// `Palette.*`. These assertions verify the surviving shims still compile so
+    /// `HubLiquidGlass.swift` / `AppShellView.swift` / `ToolSidebarView.swift` keep working.
     func testLiquidStudioGlassTokensExposeFoundationScale() {
         XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.allCases, [.backdrop, .panel, .card, .field, .chip])
         XCTAssertEqual(HubDesignSystem.Liquid.Intent.allCases, [.normal, .hover, .selected, .disabled, .warning, .error])
         XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.panel.cornerRadius, HubDesignSystem.Radius.panel)
         XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.chip.cornerRadius, HubDesignSystem.Radius.chip)
-        XCTAssertGreaterThan(HubDesignSystem.Liquid.Depth.shadowRadius(for: .panel), 0)
-        XCTAssertGreaterThan(HubDesignSystem.Liquid.Stroke.width(for: .selected), 1)
         XCTAssertEqual(
             HubDesignSystem.Liquid.Motion.duration(reduceMotion: true),
             HubDesignSystem.Liquid.Motion.disabledResponse
