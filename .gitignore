@@ -6,5 +6,6 @@ dist/
 .ai/runs/
 .ai/ui-review-*.png
 .ai/ui-review-tabs/
+tmp/
 *.xcresult
 *.log
