@@ -265,18 +265,40 @@ final class HubSemanticTokenTests: XCTestCase {
             contentsOfFile: "Sources/AppCore/Components/HubGlassChrome.swift",
             encoding: .utf8
         )
-        // HubSidebarNavRow body should reference Palette.selection for the selected fill
+        // Strip comment lines first: the DS-13 doc comment literally spells out
+        // "Palette.selection / Palette.selectionStroke" and "accent", so searching the raw
+        // source would let the *description* of the invariant satisfy the test even if the
+        // actual code were removed. Assert against code lines only.
+        let nonCommentSource = source.components(separatedBy: .newlines)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("/*")
+            }
+            .joined(separator: "\n")
+
+        // WR-04: assert the actual selected-fill CODE, not a doc-comment mention. Match the
+        // concrete `.fill(...Palette.selection)` form so deleting the fill (even if the
+        // comment survives) fails the test. `.selection` is matched specifically — this does
+        // not accept `.selectionStroke` as a substitute for the fill.
         XCTAssertTrue(
-            source.contains("Palette.selection"),
-            "HubGlassChrome.swift does not reference Palette.selection for HubSidebarNavRow (DS-13)"
+            nonCommentSource.contains(".fill(HubDesignSystem.Palette.selection)"),
+            "HubGlassChrome.swift no longer fills HubSidebarNavRow's selected state with "
+                + "Palette.selection (DS-13 — the low-chroma neutral selection fill)."
         )
-        // Sanity: verify Palette.accent is not used as the selection fill in HubSidebarNavRow.
-        // The accent CAN appear elsewhere (e.g. archive chip colors), but not as the sidebar
-        // selection fill. Since HubGlassChrome.swift only contains shell/nav primitives (not
-        // archive chips), any Palette.accent reference here would be a DS-13 violation.
-        XCTAssertFalse(
-            source.contains("Palette.accent"),
-            "HubGlassChrome.swift uses Palette.accent for a navigation surface (DS-13 violation — accent is reserved)"
+        // WR-05: forbid Palette.accent as a fill on this nav surface WITHOUT tripping on the
+        // legitimate accent-prefixed tokens. `Palette.accent` is a prefix of accentDeep /
+        // accentFill / accentTint, which DS-13 permits for strokes/borders — a future valid
+        // `Palette.accentDeep` stroke must NOT fail here. Use a word-boundary match anchored
+        // to `Palette.accent` not followed by an identifier character.
+        let accentRegex = try NSRegularExpression(pattern: "Palette\\.accent(?![A-Za-z])")
+        let accentMatches = accentRegex.numberOfMatches(
+            in: nonCommentSource,
+            range: NSRange(nonCommentSource.startIndex..., in: nonCommentSource)
+        )
+        XCTAssertEqual(
+            accentMatches, 0,
+            "HubGlassChrome.swift uses Palette.accent on a navigation surface (DS-13 violation — "
+                + "accent is reserved for primary action; accentDeep/accentFill strokes are allowed)."
         )
     }
 
