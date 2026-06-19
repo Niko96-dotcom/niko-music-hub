@@ -1,3 +1,5 @@
+> **⚠ SUPERSEDED (v1.9 Calm Workspace Refactor — 2026-06-19):** This document describes the v1.6 Liquid Studio Glass direction and is preserved as a historical record only. The current direction is the v1.9 Calm Workspace Refactor, contracted in `.planning/phases/50-discovery-sketch-and-ui-spec/UI-SPEC.md`. Active project guidance (`.planning/PROJECT.md`, `AGENTS.md`) does not treat this document as current direction (MIG-11). Do not implement anything from this document.
+
 # Niko Music Hub -- Full UI Redesign Plan
 
 > **Purpose**: A handoff-ready specification that any engineer or AI model can follow to
