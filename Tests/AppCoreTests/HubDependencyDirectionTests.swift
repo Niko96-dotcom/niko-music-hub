@@ -25,17 +25,29 @@ final class HubDependencyDirectionTests: XCTestCase {
         }
     }
 
+    /// DS-04: no Components file may reference a domain model type by name. Comment lines are
+    /// stripped first (matching `testNoSecondThemeSystemOrThemeManagerExists` below) so a valid
+    /// doc comment such as "renders a Song row's metadata" cannot trip the build as a false
+    /// positive — only forbidden type names in actual code are violations.
     func testAppCoreComponentsContainNoDomainModelTypeNames() throws {
         let componentFiles = try swiftFiles(under: "Sources/AppCore/Components")
         let forbiddenTypeNames = ["Song", "Job", "OutputInboxItem", "StemOutput"]
         for path in componentFiles {
             let source = try String(contentsOfFile: path, encoding: .utf8)
+            // Strip comment lines before searching — doc comments may legitimately mention a
+            // domain concept (e.g. "a Song row") without importing or using the type.
+            let nonCommentSource = source.components(separatedBy: .newlines)
+                .filter { line in
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("/*")
+                }
+                .joined(separator: "\n")
             for forbidden in forbiddenTypeNames {
                 // Word-boundary check to avoid false positives (e.g. "Song" inside "Songbird")
                 let regex = try NSRegularExpression(pattern: "\\b\(forbidden)\\b")
                 let matches = regex.matches(
-                    in: source,
-                    range: NSRange(source.startIndex..., in: source)
+                    in: nonCommentSource,
+                    range: NSRange(nonCommentSource.startIndex..., in: nonCommentSource)
                 )
                 XCTAssertTrue(
                     matches.isEmpty,
