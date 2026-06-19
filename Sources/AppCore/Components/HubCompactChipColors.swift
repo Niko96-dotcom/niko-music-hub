@@ -26,20 +26,20 @@ public struct HubCompactChipColors: Sendable {
     }
 
     public static let `default` = HubCompactChipColors(
-        selectedFill: HubDesignSystem.Colors.accent,
-        selectedForeground: .white,
-        selectedStroke: HubDesignSystem.Colors.accent,
-        unselectedForeground: .secondary,
-        unselectedFill: Color.primary.opacity(0.06),
-        unselectedStroke: Color.primary.opacity(0.12)
+        selectedFill: HubDesignSystem.Palette.accent,
+        selectedForeground: HubDesignSystem.Palette.textPrimary,
+        selectedStroke: HubDesignSystem.Palette.accentDeep,
+        unselectedForeground: HubDesignSystem.Palette.textSecondary,
+        unselectedFill: HubDesignSystem.Palette.selection,
+        unselectedStroke: HubDesignSystem.Palette.selectionStroke
     )
 
     public static let archive = HubCompactChipColors(
-        selectedFill: HubDesignSystem.Colors.accent,
-        selectedForeground: .white,
-        selectedStroke: HubDesignSystem.Colors.accent,
-        unselectedForeground: .secondary,
-        unselectedFill: Color.primary.opacity(0.06),
-        unselectedStroke: Color.primary.opacity(0.12)
+        selectedFill: HubDesignSystem.Palette.accent,
+        selectedForeground: HubDesignSystem.Palette.textPrimary,
+        selectedStroke: HubDesignSystem.Palette.accentDeep,
+        unselectedForeground: HubDesignSystem.Palette.textSecondary,
+        unselectedFill: HubDesignSystem.Palette.selection,
+        unselectedStroke: HubDesignSystem.Palette.selectionStroke
     )
 }

@@ -60,9 +60,9 @@ public struct HubTransportBar: View {
         if showsSurface {
             content
                 .padding(style == .compact ? 6 : 10)
-                .hubLiquidCard(
+                .hubCard(
                     cornerRadius: HubDesignSystem.Radius.row,
-                    intent: isEnabled ? .normal : .disabled,
+                    state: isEnabled ? .normal : .disabled,
                     interactive: isEnabled
                 )
         } else {
@@ -160,7 +160,7 @@ public struct HubTransportBar: View {
                     let progress = clamped(markerProgress, lower: 0, upper: 1)
                     let x = CGFloat(progress) * geometry.size.width
                     Rectangle()
-                        .fill(HubDesignSystem.Colors.accent.opacity(0.85))
+                        .fill(HubDesignSystem.Palette.accent.opacity(0.85))
                         .frame(width: 2, height: geometry.size.height + 4)
                         .offset(x: max(0, x - 1))
                         .allowsHitTesting(false)
@@ -182,7 +182,7 @@ public struct HubTransportBar: View {
                     transportButtonIcon(systemImage)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(HubDesignSystem.Colors.accent)
+                .tint(HubDesignSystem.Palette.accent)
             } else {
                 Button(action: action) {
                     transportButtonIcon(systemImage)
@@ -263,9 +263,9 @@ public struct HubWaveformSurface: View {
         if showsSurface {
             waveformContent
                 .padding(variant == .meter ? 6 : 8)
-                .hubLiquidCard(
+                .hubCard(
                     cornerRadius: HubDesignSystem.Radius.row,
-                    intent: isEnabled ? .normal : .disabled,
+                    state: isEnabled ? .normal : .disabled,
                     interactive: isEnabled
                 )
         } else {
@@ -286,7 +286,7 @@ public struct HubWaveformSurface: View {
 
                     if clampedProgress > 0 {
                         Rectangle()
-                            .fill(HubDesignSystem.Colors.accent.opacity(0.9))
+                            .fill(HubDesignSystem.Palette.accent.opacity(0.9))
                             .frame(width: 2)
                             .offset(x: clampedProgress * geometry.size.width)
                     }
@@ -353,7 +353,7 @@ public struct HubWaveformSurface: View {
             let played = Double(index) / Double(values.count) <= Double(clampedProgress)
             context.fill(
                 Path(roundedRect: rect, cornerSize: CGSize(width: 1.5, height: 1.5)),
-                with: .color(played ? HubDesignSystem.Colors.accent : barColor)
+                with: .color(played ? HubDesignSystem.Palette.accent : barColor)
             )
         }
     }

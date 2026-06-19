@@ -21,28 +21,19 @@ final class HubDesignComponentsTests: XCTestCase {
         }
     }
 
-    func testHubGlassChromeKeepsNativeGlassAndFallbackPaths() throws {
-        let chromeSource = try String(
-            contentsOfFile: "Sources/AppCore/Components/HubGlassChrome.swift",
+    func testSemanticCardPathHasNoGlassEffectAndDeprecatedAdaptersMarked() throws {
+        let cardSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubCard.swift",
             encoding: .utf8
         )
         let liquidSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubLiquidGlass.swift",
             encoding: .utf8
         )
-        let combinedSource = chromeSource + "\n" + liquidSource
-
-        [
-            "#available(macOS 26.0, *)",
-            ".glassEffect(",
-            "GlassEffectContainer",
-            ".interactive(",
-            "HubGlassChip",
-            "HubLiquidPanel",
-            "HubLiquidCard",
-        ].forEach {
-            XCTAssertTrue(combinedSource.contains($0), "Missing Liquid Glass source: \($0)")
-        }
+        // DS-08: the semantic card path has NO glass-effect modifier.
+        XCTAssertFalse(cardSource.contains(".glassEffect("), "Semantic HubCard must not use glass-effect modifier (DS-08)")
+        // The deprecated Liquid adapters are marked @available(*, deprecated).
+        XCTAssertTrue(liquidSource.contains("@available(*, deprecated"), "Liquid adapters must be deprecated")
     }
 
     func testHubButtonsUseNativeGlassStylesWhenAvailable() throws {
