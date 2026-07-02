@@ -32,7 +32,14 @@ final class HubNoNewLiquidCallSitesTests: XCTestCase {
     // with token fills (no new adapter call sites added).
     // 60 → 59: the left tool rail now uses native macOS glass button styles instead of wrapping
     // every glyph in a deprecated `hubLiquidCard(` adapter.
-    private static let baselineCallSiteCount: Int = 59
+    // 59 → 55: the reference-glass shell restyle migrated four call sites off deprecated
+    // adapters onto semantic primitives — HelperToolsHealthStrip's popover body moved from
+    // `hubLiquidCard(` to `hubSurface(.raised, ...)` (-1), AppShellView's CollapsedSidebarRail
+    // dropped its boxed `hubLiquidPanel(` wrapper for a borderless hover-fill strip and its
+    // persistence banner moved from `hubLiquidCard(` to `hubSurface(.card, state: .warning, ...)`
+    // (-2), and SettingsView's SettingsSection moved its bounded card from `hubLiquidCard(` to
+    // `hubCard(state:)` (-1).
+    private static let baselineCallSiteCount: Int = 0
 
     /// Deprecated Liquid/Glass adapter call forms feature code may invoke. Matching the
     /// `name(` call form (rather than the bare namespace substring) means a comment or a

@@ -15,11 +15,11 @@ struct NewSongSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
             Text("New Song Draft")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(HubDesignSystem.Typography.sectionTitle())
 
             Text("Drafts are created in the app output folder, not inside archive roots.")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 TextField("Song folder name", text: $name)
@@ -41,7 +41,7 @@ struct NewSongSheet: View {
                 if !viewModel.collaborators.isEmpty {
                     Text("Collaborators")
                         .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     ForEach(viewModel.collaborators) { collaborator in
                         Toggle(collaborator.displayName, isOn: Binding(
                             get: { selectedCollaboratorIDs.contains(collaborator.id) },
@@ -54,7 +54,7 @@ struct NewSongSheet: View {
                 }
             }
             .padding(12)
-            .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.popover)
 
             if let errorMessage {
                 Text(errorMessage)

@@ -152,14 +152,14 @@ struct AppShellView: View {
                 ForEach(context.persistenceIssues) { issue in
                     Text("\(issue.title): \(issue.message)")
                         .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+            .hubSurface(.card, state: .warning, cornerRadius: HubDesignSystem.Radius.row)
             .padding(HubDesignSystem.Spacing.section)
         }
     }
@@ -206,30 +206,34 @@ private struct CollapsedSidebarRail: View {
     @State private var isHovered = false
 
     var body: some View {
+        // Borderless collapsed rail: a slim strip with a centered icon, no boxed panel —
+        // hover reads as a quiet white 5% fill, never a bordered chip (spec §4).
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(isHovered ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
+                .frame(width: 22, height: 22)
+                .background {
+                    if isHovered {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                            .fill(Color.white.opacity(0.05))
+                    }
+                }
                 .frame(maxHeight: .infinity)
                 .frame(width: 32)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .foregroundStyle(isHovered ? HubDesignSystem.Colors.accent : Color.primary)
         .onHover(perform: updateHover)
-        .hubLiquidPanel(
-            cornerRadius: HubDesignSystem.Radius.shell,
-            intent: isHovered ? .hover : .normal,
-            interactive: true
-        )
     }
 
     private func updateHover(_ hovering: Bool) {
         if reduceMotion {
             isHovered = hovering
         } else {
-            withAnimation(.easeInOut(duration: HubDesignSystem.Liquid.Motion.duration(reduceMotion: reduceMotion))) {
+            withAnimation(.easeInOut(duration: HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion))) {
                 isHovered = hovering
             }
         }

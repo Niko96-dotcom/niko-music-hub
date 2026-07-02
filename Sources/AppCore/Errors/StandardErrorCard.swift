@@ -21,7 +21,7 @@ public struct StandardErrorCard: View {
 
             Text(card.body)
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
@@ -31,7 +31,7 @@ public struct StandardErrorCard: View {
             }
         }
         .padding(14)
-        .hubGlassCard(cornerRadius: HubDesignSystem.Radius.card)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var labelColor: Color {

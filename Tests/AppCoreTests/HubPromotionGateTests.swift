@@ -32,7 +32,7 @@ final class HubPromotionGateTests: XCTestCase {
             // are UNMIGRATED (Phases 52–56 replace the deprecated adapters with direct refs).
             ("HubSectionDivider",   true),  // pendingPromotion — 0 call sites (features use hubLiquidCard)
             ("StatusDot",           true),  // pendingPromotion — 1 call site (Output Inbox unmigrated)
-            ("ToolHeaderBlock",     true),  // pendingPromotion — 0 call sites outside Components
+            ("ToolHeaderBlock",     false), // promoted 2026-07 — all five tool pages share the header block
             ("OutputRow",           true),  // pendingPromotion — 0 call sites outside Components
             ("HubShellBackground",  true),  // pendingPromotion — 1 call site (AppShellView:102); Phase 52 adds more
             ("HubSidebarNavRow",    true),  // pendingPromotion — 0 call sites (ToolSidebarView unmigrated → Phase 52)

@@ -28,6 +28,10 @@ extension ProjectWorkflowStatus {
     }
 }
 
+/// Soft status chip (reference: `color.opacity(0.16)` fill + colored text, never a saturated
+/// block, never a stroke). Status color only carries meaning when a real status is set — the
+/// "No Status" case is rendered as quiet `textTertiary` text at the call site instead of this
+/// pill (see `SongCardView`).
 struct ArchiveWorkflowStatusPill: View {
     let status: ProjectWorkflowStatus?
     var compact = false
@@ -47,23 +51,15 @@ struct ArchiveWorkflowStatusPill: View {
             Capsule(style: .continuous)
                 .fill(fill)
         )
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(stroke)
-        )
         .help(status?.displayTitle ?? "No status")
         .accessibilityLabel(status?.displayTitle ?? "No status")
     }
 
     private var foreground: Color {
-        status?.archiveTint ?? .secondary
+        status?.archiveTint ?? HubDesignSystem.Palette.textSecondary
     }
 
     private var fill: Color {
-        (status?.archiveTint ?? Color.primary).opacity(status == nil ? 0.06 : 0.14)
-    }
-
-    private var stroke: Color {
-        (status?.archiveTint ?? Color.primary).opacity(status == nil ? 0.12 : 0.24)
+        (status?.archiveTint ?? HubDesignSystem.Palette.textPrimary).opacity(status == nil ? 0.06 : 0.16)
     }
 }

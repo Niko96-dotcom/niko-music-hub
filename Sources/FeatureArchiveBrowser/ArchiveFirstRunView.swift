@@ -18,14 +18,14 @@ struct ArchiveFirstRunView: View {
                 )
 
             Text("Welcome to your Cubase archive")
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .font(HubDesignSystem.Typography.screenTitle())
                 .multilineTextAlignment(.center)
 
             Text(
                 "Choose the folder that contains your song projects. The hub scans read-only — your files on disk are never renamed or moved."
             )
             .font(HubDesignSystem.Typography.body())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -42,7 +42,7 @@ struct ArchiveFirstRunView: View {
         .padding(28)
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.shell)
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        .hubSurface(.raised, cornerRadius: HubDesignSystem.Radius.popover)
+        .shadow(color: HubDesignSystem.Elevation.high.color, radius: HubDesignSystem.Elevation.high.radius, y: HubDesignSystem.Elevation.high.y)
     }
 }

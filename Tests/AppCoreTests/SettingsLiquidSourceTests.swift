@@ -5,9 +5,9 @@ final class SettingsLiquidSourceTests: XCTestCase {
         let source = try settingsSource()
 
         [
-            "hubGlassGroup",
-            "hubLiquidCard",
-            "hubGlassField",
+            "hubCard",
+            "hubSurface(.field)",
+            "HubSectionHeader",
             "sectionIntent",
             "settingsLoadErrorBanner",
             "saveErrorBanner",

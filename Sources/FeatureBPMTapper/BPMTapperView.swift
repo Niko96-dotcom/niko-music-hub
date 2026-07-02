@@ -48,18 +48,13 @@ public struct BPMTapperView: View {
     }
 
     private var header: some View {
-        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("BPM Tapper")
-                .font(HubDesignSystem.Typography.screenTitle())
-
-            Text(viewModel.statusText)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(statusColor)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: 560)
+        ToolHeaderBlock(
+            title: "BPM Tapper",
+            systemImage: "metronome",
+            statusText: viewModel.statusText,
+            statusColor: statusColor
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var tapWorkflow: some View {
@@ -81,24 +76,24 @@ public struct BPMTapperView: View {
                     .accessibilityLabel("Current BPM")
 
                 Text("BPM")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.tertiary)
+                    .font(HubDesignSystem.Typography.body())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
 
             Text(progressText)
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
 
             if let originalContextText {
                 Text(originalContextText)
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
         }
-        .padding(14)
+        .padding(HubDesignSystem.Spacing.cardPadding)
         .frame(minHeight: 94)
         .frame(maxWidth: .infinity)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: viewModel.displayedBPM == nil ? .disabled : .selected)
+        .hubCard(state: viewModel.displayedBPM == nil ? .disabled : .selected)
     }
 
     private var adjustmentPicker: some View {
@@ -111,26 +106,23 @@ public struct BPMTapperView: View {
                 .tag(BPMAdjustment.doubleTime)
         }
         .pickerStyle(.segmented)
-        .padding(8)
         .frame(maxWidth: 440)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: viewModel.displayedBPM == nil ? .disabled : .normal)
         .disabled(viewModel.displayedBPM == nil)
     }
 
     private var tapSurface: some View {
         VStack(spacing: 8) {
             Text("Tap Tempo")
-                .font(.system(size: 18, weight: .semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
 
             Text("Tap or press Space")
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
-        .padding(16)
+        .padding(HubDesignSystem.Spacing.cardPadding)
         .frame(maxWidth: 560, minHeight: 160)
-        .hubLiquidCard(
-            cornerRadius: HubDesignSystem.Radius.card,
-            intent: tapSurfaceFocused ? .selected : .normal,
+        .hubCard(
+            state: tapSurfaceFocused ? .selected : .normal,
             interactive: true
         )
         .scaleEffect(tapSurfacePressed ? 0.98 : 1)
@@ -193,8 +185,6 @@ public struct BPMTapperView: View {
 
             inlineMessages
         }
-        .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var inlineMessages: some View {
@@ -239,12 +229,8 @@ public struct BPMTapperView: View {
 
     private var historySection: some View {
         VStack(spacing: HubDesignSystem.Spacing.panel) {
-            Divider()
-                .overlay(HubDesignSystem.Colors.separator)
-
-            Text("Recent Tempos")
-                .font(HubDesignSystem.Typography.sectionTitle())
-                .frame(maxWidth: .infinity)
+            HubSectionHeader("Recent Tempos", count: viewModel.historyEntries.count)
+                .frame(maxWidth: 560)
 
             if viewModel.historyEntries.isEmpty {
                 VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
@@ -254,15 +240,14 @@ public struct BPMTapperView: View {
 
                     Text("Saved BPM results will appear here with their time and adjustment mode. Tap a tempo, then Save BPM to keep it for this session.")
                         .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: 560)
-                .padding(14)
-                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: .disabled)
+                .padding(HubDesignSystem.Spacing.cardPadding)
             } else {
-                VStack(spacing: HubDesignSystem.Spacing.cardGap) {
+                VStack(spacing: 2) {
                     ForEach(viewModel.historyEntries) { entry in
                         historyRow(entry)
                     }
@@ -290,17 +275,17 @@ public struct BPMTapperView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBPM(entry.bpm))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(HubDesignSystem.Typography.sectionTitle())
                         .monospacedDigit()
 
                     Text("BPM")
                         .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
 
                 Text(historyContext(for: entry))
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(1)
             }
 
@@ -325,7 +310,6 @@ public struct BPMTapperView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func animateTapPress() {

@@ -111,7 +111,7 @@ struct SettingsView: View {
                 ) {
                     Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
                         .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HubLabeledButton(
                         icon: "lock.shield",
@@ -157,13 +157,12 @@ struct SettingsView: View {
                     }
                     Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")
                         .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 saveErrorBanner
             }
-            .hubGlassGroup(spacing: HubDesignSystem.Spacing.section)
             .hubToolContentPadding()
             .frame(maxWidth: HubToolLayout.maxContentWidth)
             .frame(maxWidth: .infinity)
@@ -178,7 +177,7 @@ struct SettingsView: View {
         if archiveViewModel.roots.isEmpty {
             Text("No archive roots yet. Add the folder that contains your Cubase song folders.")
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             ForEach(archiveViewModel.roots, id: \.path) { root in
@@ -198,9 +197,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Text("Settings")
                 .font(HubDesignSystem.Typography.screenTitle())
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text("Hub-wide preferences for startup, output, and tools.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -214,8 +214,8 @@ struct SettingsView: View {
                 .foregroundStyle(HubDesignSystem.Colors.warning)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+                .padding(HubDesignSystem.Spacing.section)
+                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
         }
     }
 
@@ -227,8 +227,8 @@ struct SettingsView: View {
                 .foregroundStyle(HubDesignSystem.Colors.danger)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .error)
+                .padding(HubDesignSystem.Spacing.section)
+                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
         }
     }
 
@@ -246,14 +246,16 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(HubDesignSystem.Typography.caption().weight(.medium))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(path)
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .lineLimit(2)
                 .truncationMode(.middle)
         }
-        .padding(10)
-        .hubGlassField(minHeight: 48)
+        .padding(HubDesignSystem.Spacing.controlGap)
+        .hubSurface(.field)
+        .frame(minHeight: 48)
     }
 
     private func archiveRootRow(_ root: URL) -> some View {
@@ -265,9 +267,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
                     .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 Text(root.path)
                     .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -283,7 +286,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func helperPathRow(
@@ -296,33 +299,35 @@ struct SettingsView: View {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 Text(url?.path ?? "Auto-detect")
                     .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .trailing)
 
-                Button("Choose…") {
+                HubLabeledButton(
+                    icon: "ellipsis",
+                    label: "Choose…",
+                    style: .ghost,
+                    isEnabled: settingsLoadError == nil
+                ) {
                     guard let chosen = context.fileActions.chooseExecutable(prompt: prompt) else { return }
                     onSet(chosen)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(settingsLoadError != nil)
 
                 if url != nil {
-                    Button {
+                    HubIconButton(
+                        systemImage: "xmark",
+                        accessibilityLabel: "Use auto-detect for \(label)",
+                        help: "Use auto-detect for \(label)",
+                        isEnabled: settingsLoadError == nil
+                    ) {
                         onSet(nil)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
-                    .help("Use auto-detect for \(label)")
-                    .disabled(settingsLoadError != nil)
                 }
             }
             .padding(8)
-            .hubGlassField(minHeight: 40)
+            .hubSurface(.field)
+            .frame(minHeight: 40)
         }
     }
 
@@ -332,8 +337,8 @@ struct SettingsView: View {
             .foregroundStyle(HubDesignSystem.Colors.warning)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+            .padding(HubDesignSystem.Spacing.controlGap)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
     private func channelModeLabel(_ mode: AudioChannelMode) -> String {
@@ -432,40 +437,29 @@ private struct SettingsSection<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
-            Text(title)
-                .font(HubDesignSystem.Typography.sectionTitle())
-                .foregroundStyle(importance == .low ? .secondary : .primary)
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            HubSectionHeader(title)
 
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 content
             }
-            .padding(sectionPadding)
+            .padding(HubDesignSystem.Spacing.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: sectionIntent)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.card, state: sectionIntent)
 
             if let footer {
                 Text(footer)
                     .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private var sectionIntent: HubLiquidSurfaceIntent {
+    private var sectionIntent: HubDesignSystem.ControlState {
         switch importance {
         case .high, .medium, .low:
             return .normal
-        }
-    }
-
-    private var sectionPadding: CGFloat {
-        switch importance {
-        case .high, .medium:
-            return 12
-        case .low:
-            return 10
         }
     }
 }

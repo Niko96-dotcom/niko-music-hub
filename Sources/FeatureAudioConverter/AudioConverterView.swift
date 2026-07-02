@@ -47,16 +47,13 @@ public struct AudioConverterView: View {
     }
 
     private var header: some View {
-        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("WAV Converter")
-                .font(HubDesignSystem.Typography.screenTitle())
-
-            Text(headerStatus)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            ToolHeaderBlock(
+                title: "WAV Converter",
+                systemImage: "waveform.badge.plus",
+                statusText: headerStatus,
+                statusColor: HubDesignSystem.Palette.textSecondary
+            )
 
             if viewModel.isConverting {
                 ProgressView(value: viewModel.overallProgress)
@@ -64,21 +61,34 @@ public struct AudioConverterView: View {
                     .tint(HubDesignSystem.Colors.accent)
             }
         }
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
     private var intakeSurface: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Image(systemName: "arrow.down.doc")
-                .font(.system(size: 28))
-                .foregroundStyle(.quaternary)
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [HubDesignSystem.Palette.accent.opacity(0.16), HubDesignSystem.Palette.accent.opacity(0)],
+                            center: .center,
+                            startRadius: 2,
+                            endRadius: 58
+                        )
+                    )
+                    .frame(width: 96, height: 96)
+                Image(systemName: "arrow.down.doc")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(HubDesignSystem.Palette.accent)
+            }
 
             Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
-                .font(.system(size: 15, weight: .semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
 
             Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -92,18 +102,11 @@ public struct AudioConverterView: View {
         }
         .padding(24)
         .frame(maxWidth: HubToolLayout.maxContentWidth, minHeight: 180)
-        .hubLiquidCard(
+        .hubCard(
             cornerRadius: HubDesignSystem.Radius.card,
-            intent: dropTargeted ? .selected : .normal,
+            state: dropTargeted ? .selected : .normal,
             interactive: true
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card, style: .continuous)
-                .stroke(
-                    dropTargeted ? HubDesignSystem.Colors.accent : HubDesignSystem.Colors.separator,
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                )
-        }
         .onDrop(
             of: [UTType.fileURL.identifier],
             isTargeted: $dropTargeted,
@@ -117,7 +120,7 @@ public struct AudioConverterView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: "waveform")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .font(.system(size: 13))
 
                 presetValueSummary
@@ -140,7 +143,7 @@ public struct AudioConverterView: View {
             }
         }
         .padding(10)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -149,11 +152,11 @@ public struct AudioConverterView: View {
             Text(AudioConverterViewModel.sampleRateLabel(for: viewModel.currentAudioPreset.sampleRate))
                 .font(HubDesignSystem.Typography.mono())
             Text("|")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             Text("\(viewModel.currentAudioPreset.bitDepth)-bit")
                 .font(HubDesignSystem.Typography.mono())
             Text("|")
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             Text(AudioConverterViewModel.channelModeLabel(for: viewModel.currentAudioPreset.channelMode))
                 .font(HubDesignSystem.Typography.mono())
         }
@@ -263,11 +266,11 @@ public struct AudioConverterView: View {
             ForEach(viewModel.notices, id: \.self) { notice in
                 Text(notice)
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
         }
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 
@@ -297,91 +300,108 @@ public struct AudioConverterView: View {
         _ row: AudioConverterRow,
         verifiedOutputURL: URL?
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            statusDot(for: row.state)
-                .padding(.top, 3)
+        AudioConverterFlatRow(fillColor: rowFillColor(for: row.state)) {
+            HStack(alignment: .top, spacing: 12) {
+                statusDot(for: row.state)
+                    .padding(.top, 3)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(row.sourceURL.lastPathComponent)
-                        .font(.system(size: 13, weight: .semibold))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(row.sourceURL.lastPathComponent)
+                            .font(HubDesignSystem.Typography.sectionTitle())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        if let sourceType = row.sourceType {
+                            sourceTypeBadge(sourceType.rawValue.uppercased())
+                        }
+
+                        if let converterPathLabel = row.converterPathLabel {
+                            sourceTypeBadge(converterPathLabel == "FFmpeg" ? "FFmpeg" : "Native")
+                        }
+                    }
+
+                    Text(row.plannedOutputName)
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
 
-                    if let sourceType = row.sourceType {
-                        sourceTypeBadge(sourceType.rawValue.uppercased())
-                    }
+                    Text(statusText(for: row))
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(statusColor(for: row.state))
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    if let converterPathLabel = row.converterPathLabel {
-                        sourceTypeBadge(converterPathLabel == "FFmpeg" ? "FFmpeg" : "Native")
+                    if row.state == .converting {
+                        ProgressView(value: row.progress)
+                            .frame(maxWidth: 220)
+                            .tint(HubDesignSystem.Colors.accent)
                     }
                 }
 
-                Text(row.plannedOutputName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Spacer(minLength: 8)
 
-                Text(statusText(for: row))
-                    .font(.system(size: 12))
-                    .foregroundStyle(statusColor(for: row.state))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if row.state == .converting {
-                    ProgressView(value: row.progress)
-                        .frame(maxWidth: 220)
-                        .tint(HubDesignSystem.Colors.accent)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 8) {
-                if row.recoveryActionTitle == "Choose FFmpeg" {
-                    Button("Choose FFmpeg") {
-                        Task { @MainActor in
-                            guard let ffmpegURL = Self.chooseFFmpegExecutableURL() else { return }
-                            await viewModel.chooseFFmpegAndRetry(
-                                rowID: row.id,
-                                ffmpegURL: ffmpegURL
-                            )
+                VStack(alignment: .trailing, spacing: 8) {
+                    if row.recoveryActionTitle == "Choose FFmpeg" {
+                        HubLabeledButton(
+                            icon: "hammer",
+                            label: "Choose FFmpeg",
+                            style: .ghost
+                        ) {
+                            Task { @MainActor in
+                                guard let ffmpegURL = Self.chooseFFmpegExecutableURL() else { return }
+                                await viewModel.chooseFFmpegAndRetry(
+                                    rowID: row.id,
+                                    ffmpegURL: ffmpegURL
+                                )
+                            }
                         }
                     }
-                    .buttonStyle(.bordered)
-                }
 
-                if verifiedOutputURL != nil {
-                    HubIconButton(
-                        systemImage: "folder",
-                        accessibilityLabel: "Reveal in Finder",
-                        help: "Show converted WAV in Finder"
-                    ) {
-                        if let verifiedOutputURL {
-                            context.fileActions.revealInFinder(verifiedOutputURL)
+                    if verifiedOutputURL != nil {
+                        HubIconButton(
+                            systemImage: "folder",
+                            accessibilityLabel: "Reveal in Finder",
+                            help: "Show converted WAV in Finder"
+                        ) {
+                            if let verifiedOutputURL {
+                                context.fileActions.revealInFinder(verifiedOutputURL)
+                            }
                         }
                     }
                 }
             }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 10)
-        .hubLiquidCard(
-            cornerRadius: HubDesignSystem.Radius.row,
-            intent: rowSurfaceIntent(for: row.state),
-            interactive: verifiedOutputURL != nil
-        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.sourceURL.lastPathComponent)
         .accessibilityValue(statusText(for: row))
     }
 
+    private func rowFillColor(for state: AudioConverterRowState) -> Color? {
+        switch state {
+        case .verified:
+            return HubDesignSystem.Palette.accentFill
+        case .failed:
+            return HubDesignSystem.Palette.danger.opacity(0.12)
+        case .unsupported:
+            return HubDesignSystem.Palette.warning.opacity(0.12)
+        case .queued, .converting, .skipped:
+            return nil
+        }
+    }
+
     private func sourceTypeBadge(_ label: String) -> some View {
         Text(label)
             .font(HubDesignSystem.Typography.micro())
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip, intent: .selected)
+            .background {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    .fill(HubDesignSystem.Palette.accentFill)
+            }
     }
 
     private func statusDot(for state: AudioConverterRowState) -> some View {
@@ -431,22 +451,7 @@ public struct AudioConverterView: View {
         case .converting:
             return HubDesignSystem.Colors.accent
         case .queued, .skipped:
-            return .secondary
-        }
-    }
-
-    private func rowSurfaceIntent(for state: AudioConverterRowState) -> HubLiquidSurfaceIntent {
-        switch state {
-        case .verified:
-            return .selected
-        case .failed:
-            return .error
-        case .unsupported:
-            return .warning
-        case .skipped:
-            return .disabled
-        case .queued, .converting:
-            return .normal
+            return HubDesignSystem.Palette.textSecondary
         }
     }
 
@@ -503,5 +508,24 @@ public struct AudioConverterView: View {
         panel.prompt = "Choose FFmpeg"
         panel.message = "Select the ffmpeg executable."
         return panel.runModal() == .OK ? panel.url : nil
+    }
+}
+
+/// Flat batch row wrapper (IA-08): transparent at rest, `white 5%` on hover, no
+/// per-row border/shadow. An optional semantic `fillColor` washes the row at rest
+/// (e.g. verified/failed/unsupported) without introducing a bounded card look.
+private struct AudioConverterFlatRow<Content: View>: View {
+    let fillColor: Color?
+    @ViewBuilder let content: () -> Content
+
+    @State private var isHovered = false
+
+    var body: some View {
+        content()
+            .background {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                    .fill(fillColor ?? (isHovered ? Color.white.opacity(0.05) : Color.clear))
+            }
+            .onHover { isHovered = $0 }
     }
 }

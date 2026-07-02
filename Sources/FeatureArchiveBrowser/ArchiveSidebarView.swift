@@ -29,7 +29,7 @@ struct ArchiveSidebarView: View {
             if let status = viewModel.statusMessage {
                 Text(status)
                     .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .lineLimit(2)
             }
 
@@ -40,7 +40,8 @@ struct ArchiveSidebarView: View {
             if viewModel.showsSidebarMorePanel {
                 ArchiveSidebarMorePanel(
                     viewModel: viewModel,
-                    isExpanded: $sidebarUI.morePanelExpanded
+                    isExpanded: $sidebarUI.morePanelExpanded,
+                    sidebarUI: sidebarUI
                 )
             }
         }
@@ -48,13 +49,14 @@ struct ArchiveSidebarView: View {
         .padding(.top, 6)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
     }
 
+    /// Header band (reference: 17pt semibold title, right-aligned muted count, borderless
+    /// icon actions — no boxed chip, no outlined buttons).
     private var archiveToolbar: some View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Archive")
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -62,13 +64,10 @@ struct ArchiveSidebarView: View {
 
             if !viewModel.songs.isEmpty {
                 Text("\(viewModel.songs.count) songs")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip)
             }
 
             Spacer(minLength: 4)
@@ -77,7 +76,6 @@ struct ArchiveSidebarView: View {
                 systemImage: "arrow.clockwise",
                 accessibilityLabel: viewModel.isScanning ? "Scanning archive" : "Scan archive",
                 help: "Rescan archive roots",
-                prominent: true,
                 isEnabled: !viewModel.isScanning && !viewModel.roots.isEmpty
             ) {
                 Task { await viewModel.scan() }
@@ -108,7 +106,8 @@ struct ArchiveSidebarView: View {
                 }
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
                     .contentShape(Rectangle())
             }
@@ -123,7 +122,7 @@ struct ArchiveSidebarView: View {
         if viewModel.roots.isEmpty {
             Text("Add an archive root to begin.")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             DisclosureGroup(isExpanded: $sidebarUI.rootsSectionExpanded) {
@@ -132,10 +131,10 @@ struct ArchiveSidebarView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     Text("\(viewModel.roots.count) root\(viewModel.roots.count == 1 ? "" : "s")")
                         .font(HubDesignSystem.Typography.caption().weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
             }
             .onChange(of: viewModel.roots.count) { _, count in
@@ -172,8 +171,9 @@ struct ArchiveSidebarView: View {
                 }
 
                 ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
-                    HubIconButton.archiveBrowseFilter(
-                        filter: filter,
+                    ArchiveIconFilterChip(
+                        systemImage: filter.sidebarSymbolName,
+                        accessibilityLabel: filter.sidebarAccessibilityLabel,
                         isSelected: viewModel.browseFilter.contains(filter),
                         isEnabled: !viewModel.songs.isEmpty
                     ) {
@@ -203,10 +203,13 @@ struct ArchiveSidebarView: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
             }
-            .foregroundStyle(HubDesignSystem.Colors.accent)
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             .padding(.horizontal, 10)
             .frame(height: HubDesignSystem.Size.chipHeight)
-            .hubGlassChip(isSelected: true, colors: .archive)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(HubDesignSystem.Palette.accentFill)
+            }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -230,41 +233,44 @@ struct ArchiveSidebarView: View {
         }
     }
 
+    /// Reference search field: `white 6%` fill, radius 10, leading magnifier + placeholder in
+    /// `textTertiary`, no stroke.
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-            TextField("Search songs", text: Binding(
+            TextField("", text: Binding(
                 get: { viewModel.searchQuery },
                 set: { viewModel.setSearchQuery($0) }
-            ))
+            ), prompt: Text("Search songs").foregroundColor(HubDesignSystem.Palette.textTertiary))
             .textFieldStyle(.plain)
             .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .frame(minHeight: 34)
-        .hubGlassField(
-            intent: viewModel.songs.isEmpty ? .disabled : .normal,
-            minHeight: 34
-        )
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        }
+        .opacity(viewModel.songs.isEmpty ? 0.5 : 1)
     }
 
     private var skippedMatchesCallout: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label("\(viewModel.skippedSearchMatches.count) skipped", systemImage: "line.3.horizontal.decrease.circle")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             ForEach(Array(viewModel.skippedSearchMatches.prefix(2).enumerated()), id: \.offset) { _, match in
                 Text(match.entry.label)
                     .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Colors.accent)
+                    .foregroundStyle(HubDesignSystem.Palette.warning)
                     .lineLimit(1)
                 }
         }
         .padding(10)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
     @ViewBuilder
@@ -310,7 +316,6 @@ struct ArchiveSidebarView: View {
                     }
                 }
                 .padding(.vertical, 2)
-                .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
             }
         }
     }
@@ -319,13 +324,14 @@ struct ArchiveSidebarView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: systemImage)
                 .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(body)
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 }

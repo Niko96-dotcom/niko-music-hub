@@ -16,6 +16,10 @@ struct NikoMusicHubApp: App {
                 router: composition.router
             )
         }
+        // Reference chrome: no titlebar band or window title — the glass columns run
+        // edge-to-edge and the traffic lights float over the nav column.
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1_280, height: 820)
         .commands {

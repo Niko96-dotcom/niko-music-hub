@@ -78,9 +78,12 @@ final class HubSurfaceTests: XCTestCase {
             contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
             encoding: .utf8
         )
-        XCTAssertTrue(
-            materialSource.contains(".glassEffect(") && materialSource.contains("#available(macOS 26"),
-            "HubMaterial must use real Liquid Glass (.glassEffect) gated for macOS 26."
+        // 2026-07 reference-glass spec: a per-column glassEffect backdrop composites over
+        // the column's own content (the "invisible sidebar" bug). Window-level glass lives in
+        // HubShellBackground; HubMaterial must stay a plain tint veil.
+        XCTAssertFalse(
+            materialSource.contains(".glassEffect("),
+            "HubMaterial must NOT host .glassEffect — column glass veils its own content."
         )
     }
 }

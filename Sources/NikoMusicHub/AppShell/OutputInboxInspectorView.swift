@@ -47,29 +47,33 @@ struct OutputInboxInspectorView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Output Inbox")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(HubDesignSystem.Typography.sectionTitle())
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 Spacer(minLength: 8)
-                HubIconButton(
-                    systemImage: "folder.badge.gearshape",
-                    accessibilityLabel: "Choose output folder",
-                    help: "Pick where converted and recorded files are saved"
-                ) {
-                    chooseOutputFolder()
-                }
+                borderlessFolderButton
             }
             Text(displayPath(outputFolder))
-                .font(.system(size: 10))
+                .font(HubDesignSystem.Typography.caption())
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             if let settingsError {
                 Text(settingsError)
-                    .font(.system(size: 10))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
                     .lineLimit(2)
             }
         }
+    }
+
+    /// Borderless icon button — hover fill only (spec §4: no outlined controls).
+    private var borderlessFolderButton: some View {
+        BorderlessIconButton(
+            systemImage: "folder.badge.gearshape",
+            accessibilityLabel: "Choose output folder",
+            help: "Pick where converted and recorded files are saved",
+            action: chooseOutputFolder
+        )
     }
 
     private var emptyState: some View {
@@ -80,15 +84,15 @@ struct OutputInboxInspectorView: View {
                     .font(.system(size: 24))
                     .foregroundStyle(.quaternary)
                 Text("No outputs yet")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(HubDesignSystem.Typography.body().weight(.semibold))
                 Text("Converted files, recordings, and\ndownloads appear here.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .multilineTextAlignment(.center)
             }
             .padding(14)
             .frame(maxWidth: .infinity)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -97,16 +101,16 @@ struct OutputInboxInspectorView: View {
     private func errorState(message: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Output Inbox could not be loaded", systemImage: "externaldrive.badge.exclamationmark")
-                .font(.system(size: 13, weight: .semibold))
+                .font(HubDesignSystem.Typography.body().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Colors.warning)
             Text(message)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
     private func refreshSettings() {
@@ -176,7 +180,8 @@ struct OutputInboxInspectorView: View {
             fileIcon(for: item.fileURL)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.fileURL.lastPathComponent)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(HubDesignSystem.Typography.body())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     .lineLimit(1)
                 statusLine(for: item)
             }
@@ -185,7 +190,7 @@ struct OutputInboxInspectorView: View {
             if isHovered, OutputHandoff.dragFileURL(for: item) != nil {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .accessibilityHidden(true)
             }
         }
@@ -222,23 +227,25 @@ struct OutputInboxInspectorView: View {
 
     @ViewBuilder
     private func statusLine(for item: OutputInboxItem) -> some View {
+        // Quiet caption by default (textTertiary); color only carries meaning for
+        // warning/error states (DS-14) — success/pending stay neutral like the rest of the row.
         if item.status == .failed {
             Text("Failed")
-                .font(.system(size: 10))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.danger)
         } else if item.status == .missing {
             Text("File missing — choose Output Folder if you moved the inbox.")
-                .font(.system(size: 10))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
                 .lineLimit(2)
         } else {
             Text(item.status == .available ? "Ready" : "Pending")
-                .font(.system(size: 10))
-                .foregroundStyle(item.status == .available ? HubDesignSystem.Colors.success : Color.secondary)
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
     }
 
-    private func itemIntent(for item: OutputInboxItem, isHovered: Bool) -> HubLiquidSurfaceIntent {
+    private func itemIntent(for item: OutputInboxItem, isHovered: Bool) -> HubDesignSystem.ControlState {
         if item.status == .failed {
             return .error
         }
@@ -278,8 +285,40 @@ struct OutputInboxInspectorView: View {
             symbol = "doc"
         }
         return Image(systemName: symbol)
-            .font(.system(size: 14))
-            .foregroundStyle(.secondary)
+            .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             .frame(width: 22, height: 22)
+    }
+}
+
+/// Borderless icon button — icon only, hover fill only, no boxed outline (spec §4).
+private struct BorderlessIconButton: View {
+    let systemImage: String
+    let accessibilityLabel: String
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(HubDesignSystem.Typography.body().weight(.medium))
+                .foregroundStyle(
+                    isHovered ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary
+                )
+                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
+                .background {
+                    if isHovered {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                            .fill(Color.white.opacity(0.05))
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
     }
 }

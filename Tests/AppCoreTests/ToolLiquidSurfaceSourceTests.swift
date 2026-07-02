@@ -5,7 +5,8 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
         let source = try featureSource("FeatureBPMTapper/BPMTapperView.swift")
 
         [
-            "hubLiquidCard",
+            "hubCard",
+            "ToolHeaderBlock",
             "tapSurfaceFocused",
             "viewModel.recordTap()",
             "viewModel.resetTaps()",
@@ -23,7 +24,8 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
         [
             "HubWaveformSurface",
             "HubMediaSurfaceFixtures.meterPeaks",
-            "hubLiquidCard",
+            "hubCard",
+            "ToolHeaderBlock",
             "viewModel.startRecording()",
             "viewModel.stopRecording()",
             "Picker(\"Max Duration\"",
@@ -40,8 +42,8 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
         let source = try featureSource("FeatureAudioConverter/AudioConverterView.swift")
 
         [
-            "hubLiquidCard",
-            "rowSurfaceIntent",
+            "hubCard",
+            "ToolHeaderBlock",
             "onDrop",
             "NSItemProvider(contentsOf:",
             "viewModel.addFileURLs",
@@ -59,9 +61,8 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
         let source = try featureSource("FeatureDownloader/DownloaderView.swift")
 
         [
-            "hubGlassField",
-            "hubLiquidCard",
-            "hubGlassChip",
+            "hubCard",
+            "ToolHeaderBlock",
             "DownloaderCopy.trustNotice",
             "viewModel.startDownload()",
             "viewModel.retryAfterFailure()",

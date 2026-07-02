@@ -117,7 +117,7 @@ struct ArchiveBrowserView: View {
                     Text(viewModel.roots.isEmpty
                         ? "Scan a root to browse your songs here."
                         : "Preview mixdowns and open the latest Cubase project — without touching your archive.")
-                        .font(.system(size: 12))
+                        .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 320)

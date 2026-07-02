@@ -5,7 +5,7 @@ import SwiftUI
 struct CollaboratorAddRow: View {
     @Binding var draftName: String
     var placeholder: String = "Add name"
-    var fieldFont: Font = .system(size: 11)
+    var fieldFont: Font = HubDesignSystem.Typography.caption()
     var onAdd: (String) -> Bool
 
     private var trimmedName: String {

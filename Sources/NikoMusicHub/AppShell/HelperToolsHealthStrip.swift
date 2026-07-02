@@ -12,22 +12,22 @@ struct HelperToolsHealthStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Helper Tools")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
 
             helperRow(ytDlpStatus)
             helperRow(ffmpegStatus)
 
             if ytDlpStatus.state.needsSetup || ffmpegStatus.state.needsSetup {
                 Text("Install missing helpers with Homebrew to enable downloader and conversion workflows.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(10)
+        .padding(HubDesignSystem.Spacing.controlGap)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: stripIntent)
+        .hubSurface(.raised, state: stripState, cornerRadius: HubDesignSystem.Radius.popover)
         .task {
             await refresh()
         }
@@ -39,17 +39,17 @@ struct HelperToolsHealthStrip: View {
                 .fill(status.state.color)
                 .frame(width: HubDesignSystem.Size.statusDot, height: HubDesignSystem.Size.statusDot)
             Text(status.label)
-                .font(.system(size: 10, weight: .medium))
+                .font(HubDesignSystem.Typography.micro().weight(.medium))
             Spacer(minLength: 8)
             Text(status.state.displayText)
-                .font(.system(size: 10))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(status.state.foreground)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(status.label) \(status.state.displayText)")
     }
 
-    private var stripIntent: HubLiquidSurfaceIntent {
+    private var stripState: HubDesignSystem.ControlState {
         let states = [ytDlpStatus.state, ffmpegStatus.state]
         if states.contains(where: \.isError) {
             return .error

@@ -89,20 +89,18 @@ public struct AudioRecorderView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .selected)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
             .frame(maxWidth: 560)
         }
     }
 
     private var header: some View {
-        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("Audio Recorder")
-                .font(HubDesignSystem.Typography.screenTitle())
-
-            Text(statusText)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(statusColor)
-        }
+        ToolHeaderBlock(
+            title: "Audio Recorder",
+            systemImage: "waveform.circle",
+            statusText: statusText,
+            statusColor: statusColor
+        )
         .frame(maxWidth: 560)
     }
 
@@ -111,11 +109,11 @@ public struct AudioRecorderView: View {
             if viewModel.filenameOverride.isEmpty {
                 Text("Recording \(Date().formatted(date: .complete, time: .omitted)).wav")
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             } else {
                 Text(viewModel.filenameOverride)
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             }
         }
         .multilineTextAlignment(.center)
@@ -130,10 +128,6 @@ public struct AudioRecorderView: View {
             isEnabled: viewModel.isRecording
         )
         .frame(maxWidth: 560)
-        .shadow(
-            color: viewModel.isRecording ? HubDesignSystem.Colors.success.opacity(0.3) : .clear,
-            radius: 4
-        )
         .opacity(viewModel.isRecording ? 1 : 0.35)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: viewModel.currentLevel?.peak)
     }
@@ -142,12 +136,12 @@ public struct AudioRecorderView: View {
         Text(formatElapsedTime(viewModel.elapsedTime))
             .font(HubDesignSystem.Typography.display())
             .monospacedDigit()
-            .foregroundStyle(viewModel.isRecording ? .primary : .tertiary)
+            .foregroundStyle(viewModel.isRecording ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
             .padding(14)
             .frame(maxWidth: 560)
-            .hubLiquidCard(
+            .hubCard(
                 cornerRadius: HubDesignSystem.Radius.card,
-                intent: viewModel.isRecording ? .selected : .normal
+                state: viewModel.isRecording ? .selected : .normal
             )
     }
 
@@ -162,7 +156,7 @@ public struct AudioRecorderView: View {
             HStack(spacing: 8) {
                 if viewModel.isRecording {
                     Circle()
-                        .fill(.red)
+                        .fill(HubDesignSystem.Palette.danger)
                         .frame(width: 10, height: 10)
                         .animation(
                             reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
@@ -173,15 +167,21 @@ public struct AudioRecorderView: View {
                     viewModel.isRecording ? "Stop" : "Record",
                     systemImage: viewModel.isRecording ? "stop.fill" : "record.circle"
                 )
+                .font(HubDesignSystem.Typography.body())
+                .fontWeight(.semibold)
             }
+            .foregroundStyle(HubDesignSystem.Palette.canvas)
+            .frame(height: 34)
+            .padding(.horizontal, 18)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.red)
+        .buttonStyle(.plain)
+        .background {
+            Capsule()
+                .fill(viewModel.isRecording ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
+        }
         .disabled(viewModel.recordingState == .stopping)
         .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card, intent: viewModel.isRecording ? .warning : .normal)
     }
 
     private var settingsSection: some View {
@@ -199,7 +199,7 @@ public struct AudioRecorderView: View {
             .frame(maxWidth: 560)
         }
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.card)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
         .frame(maxWidth: .infinity)
     }
 
@@ -216,12 +216,12 @@ public struct AudioRecorderView: View {
         if viewModel.recordingState == .permissionNeeded {
             VStack(alignment: .leading, spacing: 12) {
                 Label("Permission Required", systemImage: "lock.shield")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(HubDesignSystem.Typography.sectionTitle())
                     .foregroundStyle(HubDesignSystem.Colors.danger)
 
                 Text("Audio Recorder captures your Mac's system audio (not your microphone). In System Settings, enable Niko Music Hub under Screen & System Audio Recording.")
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: HubDesignSystem.Spacing.controlGap) {
@@ -243,7 +243,7 @@ public struct AudioRecorderView: View {
                 }
             }
             .padding(12)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
             .frame(maxWidth: 560)
         }
     }
@@ -253,16 +253,16 @@ public struct AudioRecorderView: View {
         if case .incompatibleMacOS(let version) = viewModel.recordingState {
             VStack(alignment: .leading, spacing: 12) {
                 Label("macOS Too Old", systemImage: "laptopcomputer")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.sectionTitle())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
                 Text("Audio Recorder requires macOS 14.2 or later. Current version: \(version). Please upgrade macOS or use an external audio interface.")
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .disabled)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .disabled)
             .frame(maxWidth: 560)
         }
     }
@@ -372,7 +372,7 @@ public struct AudioRecorderView: View {
     private var statusColor: Color {
         switch viewModel.recordingState {
         case .idle:
-            return .secondary
+            return HubDesignSystem.Palette.textSecondary
         case .permissionNeeded, .incompatibleMacOS:
             return HubDesignSystem.Colors.warning
         case .recording, .stopping:

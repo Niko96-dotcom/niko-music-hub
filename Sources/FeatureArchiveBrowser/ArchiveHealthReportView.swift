@@ -10,8 +10,8 @@ struct ArchiveHealthReportView: View {
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
             if !compact {
                 Text("Archive health")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
             healthRow("Songs", value: "\(report.totalSongs)", icon: "music.note.list")
             if report.missingPreview > 0 {
@@ -33,15 +33,15 @@ struct ArchiveHealthReportView: View {
     private func healthRow(_ label: String, value: String, icon: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .frame(width: 14)
             Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(Color.primary)
         }
     }

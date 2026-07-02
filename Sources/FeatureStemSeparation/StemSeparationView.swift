@@ -31,17 +31,15 @@ public struct StemSeparationView: View {
     }
 
     private var header: some View {
-        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("Stem Separation")
-                .font(HubDesignSystem.Typography.screenTitle())
-            Text(viewModel.statusMessage)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(viewModel.errorMessage == nil ? .secondary : HubDesignSystem.Colors.warning)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
+        ToolHeaderBlock(
+            title: "Stem Separation",
+            systemImage: "slider.horizontal.below.rectangle",
+            statusText: viewModel.statusMessage,
+            statusColor: viewModel.errorMessage == nil
+                ? HubDesignSystem.Palette.textSecondary
+                : HubDesignSystem.Colors.warning
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var fileWell: some View {
@@ -50,21 +48,23 @@ public struct StemSeparationView: View {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
                         .font(.system(size: 32))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     Text(fileURL.lastPathComponent)
-                        .font(.headline)
+                        .font(HubDesignSystem.Typography.sectionTitle())
                     Text(fileURL.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
                 }
             } else {
                 Image(systemName: "arrow.down.document")
                     .font(.system(size: 32))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 Text("Drop an audio file here")
-                    .font(.headline)
+                    .font(HubDesignSystem.Typography.sectionTitle())
                 Text("WAV, AIFF, MP3, M4A, FLAC")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
 
             HStack(spacing: 12) {
@@ -115,8 +115,9 @@ public struct StemSeparationView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.tertiary)
 
-            TextField("Paste YouTube URL...", text: $viewModel.youtubeURLText)
+            TextField("Paste YouTube URL…", text: $viewModel.youtubeURLText)
                 .textFieldStyle(.plain)
+                .font(HubDesignSystem.Typography.body())
                 .disabled(viewModel.isRunning)
 
             HubLabeledButton(
@@ -144,11 +145,12 @@ public struct StemSeparationView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
-        .hubCard(
-            cornerRadius: HubDesignSystem.Radius.row,
-            state: viewModel.isRunning ? .disabled : .normal,
-            interactive: true
-        )
+        // Reference input-field style: quiet inset fill, no stroke.
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        }
+        .opacity(viewModel.isRunning ? 0.6 : 1)
         .disabled(viewModel.isRunning)
     }
 
@@ -237,9 +239,8 @@ public struct StemSeparationView: View {
     @ViewBuilder
     private var resultsList: some View {
         if !viewModel.results.isEmpty {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.rowGap) {
-                Text("Separated stems")
-                    .font(HubDesignSystem.Typography.sectionTitle())
+            VStack(alignment: .leading, spacing: 2) {
+                HubSectionHeader("Separated Stems", count: viewModel.results.count)
 
                 ForEach(viewModel.results) { item in
                     resultRow(item)
@@ -258,13 +259,13 @@ public struct StemSeparationView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.fileURL.lastPathComponent)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let role = item.metadata["displayName"] {
                     Text(role)
                         .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -272,14 +273,13 @@ public struct StemSeparationView: View {
             HubLabeledButton(
                 icon: "folder",
                 label: "Reveal",
-                style: .secondary
+                style: .ghost
             ) {
                 viewModel.reveal(item: item)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row, interactive: true)
         .onDrag {
             guard let url = viewModel.dragURL(for: item) else {
                 return NSItemProvider()

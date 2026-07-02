@@ -8,16 +8,16 @@ struct ArchiveIntelligencePanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Intelligence (read-only)")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             if !viewModel.pendingCollaboratorSuggestions.isEmpty {
                 Text("Collaborator suggestions")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(HubDesignSystem.Typography.caption())
                 ForEach(viewModel.pendingCollaboratorSuggestions.prefix(5)) { suggestion in
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(suggestion.songTitle) → \(suggestion.suggestedName)")
-                            .font(.system(size: 10))
+                            .font(HubDesignSystem.Typography.micro())
                             .lineLimit(2)
                         HStack(spacing: 6) {
                             HubIconButton(
@@ -42,10 +42,10 @@ struct ArchiveIntelligencePanelView: View {
 
             if !viewModel.duplicateSongHints.isEmpty {
                 Text("Possible duplicates")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(HubDesignSystem.Typography.caption())
                 ForEach(viewModel.duplicateSongHints.prefix(3)) { hint in
                     Text(hint.displayTitles.joined(separator: " · "))
-                        .font(.system(size: 10))
+                        .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Colors.warning)
                         .lineLimit(2)
                 }
@@ -54,13 +54,13 @@ struct ArchiveIntelligencePanelView: View {
             if let missing = viewModel.missingAudioReport {
                 if !missing.noPreview.isEmpty {
                     Text("No preview: \(missing.noPreview.count) song(s)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
                 if !missing.noCPR.isEmpty {
                     Text("No CPR: \(missing.noCPR.count) song(s)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
             }
 

@@ -4,12 +4,14 @@ final class HubShellChromeSourceTests: XCTestCase {
     func testShellUsesLiquidChromePrimitives() throws {
         let source = try shellSource("AppShellView.swift")
 
+        // Reference-spec migration: CollapsedSidebarRail moved off the boxed `hubLiquidPanel`
+        // adapter onto a borderless hover-fill strip, and the persistence banner moved off
+        // `hubLiquidCard` onto the semantic `hubSurface(.card, state: .warning, ...)` primitive
+        // (DEPTH-03). Preferences/no-@AppStorage contracts stay test-locked.
         [
             "HubShellBackground()",
-            "hubLiquidPanel",
-            "hubLiquidCard",
-            "intent: .warning",
-            "HubDesignSystem.Liquid.Motion.duration",
+            "hubSurface(.card, state: .warning",
+            "HubDesignSystem.Motion.duration",
             "context.preferences.bool",
             "context.preferences.set",
         ].forEach { required in
@@ -44,8 +46,11 @@ final class HubShellChromeSourceTests: XCTestCase {
     func testHelperHealthUsesSharedStatusColorsAndLiquidCard() throws {
         let source = try shellSource("HelperToolsHealthStrip.swift")
 
+        // Reference-spec migration: the popover body moved off the deprecated
+        // `hubLiquidCard()` adapter onto the semantic `hubSurface(.raised, ...)` primitive
+        // (DEPTH-03). Status colors and the Homebrew copy stay test-locked.
         [
-            "hubLiquidCard",
+            "hubSurface(.raised",
             "HubDesignSystem.Colors.success",
             "HubDesignSystem.Colors.warning",
             "HubDesignSystem.Colors.danger",
@@ -59,7 +64,7 @@ final class HubShellChromeSourceTests: XCTestCase {
         let source = try shellSource("OutputInboxInspectorView.swift")
 
         [
-            "hubLiquidCard",
+            "hubCard",
             "itemIntent",
             "OutputHandoff.isRevealable",
             "OutputHandoff.dragFileURL",

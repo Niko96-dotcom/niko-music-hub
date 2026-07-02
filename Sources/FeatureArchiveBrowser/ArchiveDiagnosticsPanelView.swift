@@ -33,15 +33,15 @@ struct ArchiveDiagnosticsPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("Scan diagnostics")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 if let badge = panelContext.rootHealthBadge {
                     Text(badge)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(HubDesignSystem.Typography.micro().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Colors.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.chip, intent: .selected)
+                        .hubCard(cornerRadius: HubDesignSystem.Radius.chip, state: .selected)
                         .accessibilityIdentifier(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)
                 }
                 Spacer()
@@ -54,32 +54,32 @@ struct ArchiveDiagnosticsPanelView: View {
             }
 
             Text("Support summary")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             Text(panelContext.supportSummaryLine)
-                .font(.system(size: 11, weight: .medium))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(Color.primary)
                 .textSelection(.enabled)
                 .lineLimit(4)
 
             if let footnote = panelContext.supportSummaryTruncationFootnote {
                 Text(footnote)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(2)
             }
 
             if let searchContext {
                 Text("Active search")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 Text(
                     ArchiveDiagnosticsSearchPanelContext.panelQueryLine(
                         query: searchContext.query,
                         matchCount: searchContext.matches.count
                     )
                 )
-                .font(.system(size: 10, weight: .medium))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 ForEach(searchContext.matches, id: \.displayTitle) { match in
@@ -88,8 +88,8 @@ struct ArchiveDiagnosticsPanelView: View {
                         summary: match.summary
                     )
                     Text("• \(matchLine)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -98,14 +98,14 @@ struct ArchiveDiagnosticsPanelView: View {
             if let selectedSong {
                 let selectedContext = ArchiveDiagnosticsSelectedSongContext.from(song: selectedSong)
                 Text("Selected song")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 Text(
                     ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
                         displayTitle: selectedContext.displayTitle
                     )
                 )
-                .font(.system(size: 10, weight: .medium))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 Text(
@@ -113,16 +113,16 @@ struct ArchiveDiagnosticsPanelView: View {
                         cprSummary: selectedContext.cprSummary
                     )
                 )
-                .font(.system(size: 10))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .lineLimit(3)
                 .textSelection(.enabled)
                 ForEach(selectedContext.warningLines, id: \.self) { warning in
                     Text(
                         "• \(ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: warning))"
                     )
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -130,8 +130,8 @@ struct ArchiveDiagnosticsPanelView: View {
                     Text(
                         ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: notes)
                     )
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -139,15 +139,15 @@ struct ArchiveDiagnosticsPanelView: View {
 
             if let skippedSearchContext {
                 Text("Active skipped search")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 Text(
                     ArchiveDiagnosticsSkippedSearchPanelContext.panelQueryLine(
                         query: skippedSearchContext.query,
                         matchCount: skippedSearchContext.matches.count
                     )
                 )
-                .font(.system(size: 10, weight: .medium))
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
                 ForEach(skippedSearchContext.matches, id: \.label) { match in
@@ -156,8 +156,8 @@ struct ArchiveDiagnosticsPanelView: View {
                         summary: match.summary
                     )
                     Text("• \(matchLine)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 }
@@ -165,7 +165,7 @@ struct ArchiveDiagnosticsPanelView: View {
 
             if let callout = diagnostics.previewRankingPanel.scanHeaderCallout {
                 Text(callout)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.accent)
                     .lineLimit(3)
             }
@@ -173,12 +173,12 @@ struct ArchiveDiagnosticsPanelView: View {
             let tooShortBreakdowns = diagnostics.previewRankingPanel.tooShortSongBreakdowns
             if !tooShortBreakdowns.isEmpty {
                 Text("Too short previews (not main)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ForEach(tooShortBreakdowns, id: \.displayTitle) { breakdown in
                     Text("• \(breakdown.panelDisplayLine)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(3)
                 }
             }
@@ -187,24 +187,24 @@ struct ArchiveDiagnosticsPanelView: View {
                 for: selectedSong
             ) {
                 Text(selectedHeader)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(4)
             }
 
             Text("Last scan: \(Self.scanTimeFormatter.string(from: diagnostics.scannedAt))")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             let displayRoots = diagnostics.displayRootPaths()
             if !displayRoots.isEmpty {
                 Text("Archive roots")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ForEach(displayRoots, id: \.self) { root in
                     Text("• \(root)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(2)
                 }
             }
@@ -229,7 +229,7 @@ struct ArchiveDiagnosticsPanelView: View {
                     Text(
                         "Warning: \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
                     )
-                    .font(.system(size: 11))
+                    .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
                     .lineLimit(3)
                     .textSelection(.enabled)
@@ -239,16 +239,16 @@ struct ArchiveDiagnosticsPanelView: View {
             let displaySkipped = diagnostics.displaySkippedEntries()
             if !displaySkipped.isEmpty {
                 Text("Skipped at roots (\(displaySkipped.count))")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ForEach(Array(displaySkipped.enumerated()), id: \.offset) { _, entry in
                     let skippedLine = ArchiveDiagnosticsSkippedEntriesPanelContext.panelLine(
                         label: entry.label,
                         reason: entry.reason
                     )
                     Text("• \(skippedLine)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(2)
                 }
             }
@@ -256,33 +256,33 @@ struct ArchiveDiagnosticsPanelView: View {
             let displaySongWarnings = diagnostics.displaySongWarningSummaries()
             if !displaySongWarnings.isEmpty {
                 Text("Songs with warnings (\(displaySongWarnings.count))")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ForEach(displaySongWarnings.prefix(5), id: \.displayTitle) { summary in
                     Text("• \(summary.displayTitle)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(1)
                 }
                 if displaySongWarnings.count > 5 {
                     Text("…and \(displaySongWarnings.count - 5) more (use Export)")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
             }
         }
         .padding(10)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func diagnosticRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 11))
+                .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(Color.primary)
         }
     }

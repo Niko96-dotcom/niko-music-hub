@@ -10,17 +10,17 @@ struct ArchiveCollaboratorAddressBookView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Collaborators")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.secondary)
+                .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             if viewModel.collaborators.isEmpty {
                 Text("No collaborators yet.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             } else {
                 ForEach(viewModel.collaborators) { collaborator in
                     Text(collaborator.displayName)
-                        .font(.system(size: 10))
+                        .font(HubDesignSystem.Typography.micro())
                 }
             }
 

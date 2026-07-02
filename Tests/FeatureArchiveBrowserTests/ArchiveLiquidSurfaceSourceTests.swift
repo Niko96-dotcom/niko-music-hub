@@ -28,11 +28,12 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         .map(featureSource)
         .joined(separator: "\n")
 
+        // Reference-spec migration: archive surfaces use the semantic hubCard/hubSurface
+        // primitives and ControlState (`state:`) instead of the deleted Liquid adapters.
         [
-            "hubGlassField",
-            "hubLiquidCard",
-            "intent: .selected",
-            "intent: .warning",
+            "hubCard",
+            "state: .selected",
+            "state: .warning",
             "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge",
             "Welcome to your Cubase archive",
         ].forEach { required in

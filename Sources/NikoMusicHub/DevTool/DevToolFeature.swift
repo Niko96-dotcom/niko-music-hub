@@ -24,58 +24,69 @@ struct DevToolDetailView: View {
     @State private var jobs: [Job] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
                 Label(metadata.shortLabel, systemImage: metadata.systemImage)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(HubDesignSystem.Typography.screenTitle())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 Text("Registered through AppComposition.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.body())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
 
-            VStack(alignment: .leading, spacing: 16) {
-                Button("Choose Output Folder") {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                HubLabeledButton(
+                    icon: "folder.badge.gearshape",
+                    label: "Choose Output Folder",
+                    style: .primary
+                ) {
                     chooseOutputFolder()
                 }
-                    .buttonStyle(.borderedProminent)
 
-                Button("Run Sample Job") {
+                HubLabeledButton(
+                    icon: "play.fill",
+                    label: "Run Sample Job",
+                    style: .secondary
+                ) {
                     runSampleJob()
                 }
-                    .buttonStyle(.bordered)
 
                 if let runningJob {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                         Text(runningJob.message.isEmpty ? runningJob.state.rawValue.capitalized : runningJob.message)
-                            .font(.system(size: 12))
+                            .font(HubDesignSystem.Typography.bodySmall())
+                            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         ProgressView(value: runningJob.progress)
                             .frame(maxWidth: 220)
-                        Button("Stop Job") {
+                        HubLabeledButton(
+                            icon: "stop.fill",
+                            label: "Stop Job",
+                            style: .secondary
+                        ) {
                             context.jobRunner.cancelJob(id: runningJob.id)
                             refreshJobs()
                         }
-                        .buttonStyle(.bordered)
                     }
                 } else {
                     Text("No jobs running.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
 
                 Text("Registered tools: \(context.registeredToolCount)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
                 Text(outputFolderStatus)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
-        .padding(.top, 56)
+        .padding(.horizontal, HubDesignSystem.Spacing.columnPadding)
+        .padding(.bottom, HubDesignSystem.Spacing.columnPadding)
+        .padding(.top, HubDesignSystem.Spacing.headerBandHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.clear)
         .onAppear {

@@ -44,17 +44,12 @@ public struct DownloaderView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text(DownloaderCopy.toolLabel)
-                .font(HubDesignSystem.Typography.screenTitle())
-
-            Text(headerStatus)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ToolHeaderBlock(
+            title: DownloaderCopy.toolLabel,
+            systemImage: "arrow.down.circle",
+            statusText: headerStatus,
+            statusColor: HubDesignSystem.Palette.textSecondary
+        )
     }
 
     private var headerStatus: String {
@@ -78,7 +73,7 @@ public struct DownloaderView: View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Image(systemName: "link")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
 
             TextField(DownloaderCopy.urlPlaceholder, text: $viewModel.urlText)
                 .textFieldStyle(.plain)
@@ -101,7 +96,7 @@ public struct DownloaderView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
             .buttonStyle(.plain)
             .help(DownloaderCopy.clear)
@@ -109,10 +104,12 @@ public struct DownloaderView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .hubGlassField(
-            intent: viewModel.downloadState == .downloading ? .disabled : .normal,
-            minHeight: 44
-        )
+        .frame(minHeight: 44)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        }
+        .opacity(viewModel.downloadState == .downloading ? 0.62 : 1)
         .disabled(viewModel.downloadState == .downloading)
     }
 
@@ -130,13 +127,13 @@ public struct DownloaderView: View {
             if let fileName = viewModel.detectedFileName {
                 Text(fileName)
                     .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
         }
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         .disabled(viewModel.downloadState == .downloading)
     }
 
@@ -144,7 +141,7 @@ public struct DownloaderView: View {
         Group {
             Text("Download as:")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             DownloaderTextChip(
                 title: "Audio only",
@@ -164,7 +161,7 @@ public struct DownloaderView: View {
 
             Text("Format:")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .padding(.leading, 4)
 
             secondaryFormatMenuChip
@@ -249,13 +246,13 @@ public struct DownloaderView: View {
             }
 
             Text(DownloaderCopy.trustNotice)
-                .font(.system(size: 10))
+                .font(HubDesignSystem.Typography.micro())
                 .italic()
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private var progressSection: some View {
@@ -265,31 +262,31 @@ public struct DownloaderView: View {
 
             Text("\(Int(viewModel.progress * 100))% complete")
                 .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
         .padding(12)
-        .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .selected)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
     }
 
     private var logArea: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Text("Log")
                 .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(viewModel.logEntries, id: \.self) { entry in
                         Text(entry)
                             .font(HubDesignSystem.Typography.mono(size: 10))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 140)
             .padding(8)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         }
     }
 
@@ -309,7 +306,7 @@ public struct DownloaderView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
     private static func errorCard(for message: String) -> AppErrorCard {
@@ -356,15 +353,22 @@ private struct DownloaderTextChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(isSelected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
                 .padding(.horizontal, 10)
                 .frame(height: HubDesignSystem.Size.chipHeight)
-                .hubGlassChip(isSelected: isSelected)
+                .background {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                        .fill(isSelected ? HubDesignSystem.Palette.accentFill : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+                }
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -377,10 +381,14 @@ private struct DownloaderChipLabel: View {
                 .font(HubDesignSystem.Typography.caption())
             Image(systemName: "chevron.down")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
+        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
         .padding(.horizontal, 10)
         .frame(height: HubDesignSystem.Size.chipHeight)
-        .hubGlassChip(isSelected: true)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                .fill(HubDesignSystem.Palette.accentFill)
+        }
     }
 }

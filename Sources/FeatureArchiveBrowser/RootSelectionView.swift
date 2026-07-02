@@ -11,8 +11,8 @@ struct RootSelectionView: View {
             if !compact {
                 HStack {
                     Text("Archive roots")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.secondary)
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     Spacer()
                     addRootButton
                 }
@@ -20,8 +20,8 @@ struct RootSelectionView: View {
 
             if viewModel.roots.isEmpty {
                 Text("Choose the folder that contains your Cubase song folders.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.secondary)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if compact {
                     addRootButton
@@ -30,16 +30,16 @@ struct RootSelectionView: View {
                 ForEach(viewModel.roots, id: \.path) { root in
                     HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 11))
+                            .font(HubDesignSystem.Typography.caption())
                             .foregroundStyle(HubDesignSystem.Colors.accent)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(HubDesignSystem.Typography.caption())
                                 .lineLimit(1)
                             if !compact {
                                 Text(ArchiveRootDisplayPolicy.displayPath(root))
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(Color.secondary)
+                                    .font(HubDesignSystem.Typography.micro())
+                                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }

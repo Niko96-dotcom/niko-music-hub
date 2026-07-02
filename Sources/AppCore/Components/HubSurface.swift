@@ -123,7 +123,18 @@ public struct HubSurface: ViewModifier {
         }
     }
 
+    @ViewBuilder
     private func surfaceStroke(shape: RoundedRectangle) -> some View {
+        // Reference fields are quiet inset fills with NO stroke — borders are reserved
+        // for raised/selected surfaces.
+        if level == .field, state == .normal || state == .hover || state == .pressed || state == .disabled {
+            EmptyView()
+        } else {
+            strokedBorder(shape: shape)
+        }
+    }
+
+    private func strokedBorder(shape: RoundedRectangle) -> some View {
         shape.strokeBorder(
             LinearGradient(
                 colors: [topEdgeColor, midStrokeColor, HubDesignSystem.Highlight.underside],
