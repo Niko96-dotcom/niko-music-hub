@@ -1,10 +1,10 @@
 import AppCore
 import SwiftUI
 
-/// Slim left icon rail (Intercom / Analog / Knowledge-Base style): the app mark on top,
-/// one icon per registered tool with a leading accent selection indicator + tooltips, and a
-/// helper-health button at the bottom. Icon-only keeps the nav compact; discoverability comes
-/// from `.help(...)` tooltips and the active tool's own content header (which names the tool).
+/// Labeled navigation sidebar (reference pattern: every tool is an icon + NAME + pill
+/// selection row under a muted section header — functions are visible, not hidden behind
+/// tooltip-only icons). Chrome stays neutral: monochrome icons, neutral raised-pill
+/// selection (never the accent, never system blue — DS-13).
 struct ToolSidebarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -14,8 +14,7 @@ struct ToolSidebarView: View {
 
     @State private var hoveredToolID: ToolFeatureID?
     @State private var showHelperHealth = false
-
-    private static let railWidth: CGFloat = 64
+    @State private var helperHealthHovered = false
 
     private var appVersionLabel: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -24,141 +23,123 @@ struct ToolSidebarView: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             appMark
                 .padding(.top, 34)
-                .padding(.bottom, 4)
 
-            HubDesignSystem.Palette.separator
-                .frame(width: 26, height: 0.5)
-                .padding(.bottom, 2)
+            HubSectionHeader("Tools")
 
-            ForEach(registry.features.map(\.metadata), id: \.id) { metadata in
-                toolIcon(metadata)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(registry.features.map(\.metadata), id: \.id) { metadata in
+                    toolRow(metadata)
+                }
             }
 
             Spacer(minLength: 8)
 
             if context != nil {
-                helperHealthButton
+                helperHealthRow
                     .padding(.bottom, 12)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .frame(width: Self.railWidth)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: HubDesignSystem.Size.navWidth)
     }
 
     private var appMark: some View {
-        Group {
+        HStack(spacing: 9) {
             if let logo = HubBrandLogo.sidebar {
                 logo
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 30, height: 30)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(HubDesignSystem.Palette.separator, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(HubDesignSystem.Highlight.hairline, lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
             }
+            Text("Niko Music Hub")
+                .font(HubDesignSystem.Typography.body().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                .lineLimit(1)
         }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel("Niko Music Hub \(appVersionLabel)")
         .help("Niko Music Hub \(appVersionLabel)")
     }
 
-    private func toolIcon(_ metadata: ToolMetadata) -> some View {
-        HStack(spacing: 0) {
-            // Leading accent bar marks the selected tool (accent = meaningful selection).
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(isSelected(metadata) ? HubDesignSystem.Palette.accent : Color.clear)
-                .frame(width: 3, height: 22)
+    private func toolRow(_ metadata: ToolMetadata) -> some View {
+        Button {
+            selectedToolID = metadata.id
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: metadata.systemImage)
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 14, weight: isSelected(metadata) ? .semibold : .regular))
+                    .frame(width: HubDesignSystem.Size.sidebarIconFrame)
 
-            toolRailButton(metadata)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
+                Text(metadata.displayName)
+                    .font(HubDesignSystem.Typography.body().weight(isSelected(metadata) ? .medium : .regular))
+                    .lineLimit(1)
 
-    @ViewBuilder
-    private func toolRailButton(_ metadata: ToolMetadata) -> some View {
-        if #available(macOS 26.0, *) {
-            if isSelected(metadata) {
-                Button {
-                    selectedToolID = metadata.id
-                } label: {
-                    toolIconImage(metadata)
-                }
-                .buttonStyle(.glassProminent)
-                .controlSize(.small)
-                .padding(.trailing, 4)
-                .onHover { hovering in
-                    updateHover(hovering, toolID: metadata.id)
-                }
-                .help(metadata.displayName)
-                .accessibilityLabel(metadata.displayName)
-                .accessibilityValue(metadata.shortLabel)
-                .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
-            } else {
-                Button {
-                    selectedToolID = metadata.id
-                } label: {
-                    toolIconImage(metadata)
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .padding(.trailing, 4)
-                .onHover { hovering in
-                    updateHover(hovering, toolID: metadata.id)
-                }
-                .help(metadata.displayName)
-                .accessibilityLabel(metadata.displayName)
-                .accessibilityValue(metadata.shortLabel)
-                .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
+                Spacer(minLength: 0)
             }
-        } else {
-            Button {
-                selectedToolID = metadata.id
-            } label: {
-                toolIconImage(metadata)
-                    .hubCard(
-                        cornerRadius: HubDesignSystem.Radius.row,
-                        state: isSelected(metadata) ? .selected : .normal,
-                        interactive: true
-                    )
-                    .padding(.trailing, 4)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                updateHover(hovering, toolID: metadata.id)
-            }
-            .help(metadata.displayName)
-            .accessibilityLabel(metadata.displayName)
-            .accessibilityValue(metadata.shortLabel)
-            .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
-        }
-    }
-
-    private func toolIconImage(_ metadata: ToolMetadata) -> some View {
-        Image(systemName: metadata.systemImage)
-            .symbolRenderingMode(.hierarchical)
-            .font(.system(size: 16, weight: isSelected(metadata) ? .semibold : .regular))
-            .foregroundStyle(iconForeground(for: metadata))
-            .frame(width: 40, height: 38)
+            .padding(.horizontal, 10)
+            .frame(height: HubDesignSystem.Spacing.navRowHeight)
             .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .hubSidebarNavRow(isSelected: isSelected(metadata))
+        .background {
+            if isHovered(metadata), !isSelected(metadata) {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            }
+        }
+        .onHover { hovering in
+            updateHover(hovering, toolID: metadata.id)
+        }
+        .help(metadata.displayName)
+        .accessibilityLabel(metadata.displayName)
+        .accessibilityValue(metadata.shortLabel)
+        .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
     }
 
-    private var helperHealthButton: some View {
+    private var helperHealthRow: some View {
         Button {
             showHelperHealth.toggle()
         } label: {
-            Image(systemName: "stethoscope")
-                .symbolRenderingMode(.hierarchical)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .frame(width: 40, height: 34)
-                .contentShape(Rectangle())
+            HStack(spacing: 10) {
+                Image(systemName: "stethoscope")
+                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 13, weight: .regular))
+                    .frame(width: HubDesignSystem.Size.sidebarIconFrame)
+                Text("Helper Tools")
+                    .font(HubDesignSystem.Typography.body())
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(
+                helperHealthHovered
+                    ? HubDesignSystem.Palette.textPrimary
+                    : HubDesignSystem.Palette.textSecondary
+            )
+            .padding(.horizontal, 10)
+            .frame(height: HubDesignSystem.Spacing.navRowHeight)
+            .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         }
         .buttonStyle(.plain)
+        .background {
+            if helperHealthHovered {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            }
+        }
+        .onHover { helperHealthHovered = $0 }
         .help("Helper tools status")
         .accessibilityLabel("Helper tools status")
         .popover(isPresented: $showHelperHealth, arrowEdge: .leading) {
@@ -178,21 +159,12 @@ struct ToolSidebarView: View {
         hoveredToolID == metadata.id
     }
 
-    private func iconForeground(for metadata: ToolMetadata) -> Color {
-        if isSelected(metadata) {
-            return HubDesignSystem.Palette.accent
-        }
-        return isHovered(metadata)
-            ? HubDesignSystem.Palette.textPrimary
-            : HubDesignSystem.Palette.textSecondary
-    }
-
     private func updateHover(_ hovering: Bool, toolID: ToolFeatureID) {
         let nextID: ToolFeatureID? = hovering ? toolID : (hoveredToolID == toolID ? nil : hoveredToolID)
         if reduceMotion {
             hoveredToolID = nextID
         } else {
-            withAnimation(.easeInOut(duration: HubDesignSystem.Liquid.Motion.duration(reduceMotion: reduceMotion))) {
+            withAnimation(.easeInOut(duration: HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion))) {
                 hoveredToolID = nextID
             }
         }

@@ -4,10 +4,16 @@ import SwiftUI
 import XCTest
 
 final class HubDesignSystemTokenTests: XCTestCase {
+    /// 2026-07 reference-glass spec (.planning/design/REFERENCE-SPEC-2026-07.md):
+    /// generous radii — card 14 / panel 12 / row 10 / popover 16.
     func testRadiusTokensMatchSpec() {
         XCTAssertEqual(HubDesignSystem.Radius.shell, 10)
-        XCTAssertEqual(HubDesignSystem.Radius.panel, 8)
-        XCTAssertEqual(HubDesignSystem.Radius.button, 6)
+        XCTAssertEqual(HubDesignSystem.Radius.panel, 12)
+        XCTAssertEqual(HubDesignSystem.Radius.card, 14)
+        XCTAssertEqual(HubDesignSystem.Radius.row, 10)
+        XCTAssertEqual(HubDesignSystem.Radius.chip, 8)
+        XCTAssertEqual(HubDesignSystem.Radius.button, 8)
+        XCTAssertEqual(HubDesignSystem.Radius.popover, 16)
     }
 
     func testSpacingTokensMatchCompactSpec() {

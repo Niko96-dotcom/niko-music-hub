@@ -27,13 +27,18 @@ final class HubShellChromeSourceTests: XCTestCase {
             "selectedToolID = metadata.id",
             "registry.features.map(\\.metadata)",
             "hoveredToolID",
-            ".glassProminent",
-            ".glass",
-            "HubDesignSystem.Liquid.Motion.duration",
+            "hubSidebarNavRow",
+            "HubSectionHeader",
+            "metadata.displayName",
+            "HubDesignSystem.Motion.duration",
             "accessibilityIdentifier(\"hub_tool_\\(metadata.id.rawValue)\")",
         ].forEach { required in
-            XCTAssertTrue(source.contains(required), "Missing sidebar Liquid contract source: \(required)")
+            XCTAssertTrue(source.contains(required), "Missing sidebar nav contract source: \(required)")
         }
+
+        // The labeled nav must stay neutral: `.glassProminent` paints the SYSTEM accent
+        // (blue) — the references' chrome carries no color (DS-13).
+        XCTAssertFalse(source.contains(".glassProminent"), "Sidebar must not use system-accent glassProminent")
     }
 
     func testHelperHealthUsesSharedStatusColorsAndLiquidCard() throws {

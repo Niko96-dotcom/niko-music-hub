@@ -57,12 +57,14 @@ public enum HubDesignSystem {
 
     public enum Radius {
         public static let shell: CGFloat = 10
-        public static let panel: CGFloat = 8
-        public static let card: CGFloat = 11
-        public static let row: CGFloat = 9
-        public static let chip: CGFloat = 7
+        public static let panel: CGFloat = 12
+        public static let card: CGFloat = 14
+        public static let row: CGFloat = 10
+        public static let chip: CGFloat = 8
         public static let pill: CGFloat = .infinity
-        public static let button: CGFloat = 6
+        public static let button: CGFloat = 8
+        /// Floating overlays — popovers, sheets, feature callouts (references: ~16px).
+        public static let popover: CGFloat = 16
     }
 
     // MARK: - Spacing
@@ -75,11 +77,17 @@ public enum HubDesignSystem {
         public static let controlGap: CGFloat = 10
         public static let inlineGap: CGFloat = 6
         /// Comfortable interior padding for a bounded card (references breathe — not cramped).
-        public static let cardPadding: CGFloat = 13
+        public static let cardPadding: CGFloat = 16
         /// Gap between stacked list rows/cards.
-        public static let rowGap: CGFloat = 9
+        public static let rowGap: CGFloat = 10
         /// Interior padding for a scrollable content column.
-        public static let columnPadding: CGFloat = 18
+        public static let columnPadding: CGFloat = 20
+        /// Vertical breathing room above a section header (references: ~20px before a new group).
+        public static let sectionHeaderTop: CGFloat = 20
+        /// Standard nav/sidebar row height (references: 36-44px web ≈ 34pt native).
+        public static let navRowHeight: CGFloat = 34
+        /// Tall page-title header band (references: ~52-56px).
+        public static let headerBandHeight: CGFloat = 52
     }
 
     // MARK: - Sizes
@@ -92,8 +100,10 @@ public enum HubDesignSystem {
         public static let statusDot: CGFloat = 7
         public static let sidebarWidth: ClosedRange<CGFloat> = 190 ... 250
         public static let inboxWidth: ClosedRange<CGFloat> = 220 ... 300
-        /// Icon-rail width (Intercom/Analog-style slim nav).
+        /// Icon-rail width (collapsed nav mode).
         public static let railWidth: CGFloat = 64
+        /// Labeled navigation sidebar width (references: ~230-260px web ≈ 224pt native).
+        public static let navWidth: CGFloat = 224
     }
 
     // MARK: - Elevation (DEPTH-01)

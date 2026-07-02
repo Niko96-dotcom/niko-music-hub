@@ -40,6 +40,13 @@ nmh_build_bundle() {
   cd "$NMH_ROOT_DIR"
 
   local build_dir build_binary
+  # NOTE: --show-bin-path only PRINTS the path — it does not compile. Build first,
+  # otherwise the bundle silently ships a stale binary (burned us on 2026-07-02).
+  (
+    cd "$NMH_ROOT_DIR" || exit 1
+    DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
+      swift build --product "$NMH_APP_NAME"
+  )
   build_dir="$(
     cd "$NMH_ROOT_DIR" || exit 1
     DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \

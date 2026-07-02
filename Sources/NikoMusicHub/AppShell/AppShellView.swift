@@ -39,7 +39,7 @@ struct AppShellView: View {
                         registry: registry,
                         selectedToolID: $selectedToolID
                     )
-                    .frame(width: 64)
+                    .frame(width: HubDesignSystem.Size.navWidth)
                     .hubChromeMaterial()
                     shellDivider
                 } else {
@@ -74,7 +74,6 @@ struct AppShellView: View {
                     }
                 }
             }
-            .hubGlassGroup(spacing: HubDesignSystem.Spacing.shell)
         }
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .onAppear {
@@ -115,7 +114,7 @@ struct AppShellView: View {
 
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
-        if showToolSidebar { width += 64 }
+        if showToolSidebar { width += HubDesignSystem.Size.navWidth }
         if showOutputInbox { width += 232 }
         return width
     }

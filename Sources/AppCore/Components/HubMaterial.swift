@@ -42,27 +42,15 @@ struct HubGlassBackdrop: View {
 
     let tint: Double
 
+    // NOTE: no per-column NSVisualEffectView / .glassEffect here. A column-local effect view
+    // hosts above the column's own SwiftUI rows in this shell layout, veiling the content
+    // (labels rendered faint/smeared — the "invisible sidebar" bug). The references use ONE
+    // glass sheet for the whole window: that lives in `HubShellBackground`; chrome columns
+    // are just a translucent semantic tint over it, so the desktop bleeds through while the
+    // content stays crisp.
     var body: some View {
-        if reduceTransparency {
-            fallbackBackdrop(useVibrancy: false)
-        } else if #available(macOS 26.0, *) {
-            Rectangle()
-                .fill(Color.clear)
-                .glassEffect(
-                    .regular.tint(HubDesignSystem.Palette.sidebar.opacity(tint)),
-                    in: Rectangle()
-                )
-        } else {
-            fallbackBackdrop(useVibrancy: true)
-        }
-    }
-
-    private func fallbackBackdrop(useVibrancy: Bool) -> some View {
         ZStack {
-            if useVibrancy {
-                HubVisualEffectView()
-            }
-            HubDesignSystem.Palette.sidebar.opacity(useVibrancy ? tint : 1)
+            HubDesignSystem.Palette.sidebar.opacity(reduceTransparency ? 1 : max(tint, 0.72))
             LinearGradient(
                 colors: [Color.white.opacity(0.07), Color.white.opacity(0), Color.black.opacity(0.12)],
                 startPoint: .top,

@@ -9,21 +9,28 @@ import SwiftUI
 /// The body consumes `Palette.canvas` (opaque, DS-08) instead of wrapping the deprecated
 /// liquid backdrop.
 public struct HubShellBackground: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     public init() {}
 
     public var body: some View {
-        // Inky canvas + a whisper of ambient light from the top so the window reads as a lit
-        // space, not dead-flat black (references have this ambient depth). Opaque base keeps
-        // the Reduce-Transparency path honest.
-        HubDesignSystem.Palette.canvas
-            .overlay {
-                LinearGradient(
-                    colors: [Color.white.opacity(0.022), Color.white.opacity(0), Color.black.opacity(0.06)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        // The references' windows are glass end-to-end: the desktop bleeds through the whole
+        // window, not just the chrome columns. Behind-window vibrancy veiled by the inky canvas
+        // keeps text contrast while letting the wallpaper light the surface. Reduce
+        // Transparency falls back to the opaque canvas.
+        ZStack {
+            if !reduceTransparency {
+                HubVisualEffectView(material: .underWindowBackground, blending: .behindWindow)
             }
-            .ignoresSafeArea()
+            HubDesignSystem.Palette.canvas
+                .opacity(reduceTransparency ? 1 : 0.82)
+            LinearGradient(
+                colors: [Color.white.opacity(0.022), Color.white.opacity(0), Color.black.opacity(0.06)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -150,12 +157,29 @@ public struct HubSidebarNavRow: ViewModifier {
             .foregroundStyle(isSelected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
             .background {
                 if isSelected {
+                    // Reference selection: a subtly RAISED neutral pill — fill one step up,
+                    // light-catching hairline, faint lift. Never accent-colored (DS-13).
                     RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                         .fill(HubDesignSystem.Palette.selection)
                         .overlay {
                             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                                .strokeBorder(HubDesignSystem.Palette.selectionStroke, lineWidth: 1)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            HubDesignSystem.Highlight.rim,
+                                            HubDesignSystem.Palette.selectionStroke,
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
                         }
+                        .shadow(
+                            color: HubDesignSystem.Elevation.low.color,
+                            radius: HubDesignSystem.Elevation.low.radius,
+                            y: HubDesignSystem.Elevation.low.y
+                        )
                 }
             }
     }
