@@ -22,7 +22,7 @@ struct OutputInboxInspectorView: View {
             } else {
                 List(items) { item in
                     itemRow(item)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 0))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 }
@@ -47,7 +47,8 @@ struct OutputInboxInspectorView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Output Inbox")
-                    .font(HubDesignSystem.Typography.sectionTitle())
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 Spacer(minLength: 8)
                 HubIconButton(
                     systemImage: "folder.badge.gearshape",
@@ -188,16 +189,20 @@ struct OutputInboxInspectorView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 9)
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubLiquidCard(
-            cornerRadius: HubDesignSystem.Radius.row,
-            intent: itemIntent(for: item, isHovered: isHovered),
-            interactive: revealable
-        )
+        .background {
+            // Flat reference row: transparent at rest, subtle fill on hover, tinted for
+            // failed/missing states (color is never the only carrier — statusLine repeats it).
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(itemRowFill(for: item, isHovered: isHovered))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .onHover { hovering in
-            hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
+            withAnimation(.easeOut(duration: 0.14)) {
+                hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
+            }
         }
         .onTapGesture {
             guard revealable else { return }
@@ -244,6 +249,16 @@ struct OutputInboxInspectorView: View {
             return .hover
         }
         return .normal
+    }
+
+    /// Flat-row fill derived from the semantic item intent (references list rows are unboxed).
+    private func itemRowFill(for item: OutputInboxItem, isHovered: Bool) -> Color {
+        switch itemIntent(for: item, isHovered: isHovered) {
+        case .error: return HubDesignSystem.Palette.danger.opacity(0.14)
+        case .warning: return HubDesignSystem.Palette.warning.opacity(0.14)
+        case .hover: return Color.white.opacity(0.05)
+        default: return Color.clear
+        }
     }
 
     private func fileIcon(for url: URL) -> some View {

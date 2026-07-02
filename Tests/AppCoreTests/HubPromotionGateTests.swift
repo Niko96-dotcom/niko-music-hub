@@ -37,7 +37,7 @@ final class HubPromotionGateTests: XCTestCase {
             ("HubShellBackground",  true),  // pendingPromotion — 1 call site (AppShellView:102); Phase 52 adds more
             ("HubSidebarNavRow",    true),  // pendingPromotion — 0 call sites (ToolSidebarView unmigrated → Phase 52)
             ("hubSidebarNavRow",    true),  // pendingPromotion — the modifier extension
-            ("hubCard",             true),  // pendingPromotion — new this phase, features migrate in 52–56
+            ("hubCard",             false), // promoted — Stem + AppShell now call the semantic modifier directly
             ("HubCard",             true),  // pendingPromotion — the struct itself
         ]
 

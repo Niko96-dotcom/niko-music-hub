@@ -27,19 +27,21 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        VStack(spacing: HubDesignSystem.Spacing.shell) {
+        VStack(spacing: 0) {
             persistenceIssueBanner
 
-            HStack(spacing: HubDesignSystem.Spacing.shell) {
+            // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
+            // inky canvas, separated by hairline dividers (no floating panels / gaps).
+            HStack(spacing: 0) {
                 if showToolSidebar {
                     ToolSidebarView(
                         context: context,
                         registry: registry,
                         selectedToolID: $selectedToolID
                     )
-                    .frame(minWidth: 190, idealWidth: 220, maxWidth: 250)
-                    .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
-                    .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
+                    .frame(width: 64)
+                    .hubChromeMaterial()
+                    shellDivider
                 } else {
                     CollapsedSidebarRail(
                         systemImage: "sidebar.left",
@@ -47,20 +49,23 @@ struct AppShellView: View {
                     ) {
                         setToolSidebarVisible(true)
                     }
+                    shellDivider
                 }
 
                 activeToolView
+                    .padding(.top, 14)
                     .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .layoutPriority(1)
-                    .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
-                    .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
+                    .background(HubDesignSystem.Palette.canvas)
 
                 if showOutputInbox {
+                    shellDivider
                     OutputInboxInspectorView(context: context)
-                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
-                        .hubLiquidPanel(cornerRadius: HubDesignSystem.Radius.shell)
-                        .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.shell, style: .continuous))
+                        .padding(.top, 12)
+                        .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
+                        .hubChromeMaterial()
                 } else {
+                    shellDivider
                     CollapsedSidebarRail(
                         systemImage: "sidebar.right",
                         accessibilityLabel: "Show output inbox"
@@ -71,7 +76,6 @@ struct AppShellView: View {
             }
             .hubGlassGroup(spacing: HubDesignSystem.Spacing.shell)
         }
-        .padding(HubDesignSystem.Spacing.shell)
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .onAppear {
             // Drain any pending router state that was set while the window was absent
@@ -102,10 +106,17 @@ struct AppShellView: View {
         .background(HubShellBackground())
     }
 
+    /// Full-height hairline that separates flush columns (the reference split-view seam).
+    private var shellDivider: some View {
+        HubDesignSystem.Palette.separator
+            .frame(width: 1)
+            .frame(maxHeight: .infinity)
+    }
+
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
-        if showToolSidebar { width += 190 }
-        if showOutputInbox { width += 220 }
+        if showToolSidebar { width += 64 }
+        if showOutputInbox { width += 232 }
         return width
     }
 
@@ -150,6 +161,7 @@ struct AppShellView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
             .hubLiquidCard(cornerRadius: HubDesignSystem.Radius.row, intent: .warning)
+            .padding(HubDesignSystem.Spacing.section)
         }
     }
 

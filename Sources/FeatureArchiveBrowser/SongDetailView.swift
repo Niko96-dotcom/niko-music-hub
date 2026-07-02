@@ -43,7 +43,8 @@ struct SongDetailView: View {
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(song.effectiveDisplayTitle)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(.system(size: 23, weight: .bold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
 
             Text("Folder: \(song.originalFolderName)")
                 .font(.system(size: 11))

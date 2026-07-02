@@ -25,21 +25,24 @@ public struct HubCompactChipColors: Sendable {
         self.unselectedStroke = unselectedStroke
     }
 
+    // Selected = the restrained 16%-amber tint fill (accentFill's documented purpose) with
+    // amber text — a subtle brand highlight, not a solid accent block. Unselected =
+    // near-transparent so the strip reads as quiet filter pills until one is active.
     public static let `default` = HubCompactChipColors(
-        selectedFill: HubDesignSystem.Palette.accent,
-        selectedForeground: HubDesignSystem.Palette.textPrimary,
-        selectedStroke: HubDesignSystem.Palette.accentDeep,
+        selectedFill: HubDesignSystem.Palette.accentFill,
+        selectedForeground: HubDesignSystem.Palette.accent,
+        selectedStroke: HubDesignSystem.Palette.accentDeep.opacity(0.55),
         unselectedForeground: HubDesignSystem.Palette.textSecondary,
-        unselectedFill: HubDesignSystem.Palette.selection,
-        unselectedStroke: HubDesignSystem.Palette.selectionStroke
+        unselectedFill: Color.white.opacity(0.04),
+        unselectedStroke: HubDesignSystem.Palette.separator
     )
 
     public static let archive = HubCompactChipColors(
-        selectedFill: HubDesignSystem.Palette.accent,
-        selectedForeground: HubDesignSystem.Palette.textPrimary,
-        selectedStroke: HubDesignSystem.Palette.accentDeep,
+        selectedFill: HubDesignSystem.Palette.accentFill,
+        selectedForeground: HubDesignSystem.Palette.accent,
+        selectedStroke: HubDesignSystem.Palette.accentDeep.opacity(0.55),
         unselectedForeground: HubDesignSystem.Palette.textSecondary,
-        unselectedFill: HubDesignSystem.Palette.selection,
-        unselectedStroke: HubDesignSystem.Palette.selectionStroke
+        unselectedFill: Color.white.opacity(0.04),
+        unselectedStroke: HubDesignSystem.Palette.separator
     )
 }

@@ -92,18 +92,36 @@ struct ArchiveBrowserView: View {
                 .focused($detailFocused)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
-            VStack(spacing: 10) {
-                Image(systemName: "music.note.house")
-                    .font(.system(size: 30))
-                    .foregroundStyle(HubDesignSystem.Colors.accent)
-                Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
-                    .font(HubDesignSystem.Typography.screenTitle())
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                if viewModel.roots.isEmpty {
-                    Text("Scan a root to browse songs here.")
-                        .font(HubDesignSystem.Typography.body())
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [HubDesignSystem.Palette.accent.opacity(0.16), HubDesignSystem.Palette.accent.opacity(0)],
+                                center: .center,
+                                startRadius: 2,
+                                endRadius: 58
+                            )
+                        )
+                        .frame(width: 116, height: 116)
+                    Image(systemName: "music.note")
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(HubDesignSystem.Palette.accent)
+                }
+                VStack(spacing: 6) {
+                    Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Text(viewModel.roots.isEmpty
+                        ? "Scan a root to browse your songs here."
+                        : "Preview mixdowns and open the latest Cubase project — without touching your archive.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

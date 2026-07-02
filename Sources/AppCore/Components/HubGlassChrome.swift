@@ -12,8 +12,17 @@ public struct HubShellBackground: View {
     public init() {}
 
     public var body: some View {
-        // Opaque canvas per Direction A. Reduce Transparency path stays opaque (no material blur).
+        // Inky canvas + a whisper of ambient light from the top so the window reads as a lit
+        // space, not dead-flat black (references have this ambient depth). Opaque base keeps
+        // the Reduce-Transparency path honest.
         HubDesignSystem.Palette.canvas
+            .overlay {
+                LinearGradient(
+                    colors: [Color.white.opacity(0.022), Color.white.opacity(0), Color.black.opacity(0.06)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
             .ignoresSafeArea()
     }
 }
@@ -103,9 +112,8 @@ public struct HubGlassChip: ViewModifier {
 
 /// Groups nearby custom glass surfaces — deprecated adapter.
 ///
-/// DS-08: the macOS-26 `GlassEffectContainer` branch is dropped. The body is now plain
-/// `content` (semantic spacing uses `VStack`/`hubToolContentPadding`, not a glass container).
-/// The `spacing` parameter is accepted but ignored — Phase 57 deletes this adapter.
+/// On macOS 26 this still provides the native glass grouping container so adjacent custom
+/// surfaces sample and morph coherently while call sites migrate off this adapter.
 @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem semantic tokens.")
 public struct HubGlassGroup: ViewModifier {
     private let spacing: CGFloat?
@@ -115,7 +123,13 @@ public struct HubGlassGroup: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
+        } else {
+            content
+        }
     }
 }
 

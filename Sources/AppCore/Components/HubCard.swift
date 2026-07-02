@@ -5,9 +5,9 @@ import SwiftUI
 /// Used ONLY for genuinely bounded objects per IA-08 (drop target, focused audio player,
 /// warning, compact job/result group). The default section is unboxed.
 ///
-/// DS-08: no glass-effect modifier — opaque `Palette` fills + `RoundedRectangle` stroke
-/// (macOS 14.2 baseline). The deprecated `hubLiquidCard()` adapter in `HubLiquidGlass.swift`
-/// delegates here; Phase 57 deletes the adapter.
+/// On macOS 26 this resolves to native SwiftUI Liquid Glass through `HubSurface`; older systems
+/// keep the semantic opaque fallback. The deprecated `hubLiquidCard()` adapter in
+/// `HubLiquidGlass.swift` delegates here; Phase 57 deletes the adapter.
 public struct HubCard: ViewModifier {
     private let cornerRadius: CGFloat
     private let state: HubDesignSystem.ControlState
@@ -24,47 +24,11 @@ public struct HubCard: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .opacity(state == .disabled ? 0.62 : 1)
-            .background {
-                shape.fill(fillColor)
-            }
-            .overlay {
-                shape.strokeBorder(
-                    strokeColor,
-                    lineWidth: strokeWidth
-                )
-            }
-    }
-
-    private var fillColor: Color {
-        switch state {
-        case .normal, .hover: return HubDesignSystem.Palette.surface
-        case .pressed: return HubDesignSystem.Palette.surfaceRaised
-        case .selected: return HubDesignSystem.Palette.selection
-        case .disabled: return HubDesignSystem.Palette.surface
-        case .warning: return HubDesignSystem.Palette.warning.opacity(0.16)
-        case .error: return HubDesignSystem.Palette.danger.opacity(0.16)
-        }
-    }
-
-    private var strokeColor: Color {
-        switch state {
-        case .selected: return HubDesignSystem.Palette.selectionStroke
-        case .warning: return HubDesignSystem.Palette.warning.opacity(0.42)
-        case .error: return HubDesignSystem.Palette.danger.opacity(0.44)
-        case .disabled: return HubDesignSystem.Palette.separator.opacity(0.5)
-        case .normal, .hover, .pressed: return HubDesignSystem.Palette.separator
-        }
-    }
-
-    private var strokeWidth: CGFloat {
-        switch state {
-        case .selected: return 1.25
-        case .warning, .error: return 1
-        case .normal, .hover, .pressed, .disabled: return 0.5
-        }
+        // Thin delegate over the unified `HubSurface` primitive (DEPTH-03): fill + sheen +
+        // light-catching edge + elevation all live in one place now, so every consumer of
+        // `hubCard()` (and the deprecated `hubLiquid*`/`hubGlass*` adapters that delegate here)
+        // inherits the same premium depth.
+        content.hubSurface(.card, state: state, cornerRadius: cornerRadius, interactive: interactive)
     }
 }
 
@@ -73,7 +37,6 @@ public extension View {
     ///
     /// Used ONLY for bounded objects per IA-08 (drop target, focused audio player,
     /// warning, compact job/result group). The default section is unboxed.
-    /// DS-08: no glass-effect modifier — opaque `Palette` fills + `RoundedRectangle` stroke.
     func hubCard(
         cornerRadius: CGFloat = HubDesignSystem.Radius.card,
         state: HubDesignSystem.ControlState = .normal,

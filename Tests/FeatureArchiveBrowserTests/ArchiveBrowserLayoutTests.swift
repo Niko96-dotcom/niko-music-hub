@@ -4,11 +4,11 @@ import XCTest
 final class ArchiveBrowserLayoutTests: XCTestCase {
     func testListWidthClampsAndLeavesRoomForDetail() {
         let narrow = ArchiveBrowserLayout.listWidth(totalWidth: 520)
-        XCTAssertEqual(narrow, 220)
+        XCTAssertEqual(narrow, 260)
         XCTAssertGreaterThanOrEqual(520 - narrow, 200)
 
         let wide = ArchiveBrowserLayout.listWidth(totalWidth: 1_000)
-        XCTAssertEqual(wide, 360)
+        XCTAssertEqual(wide, 410)
         XCTAssertGreaterThanOrEqual(1_000 - wide, 400)
     }
 

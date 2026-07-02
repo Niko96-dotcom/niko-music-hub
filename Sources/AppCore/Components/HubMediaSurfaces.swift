@@ -177,11 +177,20 @@ public struct HubTransportBar: View {
         action: @escaping () -> Void
     ) -> some View {
         Group {
-            if prominent {
+            if prominent && isPlaying {
+                // Solid amber only while actively playing — the one focal accent (art direction:
+                // "accent reserved for active playback"; references use accent sparingly).
                 Button(action: action) {
                     transportButtonIcon(systemImage)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(HubDesignSystem.Palette.accent)
+            } else if prominent {
+                // Idle play affordance: restrained tinted capsule, not a solid accent block.
+                Button(action: action) {
+                    transportButtonIcon(systemImage)
+                }
+                .buttonStyle(.bordered)
                 .tint(HubDesignSystem.Palette.accent)
             } else {
                 Button(action: action) {

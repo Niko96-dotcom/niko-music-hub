@@ -10,7 +10,7 @@ struct ArchiveSidebarView: View {
     let onChooseRoot: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
+        VStack(alignment: .leading, spacing: 14) {
             archiveToolbar
 
             rootsSection
@@ -44,7 +44,9 @@ struct ArchiveSidebarView: View {
                 )
             }
         }
-        .padding(compactList ? 10 : 12)
+        .padding(.horizontal, compactList ? 14 : 18)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .hubGlassGroup(spacing: HubDesignSystem.Spacing.cardGap)
     }
@@ -52,7 +54,8 @@ struct ArchiveSidebarView: View {
     private var archiveToolbar: some View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Archive")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .layoutPriority(1)
@@ -228,13 +231,18 @@ struct ArchiveSidebarView: View {
     }
 
     private var searchField: some View {
-        TextField("Search songs", text: Binding(
-            get: { viewModel.searchQuery },
-            set: { viewModel.setSearchQuery($0) }
-        ))
-        .textFieldStyle(.plain)
-        .font(HubDesignSystem.Typography.body())
-        .padding(.horizontal, 12)
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            TextField("Search songs", text: Binding(
+                get: { viewModel.searchQuery },
+                set: { viewModel.setSearchQuery($0) }
+            ))
+            .textFieldStyle(.plain)
+            .font(HubDesignSystem.Typography.body())
+        }
+        .padding(.horizontal, 11)
         .padding(.vertical, 9)
         .frame(minHeight: 34)
         .hubGlassField(
@@ -287,7 +295,7 @@ struct ArchiveSidebarView: View {
             )
         } else {
             ScrollView {
-                LazyVStack(spacing: 6) {
+                LazyVStack(spacing: 3) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in
                         Button {
                             viewModel.selectSong(song)

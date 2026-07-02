@@ -10,18 +10,38 @@ public struct StemSeparationView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
-            fileWell
-            youtubeWell
-            controls
-            progressSection
-            errorBanner
-            resultsList
-            Spacer()
+        ScrollView {
+            VStack(spacing: HubDesignSystem.Spacing.section) {
+                header
+                fileWell
+                youtubeWell
+                controls
+                progressSection
+                errorBanner
+                resultsList
+                Spacer(minLength: 0)
+            }
+            .hubToolContentPadding()
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
         }
-        .padding()
-        .frame(minWidth: 480, minHeight: 360)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
         .onAppear { viewModel.onAppear() }
+    }
+
+    private var header: some View {
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            Text("Stem Separation")
+                .font(HubDesignSystem.Typography.screenTitle())
+            Text(viewModel.statusMessage)
+                .font(HubDesignSystem.Typography.body())
+                .foregroundStyle(viewModel.errorMessage == nil ? .secondary : HubDesignSystem.Colors.warning)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var fileWell: some View {
@@ -48,11 +68,21 @@ public struct StemSeparationView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Choose File...") {
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Choose File",
+                    style: .secondary,
+                    isEnabled: !viewModel.isRunning
+                ) {
                     viewModel.selectFile()
                 }
                 if viewModel.droppedFileURL != nil {
-                    Button("Clear") {
+                    HubLabeledButton(
+                        icon: "xmark",
+                        label: "Clear",
+                        style: .ghost,
+                        isEnabled: !viewModel.isRunning
+                    ) {
                         viewModel.clearSelection()
                     }
                 }
@@ -60,8 +90,7 @@ public struct StemSeparationView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 120)
         .padding()
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card, interactive: true)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             Task {
                 var urls: [URL] = []
@@ -83,26 +112,44 @@ public struct StemSeparationView: View {
     private var youtubeWell: some View {
         HStack(spacing: 10) {
             Image(systemName: "play.rectangle")
-                .font(.title3)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.tertiary)
 
             TextField("Paste YouTube URL...", text: $viewModel.youtubeURLText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
                 .disabled(viewModel.isRunning)
 
-            Button("Download & Separate") {
+            HubLabeledButton(
+                icon: "arrow.down.circle",
+                label: "Download & Separate",
+                style: .primary,
+                isEnabled: viewModel.canStartYouTube
+            ) {
                 viewModel.startYouTubeSeparation()
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!viewModel.canStartYouTube)
 
             if !viewModel.youtubeURLText.isEmpty {
-                Button("Clear") {
+                Button {
                     viewModel.clearYouTubeURL()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.tertiary)
                 }
+                .buttonStyle(.plain)
+                .help("Clear YouTube URL")
                 .disabled(viewModel.isRunning)
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .hubCard(
+            cornerRadius: HubDesignSystem.Radius.row,
+            state: viewModel.isRunning ? .disabled : .normal,
+            interactive: true
+        )
+        .disabled(viewModel.isRunning)
     }
 
     private var controls: some View {
@@ -118,81 +165,126 @@ public struct StemSeparationView: View {
 
             HStack {
                 Text("Output: \(viewModel.outputFolderURL.path)")
-                    .font(.caption)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Button("Choose Output Folder...") {
+
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Choose Output Folder",
+                    style: .secondary,
+                    isEnabled: !viewModel.isRunning
+                ) {
                     viewModel.pickOutputFolder()
                 }
             }
 
             HStack(spacing: 12) {
-                Button("Start Separation") {
+                HubLabeledButton(
+                    icon: "waveform.path.ecg",
+                    label: "Start Separation",
+                    style: .primary,
+                    isEnabled: viewModel.canStart
+                ) {
                     viewModel.startSeparation()
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canStart)
 
-                Button("Cancel") {
+                HubLabeledButton(
+                    icon: "xmark",
+                    label: "Cancel",
+                    style: .secondary,
+                    isEnabled: viewModel.canCancel
+                ) {
                     viewModel.cancelSeparation()
                 }
-                .disabled(!viewModel.canCancel)
             }
         }
+        .padding(12)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
+    @ViewBuilder
     private var progressSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ProgressView(value: viewModel.isRunning ? viewModel.progress : 0)
-                .opacity(viewModel.isRunning ? 1 : 0)
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        if viewModel.isRunning {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+                ProgressView(value: viewModel.progress)
+                    .tint(HubDesignSystem.Colors.accent)
+                Text("\(Int(viewModel.progress * 100))% complete")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
         }
     }
 
     private var errorBanner: some View {
         Group {
             if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.white)
-                    .padding(8)
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.danger)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.9))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
             }
         }
     }
 
+    @ViewBuilder
     private var resultsList: some View {
-        List(viewModel.results) { item in
-            HStack {
-                Image(systemName: "waveform")
-                VStack(alignment: .leading) {
-                    Text(item.fileURL.lastPathComponent)
-                        .lineLimit(1)
-                    if let role = item.metadata["displayName"] {
-                        Text(role)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+        if !viewModel.results.isEmpty {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.rowGap) {
+                Text("Separated stems")
+                    .font(HubDesignSystem.Typography.sectionTitle())
+
+                ForEach(viewModel.results) { item in
+                    resultRow(item)
                 }
-                Spacer()
-                Button("Reveal") {
-                    viewModel.reveal(item: item)
-                }
-                .buttonStyle(.borderless)
             }
-            .onDrag {
-                guard let url = viewModel.dragURL(for: item) else {
-                    return NSItemProvider()
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func resultRow(_ item: OutputInboxItem) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.fileURL.lastPathComponent)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let role = item.metadata["displayName"] {
+                    Text(role)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(.secondary)
                 }
-                return NSItemProvider(object: url as NSURL)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HubLabeledButton(
+                icon: "folder",
+                label: "Reveal",
+                style: .secondary
+            ) {
+                viewModel.reveal(item: item)
             }
         }
-        .listStyle(.plain)
-        .frame(minHeight: 80)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row, interactive: true)
+        .onDrag {
+            guard let url = viewModel.dragURL(for: item) else {
+                return NSItemProvider()
+            }
+            return NSItemProvider(object: url as NSURL)
+        }
     }
 }

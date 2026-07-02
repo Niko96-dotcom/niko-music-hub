@@ -32,5 +32,11 @@ case "$CAPTURE_STATUS" in
     ;;
 esac
 
-/usr/bin/screencapture -x "$NMH_DIST_DIR/desktop-proof.png"
-echo "Saved $OUT and $NMH_DIST_DIR/desktop-proof.png"
+SCREEN_CAPTURE_BIN="${SCREEN_CAPTURE_BIN:-$(command -v screencapture || true)}"
+if [[ -n "$SCREEN_CAPTURE_BIN" ]]; then
+  "$SCREEN_CAPTURE_BIN" -x "$NMH_DIST_DIR/desktop-proof.png"
+  echo "Saved $OUT and $NMH_DIST_DIR/desktop-proof.png"
+else
+  echo "desktop capture skipped: screencapture not found" >&2
+  echo "Saved $OUT"
+fi

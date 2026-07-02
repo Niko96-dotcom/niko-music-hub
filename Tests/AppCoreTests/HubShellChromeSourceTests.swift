@@ -27,7 +27,8 @@ final class HubShellChromeSourceTests: XCTestCase {
             "selectedToolID = metadata.id",
             "registry.features.map(\\.metadata)",
             "hoveredToolID",
-            "hubLiquidCard",
+            ".glassProminent",
+            ".glass",
             "HubDesignSystem.Liquid.Motion.duration",
             "accessibilityIdentifier(\"hub_tool_\\(metadata.id.rawValue)\")",
         ].forEach { required in

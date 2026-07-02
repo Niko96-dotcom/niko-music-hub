@@ -20,18 +20,14 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
     }
 
-    /// DS-12: the product accent is the warm muted amber rgb(198,168,128) locked by
-    /// calm-native.css — NOT `Color.accentColor` (system blue). The relationship is
-    /// verified by asserting a warm RGB profile (red > green > blue, blue < 0.70).
-    /// The `rgbaComponents` helper resolves via `NSColor(color).usingColorSpace(.sRGB)`
-    /// which returns the current-appearance value; the warm-amber relationship holds in
-    /// both light and dark mode (light accent rgb(168,138,98) is also red > green > blue).
-    func testAccentIsWarmAmberNotBlue() {
+    /// DS-12: the product accent is a monochrome NEUTRAL (references carry no brand tint — color
+    /// comes from content), NOT the old gold or any blue. Verified by an achromatic profile
+    /// (R ≈ G ≈ B). Holds in both light and dark mode.
+    func testAccentIsNeutralNotTinted() {
         let components = rgbaComponents(HubDesignSystem.Colors.accent)
         XCTAssertNotNil(components)
-        XCTAssertGreaterThan(Double(components!.red), Double(components!.green))
-        XCTAssertGreaterThan(Double(components!.green), Double(components!.blue))
-        XCTAssertLessThan(Double(components!.blue), 0.70)
+        XCTAssertLessThan(abs(Double(components!.red) - Double(components!.green)), 0.06)
+        XCTAssertLessThan(abs(Double(components!.green) - Double(components!.blue)), 0.06)
     }
 
     func testSelectedRowTokensUseAccentNotSystemAccent() {

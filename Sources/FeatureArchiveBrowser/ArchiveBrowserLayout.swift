@@ -1,8 +1,8 @@
 import CoreGraphics
 
 enum ArchiveBrowserLayout {
-    static let listMinWidth: CGFloat = 220
-    static let listMaxWidth: CGFloat = 360
+    static let listMinWidth: CGFloat = 260
+    static let listMaxWidth: CGFloat = 410
     static let listWidthRatio: CGFloat = 0.42
 
     static func listWidth(totalWidth: CGFloat) -> CGFloat {

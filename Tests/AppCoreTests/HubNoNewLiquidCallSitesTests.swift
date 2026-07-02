@@ -24,7 +24,15 @@ final class HubNoNewLiquidCallSitesTests: XCTestCase {
     /// type references such as `HubLiquidSurfaceIntent` (an intent enum used in helper
     /// signatures, not an adapter call site) and prose mentions in doc comments, so the
     /// number tracks real call sites — not substrings.
-    private static let baselineCallSiteCount: Int = 65
+    // 65 → 62: the AppShellView flush-layout redesign migrated the three shell column
+    // wrappers off the deprecated `hubLiquidPanel(` adapter onto semantic `Palette` column
+    // backgrounds.
+    // 62 → 60: the reference-faithful list redesign migrated the song row (SongCardView) and
+    // the output-inbox item row off the boxed `hubLiquidCard(` adapter onto flat, unboxed rows
+    // with token fills (no new adapter call sites added).
+    // 60 → 59: the left tool rail now uses native macOS glass button styles instead of wrapping
+    // every glyph in a deprecated `hubLiquidCard(` adapter.
+    private static let baselineCallSiteCount: Int = 59
 
     /// Deprecated Liquid/Glass adapter call forms feature code may invoke. Matching the
     /// `name(` call form (rather than the bare namespace substring) means a comment or a

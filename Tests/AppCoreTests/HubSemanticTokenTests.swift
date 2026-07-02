@@ -87,37 +87,34 @@ final class HubSemanticTokenTests: XCTestCase {
             abs(canvasComponents.green - canvasComponents.blue), 0.05,
             "Palette.canvas is not achromatic (DS-11 — calm-native neutral surface)"
         )
-        // Accent must be warm in both modes (DS-11/DS-12)
+        // Accent must be achromatic/neutral in both modes (monochrome — no brand tint)
         guard let accentComponents = rgbaComponents(HubDesignSystem.Palette.accent) else {
             XCTFail("Could not resolve Palette.accent to sRGB components")
             return
         }
-        XCTAssertGreaterThan(
-            accentComponents.red, accentComponents.blue,
-            "Palette.accent is not warm in current appearance (red should exceed blue)"
+        XCTAssertLessThan(
+            abs(accentComponents.red - accentComponents.blue), 0.06,
+            "Palette.accent is not neutral in current appearance (R≈B required — monochrome accent)"
         )
     }
 
-    // MARK: DS-12: Accent is warm amber, not blue
+    // MARK: DS-12: Accent is monochrome/neutral (no brand tint), not gold or blue
 
-    /// DS-12: accent is rgb(198,168,128) warm muted amber — NOT system blue.
-    /// Red > green > blue, and blue < 0.70 confirms a warm (not saturated blue) hue.
-    func testAccentIsWarmAmberNotBlue() {
+    /// DS-12: the references carry no brand tint in their chrome — color comes from content.
+    /// So `accent` is a bright cool NEUTRAL (near-white on dark, near-black on light): achromatic
+    /// (R ≈ G ≈ B), which rules out both the old gold and any blue.
+    func testAccentIsNeutralNotTinted() {
         guard let components = rgbaComponents(HubDesignSystem.Palette.accent) else {
             XCTFail("Could not resolve Palette.accent to sRGB components")
             return
         }
-        XCTAssertGreaterThan(
-            Double(components.red), Double(components.green),
-            "Palette.accent red should exceed green (warm amber, DS-12)"
-        )
-        XCTAssertGreaterThan(
-            Double(components.green), Double(components.blue),
-            "Palette.accent green should exceed blue (warm amber, DS-12)"
+        XCTAssertLessThan(
+            abs(Double(components.red) - Double(components.green)), 0.06,
+            "Palette.accent is not achromatic — R≈G required (monochrome accent, DS-12)"
         )
         XCTAssertLessThan(
-            Double(components.blue), 0.70,
-            "Palette.accent blue component too high — not warm amber (DS-12)"
+            abs(Double(components.green) - Double(components.blue)), 0.06,
+            "Palette.accent is not achromatic — G≈B required (monochrome accent, DS-12)"
         )
     }
 
@@ -217,17 +214,27 @@ final class HubSemanticTokenTests: XCTestCase {
         }
     }
 
-    // MARK: DS-08: Semantic path (HubCard) has no glassEffect
+    // MARK: Native Liquid Glass is centralized
 
-    /// DS-08: HubCard.swift — the semantic card surface — contains no .glassEffect modifier.
-    func testSemanticPathHasNoGlassEffect() throws {
-        let source = try String(
+    /// HubCard stays a thin semantic adapter; native `.glassEffect` lives in HubSurface and
+    /// HubMaterial so callers do not hand-roll glass locally.
+    func testNativeLiquidGlassIsCentralized() throws {
+        let cardSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubCard.swift",
             encoding: .utf8
         )
         XCTAssertFalse(
-            source.contains(".glassEffect("),
-            "HubCard.swift contains a .glassEffect( call — semantic path must not use glass (DS-08)"
+            cardSource.contains(".glassEffect("),
+            "HubCard.swift must stay a semantic adapter; native glass belongs in HubSurface."
+        )
+
+        let surfaceSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubSurface.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            surfaceSource.contains("#available(macOS 26.0") && surfaceSource.contains(".glassEffect("),
+            "HubSurface.swift must centralize native Liquid Glass for bounded custom surfaces."
         )
     }
 
