@@ -38,12 +38,14 @@ public final class AudioRecorderViewModel: ObservableObject {
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
         outputURL: URL,
-        outputInboxStore: any OutputInboxStore
+        outputInboxStore: any OutputInboxStore,
+        initialMaxDurationMinutes: Int = 30
     ) {
         self.capturePort = capturePort
         self.useCase = useCase
         self.outputURL = outputURL
         self.outputInboxStore = outputInboxStore
+        self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
     }
 
     public func startRecording() async {

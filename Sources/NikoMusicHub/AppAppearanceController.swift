@@ -1,4 +1,5 @@
 import AppCore
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -7,20 +8,25 @@ final class AppAppearanceController: ObservableObject {
 
     init(appearance: AppAppearance = .followSystem) {
         self.appearance = appearance
+        applySystemAppearance(appearance)
     }
 
     var preferredColorScheme: ColorScheme? {
-        switch appearance {
-        case .followSystem:
-            return nil
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        }
+        appearance.preferredColorScheme
     }
 
     func apply(_ appearance: AppAppearance) {
         self.appearance = appearance
+        applySystemAppearance(appearance)
+    }
+
+    private func applySystemAppearance(_ appearance: AppAppearance) {
+        DispatchQueue.main.async {
+            if let name = appearance.nsAppearanceName {
+                NSApp.appearance = NSAppearance(named: name)
+            } else {
+                NSApp.appearance = nil
+            }
+        }
     }
 }

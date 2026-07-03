@@ -12,8 +12,9 @@ struct SettingsView: View {
     @State private var launchAtLoginError: String?
     @State private var settingsLoadError: String?
     @State private var saveError: String?
+    @State private var helperPathError: String?
 
-    private let recordingDurationChoices = [15, 30, 45, 60, 90, 120]
+    private let recordingDurationChoices = RecordingDurationOptions.supportedMinutes.filter { $0 > 0 }
 
     var body: some View {
         HubToolPage {
@@ -105,7 +106,7 @@ struct SettingsView: View {
             ) {
                 Picker("Max duration", selection: maxRecordingBinding) {
                     ForEach(recordingDurationChoices, id: \.self) { minutes in
-                        Text("\(minutes) minutes").tag(minutes)
+                        Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
                     }
                 }
                 .pickerStyle(.menu)
@@ -171,6 +172,7 @@ struct SettingsView: View {
             }
 
             saveErrorBanner
+            helperPathErrorBanner
         }
         .onAppear { refresh() }
     }
@@ -231,6 +233,19 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var helperPathErrorBanner: some View {
+        if let helperPathError {
+            Label(helperPathError, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(HubDesignSystem.Spacing.section)
+                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
+        }
+    }
+
     private var maxRecordingBinding: Binding<Int> {
         Binding(
             get: { settings.maxRecordingDurationMinutes },
@@ -245,9 +260,12 @@ struct SettingsView: View {
         Binding(
             get: { settings.appearance },
             set: { newValue in
+                let previous = settings.appearance
                 settings.appearance = newValue
-                if persistSettings() {
-                    appearanceController.apply(newValue)
+                appearanceController.apply(newValue)
+                if !persistSettings() {
+                    settings.appearance = previous
+                    appearanceController.apply(previous)
                 }
             }
         )
@@ -322,6 +340,11 @@ struct SettingsView: View {
                     isEnabled: settingsLoadError == nil
                 ) {
                     guard let chosen = context.fileActions.chooseExecutable(prompt: prompt) else { return }
+                    if let validationError = HelperExecutableValidation.validate(url: chosen) {
+                        helperPathError = "\(label): \(validationError)"
+                        return
+                    }
+                    helperPathError = nil
                     onSet(chosen)
                 }
 
@@ -364,15 +387,16 @@ struct SettingsView: View {
         do {
             settings = try context.settingsStore.loadSettings()
             settingsLoadError = nil
+            appearanceController.apply(settings.appearance)
         } catch {
             settings = .default
             settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
             context.diagnostics.log(.error, "Settings load failed: \(error)")
         }
-        appearanceController.apply(settings.appearance)
         launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
         saveError = nil
+        helperPathError = nil
     }
 
     @discardableResult

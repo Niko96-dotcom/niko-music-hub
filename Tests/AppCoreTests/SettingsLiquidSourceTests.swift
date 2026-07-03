@@ -17,6 +17,8 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "Picker(\"Appearance\"",
             "AppAppearance.allCases",
             "appearanceController.apply",
+            "HelperExecutableValidation.validate",
+            "helperPathError",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Settings Liquid source: \(required)")
         }

@@ -67,6 +67,9 @@ if grep -q '/' "$CHECK_DIR/NikoMusicHub-test.dmg.sha256"; then
   exit 1
 fi
 
+assert_order 'log "local gates"' 'run "$ROOT/script/ci.sh"' "$ROOT/script/release-all.sh"
+assert_order 'run "$ROOT/script/ci.sh"' 'run "$ROOT/script/e2e_user_smoke.sh"' "$ROOT/script/release-all.sh"
+
 echo "== release command order stays fail-closed =="
 assert_order 'log "build app bundle"' 'log "package dmg"' "$ROOT/script/release-all.sh"
 assert_order 'log "package dmg"' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"

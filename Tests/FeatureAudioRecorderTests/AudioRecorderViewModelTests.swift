@@ -75,6 +75,21 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.maxDurationMinutes, 5)
     }
 
+    func testInitialMaxDurationMinutesSeededFromSettingsValue() {
+        let port = MockAudioCapturePort()
+        let useCase = RecordSystemAudioUseCase(capturePort: port)
+        let outputInboxStore = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: useCase,
+            outputURL: URL(fileURLWithPath: "/tmp"),
+            outputInboxStore: outputInboxStore,
+            initialMaxDurationMinutes: 90
+        )
+
+        XCTAssertEqual(vm.maxDurationMinutes, 90)
+    }
+
     func testStopRecordingFinalizesAndAddsOutputInboxItem() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-\(UUID().uuidString)", isDirectory: true)

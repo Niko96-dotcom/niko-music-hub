@@ -12,21 +12,24 @@ public struct AudioRecorderView: View {
 
         let capturePort = CoreAudioTapAdapter()
         let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
-        let outputURL = ((try? context.settingsStore.loadSettings()) ?? .default).outputFolder.url
+        let settings = (try? context.settingsStore.loadSettings()) ?? .default
+        let outputURL = settings.outputFolder.url
         let outputInboxStore = context.outputInboxStore
+        let initialMaxDuration = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
 
         _viewModel = StateObject(wrappedValue: AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: useCase,
             outputURL: outputURL,
-            outputInboxStore: outputInboxStore
+            outputInboxStore: outputInboxStore,
+            initialMaxDurationMinutes: initialMaxDuration
         ))
     }
 
     public var body: some View {
         HubToolPage {
-            header
             saveConfirmationBanner
+            header
             filenameDisplay
             timeDisplay
             meterSection
@@ -35,6 +38,9 @@ public struct AudioRecorderView: View {
             errorSection
             permissionSection
             incompatibleSection
+        }
+        .onChange(of: viewModel.maxDurationMinutes) { _, newValue in
+            persistMaxDuration(minutes: newValue)
         }
         .task(id: viewModel.showSaveConfirmation) {
             guard viewModel.showSaveConfirmation else { return }
@@ -179,14 +185,11 @@ public struct AudioRecorderView: View {
 
     private var settingsSection: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            HubChoiceChips("Max Duration", selection: $viewModel.maxDurationMinutes, choices: [
-                .init(5, label: "5 min"),
-                .init(10, label: "10 min"),
-                .init(15, label: "15 min"),
-                .init(30, label: "30 min"),
-                .init(60, label: "60 min"),
-                .init(0, label: "Unlimited"),
-            ])
+            HubChoiceChips("Max Duration", selection: $viewModel.maxDurationMinutes, choices:
+                RecordingDurationOptions.supportedMinutes.map { minutes in
+                    .init(minutes, label: RecordingDurationOptions.chipLabel(for: minutes))
+                }
+            )
             .disabled(viewModel.isRecording)
             .opacity(viewModel.isRecording ? 0.45 : 1)
             .frame(maxWidth: HubToolLayout.maxContentWidth)
@@ -391,5 +394,12 @@ public struct AudioRecorderView: View {
         let minutes = (Int(interval) % 3600) / 60
         let seconds = Int(interval) % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private func persistMaxDuration(minutes: Int) {
+        let normalized = RecordingDurationOptions.normalized(minutes)
+        try? context.settingsStore.updateSettings { settings in
+            settings.maxRecordingDurationMinutes = normalized
+        }
     }
 }

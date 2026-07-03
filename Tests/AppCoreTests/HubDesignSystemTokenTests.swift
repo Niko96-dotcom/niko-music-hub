@@ -26,14 +26,18 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
     }
 
-    /// DS-12: the product accent is a monochrome NEUTRAL (references carry no brand tint — color
-    /// comes from content), NOT the old gold or any blue. Verified by an achromatic profile
-    /// (R ≈ G ≈ B). Holds in both light and dark mode.
     func testAccentIsNeutralNotTinted() {
-        let components = rgbaComponents(HubDesignSystem.Colors.accent)
-        XCTAssertNotNil(components)
-        XCTAssertLessThan(abs(Double(components!.red) - Double(components!.green)), 0.06)
-        XCTAssertLessThan(abs(Double(components!.green) - Double(components!.blue)), 0.06)
+        for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+            let appearance = NSAppearance(named: appearanceName)!
+            let previous = NSApp.appearance
+            NSApp.appearance = appearance
+            defer { NSApp.appearance = previous }
+
+            let components = rgbaComponents(HubDesignSystem.Colors.accent)
+            XCTAssertNotNil(components, "accent components missing under \(appearanceName.rawValue)")
+            XCTAssertLessThan(abs(Double(components!.red) - Double(components!.green)), 0.06)
+            XCTAssertLessThan(abs(Double(components!.green) - Double(components!.blue)), 0.06)
+        }
     }
 
     func testSelectedRowTokensUseAccentNotSystemAccent() {

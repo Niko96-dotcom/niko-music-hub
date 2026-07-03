@@ -264,17 +264,14 @@ public struct DownloaderView: View {
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(viewModel.logEntries, id: \.self) { entry in
-                        Text(entry)
-                            .font(HubDesignSystem.Typography.mono(size: 10))
-                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    }
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(viewModel.logEntries, id: \.self) { entry in
+                    Text(entry)
+                        .font(HubDesignSystem.Typography.mono(size: 10))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 140)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
             .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         }

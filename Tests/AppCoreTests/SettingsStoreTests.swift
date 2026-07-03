@@ -135,6 +135,56 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(source.contains("settingsLoadError"))
         XCTAssertTrue(source.contains("Settings were not saved"))
         XCTAssertFalse(source.contains("(try? context.settingsStore.loadSettings()) ?? .default"))
+        XCTAssertTrue(source.contains("appearanceController.apply(settings.appearance)"))
+    }
+
+    func testSettingsDoesNotApplyAppearanceWhenLoadFails() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        guard let applyRange = source.range(of: "appearanceController.apply(settings.appearance)"),
+              let catchRange = source.range(of: "} catch {")
+        else {
+            return XCTFail("Expected appearance apply and catch block in SettingsView.refresh")
+        }
+        XCTAssertLessThan(applyRange.lowerBound, catchRange.lowerBound)
+    }
+
+    func testSettingsAppearanceBindingRevertsOnSaveFailure() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("let previous = settings.appearance"))
+        XCTAssertTrue(source.contains("appearanceController.apply(previous)"))
+    }
+
+    func testNikoMusicHubAppAppliesPreferredColorScheme() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/NikoMusicHubApp.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains(".preferredColorScheme(appearanceController.preferredColorScheme)"))
+    }
+
+    func testAudioRecorderSeedsMaxDurationFromSettings() throws {
+        let viewSource = try String(
+            contentsOfFile: "Sources/FeatureAudioRecorder/AudioRecorderView.swift",
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOfFile: "Sources/FeatureAudioRecorder/AudioRecorderViewModel.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(viewSource.contains("initialMaxDuration"))
+        XCTAssertTrue(viewSource.contains("persistMaxDuration"))
+        XCTAssertTrue(viewSource.contains("RecordingDurationOptions"))
+        XCTAssertTrue(modelSource.contains("initialMaxDurationMinutes"))
     }
 
     func testLoadsLegacyAudioPresetMissingChannelMode() throws {

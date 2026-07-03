@@ -39,6 +39,7 @@ struct NikoMusicHubApp: App {
                 entries: MenuBarMenuModel.resolvedEntries(registry: composition.registry),
                 router: composition.router
             )
+            .preferredColorScheme(appearanceController.preferredColorScheme)
         } label: {
             Image(systemName: "waveform")
                 .accessibilityLabel("Niko Music Hub")
