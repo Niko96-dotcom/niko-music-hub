@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SettingsFeature: ToolFeature {
     let archiveViewModel: ArchiveBrowserViewModel
+    let appearanceController: AppAppearanceController
 
     let metadata = ToolMetadata(
         id: "settings",
@@ -18,7 +19,8 @@ struct SettingsFeature: ToolFeature {
         AnyView(
             SettingsView(
                 context: context,
-                archiveViewModel: archiveViewModel
+                archiveViewModel: archiveViewModel,
+                appearanceController: appearanceController
             )
         )
     }

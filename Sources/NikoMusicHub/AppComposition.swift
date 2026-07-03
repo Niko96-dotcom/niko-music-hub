@@ -14,12 +14,15 @@ struct AppComposition {
     let registry: ToolRegistry
     let context: ToolContext
     let router: QuickAccessRouter
+    let appearanceController: AppAppearanceController
 
     @MainActor
     static func make() -> AppComposition {
         let runtime = MusicHubRuntimeEnvironment.current
         let userDefaults = Self.makeUserDefaults(runtime: runtime)
         let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults)
+        let initialAppearance = (try? settingsStore.loadSettings().appearance) ?? .followSystem
+        let appearanceController = AppAppearanceController(appearance: initialAppearance)
         let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
         let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL(runtime: runtime))
         let jobRunner = JobRunner()
@@ -95,7 +98,10 @@ struct AppComposition {
             AudioRecorderFeature(),
             DownloaderFeature(),
             StemSeparationFeature(),
-            SettingsFeature(archiveViewModel: archiveViewModel)
+            SettingsFeature(
+                archiveViewModel: archiveViewModel,
+                appearanceController: appearanceController
+            )
         ]
         if showsDevTool {
             features.append(DevToolFeature())
@@ -113,7 +119,12 @@ struct AppComposition {
         let registry = try! ToolRegistry(features: features)
 
         let quickAccessRouter = QuickAccessRouter()
-        return AppComposition(registry: registry, context: context, router: quickAccessRouter)
+        return AppComposition(
+            registry: registry,
+            context: context,
+            router: quickAccessRouter,
+            appearanceController: appearanceController
+        )
     }
 
     private static func makeUserDefaults(runtime: MusicHubRuntimeEnvironment) -> UserDefaults {

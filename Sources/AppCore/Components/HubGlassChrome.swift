@@ -157,29 +157,17 @@ public struct HubSidebarNavRow: ViewModifier {
             .foregroundStyle(isSelected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
             .background {
                 if isSelected {
-                    // Reference selection: a subtly RAISED neutral pill — fill one step up,
-                    // light-catching hairline, faint lift. Never accent-colored (DS-13).
+                    // Reference selection: a quiet neutral source-list row. Never
+                    // accent-colored (DS-13), and no floating-card lift.
                     RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                         .fill(HubDesignSystem.Palette.selection)
                         .overlay {
                             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                                 .strokeBorder(
-                                    LinearGradient(
-                                        colors: [
-                                            HubDesignSystem.Highlight.rim,
-                                            HubDesignSystem.Palette.selectionStroke,
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    ),
-                                    lineWidth: 1
+                                    HubDesignSystem.Palette.selectionStroke.opacity(0.45),
+                                    lineWidth: 0.5
                                 )
                         }
-                        .shadow(
-                            color: HubDesignSystem.Elevation.low.color,
-                            radius: HubDesignSystem.Elevation.low.radius,
-                            y: HubDesignSystem.Elevation.low.y
-                        )
                 }
             }
     }

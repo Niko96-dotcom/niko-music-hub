@@ -28,6 +28,7 @@ struct OutputInboxInspectorView: View {
                         .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
 
             Spacer(minLength: 0)

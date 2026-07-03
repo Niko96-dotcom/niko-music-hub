@@ -14,6 +14,9 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "inlineWarning",
             "archiveRootRow",
             "helperPathRow",
+            "Picker(\"Appearance\"",
+            "AppAppearance.allCases",
+            "appearanceController.apply",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Settings Liquid source: \(required)")
         }

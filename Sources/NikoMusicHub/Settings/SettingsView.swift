@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     let context: ToolContext
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
+    @ObservedObject var appearanceController: AppAppearanceController
 
     @State private var settings: AppSettings = .default
     @State private var launchAtLogin = false
@@ -23,8 +24,17 @@ struct SettingsView: View {
                 SettingsSection(
                     title: "General",
                     importance: .high,
-                    footer: "Opens Niko Music Hub when you sign in to this Mac."
+                    footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
                 ) {
+                    Picker("Appearance", selection: appearanceBinding) {
+                        ForEach(AppAppearance.allCases) { appearance in
+                            Text(appearance.label).tag(appearance)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(settingsLoadError != nil)
+                    .frame(maxWidth: 360, alignment: .leading)
+
                     Toggle("Open at login", isOn: $launchAtLogin)
                         .toggleStyle(.switch)
                         .onChange(of: launchAtLogin) { _, enabled in
@@ -242,6 +252,18 @@ struct SettingsView: View {
         )
     }
 
+    private var appearanceBinding: Binding<AppAppearance> {
+        Binding(
+            get: { settings.appearance },
+            set: { newValue in
+                settings.appearance = newValue
+                if persistSettings() {
+                    appearanceController.apply(newValue)
+                }
+            }
+        )
+    }
+
     private func pathRow(label: String, path: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -358,22 +380,26 @@ struct SettingsView: View {
             settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
             context.diagnostics.log(.error, "Settings load failed: \(error)")
         }
+        appearanceController.apply(settings.appearance)
         launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
         saveError = nil
     }
 
-    private func persistSettings() {
+    @discardableResult
+    private func persistSettings() -> Bool {
         guard settingsLoadError == nil else {
             saveError = "Settings were not saved because the current settings could not be loaded."
-            return
+            return false
         }
         do {
             try context.settingsStore.saveSettings(settings)
             saveError = nil
+            return true
         } catch {
             saveError = "Could not save settings."
             context.diagnostics.log(.error, "Settings save failed")
+            return false
         }
     }
 
@@ -440,12 +466,12 @@ private struct SettingsSection<Content: View>: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HubSectionHeader(title)
 
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
                 content
             }
             .padding(HubDesignSystem.Spacing.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.card, state: sectionIntent)
+            .hubSurface(.panel, state: sectionIntent, cornerRadius: HubDesignSystem.Radius.panel)
 
             if let footer {
                 Text(footer)

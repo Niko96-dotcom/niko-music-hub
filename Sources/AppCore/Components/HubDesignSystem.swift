@@ -57,14 +57,14 @@ public enum HubDesignSystem {
 
     public enum Radius {
         public static let shell: CGFloat = 10
-        public static let panel: CGFloat = 12
-        public static let card: CGFloat = 14
-        public static let row: CGFloat = 10
-        public static let chip: CGFloat = 8
+        public static let panel: CGFloat = 8
+        public static let card: CGFloat = 8
+        public static let row: CGFloat = 8
+        public static let chip: CGFloat = 7
         public static let pill: CGFloat = .infinity
-        public static let button: CGFloat = 8
-        /// Floating overlays — popovers, sheets, feature callouts (references: ~16px).
-        public static let popover: CGFloat = 16
+        public static let button: CGFloat = 7
+        /// Floating overlays — popovers, sheets, feature callouts.
+        public static let popover: CGFloat = 12
     }
 
     // MARK: - Spacing
@@ -125,12 +125,24 @@ public enum HubDesignSystem {
     public enum Elevation {
         /// Flush with the surface — no lift.
         public static let flat = Shadow(color: .clear, radius: 0, y: 0)
-        /// List rows / resting cards — a whisper of lift off the canvas.
-        public static let low = Shadow(color: Color.black.opacity(0.20), radius: 4, y: 1)
-        /// Hovered / selected cards — clearly raised.
-        public static let medium = Shadow(color: Color.black.opacity(0.30), radius: 10, y: 4)
+        /// List rows / resting cards — almost flush, like grouped settings rows.
+        public static let low = Shadow(
+            color: Color(HubDynamicColor(light: Color.black.opacity(0.035), dark: Color.black.opacity(0.14))),
+            radius: 1,
+            y: 0
+        )
+        /// Hovered / selected cards — present, but still quiet.
+        public static let medium = Shadow(
+            color: Color(HubDynamicColor(light: Color.black.opacity(0.06), dark: Color.black.opacity(0.22))),
+            radius: 4,
+            y: 1
+        )
         /// Popovers / floating overlays — reads as detached from the window.
-        public static let high = Shadow(color: Color.black.opacity(0.44), radius: 24, y: 12)
+        public static let high = Shadow(
+            color: Color(HubDynamicColor(light: Color.black.opacity(0.10), dark: Color.black.opacity(0.34))),
+            radius: 14,
+            y: 7
+        )
     }
 
     // MARK: - Highlight (DEPTH-02)
@@ -141,15 +153,15 @@ public enum HubDesignSystem {
 
     public enum Highlight {
         /// Bright top rim on a raised surface (the edge that catches light).
-        public static let rim = Color.white.opacity(0.10)
+        public static let rim = Color.white.opacity(0.04)
         /// Stronger rim for selected / emphasized surfaces.
-        public static let rimStrong = Color.white.opacity(0.17)
+        public static let rimStrong = Color.white.opacity(0.07)
         /// Soft vertical body sheen (top a touch brighter than the fill).
-        public static let sheen = Color.white.opacity(0.05)
+        public static let sheen = Color.white.opacity(0.015)
         /// Darker underside edge, opposite the rim.
-        public static let underside = Color.black.opacity(0.18)
+        public static let underside = Color.black.opacity(0.05)
         /// Subtle neutral hairline (dividers, quiet strokes) that reads on near-black.
-        public static let hairline = Color.white.opacity(0.06)
+        public static let hairline = Color.white.opacity(0.045)
     }
 
     // MARK: - Semantic Palette
@@ -162,23 +174,23 @@ public enum HubDesignSystem {
     public enum Palette {
         /// Window background, opaque. calm-native --canvas rgb(17,18,21) — inky near-black, faint cool.
         public static let canvas = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 236/255, green: 236/255, blue: 238/255, opacity: 1),
+            light: Color(.sRGB, red: 249/255, green: 249/255, blue: 248/255, opacity: 1),
             dark:  Color(.sRGB, red: 17/255,  green: 18/255,  blue: 21/255,  opacity: 1)))
         /// NavigationSplitView sidebar. calm-native --sidebar rgb(23,24,28).
         public static let sidebar = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 240/255, green: 240/255, blue: 242/255, opacity: 1),
+            light: Color(.sRGB, red: 238/255, green: 239/255, blue: 239/255, opacity: 1),
             dark:  Color(.sRGB, red: 23/255,  green: 24/255,  blue: 28/255,  opacity: 1)))
         /// Grouped content surface. calm-native --surface rgb(28,29,33).
         public static let surface = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 252/255, green: 252/255, blue: 254/255, opacity: 1),
+            light: Color(.sRGB, red: 246/255, green: 246/255, blue: 245/255, opacity: 1),
             dark:  Color(.sRGB, red: 28/255,  green: 29/255,  blue: 33/255,  opacity: 1)))
         /// Popover / raised group. calm-native --surfaceRaised rgb(37,39,44).
         public static let surfaceRaised = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 248/255, green: 248/255, blue: 250/255, opacity: 1),
+            light: Color(.sRGB, red: 250/255, green: 250/255, blue: 249/255, opacity: 1),
             dark:  Color(.sRGB, red: 37/255,  green: 39/255,  blue: 44/255,  opacity: 1)))
         /// Divider/stroke between surfaces. calm-native --separator rgb(52,54,60) — crisp hairline on near-black.
         public static let separator = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 210/255, green: 210/255, blue: 214/255, opacity: 1),
+            light: Color(.sRGB, red: 222/255, green: 222/255, blue: 222/255, opacity: 1),
             dark:  Color(.sRGB, red: 52/255,  green: 54/255,  blue: 60/255,  opacity: 1)))
         /// Primary readable text. calm-native --textPrimary rgb(237,238,241).
         public static let textPrimary = Color(HubDynamicColor(
@@ -190,19 +202,19 @@ public enum HubDesignSystem {
             dark:  Color(.sRGB, red: 156/255, green: 158/255, blue: 167/255, opacity: 1)))
         /// Tertiary/muted text. calm-native --textTertiary rgb(108,110,120).
         public static let textTertiary = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 140/255, green: 140/255, blue: 148/255, opacity: 1),
+            light: Color(.sRGB, red: 132/255, green: 132/255, blue: 136/255, opacity: 1),
             dark:  Color(.sRGB, red: 108/255, green: 110/255, blue: 120/255, opacity: 1)))
         /// Subtle neutral selection fill (low-chroma, NOT accent). calm-native --selection rgb(46,48,54).
         public static let selection = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 210/255, green: 210/255, blue: 216/255, opacity: 1),
+            light: Color(.sRGB, red: 225/255, green: 225/255, blue: 224/255, opacity: 1),
             dark:  Color(.sRGB, red: 46/255,  green: 48/255,  blue: 54/255,  opacity: 1)))
         /// Selection stroke. calm-native --selectionStroke rgb(64,66,74).
         public static let selectionStroke = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 190/255, green: 190/255, blue: 196/255, opacity: 1),
+            light: Color(.sRGB, red: 208/255, green: 208/255, blue: 208/255, opacity: 1),
             dark:  Color(.sRGB, red: 64/255,  green: 66/255,  blue: 74/255,  opacity: 1)))
         /// Generic focus ring (low-chroma, NOT accent per DS-13). calm-native --focus rgb(80,82,90).
         public static let focus = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 180/255, green: 180/255, blue: 186/255, opacity: 1),
+            light: Color(.sRGB, red: 198/255, green: 198/255, blue: 198/255, opacity: 1),
             dark:  Color(.sRGB, red: 80/255,  green: 82/255,  blue: 90/255,  opacity: 1)))
         /// Monochrome emphasis (the references are neutral — Knowledge Base / Analog / Finder
         /// chrome carry NO brand tint; color comes from content). "Accent" is now a bright cool

@@ -69,6 +69,17 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(helperTools.demucsMlx, demucsMlx)
     }
 
+    func testPersistsAppearancePreference() throws {
+        let suiteName = uniqueSuiteName()
+        let store = makeStore(suiteName: suiteName, reset: true)
+
+        try store.updateSettings { settings in
+            settings.appearance = .light
+        }
+
+        XCTAssertEqual(try makeStore(suiteName: suiteName).loadSettings().appearance, .light)
+    }
+
     func testLoadsLegacySettingsMissingArchiveOnboardingFlag() throws {
         let suiteName = uniqueSuiteName()
         let userDefaults = UserDefaults(suiteName: suiteName)!
@@ -98,6 +109,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(settings.outputFolder.url.path, "/Users/example/Music/Niko Music Hub/Inbox")
         XCTAssertEqual(settings.archiveRoots.map(\.path), ["/Users/example/Music/00_Cubase Project"])
         XCTAssertFalse(settings.archiveOnboardingCompleted)
+        XCTAssertEqual(settings.appearance, .followSystem)
         XCTAssertEqual(settings.audioPreset.sampleRate, 44100)
         XCTAssertEqual(settings.audioPreset.bitDepth, 24)
         XCTAssertEqual(settings.audioPreset.channelMode, .preserveMonoStereo)

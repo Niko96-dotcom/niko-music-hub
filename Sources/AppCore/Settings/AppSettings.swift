@@ -33,6 +33,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var helperTools: HelperToolSettings
     public var maxRecordingDurationMinutes: Int
     public var archiveRoots: [StoredArchiveRoot]
+    public var appearance: AppAppearance
     /// User completed first-run archive root onboarding (SPEC §5).
     public var archiveOnboardingCompleted: Bool
 
@@ -42,6 +43,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         case helperTools
         case maxRecordingDurationMinutes
         case archiveRoots
+        case appearance
         case archiveOnboardingCompleted
     }
 
@@ -51,6 +53,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         helperTools: HelperToolSettings = HelperToolSettings(),
         maxRecordingDurationMinutes: Int = 30,
         archiveRoots: [StoredArchiveRoot] = [],
+        appearance: AppAppearance = .followSystem,
         archiveOnboardingCompleted: Bool = false
     ) {
         self.outputFolder = outputFolder
@@ -58,6 +61,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.helperTools = helperTools
         self.maxRecordingDurationMinutes = maxRecordingDurationMinutes
         self.archiveRoots = archiveRoots
+        self.appearance = appearance
         self.archiveOnboardingCompleted = archiveOnboardingCompleted
     }
 
@@ -69,6 +73,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         helperTools = (try? container.decodeIfPresent(HelperToolSettings.self, forKey: .helperTools)) ?? HelperToolSettings()
         maxRecordingDurationMinutes = (try? container.decodeIfPresent(Int.self, forKey: .maxRecordingDurationMinutes)) ?? 30
         archiveRoots = (try? container.decodeIfPresent([StoredArchiveRoot].self, forKey: .archiveRoots)) ?? []
+        appearance = (try? container.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? .followSystem
         archiveOnboardingCompleted = (try? container.decodeIfPresent(Bool.self, forKey: .archiveOnboardingCompleted)) ?? false
     }
 

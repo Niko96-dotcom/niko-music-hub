@@ -5,8 +5,15 @@ import SwiftUI
 @main
 struct NikoMusicHubApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var appearanceController: AppAppearanceController
 
-    private let composition = AppComposition.make()
+    private let composition: AppComposition
+
+    init() {
+        let composition = AppComposition.make()
+        self.composition = composition
+        _appearanceController = StateObject(wrappedValue: composition.appearanceController)
+    }
 
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -15,6 +22,7 @@ struct NikoMusicHubApp: App {
                 context: composition.context,
                 router: composition.router
             )
+            .preferredColorScheme(appearanceController.preferredColorScheme)
         }
         // Reference chrome: no titlebar band or window title — the glass columns run
         // edge-to-edge and the traffic lights float over the nav column.

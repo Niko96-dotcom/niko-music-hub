@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The single semantic surface primitive (DEPTH-03) — the one place a Hub surface's material,
-/// fill, sheen, light-catching edge, and elevation are composed. Every bounded surface in the
+/// fill, quiet edge, and elevation are composed. Every bounded surface in the
 /// app resolves through here: `HubCard`, the deprecated `hubLiquid*`/`hubGlass*` adapters (they
 /// delegate to `hubCard` → here), chips, fields, and the translucent chrome columns. Change the
 /// look here and the whole app inherits it — no per-view depth formulas (that was the old,
@@ -86,15 +86,7 @@ public struct HubSurface: ViewModifier {
         content
             .opacity(state == .disabled ? 0.62 : 1)
             .background { shape.fill(fillColor) }
-            .background {
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(sheenOpacity), Color.white.opacity(0)],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            }
+            .background { subtleSheen(shape: shape) }
             .overlay { surfaceStroke(shape: shape) }
             .shadow(color: elevation.color, radius: elevation.radius, y: elevation.y)
     }
@@ -113,21 +105,25 @@ public struct HubSurface: ViewModifier {
                     .glassEffect(.regular.tint(nativeGlassTint), in: shape)
             }
 
-            shape.fill(
-                LinearGradient(
-                    colors: [Color.white.opacity(sheenOpacity), Color.white.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-            )
+            subtleSheen(shape: shape)
         }
+    }
+
+    private func subtleSheen(shape: RoundedRectangle) -> some View {
+        shape.fill(
+            LinearGradient(
+                colors: [Color.white.opacity(sheenOpacity), Color.white.opacity(0)],
+                startPoint: .top,
+                endPoint: .center
+            )
+        )
     }
 
     @ViewBuilder
     private func surfaceStroke(shape: RoundedRectangle) -> some View {
-        // Reference fields are quiet inset fills with NO stroke — borders are reserved
-        // for raised/selected surfaces.
-        if level == .field, state == .normal || state == .hover || state == .pressed || state == .disabled {
+        // Reference fields are quiet inset fills with no stroke; grouped panels keep
+        // a hairline instead of a glossy rim.
+        if level == .field && [HubDesignSystem.ControlState.normal, .hover, .pressed, .disabled].contains(state) {
             EmptyView()
         } else {
             strokedBorder(shape: shape)
@@ -136,11 +132,7 @@ public struct HubSurface: ViewModifier {
 
     private func strokedBorder(shape: RoundedRectangle) -> some View {
         shape.strokeBorder(
-            LinearGradient(
-                colors: [topEdgeColor, midStrokeColor, HubDesignSystem.Highlight.underside],
-                startPoint: .top,
-                endPoint: .bottom
-            ),
+            midStrokeColor.opacity(strokeOpacity),
             lineWidth: strokeWidth
         )
     }
@@ -181,36 +173,37 @@ public struct HubSurface: ViewModifier {
         }
     }
 
-    private var topEdgeColor: Color {
-        switch state {
-        case .selected, .hover: return HubDesignSystem.Highlight.rimStrong
-        case .warning, .error: return midStrokeColor
-        case .disabled: return Color.white.opacity(0)
-        case .normal, .pressed: return HubDesignSystem.Highlight.rim
-        }
-    }
-
     private var sheenOpacity: Double {
         switch state {
-        case .selected, .hover: return 0.08
-        case .disabled: return 0.02
-        case .warning, .error: return 0.03
-        case .normal, .pressed: return 0.05
+        case .selected, .hover: return 0.025
+        case .disabled: return 0.006
+        case .warning, .error: return 0.012
+        case .normal, .pressed: return 0.01
         }
     }
 
     private var strokeWidth: CGFloat {
         switch state {
-        case .selected: return 1.25
-        case .warning, .error: return 1
-        case .normal, .hover, .pressed, .disabled: return 0.75
+        case .selected: return 0.75
+        case .warning, .error: return 0.75
+        case .normal, .hover, .pressed, .disabled: return 0.5
+        }
+    }
+
+    private var strokeOpacity: Double {
+        switch state {
+        case .selected: return 0.75
+        case .warning, .error: return 0.60
+        case .disabled: return 0.35
+        case .normal, .hover, .pressed: return 0.55
         }
     }
 
     /// Interactive lift: hover/selected raise the surface; pressed settles it.
     private var elevation: HubDesignSystem.Shadow {
         switch state {
-        case .hover, .selected: return HubDesignSystem.Elevation.medium
+        case .hover: return level == .raised ? HubDesignSystem.Elevation.medium : HubDesignSystem.Elevation.low
+        case .selected: return level == .raised ? HubDesignSystem.Elevation.medium : HubDesignSystem.Elevation.flat
         case .pressed, .disabled: return HubDesignSystem.Elevation.flat
         case .normal, .warning, .error: return level.baseElevation
         }
