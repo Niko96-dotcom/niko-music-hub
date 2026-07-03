@@ -81,6 +81,17 @@ This repo uses GitHub for review and history, but local gates are the source of 
 
 GitHub Actions are intentionally not required for this project.
 
+## Release engineering
+
+`VERSION` is the canonical release version. Maintainer release commands live in `script/release-all.sh`; public mode signs, notarizes, staples, validates, checksums, manifests, and optionally publishes GitHub Release assets. Local-only mode is explicitly labeled and cannot publish.
+
+```bash
+./script/release-all.sh --local-only
+./script/release-all.sh --public --dry-run-publish
+```
+
+See `docs/release.md` and `docs/release-validation.md`.
+
 ## Fixtures
 
 ```bash

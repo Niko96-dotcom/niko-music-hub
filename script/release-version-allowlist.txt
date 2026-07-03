@@ -1,0 +1,10 @@
+# path-prefix-or-regex | reason
+^\.ai/ | Historical AI planning/task prompts may mention old milestone versions and are not product release metadata.
+^\.planning/ | Tracked planning archive contains milestone history; public release hygiene must decide whether to prune it before source publication.
+^docs/reference/ | Reference material preserves upstream/archive-browser history and compatibility examples.
+^docs/UI-REDESIGN-PLAN\.md$ | Superseded design record with historical version labels.
+^docs/critic-review-01\.md$ | Historical critic review for the original v0.1 milestone.
+^docs/public-release-real-uat-2026-05-26\.md$ | Dated UAT evidence; old release labels are historical evidence.
+^docs/goals/ | Planning/checklist docs preserve milestone numbers and are not current artifact metadata.
+^Tests/ | Test fixtures may contain version-looking strings for domain behavior.
+^Fixtures/ | Fixture names and README examples are compatibility material, not app release metadata.

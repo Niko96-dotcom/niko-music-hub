@@ -7,8 +7,23 @@ NMH_ROOT_DIR="$(cd "$NMH_SCRIPT_DIR/.." && pwd)"
 
 NMH_APP_NAME="${NMH_APP_NAME:-NikoMusicHub}"
 NMH_BUNDLE_ID="${NMH_BUNDLE_ID:-local.niko-music-hub.app}"
-NMH_MARKETING_VERSION="${NMH_MARKETING_VERSION:-1.4}"
-NMH_BUILD_VERSION="${NMH_BUILD_VERSION:-4}"
+NMH_VERSION_FILE="${NMH_VERSION_FILE:-$NMH_ROOT_DIR/VERSION}"
+if [[ -z "${NMH_MARKETING_VERSION:-}" ]]; then
+  if [[ ! -f "$NMH_VERSION_FILE" ]]; then
+    echo "missing VERSION file: $NMH_VERSION_FILE" >&2
+    exit 1
+  fi
+  NMH_MARKETING_VERSION="$(tr -d '[:space:]' <"$NMH_VERSION_FILE")"
+fi
+if [[ -z "${NMH_BUILD_VERSION:-}" ]]; then
+  NMH_BUILD_VERSION="$(git -C "$NMH_ROOT_DIR" rev-list --count HEAD 2>/dev/null || printf '0')"
+fi
+if [[ -z "${NMH_SOURCE_COMMIT:-}" ]]; then
+  NMH_SOURCE_COMMIT="$(git -C "$NMH_ROOT_DIR" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+fi
+if [[ -z "${NMH_BUILD_ID:-}" ]]; then
+  NMH_BUILD_ID="$NMH_MARKETING_VERSION+$(git -C "$NMH_ROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')"
+fi
 NMH_MIN_SYSTEM_VERSION="${NMH_MIN_SYSTEM_VERSION:-14.2}"
 NMH_LAUNCH_WAIT_SEC="${NMH_LAUNCH_WAIT_SEC:-8}"
 NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-Niko Music Hub}"
@@ -93,6 +108,10 @@ nmh_build_bundle() {
   <string>$NMH_MARKETING_VERSION</string>
   <key>CFBundleVersion</key>
   <string>$NMH_BUILD_VERSION</string>
+  <key>NMHBuildID</key>
+  <string>$NMH_BUILD_ID</string>
+  <key>NMHSourceCommit</key>
+  <string>$NMH_SOURCE_COMMIT</string>
   <key>LSMultipleInstancesSupported</key>
   <false/>
   <key>LSMinimumSystemVersion</key>
@@ -119,10 +138,13 @@ PLIST
 PLIST
 
   local sign_identity
-  sign_identity="$(
-    /usr/bin/security find-identity -v -p codesigning 2>/dev/null \
-      | awk '/Apple Development:/ && $0 !~ /REVOKED|EXPIRED/ { print $2; exit }'
-  )"
+  sign_identity="${NMH_SIGNING_IDENTITY:-}"
+  if [[ -z "$sign_identity" ]]; then
+    sign_identity="$(
+      /usr/bin/security find-identity -v -p codesigning 2>/dev/null \
+        | awk '/Apple Development:/ && $0 !~ /REVOKED|EXPIRED/ { print $2; exit }'
+    )"
+  fi
   if [[ -n "$sign_identity" ]]; then
     /usr/bin/codesign --force --deep --options runtime --entitlements "$NMH_ENTITLEMENTS_PLIST" --sign "$sign_identity" "$NMH_APP_BUNDLE" >/dev/null
   else

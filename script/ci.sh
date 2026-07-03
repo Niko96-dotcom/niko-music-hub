@@ -39,3 +39,8 @@ if "NikoMusicCoreSelfTest" not in products or "NikoMusicCoreSelfTest" not in tar
     sys.exit(1)
 '
 swift run NikoMusicCoreSelfTest
+
+echo "== release engineering regression gate =="
+./script/release-version-verify.sh
+./script/public-tree-hygiene.sh
+./Tests/test_release_scripts.sh
