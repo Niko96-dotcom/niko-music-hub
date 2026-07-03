@@ -6,6 +6,7 @@ public struct AudioRecorderView: View {
     let context: ToolContext
     @StateObject private var viewModel: AudioRecorderViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var lastPersistedMaxDurationMinutes: Int?
 
     public init(context: ToolContext) {
         self.context = context

@@ -203,7 +203,8 @@ final class SettingsStoreTests: XCTestCase {
 
         XCTAssertTrue(viewSource.contains("initialMaxDuration"))
         XCTAssertTrue(viewSource.contains("persistMaxDuration"))
-        XCTAssertTrue(viewSource.contains("RecordingDurationOptions"))
+        XCTAssertTrue(viewSource.contains("lastPersistedMaxDurationMinutes"))
+        XCTAssertTrue(viewSource.contains("syncMaxDurationFromSettings"))
         XCTAssertTrue(modelSource.contains("initialMaxDurationMinutes"))
     }
 
