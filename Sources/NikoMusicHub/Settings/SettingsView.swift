@@ -14,7 +14,7 @@ struct SettingsView: View {
     @State private var saveError: String?
     @State private var helperPathError: String?
 
-    private let recordingDurationChoices = RecordingDurationOptions.supportedMinutes.filter { $0 > 0 }
+    private let recordingDurationChoices = RecordingDurationOptions.supportedMinutes
 
     var body: some View {
         HubToolPage {
@@ -250,8 +250,12 @@ struct SettingsView: View {
         Binding(
             get: { settings.maxRecordingDurationMinutes },
             set: { newValue in
-                settings.maxRecordingDurationMinutes = newValue
-                persistSettings()
+                let normalized = RecordingDurationOptions.normalized(newValue)
+                let previous = settings.maxRecordingDurationMinutes
+                settings.maxRecordingDurationMinutes = normalized
+                if !persistSettings() {
+                    settings.maxRecordingDurationMinutes = previous
+                }
             }
         )
     }
@@ -386,6 +390,9 @@ struct SettingsView: View {
     private func refresh() {
         do {
             settings = try context.settingsStore.loadSettings()
+            settings.maxRecordingDurationMinutes = RecordingDurationOptions.normalized(
+                settings.maxRecordingDurationMinutes
+            )
             settingsLoadError = nil
             appearanceController.apply(settings.appearance)
         } catch {

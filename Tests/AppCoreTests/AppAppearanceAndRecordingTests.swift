@@ -40,4 +40,22 @@ final class HelperExecutableValidationTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/does-not-exist-\(UUID().uuidString)")
         XCTAssertEqual(HelperExecutableValidation.validate(url: url), "That path does not exist.")
     }
+
+    func testRejectsDirectory() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("helper-validation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        XCTAssertEqual(HelperExecutableValidation.validate(url: directory), "Choose a file, not a folder.")
+    }
+
+    func testRejectsNonExecutableFile() throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("helper-validation-\(UUID().uuidString).txt")
+        try "not executable".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        XCTAssertEqual(HelperExecutableValidation.validate(url: file), "That file is not executable.")
+    }
 }

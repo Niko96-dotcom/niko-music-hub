@@ -162,6 +162,26 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(source.contains("appearanceController.apply(previous)"))
     }
 
+    func testSettingsMaxDurationBindingRevertsOnSaveFailure() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("let previous = settings.maxRecordingDurationMinutes"))
+        XCTAssertTrue(source.contains("settings.maxRecordingDurationMinutes = previous"))
+    }
+
+    func testSettingsNormalizesRecordingDurationOnLoad() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("RecordingDurationOptions.normalized("))
+        XCTAssertTrue(source.contains("RecordingDurationOptions.supportedMinutes"))
+    }
+
     func testNikoMusicHubAppAppliesPreferredColorScheme() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicHub/NikoMusicHubApp.swift",

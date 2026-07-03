@@ -39,6 +39,9 @@ public struct AudioRecorderView: View {
             permissionSection
             incompatibleSection
         }
+        .onAppear {
+            syncMaxDurationFromSettings()
+        }
         .onChange(of: viewModel.maxDurationMinutes) { _, newValue in
             persistMaxDuration(minutes: newValue)
         }
@@ -398,8 +401,19 @@ public struct AudioRecorderView: View {
 
     private func persistMaxDuration(minutes: Int) {
         let normalized = RecordingDurationOptions.normalized(minutes)
-        try? context.settingsStore.updateSettings { settings in
-            settings.maxRecordingDurationMinutes = normalized
+        do {
+            try context.settingsStore.updateSettings { settings in
+                settings.maxRecordingDurationMinutes = normalized
+            }
+        } catch {
+            context.diagnostics.log(.error, "Failed to persist max recording duration: \(error)")
         }
+    }
+
+    private func syncMaxDurationFromSettings() {
+        let settings = (try? context.settingsStore.loadSettings()) ?? .default
+        let normalized = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
+        guard viewModel.maxDurationMinutes != normalized else { return }
+        viewModel.maxDurationMinutes = normalized
     }
 }

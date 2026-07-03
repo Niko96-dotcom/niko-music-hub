@@ -106,8 +106,8 @@ printf 'version=%s\ncommit=%s\ntag=%s\nbuild_id=%s\nmode=%s\n' "$VERSION" "$COMM
 
 if [[ "$SKIP_TESTS" != true ]]; then
   log "local gates"
-  run "$ROOT/script/ci.sh"
-  run "$ROOT/script/e2e_user_smoke.sh"
+  run ci "$ROOT/script/ci.sh"
+  run e2e "$ROOT/script/e2e_user_smoke.sh"
 fi
 
 log "version and public-tree hygiene"
