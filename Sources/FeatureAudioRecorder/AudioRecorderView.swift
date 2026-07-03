@@ -25,6 +25,7 @@ public struct AudioRecorderView: View {
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDuration
         ))
+        _lastPersistedMaxDurationMinutes = State(initialValue: initialMaxDuration)
     }
 
     public var body: some View {
@@ -44,6 +45,8 @@ public struct AudioRecorderView: View {
             syncMaxDurationFromSettings()
         }
         .onChange(of: viewModel.maxDurationMinutes) { _, newValue in
+            let normalized = RecordingDurationOptions.normalized(newValue)
+            guard normalized != lastPersistedMaxDurationMinutes else { return }
             persistMaxDuration(minutes: newValue)
         }
         .task(id: viewModel.showSaveConfirmation) {
@@ -402,12 +405,15 @@ public struct AudioRecorderView: View {
 
     private func persistMaxDuration(minutes: Int) {
         let normalized = RecordingDurationOptions.normalized(minutes)
+        let previous = lastPersistedMaxDurationMinutes ?? normalized
         do {
             try context.settingsStore.updateSettings { settings in
                 settings.maxRecordingDurationMinutes = normalized
             }
+            lastPersistedMaxDurationMinutes = normalized
         } catch {
             context.diagnostics.log(.error, "Failed to persist max recording duration: \(error)")
+            viewModel.maxDurationMinutes = previous
         }
     }
 
@@ -416,5 +422,6 @@ public struct AudioRecorderView: View {
         let normalized = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
         guard viewModel.maxDurationMinutes != normalized else { return }
         viewModel.maxDurationMinutes = normalized
+        lastPersistedMaxDurationMinutes = normalized
     }
 }
