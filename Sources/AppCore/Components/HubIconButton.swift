@@ -65,38 +65,40 @@ public struct HubIconButton: View {
         .disabled(!isEnabled)
     }
 
-    @ViewBuilder
+    // Reference icon-button language: borderless glyph, hover fill only; prominent =
+    // solid contrast fill; selected = neutral accentFill chip. No system bordered/glass
+    // styles (boxes + system-blue accent).
     private var toolbarButton: some View {
-        Group {
-            if #available(macOS 26.0, *) {
-                if prominent || isSelected {
-                    buttonLabel
-                        .buttonStyle(.glassProminent)
-                } else {
-                    buttonLabel
-                        .buttonStyle(.glass)
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(toolbarForeground)
+                .frame(
+                    width: HubDesignSystem.Size.iconButtonSize,
+                    height: HubDesignSystem.Size.iconButtonSize
+                )
+                .background {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                        .fill(toolbarFill)
                 }
-            } else {
-                if prominent {
-                    buttonLabel
-                        .buttonStyle(.borderedProminent)
-                } else if isSelected {
-                    buttonLabel
-                        .buttonStyle(.borderedProminent)
-                } else {
-                    buttonLabel
-                        .buttonStyle(.bordered)
-                        .background {
-                            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                                .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
-                        }
-                        .onHover(perform: updateHover)
-                }
-            }
+                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
         }
-        .controlSize(.small)
-        .labelStyle(.iconOnly)
-        .tint(HubDesignSystem.Colors.accent)
+        .buttonStyle(.plain)
+        .onHover(perform: updateHover)
+    }
+
+    private var toolbarForeground: Color {
+        if prominent { return HubDesignSystem.Palette.canvas }
+        if isSelected { return HubDesignSystem.Palette.textPrimary }
+        return isHovered ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary
+    }
+
+    private var toolbarFill: Color {
+        if prominent {
+            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
+        }
+        if isSelected { return HubDesignSystem.Palette.accentFill }
+        return isHovered ? Color.white.opacity(0.06) : Color.clear
     }
 
     private var compactChipButton: some View {
@@ -108,18 +110,6 @@ public struct HubIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var buttonLabel: some View {
-        Button(role: role, action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(
-                    width: HubDesignSystem.Size.iconButtonSize,
-                    height: HubDesignSystem.Size.iconButtonSize
-                )
-                .contentShape(Rectangle())
-        }
     }
 
     private func updateHover(_ hovering: Bool) {

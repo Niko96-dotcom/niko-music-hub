@@ -23,6 +23,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published private(set) var selectedShelf: ArchiveSmartShelf = .allSongs
     @Published private(set) var selectedCollaboratorID: String?
     @Published var selectedSong: Song?
+    /// Song-detail "Details" disclosure state — hoisted so the browser-level "d"
+    /// keyboard shortcut can toggle it.
+    @Published var songDetailsExpanded = false
     @Published var isScanning = false
     @Published var statusMessage: String?
     @Published var scanDiagnostics: ArchiveScanDiagnostics?

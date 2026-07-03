@@ -9,6 +9,7 @@ struct ToolSidebarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var context: ToolContext? = nil
+    var onCollapse: (() -> Void)? = nil
     let registry: ToolRegistry
     @Binding var selectedToolID: ToolFeatureID?
 
@@ -65,6 +66,17 @@ struct ToolSidebarView: View {
                 .font(HubDesignSystem.Typography.body().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            if let onCollapse {
+                HubIconButton(
+                    systemImage: "sidebar.left",
+                    accessibilityLabel: "Hide tools sidebar",
+                    help: "Hide tools sidebar",
+                    action: onCollapse
+                )
+            }
         }
         .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)

@@ -17,6 +17,7 @@ public struct HubTransportBar: View {
     private let volumeLevel: Double?
     private let showsSkipControls: Bool
     private let showsSurface: Bool
+    private let showsSlider: Bool
     private let onPlayPause: () -> Void
     private let onSeekBackward: (() -> Void)?
     private let onSeekForward: (() -> Void)?
@@ -34,6 +35,7 @@ public struct HubTransportBar: View {
         volumeLevel: Double? = nil,
         showsSkipControls: Bool = false,
         showsSurface: Bool = true,
+        showsSlider: Bool = true,
         onPlayPause: @escaping () -> Void,
         onSeekBackward: (() -> Void)? = nil,
         onSeekForward: (() -> Void)? = nil,
@@ -50,6 +52,7 @@ public struct HubTransportBar: View {
         self.volumeLevel = volumeLevel
         self.showsSkipControls = showsSkipControls
         self.showsSurface = showsSurface
+        self.showsSlider = showsSlider
         self.onPlayPause = onPlayPause
         self.onSeekBackward = onSeekBackward
         self.onSeekForward = onSeekForward
@@ -118,7 +121,7 @@ public struct HubTransportBar: View {
                 }
             }
 
-            if isEnabled, duration > 0 {
+            if showsSlider, isEnabled, duration > 0 {
                 progressSlider
             }
         }

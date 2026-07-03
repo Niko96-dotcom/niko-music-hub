@@ -30,7 +30,7 @@ final class HandoffSurfacingSourceTests: XCTestCase {
             "HAND-01: AppShellView must call clearRevealOutputInbox() after consuming the flag to prevent stuck state"
         )
         XCTAssertTrue(
-            source.contains("OutputInboxInspectorView(context: context)"),
+            source.contains("OutputInboxInspectorView("),
             "HAND-01: OutputInboxInspectorView must be present in the AppShellView body"
         )
     }

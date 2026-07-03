@@ -38,46 +38,47 @@ public struct HubLabeledButton: View {
         self.action = action
     }
 
+    // Reference button language: primary = solid contrast pill (near-white fill, dark
+    // label — the "Create agent" pattern); secondary = quiet neutral fill; ghost = text
+    // with hover fill. No system bordered/glass styles — those paint boxes and the
+    // system accent (blue), which the references' chrome never shows.
     public var body: some View {
-        Group {
-            switch style {
-            case .primary:
-                if #available(macOS 26.0, *) {
-                    labeledButton
-                        .buttonStyle(.glassProminent)
-                } else {
-                    labeledButton
-                        .buttonStyle(.borderedProminent)
+        Button(role: role, action: action) {
+            Label(label, systemImage: icon)
+                .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+                .foregroundStyle(foreground)
+                .padding(.horizontal, 12)
+                .frame(minHeight: HubDesignSystem.Size.buttonMinHeight)
+                .background {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                        .fill(fill)
                 }
-            case .secondary:
-                if #available(macOS 26.0, *) {
-                    labeledButton
-                        .buttonStyle(.glass)
-                } else {
-                    labeledButton
-                        .buttonStyle(.bordered)
-                }
-            case .ghost:
-                labeledButton
-                    .buttonStyle(.plain)
-                    .background {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
-                            .fill(isHovered ? HubDesignSystem.Colors.accentTint : Color.clear)
-                    }
-                    .onHover(perform: updateHover)
-            }
+                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
         }
-        .controlSize(.small)
-        .tint(HubDesignSystem.Colors.accent)
+        .buttonStyle(.plain)
+        .onHover(perform: updateHover)
+        .opacity(isEnabled ? 1 : 0.45)
         .disabled(!isEnabled)
         .help(help ?? label)
     }
 
-    private var labeledButton: some View {
-        Button(role: role, action: action) {
-            Label(label, systemImage: icon)
-                .font(.system(size: 12, weight: .medium))
-                .frame(minHeight: HubDesignSystem.Size.buttonMinHeight)
+    private var foreground: Color {
+        guard role != .destructive else { return HubDesignSystem.Colors.danger }
+        switch style {
+        case .primary: return HubDesignSystem.Palette.canvas
+        case .secondary: return HubDesignSystem.Palette.textPrimary
+        case .ghost: return HubDesignSystem.Palette.textSecondary
+        }
+    }
+
+    private var fill: Color {
+        switch style {
+        case .primary:
+            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
+        case .secondary:
+            return Color.white.opacity(isHovered ? 0.12 : 0.08)
+        case .ghost:
+            return isHovered ? Color.white.opacity(0.06) : Color.clear
         }
     }
 

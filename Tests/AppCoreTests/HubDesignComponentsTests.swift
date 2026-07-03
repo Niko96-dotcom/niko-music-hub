@@ -46,13 +46,24 @@ final class HubDesignComponentsTests: XCTestCase {
             encoding: .utf8
         )
 
+        // Reference-spec buttons are custom neutral controls: solid accent pill for
+        // primary, quiet fills otherwise. System glass/bordered styles are FORBIDDEN —
+        // they draw boxes and paint the system accent (blue) the references never show.
         [
             ".buttonStyle(.glassProminent)",
             ".buttonStyle(.glass)",
-            "#available(macOS 26.0, *)",
+            ".buttonStyle(.borderedProminent)",
+            ".buttonStyle(.bordered)",
+        ].forEach { forbidden in
+            XCTAssertFalse(iconSource.contains(forbidden), "Icon button must not use system style: \(forbidden)")
+            XCTAssertFalse(labeledSource.contains(forbidden), "Labeled button must not use system style: \(forbidden)")
+        }
+        [
+            "HubDesignSystem.Palette.accent",
+            "buttonStyle(.plain)",
         ].forEach { required in
-            XCTAssertTrue(iconSource.contains(required), "Missing icon button glass source: \(required)")
-            XCTAssertTrue(labeledSource.contains(required), "Missing labeled button glass source: \(required)")
+            XCTAssertTrue(iconSource.contains(required), "Missing icon button reference-style source: \(required)")
+            XCTAssertTrue(labeledSource.contains(required), "Missing labeled button reference-style source: \(required)")
         }
     }
 }

@@ -10,7 +10,6 @@ struct SongDetailView: View {
     @State private var virtualTitleDraft = ""
     @State private var appNoteDraft = ""
     @State private var aliasesDraft = ""
-    @State private var detailsExpanded = false
 
     var body: some View {
         ScrollView {
@@ -191,17 +190,41 @@ struct SongDetailView: View {
     }
 
     private var detailsSection: some View {
-        DisclosureGroup(isExpanded: $detailsExpanded) {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
-                collaboratorsSection
-                bpmSection
-                cprListSection
-                alternatePreviewsSection
-                supplementalInfoSection
+        // Whole-row toggle: a native DisclosureGroup only toggles on its tiny chevron,
+        // which reads as a dead control. The full header row is the tap target here.
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                    viewModel.songDetailsExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .rotationEffect(.degrees(viewModel.songDetailsExpanded ? 90 : 0))
+                    Text("Details".uppercased())
+                        .font(HubDesignSystem.Typography.caption())
+                        .tracking(0.7)
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(.top, 8)
-        } label: {
-            sectionTitle("Details")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Details")
+            .accessibilityValue(viewModel.songDetailsExpanded ? "Expanded" : "Collapsed")
+
+            if viewModel.songDetailsExpanded {
+                VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
+                    collaboratorsSection
+                    bpmSection
+                    cprListSection
+                    alternatePreviewsSection
+                    supplementalInfoSection
+                }
+                .padding(.top, 10)
+            }
         }
         .padding(HubDesignSystem.Spacing.cardPadding)
         .hubCard()
@@ -226,7 +249,7 @@ struct SongDetailView: View {
             sectionTitle("Collaborators")
 
             if viewModel.collaborators.isEmpty {
-                Text("Add collaborators in the More panel at the bottom of the sidebar.")
+                Text("Add collaborators under Library → Collaborators in the sidebar.")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             } else {

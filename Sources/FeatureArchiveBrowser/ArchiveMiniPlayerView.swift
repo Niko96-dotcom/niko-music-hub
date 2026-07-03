@@ -12,6 +12,8 @@ struct ArchiveMiniPlayerView: View {
     let url: URL?
     var style: ArchiveMiniPlayerStyle = .full
     var label: String?
+    /// Reference rule: the scrub slider is hidden at rest — only the actively playing row shows it.
+    var showsSlider: Bool = true
 
     @StateObject private var playback = ArchiveMiniPlayerModel()
     @ObservedObject private var coordinator = ArchivePlaybackCoordinator.shared
@@ -28,6 +30,7 @@ struct ArchiveMiniPlayerView: View {
             markerProgress: hookProgress,
             volumeLevel: style == .full ? 1 : nil,
             showsSurface: style == .full,
+            showsSlider: showsSlider,
             onPlayPause: {
                 playback.toggle(at: url)
             },

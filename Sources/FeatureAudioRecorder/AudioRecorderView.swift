@@ -186,16 +186,16 @@ public struct AudioRecorderView: View {
 
     private var settingsSection: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Picker("Max Duration", selection: $viewModel.maxDurationMinutes) {
-                Text("5 min").tag(5)
-                Text("10 min").tag(10)
-                Text("15 min").tag(15)
-                Text("30 min").tag(30)
-                Text("60 min").tag(60)
-                Text("Unlimited").tag(0)
-            }
-            .pickerStyle(.segmented)
+            HubChoiceChips("Max Duration", selection: $viewModel.maxDurationMinutes, choices: [
+                .init(5, label: "5 min"),
+                .init(10, label: "10 min"),
+                .init(15, label: "15 min"),
+                .init(30, label: "30 min"),
+                .init(60, label: "60 min"),
+                .init(0, label: "Unlimited"),
+            ])
             .disabled(viewModel.isRecording)
+            .opacity(viewModel.isRecording ? 0.45 : 1)
             .frame(maxWidth: 560)
         }
         .padding(12)

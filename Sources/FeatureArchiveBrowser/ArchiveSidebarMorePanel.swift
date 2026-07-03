@@ -67,24 +67,41 @@ struct ArchiveSidebarMorePanel: View {
         isExpanded: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        DisclosureGroup(isExpanded: isExpanded) {
-            content()
-                .padding(.top, 4)
-                .padding(.leading, HubDesignSystem.Size.sidebarIconFrame + HubDesignSystem.Spacing.controlGap)
-        } label: {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .frame(width: HubDesignSystem.Size.sidebarIconFrame)
-                Text(title)
-                    .font(HubDesignSystem.Typography.body())
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                Spacer(minLength: 0)
+        // Whole-row toggle: a native DisclosureGroup only toggles on its tiny chevron,
+        // which makes these rows feel dead. The entire nav row is the tap target.
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .frame(width: HubDesignSystem.Size.sidebarIconFrame)
+                    Text(title)
+                        .font(HubDesignSystem.Typography.body())
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                }
+                .padding(.horizontal, 4)
+                .frame(height: HubDesignSystem.Spacing.navRowHeight)
+                .contentShape(Rectangle())
             }
-            .frame(height: HubDesignSystem.Spacing.navRowHeight)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(isExpanded.wrappedValue ? "Expanded" : "Collapsed")
+
+            if isExpanded.wrappedValue {
+                content()
+                    .padding(.top, 4)
+                    .padding(.leading, HubDesignSystem.Size.sidebarIconFrame + HubDesignSystem.Spacing.controlGap)
+            }
         }
-        .accessibilityLabel(title)
     }
 }

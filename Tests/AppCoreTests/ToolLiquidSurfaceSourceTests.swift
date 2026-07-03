@@ -28,7 +28,7 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
             "ToolHeaderBlock",
             "viewModel.startRecording()",
             "viewModel.stopRecording()",
-            "Picker(\"Max Duration\"",
+            "HubChoiceChips(\"Max Duration\"",
             "SystemPrivacySettings.openSystemAudioRecordingSettings()",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing recorder Liquid source: \(required)")

@@ -97,17 +97,13 @@ public struct BPMTapperView: View {
     }
 
     private var adjustmentPicker: some View {
-        Picker("Adjustment", selection: adjustmentBinding) {
-            Text("Original")
-                .tag(BPMAdjustment.original)
-            Text("Half-Time")
-                .tag(BPMAdjustment.halfTime)
-            Text("Double-Time")
-                .tag(BPMAdjustment.doubleTime)
-        }
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 440)
+        HubChoiceChips("Adjustment", selection: adjustmentBinding, choices: [
+            .init(BPMAdjustment.original, label: "Original"),
+            .init(BPMAdjustment.halfTime, label: "Half-Time"),
+            .init(BPMAdjustment.doubleTime, label: "Double-Time"),
+        ])
         .disabled(viewModel.displayedBPM == nil)
+        .opacity(viewModel.displayedBPM == nil ? 0.45 : 1)
     }
 
     private var tapSurface: some View {
@@ -128,6 +124,7 @@ public struct BPMTapperView: View {
         .scaleEffect(tapSurfacePressed ? 0.98 : 1)
         .contentShape(Rectangle())
         .focusable()
+        .focusEffectDisabled()
         .focused($tapSurfaceFocused)
         .onTapGesture {
             animateTapPress()

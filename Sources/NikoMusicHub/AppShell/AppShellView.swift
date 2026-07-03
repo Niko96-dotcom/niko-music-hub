@@ -36,6 +36,7 @@ struct AppShellView: View {
                 if showToolSidebar {
                     ToolSidebarView(
                         context: context,
+                        onCollapse: { setToolSidebarVisible(false) },
                         registry: registry,
                         selectedToolID: $selectedToolID
                     )
@@ -60,7 +61,10 @@ struct AppShellView: View {
 
                 if showOutputInbox {
                     shellDivider
-                    OutputInboxInspectorView(context: context)
+                    OutputInboxInspectorView(
+                        context: context,
+                        onCollapse: { setOutputInboxVisible(false) }
+                    )
                         .padding(.top, 12)
                         .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
                         .hubChromeMaterial()
@@ -119,29 +123,6 @@ struct AppShellView: View {
         return width
     }
 
-    @ToolbarContentBuilder
-    private var shellToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button {
-                setToolSidebarVisible(!showToolSidebar)
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .help(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
-            .accessibilityLabel(showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar")
-
-            Button {
-                setOutputInboxVisible(!showOutputInbox)
-            } label: {
-                Image(systemName: "sidebar.right")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .help(showOutputInbox ? "Hide output inbox" : "Show output inbox")
-            .accessibilityLabel(showOutputInbox ? "Hide output inbox" : "Show output inbox")
-        }
-    }
-
     @ViewBuilder
     private var persistenceIssueBanner: some View {
         if !context.persistenceIssues.isEmpty {
@@ -192,7 +173,6 @@ struct AppShellView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .toolbar { shellToolbar }
     }
 }
 

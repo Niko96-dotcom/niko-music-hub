@@ -61,9 +61,7 @@ struct SongCardView: View {
                     .lineLimit(1)
             }
 
-            ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact)
-                .frame(height: isRowPlaying ? nil : compactPlayerRestHeight)
-                .clipped()
+            ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact, showsSlider: isRowPlaying)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
@@ -80,10 +78,6 @@ struct SongCardView: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
     }
-
-    /// Height of the compact transport row with its slider collapsed — just the
-    /// play button + title line (reference: slider hidden at rest).
-    private let compactPlayerRestHeight: CGFloat = 22
 
     private var rowFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }

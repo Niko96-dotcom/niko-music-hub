@@ -7,7 +7,6 @@ struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @State private var showNewSongSheet = false
     @FocusState private var archiveFocused: Bool
-    @FocusState private var detailFocused: Bool
 
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
@@ -67,7 +66,7 @@ struct ArchiveBrowserView: View {
         }
         .onKeyPress("d") {
             guard archiveFocused, viewModel.selectedSong != nil else { return .ignored }
-            detailFocused = true
+            viewModel.songDetailsExpanded.toggle()
             return .handled
         }
         .sheet(isPresented: $showNewSongSheet) {
@@ -86,10 +85,10 @@ struct ArchiveBrowserView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let song = viewModel.selectedSong {
+            // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
+            // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
                 .padding(20)
-                .focusable()
-                .focused($detailFocused)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             VStack(spacing: 16) {

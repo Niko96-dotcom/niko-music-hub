@@ -156,14 +156,13 @@ public struct StemSeparationView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("Preset", selection: $viewModel.selectedPreset) {
-                ForEach(viewModel.supportedPresets) { preset in
-                    Text(preset.displayName)
-                        .tag(preset)
-                        .help(preset.shortDescription)
+            HubChoiceChips(
+                "Preset",
+                selection: $viewModel.selectedPreset,
+                choices: viewModel.supportedPresets.map {
+                    .init($0, label: $0.displayName, help: $0.shortDescription)
                 }
-            }
-            .pickerStyle(.segmented)
+            )
 
             HStack {
                 Text("Output: \(viewModel.outputFolderURL.path)")
