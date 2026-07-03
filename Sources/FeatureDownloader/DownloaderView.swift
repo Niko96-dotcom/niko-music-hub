@@ -16,31 +16,24 @@ public struct DownloaderView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                header
-                urlInputRow
-                formatChipStrip
-                if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .downloading {
-                    trustInfoCard
-                }
-                if viewModel.downloadState == .downloading {
-                    progressSection
-                    logArea
-                }
-                if viewModel.downloadState == .completed, let message = viewModel.errorMessage {
-                    handoffWarningSection(message: message)
-                }
-                if case let .failed(message) = viewModel.downloadState {
-                    errorSection(message: message)
-                }
+        HubToolPage {
+            header
+            urlInputRow
+            formatChipStrip
+            if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .downloading {
+                trustInfoCard
             }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+            if viewModel.downloadState == .downloading {
+                progressSection
+                logArea
+            }
+            if viewModel.downloadState == .completed, let message = viewModel.errorMessage {
+                handoffWarningSection(message: message)
+            }
+            if case let .failed(message) = viewModel.downloadState {
+                errorSection(message: message)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
     }
 
     private var header: some View {
@@ -105,10 +98,7 @@ public struct DownloaderView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        }
+        .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.downloadState == .downloading ? 0.62 : 1)
         .disabled(viewModel.downloadState == .downloading)
     }

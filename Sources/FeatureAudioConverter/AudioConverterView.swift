@@ -20,21 +20,13 @@ public struct AudioConverterView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                header
-                intakeSurface
-                presetStrip
-                actionRow
-                batchRows
-                Spacer(minLength: 0)
-            }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+        HubToolPage {
+            header
+            intakeSurface
+            presetStrip
+            actionRow
+            batchRows
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
         .fileImporter(
             isPresented: $fileImporterVisible,
             allowedContentTypes: allowedAudioTypes,

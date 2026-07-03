@@ -10,23 +10,15 @@ public struct StemSeparationView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                header
-                fileWell
-                youtubeWell
-                controls
-                progressSection
-                errorBanner
-                resultsList
-                Spacer(minLength: 0)
-            }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+        HubToolPage {
+            header
+            fileWell
+            youtubeWell
+            controls
+            progressSection
+            errorBanner
+            resultsList
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
         .onAppear { viewModel.onAppear() }
     }
 
@@ -145,11 +137,7 @@ public struct StemSeparationView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
-        // Reference input-field style: quiet inset fill, no stroke.
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        }
+        .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.isRunning ? 0.6 : 1)
         .disabled(viewModel.isRunning)
     }

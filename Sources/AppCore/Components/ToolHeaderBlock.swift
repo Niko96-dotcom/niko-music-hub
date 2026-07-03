@@ -22,11 +22,13 @@ public struct ToolHeaderBlock: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Label(title, systemImage: systemImage)
                 .font(HubDesignSystem.Typography.screenTitle())
+                .lineLimit(1)
             Text(statusText)
                 .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(statusColor)
                 .lineLimit(2)
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
+        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .topLeading)
     }
 }

@@ -46,7 +46,7 @@ struct ArchiveSidebarView: View {
             }
         }
         .padding(.horizontal, compactList ? 14 : 18)
-        .padding(.top, 6)
+        .padding(.top, HubToolLayout.topPadding)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -115,6 +115,7 @@ struct ArchiveSidebarView: View {
             .help("Archive actions")
             .accessibilityLabel("Archive actions")
         }
+        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
     }
 
     @ViewBuilder
@@ -233,8 +234,8 @@ struct ArchiveSidebarView: View {
         }
     }
 
-    /// Reference search field: `white 6%` fill, radius 10, leading magnifier + placeholder in
-    /// `textTertiary`, no stroke.
+    /// Reference search field: quiet inset fill, leading magnifier + placeholder in
+    /// `textTertiary`, no extra visual weight.
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -250,10 +251,7 @@ struct ArchiveSidebarView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        }
+        .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.songs.isEmpty ? 0.5 : 1)
     }
 

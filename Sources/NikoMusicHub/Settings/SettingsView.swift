@@ -16,169 +16,162 @@ struct SettingsView: View {
     private let recordingDurationChoices = [15, 30, 45, 60, 90, 120]
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                header
-                settingsLoadErrorBanner
+        HubToolPage {
+            header
+            settingsLoadErrorBanner
 
-                SettingsSection(
-                    title: "General",
-                    importance: .high,
-                    footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
-                ) {
-                    Picker("Appearance", selection: appearanceBinding) {
-                        ForEach(AppAppearance.allCases) { appearance in
-                            Text(appearance.label).tag(appearance)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(settingsLoadError != nil)
-                    .frame(maxWidth: 360, alignment: .leading)
-
-                    Toggle("Open at login", isOn: $launchAtLogin)
-                        .toggleStyle(.switch)
-                        .onChange(of: launchAtLogin) { _, enabled in
-                            setLaunchAtLogin(enabled)
-                        }
-                    if let launchAtLoginError {
-                        inlineWarning(launchAtLoginError)
+            SettingsSection(
+                title: "General",
+                importance: .high,
+                footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
+            ) {
+                Picker("Appearance", selection: appearanceBinding) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.label).tag(appearance)
                     }
                 }
+                .pickerStyle(.segmented)
+                .disabled(settingsLoadError != nil)
+                .frame(maxWidth: 360, alignment: .leading)
 
-                SettingsSection(
-                    title: "Output",
-                    importance: .high,
-                    footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
-                ) {
-                    pathRow(
-                        label: "Output folder",
-                        path: settings.outputFolder.url.path
-                    )
-                    HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                        HubLabeledButton(
-                            icon: "folder.badge.gearshape",
-                            label: "Choose Folder",
-                            style: .secondary,
-                            help: "Pick where exports and recordings are saved",
-                            isEnabled: settingsLoadError == nil
-                        ) {
-                            chooseOutputFolder()
-                        }
-                        HubLabeledButton(
-                            icon: "folder",
-                            label: "Reveal in Finder",
-                            style: .ghost,
-                            help: "Show output folder in Finder"
-                        ) {
-                            context.fileActions.revealInFinder(settings.outputFolder.url)
-                        }
+                Toggle("Open at login", isOn: $launchAtLogin)
+                    .toggleStyle(.switch)
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        setLaunchAtLogin(enabled)
                     }
+                if let launchAtLoginError {
+                    inlineWarning(launchAtLoginError)
                 }
-
-                SettingsSection(
-                    title: "Cubase archive",
-                    importance: .high,
-                    footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
-                ) {
-                    archiveRootsSection
-                }
-
-                SettingsSection(
-                    title: "Audio conversion",
-                    importance: .medium,
-                    footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
-                ) {
-                    LabeledContent("Sample rate") {
-                        Text("\(settings.audioPreset.sampleRate) Hz")
-                    }
-                    LabeledContent("Bit depth") {
-                        Text("\(settings.audioPreset.bitDepth)-bit")
-                    }
-                    LabeledContent("Channels") {
-                        Text(channelModeLabel(settings.audioPreset.channelMode))
-                    }
-                }
-
-                SettingsSection(
-                    title: "Recording",
-                    importance: .medium,
-                    footer: "Maximum length for system-audio capture sessions."
-                ) {
-                    Picker("Max duration", selection: maxRecordingBinding) {
-                        ForEach(recordingDurationChoices, id: \.self) { minutes in
-                            Text("\(minutes) minutes").tag(minutes)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(settingsLoadError != nil)
-                    .frame(maxWidth: 280, alignment: .leading)
-                }
-
-                SettingsSection(
-                    title: "Privacy & recording",
-                    importance: .low,
-                    footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
-                ) {
-                    Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HubLabeledButton(
-                        icon: "lock.shield",
-                        label: "Open System Settings",
-                        style: .primary,
-                        help: "Open Screen & System Audio Recording in System Settings"
-                    ) {
-                        SystemPrivacySettings.openSystemAudioRecordingSettings()
-                    }
-                }
-
-                SettingsSection(
-                    title: "Helper tools",
-                    importance: .low,
-                    footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
-                ) {
-                    helperPathRow(label: "FFmpeg", url: settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
-                        settings.helperTools.ffmpeg = url
-                        persistSettings()
-                    }
-                    helperPathRow(label: "ffprobe", url: settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
-                        settings.helperTools.ffprobe = url
-                        persistSettings()
-                    }
-                    helperPathRow(label: "yt-dlp", url: settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
-                        settings.helperTools.ytDlp = url
-                        persistSettings()
-                    }
-                    helperPathRow(label: "demucs-mlx", url: settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
-                        settings.helperTools.demucsMlx = url
-                        persistSettings()
-                    }
-                }
-
-                SettingsSection(title: "About", importance: .low) {
-                    LabeledContent("App") {
-                        Text("Niko Music Hub")
-                    }
-                    if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                        LabeledContent("Version") {
-                            Text(version)
-                        }
-                    }
-                    Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                saveErrorBanner
             }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+
+            SettingsSection(
+                title: "Output",
+                importance: .high,
+                footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
+            ) {
+                pathRow(
+                    label: "Output folder",
+                    path: settings.outputFolder.url.path
+                )
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(
+                        icon: "folder.badge.gearshape",
+                        label: "Choose Folder",
+                        style: .secondary,
+                        help: "Pick where exports and recordings are saved",
+                        isEnabled: settingsLoadError == nil
+                    ) {
+                        chooseOutputFolder()
+                    }
+                    HubLabeledButton(
+                        icon: "folder",
+                        label: "Reveal in Finder",
+                        style: .ghost,
+                        help: "Show output folder in Finder"
+                    ) {
+                        context.fileActions.revealInFinder(settings.outputFolder.url)
+                    }
+                }
+            }
+
+            SettingsSection(
+                title: "Cubase archive",
+                importance: .high,
+                footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
+            ) {
+                archiveRootsSection
+            }
+
+            SettingsSection(
+                title: "Audio conversion",
+                importance: .medium,
+                footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
+            ) {
+                LabeledContent("Sample rate") {
+                    Text("\(settings.audioPreset.sampleRate) Hz")
+                }
+                LabeledContent("Bit depth") {
+                    Text("\(settings.audioPreset.bitDepth)-bit")
+                }
+                LabeledContent("Channels") {
+                    Text(channelModeLabel(settings.audioPreset.channelMode))
+                }
+            }
+
+            SettingsSection(
+                title: "Recording",
+                importance: .medium,
+                footer: "Maximum length for system-audio capture sessions."
+            ) {
+                Picker("Max duration", selection: maxRecordingBinding) {
+                    ForEach(recordingDurationChoices, id: \.self) { minutes in
+                        Text("\(minutes) minutes").tag(minutes)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(settingsLoadError != nil)
+                .frame(maxWidth: 280, alignment: .leading)
+            }
+
+            SettingsSection(
+                title: "Privacy & recording",
+                importance: .low,
+                footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
+            ) {
+                Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HubLabeledButton(
+                    icon: "lock.shield",
+                    label: "Open System Settings",
+                    style: .primary,
+                    help: "Open Screen & System Audio Recording in System Settings"
+                ) {
+                    SystemPrivacySettings.openSystemAudioRecordingSettings()
+                }
+            }
+
+            SettingsSection(
+                title: "Helper tools",
+                importance: .low,
+                footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
+            ) {
+                helperPathRow(label: "FFmpeg", url: settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
+                    settings.helperTools.ffmpeg = url
+                    persistSettings()
+                }
+                helperPathRow(label: "ffprobe", url: settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
+                    settings.helperTools.ffprobe = url
+                    persistSettings()
+                }
+                helperPathRow(label: "yt-dlp", url: settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
+                    settings.helperTools.ytDlp = url
+                    persistSettings()
+                }
+                helperPathRow(label: "demucs-mlx", url: settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
+                    settings.helperTools.demucsMlx = url
+                    persistSettings()
+                }
+            }
+
+            SettingsSection(title: "About", importance: .low) {
+                LabeledContent("App") {
+                    Text("Niko Music Hub")
+                }
+                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                    LabeledContent("Version") {
+                        Text(version)
+                    }
+                }
+                Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            saveErrorBanner
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
         .onAppear { refresh() }
     }
 
@@ -204,16 +197,12 @@ struct SettingsView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("Settings")
-                .font(HubDesignSystem.Typography.screenTitle())
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text("Hub-wide preferences for startup, output, and tools.")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ToolHeaderBlock(
+            title: "Settings",
+            systemImage: "gearshape",
+            statusText: "Hub-wide preferences for startup, output, and tools.",
+            statusColor: HubDesignSystem.Palette.textSecondary
+        )
     }
 
     @ViewBuilder

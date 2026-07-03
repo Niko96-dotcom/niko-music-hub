@@ -54,7 +54,6 @@ struct AppShellView: View {
                 }
 
                 activeToolView
-                    .padding(.top, 14)
                     .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .layoutPriority(1)
                     .background(HubDesignSystem.Palette.canvas)

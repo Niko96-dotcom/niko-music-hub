@@ -20,18 +20,11 @@ public struct BPMTapperView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                header
-                tapWorkflow
-                historySection
-            }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+        HubToolPage {
+            header
+            tapWorkflow
+            historySection
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
         .onAppear {
             try? viewModel.loadHistory()
             tapSurfaceFocused = true
@@ -64,7 +57,7 @@ public struct BPMTapperView: View {
             tapSurface
             actionRow
         }
-        .frame(maxWidth: 560)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var bpmReadout: some View {
@@ -116,7 +109,7 @@ public struct BPMTapperView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
         .padding(HubDesignSystem.Spacing.cardPadding)
-        .frame(maxWidth: 560, minHeight: 160)
+        .frame(maxWidth: HubToolLayout.maxContentWidth, minHeight: 160)
         .hubCard(
             state: tapSurfaceFocused ? .selected : .normal,
             interactive: true
@@ -227,7 +220,7 @@ public struct BPMTapperView: View {
     private var historySection: some View {
         VStack(spacing: HubDesignSystem.Spacing.panel) {
             HubSectionHeader("Recent Tempos", count: viewModel.historyEntries.count)
-                .frame(maxWidth: 560)
+                .frame(maxWidth: HubToolLayout.maxContentWidth)
 
             if viewModel.historyEntries.isEmpty {
                 VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
@@ -241,7 +234,7 @@ public struct BPMTapperView: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: 560)
+                .frame(maxWidth: HubToolLayout.maxContentWidth)
                 .padding(HubDesignSystem.Spacing.cardPadding)
             } else {
                 VStack(spacing: 2) {
@@ -249,7 +242,7 @@ public struct BPMTapperView: View {
                         historyRow(entry)
                     }
                 }
-                .frame(maxWidth: 560)
+                .frame(maxWidth: HubToolLayout.maxContentWidth)
             }
 
             HubLabeledButton(
@@ -263,7 +256,7 @@ public struct BPMTapperView: View {
                 clearHistoryConfirmationVisible = true
             }
         }
-        .frame(maxWidth: 560)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
         .frame(maxWidth: .infinity)
     }
 

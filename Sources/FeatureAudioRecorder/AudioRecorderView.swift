@@ -24,25 +24,18 @@ public struct AudioRecorderView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: HubDesignSystem.Spacing.section) {
-                saveConfirmationBanner
-                header
-                filenameDisplay
-                timeDisplay
-                meterSection
-                controlSection
-                settingsSection
-                errorSection
-                permissionSection
-                incompatibleSection
-            }
-            .hubToolContentPadding()
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .frame(maxWidth: .infinity)
+        HubToolPage {
+            header
+            saveConfirmationBanner
+            filenameDisplay
+            timeDisplay
+            meterSection
+            controlSection
+            settingsSection
+            errorSection
+            permissionSection
+            incompatibleSection
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
         .task(id: viewModel.showSaveConfirmation) {
             guard viewModel.showSaveConfirmation else { return }
             try? await Task.sleep(for: .seconds(5))
@@ -90,7 +83,7 @@ public struct AudioRecorderView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
-            .frame(maxWidth: 560)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
     }
 
@@ -101,7 +94,7 @@ public struct AudioRecorderView: View {
             statusText: statusText,
             statusColor: statusColor
         )
-        .frame(maxWidth: 560)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var filenameDisplay: some View {
@@ -117,7 +110,7 @@ public struct AudioRecorderView: View {
             }
         }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: 560)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var meterSection: some View {
@@ -127,7 +120,7 @@ public struct AudioRecorderView: View {
             variant: .meter,
             isEnabled: viewModel.isRecording
         )
-        .frame(maxWidth: 560)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
         .opacity(viewModel.isRecording ? 1 : 0.35)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: viewModel.currentLevel?.peak)
     }
@@ -138,7 +131,7 @@ public struct AudioRecorderView: View {
             .monospacedDigit()
             .foregroundStyle(viewModel.isRecording ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
             .padding(14)
-            .frame(maxWidth: 560)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
             .hubCard(
                 cornerRadius: HubDesignSystem.Radius.card,
                 state: viewModel.isRecording ? .selected : .normal
@@ -196,7 +189,7 @@ public struct AudioRecorderView: View {
             ])
             .disabled(viewModel.isRecording)
             .opacity(viewModel.isRecording ? 0.45 : 1)
-            .frame(maxWidth: 560)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
         .padding(12)
         .hubCard(cornerRadius: HubDesignSystem.Radius.card)
@@ -207,7 +200,7 @@ public struct AudioRecorderView: View {
     private var errorSection: some View {
         if case .error(let error) = viewModel.recordingState {
             errorCard(for: error)
-                .frame(maxWidth: 560)
+                .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
     }
 
@@ -244,7 +237,7 @@ public struct AudioRecorderView: View {
             }
             .padding(12)
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
-            .frame(maxWidth: 560)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
     }
 
@@ -263,7 +256,7 @@ public struct AudioRecorderView: View {
             }
             .padding(12)
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .disabled)
-            .frame(maxWidth: 560)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
     }
 

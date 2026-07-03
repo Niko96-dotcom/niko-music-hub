@@ -24,15 +24,13 @@ struct DevToolDetailView: View {
     @State private var jobs: [Job] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-                Label(metadata.shortLabel, systemImage: metadata.systemImage)
-                    .font(HubDesignSystem.Typography.screenTitle())
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                Text("Registered through AppComposition.")
-                    .font(HubDesignSystem.Typography.body())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
+        HubToolPage {
+            ToolHeaderBlock(
+                title: metadata.shortLabel,
+                systemImage: metadata.systemImage,
+                statusText: "Registered through AppComposition.",
+                statusColor: HubDesignSystem.Palette.textSecondary
+            )
 
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 HubLabeledButton(
@@ -81,14 +79,7 @@ struct DevToolDetailView: View {
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
-
-            Spacer()
         }
-        .padding(.horizontal, HubDesignSystem.Spacing.columnPadding)
-        .padding(.bottom, HubDesignSystem.Spacing.columnPadding)
-        .padding(.top, HubDesignSystem.Spacing.headerBandHeight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.clear)
         .onAppear {
             refreshState()
         }

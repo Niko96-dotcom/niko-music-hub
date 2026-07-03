@@ -4,9 +4,10 @@ import SwiftUI
 public enum HubToolLayout {
     public static let horizontalPadding: CGFloat = 16
     public static let bottomPadding: CGFloat = 16
-    public static let topPadding: CGFloat = 12
+    public static let topPadding: CGFloat = 20
     public static let sectionSpacing: CGFloat = 20
-    public static let maxContentWidth: CGFloat = 640
+    public static let maxContentWidth: CGFloat = 680
+    public static let headerMinHeight: CGFloat = 56
 }
 
 public extension View {
@@ -21,5 +22,26 @@ public extension View {
         hubToolContentPadding()
             .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .top)
+    }
+}
+
+/// Standard scrollable tool page scaffold. Keeps headers and content columns in the
+/// same place when switching between tools.
+public struct HubToolPage<Content: View>: View {
+    private let content: Content
+
+    public init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
+                content
+            }
+            .hubToolContentColumn()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
     }
 }

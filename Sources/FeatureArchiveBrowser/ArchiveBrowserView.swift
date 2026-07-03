@@ -88,7 +88,9 @@ struct ArchiveBrowserView: View {
             // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
-                .padding(20)
+                .padding(.horizontal, HubToolLayout.horizontalPadding)
+                .padding(.top, HubToolLayout.topPadding)
+                .padding(.bottom, HubToolLayout.bottomPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             VStack(spacing: 16) {
