@@ -75,7 +75,15 @@ public struct MissingAudioReport: Equatable, Sendable {
               ) else {
             return []
         }
-        let referenced = Set(song.previewCandidates.map { $0.filePath.standardizedFileURL.path })
+        // Referenced = preview candidates whose filename signals a real preview/main-mix role
+        // (mixdown/master/bounce/stems/etc.). Audio with no role signal — even if the ranker
+        // auto-selected it as main because nothing better was available — is treated as
+        // unreferenced/orphan per V20-13.
+        let referenced = Set(
+            song.previewCandidates
+                .filter { $0.detectedRole != .unknown }
+                .map { $0.filePath.standardizedFileURL.path }
+        )
         var orphans: [String] = []
         for case let fileURL as URL in enumerator {
             let ext = fileURL.pathExtension.lowercased()

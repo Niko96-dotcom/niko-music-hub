@@ -5,7 +5,7 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
     func testParsesEmbeddedMarkerFromFixtureCPR() throws {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("plugins-\(UUID().uuidString).cpr")
-        let contents = "binary\x00NIKO_PLUGINS:EQ One,Compressor Pro\x00trailer"
+        let contents = "binary\u{0}NIKO_PLUGINS:EQ One,Compressor Pro\u{0}trailer"
         FileManager.default.createFile(atPath: file.path, contents: Data(contents.utf8))
         defer { try? FileManager.default.removeItem(at: file) }
 

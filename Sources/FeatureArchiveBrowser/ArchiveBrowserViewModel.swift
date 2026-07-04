@@ -58,7 +58,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let archiveRootWatcher: (any ArchiveRootWatching)?
     private let runtime: MusicHubRuntimeEnvironment
     private let scanOverride: (([URL]) async throws -> ScanResult)?
-    var requestConverterHandoff: ((URL) -> Void)?
+    public var requestConverterHandoff: ((URL) -> Void)?
     private var statusBaseMessage: String?
     private var persistenceWarningMessage: String?
 
@@ -658,7 +658,7 @@ extension ArchiveBrowserViewModel {
             )
             guard incremental.affectedSongIDs.isEmpty == false else { return }
 
-            let merged = catalog.mergeIncrementalScan(
+            let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
                 existing: existingSnapshot,
                 incremental: incremental.result,
                 affectedSongIDs: incremental.affectedSongIDs

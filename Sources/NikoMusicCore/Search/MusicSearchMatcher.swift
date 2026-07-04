@@ -96,15 +96,15 @@ enum MusicSearchMatcher {
 
         if token.count >= 3 {
             if let fuzzy = fuzzyEditDistanceMatch(token, in: title) {
-                return (.fuzzyTitle, fuzzy.score)
+                return (.fuzzyTitle, fuzzy)
             }
             for alias in song.aliases {
                 if let fuzzy = fuzzyEditDistanceMatch(token, in: normalize(alias)) {
-                    return (.fuzzyAlias, fuzzy.score)
+                    return (.fuzzyAlias, fuzzy)
                 }
             }
             if let fuzzy = fuzzyEditDistanceMatch(token, in: folder) {
-                return (.fuzzyFolderName, fuzzy.score)
+                return (.fuzzyFolderName, fuzzy)
             }
         }
 
@@ -160,7 +160,7 @@ enum MusicSearchMatcher {
         _ token: String,
         in haystack: String,
         maxDistance: Int = 2
-    ) -> (score: Int)? {
+    ) -> Int? {
         guard token.count >= 3 else { return nil }
         let words = haystack.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
         var best: Int?
@@ -172,10 +172,10 @@ enum MusicSearchMatcher {
                 }
             }
         }
-        if let best { return (best) }
+        if let best { return best }
         if haystack.count >= token.count,
            let distance = boundedEditDistance(token, String(haystack.prefix(token.count + maxDistance)), max: maxDistance) {
-            return (max(6, 20 - distance * 6))
+            return max(6, 20 - distance * 6)
         }
         return nil
     }
@@ -187,21 +187,31 @@ enum MusicSearchMatcher {
         let right = Array(rhs)
         if abs(left.count - right.count) > max { return nil }
 
+        // Damerau-Levenshtein (optimal string alignment): treats a single adjacent
+        // transposition as one edit, which matches the "typo" intuition callers rely on.
         var previous = Array(0...right.count)
         var current = Array(repeating: 0, count: right.count + 1)
+        var beforePrevious = Array(repeating: 0, count: right.count + 1)
         for i in 1...left.count {
             current[0] = i
             var rowMin = current[0]
             for j in 1...right.count {
                 let cost = left[i - 1] == right[j - 1] ? 0 : 1
-                current[j] = min(
+                var cell = min(
                     previous[j] + 1,
                     current[j - 1] + 1,
                     previous[j - 1] + cost
                 )
+                if i > 1, j > 1,
+                   left[i - 1] == right[j - 2],
+                   left[i - 2] == right[j - 1] {
+                    cell = min(cell, beforePrevious[j - 2] + 1)
+                }
+                current[j] = cell
                 rowMin = min(rowMin, current[j])
             }
             if rowMin > max { return nil }
+            beforePrevious = previous
             swap(&previous, &current)
         }
         let distance = previous[right.count]

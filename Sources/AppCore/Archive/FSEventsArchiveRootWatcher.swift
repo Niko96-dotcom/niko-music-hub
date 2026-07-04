@@ -46,11 +46,13 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         guard let stream = FSEventStreamCreate(
             nil,
             { _, info, numEvents, eventPaths, _, _ in
-                guard let info, let eventPaths else { return }
+                guard let info else { return }
                 let watcher = Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(info).takeUnretainedValue()
+                let array = unsafeBitCast(eventPaths, to: CFArray.self)
                 let paths = (0..<numEvents).compactMap { index -> String? in
-                    guard let cString = CFArrayGetValueAtIndex(eventPaths, index) else { return nil }
-                    return Unmanaged<CFString>.fromOpaque(cString).takeUnretainedValue() as String
+                    let pointer = CFArrayGetValueAtIndex(array, index)
+                    guard let pointer else { return nil }
+                    return Unmanaged<CFString>.fromOpaque(pointer).takeUnretainedValue() as String
                 }
                 watcher.recordChangedPaths(paths)
             },

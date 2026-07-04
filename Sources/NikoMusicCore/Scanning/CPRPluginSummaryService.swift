@@ -70,7 +70,9 @@ public enum CPRPluginSummaryService {
         }
         guard let range = text.range(of: "NIKO_PLUGINS:") else { return nil }
         let tail = text[range.upperBound...]
-        let end = tail.firstIndex(where: { $0 == "\n" || $0 == "\r" }) ?? tail.endIndex
+        // CPR/project files are binary; the marker list is terminated by a null byte
+        // or a newline/carriage return.
+        let end = tail.firstIndex(where: { $0 == "\n" || $0 == "\r" || $0 == "\0" }) ?? tail.endIndex
         let list = tail[..<end]
         let names = list.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,7 +106,7 @@ public enum CPRPluginSummaryService {
         return names.isEmpty ? nil : Array(names)
     }
 
-    static func runCubaseProjectPlugins(cprURL: URL) -> [String]? {
+    @usableFromInline static func runCubaseProjectPlugins(cprURL: URL) -> [String]? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["cubase-project-plugins", cprURL.path]
