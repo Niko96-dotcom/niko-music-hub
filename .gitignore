@@ -9,3 +9,13 @@ dist/
 tmp/
 *.xcresult
 *.log
+
+# Local scratch / tooling artifacts (not project source)
+.commandcode/
+.opencode/
+output/
+goal-agents/
+.planning/codebase/
+
+# Stray screenshots in repo root
+Bildschirmfoto*.png
