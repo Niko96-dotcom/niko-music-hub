@@ -74,11 +74,16 @@ npm install -g get-shit-done-cc   # once per machine
 ./script/gsd.sh query roadmap.analyze
 ```
 
-**Autonomous milestone run in Cursor:** user says **`/gsd-autonomous --from 12 --to 18`** (phase 11 persistence is done).
+**Autonomous milestone run in Cursor:** user says **`/gsd-autonomous --from 58 --to 67`** (v2.0 finish the app).
 
-- Roadmap: `.planning/ROADMAP.md` phases 11–18
-- Checklist: `docs/goals/niko-archive-recall-autonomous.goals.md`
+- Roadmap: `.planning/milestones/v2.0-ROADMAP.md` phases 58–67
+- Checklist: `docs/goals/niko-music-hub-v2.0-autonomous.goals.md`
+- Handoff: `.ai/HANDOFF-v2.0.md`
 - Gates after each phase: `./script/ci.sh` (and `./script/e2e_user_smoke.sh` when UI changes)
+
+**Do not** run `/gsd-autonomous --from 52 --to 57` — stale v1.9 delete-glass track (superseded).
+
+**Prior milestone (done):** `/gsd-autonomous --from 12 --to 18` — v1.2 archive recall.
 
 Do **not** use `gsd-sdk auto` inside Cursor — that targets external CLI runners. Use the **`/gsd-autonomous`** skill (discuss → plan → execute per phase).
 
