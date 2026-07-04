@@ -23,6 +23,81 @@ struct ArchiveCatalogCoordinator {
         }.value
     }
 
+    func performIncrementalScanDetached(
+        changedPaths: [URL],
+        roots: [URL],
+        existingSongs: [Song]
+    ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>) {
+        let resolution = ArchiveSongFolderResolver.resolve(changedPaths: changedPaths, roots: roots)
+        guard !resolution.isEmpty else {
+            return (ScanResult(), [])
+        }
+        let scanner = scanner
+        let result = try await Task.detached(priority: .userInitiated) {
+            try scanner.scanIncremental(resolution: resolution, roots: roots)
+        }.value
+        let affectedSongIDs = Self.affectedSongIDs(
+            resolution: resolution,
+            existing: existingSongs
+        )
+        return (result, affectedSongIDs)
+    }
+
+    static func mergeIncrementalScan(
+        existing: [Song],
+        incremental: ScanResult,
+        affectedSongIDs: Set<String>
+    ) -> [Song] {
+        let incomingByID = Dictionary(uniqueKeysWithValues: incremental.songs.map { ($0.id, $0) })
+        var merged: [Song] = []
+        merged.reserveCapacity(existing.count + incremental.songs.count)
+
+        for song in existing {
+            guard affectedSongIDs.contains(song.id) else {
+                merged.append(song)
+                continue
+            }
+            if let updated = incomingByID[song.id] {
+                merged.append(updated)
+            }
+        }
+
+        let mergedIDs = Set(merged.map(\.id))
+        for song in incremental.songs where !mergedIDs.contains(song.id) {
+            merged.append(song)
+        }
+
+        merged.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
+        return merged
+    }
+
+    private static func affectedSongIDs(
+        resolution: ArchiveSongFolderResolver.Resolution,
+        existing: [Song]
+    ) -> Set<String> {
+        var ids = Set(resolution.songFolders.map { $0.standardizedFileURL.path })
+
+        guard !resolution.rootsForRootLevelScan.isEmpty else { return ids }
+
+        let rootPaths = Set(resolution.rootsForRootLevelScan.map { $0.standardizedFileURL.path })
+        for song in existing {
+            let songPath = song.folderPath.standardizedFileURL.path
+            for rootPath in rootPaths where isImmediateChildPath(songPath, ofRoot: rootPath) {
+                ids.insert(song.id)
+            }
+        }
+        for song in existing where rootPaths.contains(song.folderPath.standardizedFileURL.path) {
+            ids.insert(song.id)
+        }
+        return ids
+    }
+
+    private static func isImmediateChildPath(_ path: String, ofRoot rootPath: String) -> Bool {
+        guard path.hasPrefix(rootPath + "/") else { return false }
+        let relative = String(path.dropFirst(rootPath.count + 1))
+        return !relative.contains("/")
+    }
+
     func buildDiagnostics(
         result: ScanResult,
         roots: [URL],

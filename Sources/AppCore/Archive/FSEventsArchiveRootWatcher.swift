@@ -7,7 +7,9 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private let eventQueue: DispatchQueue
     private var stream: FSEventStreamRef?
     private var debounceWorkItem: DispatchWorkItem?
-    private var onChange: (@MainActor () -> Void)?
+    private var onChange: (@MainActor ([URL]) -> Void)?
+    private var pendingChangedPaths: Set<String> = []
+    private let pathsLock = NSLock()
 
     public init(
         debounceInterval: TimeInterval = 2.0,
@@ -21,9 +23,12 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         stop()
     }
 
-    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor () -> Void) {
+    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) {
         stop()
         self.onChange = onChange
+        pathsLock.lock()
+        pendingChangedPaths.removeAll()
+        pathsLock.unlock()
         guard !roots.isEmpty else { return }
 
         let paths = roots.map(\.path) as CFArray
@@ -40,10 +45,14 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         )
         guard let stream = FSEventStreamCreate(
             nil,
-            { _, info, _, _, _, _ in
-                guard let info else { return }
+            { _, info, numEvents, eventPaths, _, _ in
+                guard let info, let eventPaths else { return }
                 let watcher = Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(info).takeUnretainedValue()
-                watcher.scheduleDebouncedCallback()
+                let paths = (0..<numEvents).compactMap { index -> String? in
+                    guard let cString = CFArrayGetValueAtIndex(eventPaths, index) else { return nil }
+                    return Unmanaged<CFString>.fromOpaque(cString).takeUnretainedValue() as String
+                }
+                watcher.recordChangedPaths(paths)
             },
             &context,
             paths,
@@ -68,14 +77,30 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         }
         stream = nil
         onChange = nil
+        pathsLock.lock()
+        pendingChangedPaths.removeAll()
+        pathsLock.unlock()
+    }
+
+    private func recordChangedPaths(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        pathsLock.lock()
+        pendingChangedPaths.formUnion(paths)
+        pathsLock.unlock()
+        scheduleDebouncedCallback()
     }
 
     private func scheduleDebouncedCallback() {
         debounceWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, let onChange = self.onChange else { return }
+            self.pathsLock.lock()
+            let paths = self.pendingChangedPaths.map { URL(fileURLWithPath: $0) }
+            self.pendingChangedPaths.removeAll()
+            self.pathsLock.unlock()
+            guard !paths.isEmpty else { return }
             Task { @MainActor in
-                onChange()
+                onChange(paths)
             }
         }
         debounceWorkItem = work

@@ -2,7 +2,7 @@ import Foundation
 
 public protocol ArchiveRootWatching: Sendable {
     /// Observe `roots`; call `onChange` on the main queue after debounced filesystem events.
-    func setRoots(_ roots: [URL], onChange: @escaping @MainActor () -> Void)
+    func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void)
     func stop()
 }
 
@@ -10,7 +10,7 @@ public protocol ArchiveRootWatching: Sendable {
 public struct NoopArchiveRootWatcher: ArchiveRootWatching, Sendable {
     public init() {}
 
-    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor () -> Void) {}
+    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) {}
 
     public func stop() {}
 }

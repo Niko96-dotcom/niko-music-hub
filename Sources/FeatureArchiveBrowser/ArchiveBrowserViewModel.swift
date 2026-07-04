@@ -574,10 +574,68 @@ extension ArchiveBrowserViewModel {
     private func restartArchiveRootWatching() {
         guard let archiveRootWatcher else { return }
         let rootsSnapshot = roots
-        archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] in
+        archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
             guard let self else { return }
             guard !self.isScanning, !self.roots.isEmpty else { return }
-            Task { await self.scan() }
+            Task { await self.rescanChangedPaths(changedPaths) }
+        }
+    }
+
+    private func rescanChangedPaths(_ changedPaths: [URL]) async {
+        guard !roots.isEmpty, !changedPaths.isEmpty else { return }
+        guard !isScanning else { return }
+
+        let rootsSnapshot = roots
+        let existingSnapshot = songs
+        do {
+            let scannedAt = Date()
+            let incremental = try await catalog.performIncrementalScanDetached(
+                changedPaths: changedPaths,
+                roots: rootsSnapshot,
+                existingSongs: existingSnapshot
+            )
+            guard incremental.affectedSongIDs.isEmpty == false else { return }
+
+            let merged = catalog.mergeIncrementalScan(
+                existing: existingSnapshot,
+                incremental: incremental.result,
+                affectedSongIDs: incremental.affectedSongIDs
+            )
+            let withMetadata = catalog.mergeUserMetadata(into: merged, collaborators: collaborators)
+            let updateCount = incremental.result.songs.count
+
+            mutateCatalog {
+                songs = withMetadata
+                if let diagnostics = scanDiagnostics {
+                    scanDiagnostics = ArchiveScanDiagnostics(
+                        scannedAt: scannedAt,
+                        rootPaths: diagnostics.rootPaths,
+                        songCount: withMetadata.count,
+                        songsWithWarningsCount: withMetadata.filter { !$0.scanWarnings.isEmpty }.count,
+                        totalSongWarningCount: withMetadata.reduce(0) { $0 + $1.scanWarnings.count },
+                        globalWarnings: diagnostics.globalWarnings,
+                        songWarningSummaries: withMetadata
+                            .filter { !$0.scanWarnings.isEmpty }
+                            .map { SongWarningSummary(displayTitle: $0.displayTitle, warnings: $0.scanWarnings) }
+                            .sorted { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending },
+                        skippedEntries: diagnostics.skippedEntries,
+                        previewRankingPanel: diagnostics.previewRankingPanel
+                    )
+                }
+                if updateCount == 1, let title = incremental.result.songs.first?.displayTitle {
+                    setStatusMessage("Updated \(title) from filesystem change (\(withMetadata.count) songs).")
+                } else {
+                    setStatusMessage("Updated \(updateCount) songs from filesystem change (\(withMetadata.count) total).")
+                }
+            }
+
+            if let warning = catalog.persistCachedIndex(roots: rootsSnapshot, songs: songs, scannedAt: scannedAt) {
+                recordPersistenceWarning(warning)
+            }
+            diagnostics.log(.info, "Incremental archive rescan updated \(updateCount) song(s)")
+        } catch {
+            setStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
+            diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }
     }
 }

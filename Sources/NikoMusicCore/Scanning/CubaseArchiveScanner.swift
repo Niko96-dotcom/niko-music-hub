@@ -133,6 +133,65 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         )
     }
 
+    /// Rescan only song folders and/or root-level CPR groups affected by filesystem changes.
+    public func scanIncremental(
+        resolution: ArchiveSongFolderResolver.Resolution,
+        roots: [URL]
+    ) throws -> ScanResult {
+        var songs: [Song] = []
+        var skippedEntries: [SkippedScanEntry] = []
+
+        for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                continue
+            }
+            do {
+                if let song = try scanSongFolder(folder) {
+                    songs.append(song)
+                }
+            } catch {
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .unreadableChild,
+                        label: folder.lastPathComponent,
+                        reason: "Could not scan folder: \(error.localizedDescription)"
+                    )
+                )
+            }
+        }
+
+        for root in resolution.rootsForRootLevelScan.sorted(by: { $0.path < $1.path }) {
+            let standardizedRoot = root.standardizedFileURL
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: standardizedRoot.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                continue
+            }
+            do {
+                let rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+                songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
+            } catch {
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .unreadableChild,
+                        label: standardizedRoot.lastPathComponent,
+                        reason: "Could not read root-level CPR files: \(error.localizedDescription)"
+                    )
+                )
+            }
+        }
+
+        songs.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
+        skippedEntries.sort {
+            let kindOrder = $0.kind.rawValue.localizedCaseInsensitiveCompare($1.kind.rawValue)
+            if kindOrder != .orderedSame { return kindOrder == .orderedAscending }
+            return $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        }
+        return ScanResult(songs: songs, skippedEntries: skippedEntries)
+    }
+
     private func rootLevelSongs(from versions: [ProjectVersion]) -> [Song] {
         let grouped = Dictionary(grouping: versions, by: rootLevelSongKey)
         return grouped.values.compactMap { versions in

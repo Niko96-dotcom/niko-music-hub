@@ -118,6 +118,43 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertGreaterThan(result.songs.count, 9)
     }
 
+    func testIncrementalScanUpdatesSingleSongFolder() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        let songB = root.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: songB.appendingPathComponent("Song B.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+
+        let scanner = CubaseArchiveScanner()
+        let full = try scanner.scan(roots: [root])
+        XCTAssertEqual(full.songs.count, 2)
+        XCTAssertTrue(full.songs.allSatisfy { $0.previewCandidates.isEmpty })
+
+        let mixdownFolder = songA.appendingPathComponent("mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
+        let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
+        FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
+
+        let resolution = ArchiveSongFolderResolver.resolve(changedPaths: [mixdown], roots: [root])
+        let incremental = try scanner.scanIncremental(resolution: resolution, roots: [root])
+
+        XCTAssertEqual(incremental.songs.count, 1)
+        let updated = try XCTUnwrap(incremental.songs.first)
+        XCTAssertEqual(updated.displayTitle, "Song A")
+        XCTAssertEqual(updated.previewCandidates.count, 1)
+        XCTAssertEqual(updated.previewCandidates.first?.fileName, "Song A mix.wav")
+    }
+
     func testUnreadableImmediateChildIsSkippedWhileSiblingsScan() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
