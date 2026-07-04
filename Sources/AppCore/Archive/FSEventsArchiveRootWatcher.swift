@@ -1,5 +1,6 @@
 import CoreServices
 import Foundation
+import os
 
 /// Debounced FSEvents observer for archive root directories.
 public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked Sendable {
@@ -10,7 +11,11 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private var onChange: (@MainActor ([URL]) -> Void)?
     private var pendingChangedPaths: Set<String> = []
     private let pathsLock = NSLock()
-    private var isStopped = false
+    private let stoppedLock = OSAllocatedUnfairLock(initialState: false)
+
+    private var isStopped: Bool {
+        stoppedLock.withLock { $0 }
+    }
 
     public init(
         debounceInterval: TimeInterval = 2.0,
@@ -32,7 +37,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         pathsLock.unlock()
         guard !roots.isEmpty else { return }
 
-        isStopped = false
+        stoppedLock.withLock { $0 = false }
         let paths = roots.map(\.path) as CFArray
         var context = FSEventStreamContext(
             version: 0,
@@ -83,7 +88,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     }
 
     public func stop() {
-        isStopped = true
+        stoppedLock.withLock { $0 = true }
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
         if let stream {

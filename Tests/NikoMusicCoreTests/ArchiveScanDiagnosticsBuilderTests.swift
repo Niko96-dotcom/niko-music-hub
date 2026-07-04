@@ -59,4 +59,37 @@ final class ArchiveScanDiagnosticsBuilderTests: XCTestCase {
             "1 invalid root · 1 root warning"
         )
     }
+
+    func testMergeIncrementalPreservesPriorGlobalWarningsAndMergesSkipped() {
+        let prior = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/archive"],
+            songCount: 2,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["prior warning"],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .nonFolderAtRoot, label: "old.txt", reason: "not a folder")
+            ]
+        )
+        let built = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 2),
+            rootPaths: ["/archive"],
+            songCount: 2,
+            songsWithWarningsCount: 1,
+            totalSongWarningCount: 1,
+            globalWarnings: ["new warning"],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .nonFolderAtRoot, label: "new.txt", reason: "not a folder")
+            ]
+        )
+
+        let merged = ArchiveScanDiagnosticsBuilder.mergeIncremental(prior: prior, built: built)
+
+        XCTAssertEqual(merged.globalWarnings, ["prior warning"])
+        XCTAssertEqual(merged.skippedEntries.map(\.label), ["old.txt", "new.txt"])
+        XCTAssertEqual(merged.songCount, 2)
+    }
 }

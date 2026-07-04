@@ -54,7 +54,8 @@ public enum CPRPluginSummaryService {
 
         cacheLock.lock()
         cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)
-        if cache.count > maxCacheEntries, let keyToRemove = cache.keys.first {
+        if cache.count > maxCacheEntries,
+           let keyToRemove = cache.min(by: { $0.value.modifiedAt < $1.value.modifiedAt })?.key {
             cache.removeValue(forKey: keyToRemove)
         }
         cacheLock.unlock()

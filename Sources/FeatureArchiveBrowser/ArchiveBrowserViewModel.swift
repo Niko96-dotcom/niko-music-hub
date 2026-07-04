@@ -6,13 +6,12 @@ import NikoMusicCore
 /// so catalog/browse invariants stay ``private`` without cross-file extension leaks.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
-    private var rootGeneration: UInt64 = 0
-    private var activeScanGeneration: UInt64?
-    private var pendingIncrementalRescanPaths: Set<String> = []
+    var rootGeneration: UInt64 = 0
+    private lazy var scanOrchestrator = ArchiveScanOrchestrator(host: self)
 
     @Published public var roots: [URL] = [] {
         didSet {
-            guard rootPathSnapshot(oldValue) != rootPathSnapshot(roots) else { return }
+            guard oldValue.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
             invalidateActiveScanForRootChange()
         }
     }
@@ -46,7 +45,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published private(set) var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
 
-    private let catalog: ArchiveCatalogCoordinator
+    let catalog: ArchiveCatalogCoordinator
     private let browseRefreshDriver: ArchiveBrowseRefreshDriver
     private var bpmEstimateTask: Task<Void, Never>?
     private var keyEstimateTask: Task<Void, Never>?
@@ -54,11 +53,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
-    private let diagnostics: Diagnostics
+    let diagnostics: Diagnostics
     private let collaboratorStore: (any CollaboratorStoring)?
-    private let archiveRootWatcher: (any ArchiveRootWatching)?
+    let archiveRootWatcher: (any ArchiveRootWatching)?
     private let runtime: MusicHubRuntimeEnvironment
-    private let scanOverride: (([URL]) async throws -> ScanResult)?
+    let scanOverride: (([URL]) async throws -> ScanResult)?
     public var requestConverterHandoff: ((URL) -> Void)?
     private var statusBaseMessage: String?
     private var persistenceWarningMessage: String?
@@ -225,7 +224,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         let before = roots
         let standardizedPath = url.standardizedFileURL.path
         roots.removeAll { $0.standardizedFileURL.path == standardizedPath }
-        guard rootPathSnapshot(before) != rootPathSnapshot(roots) else { return }
+        guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
         clearRootBoundArchiveState(
             statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
         )
@@ -294,7 +293,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         missingAudioReport = ArchiveIntelligence.missingAudioReport(songs: songs)
     }
 
-    private func setStatusMessage(_ message: String?) {
+    func setStatusMessage(_ message: String?) {
         statusBaseMessage = message
         statusMessage = combinedStatusMessage(base: message)
     }
@@ -495,107 +494,28 @@ extension ArchiveBrowserViewModel {
 // MARK: - Scan and cache
 
 extension ArchiveBrowserViewModel {
-    private struct ScanRequest {
-        let roots: [URL]
-        let generation: UInt64
-    }
-
     func clearScanResults() {
         clearRootBoundArchiveState(statusMessage: nil)
     }
 
     func scan() async {
-        guard let request = beginScan() else { return }
-        defer { finishScan(request) }
-        do {
-            let scannedAt = Date()
-            let result = try await performScanDetached(roots: request.roots)
-            guard isCurrentScan(request) else { return }
-            applyScanResult(result, request: request, scannedAt: scannedAt)
-        } catch {
-            guard isCurrentScan(request) else { return }
-            recordScanFailure(error)
-        }
+        await scanOrchestrator.scan()
     }
 
     func scanSync() {
-        guard let request = beginScan() else { return }
-        defer { finishScan(request) }
-        do {
-            let result = try catalog.performScanSynchronously(roots: request.roots)
-            guard isCurrentScan(request) else { return }
-            applyScanResult(result, request: request, scannedAt: Date())
-        } catch {
-            guard isCurrentScan(request) else { return }
-            recordScanFailure(error)
-        }
-    }
-
-    private func beginScan() -> ScanRequest? {
-        guard !roots.isEmpty else {
-            setStatusMessage("Add at least one archive root.")
-            return nil
-        }
-        guard !isScanning else { return nil }
-        isScanning = true
-        activeScanGeneration = rootGeneration
-        setStatusMessage("Scanning archive...")
-        return ScanRequest(roots: roots, generation: rootGeneration)
-    }
-
-    private func recordScanFailure(_ error: Error) {
-        mutateCatalog {
-            scanDiagnostics = nil
-            setStatusMessage("Scan failed: \(error.localizedDescription)")
-        }
-        diagnostics.log(.error, statusMessage ?? "scan failed")
-    }
-
-    private func applyScanResult(_ result: ScanResult, request: ScanRequest, scannedAt: Date) {
-        let built = catalog.buildDiagnostics(result: result, roots: request.roots, scannedAt: scannedAt)
-        mutateCatalog {
-            songs = catalog.mergeUserMetadata(into: result.songs, collaborators: collaborators)
-            scanDiagnostics = built
-            setStatusMessage(built.compactSummaryLine)
-        }
-        diagnostics.log(.info, built.summaryLine)
-        if let warning = catalog.persistCachedIndex(roots: request.roots, songs: songs, scannedAt: scannedAt) {
-            recordPersistenceWarning(warning)
-        }
-        if let warning = catalog.persistUserMetadata(for: songs) {
-            recordPersistenceWarning(warning)
-        }
-    }
-
-    private func performScanDetached(roots: [URL]) async throws -> ScanResult {
-        if let scanOverride {
-            return try await scanOverride(roots)
-        }
-        return try await catalog.performScanDetached(roots: roots)
-    }
-
-    private func finishScan(_ request: ScanRequest) {
-        guard activeScanGeneration == request.generation else { return }
-        activeScanGeneration = nil
-        isScanning = false
-    }
-
-    private func isCurrentScan(_ request: ScanRequest) -> Bool {
-        activeScanGeneration == request.generation
-            && rootGeneration == request.generation
-            && rootPathSnapshot(roots) == rootPathSnapshot(request.roots)
+        scanOrchestrator.scanSync()
     }
 
     private func invalidateActiveScanForRootChange() {
         rootGeneration &+= 1
-        activeScanGeneration = nil
         isScanning = false
+        scanOrchestrator.invalidateForRootChange()
     }
 
     private func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         browseRefreshDriver.cancelPendingDebounce()
         persistenceWarningMessage = nil
-        pendingIncrementalRescanPaths.removeAll()
+        scanOrchestrator.clearPendingPaths()
         songs = []
         filteredSongs = []
         searchMatchSummaries = [:]
@@ -635,128 +555,34 @@ extension ArchiveBrowserViewModel {
         return true
     }
 
-    private func restartArchiveRootWatching() {
-        guard let archiveRootWatcher else { return }
-        let rootsSnapshot = roots
-        archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
-            guard let self else { return }
-            guard !self.roots.isEmpty else { return }
-            self.enqueueIncrementalRescan(paths: changedPaths)
-        }
-    }
-
-    private func enqueueIncrementalRescan(paths: [URL]) {
-        pendingIncrementalRescanPaths.formUnion(paths.map { $0.standardizedFileURL.path })
-        guard !isScanning else { return }
-        Task { await drainPendingIncrementalRescan() }
-    }
-
-    private func drainPendingIncrementalRescan() async {
-        guard !isScanning, !pendingIncrementalRescanPaths.isEmpty else { return }
-        let batch = pendingIncrementalRescanPaths
-        pendingIncrementalRescanPaths.removeAll()
-        await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) })
-    }
-
-    private func rescanChangedPaths(_ changedPaths: [URL]) async {
-        guard !roots.isEmpty, !changedPaths.isEmpty else { return }
-        guard !isScanning else { return }
-        isScanning = true
-        defer {
-            isScanning = false
-            Task { await drainPendingIncrementalRescan() }
-        }
-
-        let rootsSnapshot = roots
-        let generationSnapshot = rootGeneration
-        let existingSnapshot = songs
-        let priorDiagnostics = scanDiagnostics
-        do {
-            let scannedAt = Date()
-            let incremental = try await catalog.performIncrementalScanDetached(
-                changedPaths: changedPaths,
-                roots: rootsSnapshot,
-                existingSongs: existingSnapshot
-            )
-            guard rootGeneration == generationSnapshot,
-                  rootPathSnapshot(roots) == rootPathSnapshot(rootsSnapshot) else { return }
-            guard !incremental.affectedSongIDs.isEmpty || !incremental.result.songs.isEmpty else { return }
-
-            let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
-                existing: existingSnapshot,
-                incremental: incremental.result,
-                affectedSongIDs: incremental.affectedSongIDs
-            )
-            let withMetadata = catalog.mergeUserMetadata(into: merged, collaborators: collaborators)
-            let updateCount = incremental.result.songs.count
-
-            mutateCatalog {
-                songs = withMetadata
-                let mergedResult = ScanResult(
-                    songs: withMetadata,
-                    globalWarnings: incremental.result.globalWarnings,
-                    skippedEntries: incremental.result.skippedEntries
-                )
-                let built = catalog.buildDiagnostics(
-                    result: mergedResult,
-                    roots: rootsSnapshot,
-                    scannedAt: scannedAt
-                )
-                if let priorDiagnostics {
-                    scanDiagnostics = ArchiveScanDiagnostics(
-                        scannedAt: built.scannedAt,
-                        rootPaths: built.rootPaths,
-                        songCount: built.songCount,
-                        songsWithWarningsCount: built.songsWithWarningsCount,
-                        totalSongWarningCount: built.totalSongWarningCount,
-                        globalWarnings: priorDiagnostics.globalWarnings.isEmpty
-                            ? built.globalWarnings
-                            : priorDiagnostics.globalWarnings,
-                        songWarningSummaries: built.songWarningSummaries,
-                        skippedEntries: mergeSkippedEntries(
-                            prior: priorDiagnostics.skippedEntries,
-                            incremental: built.skippedEntries
-                        ),
-                        previewRankingPanel: built.previewRankingPanel
-                    )
-                } else {
-                    scanDiagnostics = built
-                }
-                if updateCount == 1, let title = incremental.result.songs.first?.displayTitle {
-                    setStatusMessage("Updated \(title) from filesystem change (\(withMetadata.count) songs).")
-                } else {
-                    setStatusMessage("Updated \(updateCount) songs from filesystem change (\(withMetadata.count) total).")
-                }
-            }
-
-            if let warning = catalog.persistCachedIndex(roots: rootsSnapshot, songs: songs, scannedAt: scannedAt) {
-                recordPersistenceWarning(warning)
-            }
-            diagnostics.log(.info, "Incremental archive rescan updated \(updateCount) song(s)")
-        } catch {
-            setStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
-            diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
-        }
+    func restartArchiveRootWatching() {
+        scanOrchestrator.restartArchiveRootWatching()
     }
 }
 
-private func rootPathSnapshot(_ roots: [URL]) -> [String] {
-    roots.map { $0.standardizedFileURL.path }
-}
-
-private func mergeSkippedEntries(
-    prior: [SkippedScanEntry],
-    incremental: [SkippedScanEntry]
-) -> [SkippedScanEntry] {
-    var seen = Set<String>()
-    var merged: [SkippedScanEntry] = []
-    merged.reserveCapacity(prior.count + incremental.count)
-    for entry in prior + incremental {
-        let key = "\(entry.kind.rawValue)|\(entry.label)|\(entry.reason)"
-        guard seen.insert(key).inserted else { continue }
-        merged.append(entry)
+extension ArchiveBrowserViewModel: ArchiveScanHost {
+    func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL]) {
+        mutateCatalog {
+            songs = update.songs
+            scanDiagnostics = update.diagnostics
+            setStatusMessage(update.statusMessage)
+        }
+        if let warning = catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: update.scannedAt) {
+            recordPersistenceWarning(warning)
+        }
+        if update.shouldPersistUserMetadata,
+           let warning = catalog.persistUserMetadata(for: songs) {
+            recordPersistenceWarning(warning)
+        }
     }
-    return merged
+
+    func applyScanFailure(_ error: Error) {
+        mutateCatalog {
+            scanDiagnostics = nil
+            setStatusMessage("Scan failed: \(error.localizedDescription)")
+        }
+        diagnostics.log(.error, statusMessage ?? "scan failed")
+    }
 }
 
 // MARK: - Metadata

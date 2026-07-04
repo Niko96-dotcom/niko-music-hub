@@ -1398,6 +1398,140 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Brand New"])
     }
 
+    func testPendingIncrementalPathsDrainAfterFullScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubDrainAfterFull-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let gate = ScanReleaseGate()
+        let watcher = TestArchiveRootWatcher()
+        let indexStore = RecordingArchiveIndexStore()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveIndexStore: indexStore,
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                await gate.waitForRelease()
+                return ScanResult(songs: [
+                    Song(
+                        folderPath: songA,
+                        originalFolderName: songA.lastPathComponent,
+                        displayTitle: "Song A"
+                    )
+                ])
+            }
+        )
+
+        let scanningDeadline = Date().addingTimeInterval(2)
+        while !viewModel.isScanning, Date() < scanningDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(viewModel.isScanning)
+
+        let mixdownFolder = songA.appendingPathComponent("mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
+        let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
+        FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [mixdown])
+
+        gate.release()
+
+        let updateDeadline = Date().addingTimeInterval(3)
+        while viewModel.songs.first?.previewCandidates.isEmpty != false, Date() < updateDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(viewModel.songs.first?.previewCandidates.count, 1)
+        XCTAssertEqual(indexStore.savedSnapshots.count, 2)
+    }
+
+    func testPendingIncrementalPathsClearedOnRootChange() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let rootA = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubRootChangeA-\(UUID().uuidString)", isDirectory: true)
+        let rootB = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubRootChangeB-\(UUID().uuidString)", isDirectory: true)
+        let songA = rootA.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: rootB, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: rootA)
+            try? FileManager.default.removeItem(at: rootB)
+        }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: rootA.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                ScanResult(songs: [
+                    Song(
+                        folderPath: songA,
+                        originalFolderName: songA.lastPathComponent,
+                        displayTitle: "Song A"
+                    )
+                ])
+            }
+        )
+
+        let scanDeadline = Date().addingTimeInterval(2)
+        while viewModel.songs.isEmpty, Date() < scanDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let mixdownFolder = songA.appendingPathComponent("mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
+        let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
+        FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [mixdown])
+        viewModel.roots = [rootB]
+
+        let settleDeadline = Date().addingTimeInterval(2)
+        while Date() < settleDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let song = try XCTUnwrap(viewModel.songs.first)
+        XCTAssertTrue(song.previewCandidates.isEmpty)
+        XCTAssertFalse(viewModel.statusMessage?.contains("filesystem change") ?? false)
+    }
+
     func testExportIndexJSONFromViewModel() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -1417,6 +1551,27 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertGreaterThan(decoded.songCount, 0)
     }
 
+}
+
+private final class ScanReleaseGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func waitForRelease() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func release() {
+        lock.lock()
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
 }
 
 private final class RecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {

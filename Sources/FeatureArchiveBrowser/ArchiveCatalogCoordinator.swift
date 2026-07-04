@@ -46,6 +46,99 @@ struct ArchiveCatalogCoordinator {
         }.value
     }
 
+    struct IncrementalFilesystemApplyResult: Sendable {
+        let songs: [Song]
+        let diagnostics: ArchiveScanDiagnostics
+        let incrementalSongCount: Int
+        let firstUpdatedTitle: String?
+        let scannedAt: Date
+
+        var statusMessage: String {
+            if incrementalSongCount == 1, let firstUpdatedTitle {
+                return "Updated \(firstUpdatedTitle) from filesystem change (\(songs.count) songs)."
+            }
+            return "Updated \(incrementalSongCount) songs from filesystem change (\(songs.count) total)."
+        }
+
+        var catalogApplyResult: CatalogScanApplyResult {
+            CatalogScanApplyResult(
+                songs: songs,
+                diagnostics: diagnostics,
+                statusMessage: statusMessage,
+                scannedAt: scannedAt,
+                shouldPersistUserMetadata: false
+            )
+        }
+    }
+
+    struct CatalogScanApplyResult: Sendable {
+        let songs: [Song]
+        let diagnostics: ArchiveScanDiagnostics
+        let statusMessage: String
+        let scannedAt: Date
+        let shouldPersistUserMetadata: Bool
+    }
+
+    func applyFullScanResult(
+        result: ScanResult,
+        roots: [URL],
+        collaborators: [Collaborator],
+        scannedAt: Date
+    ) -> CatalogScanApplyResult {
+        let withMetadata = mergeUserMetadata(into: result.songs, collaborators: collaborators)
+        let mergedResult = ScanResult(
+            songs: withMetadata,
+            globalWarnings: result.globalWarnings,
+            skippedEntries: result.skippedEntries
+        )
+        let built = buildDiagnostics(result: mergedResult, roots: roots, scannedAt: scannedAt)
+        return CatalogScanApplyResult(
+            songs: withMetadata,
+            diagnostics: built,
+            statusMessage: built.compactSummaryLine,
+            scannedAt: scannedAt,
+            shouldPersistUserMetadata: true
+        )
+    }
+
+    func applyIncrementalFilesystemUpdate(
+        changedPaths: [URL],
+        roots: [URL],
+        existingSongs: [Song],
+        collaborators: [Collaborator],
+        priorDiagnostics: ArchiveScanDiagnostics?
+    ) async throws -> IncrementalFilesystemApplyResult? {
+        let scannedAt = Date()
+        let incremental = try await performIncrementalScanDetached(
+            changedPaths: changedPaths,
+            roots: roots,
+            existingSongs: existingSongs
+        )
+        guard !incremental.affectedSongIDs.isEmpty || !incremental.result.songs.isEmpty else {
+            return nil
+        }
+
+        let merged = Self.mergeIncrementalScan(
+            existing: existingSongs,
+            incremental: incremental.result,
+            affectedSongIDs: incremental.affectedSongIDs
+        )
+        let withMetadata = mergeUserMetadata(into: merged, collaborators: collaborators)
+        let mergedResult = ScanResult(
+            songs: withMetadata,
+            globalWarnings: incremental.result.globalWarnings,
+            skippedEntries: incremental.result.skippedEntries
+        )
+        let built = buildDiagnostics(result: mergedResult, roots: roots, scannedAt: scannedAt)
+        return IncrementalFilesystemApplyResult(
+            songs: withMetadata,
+            diagnostics: ArchiveScanDiagnosticsBuilder.mergeIncremental(prior: priorDiagnostics, built: built),
+            incrementalSongCount: incremental.result.songs.count,
+            firstUpdatedTitle: incremental.result.songs.first?.displayTitle,
+            scannedAt: scannedAt
+        )
+    }
+
     func performIncrementalScanDetached(
         changedPaths: [URL],
         roots: [URL],
@@ -102,6 +195,7 @@ struct ArchiveCatalogCoordinator {
         resolution: ArchiveSongFolderResolver.Resolution,
         existing: [Song]
     ) -> Set<String> {
+        // Song.id is the standardized song-folder path; resolver returns folder URLs.
         var ids = Set(resolution.songFolders.map { $0.standardizedFileURL.path })
 
         guard !resolution.rootsForRootLevelScan.isEmpty else { return ids }
