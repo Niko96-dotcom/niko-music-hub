@@ -7,19 +7,22 @@ public struct DownloadJobOptions: Sendable {
     public var fileNameTemplate: String
     public var formatSelection: DownloadFormatSelection
     public var retries: Int
+    public var playlistMode: DownloadPlaylistMode
 
     public init(
         sourceURL: URL,
         outputDirectory: URL,
         fileNameTemplate: String = DownloadRequest.defaultOutputTemplate,
         formatSelection: DownloadFormatSelection = .default,
-        retries: Int = 3
+        retries: Int = 3,
+        playlistMode: DownloadPlaylistMode = .single
     ) {
         self.sourceURL = sourceURL
         self.outputDirectory = outputDirectory
         self.fileNameTemplate = fileNameTemplate
         self.formatSelection = formatSelection
         self.retries = retries
+        self.playlistMode = playlistMode
     }
 }
 
@@ -95,7 +98,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             arguments: YtDlpDownloadCommandBuilder.simulateArguments(
                 formatSelection: options.formatSelection,
                 sourceURL: url,
-                ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools)
+                ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools),
+                playlistMode: options.playlistMode
             ),
             environment: DownloaderHelperToolResolver.processEnvironment(settings: settings.helperTools),
             timeoutSeconds: 30
@@ -157,7 +161,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                     outputTemplate: options.fileNameTemplate,
                     formatSelection: options.formatSelection,
                     ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools),
-                    helperSearchDirectories: DownloaderHelperToolResolver.helperSearchDirectories(settings: settings.helperTools)
+                    helperSearchDirectories: DownloaderHelperToolResolver.helperSearchDirectories(settings: settings.helperTools),
+                    playlistMode: options.playlistMode
                 )
 
                 let result = try await downloader.download(request) { line in

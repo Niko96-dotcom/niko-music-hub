@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import NikoMusicCore
 import SwiftUI
 
 struct OutputInboxInspectorView: View {
@@ -11,6 +12,7 @@ struct OutputInboxInspectorView: View {
     @State private var hoveredItemID: OutputInboxItem.ID?
     @State private var settingsError: String?
     @State private var inboxError: String?
+    @State private var analyzingItemID: OutputInboxItem.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
@@ -224,6 +226,11 @@ struct OutputInboxInspectorView: View {
             context.fileActions.revealInFinder(item.fileURL)
         }
         .contextMenu {
+            if isAudioItem(item) {
+                Button("Analyze BPM") {
+                    analyzeBPM(for: item)
+                }
+            }
             if revealable {
                 Button("Reveal in Finder") {
                     context.fileActions.revealInFinder(item.fileURL)
@@ -237,9 +244,15 @@ struct OutputInboxInspectorView: View {
 
     @ViewBuilder
     private func statusLine(for item: OutputInboxItem) -> some View {
-        // Quiet caption by default (textTertiary); color only carries meaning for
-        // warning/error states (DS-14) — success/pending stay neutral like the rest of the row.
-        if item.status == .failed {
+        if let bpm = item.metadata["bpm"] {
+            Text("BPM \(bpm)\(item.metadata["bpmConfidence"].map { " (\($0))" } ?? "")")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+        } else if analyzingItemID == item.id {
+            Text("Analyzing BPM…")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        } else if item.status == .failed {
             Text("Failed")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.danger)
@@ -269,15 +282,6 @@ struct OutputInboxInspectorView: View {
     }
 
     /// Flat-row fill derived from the semantic item intent (references list rows are unboxed).
-    private func itemRowFill(for item: OutputInboxItem, isHovered: Bool) -> Color {
-        switch itemIntent(for: item, isHovered: isHovered) {
-        case .error: return HubDesignSystem.Palette.danger.opacity(0.14)
-        case .warning: return HubDesignSystem.Palette.warning.opacity(0.14)
-        case .hover: return Color.white.opacity(0.05)
-        default: return Color.clear
-        }
-    }
-
     private func fileIcon(for url: URL) -> some View {
         let symbol: String
         switch url.pathExtension.lowercased() {
@@ -298,6 +302,44 @@ struct OutputInboxInspectorView: View {
             .font(HubDesignSystem.Typography.body())
             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             .frame(width: 22, height: 22)
+    }
+
+    private func itemRowFill(for item: OutputInboxItem, isHovered: Bool) -> Color {
+        switch itemIntent(for: item, isHovered: isHovered) {
+        case .error: return HubDesignSystem.Palette.danger.opacity(0.14)
+        case .warning: return HubDesignSystem.Palette.warning.opacity(0.14)
+        case .hover: return Color.white.opacity(0.05)
+        default: return Color.clear
+        }
+    }
+
+    private func isAudioItem(_ item: OutputInboxItem) -> Bool {
+        ["wav", "mp3", "m4a", "aiff", "aif", "flac"].contains(item.fileURL.pathExtension.lowercased())
+    }
+
+    private func analyzeBPM(for item: OutputInboxItem) {
+        guard isAudioItem(item), item.status == .available else { return }
+        analyzingItemID = item.id
+        let itemID = item.id
+        Task {
+            let estimate = await Task.detached(priority: .utility) {
+                MixdownBPMEstimator.estimate(url: item.fileURL)
+            }.value
+            await MainActor.run {
+                analyzingItemID = nil
+                guard let estimate else { return }
+                var updated = item
+                updated.metadata["bpm"] = String(format: "%.1f", estimate.bpm)
+                updated.metadata["bpmConfidence"] = estimate.confidence
+                do {
+                    try context.outputInboxStore.updateItem(updated)
+                    refreshItems()
+                } catch {
+                    inboxError = error.localizedDescription
+                }
+                _ = itemID
+            }
+        }
     }
 }
 

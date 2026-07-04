@@ -4,7 +4,9 @@ import SwiftUI
 struct AppShellView: View {
     private static let showToolSidebarKey = "hub.shell.panels.toolsVisible"
     private static let showOutputInboxKey = "hub.shell.panels.inboxVisible"
+    private static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
     private static let activeToolMinWidth: CGFloat = 540
+    private static let compactInboxCollapseWidth: CGFloat = 1180
 
     let registry: ToolRegistry
     let context: ToolContext
@@ -13,6 +15,7 @@ struct AppShellView: View {
     @State private var selectedToolID: ToolFeatureID?
     @State private var showToolSidebar: Bool
     @State private var showOutputInbox: Bool
+    @State private var windowWidth: CGFloat = 1400
 
     init(registry: ToolRegistry, context: ToolContext, router: QuickAccessRouter) {
         self.registry = registry
@@ -23,7 +26,20 @@ struct AppShellView: View {
             ?? registry.preferredDefaultFeatureID
         _selectedToolID = State(initialValue: initialToolID)
         _showToolSidebar = State(initialValue: context.preferences.bool(forKey: Self.showToolSidebarKey) ?? true)
-        _showOutputInbox = State(initialValue: context.preferences.bool(forKey: Self.showOutputInboxKey) ?? true)
+
+        let migrated = context.preferences.bool(forKey: Self.inboxMigrationKey) ?? false
+        let storedInbox = context.preferences.bool(forKey: Self.showOutputInboxKey)
+        let initialInboxVisible: Bool
+        if !migrated {
+            initialInboxVisible = storedInbox ?? false
+            if storedInbox == nil {
+                context.preferences.set(false, forKey: Self.showOutputInboxKey)
+            }
+            context.preferences.set(true, forKey: Self.inboxMigrationKey)
+        } else {
+            initialInboxVisible = storedInbox ?? false
+        }
+        _showOutputInbox = State(initialValue: initialInboxVisible)
     }
 
     var body: some View {
@@ -103,6 +119,24 @@ struct AppShellView: View {
             if reveal {
                 setOutputInboxVisible(true)
                 router.clearRevealOutputInbox()
+            }
+        }
+        .onChange(of: router.prefilledConverterURLs) { _, urls in
+            guard !urls.isEmpty else { return }
+            if selectedToolID != ToolFeatureID("wav-converter") {
+                selectedToolID = ToolFeatureID("wav-converter")
+            }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { windowWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in
+                        windowWidth = width
+                        if width < Self.compactInboxCollapseWidth, showOutputInbox {
+                            setOutputInboxVisible(false)
+                        }
+                    }
             }
         }
         .background(HubShellBackground())

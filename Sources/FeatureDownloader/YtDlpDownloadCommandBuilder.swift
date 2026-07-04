@@ -11,7 +11,6 @@ enum YtDlpDownloadCommandBuilder {
         var args: [String] = [
             "--newline",
             "--no-overwrites",
-            "--no-playlist",
             "--socket-timeout", "30",
             "--retries", "1",
             "--fragment-retries", "1",
@@ -19,6 +18,11 @@ enum YtDlpDownloadCommandBuilder {
             "--progress",
             "-f", formatArgs.formatSelector,
         ]
+        if request.playlistMode == .single {
+            args.append("--no-playlist")
+        } else if let maxEntries = request.playlistMode.maxEntries {
+            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+        }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL = request.ffmpegLocationURL {
             args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])
@@ -35,14 +39,19 @@ enum YtDlpDownloadCommandBuilder {
     static func simulateArguments(
         formatSelection: DownloadFormatSelection,
         sourceURL: URL,
-        ffmpegLocationURL: URL?
+        ffmpegLocationURL: URL?,
+        playlistMode: DownloadPlaylistMode = .single
     ) -> [String] {
         let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: formatSelection)
         var args: [String] = [
             "--simulate",
-            "--no-playlist",
             "-f", formatArgs.formatSelector,
         ]
+        if playlistMode == .single {
+            args.append("--no-playlist")
+        } else if let maxEntries = playlistMode.maxEntries {
+            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+        }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL {
             args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])

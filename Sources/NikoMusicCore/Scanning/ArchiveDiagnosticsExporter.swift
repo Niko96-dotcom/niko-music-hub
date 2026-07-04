@@ -12,7 +12,8 @@ public enum ArchiveDiagnosticsExporter {
         homeDirectory: String? = nil,
         searchContext: ArchiveDiagnosticsSearchContext? = nil,
         skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext? = nil,
-        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
+        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil,
+        orphanAudioReport: MissingAudioReport? = nil
     ) throws {
         let destinationPath = destination.standardizedFileURL.path
         for root in archiveRoots {
@@ -28,7 +29,8 @@ public enum ArchiveDiagnosticsExporter {
             homeDirectory: homeDirectory,
             searchContext: searchContext,
             skippedSearchContext: skippedSearchContext,
-            selectedSongContext: selectedSongContext
+            selectedSongContext: selectedSongContext,
+            orphanAudioReport: orphanAudioReport
         )
         try text.write(to: destination, atomically: true, encoding: .utf8)
     }
@@ -38,7 +40,8 @@ public enum ArchiveDiagnosticsExporter {
         homeDirectory: String?,
         searchContext: ArchiveDiagnosticsSearchContext? = nil,
         skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext? = nil,
-        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil
+        selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil,
+        orphanAudioReport: MissingAudioReport? = nil
     ) -> String {
         var lines: [String] = []
         lines.append("Niko Music Hub — archive scan diagnostics")
@@ -148,6 +151,17 @@ public enum ArchiveDiagnosticsExporter {
             }
             if let tiebreakCallout = selectedSongContext.previewRankingTiebreakCallout {
                 lines.append("preview_rank_tiebreak=\(tiebreakCallout)")
+            }
+        }
+
+        if let orphanAudioReport, !orphanAudioReport.orphanAudioBySongID.isEmpty {
+            lines.append("")
+            lines.append("orphan_audio")
+            for (songID, paths) in orphanAudioReport.orphanAudioBySongID.sorted(by: { $0.key < $1.key }) {
+                lines.append("song_id=\(DiagnosticsPathRedactor.redact(songID, homeDirectory: homeDirectory))")
+                for path in paths {
+                    lines.append("  orphan=\(path)")
+                }
             }
         }
 

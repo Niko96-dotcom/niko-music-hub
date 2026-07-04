@@ -10,13 +10,18 @@ public struct AudioConverterFeature: ToolFeature {
         capabilities: [.producesFiles, .runsJobs]
     )
 
-    public init() {}
+    private let router: QuickAccessRouter?
+
+    public init(router: QuickAccessRouter? = nil) {
+        self.router = router
+    }
 
     @MainActor
     public func makeView(context: ToolContext) -> AnyView {
         AnyView(AudioConverterView(
             context: context,
-            viewModel: AudioConverterViewModel(context: context)
+            viewModel: AudioConverterViewModel(context: context),
+            router: router
         ))
     }
 }

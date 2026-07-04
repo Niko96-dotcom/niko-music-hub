@@ -15,9 +15,9 @@ struct SongDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
                 heroSection
-                metadataCard
                 previewCard
                 actionsSection
+                metadataCard
                 detailsSection
                 hideSection
             }
@@ -27,11 +27,18 @@ struct SongDetailView: View {
             syncDrafts(from: song)
             heroPlayback.prepare(url: mainPreviewURL)
             viewModel.refreshBPMEstimate(for: song)
+            viewModel.refreshKeyEstimate(for: song)
         }
         .onChange(of: song.id) { _, _ in
             syncDrafts(from: song)
             heroPlayback.prepare(url: mainPreviewURL)
             viewModel.refreshBPMEstimate(for: song)
+            viewModel.refreshKeyEstimate(for: song)
+        }
+        .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
+            if expanded {
+                viewModel.refreshCPRPluginSummary(for: song)
+            }
         }
         .onDisappear {
             heroPlayback.stopIfPlaying(url: mainPreviewURL)
@@ -140,6 +147,17 @@ struct SongDetailView: View {
                 openInCubaseButton
 
                 Button {
+                    viewModel.convertMainPreview(for: song)
+                } label: {
+                    Label("Convert main preview…", systemImage: "waveform.badge.plus")
+                        .font(HubDesignSystem.Typography.body())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .disabled(mainPreviewURL == nil)
+                .help("Open WAV converter with the main preview pre-filled")
+
+                Button {
                     viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
                 } label: {
                     Label("Reveal in Finder", systemImage: "folder")
@@ -218,7 +236,8 @@ struct SongDetailView: View {
             if viewModel.songDetailsExpanded {
                 VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
                     collaboratorsSection
-                    bpmSection
+                    mixdownAnalysisSection
+                    pluginsSection
                     cprListSection
                     alternatePreviewsSection
                     supplementalInfoSection
@@ -269,11 +288,54 @@ struct SongDetailView: View {
     }
 
     @ViewBuilder
-    private var bpmSection: some View {
-        if let estimate = viewModel.bpmEstimate(for: song) {
-            LabeledContent("Mixdown BPM") {
-                Text("\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
-                    .font(HubDesignSystem.Typography.caption())
+    private var mixdownAnalysisSection: some View {
+        if viewModel.bpmEstimate(for: song) != nil || viewModel.keyEstimate(for: song) != nil {
+            VStack(alignment: .leading, spacing: 4) {
+                if let estimate = viewModel.bpmEstimate(for: song) {
+                    LabeledContent("Mixdown BPM") {
+                        Text("\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
+                            .font(HubDesignSystem.Typography.caption())
+                    }
+                }
+                if let key = viewModel.keyEstimate(for: song) {
+                    LabeledContent("Musical key") {
+                        Text("\(key.key) (\(key.confidence))")
+                            .font(HubDesignSystem.Typography.caption())
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pluginsSection: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            Button {
+                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                    viewModel.pluginsSectionExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    sectionTitle("Plugins (read-only)")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(viewModel.pluginsSectionExpanded ? 90 : 0))
+                }
+            }
+            .buttonStyle(.plain)
+
+            if viewModel.pluginsSectionExpanded {
+                if let summary = viewModel.cprPluginSummary(for: song), !summary.pluginNames.isEmpty {
+                    ForEach(summary.pluginNames, id: \.self) { name in
+                        Text(name)
+                            .font(HubDesignSystem.Typography.caption())
+                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    }
+                } else {
+                    Text("No plugin list available for this CPR.")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
             }
         }
     }
@@ -334,6 +396,18 @@ struct SongDetailView: View {
             Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            HStack(spacing: 8) {
+                if let size = cprFileSizeLabel(for: version) {
+                    Text(size)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
+                if let versionNumber = version.detectedVersionNumber {
+                    Text("v\(versionNumber)")
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
+            }
             if !isIgnored {
                 HStack(spacing: 6) {
                     HubLabeledButton(
@@ -440,6 +514,13 @@ struct SongDetailView: View {
 
     private var mainPreviewLabel: String? {
         mainPreviewCandidate?.fileName
+    }
+
+    private func cprFileSizeLabel(for version: ProjectVersion) -> String? {
+        guard let size = try? version.filePath.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+            return nil
+        }
+        return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
 
     private func syncDrafts(from song: Song) {

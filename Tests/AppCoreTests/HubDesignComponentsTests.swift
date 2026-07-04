@@ -21,19 +21,16 @@ final class HubDesignComponentsTests: XCTestCase {
         }
     }
 
-    func testSemanticCardPathHasNoGlassEffectAndDeprecatedAdaptersMarked() throws {
+    func testSemanticCardPathHasNoGlassEffect() throws {
         let cardSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubCard.swift",
             encoding: .utf8
         )
-        let liquidSource = try String(
-            contentsOfFile: "Sources/AppCore/Components/HubLiquidGlass.swift",
-            encoding: .utf8
-        )
-        // DS-08: the semantic card path has NO glass-effect modifier.
         XCTAssertFalse(cardSource.contains(".glassEffect("), "Semantic HubCard must not use glass-effect modifier (DS-08)")
-        // The deprecated Liquid adapters are marked @available(*, deprecated).
-        XCTAssertTrue(liquidSource.contains("@available(*, deprecated"), "Liquid adapters must be deprecated")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: "Sources/AppCore/Components/HubLiquidGlass.swift"),
+            "Deprecated HubLiquidGlass adapters should be removed"
+        )
     }
 
     func testHubButtonsUseNativeGlassStylesWhenAvailable() throws {

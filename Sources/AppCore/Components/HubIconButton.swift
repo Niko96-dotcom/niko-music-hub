@@ -106,7 +106,18 @@ public struct HubIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
-                .hubGlassChip(isSelected: isSelected, colors: chipColors)
+                .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    shape.fill(isSelected ? chipColors.selectedFill : chipColors.unselectedFill)
+                }
+                .overlay {
+                    let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    shape.strokeBorder(
+                        isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

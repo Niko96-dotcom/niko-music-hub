@@ -17,6 +17,9 @@ public final class QuickAccessRouter: ObservableObject {
     /// and then call `clearRevealOutputInbox()` to reset this flag.
     @Published public private(set) var revealOutputInbox: Bool = false
 
+    /// Audio files to prefill in the WAV converter after `openConverter(with:)`.
+    @Published public private(set) var prefilledConverterURLs: [URL] = []
+
     public init() {}
 
     /// Process a quick-access command.
@@ -47,5 +50,16 @@ public final class QuickAccessRouter: ObservableObject {
     /// fires on every command even when consecutive commands name the same tool.
     public func clearSelectedToolID() {
         selectedToolID = nil
+    }
+
+    public func openConverter(with urls: [URL]) {
+        prefilledConverterURLs = urls
+        selectedToolID = ToolFeatureID("wav-converter")
+    }
+
+    public func consumePrefilledConverterURLs() -> [URL] {
+        let urls = prefilledConverterURLs
+        prefilledConverterURLs = []
+        return urls
     }
 }

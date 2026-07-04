@@ -9,14 +9,16 @@ public struct DownloaderJobFactory: Sendable {
         outputDirectory: URL,
         fileNameTemplate: String = DownloadRequest.defaultOutputTemplate,
         formatSelection: DownloadFormatSelection = .default,
-        retries: Int = 3
+        retries: Int = 3,
+        playlistMode: DownloadPlaylistMode = .single
     ) -> DownloadJobOptions {
         DownloadJobOptions(
             sourceURL: sourceURL,
             outputDirectory: outputDirectory,
             fileNameTemplate: fileNameTemplate,
             formatSelection: formatSelection,
-            retries: retries
+            retries: retries,
+            playlistMode: playlistMode
         )
     }
 }

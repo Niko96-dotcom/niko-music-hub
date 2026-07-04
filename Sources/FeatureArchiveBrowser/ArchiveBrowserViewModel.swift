@@ -41,10 +41,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
+    @Published private(set) var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
+    @Published private(set) var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
+    @Published var pluginsSectionExpanded = false
 
     private let catalog: ArchiveCatalogCoordinator
     private let browseRefreshDriver: ArchiveBrowseRefreshDriver
     private var bpmEstimateTask: Task<Void, Never>?
+    private var keyEstimateTask: Task<Void, Never>?
+    private var pluginLoadTask: Task<Void, Never>?
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
@@ -53,6 +58,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private let archiveRootWatcher: (any ArchiveRootWatching)?
     private let runtime: MusicHubRuntimeEnvironment
     private let scanOverride: (([URL]) async throws -> ScanResult)?
+    var requestConverterHandoff: ((URL) -> Void)?
     private var statusBaseMessage: String?
     private var persistenceWarningMessage: String?
 
@@ -98,7 +104,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             archiveIndexStore: archiveIndexStore,
             songMetadataStore: songMetadataStore,
             collaboratorStore: collaboratorStore,
-            diagnostics: context.diagnostics
+            diagnostics: context.diagnostics,
+            settingsStore: context.settingsStore
         )
         self.browseRefreshDriver = ArchiveBrowseRefreshDriver(debounceNanoseconds: browseSearchDebounceNanoseconds)
         let dryRunOnly = runtime.dryRunOpen
@@ -361,6 +368,60 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {
         mixdownBPMBySongID[song.id]
     }
+
+    func keyEstimate(for song: Song) -> MixdownKeyEstimate? {
+        mixdownKeyBySongID[song.id]
+    }
+
+    func cprPluginSummary(for song: Song) -> CPRPluginSummary? {
+        guard let cpr = song.effectiveLatestCPR else { return nil }
+        return cprPluginSummaryByCPRPath[cpr.filePath.standardizedFileURL.path]
+    }
+
+    func refreshKeyEstimate(for song: Song) {
+        keyEstimateTask?.cancel()
+        guard mixdownKeyBySongID[song.id] == nil,
+              let id = song.mainPreviewCandidateID,
+              let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else { return }
+        let songID = song.id
+        keyEstimateTask = Task {
+            let estimate = await Task.detached(priority: .utility) {
+                MixdownKeyEstimator.estimate(url: url)
+            }.value
+            guard !Task.isCancelled,
+                  let estimate,
+                  selectedSong?.id == songID,
+                  mixdownKeyBySongID[songID] == nil else { return }
+            mixdownKeyBySongID[songID] = estimate
+        }
+    }
+
+    func refreshCPRPluginSummary(for song: Song) {
+        pluginLoadTask?.cancel()
+        guard let cpr = song.effectiveLatestCPR else { return }
+        let path = cpr.filePath.standardizedFileURL.path
+        guard cprPluginSummaryByCPRPath[path] == nil else { return }
+        let songID = song.id
+        pluginLoadTask = Task {
+            let summary = await Task.detached(priority: .utility) {
+                CPRPluginSummaryService.loadPlugins(cprURL: cpr.filePath)
+            }.value
+            guard !Task.isCancelled, selectedSong?.id == songID else { return }
+            cprPluginSummaryByCPRPath[path] = summary
+        }
+    }
+
+    func convertMainPreview(for song: Song) {
+        guard let id = song.mainPreviewCandidateID,
+              let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else {
+            return
+        }
+        requestConverterHandoff?(url)
+    }
+
+    func chooseTemplateFolder() -> URL? {
+        fileActions.chooseDirectory(prompt: "Choose Cubase template folder")
+    }
 }
 
 // MARK: - Browse projection and refresh
@@ -549,6 +610,7 @@ extension ArchiveBrowserViewModel {
         duplicateSongHints = []
         missingAudioReport = nil
         mixdownBPMBySongID = [:]
+        mixdownKeyBySongID = [:]
         setStatusMessage(nextStatusMessage)
     }
 

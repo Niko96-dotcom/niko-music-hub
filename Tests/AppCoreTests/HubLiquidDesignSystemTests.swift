@@ -5,40 +5,29 @@ import XCTest
 
 @MainActor
 final class HubLiquidDesignSystemTests: XCTestCase {
-    func testAppCoreDefinesLiquidPrimitiveNames() throws {
-        let appCoreSource = try combinedSource(in: [
-            "Sources/AppCore/Components/HubDesignSystem.swift",
-            "Sources/AppCore/Components/HubCard.swift",
-            "Sources/AppCore/Components/HubLiquidGlass.swift",
-            "Sources/AppCore/Components/HubGlassChrome.swift",
-        ])
-
-        [
-            // Deprecated adapter types still present (thin wrappers delegating to semantic hubCard).
-            "public enum Liquid",
-            "public typealias HubLiquidSurfaceIntent",
-            "@available(*, deprecated",
-            "HubLiquidBackdrop",
-            "HubLiquidPanel",
-            "HubLiquidCard",
-            "HubGlassField",
-            "func hubLiquidCard",
-            "func hubGlassField",
-            // Semantic surface path (DS-08: no .glassEffect in HubCard).
-            "public struct HubCard",
-            "func hubCard",
-            "Palette.surface",
-            "Palette.separator",
-        ].forEach { required in
-            XCTAssertTrue(appCoreSource.contains(required), "Missing AppCore design-system source: \(required)")
-        }
+    func testDeprecatedLiquidGlassAdaptersRemoved() throws {
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: "Sources/AppCore/Components/HubLiquidGlass.swift"),
+            "HubLiquidGlass.swift should be deleted in v2.0 closure"
+        )
+        let chrome = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubGlassChrome.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(chrome.contains("hubGlassChip("))
+        XCTAssertFalse(chrome.contains("hubLiquidCard("))
+        XCTAssertTrue(chrome.contains("HubShellBackground"))
+        XCTAssertTrue(chrome.contains("HubSidebarNavRow"))
     }
 
-    func testLiquidPrimitiveViewsHostWithoutCrash() throws {
-        XCTAssertNoThrow(try hostView(HubLiquidBackdrop(), size: CGSize(width: 240, height: 160)))
-        XCTAssertNoThrow(try hostView(Text("Panel").padding().hubLiquidPanel(), size: CGSize(width: 240, height: 80)))
-        XCTAssertNoThrow(try hostView(Text("Card").padding().hubLiquidCard(intent: .selected), size: CGSize(width: 240, height: 80)))
-        XCTAssertNoThrow(try hostView(Text("Field").padding(.horizontal, 8).hubGlassField(), size: CGSize(width: 240, height: 48)))
+    func testSemanticShellPrimitivesHostWithoutCrash() throws {
+        XCTAssertNoThrow(try hostView(HubShellBackground(), size: CGSize(width: 240, height: 160)))
+        XCTAssertNoThrow(
+            try hostView(
+                Text("Row").padding().hubSidebarNavRow(isSelected: true),
+                size: CGSize(width: 240, height: 80)
+            )
+        )
     }
 
     func testFeatureModulesDoNotDeclareLocalLiquidGlassSystem() throws {
@@ -66,12 +55,6 @@ private func hostView<V: View>(_ view: V, size: CGSize) throws {
     )
     window.contentView = controller.view
     controller.view.layoutSubtreeIfNeeded()
-}
-
-private func combinedSource(in paths: [String]) throws -> String {
-    try paths
-        .map { try String(contentsOfFile: $0, encoding: .utf8) }
-        .joined(separator: "\n")
 }
 
 private func swiftFiles(under root: String) throws -> [String] {

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 public struct AudioConverterView: View {
     let context: ToolContext
+    let router: QuickAccessRouter?
 
     @StateObject private var viewModel: AudioConverterViewModel
     @State private var fileImporterVisible = false
@@ -13,9 +14,11 @@ public struct AudioConverterView: View {
 
     public init(
         context: ToolContext,
-        viewModel: AudioConverterViewModel
+        viewModel: AudioConverterViewModel,
+        router: QuickAccessRouter? = nil
     ) {
         self.context = context
+        self.router = router
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
@@ -26,6 +29,12 @@ public struct AudioConverterView: View {
             presetStrip
             actionRow
             batchRows
+        }
+        .onAppear {
+            consumeConverterHandoffIfNeeded()
+        }
+        .onChange(of: router?.prefilledConverterURLs ?? []) { _, _ in
+            consumeConverterHandoffIfNeeded()
         }
         .fileImporter(
             isPresented: $fileImporterVisible,
@@ -500,6 +509,13 @@ public struct AudioConverterView: View {
         panel.prompt = "Choose FFmpeg"
         panel.message = "Select the ffmpeg executable."
         return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    private func consumeConverterHandoffIfNeeded() {
+        guard let router else { return }
+        let urls = router.consumePrefilledConverterURLs()
+        guard !urls.isEmpty else { return }
+        viewModel.addFileURLs(urls)
     }
 }
 

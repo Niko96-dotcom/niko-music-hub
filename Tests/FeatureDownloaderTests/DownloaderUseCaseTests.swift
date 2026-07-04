@@ -192,6 +192,18 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(DownloaderUseCase.parseProgress(from: "NIKO_PROGRESS: 50.0%"), 0.5)
     }
 
+    func testPlaylistModeOmitsNoPlaylistFlag() {
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com/playlist?list=abc")!,
+            outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+            playlistMode: .playlist
+        )
+        let args = YtDlpDownloadCommandBuilder.downloadArguments(for: request)
+        XCTAssertFalse(args.contains("--no-playlist"))
+        XCTAssertTrue(args.contains("--max-downloads"))
+    }
+
     func testAudioPostProcessingRequestCarriesConfiguredFFmpegLocationAndHelperPath() async throws {
         let outputURL = URL(fileURLWithPath: "/tmp/out/Sample.wav")
         let downloader = CapturingDownloader(outputURLs: [outputURL])

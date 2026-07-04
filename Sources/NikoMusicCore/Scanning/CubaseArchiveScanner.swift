@@ -7,9 +7,11 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     private let previewDetector: PreviewCandidateDetector
     private let previewRanker: PreviewConfidenceRanker
     private let sidecarNotesReader: SidecarNotesReader
+    private let exclusionTerms: [String]
 
-    public init(fileManager: FileManager = .default) {
+    public init(fileManager: FileManager = .default, exclusionTerms: [String] = []) {
         self.fileManager = fileManager
+        self.exclusionTerms = exclusionTerms.map { $0.lowercased() }
         self.titleResolver = SongTitleResolver()
         self.cprDetector = CPRVersionDetector(fileManager: fileManager)
         self.previewDetector = PreviewCandidateDetector(fileManager: fileManager)
@@ -90,6 +92,17 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                     continue
                 }
                 if values.isDirectory == true {
+                    let folderName = child.lastPathComponent
+                    if ScanExclusionPolicy.shouldSkipFolder(named: folderName, terms: exclusionTerms) {
+                        skippedEntries.append(
+                            SkippedScanEntry(
+                                kind: .unreadableChild,
+                                label: folderName,
+                                reason: "Excluded by scan settings"
+                            )
+                        )
+                        continue
+                    }
                     do {
                         if let song = try scanSongFolder(child) {
                             songs.append(song)

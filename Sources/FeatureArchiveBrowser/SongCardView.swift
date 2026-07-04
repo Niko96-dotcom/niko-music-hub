@@ -14,6 +14,7 @@ struct SongCardView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+    @State private var cardPeaks: [Float] = []
     @ObservedObject private var playbackCoordinator = ArchivePlaybackCoordinator.shared
 
     private var hasScanWarning: Bool {
@@ -26,6 +27,10 @@ struct SongCardView: View {
     private var isRowPlaying: Bool {
         guard let mainPreviewURL else { return false }
         return playbackCoordinator.activeURL == mainPreviewURL
+    }
+
+    private var showsPeakStrip: Bool {
+        isSelected || isRowPlaying
     }
 
     var body: some View {
@@ -61,6 +66,11 @@ struct SongCardView: View {
                     .lineLimit(1)
             }
 
+            if showsPeakStrip, !cardPeaks.isEmpty {
+                ArchiveWaveformView(peaks: cardPeaks, progress: 0, onSeek: { _ in })
+                    .frame(height: 22)
+            }
+
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact, showsSlider: isRowPlaying)
         }
         .padding(.horizontal, 10)
@@ -77,6 +87,18 @@ struct SongCardView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
+        .task(id: peakStripTaskID) {
+            guard showsPeakStrip, let url = mainPreviewURL else {
+                cardPeaks = []
+                return
+            }
+            cardPeaks = await WaveformPeakCache.shared.peaks(for: url, barCount: 48)
+        }
+    }
+
+    private var peakStripTaskID: String {
+        let urlID = mainPreviewURL?.standardizedFileURL.path ?? "none"
+        return "\(song.id)|\(urlID)|\(showsPeakStrip)"
     }
 
     private var rowFill: Color {

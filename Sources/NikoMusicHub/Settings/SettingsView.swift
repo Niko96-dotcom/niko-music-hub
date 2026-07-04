@@ -81,6 +81,16 @@ struct SettingsView: View {
                 footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
             ) {
                 archiveRootsSection
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Scan exclusions")
+                        .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    TextField("backup, tmp, archive", text: scanExclusionBinding)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Comma-separated folder-name terms to skip during scan.")
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
             }
 
             SettingsSection(
@@ -270,6 +280,19 @@ struct SettingsView: View {
                 if !persistSettings() {
                     settings.appearance = previous
                     appearanceController.apply(previous)
+                }
+            }
+        )
+    }
+
+    private var scanExclusionBinding: Binding<String> {
+        Binding(
+            get: { settings.scanExclusionTerms },
+            set: { newValue in
+                let previous = settings.scanExclusionTerms
+                settings.scanExclusionTerms = newValue
+                if !persistSettings() {
+                    settings.scanExclusionTerms = previous
                 }
             }
         )

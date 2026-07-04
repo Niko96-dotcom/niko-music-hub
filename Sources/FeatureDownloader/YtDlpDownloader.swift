@@ -11,6 +11,7 @@ public struct DownloadRequest: Equatable, Sendable {
     public var formatSelection: DownloadFormatSelection
     public var ffmpegLocationURL: URL?
     public var helperSearchDirectories: [URL]
+    public var playlistMode: DownloadPlaylistMode
 
     public init(
         ytDlpURL: URL,
@@ -19,7 +20,8 @@ public struct DownloadRequest: Equatable, Sendable {
         outputTemplate: String = Self.defaultOutputTemplate,
         formatSelection: DownloadFormatSelection = .default,
         ffmpegLocationURL: URL? = nil,
-        helperSearchDirectories: [URL] = []
+        helperSearchDirectories: [URL] = [],
+        playlistMode: DownloadPlaylistMode = .single
     ) {
         self.ytDlpURL = ytDlpURL
         self.sourceURL = sourceURL
@@ -28,6 +30,7 @@ public struct DownloadRequest: Equatable, Sendable {
         self.formatSelection = formatSelection
         self.ffmpegLocationURL = ffmpegLocationURL
         self.helperSearchDirectories = helperSearchDirectories
+        self.playlistMode = playlistMode
     }
 }
 

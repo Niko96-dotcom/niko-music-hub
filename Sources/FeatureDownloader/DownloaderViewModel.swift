@@ -27,6 +27,7 @@ public enum DownloadState: Equatable {
 public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public var urlText: String = ""
     @Published public var formatSelection: DownloadFormatSelection
+    @Published public var playlistMode: DownloadPlaylistMode = .single
     @Published public var detectedFileName: String?
     @Published public var downloadState: DownloadState = .idle
     @Published public var statusMessage: String?
@@ -131,10 +132,12 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
 
         let capturedFormatSelection = formatSelection
+        let capturedPlaylistMode = playlistMode
         let options = jobFactory.makeJobOptions(
             sourceURL: sourceURL,
             outputDirectory: settings.outputFolder.url,
-            formatSelection: capturedFormatSelection
+            formatSelection: capturedFormatSelection,
+            playlistMode: capturedPlaylistMode
         )
 
         logEntries = []

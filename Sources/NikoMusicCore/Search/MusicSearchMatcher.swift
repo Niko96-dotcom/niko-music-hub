@@ -94,6 +94,20 @@ enum MusicSearchMatcher {
 
         if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
 
+        if token.count >= 3 {
+            if let fuzzy = fuzzyEditDistanceMatch(token, in: title) {
+                return (.fuzzyTitle, fuzzy.score)
+            }
+            for alias in song.aliases {
+                if let fuzzy = fuzzyEditDistanceMatch(token, in: normalize(alias)) {
+                    return (.fuzzyAlias, fuzzy.score)
+                }
+            }
+            if let fuzzy = fuzzyEditDistanceMatch(token, in: folder) {
+                return (.fuzzyFolderName, fuzzy.score)
+            }
+        }
+
         let haystack = searchableHaystack(for: song)
         if isSubsequence(token, in: haystack) { return (.fuzzyHaystack, 5) }
 
@@ -140,5 +154,57 @@ enum MusicSearchMatcher {
             hayIndex = haystack.index(after: hayIndex)
         }
         return true
+    }
+
+    private static func fuzzyEditDistanceMatch(
+        _ token: String,
+        in haystack: String,
+        maxDistance: Int = 2
+    ) -> (score: Int)? {
+        guard token.count >= 3 else { return nil }
+        let words = haystack.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        var best: Int?
+        for word in words where abs(word.count - token.count) <= maxDistance {
+            if let distance = boundedEditDistance(token, word, max: maxDistance) {
+                let score = max(8, 24 - distance * 6)
+                if best.map({ score > $0 }) ?? true {
+                    best = score
+                }
+            }
+        }
+        if let best { return (best) }
+        if haystack.count >= token.count,
+           let distance = boundedEditDistance(token, String(haystack.prefix(token.count + maxDistance)), max: maxDistance) {
+            return (max(6, 20 - distance * 6))
+        }
+        return nil
+    }
+
+    static func boundedEditDistance(_ lhs: String, _ rhs: String, max: Int) -> Int? {
+        if lhs == rhs { return 0 }
+        if max == 0 { return nil }
+        let left = Array(lhs)
+        let right = Array(rhs)
+        if abs(left.count - right.count) > max { return nil }
+
+        var previous = Array(0...right.count)
+        var current = Array(repeating: 0, count: right.count + 1)
+        for i in 1...left.count {
+            current[0] = i
+            var rowMin = current[0]
+            for j in 1...right.count {
+                let cost = left[i - 1] == right[j - 1] ? 0 : 1
+                current[j] = min(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost
+                )
+                rowMin = min(rowMin, current[j])
+            }
+            if rowMin > max { return nil }
+            swap(&previous, &current)
+        }
+        let distance = previous[right.count]
+        return distance <= max ? distance : nil
     }
 }

@@ -40,6 +40,23 @@ if "NikoMusicCoreSelfTest" not in products or "NikoMusicCoreSelfTest" not in tar
 '
 swift run NikoMusicCoreSelfTest
 
+echo "== NikoMusicHubCLI export smoke =="
+swift package describe --type json | /usr/bin/python3 -c '
+import json
+import sys
+data = json.load(sys.stdin)
+products = {product.get("name") for product in data.get("products", [])}
+targets = {target.get("name") for target in data.get("targets", [])}
+if "NikoMusicHubCLI" not in products or "NikoMusicHubCLI" not in targets:
+    print("critical CLI missing: NikoMusicHubCLI product/target", file=sys.stderr)
+    sys.exit(1)
+'
+FIXTURE_ROOT="$(pwd)/Fixtures/CubaseArchive"
+OUT="$(mktemp -t niko-cli-index.XXXXXX.json)"
+swift run NikoMusicHubCLI export-index --roots "$FIXTURE_ROOT" --output "$OUT"
+/usr/bin/python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT"
+rm -f "$OUT"
+
 echo "== release engineering regression gate =="
 ./script/release-version-verify.sh
 ./script/public-tree-hygiene.sh

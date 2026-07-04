@@ -41,11 +41,53 @@ public struct DuplicateSongHint: Equatable, Sendable, Identifiable {
 public struct MissingAudioReport: Equatable, Sendable {
     public let noPreview: [String]
     public let noCPR: [String]
+    public let orphanAudioBySongID: [String: [String]]
 
-    public init(songs: [Song]) {
+    public init(songs: [Song], fileManager: FileManager = .default) {
         let visible = songs.filter { !$0.isIgnored }
         noPreview = visible.filter { $0.mainPreviewCandidateID == nil }.map(\.effectiveDisplayTitle)
         noCPR = visible.filter { $0.effectiveLatestCPR == nil }.map(\.effectiveDisplayTitle)
+        orphanAudioBySongID = Dictionary(
+            uniqueKeysWithValues: visible.compactMap { song -> (String, [String])? in
+                let orphans = Self.orphanAudioPaths(for: song, fileManager: fileManager)
+                return orphans.isEmpty ? nil : (song.id, orphans)
+            }
+        )
+    }
+
+    public init(noPreview: [String], noCPR: [String], orphanAudioBySongID: [String: [String]] = [:]) {
+        self.noPreview = noPreview
+        self.noCPR = noCPR
+        self.orphanAudioBySongID = orphanAudioBySongID
+    }
+
+    private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aiff", "aif", "flac"]
+
+    static func orphanAudioPaths(for song: Song, fileManager: FileManager) -> [String] {
+        var isDirectory: ObjCBool = false
+        let folder = song.folderPath.standardizedFileURL
+        guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              let enumerator = fileManager.enumerator(
+                at: folder,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+              ) else {
+            return []
+        }
+        let referenced = Set(song.previewCandidates.map { $0.filePath.standardizedFileURL.path })
+        var orphans: [String] = []
+        for case let fileURL as URL in enumerator {
+            let ext = fileURL.pathExtension.lowercased()
+            guard Self.audioExtensions.contains(ext) else { continue }
+            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            let path = fileURL.standardizedFileURL.path
+            if !referenced.contains(path) {
+                orphans.append(fileURL.lastPathComponent)
+            }
+        }
+        return orphans.sorted()
     }
 }
 

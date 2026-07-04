@@ -91,10 +91,15 @@ struct AppComposition {
             runtime: runtime
         )
 
+        let quickAccessRouter = QuickAccessRouter()
+        archiveViewModel.requestConverterHandoff = { url in
+            quickAccessRouter.openConverter(with: [url])
+        }
+
         var features: [any ToolFeature] = [
             ArchiveBrowserFeature(viewModel: archiveViewModel),
             BPMTapperFeature(),
-            AudioConverterFeature(),
+            AudioConverterFeature(router: quickAccessRouter),
             AudioRecorderFeature(),
             DownloaderFeature(),
             StemSeparationFeature(),
@@ -118,7 +123,6 @@ struct AppComposition {
         )
         let registry = try! ToolRegistry(features: features)
 
-        let quickAccessRouter = QuickAccessRouter()
         return AppComposition(
             registry: registry,
             context: context,

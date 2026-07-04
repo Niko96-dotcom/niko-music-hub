@@ -47,6 +47,10 @@ let package = Package(
         .executable(
             name: "NikoMusicCoreSelfTest",
             targets: ["NikoMusicCoreSelfTest"]
+        ),
+        .executable(
+            name: "NikoMusicHubCLI",
+            targets: ["NikoMusicHubCLI"]
         )
     ],
     targets: [
@@ -61,6 +65,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "NikoMusicCoreSelfTest",
+            dependencies: ["NikoMusicCore"]
+        ),
+        .executableTarget(
+            name: "NikoMusicHubCLI",
             dependencies: ["NikoMusicCore"]
         ),
         .target(

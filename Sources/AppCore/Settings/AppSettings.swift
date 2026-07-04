@@ -36,6 +36,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var appearance: AppAppearance
     /// User completed first-run archive root onboarding (SPEC §5).
     public var archiveOnboardingCompleted: Bool
+    /// Comma-separated folder-name terms to skip during archive scan (e.g. backup, tmp).
+    public var scanExclusionTerms: String
 
     private enum CodingKeys: String, CodingKey {
         case outputFolder
@@ -45,6 +47,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         case archiveRoots
         case appearance
         case archiveOnboardingCompleted
+        case scanExclusionTerms
     }
 
     public init(
@@ -54,7 +57,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
         maxRecordingDurationMinutes: Int = 30,
         archiveRoots: [StoredArchiveRoot] = [],
         appearance: AppAppearance = .followSystem,
-        archiveOnboardingCompleted: Bool = false
+        archiveOnboardingCompleted: Bool = false,
+        scanExclusionTerms: String = ""
     ) {
         self.outputFolder = outputFolder
         self.audioPreset = audioPreset
@@ -63,6 +67,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.archiveRoots = archiveRoots
         self.appearance = appearance
         self.archiveOnboardingCompleted = archiveOnboardingCompleted
+        self.scanExclusionTerms = scanExclusionTerms
     }
 
     public init(from decoder: Decoder) throws {
@@ -75,6 +80,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         archiveRoots = (try? container.decodeIfPresent([StoredArchiveRoot].self, forKey: .archiveRoots)) ?? []
         appearance = (try? container.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? .followSystem
         archiveOnboardingCompleted = (try? container.decodeIfPresent(Bool.self, forKey: .archiveOnboardingCompleted)) ?? false
+        scanExclusionTerms = (try? container.decodeIfPresent(String.self, forKey: .scanExclusionTerms)) ?? ""
     }
 
     public static let `default` = AppSettings()

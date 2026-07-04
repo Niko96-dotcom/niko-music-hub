@@ -6,20 +6,45 @@ import NikoMusicCore
 /// browse/UI orchestration stays in the view model.
 @MainActor
 struct ArchiveCatalogCoordinator {
-    private let scanner = CubaseArchiveScanner()
+    private let scanner: CubaseArchiveScanner
     let archiveIndexStore: (any ArchiveIndexStoring)?
     let songMetadataStore: (any SongUserMetadataStoring)?
     let collaboratorStore: (any CollaboratorStoring)?
     let diagnostics: Diagnostics
+    private let settingsStore: SettingsStore?
+
+    init(
+        archiveIndexStore: (any ArchiveIndexStoring)?,
+        songMetadataStore: (any SongUserMetadataStoring)?,
+        collaboratorStore: (any CollaboratorStoring)?,
+        diagnostics: Diagnostics,
+        settingsStore: SettingsStore? = nil
+    ) {
+        self.archiveIndexStore = archiveIndexStore
+        self.songMetadataStore = songMetadataStore
+        self.collaboratorStore = collaboratorStore
+        self.diagnostics = diagnostics
+        self.settingsStore = settingsStore
+        self.scanner = CubaseArchiveScanner(exclusionTerms: Self.loadExclusionTerms(settingsStore: settingsStore))
+    }
+
+    private static func loadExclusionTerms(settingsStore: SettingsStore?) -> [String] {
+        guard let settingsStore,
+              let settings = try? settingsStore.loadSettings() else { return [] }
+        return ScanExclusionPolicy.terms(from: settings.scanExclusionTerms)
+    }
 
     func performScanSynchronously(roots: [URL]) throws -> ScanResult {
-        try scanner.scan(roots: roots)
+        let scanner = CubaseArchiveScanner(
+            exclusionTerms: Self.loadExclusionTerms(settingsStore: settingsStore)
+        )
+        return try scanner.scan(roots: roots)
     }
 
     func performScanDetached(roots: [URL]) async throws -> ScanResult {
-        let scanner = scanner
+        let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         return try await Task.detached(priority: .userInitiated) {
-            try scanner.scan(roots: roots)
+            try CubaseArchiveScanner(exclusionTerms: exclusionTerms).scan(roots: roots)
         }.value
     }
 

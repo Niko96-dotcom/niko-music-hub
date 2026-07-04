@@ -19,6 +19,7 @@ public struct DownloaderView: View {
         HubToolPage {
             header
             urlInputRow
+            playlistModeStrip
             formatChipStrip
             if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .downloading {
                 trustInfoCard
@@ -101,6 +102,36 @@ public struct DownloaderView: View {
         .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.downloadState == .downloading ? 0.62 : 1)
         .disabled(viewModel.downloadState == .downloading)
+    }
+
+    private var playlistModeStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(DownloadPlaylistMode.allCases) { mode in
+                Button {
+                    viewModel.playlistMode = mode
+                } label: {
+                    Text(mode.label)
+                        .font(HubDesignSystem.Typography.caption())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule()
+                                .fill(
+                                    viewModel.playlistMode == mode
+                                        ? HubDesignSystem.Palette.accentFill
+                                        : Color.white.opacity(0.05)
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+            if viewModel.playlistMode != .single {
+                Text("Max \(viewModel.playlistMode.maxEntries ?? 0) items")
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            }
+        }
+        .padding(.horizontal, 4)
     }
 
     private var formatChipStrip: some View {

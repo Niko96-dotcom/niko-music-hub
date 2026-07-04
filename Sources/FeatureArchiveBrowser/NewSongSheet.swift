@@ -10,6 +10,7 @@ struct NewSongSheet: View {
     @State private var note = ""
     @State private var workflowStatus: ProjectWorkflowStatus? = .songstarterBeat
     @State private var selectedCollaboratorIDs: Set<String> = []
+    @State private var templateFolder: URL?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -52,6 +53,25 @@ struct NewSongSheet: View {
                         ))
                     }
                 }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Cubase template folder (optional)")
+                        .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    HStack {
+                        Text(templateFolder?.lastPathComponent ?? "None")
+                            .font(HubDesignSystem.Typography.caption())
+                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("Choose…") { chooseTemplateFolder() }
+                            .buttonStyle(.bordered)
+                        if templateFolder != nil {
+                            Button("Clear") { templateFolder = nil }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
             .padding(12)
             .hubCard(cornerRadius: HubDesignSystem.Radius.popover)
@@ -82,7 +102,8 @@ struct NewSongSheet: View {
             root: viewModel.newSongDraftRoot,
             collaboratorIDs: Array(selectedCollaboratorIDs),
             appNote: note.isEmpty ? nil : note,
-            workflowStatus: workflowStatus
+            workflowStatus: workflowStatus,
+            templateFolder: templateFolder
         )
         do {
             _ = try viewModel.createNewSong(request: request)
@@ -96,5 +117,9 @@ struct NewSongSheet: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func chooseTemplateFolder() {
+        templateFolder = viewModel.chooseTemplateFolder()
     }
 }

@@ -177,7 +177,7 @@ final class HubSemanticTokenTests: XCTestCase {
         let requiredFiles = [
             "Sources/AppCore/Components/HubDesignSystem.swift",
             "Sources/AppCore/Components/HubCard.swift",
-            "Sources/AppCore/Components/HubLiquidGlass.swift",
+            "Sources/AppCore/Components/HubSurface.swift",
             "Sources/AppCore/Components/HubGlassChrome.swift",
             "Sources/AppCore/Components/HubMediaSurfaces.swift",
             "Sources/AppCore/Components/HubIconButton.swift",
