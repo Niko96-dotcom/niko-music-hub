@@ -20,6 +20,21 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
         XCTAssertTrue(resolution.rootsForRootLevelScan.isEmpty)
     }
 
+    func testResolvesRootDirectoryToChildFoldersAndRootRescan() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let songFolder = root.appendingPathComponent("Neon Hook", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+
+        let resolution = ArchiveSongFolderResolver.resolve(
+            changedPaths: [root],
+            roots: [root]
+        )
+
+        XCTAssertEqual(resolution.songFolders, [songFolder.standardizedFileURL])
+        XCTAssertEqual(resolution.rootsForRootLevelScan, [root.standardizedFileURL])
+    }
+
     func testResolvesRootLevelCPRToRootRescan() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -32,6 +47,25 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
 
         XCTAssertTrue(resolution.songFolders.isEmpty)
         XCTAssertEqual(resolution.rootsForRootLevelScan, [root.standardizedFileURL])
+    }
+
+    func testResolvesNestedRootsToDeepestMatch() throws {
+        let outer = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: outer) }
+        let inner = outer.appendingPathComponent("Inner Archive", isDirectory: true)
+        try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
+        let songFolder = inner.appendingPathComponent("Nested Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        let mixdown = songFolder
+            .appendingPathComponent("mixdown", isDirectory: true)
+            .appendingPathComponent("Nested Song.wav")
+
+        let resolution = ArchiveSongFolderResolver.resolve(
+            changedPaths: [mixdown],
+            roots: [outer, inner]
+        )
+
+        XCTAssertEqual(resolution.songFolders, [songFolder.standardizedFileURL])
     }
 
     func testIgnoresPathsOutsideRoots() throws {

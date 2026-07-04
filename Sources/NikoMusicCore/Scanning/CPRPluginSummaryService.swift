@@ -14,6 +14,7 @@ public struct CPRPluginSummary: Equatable, Sendable {
 
 /// Read-only CPR plugin listing with mtime-keyed cache and graceful degradation.
 public enum CPRPluginSummaryService {
+    private static let maxCacheEntries = 128
     private static let cacheLock = NSLock()
     private nonisolated(unsafe) static var cache: [String: CacheEntry] = [:]
 
@@ -53,6 +54,9 @@ public enum CPRPluginSummaryService {
 
         cacheLock.lock()
         cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)
+        if cache.count > maxCacheEntries, let keyToRemove = cache.keys.first {
+            cache.removeValue(forKey: keyToRemove)
+        }
         cacheLock.unlock()
         return summary
     }

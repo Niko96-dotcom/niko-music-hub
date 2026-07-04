@@ -29,12 +29,25 @@ public enum ArchiveSongFolderResolver {
 
         for changedPath in changedPaths {
             let path = changedPath.standardizedFileURL
-            guard let root = standardizedRoots.first(where: { contains(root: $0, path: path) }) else {
+            guard let root = matchingDeepestRoot(for: path, in: standardizedRoots) else {
                 continue
             }
 
             if path == root {
                 rootsForRootLevelScan.insert(root)
+                if let children = try? fileManager.contentsOfDirectory(
+                    at: root,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                ) {
+                    for child in children {
+                        var isDirectory: ObjCBool = false
+                        if fileManager.fileExists(atPath: child.path, isDirectory: &isDirectory),
+                           isDirectory.boolValue {
+                            songFolders.insert(child.standardizedFileURL)
+                        }
+                    }
+                }
                 continue
             }
 
@@ -58,6 +71,12 @@ public enum ArchiveSongFolderResolver {
         }
 
         return Resolution(songFolders: songFolders, rootsForRootLevelScan: rootsForRootLevelScan)
+    }
+
+    private static func matchingDeepestRoot(for path: URL, in roots: [URL]) -> URL? {
+        roots
+            .filter { contains(root: $0, path: path) }
+            .max(by: { $0.path.count < $1.path.count })
     }
 
     private static func contains(root: URL, path: URL) -> Bool {

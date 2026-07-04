@@ -1297,6 +1297,107 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(indexStore.savedSnapshots.count, 2)
     }
 
+    func testIncrementalRescanOnRootLevelCPRPreservesSiblingFolders() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubRootCPR-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        let songB = root.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: songB.appendingPathComponent("Song B.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        let looseCPR = root.appendingPathComponent("Loose.cpr")
+        FileManager.default.createFile(atPath: looseCPR.path, contents: Data("fixture".utf8))
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let indexStore = RecordingArchiveIndexStore()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveIndexStore: indexStore,
+            archiveRootWatcher: watcher
+        )
+
+        await viewModel.scan()
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Song B", "Loose"])
+
+        FileManager.default.createFile(atPath: looseCPR.path, contents: Data("updated fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [looseCPR])
+
+        let deadline = Date().addingTimeInterval(2)
+        while indexStore.savedSnapshots.count < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Song B", "Loose"])
+        XCTAssertEqual(indexStore.savedSnapshots.count, 2)
+    }
+
+    func testIncrementalRescanAddsNewRootLevelCPR() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubNewRootCPR-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: watcher
+        )
+
+        await viewModel.scan()
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A"])
+
+        let newLooseCPR = root.appendingPathComponent("Brand New.cpr")
+        FileManager.default.createFile(atPath: newLooseCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [newLooseCPR])
+
+        let deadline = Date().addingTimeInterval(2)
+        while !viewModel.songs.contains(where: { $0.displayTitle == "Brand New" }),
+              Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Brand New"])
+    }
+
     func testExportIndexJSONFromViewModel() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

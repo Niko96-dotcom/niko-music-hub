@@ -10,6 +10,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private var onChange: (@MainActor ([URL]) -> Void)?
     private var pendingChangedPaths: Set<String> = []
     private let pathsLock = NSLock()
+    private var isStopped = false
 
     public init(
         debounceInterval: TimeInterval = 2.0,
@@ -31,12 +32,22 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         pathsLock.unlock()
         guard !roots.isEmpty else { return }
 
+        isStopped = false
         let paths = roots.map(\.path) as CFArray
         var context = FSEventStreamContext(
             version: 0,
-            info: Unmanaged.passUnretained(self).toOpaque(),
-            retain: nil,
-            release: nil,
+            info: Unmanaged.passRetained(self).toOpaque(),
+            retain: { pointer in
+                if let pointer {
+                    _ = Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(pointer).retain()
+                }
+                return pointer
+            },
+            release: { pointer in
+                if let pointer {
+                    Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(pointer).release()
+                }
+            },
             copyDescription: nil
         )
         let flags = FSEventStreamCreateFlags(
@@ -46,8 +57,9 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         guard let stream = FSEventStreamCreate(
             nil,
             { _, info, numEvents, eventPaths, _, _ in
-                guard let info else { return }
+                guard let info, numEvents > 0 else { return }
                 let watcher = Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(info).takeUnretainedValue()
+                guard !watcher.isStopped else { return }
                 let array = unsafeBitCast(eventPaths, to: CFArray.self)
                 let paths = (0..<numEvents).compactMap { index -> String? in
                     let pointer = CFArrayGetValueAtIndex(array, index)
@@ -62,6 +74,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             0.3,
             flags
         ) else {
+            Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(context.info!).release()
             return
         }
         self.stream = stream
@@ -70,6 +83,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     }
 
     public func stop() {
+        isStopped = true
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
         if let stream {

@@ -6,7 +6,6 @@ import NikoMusicCore
 /// browse/UI orchestration stays in the view model.
 @MainActor
 struct ArchiveCatalogCoordinator {
-    private let scanner: CubaseArchiveScanner
     let archiveIndexStore: (any ArchiveIndexStoring)?
     let songMetadataStore: (any SongUserMetadataStoring)?
     let collaboratorStore: (any CollaboratorStoring)?
@@ -25,7 +24,6 @@ struct ArchiveCatalogCoordinator {
         self.collaboratorStore = collaboratorStore
         self.diagnostics = diagnostics
         self.settingsStore = settingsStore
-        self.scanner = CubaseArchiveScanner(exclusionTerms: Self.loadExclusionTerms(settingsStore: settingsStore))
     }
 
     private static func loadExclusionTerms(settingsStore: SettingsStore?) -> [String] {
@@ -57,9 +55,10 @@ struct ArchiveCatalogCoordinator {
         guard !resolution.isEmpty else {
             return (ScanResult(), [])
         }
-        let scanner = scanner
+        let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         let result = try await Task.detached(priority: .userInitiated) {
-            try scanner.scanIncremental(resolution: resolution, roots: roots)
+            try CubaseArchiveScanner(exclusionTerms: exclusionTerms)
+                .scanIncremental(resolution: resolution, roots: roots)
         }.value
         let affectedSongIDs = Self.affectedSongIDs(
             resolution: resolution,
@@ -71,7 +70,8 @@ struct ArchiveCatalogCoordinator {
     static func mergeIncrementalScan(
         existing: [Song],
         incremental: ScanResult,
-        affectedSongIDs: Set<String>
+        affectedSongIDs: Set<String>,
+        fileManager: FileManager = .default
     ) -> [Song] {
         let incomingByID = Dictionary(uniqueKeysWithValues: incremental.songs.map { ($0.id, $0) })
         var merged: [Song] = []
@@ -84,6 +84,8 @@ struct ArchiveCatalogCoordinator {
             }
             if let updated = incomingByID[song.id] {
                 merged.append(updated)
+            } else if fileManager.fileExists(atPath: song.folderPath.path) {
+                merged.append(song)
             }
         }
 
@@ -107,20 +109,17 @@ struct ArchiveCatalogCoordinator {
         let rootPaths = Set(resolution.rootsForRootLevelScan.map { $0.standardizedFileURL.path })
         for song in existing {
             let songPath = song.folderPath.standardizedFileURL.path
-            for rootPath in rootPaths where isImmediateChildPath(songPath, ofRoot: rootPath) {
+            for rootPath in rootPaths where isRootLevelCPRPath(songPath, ofRoot: rootPath) {
                 ids.insert(song.id)
             }
-        }
-        for song in existing where rootPaths.contains(song.folderPath.standardizedFileURL.path) {
-            ids.insert(song.id)
         }
         return ids
     }
 
-    private static func isImmediateChildPath(_ path: String, ofRoot rootPath: String) -> Bool {
+    private static func isRootLevelCPRPath(_ path: String, ofRoot rootPath: String) -> Bool {
         guard path.hasPrefix(rootPath + "/") else { return false }
         let relative = String(path.dropFirst(rootPath.count + 1))
-        return !relative.contains("/")
+        return !relative.contains("/") && relative.lowercased().hasSuffix(".cpr")
     }
 
     func buildDiagnostics(

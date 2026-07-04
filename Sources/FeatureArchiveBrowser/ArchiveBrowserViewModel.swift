@@ -8,6 +8,7 @@ import NikoMusicCore
 public final class ArchiveBrowserViewModel: ObservableObject {
     private var rootGeneration: UInt64 = 0
     private var activeScanGeneration: UInt64?
+    private var pendingIncrementalRescanPaths: Set<String> = []
 
     @Published public var roots: [URL] = [] {
         didSet {
@@ -594,6 +595,7 @@ extension ArchiveBrowserViewModel {
     private func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         browseRefreshDriver.cancelPendingDebounce()
         persistenceWarningMessage = nil
+        pendingIncrementalRescanPaths.removeAll()
         songs = []
         filteredSongs = []
         searchMatchSummaries = [:]
@@ -638,17 +640,37 @@ extension ArchiveBrowserViewModel {
         let rootsSnapshot = roots
         archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
             guard let self else { return }
-            guard !self.isScanning, !self.roots.isEmpty else { return }
-            Task { await self.rescanChangedPaths(changedPaths) }
+            guard !self.roots.isEmpty else { return }
+            self.enqueueIncrementalRescan(paths: changedPaths)
         }
+    }
+
+    private func enqueueIncrementalRescan(paths: [URL]) {
+        pendingIncrementalRescanPaths.formUnion(paths.map { $0.standardizedFileURL.path })
+        guard !isScanning else { return }
+        Task { await drainPendingIncrementalRescan() }
+    }
+
+    private func drainPendingIncrementalRescan() async {
+        guard !isScanning, !pendingIncrementalRescanPaths.isEmpty else { return }
+        let batch = pendingIncrementalRescanPaths
+        pendingIncrementalRescanPaths.removeAll()
+        await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) })
     }
 
     private func rescanChangedPaths(_ changedPaths: [URL]) async {
         guard !roots.isEmpty, !changedPaths.isEmpty else { return }
         guard !isScanning else { return }
+        isScanning = true
+        defer {
+            isScanning = false
+            Task { await drainPendingIncrementalRescan() }
+        }
 
         let rootsSnapshot = roots
+        let generationSnapshot = rootGeneration
         let existingSnapshot = songs
+        let priorDiagnostics = scanDiagnostics
         do {
             let scannedAt = Date()
             let incremental = try await catalog.performIncrementalScanDetached(
@@ -656,7 +678,9 @@ extension ArchiveBrowserViewModel {
                 roots: rootsSnapshot,
                 existingSongs: existingSnapshot
             )
-            guard incremental.affectedSongIDs.isEmpty == false else { return }
+            guard rootGeneration == generationSnapshot,
+                  rootPathSnapshot(roots) == rootPathSnapshot(rootsSnapshot) else { return }
+            guard !incremental.affectedSongIDs.isEmpty || !incremental.result.songs.isEmpty else { return }
 
             let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
                 existing: existingSnapshot,
@@ -668,21 +692,35 @@ extension ArchiveBrowserViewModel {
 
             mutateCatalog {
                 songs = withMetadata
-                if let diagnostics = scanDiagnostics {
+                let mergedResult = ScanResult(
+                    songs: withMetadata,
+                    globalWarnings: incremental.result.globalWarnings,
+                    skippedEntries: incremental.result.skippedEntries
+                )
+                let built = catalog.buildDiagnostics(
+                    result: mergedResult,
+                    roots: rootsSnapshot,
+                    scannedAt: scannedAt
+                )
+                if let priorDiagnostics {
                     scanDiagnostics = ArchiveScanDiagnostics(
-                        scannedAt: scannedAt,
-                        rootPaths: diagnostics.rootPaths,
-                        songCount: withMetadata.count,
-                        songsWithWarningsCount: withMetadata.filter { !$0.scanWarnings.isEmpty }.count,
-                        totalSongWarningCount: withMetadata.reduce(0) { $0 + $1.scanWarnings.count },
-                        globalWarnings: diagnostics.globalWarnings,
-                        songWarningSummaries: withMetadata
-                            .filter { !$0.scanWarnings.isEmpty }
-                            .map { SongWarningSummary(displayTitle: $0.displayTitle, warnings: $0.scanWarnings) }
-                            .sorted { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending },
-                        skippedEntries: diagnostics.skippedEntries,
-                        previewRankingPanel: diagnostics.previewRankingPanel
+                        scannedAt: built.scannedAt,
+                        rootPaths: built.rootPaths,
+                        songCount: built.songCount,
+                        songsWithWarningsCount: built.songsWithWarningsCount,
+                        totalSongWarningCount: built.totalSongWarningCount,
+                        globalWarnings: priorDiagnostics.globalWarnings.isEmpty
+                            ? built.globalWarnings
+                            : priorDiagnostics.globalWarnings,
+                        songWarningSummaries: built.songWarningSummaries,
+                        skippedEntries: mergeSkippedEntries(
+                            prior: priorDiagnostics.skippedEntries,
+                            incremental: built.skippedEntries
+                        ),
+                        previewRankingPanel: built.previewRankingPanel
                     )
+                } else {
+                    scanDiagnostics = built
                 }
                 if updateCount == 1, let title = incremental.result.songs.first?.displayTitle {
                     setStatusMessage("Updated \(title) from filesystem change (\(withMetadata.count) songs).")
@@ -704,6 +742,21 @@ extension ArchiveBrowserViewModel {
 
 private func rootPathSnapshot(_ roots: [URL]) -> [String] {
     roots.map { $0.standardizedFileURL.path }
+}
+
+private func mergeSkippedEntries(
+    prior: [SkippedScanEntry],
+    incremental: [SkippedScanEntry]
+) -> [SkippedScanEntry] {
+    var seen = Set<String>()
+    var merged: [SkippedScanEntry] = []
+    merged.reserveCapacity(prior.count + incremental.count)
+    for entry in prior + incremental {
+        let key = "\(entry.kind.rawValue)|\(entry.label)|\(entry.reason)"
+        guard seen.insert(key).inserted else { continue }
+        merged.append(entry)
+    }
+    return merged
 }
 
 // MARK: - Metadata
