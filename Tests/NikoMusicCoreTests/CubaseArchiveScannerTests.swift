@@ -52,6 +52,43 @@ final class CubaseArchiveScannerTests: XCTestCase {
         )
     }
 
+    func testSkipsSymbolicLinkFoldersAtArchiveRoot() throws {
+        let root = try makeTemporaryRoot()
+        let outside = try makeTemporaryRoot()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+
+        let outsideSong = outside.appendingPathComponent("External Song", isDirectory: true)
+        let mixdown = outsideSong.appendingPathComponent("Mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdown, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: mixdown.appendingPathComponent("escape.wav").path,
+            contents: Data("fixture".utf8)
+        )
+
+        let alias = root.appendingPathComponent("Alias Song", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: outsideSong)
+
+        let realSong = root.appendingPathComponent("Real Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: realSong, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: realSong.appendingPathComponent("Real Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [root])
+
+        XCTAssertEqual(result.songs.map(\.displayTitle), ["Real Song"])
+        XCTAssertTrue(
+            result.skippedEntries.contains {
+                $0.label == "Alias Song" && $0.reason.contains("symbolic-link")
+            }
+        )
+    }
+
     func testScansRootLevelCPRFilesAsSongs() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
