@@ -17,5 +17,8 @@ output/
 goal-agents/
 .planning/codebase/
 
+# Ultimate De-Slop runtime state (skill is vendored under .cursor/skills/)
+.deslop/
+
 # Stray screenshots in repo root
 Bildschirmfoto*.png
