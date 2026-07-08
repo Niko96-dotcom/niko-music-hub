@@ -113,7 +113,16 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
 
         do {
             activeDiagnostics.setWrittenFrameCount(activeWriter.writtenFrameCount)
-            let result = try activeWriter.finalize(diagnostics: activeDiagnostics.snapshot())
+            let diagnosticsSnapshot = activeDiagnostics.snapshot()
+            let result = try activeWriter.finalize(diagnostics: diagnosticsSnapshot)
+            if diagnosticsSnapshot.writeErrorCount > 0 {
+                clearRecordingResources()
+                destroyTapAndAggregate()
+                try? FileManager.default.removeItem(at: result.outputURL)
+                throw RecorderError.writeError(
+                    "Recording write failed (\(diagnosticsSnapshot.writeErrorCount) errors). CoreAudio diagnostics: \(diagnosticsSnapshot.summary)."
+                )
+            }
             clearRecordingResources()
             destroyTapAndAggregate()
             return result
@@ -411,6 +420,11 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
             try writer.writeBuffer(convertedBuffer)
         } catch {
             activeDiagnostics.recordWriteError()
+            // Fail closed: stop capture so a truncated take cannot keep running as "recording".
+            setRunning(false)
+            if let ioProcID, aggregateDeviceID != kAudioObjectUnknown {
+                AudioDeviceStop(aggregateDeviceID, ioProcID)
+            }
             return
         }
         activeDiagnostics.setWrittenFrameCount(writer.writtenFrameCount)

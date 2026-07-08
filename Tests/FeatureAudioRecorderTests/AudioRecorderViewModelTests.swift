@@ -310,6 +310,37 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(try inbox.listItems().count, 0)
     }
 
+    func testStopRecordingRejectsResultsWithWriteErrors() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-write-errors-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: true, writeErrorCount: 2)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        guard case .error(.writeError(let message)) = vm.recordingState else {
+            XCTFail("Expected writeError, got \(vm.recordingState)")
+            return
+        }
+        XCTAssertTrue(message.contains("write failed"))
+        XCTAssertTrue(message.contains("writeErrors=2") || message.contains("2 errors"))
+        XCTAssertEqual(try inbox.listItems().count, 0)
+        if let recorded = port.recordedOutputURL {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recorded.path))
+        }
+    }
+
     func testFailedVerificationRemovesIncompleteOutput() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-remove-failed-\(UUID().uuidString)", isDirectory: true)
@@ -437,13 +468,15 @@ private final class MockAudioCapturePort: AudioCapturePort, @unchecked Sendable 
 
 private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
     private let writesAudioFrames: Bool
+    private let writeErrorCount: Int
     private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
     var recordedOutputURL: URL? { outputURL }
     var recording: Bool = false
 
-    init(writesAudioFrames: Bool) {
+    init(writesAudioFrames: Bool, writeErrorCount: Int = 0) {
         self.writesAudioFrames = writesAudioFrames
+        self.writeErrorCount = writeErrorCount
     }
 
     func checkPermission() async -> RecorderPermissionState {
@@ -513,7 +546,8 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
                 inputBufferCallbackCount: 3,
                 inputFrameCount: 1024,
                 convertedFrameCount: writesAudioFrames ? 512 : 0,
-                writtenFrameCount: writesAudioFrames ? 512 : 0
+                writtenFrameCount: writesAudioFrames ? 512 : 0,
+                writeErrorCount: writeErrorCount
             )
         )
     }

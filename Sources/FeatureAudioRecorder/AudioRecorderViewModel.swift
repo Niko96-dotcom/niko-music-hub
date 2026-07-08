@@ -182,6 +182,11 @@ public final class AudioRecorderViewModel: ObservableObject {
         )
 
         do {
+            if let diagnostics = result.diagnostics, diagnostics.writeErrorCount > 0 {
+                throw RecorderError.writeError(
+                    "Recording write failed (\(diagnostics.writeErrorCount) errors). CoreAudio diagnostics: \(diagnostics.summary)."
+                )
+            }
             _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
             let file = try AVAudioFile(forReading: result.outputURL)
             guard file.length > 0 else {
