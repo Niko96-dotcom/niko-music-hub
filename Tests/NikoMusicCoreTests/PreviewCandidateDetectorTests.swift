@@ -61,6 +61,34 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         XCTAssertNil(cloudCandidates.first?.durationSeconds)
     }
 
+    func testRejectsPreviewFilesThatEscapeSongFolderViaSymlink() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent(
+            "preview-escape-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        let mixdown = songFolder.appendingPathComponent("Mixdown", isDirectory: true)
+        let outside = base.appendingPathComponent("Outside", isDirectory: true)
+        try fm.createDirectory(at: mixdown, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+
+        let outsideWAV = outside.appendingPathComponent("escape.wav")
+        let wavHeader = Self.wavHeader(sampleRate: 44_100, channels: 1, bitsPerSample: 16, durationSeconds: 1)
+        fm.createFile(atPath: outsideWAV.path, contents: wavHeader)
+
+        let link = mixdown.appendingPathComponent("escape.wav")
+        try fm.createSymbolicLink(at: link, withDestinationURL: outsideWAV)
+
+        let localWAV = mixdown.appendingPathComponent("legit.wav")
+        fm.createFile(atPath: localWAV.path, contents: wavHeader)
+
+        let candidates = try PreviewCandidateDetector(fileManager: fm).detectCandidates(in: songFolder)
+        XCTAssertEqual(candidates.map(\.fileName), ["legit.wav"])
+        XCTAssertFalse(candidates.contains(where: { $0.fileName == "escape.wav" }))
+    }
+
     private static func wavHeader(
         sampleRate: UInt32,
         channels: UInt16,

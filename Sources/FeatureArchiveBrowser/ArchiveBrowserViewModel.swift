@@ -1039,13 +1039,14 @@ extension ArchiveBrowserViewModel {
     func openMainPreview(for song: Song) throws {
         guard let id = song.mainPreviewCandidateID,
               let candidate = song.previewCandidates.first(where: { $0.id == id }) else { return }
+        let resolved = try resolveRevealURL(candidate.filePath)
         if runtime.dryRunOpen {
-            let path = candidate.filePath.path
+            let path = resolved.path
             lastDryRunLog = path
             print("[niko-music-hub-smoke] dry-run open preview: \(Song.displayDryRunPath(path))")
             return
         }
-        fileActions.revealInFinder(candidate.filePath)
+        fileActions.revealInFinder(resolved)
     }
 
     func preferredRevealURL(for song: Song) -> URL? {
@@ -1057,6 +1058,25 @@ extension ArchiveBrowserViewModel {
 
     func revealInFinder(url: URL?) {
         guard let url else { return }
-        fileActions.revealInFinder(url)
+        do {
+            let resolved = try resolveRevealURL(url)
+            fileActions.revealInFinder(resolved)
+        } catch {
+            setStatusMessage("Reveal blocked: path is outside configured archive roots.")
+            diagnostics.log(.warning, "Reveal refused outside archive roots: \(url.path)")
+        }
+    }
+
+    private func resolveRevealURL(_ url: URL) throws -> URL {
+        guard !roots.isEmpty else {
+            throw MusicItemOpenerError.pathOutsideAllowedRoots(url.standardizedFileURL)
+        }
+        do {
+            return try PathSafety().resolve(url, allowedRoots: roots)
+        } catch PathSafetyError.pathOutsideAllowedRoots(let outside) {
+            throw MusicItemOpenerError.pathOutsideAllowedRoots(outside)
+        } catch PathSafetyError.pathDoesNotExist(let missing) {
+            throw MusicItemOpenerError.pathDoesNotExist(missing)
+        }
     }
 }
