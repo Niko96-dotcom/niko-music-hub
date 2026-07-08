@@ -3,16 +3,13 @@ import XCTest
 
 final class PreviewHookLocatorTests: XCTestCase {
     func testFindsHookInFixtureWav() throws {
-        try CubaseFixtures.ensureGenerated()
-        let url = CubaseFixtures.archiveRoot
-            .appendingPathComponent("90s Rave/Mixdown/Graffiti master.wav")
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw XCTSkip("Fixture wav missing")
-        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hook-fixture-\(UUID().uuidString).wav")
+        try makeMono16BitWAV(seconds: 20, loudBurstAt: 6, at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
 
         let hook = try XCTUnwrap(PreviewHookLocator.hookStartSecondsSync(for: url))
         XCTAssertGreaterThanOrEqual(hook, 0)
-        // Sparse locator must stay within the capped analysis window (+ lead-in floor).
         XCTAssertLessThanOrEqual(hook, PreviewHookLocator.maxAnalysisSeconds)
     }
 

@@ -279,22 +279,16 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     }
 
     private func warmMetadata(for url: URL, seekToHookIfIdle: Bool = false) async {
-        let item = playerItem
+        let cachedHook = Self.cachedValue(in: Self.hookCache, url: url)
+        let cachedDuration = Self.cachedValue(in: Self.durationCache, url: url)
 
         async let hookResult: TimeInterval? = {
-            if let cached = Self.cachedValue(in: Self.hookCache, url: url) { return cached }
+            if let cachedHook { return cachedHook }
             return await PreviewHookLocator.hookStartSeconds(for: url)
         }()
 
         async let durationResult: Double? = {
-            if let cached = Self.cachedValue(in: Self.durationCache, url: url) { return cached }
-            if let item,
-               let loaded = try? await item.asset.load(.duration).seconds,
-               loaded.isFinite,
-               loaded > 0 {
-                return loaded
-            }
-            // Fallback without requiring an already-created player item.
+            if let cachedDuration { return cachedDuration }
             let asset = AVURLAsset(url: url)
             if let loaded = try? await asset.load(.duration).seconds, loaded.isFinite, loaded > 0 {
                 return loaded

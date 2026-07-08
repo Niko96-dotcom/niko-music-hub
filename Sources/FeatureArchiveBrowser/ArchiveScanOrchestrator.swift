@@ -35,7 +35,7 @@ final class ArchiveScanOrchestrator {
         let generation: UInt64
     }
 
-    private unowned let host: any ArchiveScanHost
+    private weak var host: (any ArchiveScanHost)?
     private var activeScanGeneration: UInt64?
     private var pendingIncrementalPaths: Set<String> = []
 
@@ -53,11 +53,12 @@ final class ArchiveScanOrchestrator {
     }
 
     func restartArchiveRootWatching() {
+        guard let host else { return }
         guard let archiveRootWatcher = host.archiveRootWatcher else { return }
         let rootsSnapshot = host.roots
         archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
             guard let self else { return }
-            guard !self.host.roots.isEmpty else { return }
+            guard let host = self.host, !host.roots.isEmpty else { return }
             self.enqueueIncrementalRescan(paths: changedPaths)
         }
     }
@@ -67,6 +68,7 @@ final class ArchiveScanOrchestrator {
     }
 
     func scanSync() {
+        guard let host else { return }
         runFullScanSync { roots in try host.catalog.performScanSynchronously(roots: roots) }
     }
 
@@ -105,7 +107,7 @@ final class ArchiveScanOrchestrator {
         request: ScanRequest,
         scannedAt: Date
     ) throws {
-        guard isCurrentScan(request) else { return }
+        guard let host, isCurrentScan(request) else { return }
         let update = host.catalog.applyFullScanResult(
             result: result,
             roots: request.roots,
@@ -117,6 +119,7 @@ final class ArchiveScanOrchestrator {
     }
 
     private func beginScan() -> ScanRequest? {
+        guard let host else { return nil }
         guard !host.roots.isEmpty else {
             host.setStatusMessage("Add at least one archive root.")
             return nil
@@ -129,6 +132,7 @@ final class ArchiveScanOrchestrator {
     }
 
     private func finishScan(_ request: ScanRequest) {
+        guard let host else { return }
         guard activeScanGeneration == request.generation else { return }
         activeScanGeneration = nil
         host.isScanning = false
@@ -136,16 +140,20 @@ final class ArchiveScanOrchestrator {
     }
 
     private func isCurrentScan(_ request: ScanRequest) -> Bool {
-        activeScanGeneration == request.generation
+        guard let host else { return false }
+        return activeScanGeneration == request.generation
             && host.rootGeneration == request.generation
             && host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths
     }
 
     private func recordScanFailure(_ error: Error) {
-        host.applyScanFailure(error)
+        host?.applyScanFailure(error)
     }
 
     private func performScanDetached(roots: [URL]) async throws -> ScanResult {
+        guard let host else {
+            throw CancellationError()
+        }
         if let scanOverride = host.scanOverride {
             return try await scanOverride(roots)
         }
@@ -154,18 +162,19 @@ final class ArchiveScanOrchestrator {
 
     private func enqueueIncrementalRescan(paths: [URL]) {
         pendingIncrementalPaths.formUnion(paths.map { $0.standardizedFileURL.path })
-        guard !host.isScanning else { return }
+        guard let host, !host.isScanning else { return }
         Task { await drainPendingIncrementalRescan() }
     }
 
     private func drainPendingIncrementalRescan() async {
-        guard !host.isScanning, !pendingIncrementalPaths.isEmpty else { return }
+        guard let host, !host.isScanning, !pendingIncrementalPaths.isEmpty else { return }
         let batch = pendingIncrementalPaths
         pendingIncrementalPaths.removeAll()
         await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) })
     }
 
     private func rescanChangedPaths(_ changedPaths: [URL]) async {
+        guard let host else { return }
         guard !host.roots.isEmpty, !changedPaths.isEmpty, !host.isScanning else { return }
         host.isScanning = true
         defer {

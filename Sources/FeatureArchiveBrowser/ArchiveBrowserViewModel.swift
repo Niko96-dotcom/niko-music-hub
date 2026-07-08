@@ -686,11 +686,11 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         }
         // Drop analysis for songs that disappeared.
         let remainingIDs = Set(update.songs.map(\.id))
-        mixdownBPMBySongID = mixdownBPMBySongID.filter { key in
-            remainingIDs.contains(where: { key.hasPrefix("\($0)|") })
+        mixdownBPMBySongID = mixdownBPMBySongID.filter { entry in
+            remainingIDs.contains(where: { entry.key.hasPrefix("\($0)|") })
         }
-        mixdownKeyBySongID = mixdownKeyBySongID.filter { key in
-            remainingIDs.contains(where: { key.hasPrefix("\($0)|") })
+        mixdownKeyBySongID = mixdownKeyBySongID.filter { entry in
+            remainingIDs.contains(where: { entry.key.hasPrefix("\($0)|") })
         }
         // Scan already writes a fresh index — cancel any pending metadata-edit persist.
         indexPersistTask?.cancel()

@@ -3,10 +3,12 @@ import XCTest
 
 final class WaveformPeakLoaderTests: XCTestCase {
     func testLoadsPeaksFromFixtureMixdown() async throws {
-        try CubaseFixtures.ensureGenerated()
-        let url = CubaseFixtures.archiveRoot
-            .appendingPathComponent("Neon Hook/Mixdown/Neon Hook v3.wav")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform-fixture-\(UUID().uuidString).wav")
+        let samples = Array(repeating: Int16(4_000), count: 44_100) + Array(repeating: Int16(-4_000), count: 44_100)
+        try makeMono16BitWAV(samples: samples, at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
         let peaks = await WaveformPeakLoader.loadPeaks(from: url, barCount: 32)
         XCTAssertFalse(peaks.isEmpty)
         XCTAssertEqual(peaks.count, 32)
@@ -50,15 +52,17 @@ final class WaveformPeakLoaderTests: XCTestCase {
     }
 
     func testSharedCacheServesRowStripFromCanonicalHeroLoad() async throws {
-        try CubaseFixtures.ensureGenerated()
-        let url = CubaseFixtures.archiveRoot
-            .appendingPathComponent("Neon Hook/Mixdown/Neon Hook v3.wav")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform-cache-\(UUID().uuidString).wav")
+        let samples = (0..<88_200).map { index in Int16(index % 2 == 0 ? 6_000 : -6_000) }
+        try makeMono16BitWAV(samples: samples, at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
         await MainActor.run { WaveformPeakCache.shared.clear() }
 
-        let hero = await WaveformPeakCache.shared.peaks(for: url, barCount: WaveformPeakCache.canonicalBarCount)
+        let hero = await WaveformPeakCache.shared.peaks(for: url, barCount: WaveformPeakLoader.defaultBarCount)
         let row = await WaveformPeakCache.shared.peaks(for: url, barCount: 48)
 
-        XCTAssertEqual(hero.count, WaveformPeakCache.canonicalBarCount)
+        XCTAssertEqual(hero.count, WaveformPeakLoader.defaultBarCount)
         XCTAssertEqual(row.count, 48)
         XCTAssertFalse(hero.isEmpty)
         XCTAssertFalse(row.isEmpty)
