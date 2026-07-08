@@ -73,10 +73,21 @@ struct ArchiveWaveformHeroView: View {
             // Drop prior song peaks immediately so rapid selection never shows stale bars.
             peaks = []
             isLoadingPeaks = true
-            let loaded = await WaveformPeakLoader.loadPeaks(from: url)
+            // Shared cache — same decode as the list row strip, no second full read.
+            let loaded = await WaveformPeakCache.shared.peaks(
+                for: url,
+                barCount: WaveformPeakCache.canonicalBarCount
+            )
             guard !Task.isCancelled else { return }
             peaks = loaded
             isLoadingPeaks = false
+        }
+        .onAppear {
+            // Detail hero warms the player; list rows stay lazy until play.
+            playback.prepare(url: url)
+        }
+        .onChange(of: url?.path) { _, _ in
+            playback.prepare(url: url)
         }
     }
 

@@ -56,8 +56,14 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
 
         let hero = try featureSource("ArchiveWaveformHeroView.swift")
+        XCTAssertTrue(hero.contains("WaveformPeakCache.shared"), "Hero must reuse shared peak cache")
         XCTAssertTrue(hero.contains("guard !Task.isCancelled"), "Hero peak load must ignore cancelled tasks")
         XCTAssertTrue(hero.contains("peaks = []"), "Hero must clear peaks before loading a new URL")
+
+        let miniPlayer = try featureSource("ArchiveMiniPlayerView.swift")
+        XCTAssertTrue(miniPlayer.contains("preparesOnAppear"), "List rows must support lazy player prepare")
+        XCTAssertTrue(miniPlayer.contains("func bind(url"), "Lazy bind must exist for list rows")
+        XCTAssertTrue(miniPlayer.contains("hookCache"), "Hook results must be cached across prepares")
 
         let viewModel = try featureSource("ArchiveBrowserViewModel.swift")
         XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")

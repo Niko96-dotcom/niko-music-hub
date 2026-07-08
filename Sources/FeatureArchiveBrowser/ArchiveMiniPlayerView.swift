@@ -14,6 +14,8 @@ struct ArchiveMiniPlayerView: View {
     var label: String?
     /// Reference rule: the scrub slider is hidden at rest — only the actively playing row shows it.
     var showsSlider: Bool = true
+    /// When false, the model stays idle until the user hits play (list rows). Detail/hero sets true.
+    var preparesOnAppear: Bool = false
 
     @StateObject private var playback = ArchiveMiniPlayerModel()
     @ObservedObject private var coordinator = ArchivePlaybackCoordinator.shared
@@ -39,10 +41,18 @@ struct ArchiveMiniPlayerView: View {
             }
         )
         .onChange(of: url) { _, newURL in
-            playback.prepare(url: newURL)
+            if preparesOnAppear {
+                playback.prepare(url: newURL)
+            } else {
+                playback.bind(url: newURL)
+            }
         }
         .onAppear {
-            playback.prepare(url: url)
+            if preparesOnAppear {
+                playback.prepare(url: url)
+            } else {
+                playback.bind(url: url)
+            }
         }
         .onDisappear {
             playback.stopIfPlaying(url: url)
@@ -90,14 +100,37 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     @Published private(set) var activeURL: URL?
 
     private var player: AVPlayer?
+    private var playerItem: AVPlayerItem?
     private var timeObserver: Any?
     private var hookSeekPending = false
+    private var prepareTask: Task<Void, Never>?
+
+    /// Shared hook cache so list + detail don't re-scan the same mixdown.
+    private static var hookCache: [String: TimeInterval] = [:]
+    private static var durationCache: [String: Double] = [:]
 
     func isPlaying(_ url: URL?) -> Bool {
         guard let url, let player, activeURL == url else { return false }
         return player.timeControlStatus == .playing
     }
 
+    /// Lightweight bind for list rows — no AVPlayer, no hook scan until play.
+    func bind(url: URL?) {
+        guard let url else {
+            stop()
+            return
+        }
+        if activeURL == url { return }
+        stop()
+        activeURL = url
+        let key = url.standardizedFileURL.path
+        duration = Self.durationCache[key] ?? 0
+        hookTime = Self.hookCache[key]
+        currentTime = 0
+        hookSeekPending = hookTime == nil
+    }
+
+    /// Eager prepare for detail/hero — creates the player and warms duration/hook in background.
     func prepare(url: URL?) {
         guard let url else {
             stop()
@@ -106,48 +139,67 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         if activeURL == url, player != nil { return }
         stop()
         activeURL = url
-        let item = AVPlayerItem(url: url)
-        player = AVPlayer(playerItem: item)
-        hookSeekPending = true
-        hookTime = nil
+        ensurePlayer(for: url)
         currentTime = 0
-        duration = 0
-        installTimeObserver()
-        Task {
-            let hook = await PreviewHookLocator.hookStartSeconds(for: url)
-            await MainActor.run {
-                guard self.activeURL == url else { return }
-                self.hookTime = hook
-            }
-            if let loaded = try? await item.asset.load(.duration).seconds, loaded.isFinite, loaded > 0 {
-                await MainActor.run {
-                    guard self.activeURL == url else { return }
-                    self.duration = loaded
-                }
-            }
+        hookSeekPending = true
+
+        let key = url.standardizedFileURL.path
+        if let cachedDuration = Self.durationCache[key] {
+            duration = cachedDuration
+        } else {
+            duration = 0
+        }
+        if let cachedHook = Self.hookCache[key] {
+            hookTime = cachedHook
+            // Keep pending so the first play still jumps to the hook.
+            hookSeekPending = true
+        } else {
+            hookTime = nil
+            hookSeekPending = true
+        }
+
+        prepareTask?.cancel()
+        prepareTask = Task { [weak self] in
+            await self?.warmMetadata(for: url)
         }
     }
 
     func toggle(at url: URL?) {
-        guard let url, let player else { return }
+        guard let url else { return }
+        if activeURL != url || player == nil {
+            prepare(url: url)
+        }
+        guard let player else { return }
+
         if isPlaying(url) {
             player.pause()
             ArchivePlaybackCoordinator.shared.endPlayback(for: url)
             return
         }
+
         ArchivePlaybackCoordinator.shared.beginPlayback(for: url)
+
+        // Play immediately — don't block on hook analysis.
         if hookSeekPending, let hook = hookTime {
-            let time = CMTime(seconds: hook, preferredTimescale: 600)
-            player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-            hookSeekPending = false
+            seekToHook(hook)
+        } else if hookTime == nil {
+            prepareTask?.cancel()
+            prepareTask = Task { [weak self] in
+                await self?.warmMetadata(for: url, seekToHookIfIdle: true)
+            }
         }
         player.play()
     }
 
     func seek(to seconds: Double, url: URL?) {
-        guard let url, activeURL == url, let player else { return }
+        guard let url else { return }
+        if activeURL != url || player == nil {
+            prepare(url: url)
+        }
+        guard activeURL == url, let player else { return }
         hookSeekPending = false
-        let clamped = min(max(0, seconds), duration)
+        let upper = duration > 0 ? duration : seconds + 1
+        let clamped = min(max(0, seconds), upper)
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
         currentTime = clamped
     }
@@ -175,13 +227,77 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         }
     }
 
+    private func ensurePlayer(for url: URL) {
+        if player != nil, activeURL == url { return }
+        let item = AVPlayerItem(url: url)
+        playerItem = item
+        player = AVPlayer(playerItem: item)
+        installTimeObserver()
+    }
+
+    private func warmMetadata(for url: URL, seekToHookIfIdle: Bool = false) async {
+        let key = url.standardizedFileURL.path
+        let item = playerItem
+
+        async let hookResult: TimeInterval? = {
+            if let cached = Self.hookCache[key] { return cached }
+            return await PreviewHookLocator.hookStartSeconds(for: url)
+        }()
+
+        async let durationResult: Double? = {
+            if let cached = Self.durationCache[key] { return cached }
+            if let item,
+               let loaded = try? await item.asset.load(.duration).seconds,
+               loaded.isFinite,
+               loaded > 0 {
+                return loaded
+            }
+            // Fallback without requiring an already-created player item.
+            let asset = AVURLAsset(url: url)
+            if let loaded = try? await asset.load(.duration).seconds, loaded.isFinite, loaded > 0 {
+                return loaded
+            }
+            return nil
+        }()
+
+        let (hook, loadedDuration) = await (hookResult, durationResult)
+        guard !Task.isCancelled, activeURL == url else { return }
+
+        if let loadedDuration {
+            Self.durationCache[key] = loadedDuration
+            duration = loadedDuration
+        }
+        if let hook {
+            Self.hookCache[key] = hook
+            hookTime = hook
+            if seekToHookIfIdle, hookSeekPending, currentTime < 0.35 {
+                seekToHook(hook)
+            } else if hookSeekPending {
+                // Metadata ready before first play — next play will seek.
+            }
+        } else {
+            hookSeekPending = false
+        }
+    }
+
+    private func seekToHook(_ hook: TimeInterval) {
+        guard let player else { return }
+        let time = CMTime(seconds: hook, preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTime = hook
+        hookSeekPending = false
+    }
+
     private func stop() {
+        prepareTask?.cancel()
+        prepareTask = nil
         if let timeObserver, let player {
             player.removeTimeObserver(timeObserver)
         }
         timeObserver = nil
         player?.pause()
         player = nil
+        playerItem = nil
         if let activeURL {
             ArchivePlaybackCoordinator.shared.endPlayback(for: activeURL)
         }

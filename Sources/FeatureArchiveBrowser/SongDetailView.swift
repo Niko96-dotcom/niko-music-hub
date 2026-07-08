@@ -28,7 +28,7 @@ struct SongDetailView: View {
         }
         .onAppear {
             syncDrafts(from: song)
-            heroPlayback.prepare(url: mainPreviewURL)
+            // Hero view prepares playback; avoid a duplicate prepare race here.
             viewModel.refreshBPMEstimate(for: song)
             viewModel.refreshKeyEstimate(for: song)
         }
@@ -37,7 +37,6 @@ struct SongDetailView: View {
             metadataExpanded = false
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
-            heroPlayback.prepare(url: mainPreviewURL)
             viewModel.refreshBPMEstimate(for: song)
             viewModel.refreshKeyEstimate(for: song)
         }

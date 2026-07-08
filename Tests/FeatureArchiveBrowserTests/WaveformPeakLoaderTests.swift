@@ -9,6 +9,7 @@ final class WaveformPeakLoaderTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         let peaks = await WaveformPeakLoader.loadPeaks(from: url, barCount: 32)
         XCTAssertFalse(peaks.isEmpty)
+        XCTAssertEqual(peaks.count, 32)
         XCTAssertTrue(peaks.allSatisfy { $0 >= 0 && $0 <= 1 })
     }
 
@@ -24,6 +25,43 @@ final class WaveformPeakLoaderTests: XCTestCase {
         XCTAssertFalse(peaks.isEmpty)
         XCTAssertTrue(peaks.allSatisfy { $0 >= 0 && $0 <= 1 })
         XCTAssertGreaterThanOrEqual(peaks.max() ?? 0, 0.99)
+    }
+
+    func testDownsamplePeaksReducesBarCountWithoutRereading() {
+        let dense = (0..<120).map { Float($0 % 10) / 10 }
+        let compact = WaveformPeakLoader.downsamplePeaks(dense, to: 48)
+        XCTAssertEqual(compact.count, 48)
+        XCTAssertTrue(compact.allSatisfy { $0 >= 0 && $0 <= 1 })
+    }
+
+    func testSparsePeakLoadCompletesQuicklyOnLongSyntheticWav() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("peaks-long-\(UUID().uuidString).wav")
+        try makeMono16BitWAV(samples: Array(repeating: Int16(1_000), count: 44_100 * 45), at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let started = Date()
+        let peaks = await WaveformPeakLoader.loadPeaks(from: url, barCount: 64)
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertEqual(peaks.count, 64)
+        XCTAssertFalse(peaks.isEmpty)
+        XCTAssertLessThan(elapsed, 2.5, "Peak load took \(elapsed)s — expected sparse window sampling")
+    }
+
+    func testSharedCacheServesRowStripFromCanonicalHeroLoad() async throws {
+        try CubaseFixtures.ensureGenerated()
+        let url = CubaseFixtures.archiveRoot
+            .appendingPathComponent("Neon Hook/Mixdown/Neon Hook v3.wav")
+        await MainActor.run { WaveformPeakCache.shared.clear() }
+
+        let hero = await WaveformPeakCache.shared.peaks(for: url, barCount: WaveformPeakCache.canonicalBarCount)
+        let row = await WaveformPeakCache.shared.peaks(for: url, barCount: 48)
+
+        XCTAssertEqual(hero.count, WaveformPeakCache.canonicalBarCount)
+        XCTAssertEqual(row.count, 48)
+        XCTAssertFalse(hero.isEmpty)
+        XCTAssertFalse(row.isEmpty)
     }
 
     private func makeMono16BitWAV(samples: [Int16], at url: URL) throws {
