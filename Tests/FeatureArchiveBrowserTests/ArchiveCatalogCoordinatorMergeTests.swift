@@ -52,6 +52,38 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         XCTAssertEqual(merged.map(\.displayTitle), ["Kept"])
     }
 
+    func testMergeIncrementalScanDropsGhostAfterFolderRename() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubMergeRename-\(UUID().uuidString)", isDirectory: true)
+        let oldFolder = root.appendingPathComponent("Old Name", isDirectory: true)
+        let newFolder = root.appendingPathComponent("New Name", isDirectory: true)
+        let siblingFolder = root.appendingPathComponent("Sibling", isDirectory: true)
+
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: newFolder, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: siblingFolder, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let oldSong = makeFolderSong(folder: oldFolder, title: "Old Name")
+        let sibling = makeFolderSong(folder: siblingFolder, title: "Sibling")
+        let renamed = makeFolderSong(folder: newFolder, title: "New Name")
+
+        // Finder-style rename: only the new path is reported as affected.
+        let affected: Set<String> = [newFolder.standardizedFileURL.path]
+        let incremental = ScanResult(songs: [renamed])
+
+        let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
+            existing: [oldSong, sibling],
+            incremental: incremental,
+            affectedSongIDs: affected,
+            fileManager: fileManager
+        )
+
+        XCTAssertEqual(Set(merged.map(\.displayTitle)), ["New Name", "Sibling"])
+        XCTAssertFalse(merged.contains(where: { $0.id == oldSong.id }))
+    }
+
     func testMergeIncrementalScanKeepsAffectedSongWhenFolderStillExistsButScanEmpty() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent(".build", isDirectory: true)

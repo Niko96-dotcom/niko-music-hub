@@ -171,13 +171,18 @@ struct ArchiveCatalogCoordinator {
         merged.reserveCapacity(existing.count + incremental.songs.count)
 
         for song in existing {
-            guard affectedSongIDs.contains(song.id) else {
-                merged.append(song)
+            let folderStillExists = fileManager.fileExists(atPath: song.folderPath.path)
+            // Drop ghosts even when FSEvents did not mark the old path as affected
+            // (common for Finder renames that only emit create events on the new name).
+            if !affectedSongIDs.contains(song.id) {
+                if folderStillExists {
+                    merged.append(song)
+                }
                 continue
             }
             if let updated = incomingByID[song.id] {
                 merged.append(updated)
-            } else if fileManager.fileExists(atPath: song.folderPath.path) {
+            } else if folderStillExists {
                 merged.append(song)
             }
         }
