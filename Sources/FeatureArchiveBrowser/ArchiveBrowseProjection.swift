@@ -31,7 +31,10 @@ enum ArchiveBrowseProjection {
         )
     }
 
-    static func project(_ state: ArchiveBrowseState) -> ArchiveBrowseResult {
+    static func project(
+        _ state: ArchiveBrowseState,
+        searchIndex: MusicSearchIndex? = nil
+    ) -> ArchiveBrowseResult {
         let onShelf = shelfSongs(from: state)
         let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -44,16 +47,21 @@ enum ArchiveBrowseProjection {
             summaries = [:]
             skippedMatches = []
         } else {
-            let results = MusicSearchIndex(songs: onShelf).searchResults(state.searchQuery)
+            let index = searchIndex ?? MusicSearchIndex(songs: onShelf)
+            let results = index.searchResults(state.searchQuery)
             searched = results.map(\.song)
             summaries = Dictionary(uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) })
             skippedMatches = SkippedEntrySearchMatcher.search(state.searchQuery, in: state.skippedScanEntries)
         }
 
-        let filtered = ArchiveBrowseSortMode.sort(
-            ArchiveBrowseFilter.apply(searched, filter: state.browseFilter),
-            mode: state.sortMode
-        )
+        let afterFilter = ArchiveBrowseFilter.apply(searched, filter: state.browseFilter)
+        // Active search already returns relevance-ranked results — don't re-sort by CPR/bounce.
+        let filtered: [Song]
+        if trimmed.isEmpty {
+            filtered = ArchiveBrowseSortMode.sort(afterFilter, mode: state.sortMode)
+        } else {
+            filtered = afterFilter
+        }
         return ArchiveBrowseResult(
             filteredSongs: filtered,
             searchMatchSummaries: summaries,

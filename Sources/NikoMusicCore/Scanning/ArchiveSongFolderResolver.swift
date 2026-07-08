@@ -34,20 +34,11 @@ public enum ArchiveSongFolderResolver {
             }
 
             if path == root {
+                // Root-level events only refresh root-level CPR songs. Enumerating every
+                // child folder here caused near-full rescans on noisy root touches
+                // (.DS_Store, Spotlight, sync metadata). Child folder creates/edits
+                // arrive as their own FSEvents paths.
                 rootsForRootLevelScan.insert(root)
-                if let children = try? fileManager.contentsOfDirectory(
-                    at: root,
-                    includingPropertiesForKeys: [.isDirectoryKey],
-                    options: [.skipsHiddenFiles]
-                ) {
-                    for child in children {
-                        var isDirectory: ObjCBool = false
-                        if fileManager.fileExists(atPath: child.path, isDirectory: &isDirectory),
-                           isDirectory.boolValue {
-                            songFolders.insert(child.standardizedFileURL)
-                        }
-                    }
-                }
                 continue
             }
 

@@ -37,6 +37,39 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertFalse(searched.searchMatchSummaries[songA.id, default: ""].isEmpty)
     }
 
+    func testActiveSearchPreservesRelevanceOrderOverBrowseSort() {
+        let older = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/older-match"),
+            originalFolderName: "Older Match",
+            displayTitle: "Older Neon Match"
+        )
+        let newer = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/newer-weak"),
+            originalFolderName: "Newer Weak",
+            displayTitle: "Zed Track",
+            projectVersions: [
+                ProjectVersion(
+                    filePath: URL(fileURLWithPath: "/tmp/newer-weak/Newer.cpr"),
+                    fileName: "Newer.cpr",
+                    modifiedAt: Date(timeIntervalSince1970: 9_999_999)
+                )
+            ]
+        )
+        // "neon" should keep Older first by relevance even though Newer has a much newer CPR.
+        let state = ArchiveBrowseState(
+            songs: [newer, older],
+            showHiddenSongs: true,
+            selectedShelf: .allSongs,
+            selectedCollaboratorID: nil,
+            searchQuery: "neon",
+            browseFilter: [],
+            sortMode: .recentCPR,
+            skippedScanEntries: []
+        )
+        let result = ArchiveBrowseProjection.project(state)
+        XCTAssertEqual(result.filteredSongs.map(\.id), [older.id])
+    }
+
     func testShelfHidesIgnoredSongsUnlessShowHiddenEnabled() {
         let visible = Song(
             folderPath: URL(fileURLWithPath: "/tmp/visible"),

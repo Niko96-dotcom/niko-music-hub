@@ -50,6 +50,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     private var bpmEstimateTask: Task<Void, Never>?
     private var keyEstimateTask: Task<Void, Never>?
     private var pluginLoadTask: Task<Void, Never>?
+    private var intelligenceRefreshTask: Task<Void, Never>?
+    private var indexPersistTask: Task<Void, Never>?
+    /// Reused search index rebuilt from the current shelf on each browse recompute.
+    /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
+    /// reflecting live metadata (titles/aliases) after catalog edits.
+    private var cachedSearchIndex = MusicSearchIndex()
     private let opener: MusicItemOpener
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
@@ -264,11 +270,45 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func selectSong(_ song: Song) {
+        let previousID = selectedSong?.id
+        // Stop list/detail audio when changing songs so detail never fights a row player.
+        if previousID != song.id {
+            ArchivePlaybackCoordinator.shared.stopAllPlayback()
+        }
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
         songDetailsExpanded = false
         pluginsSectionExpanded = false
         refreshBPMEstimate(for: song)
+        refreshKeyEstimate(for: song)
+    }
+
+    /// Keeps `selectedSong` in sync with the live catalog and current browse results.
+    /// - Clears selection when the song disappeared from the catalog.
+    /// - Refreshes the snapshot after scan/metadata so detail never shows stale CPR/previews.
+    /// - Clears selection when the song is filtered out of the current browse list.
+    func reconcileSelectedSong(requireVisibleInFilteredList: Bool = true) {
+        guard let current = selectedSong else { return }
+        guard let fresh = songs.first(where: { $0.id == current.id }) else {
+            clearSelection(stopPlayback: true)
+            return
+        }
+        if requireVisibleInFilteredList, !filteredSongs.contains(where: { $0.id == fresh.id }) {
+            clearSelection(stopPlayback: true)
+            return
+        }
+        if fresh != current {
+            selectedSong = fresh
+        }
+    }
+
+    func clearSelection(stopPlayback: Bool) {
+        if stopPlayback {
+            ArchivePlaybackCoordinator.shared.stopAllPlayback()
+        }
+        selectedSong = nil
+        songDetailsExpanded = false
+        pluginsSectionExpanded = false
     }
 
     func healthReport() -> ArchiveHealthReport {
@@ -288,12 +328,37 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func refreshIntelligence() {
-        pendingCollaboratorSuggestions = ArchiveIntelligence.collaboratorSuggestions(
-            songs: songs,
-            collaborators: collaborators
-        )
-        duplicateSongHints = ArchiveIntelligence.duplicateSongHints(songs: songs)
-        missingAudioReport = ArchiveIntelligence.missingAudioReport(songs: songs)
+        scheduleIntelligenceRefresh(immediate: false)
+    }
+
+    /// Immediate intelligence refresh (collaborator upsert, tests). Prefer the debounced path
+    /// for scan/catalog churn so FS walks don't stall the main actor after every mutate.
+    func refreshIntelligenceNow() {
+        scheduleIntelligenceRefresh(immediate: true)
+    }
+
+    private func scheduleIntelligenceRefresh(immediate: Bool) {
+        intelligenceRefreshTask?.cancel()
+        let snapshotSongs = songs
+        let snapshotCollaborators = collaborators
+        intelligenceRefreshTask = Task { @MainActor [weak self] in
+            if !immediate {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard !Task.isCancelled else { return }
+            }
+            let suggestions = ArchiveIntelligence.collaboratorSuggestions(
+                songs: snapshotSongs,
+                collaborators: snapshotCollaborators
+            )
+            let duplicates = ArchiveIntelligence.duplicateSongHints(songs: snapshotSongs)
+            let missing = await Task.detached(priority: .utility) {
+                ArchiveIntelligence.missingAudioReport(songs: snapshotSongs)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.pendingCollaboratorSuggestions = suggestions
+            self.duplicateSongHints = duplicates
+            self.missingAudioReport = missing
+        }
     }
 
     func setStatusMessage(_ message: String?) {
@@ -342,7 +407,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         do {
             try collaboratorStore.upsert(collaborator)
             loadCollaborators()
-            refreshIntelligence()
+            refreshIntelligenceNow()
             return collaborator
         } catch {
             diagnostics.log(.error, "Collaborator save failed: \(error)")
@@ -352,10 +417,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func refreshBPMEstimate(for song: Song) {
         bpmEstimateTask?.cancel()
-        guard mixdownBPMBySongID[song.id] == nil,
-              let id = song.mainPreviewCandidateID,
-              let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else { return }
+        guard let cacheKey = mixdownAnalysisCacheKey(for: song) else { return }
+        if mixdownBPMBySongID[cacheKey] != nil { return }
         let songID = song.id
+        let url = song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID })?.filePath
+        guard let url else { return }
         bpmEstimateTask = Task {
             let estimate = await Task.detached(priority: .utility) {
                 MixdownBPMEstimator.estimate(url: url)
@@ -363,17 +429,19 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             guard !Task.isCancelled,
                   let estimate,
                   selectedSong?.id == songID,
-                  mixdownBPMBySongID[songID] == nil else { return }
-            mixdownBPMBySongID[songID] = estimate
+                  mixdownBPMBySongID[cacheKey] == nil else { return }
+            mixdownBPMBySongID[cacheKey] = estimate
         }
     }
 
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {
-        mixdownBPMBySongID[song.id]
+        guard let key = mixdownAnalysisCacheKey(for: song) else { return nil }
+        return mixdownBPMBySongID[key]
     }
 
     func keyEstimate(for song: Song) -> MixdownKeyEstimate? {
-        mixdownKeyBySongID[song.id]
+        guard let key = mixdownAnalysisCacheKey(for: song) else { return nil }
+        return mixdownKeyBySongID[key]
     }
 
     func cprPluginSummary(for song: Song) -> CPRPluginSummary? {
@@ -383,10 +451,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func refreshKeyEstimate(for song: Song) {
         keyEstimateTask?.cancel()
-        guard mixdownKeyBySongID[song.id] == nil,
-              let id = song.mainPreviewCandidateID,
-              let url = song.previewCandidates.first(where: { $0.id == id })?.filePath else { return }
+        guard let cacheKey = mixdownAnalysisCacheKey(for: song) else { return }
+        if mixdownKeyBySongID[cacheKey] != nil { return }
         let songID = song.id
+        let url = song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID })?.filePath
+        guard let url else { return }
         keyEstimateTask = Task {
             let estimate = await Task.detached(priority: .utility) {
                 MixdownKeyEstimator.estimate(url: url)
@@ -394,9 +463,20 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             guard !Task.isCancelled,
                   let estimate,
                   selectedSong?.id == songID,
-                  mixdownKeyBySongID[songID] == nil else { return }
-            mixdownKeyBySongID[songID] = estimate
+                  mixdownKeyBySongID[cacheKey] == nil else { return }
+            mixdownKeyBySongID[cacheKey] = estimate
         }
+    }
+
+    /// BPM/key must key off the active preview file, not just song folder id.
+    private func mixdownAnalysisCacheKey(for song: Song) -> String? {
+        guard let previewID = song.mainPreviewCandidateID else { return nil }
+        return "\(song.id)|\(previewID)"
+    }
+
+    private func invalidateMixdownAnalysis(for songID: String) {
+        mixdownBPMBySongID = mixdownBPMBySongID.filter { !$0.key.hasPrefix("\(songID)|") }
+        mixdownKeyBySongID = mixdownKeyBySongID.filter { !$0.key.hasPrefix("\(songID)|") }
     }
 
     func refreshCPRPluginSummary(for song: Song) {
@@ -454,7 +534,11 @@ extension ArchiveBrowserViewModel {
     /// ``mutateBrowseInputs``) and recomputes after debounce, or immediately when `immediate` is true.
     func setSearchQuery(_ query: String, immediate: Bool = false) {
         searchQuery = query
-        if immediate {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Clearing search should refresh the list immediately so the empty field never
+        // sits on a stale narrowed result set for ~200ms.
+        let shouldImmediate = immediate || trimmed.isEmpty
+        if shouldImmediate {
             browseRefreshDriver.cancelPendingDebounce()
             recomputeBrowseResults()
         } else {
@@ -487,10 +571,17 @@ extension ArchiveBrowserViewModel {
     }
 
     func recomputeBrowseResults() {
-        let result = ArchiveBrowseProjection.project(browseState())
+        let state = browseState()
+        let onShelf = ArchiveBrowseProjection.shelfSongs(from: state)
+        // Always refresh songs in the index so title/alias edits are searchable immediately.
+        // Rebuild is an array assign; the expensive work is `searchResults` when a query is active.
+        cachedSearchIndex.rebuild(from: onShelf)
+
+        let result = ArchiveBrowseProjection.project(state, searchIndex: cachedSearchIndex)
         filteredSongs = result.filteredSongs
         searchMatchSummaries = result.searchMatchSummaries
         skippedSearchMatches = result.skippedSearchMatches
+        reconcileSelectedSong(requireVisibleInFilteredList: true)
     }
 }
 
@@ -517,8 +608,13 @@ extension ArchiveBrowserViewModel {
 
     private func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         browseRefreshDriver.cancelPendingDebounce()
+        intelligenceRefreshTask?.cancel()
+        indexPersistTask?.cancel()
         persistenceWarningMessage = nil
         scanOrchestrator.clearPendingPaths()
+        ArchivePlaybackCoordinator.shared.stopAllPlayback()
+        ArchiveMiniPlayerModel.clearMetadataCaches()
+        WaveformPeakCache.shared.clear()
         songs = []
         filteredSongs = []
         searchMatchSummaries = [:]
@@ -530,12 +626,16 @@ extension ArchiveBrowserViewModel {
         showHiddenSongs = false
         sortMode = .recentCPR
         selectedSong = nil
+        songDetailsExpanded = false
+        pluginsSectionExpanded = false
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []
         duplicateSongHints = []
         missingAudioReport = nil
         mixdownBPMBySongID = [:]
         mixdownKeyBySongID = [:]
+        cprPluginSummaryByCPRPath = [:]
+        cachedSearchIndex = MusicSearchIndex()
         setStatusMessage(nextStatusMessage)
     }
 
@@ -565,11 +665,35 @@ extension ArchiveBrowserViewModel {
 
 extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL]) {
+        let previousPreviewBySongID = Dictionary(
+            uniqueKeysWithValues: songs.compactMap { song -> (String, String)? in
+                guard let previewID = song.mainPreviewCandidateID else { return nil }
+                return (song.id, previewID)
+            }
+        )
         mutateCatalog {
             songs = update.songs
             scanDiagnostics = update.diagnostics
             setStatusMessage(update.statusMessage)
         }
+        // Refresh or clear selection against the new catalog (keep if still present even when
+        // filtered out — browse recompute will clear filtered-out selections next).
+        reconcileSelectedSong(requireVisibleInFilteredList: false)
+        for song in update.songs {
+            if previousPreviewBySongID[song.id] != song.mainPreviewCandidateID {
+                invalidateMixdownAnalysis(for: song.id)
+            }
+        }
+        // Drop analysis for songs that disappeared.
+        let remainingIDs = Set(update.songs.map(\.id))
+        mixdownBPMBySongID = mixdownBPMBySongID.filter { key in
+            remainingIDs.contains(where: { key.hasPrefix("\($0)|") })
+        }
+        mixdownKeyBySongID = mixdownKeyBySongID.filter { key in
+            remainingIDs.contains(where: { key.hasPrefix("\($0)|") })
+        }
+        // Scan already writes a fresh index — cancel any pending metadata-edit persist.
+        indexPersistTask?.cancel()
         if let warning = catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: update.scannedAt) {
             recordPersistenceWarning(warning)
         }
@@ -625,17 +749,31 @@ extension ArchiveBrowserViewModel {
         guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
             return
         }
+        invalidateMixdownAnalysis(for: song.id)
+        if let path = songs.first(where: { $0.id == song.id })?
+            .previewCandidates.first(where: { $0.id == candidateID })?.filePath {
+            ArchiveMiniPlayerModel.invalidateMetadataCaches(for: path)
+        }
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.previewSelectionMode = .manual
             metadata.manualMainPreviewID = candidateID
         }
+        if let updated = songs.first(where: { $0.id == song.id }) {
+            refreshBPMEstimate(for: updated)
+            refreshKeyEstimate(for: updated)
+        }
     }
 
     func revertPreviewToAuto(for song: Song) {
+        invalidateMixdownAnalysis(for: song.id)
         applyMetadataMerge(for: song, rankingRefresh: .previewAuto) { metadata, scanned in
             metadata.previewSelectionMode = .auto
             metadata.manualMainPreviewID = nil
             scanned.previewSelectionMode = .auto
+        }
+        if let updated = songs.first(where: { $0.id == song.id }) {
+            refreshBPMEstimate(for: updated)
+            refreshKeyEstimate(for: updated)
         }
     }
 
@@ -690,7 +828,7 @@ extension ArchiveBrowserViewModel {
             metadata.isIgnored = hidden
         }
         if hidden, selectedSong?.id == song.id {
-            selectedSong = nil
+            clearSelection(stopPlayback: true)
         }
     }
 
@@ -758,13 +896,24 @@ extension ArchiveBrowserViewModel {
         if let warning = catalog.persistUserMetadata(for: [updated]) {
             recordPersistenceWarning(warning)
         }
-        if !roots.isEmpty {
-            if let warning = catalog.persistCachedIndex(
-                roots: roots,
-                songs: songs,
-                scannedAt: scanDiagnostics?.scannedAt ?? Date()
+        scheduleDebouncedIndexPersist()
+    }
+
+    /// Coalesce full-catalog JSON index writes while the user edits metadata.
+    /// Reads live catalog state at fire time so a later scan cannot be overwritten by a stale snapshot.
+    private func scheduleDebouncedIndexPersist() {
+        guard !roots.isEmpty else { return }
+        indexPersistTask?.cancel()
+        indexPersistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let self, !Task.isCancelled else { return }
+            guard !self.roots.isEmpty else { return }
+            if let warning = self.catalog.persistCachedIndex(
+                roots: self.roots,
+                songs: self.songs,
+                scannedAt: self.scanDiagnostics?.scannedAt ?? Date()
             ) {
-                recordPersistenceWarning(warning)
+                self.recordPersistenceWarning(warning)
             }
         }
     }

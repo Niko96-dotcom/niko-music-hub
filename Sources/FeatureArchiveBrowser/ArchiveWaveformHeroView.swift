@@ -5,6 +5,7 @@ struct ArchiveWaveformHeroView: View {
     let url: URL?
     var label: String?
     @ObservedObject var playback: ArchiveMiniPlayerModel
+    @ObservedObject private var coordinator = ArchivePlaybackCoordinator.shared
 
     @State private var peaks: [Float] = []
     @State private var isLoadingPeaks = false
@@ -88,6 +89,15 @@ struct ArchiveWaveformHeroView: View {
         }
         .onChange(of: url?.path) { _, _ in
             playback.prepare(url: url)
+        }
+        .onChange(of: coordinator.activeURL) { _, active in
+            // Pause hero when a list/alternate player takes over (same coordinator contract).
+            if active != url {
+                playback.pauseIfPlaying(url: url)
+            }
+        }
+        .onChange(of: coordinator.stopGeneration) { _, _ in
+            playback.forceStop()
         }
     }
 

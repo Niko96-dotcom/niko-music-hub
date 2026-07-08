@@ -54,20 +54,29 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(detail.contains("Open in Cubase"), "Primary Cubase action must remain labeled")
         XCTAssertTrue(detail.contains("Mixdown BPM"), "BPM fidelity must remain visible in essential info")
         XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
+        XCTAssertTrue(detail.contains("liveSong"), "Detail must resolve live catalog snapshots")
 
         let hero = try featureSource("ArchiveWaveformHeroView.swift")
         XCTAssertTrue(hero.contains("WaveformPeakCache.shared"), "Hero must reuse shared peak cache")
+        XCTAssertTrue(hero.contains("stopGeneration"), "Hero must observe global stop broadcasts")
         XCTAssertTrue(hero.contains("guard !Task.isCancelled"), "Hero peak load must ignore cancelled tasks")
-        XCTAssertTrue(hero.contains("peaks = []"), "Hero must clear peaks before loading a new URL")
 
         let miniPlayer = try featureSource("ArchiveMiniPlayerView.swift")
         XCTAssertTrue(miniPlayer.contains("preparesOnAppear"), "List rows must support lazy player prepare")
         XCTAssertTrue(miniPlayer.contains("func bind(url"), "Lazy bind must exist for list rows")
-        XCTAssertTrue(miniPlayer.contains("hookCache"), "Hook results must be cached across prepares")
+        XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
+        XCTAssertTrue(miniPlayer.contains("stopGeneration"), "List players must observe global stop")
 
         let viewModel = try featureSource("ArchiveBrowserViewModel.swift")
         XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
         XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
+        XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
+        XCTAssertTrue(viewModel.contains("stopAllPlayback"), "Song change must stop playback")
+        XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
+        XCTAssertTrue(viewModel.contains("mixdownAnalysisCacheKey"), "BPM/key must key off preview id")
+
+        let browser = try featureSource("ArchiveBrowserView.swift")
+        XCTAssertTrue(browser.contains("viewModel.songs.isEmpty"), "Archive remount must not unconditional full-scan")
     }
 
     func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {

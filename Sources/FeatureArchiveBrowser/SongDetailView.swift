@@ -12,6 +12,11 @@ struct SongDetailView: View {
     @State private var aliasesDraft = ""
     @State private var metadataExpanded = false
 
+    /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
+    private var liveSong: Song {
+        viewModel.songs.first(where: { $0.id == song.id }) ?? song
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
@@ -27,26 +32,25 @@ struct SongDetailView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .onAppear {
-            syncDrafts(from: song)
-            // Hero view prepares playback; avoid a duplicate prepare race here.
-            viewModel.refreshBPMEstimate(for: song)
-            viewModel.refreshKeyEstimate(for: song)
+            syncDrafts(from: liveSong)
         }
-        .onChange(of: song.id) { _, _ in
-            syncDrafts(from: song)
+        .onChange(of: liveSong.id) { _, _ in
+            syncDrafts(from: liveSong)
             metadataExpanded = false
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
-            viewModel.refreshBPMEstimate(for: song)
-            viewModel.refreshKeyEstimate(for: song)
+        }
+        .onChange(of: liveSong.mainPreviewCandidateID) { _, _ in
+            viewModel.refreshBPMEstimate(for: liveSong)
+            viewModel.refreshKeyEstimate(for: liveSong)
         }
         .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
             if expanded {
-                viewModel.refreshCPRPluginSummary(for: song)
+                viewModel.refreshCPRPluginSummary(for: liveSong)
             }
         }
         .onDisappear {
-            heroPlayback.stopIfPlaying(url: mainPreviewURL)
+            heroPlayback.forceStop()
         }
     }
 
@@ -55,7 +59,7 @@ struct SongDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.controlGap) {
-                Text(song.effectiveDisplayTitle)
+                Text(liveSong.effectiveDisplayTitle)
                     .font(HubDesignSystem.Typography.screenTitle())
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     .lineLimit(2)
@@ -63,7 +67,7 @@ struct SongDetailView: View {
 
                 Spacer(minLength: 8)
 
-                if let status = song.workflowStatus {
+                if let status = liveSong.workflowStatus {
                     ArchiveWorkflowStatusPill(status: status)
                 }
             }
@@ -77,7 +81,7 @@ struct SongDetailView: View {
     }
 
     private var headerStatusLine: String {
-        song.originalFolderName
+        liveSong.originalFolderName
     }
 
     // MARK: - Preview (one focused surface)
@@ -91,7 +95,7 @@ struct SongDetailView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
-                Text(song.previewSelectionMode == .manual ? "Manual" : "Auto")
+                Text(liveSong.previewSelectionMode == .manual ? "Manual" : "Auto")
                     .font(HubDesignSystem.Typography.micro())
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
@@ -102,9 +106,9 @@ struct SongDetailView: View {
                 playback: heroPlayback
             )
 
-            if song.previewSelectionMode == .manual {
+            if liveSong.previewSelectionMode == .manual {
                 Button("Revert to Auto") {
-                    viewModel.revertPreviewToAuto(for: song)
+                    viewModel.revertPreviewToAuto(for: liveSong)
                 }
                 .buttonStyle(.plain)
                 .font(HubDesignSystem.Typography.caption())
@@ -128,7 +132,7 @@ struct SongDetailView: View {
                     style: .primary,
                     help: "Open latest CPR (O)"
                 ) {
-                    try? viewModel.openLatestCPR(for: song)
+                    try? viewModel.openLatestCPR(for: liveSong)
                 }
 
                 HubLabeledButton(
@@ -136,9 +140,9 @@ struct SongDetailView: View {
                     label: "Reveal in Finder",
                     style: .secondary,
                     help: "Reveal CPR or folder (F)",
-                    isEnabled: viewModel.preferredRevealURL(for: song) != nil
+                    isEnabled: viewModel.preferredRevealURL(for: liveSong) != nil
                 ) {
-                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
                 }
 
                 HubLabeledButton(
@@ -148,13 +152,13 @@ struct SongDetailView: View {
                     help: "Open WAV converter with the main preview pre-filled",
                     isEnabled: mainPreviewURL != nil
                 ) {
-                    viewModel.convertMainPreview(for: song)
+                    viewModel.convertMainPreview(for: liveSong)
                 }
 
                 Spacer(minLength: 0)
             }
 
-            Text("P preview · O Cubase · F Finder · D detail")
+            Text("P reveal preview · O Cubase · F Finder · D detail")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
@@ -164,33 +168,33 @@ struct SongDetailView: View {
 
     private var essentialInfo: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let cpr = song.effectiveLatestCPR {
+            if let cpr = liveSong.effectiveLatestCPR {
                 infoLine(label: "Latest CPR", value: cpr.fileName)
             } else {
                 infoLine(label: "Latest CPR", value: "None found", warning: true)
             }
 
-            if let estimate = viewModel.bpmEstimate(for: song) {
+            if let estimate = viewModel.bpmEstimate(for: liveSong) {
                 infoLine(
                     label: "Mixdown BPM",
                     value: "\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))"
                 )
             }
 
-            if let key = viewModel.keyEstimate(for: song) {
+            if let key = viewModel.keyEstimate(for: liveSong) {
                 infoLine(
                     label: "Key",
                     value: "\(key.key) (\(key.confidence))"
                 )
             }
 
-            if song.hasStems {
+            if liveSong.hasStems {
                 Text("Stems detected")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
 
-            if let warning = song.displayScanWarnings().first {
+            if let warning = liveSong.displayScanWarnings().first {
                 Text(warning)
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.warning)
@@ -231,8 +235,8 @@ struct SongDetailView: View {
                 VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                     metadataField(label: "Workflow status") {
                         Picker("Workflow status", selection: Binding<ProjectWorkflowStatus?>(
-                            get: { song.workflowStatus },
-                            set: { viewModel.updateWorkflowStatus(for: song, status: $0) }
+                            get: { liveSong.workflowStatus },
+                            set: { viewModel.updateWorkflowStatus(for: liveSong, status: $0) }
                         )) {
                             Text("No Status").tag(nil as ProjectWorkflowStatus?)
                             ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
@@ -353,14 +357,14 @@ struct SongDetailView: View {
 
     private var hideRow: some View {
         Toggle("Hide song from browse", isOn: Binding(
-            get: { song.isIgnored },
-            set: { viewModel.setSongHidden(song, hidden: $0) }
+            get: { liveSong.isIgnored },
+            set: { viewModel.setSongHidden(liveSong, hidden: $0) }
         ))
         .font(HubDesignSystem.Typography.bodySmall())
         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         .padding(.vertical, 6)
-        .padding(.horizontal, song.isIgnored ? 10 : 0)
-        .modifier(HideSongChrome(isHidden: song.isIgnored))
+        .padding(.horizontal, liveSong.isIgnored ? 10 : 0)
+        .modifier(HideSongChrome(isHidden: liveSong.isIgnored))
     }
 
     private var collaboratorsSection: some View {
@@ -374,12 +378,12 @@ struct SongDetailView: View {
             } else {
                 ForEach(viewModel.collaborators) { collaborator in
                     Toggle(collaborator.displayName, isOn: Binding(
-                        get: { song.collaboratorIDs.contains(collaborator.id) },
+                        get: { liveSong.collaboratorIDs.contains(collaborator.id) },
                         set: { on in
-                            var ids = song.collaboratorIDs
+                            var ids = liveSong.collaboratorIDs
                             if on { ids.append(collaborator.id) }
                             else { ids.removeAll { $0 == collaborator.id } }
-                            viewModel.assignCollaborators(to: song, collaboratorIDs: ids)
+                            viewModel.assignCollaborators(to: liveSong, collaboratorIDs: ids)
                         }
                     ))
                 }
@@ -410,7 +414,7 @@ struct SongDetailView: View {
             .buttonStyle(.plain)
 
             if viewModel.pluginsSectionExpanded {
-                if let summary = viewModel.cprPluginSummary(for: song), !summary.pluginNames.isEmpty {
+                if let summary = viewModel.cprPluginSummary(for: liveSong), !summary.pluginNames.isEmpty {
                     ForEach(summary.pluginNames, id: \.self) { name in
                         Text(name)
                             .font(HubDesignSystem.Typography.caption())
@@ -430,27 +434,27 @@ struct SongDetailView: View {
             HStack(alignment: .firstTextBaseline) {
                 HubSectionHeader("CPR versions")
                 Spacer()
-                Text(song.cprSelectionMode == .manual ? "Manual main" : "Auto main")
+                Text(liveSong.cprSelectionMode == .manual ? "Manual main" : "Auto main")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
 
-            if song.projectVersions.isEmpty {
+            if liveSong.projectVersions.isEmpty {
                 Text("No CPR project files found")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.warning)
             } else {
-                ForEach(song.projectVersions, id: \.id) { version in
+                ForEach(liveSong.projectVersions, id: \.id) { version in
                     cprVersionRow(version)
                 }
-                if song.cprSelectionMode == .manual {
+                if liveSong.cprSelectionMode == .manual {
                     HubLabeledButton(
                         icon: "arrow.uturn.backward",
                         label: "Auto CPR",
                         style: .secondary,
                         help: "Revert to automatic CPR selection"
                     ) {
-                        viewModel.revertCPRToAuto(for: song)
+                        viewModel.revertCPRToAuto(for: liveSong)
                     }
                 }
             }
@@ -458,8 +462,8 @@ struct SongDetailView: View {
     }
 
     private func cprVersionRow(_ version: ProjectVersion) -> some View {
-        let isMain = song.effectiveLatestCPR?.id == version.id
-        let isIgnored = song.ignoredCPRVersionIDs.contains(version.id)
+        let isMain = liveSong.effectiveLatestCPR?.id == version.id
+        let isIgnored = liveSong.ignoredCPRVersionIDs.contains(version.id)
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(version.fileName)
@@ -498,7 +502,7 @@ struct SongDetailView: View {
                         style: .ghost,
                         help: "Use this CPR version as main"
                     ) {
-                        viewModel.setManualMainCPR(for: song, versionID: version.id)
+                        viewModel.setManualMainCPR(for: liveSong, versionID: version.id)
                     }
                     HubLabeledButton(
                         icon: "eye.slash",
@@ -506,7 +510,7 @@ struct SongDetailView: View {
                         style: .ghost,
                         help: "Hide this CPR from browse"
                     ) {
-                        viewModel.ignoreCPRVersion(for: song, versionID: version.id)
+                        viewModel.ignoreCPRVersion(for: liveSong, versionID: version.id)
                     }
                 }
             }
@@ -521,7 +525,7 @@ struct SongDetailView: View {
 
     @ViewBuilder
     private var alternatePreviewsSection: some View {
-        let alternates = rankedPreviews.filter { $0.id != song.mainPreviewCandidateID }
+        let alternates = rankedPreviews.filter { $0.id != liveSong.mainPreviewCandidateID }
         if !alternates.isEmpty {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 HubSectionHeader("Preview candidates")
@@ -540,7 +544,7 @@ struct SongDetailView: View {
                                 style: .ghost,
                                 help: "Use this file as the main preview"
                             ) {
-                                viewModel.setManualMainPreview(for: song, candidateID: candidate.id)
+                                viewModel.setManualMainPreview(for: liveSong, candidateID: candidate.id)
                             }
                             HubLabeledButton(
                                 icon: "eye.slash",
@@ -548,7 +552,7 @@ struct SongDetailView: View {
                                 style: .ghost,
                                 help: "Hide this preview candidate"
                             ) {
-                                viewModel.ignorePreviewCandidate(for: song, candidateID: candidate.id)
+                                viewModel.ignorePreviewCandidate(for: liveSong, candidateID: candidate.id)
                             }
                         }
                     }
@@ -559,7 +563,7 @@ struct SongDetailView: View {
 
     @ViewBuilder
     private var sidecarNotesSection: some View {
-        if let notes = song.displaySidecarNotes() {
+        if let notes = liveSong.displaySidecarNotes() {
             VStack(alignment: .leading, spacing: 4) {
                 HubSectionHeader("Sidecar notes")
                 Text(notes)
@@ -571,12 +575,12 @@ struct SongDetailView: View {
     }
 
     private var rankedPreviews: [PreviewCandidate] {
-        song.previewCandidates
+        liveSong.previewCandidates
     }
 
     private var mainPreviewCandidate: PreviewCandidate? {
-        guard let id = song.mainPreviewCandidateID else { return nil }
-        return song.previewCandidates.first(where: { $0.id == id })
+        guard let id = liveSong.mainPreviewCandidateID else { return nil }
+        return liveSong.previewCandidates.first(where: { $0.id == id })
     }
 
     private var mainPreviewURL: URL? {
@@ -612,15 +616,15 @@ struct SongDetailView: View {
     }
 
     private func commitVirtualTitle() {
-        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
+        viewModel.updateVirtualTitle(for: liveSong, title: virtualTitleDraft)
     }
 
     private func commitAppNote() {
-        viewModel.updateAppNote(for: song, note: appNoteDraft)
+        viewModel.updateAppNote(for: liveSong, note: appNoteDraft)
     }
 
     private func commitAliases() {
-        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
+        viewModel.updateAliases(for: liveSong, aliasesText: aliasesDraft)
     }
 }
 

@@ -20,7 +20,7 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
         XCTAssertTrue(resolution.rootsForRootLevelScan.isEmpty)
     }
 
-    func testResolvesRootDirectoryToChildFoldersAndRootRescan() throws {
+    func testResolvesRootDirectoryToRootRescanOnly() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let songFolder = root.appendingPathComponent("Neon Hook", isDirectory: true)
@@ -31,7 +31,8 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
             roots: [root]
         )
 
-        XCTAssertEqual(resolution.songFolders, [songFolder.standardizedFileURL])
+        // Root-level noise must not fan out into every child song folder.
+        XCTAssertTrue(resolution.songFolders.isEmpty)
         XCTAssertEqual(resolution.rootsForRootLevelScan, [root.standardizedFileURL])
     }
 

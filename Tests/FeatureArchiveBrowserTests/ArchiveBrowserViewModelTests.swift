@@ -359,15 +359,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
         let selected = try XCTUnwrap(viewModel.songs.first)
         viewModel.selectSong(selected)
-        viewModel.setSearchQuery("project", immediate: true)
+        viewModel.setSearchQuery(selected.effectiveDisplayTitle, immediate: true)
         viewModel.toggleBrowseFilter(.hasWarnings)
-        XCTAssertFalse(viewModel.filteredSongs.isEmpty)
+        // Selection may clear when the song leaves the filtered list — that is intentional.
         viewModel.selectShelf(.recentlyBounced)
-        viewModel.refreshIntelligence()
+        viewModel.refreshIntelligenceNow()
 
         XCTAssertFalse(viewModel.songs.isEmpty)
         XCTAssertNotNil(viewModel.scanDiagnostics)
-        XCTAssertNotNil(viewModel.selectedSong)
         XCTAssertFalse(viewModel.searchQuery.isEmpty)
 
         viewModel.removeRoot(CubaseFixtures.archiveRoot)
@@ -793,6 +792,51 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedSong?.id, second.id)
         XCTAssertFalse(viewModel.songDetailsExpanded)
         XCTAssertFalse(viewModel.pluginsSectionExpanded)
+    }
+
+    func testSearchClearsSelectionWhenSongLeavesFilteredList() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            browseSearchDebounceNanoseconds: 0
+        )
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        viewModel.selectSong(neon)
+        XCTAssertEqual(viewModel.selectedSong?.id, neon.id)
+
+        viewModel.setSearchQuery("zzzz-no-match", immediate: true)
+        XCTAssertNil(viewModel.selectedSong)
+    }
+
+    func testScanRefreshUpdatesSelectedSongSnapshot() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        viewModel.selectSong(neon)
+
+        // Simulate a catalog refresh that replaces the song struct while keeping the id.
+        var refreshed = neon
+        refreshed.appNote = "post-scan note"
+        viewModel.applyCatalogScanUpdate(
+            ArchiveCatalogCoordinator.CatalogScanApplyResult(
+                songs: viewModel.songs.map { $0.id == neon.id ? refreshed : $0 },
+                diagnostics: try XCTUnwrap(viewModel.scanDiagnostics),
+                statusMessage: "refreshed",
+                scannedAt: Date(),
+                shouldPersistUserMetadata: false
+            ),
+            roots: viewModel.roots
+        )
+        XCTAssertEqual(viewModel.selectedSong?.id, neon.id)
+        XCTAssertEqual(viewModel.selectedSong?.appNote, "post-scan note")
     }
 
     func testExportDiagnosticsIncludesSkippedSearchContext() async throws {

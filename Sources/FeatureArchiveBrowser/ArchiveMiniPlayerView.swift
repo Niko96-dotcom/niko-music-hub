@@ -62,6 +62,9 @@ struct ArchiveMiniPlayerView: View {
                 playback.pauseIfPlaying(url: url)
             }
         }
+        .onChange(of: coordinator.stopGeneration) { _, _ in
+            playback.forceStop()
+        }
     }
 
     private var displayLabel: String {
@@ -105,9 +108,46 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     private var hookSeekPending = false
     private var prepareTask: Task<Void, Never>?
 
-    /// Shared hook cache so list + detail don't re-scan the same mixdown.
-    private static var hookCache: [String: TimeInterval] = [:]
-    private static var durationCache: [String: Double] = [:]
+    /// Shared hook/duration caches so list + detail don't re-scan the same mixdown.
+    private static var hookCache: [String: CachedTime] = [:]
+    private static var durationCache: [String: CachedTime] = [:]
+
+    private struct CachedTime {
+        let modifiedAt: Date
+        let value: Double
+    }
+
+    static func clearMetadataCaches() {
+        hookCache.removeAll()
+        durationCache.removeAll()
+    }
+
+    static func invalidateMetadataCaches(for url: URL) {
+        let key = url.standardizedFileURL.path
+        hookCache.removeValue(forKey: key)
+        durationCache.removeValue(forKey: key)
+    }
+
+    private static func fileModifiedAt(_ url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            ?? .distantPast
+    }
+
+    private static func cachedValue(in cache: [String: CachedTime], url: URL) -> Double? {
+        let key = url.standardizedFileURL.path
+        let modifiedAt = fileModifiedAt(url)
+        guard let entry = cache[key], entry.modifiedAt == modifiedAt else { return nil }
+        return entry.value
+    }
+
+    private static func store(
+        _ value: Double,
+        for url: URL,
+        in cache: inout [String: CachedTime]
+    ) {
+        let key = url.standardizedFileURL.path
+        cache[key] = CachedTime(modifiedAt: fileModifiedAt(url), value: value)
+    }
 
     func isPlaying(_ url: URL?) -> Bool {
         guard let url, let player, activeURL == url else { return false }
@@ -123,9 +163,8 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         if activeURL == url { return }
         stop()
         activeURL = url
-        let key = url.standardizedFileURL.path
-        duration = Self.durationCache[key] ?? 0
-        hookTime = Self.hookCache[key]
+        duration = Self.cachedValue(in: Self.durationCache, url: url) ?? 0
+        hookTime = Self.cachedValue(in: Self.hookCache, url: url)
         currentTime = 0
         hookSeekPending = hookTime == nil
     }
@@ -143,13 +182,12 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         currentTime = 0
         hookSeekPending = true
 
-        let key = url.standardizedFileURL.path
-        if let cachedDuration = Self.durationCache[key] {
+        if let cachedDuration = Self.cachedValue(in: Self.durationCache, url: url) {
             duration = cachedDuration
         } else {
             duration = 0
         }
-        if let cachedHook = Self.hookCache[key] {
+        if let cachedHook = Self.cachedValue(in: Self.hookCache, url: url) {
             hookTime = cachedHook
             // Keep pending so the first play still jumps to the hook.
             hookSeekPending = true
@@ -227,6 +265,11 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         }
     }
 
+    /// Unconditional teardown — used when the coordinator broadcasts a global stop.
+    func forceStop() {
+        stop()
+    }
+
     private func ensurePlayer(for url: URL) {
         if player != nil, activeURL == url { return }
         let item = AVPlayerItem(url: url)
@@ -236,16 +279,15 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     }
 
     private func warmMetadata(for url: URL, seekToHookIfIdle: Bool = false) async {
-        let key = url.standardizedFileURL.path
         let item = playerItem
 
         async let hookResult: TimeInterval? = {
-            if let cached = Self.hookCache[key] { return cached }
+            if let cached = Self.cachedValue(in: Self.hookCache, url: url) { return cached }
             return await PreviewHookLocator.hookStartSeconds(for: url)
         }()
 
         async let durationResult: Double? = {
-            if let cached = Self.durationCache[key] { return cached }
+            if let cached = Self.cachedValue(in: Self.durationCache, url: url) { return cached }
             if let item,
                let loaded = try? await item.asset.load(.duration).seconds,
                loaded.isFinite,
@@ -264,11 +306,11 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         guard !Task.isCancelled, activeURL == url else { return }
 
         if let loadedDuration {
-            Self.durationCache[key] = loadedDuration
+            Self.store(loadedDuration, for: url, in: &Self.durationCache)
             duration = loadedDuration
         }
         if let hook {
-            Self.hookCache[key] = hook
+            Self.store(hook, for: url, in: &Self.hookCache)
             hookTime = hook
             if seekToHookIfIdle, hookSeekPending, currentTime < 0.35 {
                 seekToHook(hook)

@@ -78,6 +78,10 @@ struct ArchiveBrowserView: View {
                 viewModel.clearScanResults()
                 return
             }
+            // Don't full-rescan every time the Archive tool remounts. Init already loads
+            // cache and may start a watcher-backed scan; only scan here when the catalog
+            // is still empty (first open / roots just added).
+            guard viewModel.songs.isEmpty else { return }
             await viewModel.scan()
         }
     }
