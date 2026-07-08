@@ -41,12 +41,16 @@ public enum NewSongFolderCreator {
             throw CreationError.invalidName
         }
         let destinationRoot = request.root.standardizedFileURL
-        guard !protectedRoots.contains(where: { destinationRoot.isEqualToOrDescendant(of: $0) }) else {
-            throw CreationError.archiveRootIsReadOnly
-        }
         let songFolder = destinationRoot.appendingPathComponent(trimmed, isDirectory: true).standardizedFileURL
         guard songFolder.isDescendant(of: destinationRoot) else {
             throw CreationError.invalidName
+        }
+        let policy = ReadOnlyArchivePolicy(fileManager: fileManager)
+        do {
+            try policy.enforceNoWrite(at: destinationRoot, archiveRoots: protectedRoots)
+            try policy.enforceNoWrite(at: songFolder, archiveRoots: protectedRoots)
+        } catch ReadOnlyArchivePolicyError.writeDenied {
+            throw CreationError.archiveRootIsReadOnly
         }
         guard !fileManager.fileExists(atPath: songFolder.path) else {
             throw CreationError.folderExists
@@ -129,11 +133,5 @@ private extension URL {
         let path = standardizedFileURL.path
         let ancestorPath = ancestor.standardizedFileURL.path
         return path.hasPrefix(ancestorPath + "/")
-    }
-
-    func isEqualToOrDescendant(of ancestor: URL) -> Bool {
-        let path = standardizedFileURL.path
-        let ancestorPath = ancestor.standardizedFileURL.path
-        return path == ancestorPath || path.hasPrefix(ancestorPath + "/")
     }
 }

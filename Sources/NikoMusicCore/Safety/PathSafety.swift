@@ -38,4 +38,17 @@ public struct PathSafety: @unchecked Sendable {
         }
         return false
     }
+
+    /// Containment check that resolves symlinks on both sides before comparing.
+    /// Use for write/open safety so a symlink outside a root cannot escape into it.
+    public func isResolvedContained(_ path: URL, in roots: [URL]) -> Bool {
+        let candidate = path.standardizedFileURL.resolvingSymlinksInPath().path
+        for root in roots {
+            let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+            if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
+                return true
+            }
+        }
+        return false
+    }
 }

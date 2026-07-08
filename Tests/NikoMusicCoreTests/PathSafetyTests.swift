@@ -30,4 +30,21 @@ final class PathSafetyTests: XCTestCase {
         let resolved = try safety.resolve(inside, allowedRoots: [root])
         XCTAssertTrue(resolved.path.hasPrefix(root.standardizedFileURL.path))
     }
+
+    func testResolvedContainedDetectsSymlinkIntoRoot() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("path-safety-symlink-\(UUID().uuidString)", isDirectory: true)
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let outside = base.appendingPathComponent("outside", isDirectory: true)
+        let link = outside.appendingPathComponent("into-archive", isDirectory: true)
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+
+        try fm.createSymbolicLink(at: link, withDestinationURL: archive)
+
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertTrue(safety.isResolvedContained(link, in: [archive]))
+        XCTAssertFalse(safety.isResolvedContained(outside, in: [archive]))
+    }
 }

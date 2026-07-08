@@ -12,20 +12,23 @@ public struct ReadOnlyArchivePolicy: @unchecked Sendable {
     }
 
     /// Returns false when a write under `archiveRoot` must be blocked.
+    /// Symlinks are resolved so a draft/output path that points into an archive is denied.
     public func allowsWrite(at url: URL, archiveRoot: URL) -> Bool {
-        let target = url.standardizedFileURL
-        let root = archiveRoot.standardizedFileURL
-        let rootPath = root.path
-        let targetPath = target.path
-        guard targetPath == rootPath || targetPath.hasPrefix(rootPath + "/") else {
-            return true
-        }
-        return false
+        let safety = PathSafety(fileManager: fileManager)
+        // Deny when the resolved target is equal to or inside the resolved archive root.
+        return !safety.isResolvedContained(url, in: [archiveRoot])
     }
 
     public func enforceNoWrite(at url: URL, archiveRoot: URL) throws {
         if !allowsWrite(at: url, archiveRoot: archiveRoot) {
             throw ReadOnlyArchivePolicyError.writeDenied(url)
+        }
+    }
+
+    /// Denies a write when `url` resolves inside any of the protected archive roots.
+    public func enforceNoWrite(at url: URL, archiveRoots: [URL]) throws {
+        for root in archiveRoots {
+            try enforceNoWrite(at: url, archiveRoot: root)
         }
     }
 
