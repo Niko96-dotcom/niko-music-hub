@@ -15,13 +15,15 @@ public enum ArchiveDiagnosticsExporter {
         selectedSongContext: ArchiveDiagnosticsSelectedSongContext? = nil,
         orphanAudioReport: MissingAudioReport? = nil
     ) throws {
-        let destinationPath = destination.standardizedFileURL.path
-        for root in archiveRoots {
-            let rootPath = root.standardizedFileURL.path
-            let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
-            if destinationPath == rootPath || destinationPath.hasPrefix(prefix) {
-                throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
-            }
+        let policy = ReadOnlyArchivePolicy()
+        do {
+            try policy.enforceNoWrite(at: destination, archiveRoots: archiveRoots)
+            try policy.enforceNoWrite(
+                at: destination.deletingLastPathComponent(),
+                archiveRoots: archiveRoots
+            )
+        } catch ReadOnlyArchivePolicyError.writeDenied {
+            throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
         }
 
         let text = formattedText(

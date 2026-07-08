@@ -959,6 +959,16 @@ extension ArchiveBrowserViewModel {
             namePrefix: "archive-index",
             nameSuffix: ".json"
         )
+        let policy = ReadOnlyArchivePolicy()
+        do {
+            try policy.enforceNoWrite(at: destination, archiveRoots: roots)
+            try policy.enforceNoWrite(
+                at: destination.deletingLastPathComponent(),
+                archiveRoots: roots
+            )
+        } catch ReadOnlyArchivePolicyError.writeDenied {
+            throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
+        }
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: songs)
         try data.write(to: destination)
         lastIndexExportPath = destination.path

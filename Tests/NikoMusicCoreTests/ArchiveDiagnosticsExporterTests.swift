@@ -415,4 +415,35 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
         }
     }
+
+    func testExportRejectsSymlinkedDestinationInsideArchiveRoot() throws {
+        try CubaseFixtures.ensureGenerated()
+        let archiveRoot = CubaseFixtures.archiveRoot
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent(
+            "diagnostics-export-symlink-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let linkDir = base.appendingPathComponent("niko-music-hub-diagnostics", isDirectory: true)
+        try fm.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+        try fm.createSymbolicLink(at: linkDir, withDestinationURL: archiveRoot)
+
+        let diagnostics = ArchiveScanDiagnosticsBuilder.build(
+            result: ScanResult(),
+            roots: [archiveRoot]
+        )
+        let destination = linkDir.appendingPathComponent("scan-diagnostics.txt")
+
+        XCTAssertThrowsError(
+            try ArchiveDiagnosticsExporter.exportText(
+                diagnostics: diagnostics,
+                to: destination,
+                archiveRoots: [archiveRoot]
+            )
+        ) { error in
+            XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+        }
+        XCTAssertFalse(fm.fileExists(atPath: archiveRoot.appendingPathComponent("scan-diagnostics.txt").path))
+    }
 }
