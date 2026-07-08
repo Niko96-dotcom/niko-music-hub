@@ -103,14 +103,20 @@ public struct HubTransportBar: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.system(size: style == .compact ? 11 : 12, weight: .medium))
-                        .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+                        .font(style == .compact
+                              ? HubDesignSystem.Typography.caption().weight(.medium)
+                              : HubDesignSystem.Typography.bodySmall().weight(.medium))
+                        .foregroundStyle(
+                            isEnabled
+                                ? HubDesignSystem.Palette.textPrimary
+                                : HubDesignSystem.Palette.textTertiary
+                        )
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if style == .full, let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(HubDesignSystem.Typography.micro())
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                             .lineLimit(1)
                     }
                 }
@@ -132,13 +138,13 @@ public struct HubTransportBar: View {
             if let volumeLevel {
                 Image(systemName: volumeIcon(for: volumeLevel))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .accessibilityLabel("Volume ready")
             }
 
             Text(timeLabel(current: currentTime, total: duration))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(HubDesignSystem.Typography.mono(size: 10))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
@@ -243,6 +249,8 @@ public struct HubTransportBar: View {
 
 public enum HubWaveformSurfaceVariant: Sendable {
     case archivePreview
+    /// Thin list-row peak strip (selected/playing song cards). Not a card.
+    case rowStrip
     case meter
     case empty
 }
@@ -272,7 +280,10 @@ public struct HubWaveformSurface: View {
     }
 
     public var body: some View {
-        if showsSurface {
+        // Row strips stay unboxed — a carded 72pt hero popping into a list row is the
+        // delayed "ugly player" users see on song select.
+        let shouldSurface = showsSurface && variant != .rowStrip
+        if shouldSurface {
             waveformContent
                 .padding(variant == .meter ? 6 : 8)
                 .hubCard(
@@ -318,13 +329,20 @@ public struct HubWaveformSurface: View {
     }
 
     private var emptyState: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "waveform.slash")
-                .font(.system(size: 13, weight: .medium))
-            Text("No waveform")
-                .font(HubDesignSystem.Typography.caption())
+        Group {
+            if variant == .rowStrip {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(HubDesignSystem.Palette.textTertiary.opacity(0.12))
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform.slash")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("No waveform")
+                        .font(HubDesignSystem.Typography.caption())
+                }
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            }
         }
-        .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -340,6 +358,8 @@ public struct HubWaveformSurface: View {
         switch variant {
         case .archivePreview:
             return 72
+        case .rowStrip:
+            return 22
         case .meter:
             return 44
         case .empty:
@@ -354,7 +374,14 @@ public struct HubWaveformSurface: View {
         let barWidth = size.width / CGFloat(values.count)
         let midY = size.height / 2
         for (index, peak) in values.enumerated() {
-            let height = CGFloat(peak) * size.height * (variant == .meter ? 0.78 : 0.90)
+            let amplitude: CGFloat = {
+                switch variant {
+                case .meter: return 0.78
+                case .rowStrip: return 0.92
+                case .archivePreview, .empty: return 0.90
+                }
+            }()
+            let height = CGFloat(peak) * size.height * amplitude
             let x = CGFloat(index) * barWidth
             let rect = CGRect(
                 x: x + barWidth * 0.15,
@@ -374,6 +401,8 @@ public struct HubWaveformSurface: View {
         switch variant {
         case .archivePreview:
             return Color.secondary.opacity(0.58)
+        case .rowStrip:
+            return HubDesignSystem.Palette.textTertiary.opacity(0.72)
         case .meter:
             return HubDesignSystem.Palette.accent.opacity(0.62)
         case .empty:

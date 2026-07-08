@@ -29,12 +29,13 @@ struct SongCardView: View {
         return playbackCoordinator.activeURL == mainPreviewURL
     }
 
+    /// Thin peak strip only while selected or playing — never the full 72pt hero card.
     private var showsPeakStrip: Bool {
         isSelected || isRowPlaying
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(song.effectiveDisplayTitle)
                     .font(HubDesignSystem.Typography.body().weight(.semibold))
@@ -66,9 +67,24 @@ struct SongCardView: View {
                     .lineLimit(1)
             }
 
-            if showsPeakStrip, !cardPeaks.isEmpty {
-                ArchiveWaveformView(peaks: cardPeaks, progress: 0, onSeek: { _ in })
-                    .frame(height: 22)
+            // Reserve strip height immediately on select so peaks don't pop the row taller
+            // a second later when the async cache returns.
+            if showsPeakStrip {
+                Group {
+                    if cardPeaks.isEmpty {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(HubDesignSystem.Palette.textTertiary.opacity(0.12))
+                    } else {
+                        ArchiveWaveformView(
+                            peaks: cardPeaks,
+                            progress: 0,
+                            variant: .rowStrip,
+                            onSeek: { _ in }
+                        )
+                    }
+                }
+                .frame(height: 22)
+                .transition(.opacity)
             }
 
             ArchiveMiniPlayerView(url: mainPreviewURL, style: .compact, showsSlider: isRowPlaying)
@@ -87,6 +103,7 @@ struct SongCardView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: showsPeakStrip)
         .task(id: peakStripTaskID) {
             guard showsPeakStrip, let url = mainPreviewURL else {
                 cardPeaks = []

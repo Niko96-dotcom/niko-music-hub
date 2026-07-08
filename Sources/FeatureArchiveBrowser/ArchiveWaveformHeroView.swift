@@ -7,16 +7,35 @@ struct ArchiveWaveformHeroView: View {
     @ObservedObject var playback: ArchiveMiniPlayerModel
 
     @State private var peaks: [Float] = []
+    @State private var isLoadingPeaks = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ArchiveWaveformView(
-                peaks: peaks,
-                progress: playback.playbackProgress
-            ) { fraction in
-                guard playback.duration > 0 else { return }
-                playback.seek(to: fraction * playback.duration, url: url)
+            ZStack {
+                // Always reserve the hero height so async peak load doesn't pop a
+                // "No waveform" empty card into a full player a beat later.
+                Color.clear.frame(height: 72)
+
+                if isLoadingPeaks && peaks.isEmpty {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                        .fill(HubDesignSystem.Palette.textTertiary.opacity(0.08))
+                        .frame(height: 72)
+                        .overlay {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                } else {
+                    ArchiveWaveformView(
+                        peaks: peaks,
+                        progress: playback.playbackProgress,
+                        showsSurface: false
+                    ) { fraction in
+                        guard playback.duration > 0 else { return }
+                        playback.seek(to: fraction * playback.duration, url: url)
+                    }
+                }
             }
+            .frame(height: 72)
 
             HubTransportBar(
                 style: .full,
@@ -29,6 +48,8 @@ struct ArchiveWaveformHeroView: View {
                 markerProgress: hookProgress,
                 volumeLevel: 1,
                 showsSkipControls: true,
+                // Hero already sits inside the detail preview card — no nested surface.
+                showsSurface: false,
                 onPlayPause: {
                     playback.toggle(at: url)
                 },
@@ -46,9 +67,12 @@ struct ArchiveWaveformHeroView: View {
         .task(id: url?.path) {
             guard let url else {
                 peaks = []
+                isLoadingPeaks = false
                 return
             }
+            isLoadingPeaks = true
             peaks = await WaveformPeakLoader.loadPeaks(from: url)
+            isLoadingPeaks = false
         }
     }
 

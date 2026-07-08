@@ -10,9 +10,10 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(miniPlayer.contains("markerProgress"))
         XCTAssertTrue(hero.contains("HubTransportBar"))
         XCTAssertTrue(hero.contains("showsSkipControls: true"))
+        XCTAssertTrue(hero.contains("showsSurface: false"))
         XCTAssertTrue(hero.contains("volumeLevel"))
         XCTAssertTrue(waveform.contains("HubWaveformSurface"))
-        XCTAssertTrue(waveform.contains("variant: peaks.isEmpty ? .empty : .archivePreview"))
+        XCTAssertTrue(waveform.contains("variant != .rowStrip") || waveform.contains(".rowStrip"))
         XCTAssertFalse(waveform.contains("Canvas"))
         XCTAssertFalse(waveform.contains("drawWaveform"))
     }
@@ -39,6 +40,10 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         ].forEach { required in
             XCTAssertTrue(combined.contains(required), "Missing archive Liquid surface source: \(required)")
         }
+
+        let songCard = try featureSource("SongCardView.swift")
+        XCTAssertTrue(songCard.contains("variant: .rowStrip"), "Song rows must use the thin rowStrip waveform")
+        XCTAssertFalse(songCard.contains("variant: .archivePreview"), "Song rows must not host the 72pt hero waveform")
     }
 
     func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {

@@ -76,6 +76,7 @@ final class HubMediaSurfaceTests: XCTestCase {
             "public struct HubWaveformSurface",
             "HubTransportBarStyle",
             "HubWaveformSurfaceVariant",
+            "rowStrip",
             "isPlaying",
             "isEnabled",
             "markerProgress",

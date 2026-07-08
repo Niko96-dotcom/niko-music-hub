@@ -13,11 +13,11 @@ struct SongDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.sectionHeaderTop) {
                 heroSection
-                previewCard
+                previewSection
                 actionsSection
-                metadataCard
+                metadataSection
                 detailsSection
                 hideSection
             }
@@ -45,75 +45,48 @@ struct SongDetailView: View {
         }
     }
 
-    private var heroSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(song.effectiveDisplayTitle)
-                .font(HubDesignSystem.Typography.display())
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+    // MARK: - Hero (unboxed)
 
-            Text("Folder: \(song.originalFolderName)")
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.controlGap) {
+                Text(song.effectiveDisplayTitle)
+                    .font(HubDesignSystem.Typography.screenTitle())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                if let status = song.workflowStatus {
+                    ArchiveWorkflowStatusPill(status: status)
+                }
+            }
+
+            Text(song.originalFolderName)
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            if let analysis = mixdownAnalysisLine {
+                Text(analysis)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
         }
     }
 
-    private var metadataCard: some View {
+    // MARK: - Preview (single focused card)
+
+    private var previewSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            sectionTitle("Metadata")
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Workflow status")
-                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                Picker("Workflow status", selection: Binding<ProjectWorkflowStatus?>(
-                    get: { song.workflowStatus },
-                    set: { viewModel.updateWorkflowStatus(for: song, status: $0) }
-                )) {
-                    Text("No Status").tag(nil as ProjectWorkflowStatus?)
-                    ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
-                        Label(status.displayTitle, systemImage: status.archiveSymbolName)
-                            .tag(status as ProjectWorkflowStatus?)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-
-                Text("Display title")
-                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                TextField("Virtual title (app only)", text: $virtualTitleDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { commitVirtualTitle() }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Aliases (comma-separated, searchable)")
-                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                TextField("e.g. rave hook, neon v2", text: $aliasesDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { commitAliases() }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Song note (app-owned)")
-                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                TextField("Your note", text: $appNoteDraft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(2...4)
-                    .onSubmit { commitAppNote() }
-            }
-        }
-        .padding(HubDesignSystem.Spacing.cardPadding)
-        .hubCard()
-    }
-
-    private var previewCard: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            HStack {
-                sectionTitle("Main preview")
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.inlineGap) {
+                Text("MAIN PREVIEW")
+                    .font(HubDesignSystem.Typography.caption())
+                    .tracking(0.7)
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                Spacer(minLength: 0)
                 Text(song.previewSelectionMode == .manual ? "Manual" : "Auto")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.accent)
@@ -139,77 +112,119 @@ struct SongDetailView: View {
         .hubCard(state: .selected)
     }
 
-    /// Primary action = solid `Palette.accent` fill pill, dark `Palette.canvas` label
-    /// (reference: "Create agent" white pill). Secondary/tertiary actions are plain text.
+    // MARK: - Actions (unboxed)
+
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                openInCubaseButton
+            HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+                HubLabeledButton(
+                    icon: "pianokeys",
+                    label: "Open in Cubase",
+                    style: .primary,
+                    help: "Open latest CPR (O)"
+                ) {
+                    try? viewModel.openLatestCPR(for: song)
+                }
 
-                Button {
+                HubLabeledButton(
+                    icon: "waveform.badge.plus",
+                    label: "Convert…",
+                    style: .ghost,
+                    help: "Open WAV converter with the main preview pre-filled",
+                    isEnabled: mainPreviewURL != nil
+                ) {
                     viewModel.convertMainPreview(for: song)
-                } label: {
-                    Label("Convert main preview…", systemImage: "waveform.badge.plus")
-                        .font(HubDesignSystem.Typography.body())
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .disabled(mainPreviewURL == nil)
-                .help("Open WAV converter with the main preview pre-filled")
 
-                Button {
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Reveal",
+                    style: .ghost,
+                    help: "Reveal CPR or folder (F)",
+                    isEnabled: viewModel.preferredRevealURL(for: song) != nil
+                ) {
                     viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                        .font(HubDesignSystem.Typography.body())
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .disabled(viewModel.preferredRevealURL(for: song) == nil)
-                .help("Reveal CPR or folder (F)")
 
-                Button {
+                HubLabeledButton(
+                    icon: "square.and.arrow.down",
+                    label: "Save",
+                    style: .ghost,
+                    help: "Save display title, aliases, and note"
+                ) {
                     commitVirtualTitle()
                     commitAliases()
                     commitAppNote()
-                } label: {
-                    Label("Save Metadata", systemImage: "square.and.arrow.down")
-                        .font(HubDesignSystem.Typography.body())
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .help("Save display title, aliases, and note")
+
+                Spacer(minLength: 0)
             }
 
             Text("P preview · O Cubase · F Finder · D detail")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
-        .padding(HubDesignSystem.Spacing.cardPadding)
-        .hubCard()
     }
 
-    private var openInCubaseButton: some View {
-        Button {
-            try? viewModel.openLatestCPR(for: song)
-        } label: {
-            Label("Open in Cubase", systemImage: "pianokeys")
-                .font(HubDesignSystem.Typography.body().weight(.medium))
-                .foregroundStyle(HubDesignSystem.Palette.canvas)
-                .padding(.horizontal, 16)
-                .frame(height: 34)
+    // MARK: - Metadata (unboxed)
+
+    private var metadataSection: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            HubSectionHeader("Metadata")
+
+            metadataField(label: "Workflow status") {
+                Picker("Workflow status", selection: Binding<ProjectWorkflowStatus?>(
+                    get: { song.workflowStatus },
+                    set: { viewModel.updateWorkflowStatus(for: song, status: $0) }
+                )) {
+                    Text("No Status").tag(nil as ProjectWorkflowStatus?)
+                    ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                        Label(status.displayTitle, systemImage: status.archiveSymbolName)
+                            .tag(status as ProjectWorkflowStatus?)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            HubSectionDivider()
+
+            metadataField(label: "Display title") {
+                TextField("Virtual title (app only)", text: $virtualTitleDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitVirtualTitle() }
+            }
+
+            metadataField(label: "Aliases") {
+                TextField("e.g. rave hook, neon v2", text: $aliasesDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { commitAliases() }
+            }
+
+            metadataField(label: "Song note") {
+                TextField("Your note", text: $appNoteDraft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .onSubmit { commitAppNote() }
+            }
         }
-        .buttonStyle(.plain)
-        .background {
-            Capsule(style: .continuous)
-                .fill(HubDesignSystem.Palette.accent)
-        }
-        .help("Open latest CPR (O)")
     }
+
+    private func metadataField<Content: View>(
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            content()
+        }
+    }
+
+    // MARK: - Details (disclosure)
 
     private var detailsSection: some View {
-        // Whole-row toggle: a native DisclosureGroup only toggles on its tiny chevron,
-        // which reads as a dead control. The full header row is the tap target here.
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
@@ -228,6 +243,7 @@ struct SongDetailView: View {
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
+                .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Details")
@@ -236,17 +252,14 @@ struct SongDetailView: View {
             if viewModel.songDetailsExpanded {
                 VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
                     collaboratorsSection
-                    mixdownAnalysisSection
                     pluginsSection
                     cprListSection
                     alternatePreviewsSection
                     supplementalInfoSection
                 }
-                .padding(.top, 10)
+                .padding(.top, 4)
             }
         }
-        .padding(HubDesignSystem.Spacing.cardPadding)
-        .hubCard()
     }
 
     private var hideSection: some View {
@@ -255,17 +268,15 @@ struct SongDetailView: View {
             set: { viewModel.setSongHidden(song, hidden: $0) }
         ))
         .font(HubDesignSystem.Typography.bodySmall())
-        .padding(10)
-        .hubCard(state: song.isIgnored ? .warning : .normal)
-    }
-
-    private func sectionTitle(_ title: String) -> some View {
-        HubSectionHeader(title)
+        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+        .padding(.vertical, 6)
+        .padding(.horizontal, song.isIgnored ? 10 : 0)
+        .modifier(HideSongChrome(isHidden: song.isIgnored))
     }
 
     private var collaboratorsSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            sectionTitle("Collaborators")
+            HubSectionHeader("Collaborators")
 
             if viewModel.collaborators.isEmpty {
                 Text("Add collaborators under Library → Collaborators in the sidebar.")
@@ -288,26 +299,6 @@ struct SongDetailView: View {
     }
 
     @ViewBuilder
-    private var mixdownAnalysisSection: some View {
-        if viewModel.bpmEstimate(for: song) != nil || viewModel.keyEstimate(for: song) != nil {
-            VStack(alignment: .leading, spacing: 4) {
-                if let estimate = viewModel.bpmEstimate(for: song) {
-                    LabeledContent("Mixdown BPM") {
-                        Text("\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))")
-                            .font(HubDesignSystem.Typography.caption())
-                    }
-                }
-                if let key = viewModel.keyEstimate(for: song) {
-                    LabeledContent("Musical key") {
-                        Text("\(key.key) (\(key.confidence))")
-                            .font(HubDesignSystem.Typography.caption())
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
     private var pluginsSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             Button {
@@ -316,9 +307,10 @@ struct SongDetailView: View {
                 }
             } label: {
                 HStack {
-                    sectionTitle("Plugins (read-only)")
+                    HubSectionHeader("Plugins (read-only)")
                     Spacer()
                     Image(systemName: "chevron.right")
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .rotationEffect(.degrees(viewModel.pluginsSectionExpanded ? 90 : 0))
                 }
             }
@@ -342,8 +334,8 @@ struct SongDetailView: View {
 
     private var cprListSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            HStack {
-                sectionTitle("CPR versions")
+            HStack(alignment: .firstTextBaseline) {
+                HubSectionHeader("CPR versions")
                 Spacer()
                 Text(song.cprSelectionMode == .manual ? "Manual main" : "Auto main")
                     .font(HubDesignSystem.Typography.caption())
@@ -429,11 +421,15 @@ struct SongDetailView: View {
                 }
             }
         }
-        .padding(8)
-        .hubCard(
-            cornerRadius: HubDesignSystem.Radius.row,
-            state: isIgnored ? .disabled : (isMain ? .selected : .normal)
-        )
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(
+                    isIgnored
+                        ? Color.white.opacity(0.03)
+                        : (isMain ? HubDesignSystem.Palette.selection : Color.white.opacity(0.04))
+                )
+        }
     }
 
     @ViewBuilder
@@ -441,7 +437,7 @@ struct SongDetailView: View {
         let alternates = rankedPreviews.filter { $0.id != song.mainPreviewCandidateID }
         if !alternates.isEmpty {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-                sectionTitle("Preview candidates")
+                HubSectionHeader("Preview candidates")
 
                 ForEach(alternates, id: \.id) { candidate in
                     VStack(alignment: .leading, spacing: 6) {
@@ -469,8 +465,6 @@ struct SongDetailView: View {
                             }
                         }
                     }
-                    .padding(8)
-                    .hubCard(cornerRadius: HubDesignSystem.Radius.row)
                 }
             }
         }
@@ -478,25 +472,39 @@ struct SongDetailView: View {
 
     @ViewBuilder
     private var supplementalInfoSection: some View {
-        if song.hasStems {
-            Text("Stems detected")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.accent)
-        }
+        VStack(alignment: .leading, spacing: 6) {
+            if song.hasStems {
+                Text("Stems detected")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.accent)
+            }
 
-        if let warning = song.displayScanWarnings().first {
-            Text(warning)
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.warning)
-                .lineLimit(3)
-        }
+            if let warning = song.displayScanWarnings().first {
+                Text(warning)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.warning)
+                    .lineLimit(3)
+            }
 
-        if let notes = song.displaySidecarNotes() {
-            Text("Sidecar notes.txt: \(notes)")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .lineLimit(4)
+            if let notes = song.displaySidecarNotes() {
+                Text("Sidecar notes.txt: \(notes)")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .lineLimit(4)
+            }
         }
+    }
+
+    private var mixdownAnalysisLine: String? {
+        var parts: [String] = []
+        if let estimate = viewModel.bpmEstimate(for: song) {
+            parts.append("\(String(format: "%.0f", estimate.bpm)) BPM")
+        }
+        if let key = viewModel.keyEstimate(for: song) {
+            parts.append(key.key)
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
     private var rankedPreviews: [PreviewCandidate] {
@@ -539,5 +547,17 @@ struct SongDetailView: View {
 
     private func commitAliases() {
         viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
+    }
+}
+
+private struct HideSongChrome: ViewModifier {
+    let isHidden: Bool
+
+    func body(content: Content) -> some View {
+        if isHidden {
+            content.hubCard(state: .warning)
+        } else {
+            content
+        }
     }
 }
