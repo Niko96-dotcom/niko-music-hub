@@ -39,14 +39,14 @@ struct ArchiveWaveformHeroView: View {
 
             HubTransportBar(
                 style: .full,
-                title: label ?? url?.lastPathComponent ?? "No preview",
-                subtitle: "Main preview",
+                title: label ?? (url == nil ? "No preview" : "Preview"),
+                subtitle: nil,
                 isPlaying: playback.isPlaying(url),
                 currentTime: playback.currentTime,
                 duration: playback.duration,
                 isEnabled: url != nil,
                 markerProgress: hookProgress,
-                volumeLevel: 1,
+                volumeLevel: nil,
                 showsSkipControls: true,
                 // Hero already sits inside the detail preview card — no nested surface.
                 showsSurface: false,

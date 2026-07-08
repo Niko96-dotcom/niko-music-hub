@@ -11,7 +11,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(hero.contains("HubTransportBar"))
         XCTAssertTrue(hero.contains("showsSkipControls: true"))
         XCTAssertTrue(hero.contains("showsSurface: false"))
-        XCTAssertTrue(hero.contains("volumeLevel"))
+        XCTAssertTrue(hero.contains("volumeLevel: nil"))
         XCTAssertTrue(waveform.contains("HubWaveformSurface"))
         XCTAssertTrue(waveform.contains("variant != .rowStrip") || waveform.contains(".rowStrip"))
         XCTAssertFalse(waveform.contains("Canvas"))
@@ -44,6 +44,12 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         let songCard = try featureSource("SongCardView.swift")
         XCTAssertTrue(songCard.contains("variant: .rowStrip"), "Song rows must use the thin rowStrip waveform")
         XCTAssertFalse(songCard.contains("variant: .archivePreview"), "Song rows must not host the 72pt hero waveform")
+
+        let detail = try featureSource("SongDetailView.swift")
+        XCTAssertTrue(detail.contains("hubSurface(.raised"), "Song detail preview should use a quiet raised surface")
+        XCTAssertTrue(detail.contains("hubSurface(.panel"), "Collapsed detail groups should use Settings-like panels")
+        XCTAssertTrue(detail.contains("metadataExpanded"), "Metadata must start collapsed (ARCH-07)")
+        XCTAssertTrue(detail.contains("Open in Cubase"), "Primary Cubase action must remain labeled")
     }
 
     func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {
