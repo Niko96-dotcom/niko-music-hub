@@ -54,7 +54,9 @@ final class MusicItemOpenerTests: XCTestCase {
         let logs = LogCollector()
         let opener = MusicItemOpener(workspace: fake) { logs.append($0) }
 
-        let openResult = try XCTUnwrap(opener.openLatestCPR(for: neon, dryRun: true))
+        let openResult = try XCTUnwrap(
+            opener.openLatestCPR(for: neon, dryRun: true, allowedRoots: [CubaseFixtures.archiveRoot])
+        )
         XCTAssertTrue(openResult.dryRun)
         XCTAssertTrue(openResult.path.contains("Neon Hook"))
         XCTAssertTrue(openResult.path.hasSuffix(".cpr"))
@@ -70,7 +72,50 @@ final class MusicItemOpenerTests: XCTestCase {
 
         let fake = FakeWorkspace()
         let opener = MusicItemOpener(workspace: fake)
-        _ = try opener.openLatestCPR(for: neon, dryRun: false)
+        _ = try opener.openLatestCPR(for: neon, dryRun: false, allowedRoots: [CubaseFixtures.archiveRoot])
         XCTAssertEqual(fake.openedCount, 1)
+    }
+
+    func testOpenRejectsCPROutsideAllowedRoots() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
+
+        let outsideRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("music-item-opener-outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outsideRoot) }
+
+        let fake = FakeWorkspace()
+        let opener = MusicItemOpener(workspace: fake)
+        XCTAssertThrowsError(
+            try opener.openLatestCPR(for: neon, dryRun: false, allowedRoots: [outsideRoot])
+        ) { error in
+            guard case MusicItemOpenerError.pathOutsideAllowedRoots = error else {
+                XCTFail("Expected pathOutsideAllowedRoots, got \(error)")
+                return
+            }
+        }
+        XCTAssertEqual(fake.openedCount, 0)
+    }
+
+    func testOpenRejectsWhenAllowedRootsEmpty() throws {
+        try CubaseFixtures.ensureGenerated()
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
+
+        let fake = FakeWorkspace()
+        let opener = MusicItemOpener(workspace: fake)
+        XCTAssertThrowsError(
+            try opener.openLatestCPR(for: neon, dryRun: true, allowedRoots: [])
+        ) { error in
+            guard case MusicItemOpenerError.pathOutsideAllowedRoots = error else {
+                XCTFail("Expected pathOutsideAllowedRoots, got \(error)")
+                return
+            }
+        }
+        XCTAssertEqual(fake.openedCount, 0)
     }
 }

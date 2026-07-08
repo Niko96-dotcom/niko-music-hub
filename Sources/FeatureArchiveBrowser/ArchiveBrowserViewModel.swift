@@ -1013,7 +1013,11 @@ extension ArchiveBrowserViewModel {
     }
 
     func openLatestCPR(for song: Song) throws {
-        if let result = try opener.openLatestCPR(for: song, dryRun: runtime.dryRunOpen) {
+        if let result = try opener.openLatestCPR(
+            for: song,
+            dryRun: runtime.dryRunOpen,
+            allowedRoots: roots
+        ) {
             lastDryRunLog = result.path
             if runtime.dryRunOpen {
                 let displayPath = Song.displayDryRunPath(result.path)
