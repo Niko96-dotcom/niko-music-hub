@@ -1615,6 +1615,92 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertGreaterThan(decoded.songCount, 0)
     }
 
+    func testStaleIncrementalRescanDoesNotClearIsScanningDuringFullScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        setenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS", "300000000", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS") }
+
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let rootA = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubStaleIncrementalA-\(UUID().uuidString)", isDirectory: true)
+        let rootB = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubStaleIncrementalB-\(UUID().uuidString)", isDirectory: true)
+        let songA = rootA.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: rootB, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: rootA)
+            try? FileManager.default.removeItem(at: rootB)
+        }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: rootA.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let gate = ScanReleaseGate()
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                await gate.waitForRelease()
+                return ScanResult(songs: [
+                    Song(
+                        folderPath: songA,
+                        originalFolderName: songA.lastPathComponent,
+                        displayTitle: "Song A"
+                    )
+                ])
+            }
+        )
+
+        let initialScanDeadline = Date().addingTimeInterval(2)
+        while viewModel.songs.isEmpty, Date() < initialScanDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        gate.release()
+
+        let mixdownFolder = songA.appendingPathComponent("mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
+        let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
+        FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [mixdown])
+
+        let incrementalStartDeadline = Date().addingTimeInterval(2)
+        while !viewModel.isScanning, Date() < incrementalStartDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        viewModel.roots = [rootB]
+        let fullScanTask = Task { await viewModel.scan() }
+
+        let fullScanStartDeadline = Date().addingTimeInterval(2)
+        while !viewModel.isScanning, Date() < fullScanStartDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        try await Task.sleep(nanoseconds: 350_000_000)
+        XCTAssertTrue(
+            viewModel.isScanning,
+            "Stale incremental completion must not clear isScanning while a full scan is active"
+        )
+
+        gate.release()
+        await fullScanTask.value
+    }
+
 }
 
 private final class ScanReleaseGate: @unchecked Sendable {

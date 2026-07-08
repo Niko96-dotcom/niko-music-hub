@@ -178,9 +178,20 @@ final class ArchiveScanOrchestrator {
         guard !host.roots.isEmpty, !changedPaths.isEmpty, !host.isScanning else { return }
         host.isScanning = true
         defer {
-            host.isScanning = false
+            // Full scans own `isScanning` via `activeScanGeneration`; a stale incremental
+            // completion must not clear the flag while a newer full scan is still running.
+            if activeScanGeneration == nil {
+                host.isScanning = false
+            }
             Task { await drainPendingIncrementalRescan() }
         }
+
+        #if DEBUG
+        if let holdRaw = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS"],
+           let holdNanoseconds = UInt64(holdRaw), holdNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: holdNanoseconds)
+        }
+        #endif
 
         let rootsSnapshot = host.roots
         let generationSnapshot = host.rootGeneration

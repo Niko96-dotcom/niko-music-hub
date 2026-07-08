@@ -47,8 +47,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     let catalog: ArchiveCatalogCoordinator
     private let browseRefreshDriver: ArchiveBrowseRefreshDriver
-    private var bpmEstimateTask: Task<Void, Never>?
-    private var keyEstimateTask: Task<Void, Never>?
+    private var mixdownAnalysisTask: Task<Void, Never>?
     private var pluginLoadTask: Task<Void, Never>?
     private var intelligenceRefreshTask: Task<Void, Never>?
     private var indexPersistTask: Task<Void, Never>?
@@ -279,8 +278,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // Keep the first viewport calm when changing songs (ARCH-07).
         songDetailsExpanded = false
         pluginsSectionExpanded = false
-        refreshBPMEstimate(for: song)
-        refreshKeyEstimate(for: song)
+        refreshMixdownAnalysis(for: song)
     }
 
     /// Keeps `selectedSong` in sync with the live catalog and current browse results.
@@ -416,22 +414,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func refreshBPMEstimate(for song: Song) {
-        bpmEstimateTask?.cancel()
-        guard let cacheKey = mixdownAnalysisCacheKey(for: song) else { return }
-        if mixdownBPMBySongID[cacheKey] != nil { return }
-        let songID = song.id
-        let url = song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID })?.filePath
-        guard let url else { return }
-        bpmEstimateTask = Task {
-            let estimate = await Task.detached(priority: .utility) {
-                MixdownBPMEstimator.estimate(url: url)
-            }.value
-            guard !Task.isCancelled,
-                  let estimate,
-                  selectedSong?.id == songID,
-                  mixdownBPMBySongID[cacheKey] == nil else { return }
-            mixdownBPMBySongID[cacheKey] = estimate
-        }
+        refreshMixdownAnalysis(for: song)
     }
 
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {
@@ -450,21 +433,48 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func refreshKeyEstimate(for song: Song) {
-        keyEstimateTask?.cancel()
+        refreshMixdownAnalysis(for: song)
+    }
+
+    func refreshMixdownAnalysis(for song: Song) {
+        mixdownAnalysisTask?.cancel()
         guard let cacheKey = mixdownAnalysisCacheKey(for: song) else { return }
-        if mixdownKeyBySongID[cacheKey] != nil { return }
+        let needsBPM = mixdownBPMBySongID[cacheKey] == nil
+        let needsKey = mixdownKeyBySongID[cacheKey] == nil
+        guard needsBPM || needsKey else { return }
         let songID = song.id
         let url = song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID })?.filePath
         guard let url else { return }
-        keyEstimateTask = Task {
-            let estimate = await Task.detached(priority: .utility) {
-                MixdownKeyEstimator.estimate(url: url)
-            }.value
-            guard !Task.isCancelled,
-                  let estimate,
-                  selectedSong?.id == songID,
-                  mixdownKeyBySongID[cacheKey] == nil else { return }
-            mixdownKeyBySongID[cacheKey] = estimate
+        mixdownAnalysisTask = Task {
+            let bpmEstimate: MixdownBPMEstimate?
+            let keyEstimate: MixdownKeyEstimate?
+            if needsBPM, needsKey {
+                async let bpm = Task.detached(priority: .utility) {
+                    MixdownBPMEstimator.estimate(url: url)
+                }.value
+                async let key = Task.detached(priority: .utility) {
+                    MixdownKeyEstimator.estimate(url: url)
+                }.value
+                bpmEstimate = await bpm
+                keyEstimate = await key
+            } else if needsBPM {
+                bpmEstimate = await Task.detached(priority: .utility) {
+                    MixdownBPMEstimator.estimate(url: url)
+                }.value
+                keyEstimate = nil
+            } else {
+                bpmEstimate = nil
+                keyEstimate = await Task.detached(priority: .utility) {
+                    MixdownKeyEstimator.estimate(url: url)
+                }.value
+            }
+            guard !Task.isCancelled, selectedSong?.id == songID else { return }
+            if needsBPM, let bpmEstimate, mixdownBPMBySongID[cacheKey] == nil {
+                mixdownBPMBySongID[cacheKey] = bpmEstimate
+            }
+            if needsKey, let keyEstimate, mixdownKeyBySongID[cacheKey] == nil {
+                mixdownKeyBySongID[cacheKey] = keyEstimate
+            }
         }
     }
 
@@ -759,8 +769,7 @@ extension ArchiveBrowserViewModel {
             metadata.manualMainPreviewID = candidateID
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshBPMEstimate(for: updated)
-            refreshKeyEstimate(for: updated)
+            refreshMixdownAnalysis(for: updated)
         }
     }
 
@@ -772,8 +781,7 @@ extension ArchiveBrowserViewModel {
             scanned.previewSelectionMode = .auto
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshBPMEstimate(for: updated)
-            refreshKeyEstimate(for: updated)
+            refreshMixdownAnalysis(for: updated)
         }
     }
 

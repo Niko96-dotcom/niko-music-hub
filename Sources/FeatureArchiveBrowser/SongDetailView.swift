@@ -10,11 +10,19 @@ struct SongDetailView: View {
     @State private var virtualTitleDraft = ""
     @State private var appNoteDraft = ""
     @State private var aliasesDraft = ""
+    @State private var syncedVirtualTitle = ""
+    @State private var syncedAppNote = ""
+    @State private var syncedAliases = ""
     @State private var metadataExpanded = false
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
     private var liveSong: Song {
         viewModel.songs.first(where: { $0.id == song.id }) ?? song
+    }
+
+    private var metadataFingerprint: String {
+        let song = liveSong
+        return "\(song.virtualTitle ?? "")\u{1e}\(song.appNote ?? "")\u{1e}\(song.aliases.joined(separator: ","))"
     }
 
     var body: some View {
@@ -40,9 +48,11 @@ struct SongDetailView: View {
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
         }
+        .onChange(of: metadataFingerprint) { _, _ in
+            refreshDraftsFromCatalogIfUnedited()
+        }
         .onChange(of: liveSong.mainPreviewCandidateID) { _, _ in
-            viewModel.refreshBPMEstimate(for: liveSong)
-            viewModel.refreshKeyEstimate(for: liveSong)
+            viewModel.refreshMixdownAnalysis(for: liveSong)
         }
         .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
             if expanded {
@@ -613,18 +623,40 @@ struct SongDetailView: View {
         virtualTitleDraft = song.virtualTitle ?? ""
         appNoteDraft = song.appNote ?? ""
         aliasesDraft = song.aliases.joined(separator: ", ")
+        syncedVirtualTitle = virtualTitleDraft
+        syncedAppNote = appNoteDraft
+        syncedAliases = aliasesDraft
+    }
+
+    private func refreshDraftsFromCatalogIfUnedited() {
+        let song = liveSong
+        if virtualTitleDraft == syncedVirtualTitle {
+            virtualTitleDraft = song.virtualTitle ?? ""
+            syncedVirtualTitle = virtualTitleDraft
+        }
+        if appNoteDraft == syncedAppNote {
+            appNoteDraft = song.appNote ?? ""
+            syncedAppNote = appNoteDraft
+        }
+        if aliasesDraft == syncedAliases {
+            aliasesDraft = song.aliases.joined(separator: ", ")
+            syncedAliases = aliasesDraft
+        }
     }
 
     private func commitVirtualTitle() {
         viewModel.updateVirtualTitle(for: liveSong, title: virtualTitleDraft)
+        syncedVirtualTitle = virtualTitleDraft
     }
 
     private func commitAppNote() {
         viewModel.updateAppNote(for: liveSong, note: appNoteDraft)
+        syncedAppNote = appNoteDraft
     }
 
     private func commitAliases() {
         viewModel.updateAliases(for: liveSong, aliasesText: aliasesDraft)
+        syncedAliases = aliasesDraft
     }
 }
 
