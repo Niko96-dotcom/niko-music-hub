@@ -63,6 +63,19 @@ final class HubMediaSurfaceTests: XCTestCase {
             HubWaveformSurface(peaks: [], variant: .empty, isEnabled: false),
             size: CGSize(width: 240, height: 72)
         ))
+
+        // Row strip must stay thin and unboxed — this is the surface that replaced the
+        // delayed 72pt carded "ugly player" on archive song select.
+        XCTAssertNoThrow(try hostMediaView(
+            HubWaveformSurface(
+                peaks: HubMediaSurfaceFixtures.archivePreviewPeaks,
+                progress: 0,
+                variant: .rowStrip,
+                showsSurface: true,
+                onSeek: { _ in }
+            ),
+            size: CGSize(width: 220, height: 22)
+        ))
     }
 
     func testMediaSurfaceSourceExposesRequiredStates() throws {

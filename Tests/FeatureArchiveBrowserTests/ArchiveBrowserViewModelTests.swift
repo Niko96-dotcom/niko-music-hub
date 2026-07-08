@@ -775,6 +775,26 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
     }
 
+    func testSelectSongCollapsesDetailsForCalmFirstViewport() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let first = try XCTUnwrap(viewModel.songs.first)
+        let second = try XCTUnwrap(viewModel.songs.dropFirst().first)
+
+        viewModel.selectSong(first)
+        viewModel.songDetailsExpanded = true
+        viewModel.pluginsSectionExpanded = true
+
+        viewModel.selectSong(second)
+        XCTAssertEqual(viewModel.selectedSong?.id, second.id)
+        XCTAssertFalse(viewModel.songDetailsExpanded)
+        XCTAssertFalse(viewModel.pluginsSectionExpanded)
+    }
+
     func testExportDiagnosticsIncludesSkippedSearchContext() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

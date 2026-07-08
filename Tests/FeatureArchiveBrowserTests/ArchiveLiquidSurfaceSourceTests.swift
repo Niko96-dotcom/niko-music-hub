@@ -44,12 +44,24 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         let songCard = try featureSource("SongCardView.swift")
         XCTAssertTrue(songCard.contains("variant: .rowStrip"), "Song rows must use the thin rowStrip waveform")
         XCTAssertFalse(songCard.contains("variant: .archivePreview"), "Song rows must not host the 72pt hero waveform")
+        XCTAssertTrue(songCard.contains("guard !Task.isCancelled"), "Peak load must ignore cancelled tasks")
+        XCTAssertTrue(songCard.contains("cardPeaks = []"), "Peak strip must clear before loading a new URL")
 
         let detail = try featureSource("SongDetailView.swift")
         XCTAssertTrue(detail.contains("hubSurface(.raised"), "Song detail preview should use a quiet raised surface")
         XCTAssertTrue(detail.contains("hubSurface(.panel"), "Collapsed detail groups should use Settings-like panels")
         XCTAssertTrue(detail.contains("metadataExpanded"), "Metadata must start collapsed (ARCH-07)")
         XCTAssertTrue(detail.contains("Open in Cubase"), "Primary Cubase action must remain labeled")
+        XCTAssertTrue(detail.contains("Mixdown BPM"), "BPM fidelity must remain visible in essential info")
+        XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
+
+        let hero = try featureSource("ArchiveWaveformHeroView.swift")
+        XCTAssertTrue(hero.contains("guard !Task.isCancelled"), "Hero peak load must ignore cancelled tasks")
+        XCTAssertTrue(hero.contains("peaks = []"), "Hero must clear peaks before loading a new URL")
+
+        let viewModel = try featureSource("ArchiveBrowserViewModel.swift")
+        XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
+        XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
     }
 
     func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {

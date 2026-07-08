@@ -35,6 +35,8 @@ struct SongDetailView: View {
         .onChange(of: song.id) { _, _ in
             syncDrafts(from: song)
             metadataExpanded = false
+            viewModel.songDetailsExpanded = false
+            viewModel.pluginsSectionExpanded = false
             heroPlayback.prepare(url: mainPreviewURL)
             viewModel.refreshBPMEstimate(for: song)
             viewModel.refreshKeyEstimate(for: song)
@@ -76,11 +78,7 @@ struct SongDetailView: View {
     }
 
     private var headerStatusLine: String {
-        var parts: [String] = [song.originalFolderName]
-        if let analysis = mixdownAnalysisLine {
-            parts.append(analysis)
-        }
-        return parts.joined(separator: "  ·  ")
+        song.originalFolderName
     }
 
     // MARK: - Preview (one focused surface)
@@ -173,8 +171,18 @@ struct SongDetailView: View {
                 infoLine(label: "Latest CPR", value: "None found", warning: true)
             }
 
-            if let preview = mainPreviewLabel {
-                infoLine(label: "Main preview", value: preview)
+            if let estimate = viewModel.bpmEstimate(for: song) {
+                infoLine(
+                    label: "Mixdown BPM",
+                    value: "\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))"
+                )
+            }
+
+            if let key = viewModel.keyEstimate(for: song) {
+                infoLine(
+                    label: "Key",
+                    value: "\(key.key) (\(key.confidence))"
+                )
             }
 
             if song.hasStems {
@@ -217,6 +225,8 @@ struct SongDetailView: View {
             ) {
                 metadataExpanded.toggle()
             }
+            .accessibilityLabel("Song info")
+            .accessibilityValue(metadataExpanded ? "Expanded" : "Collapsed")
 
             if metadataExpanded {
                 VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
@@ -387,7 +397,7 @@ struct SongDetailView: View {
                 }
             } label: {
                 HStack {
-                    Text("PLUGINS")
+                    Text("PLUGINS (READ-ONLY)")
                         .font(HubDesignSystem.Typography.caption())
                         .tracking(0.7)
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
@@ -559,18 +569,6 @@ struct SongDetailView: View {
                     .lineLimit(4)
             }
         }
-    }
-
-    private var mixdownAnalysisLine: String? {
-        var parts: [String] = []
-        if let estimate = viewModel.bpmEstimate(for: song) {
-            parts.append("\(String(format: "%.0f", estimate.bpm)) BPM")
-        }
-        if let key = viewModel.keyEstimate(for: song) {
-            parts.append(key.key)
-        }
-        guard !parts.isEmpty else { return nil }
-        return parts.joined(separator: " · ")
     }
 
     private var rankedPreviews: [PreviewCandidate] {

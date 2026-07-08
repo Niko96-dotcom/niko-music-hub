@@ -30,8 +30,9 @@ struct SongCardView: View {
     }
 
     /// Thin peak strip only while selected or playing — never the full 72pt hero card.
+    /// No strip when the song has no preview (avoids a blank reserved bar).
     private var showsPeakStrip: Bool {
-        isSelected || isRowPlaying
+        mainPreviewURL != nil && (isSelected || isRowPlaying)
     }
 
     var body: some View {
@@ -109,7 +110,11 @@ struct SongCardView: View {
                 cardPeaks = []
                 return
             }
-            cardPeaks = await WaveformPeakCache.shared.peaks(for: url, barCount: 48)
+            // Clear immediately so a fast A→B selection never flashes A's peaks on B.
+            cardPeaks = []
+            let loaded = await WaveformPeakCache.shared.peaks(for: url, barCount: 48)
+            guard !Task.isCancelled else { return }
+            cardPeaks = loaded
         }
     }
 

@@ -70,8 +70,12 @@ struct ArchiveWaveformHeroView: View {
                 isLoadingPeaks = false
                 return
             }
+            // Drop prior song peaks immediately so rapid selection never shows stale bars.
+            peaks = []
             isLoadingPeaks = true
-            peaks = await WaveformPeakLoader.loadPeaks(from: url)
+            let loaded = await WaveformPeakLoader.loadPeaks(from: url)
+            guard !Task.isCancelled else { return }
+            peaks = loaded
             isLoadingPeaks = false
         }
     }

@@ -265,6 +265,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func selectSong(_ song: Song) {
         selectedSong = song
+        // Keep the first viewport calm when changing songs (ARCH-07).
+        songDetailsExpanded = false
+        pluginsSectionExpanded = false
         refreshBPMEstimate(for: song)
     }
 
