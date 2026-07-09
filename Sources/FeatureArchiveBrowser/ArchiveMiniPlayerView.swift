@@ -23,7 +23,7 @@ struct ArchiveMiniPlayerView: View {
     var body: some View {
         HubTransportBar(
             style: style.transportStyle,
-            title: displayLabel,
+            title: style == .compact ? "" : displayLabel,
             subtitle: style == .full ? "Preview" : nil,
             isPlaying: playback.isPlaying(url),
             currentTime: playback.currentTime,

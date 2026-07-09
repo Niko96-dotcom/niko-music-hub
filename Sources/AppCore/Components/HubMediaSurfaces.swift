@@ -101,26 +101,28 @@ public struct HubTransportBar: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(style == .compact
-                              ? HubDesignSystem.Typography.caption().weight(.medium)
-                              : HubDesignSystem.Typography.bodySmall().weight(.medium))
-                        .foregroundStyle(
-                            isEnabled
-                                ? HubDesignSystem.Palette.textPrimary
-                                : HubDesignSystem.Palette.textTertiary
-                        )
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if style == .full, let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(HubDesignSystem.Typography.micro())
-                            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                if !title.isEmpty {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(style == .compact
+                                  ? HubDesignSystem.Typography.caption().weight(.medium)
+                                  : HubDesignSystem.Typography.bodySmall().weight(.medium))
+                            .foregroundStyle(
+                                isEnabled
+                                    ? HubDesignSystem.Palette.textPrimary
+                                    : HubDesignSystem.Palette.textTertiary
+                            )
                             .lineLimit(1)
+                            .truncationMode(.middle)
+                        if style == .full, let subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(HubDesignSystem.Typography.micro())
+                                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                                .lineLimit(1)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if style == .full {
                     trailingStatus

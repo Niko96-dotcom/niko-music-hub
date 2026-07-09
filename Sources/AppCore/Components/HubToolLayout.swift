@@ -10,12 +10,13 @@ public enum HubToolLayout {
     public static let headerMinHeight: CGFloat = 56
 }
 
-/// Shared shell chrome insets so collapse/expand controls stay in the same place.
+/// Shared shell chrome insets for the unified title bar row.
 public enum HubShellLayout {
-    /// Matches `ToolSidebarView` app mark top padding.
-    public static let toolSidebarControlTopInset: CGFloat = 34
-    /// Matches `OutputInboxInspectorView` outer top padding in `AppShellView`.
-    public static let outputInboxControlTopInset: CGFloat = 12 + HubDesignSystem.Spacing.panel
+    /// Height reserved for traffic lights + sidebar toggle row.
+    public static let titleBarHeight: CGFloat = 38
+    /// Leading inset so toggles sit immediately after the traffic lights.
+    public static let titleBarLeadingInset: CGFloat = 78
+    public static let titleBarTrailingInset: CGFloat = 12
 }
 
 public extension View {

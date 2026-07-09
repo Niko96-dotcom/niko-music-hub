@@ -4,14 +4,13 @@ final class HubShellChromeSourceTests: XCTestCase {
     func testShellUsesLiquidChromePrimitives() throws {
         let source = try shellSource("AppShellView.swift")
 
-        // Reference-spec migration: CollapsedSidebarRail moved off the boxed `hubLiquidPanel`
-        // adapter onto a borderless hover-fill strip, and the persistence banner moved off
-        // `hubLiquidCard` onto the semantic `hubSurface(.card, state: .warning, ...)` primitive
-        // (DEPTH-03). Preferences/no-@AppStorage contracts stay test-locked.
+        // Reference-spec migration: sidebar toggles live in the unified title bar row
+        // (`HubShellTitleBarControls`) beside the traffic lights; collapsed sidebars
+        // reclaim full width instead of rendering a slim rail.
         [
             "HubShellBackground()",
+            "HubShellTitleBarControls(",
             "hubSurface(.card, state: .warning",
-            "HubDesignSystem.Motion.duration",
             "context.preferences.bool",
             "context.preferences.set",
         ].forEach { required in

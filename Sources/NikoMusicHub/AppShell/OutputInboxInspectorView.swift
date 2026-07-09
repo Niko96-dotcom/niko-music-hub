@@ -5,7 +5,6 @@ import SwiftUI
 
 struct OutputInboxInspectorView: View {
     let context: ToolContext
-    var onCollapse: (() -> Void)? = nil
 
     @State private var items: [OutputInboxItem] = []
     @State private var outputFolder: URL = AppSettings.default.outputFolder.url
@@ -55,14 +54,6 @@ struct OutputInboxInspectorView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 Spacer(minLength: 8)
                 borderlessFolderButton
-                if let onCollapse {
-                    BorderlessIconButton(
-                        systemImage: "sidebar.right",
-                        accessibilityLabel: "Hide output inbox",
-                        help: "Hide output inbox",
-                        action: onCollapse
-                    )
-                }
             }
             Text(displayPath(outputFolder))
                 .font(HubDesignSystem.Typography.caption())

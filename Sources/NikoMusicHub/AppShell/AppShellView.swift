@@ -43,58 +43,46 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            persistenceIssueBanner
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                persistenceIssueBanner
 
-            // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
-            // inky canvas, separated by hairline dividers (no floating panels / gaps).
-            HStack(spacing: 0) {
-                if showToolSidebar {
-                    ToolSidebarView(
-                        context: context,
-                        onCollapse: { setToolSidebarVisible(false) },
-                        registry: registry,
-                        selectedToolID: $selectedToolID
-                    )
-                    .frame(width: HubDesignSystem.Size.navWidth)
-                    .hubChromeMaterial()
-                    shellDivider
-                } else {
-                    CollapsedSidebarRail(
-                        systemImage: "sidebar.left",
-                        accessibilityLabel: "Show tools sidebar",
-                        topInset: HubShellLayout.toolSidebarControlTopInset
-                    ) {
-                        setToolSidebarVisible(true)
-                    }
-                    shellDivider
-                }
-
-                activeToolView
-                    .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .layoutPriority(1)
-                    .background(HubDesignSystem.Palette.canvas)
-
-                if showOutputInbox {
-                    shellDivider
-                    OutputInboxInspectorView(
-                        context: context,
-                        onCollapse: { setOutputInboxVisible(false) }
-                    )
-                        .padding(.top, 12)
-                        .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
+                // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
+                // inky canvas, separated by hairline dividers (no floating panels / gaps).
+                HStack(spacing: 0) {
+                    if showToolSidebar {
+                        ToolSidebarView(
+                            context: context,
+                            registry: registry,
+                            selectedToolID: $selectedToolID
+                        )
+                        .frame(width: HubDesignSystem.Size.navWidth)
                         .hubChromeMaterial()
-                } else {
-                    shellDivider
-                    CollapsedSidebarRail(
-                        systemImage: "sidebar.right",
-                        accessibilityLabel: "Show output inbox",
-                        topInset: HubShellLayout.outputInboxControlTopInset
-                    ) {
-                        setOutputInboxVisible(true)
+                        shellDivider
+                    }
+
+                    activeToolView
+                        .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .layoutPriority(1)
+                        .background(HubDesignSystem.Palette.canvas)
+
+                    if showOutputInbox {
+                        shellDivider
+                        OutputInboxInspectorView(context: context)
+                            .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
+                            .hubChromeMaterial()
                     }
                 }
             }
+            .padding(.top, HubShellLayout.titleBarHeight)
+
+            HubShellTitleBarControls(
+                showToolSidebar: showToolSidebar,
+                showOutputInbox: showOutputInbox,
+                onToggleToolSidebar: { setToolSidebarVisible(!showToolSidebar) },
+                onToggleOutputInbox: { setOutputInboxVisible(!showOutputInbox) }
+            )
+            .ignoresSafeArea(edges: .top)
         }
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .onAppear {
@@ -208,27 +196,5 @@ struct AppShellView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-}
-
-private struct CollapsedSidebarRail: View {
-    let systemImage: String
-    let accessibilityLabel: String
-    let topInset: CGFloat
-    let action: () -> Void
-
-    var body: some View {
-        // Pin the expand control to the same vertical slot as the expanded sidebar header.
-        VStack(spacing: 0) {
-            HubIconButton(
-                systemImage: systemImage,
-                accessibilityLabel: accessibilityLabel,
-                action: action
-            )
-            .padding(.top, topInset)
-            Spacer(minLength: 0)
-        }
-        .frame(width: 32)
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
