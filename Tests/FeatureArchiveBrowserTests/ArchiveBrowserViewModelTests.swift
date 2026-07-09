@@ -27,6 +27,29 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(reloaded.roots.map(\.path), [root.standardizedFileURL.path])
     }
 
+    func testFilesystemWatcherStartupFailureSurfacesStatusMessage() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubWatcherFail-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: FailingArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [], globalWarnings: [], skippedEntries: []) }
+        )
+        viewModel.roots = [root]
+        viewModel.restartArchiveRootWatching()
+
+        XCTAssertEqual(
+            viewModel.statusMessage,
+            "Archive filesystem watcher unavailable — use Rescan to refresh after external edits."
+        )
+    }
+
     func testPersistsMultipleArchiveRoots() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -1699,6 +1722,33 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         gate.release()
         await fullScanTask.value
+    }
+
+    func testRevealInFinderAcceptsSymlinkedArchiveRoot() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("archive-reveal-root-link-\(UUID().uuidString)", isDirectory: true)
+        let link = base.appendingPathComponent("archive-link", isDirectory: true)
+        try fm.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+        try fm.createSymbolicLink(at: link, withDestinationURL: CubaseFixtures.archiveRoot)
+
+        let revealed = RevealedURLBox()
+        let context = TestToolContext.make(fileActions: CapturingTestFileActions(revealed: revealed))
+        let viewModel = ArchiveBrowserViewModel(context: context)
+        await viewModel.scan()
+        viewModel.roots = [link]
+
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        let cpr = try XCTUnwrap(neon.effectiveLatestCPR?.filePath ?? neon.latestCPR?.filePath)
+        viewModel.revealInFinder(url: cpr)
+
+        XCTAssertFalse(viewModel.statusMessage?.contains("outside allowed archive roots") ?? false)
+        XCTAssertEqual(revealed.urls.count, 1)
+        XCTAssertTrue(revealed.urls[0].path.hasSuffix(".cpr"))
     }
 
     func testRevealInFinderRejectsOutsideAllowedRoots() async throws {

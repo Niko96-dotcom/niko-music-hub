@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class WaveformPeakCache {
     static let shared = WaveformPeakCache()
+    static let maxEntries = 48
 
     /// Canonical resolution stored in cache (hero). Row strips downsample from this.
     static let canonicalBarCount = WaveformPeakLoader.defaultBarCount
@@ -12,6 +13,7 @@ final class WaveformPeakCache {
     private struct Entry {
         let modifiedAt: Date
         let peaks: [Float]
+        var lastAccess: Date
     }
 
     private var cache: [String: Entry] = [:]
@@ -23,7 +25,9 @@ final class WaveformPeakCache {
             ?? .distantPast
         let key = standard.path
 
-        if let cached = cache[key], cached.modifiedAt == modifiedAt {
+        if var cached = cache[key], cached.modifiedAt == modifiedAt {
+            cached.lastAccess = Date()
+            cache[key] = cached
             return WaveformPeakLoader.downsamplePeaks(cached.peaks, to: barCount)
         }
 
@@ -39,8 +43,8 @@ final class WaveformPeakCache {
         let loaded = await task.value
         inFlight[key] = nil
 
-        // Only publish if this is still the latest request for the path.
-        cache[key] = Entry(modifiedAt: modifiedAt, peaks: loaded)
+        cache[key] = Entry(modifiedAt: modifiedAt, peaks: loaded, lastAccess: Date())
+        evictIfNeeded()
         return WaveformPeakLoader.downsamplePeaks(loaded, to: barCount)
     }
 
@@ -50,5 +54,16 @@ final class WaveformPeakCache {
         }
         inFlight.removeAll()
         cache.removeAll()
+    }
+
+    private func evictIfNeeded() {
+        guard cache.count > Self.maxEntries else { return }
+        let sortedKeys = cache.sorted { $0.value.lastAccess < $1.value.lastAccess }.map(\.key)
+        let overflow = cache.count - Self.maxEntries
+        for key in sortedKeys.prefix(overflow) {
+            inFlight[key]?.cancel()
+            inFlight[key] = nil
+            cache.removeValue(forKey: key)
+        }
     }
 }

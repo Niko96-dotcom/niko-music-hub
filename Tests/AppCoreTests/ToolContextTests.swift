@@ -57,6 +57,7 @@ final class ToolContextTests: XCTestCase {
         XCTAssertFalse(source.contains("try? SQLiteCollaboratorStore"))
         XCTAssertTrue(source.contains("persistenceIssues"))
         XCTAssertTrue(source.contains("makeSQLiteStore"))
+        XCTAssertFalse(source.contains("try! ToolRegistry"))
     }
 
     func testAppCompositionDoesNotEraseIsolatedSettingsOnLaunch() throws {

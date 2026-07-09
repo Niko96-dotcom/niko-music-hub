@@ -79,8 +79,13 @@ final class SQLiteSongUserMetadataStoreTests: XCTestCase {
             contentsOfFile: "Sources/NikoMusicCore/Persistence/SQLiteSongUserMetadataStore.swift",
             encoding: .utf8
         )
+        let databaseSource = try String(
+            contentsOfFile: "Sources/NikoMusicCore/Persistence/SQLiteArchiveDatabase.swift",
+            encoding: .utf8
+        )
 
-        XCTAssertTrue(source.contains("sqlite3_busy_timeout(db, 5_000)"))
+        XCTAssertTrue(source.contains("database.withConnection"))
+        XCTAssertTrue(databaseSource.contains("sqlite3_busy_timeout(db, 5_000)"))
         XCTAssertTrue(source.contains("case SQLITE_DONE:"))
         XCTAssertTrue(source.contains("throw StoreError.step(message(db))"))
         XCTAssertFalse(source.contains("while sqlite3_step(statement) == SQLITE_ROW"))

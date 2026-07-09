@@ -1,5 +1,6 @@
 import AppCore
 import FeatureArchiveBrowser
+import NikoMusicCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -469,6 +470,15 @@ struct SettingsView: View {
             return
         }
         guard let folder = context.fileActions.chooseOutputFolder() else { return }
+        do {
+            try OutputWriteGuard().validateCanWriteOutput(
+                to: folder,
+                archiveRoots: settings.archiveRoots.map(\.url)
+            )
+        } catch {
+            saveError = error.localizedDescription
+            return
+        }
         settings.outputFolder = StoredFolderLocation(url: folder)
         persistSettings()
     }

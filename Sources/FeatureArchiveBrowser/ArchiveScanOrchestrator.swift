@@ -56,10 +56,19 @@ final class ArchiveScanOrchestrator {
         guard let host else { return }
         guard let archiveRootWatcher = host.archiveRootWatcher else { return }
         let rootsSnapshot = host.roots
-        archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
+        let started = archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
             guard let self else { return }
             guard let host = self.host, !host.roots.isEmpty else { return }
             self.enqueueIncrementalRescan(paths: changedPaths)
+        }
+        if !started {
+            host.diagnostics.log(
+                .error,
+                "Archive filesystem watcher could not start; incremental rescans are disabled until the next root change."
+            )
+            host.setStatusMessage(
+                "Archive filesystem watcher unavailable — use Rescan to refresh after external edits."
+            )
         }
     }
 

@@ -4,17 +4,19 @@ import SQLite3
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked Sendable {
-    private let databaseURL: URL
-    private let fileManager: FileManager
+    private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    public init(databaseURL: URL, fileManager: FileManager = .default) throws {
-        self.databaseURL = databaseURL
-        self.fileManager = fileManager
+    public init(database: SQLiteArchiveDatabase) throws {
+        self.database = database
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         try prepareDatabase()
+    }
+
+    public init(databaseURL: URL, fileManager: FileManager = .default) throws {
+        try self.init(database: SQLiteArchiveDatabase(databaseURL: databaseURL, fileManager: fileManager))
     }
 
     public static func defaultStoreURL(fileManager: FileManager = .default) -> URL {
@@ -159,9 +161,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
     }
 
     private func prepareDatabase() throws {
-        let directory = databaseURL.deletingLastPathComponent()
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try withConnection { db in
+        try database.withConnection { db in
             let sql = """
             CREATE TABLE IF NOT EXISTS song_metadata (
               song_id TEXT PRIMARY KEY,
@@ -226,13 +226,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
     }
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        var db: OpaquePointer?
-        guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
-            throw StoreError.open(message(db))
-        }
-        sqlite3_busy_timeout(db, 5_000)
-        defer { sqlite3_close(db) }
-        return try body(db)
+        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {

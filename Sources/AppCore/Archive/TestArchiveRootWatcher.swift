@@ -6,8 +6,9 @@ public final class TestArchiveRootWatcher: ArchiveRootWatching, @unchecked Senda
 
     public init() {}
 
-    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) {
+    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) -> Bool {
         self.onChange = onChange
+        return true
     }
 
     public func stop() {

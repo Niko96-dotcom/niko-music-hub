@@ -4,13 +4,15 @@ import SQLite3
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable {
-    private let databaseURL: URL
-    private let fileManager: FileManager
+    private let database: SQLiteArchiveDatabase
+
+    public init(database: SQLiteArchiveDatabase) throws {
+        self.database = database
+        try prepareDatabase()
+    }
 
     public init(databaseURL: URL, fileManager: FileManager = .default) throws {
-        self.databaseURL = databaseURL
-        self.fileManager = fileManager
-        try prepareDatabase()
+        try self.init(database: SQLiteArchiveDatabase(databaseURL: databaseURL, fileManager: fileManager))
     }
 
     public func loadAll() throws -> [Collaborator] {
@@ -85,9 +87,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
     }
 
     private func prepareDatabase() throws {
-        let directory = databaseURL.deletingLastPathComponent()
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try withConnection { db in
+        try database.withConnection { db in
             let sql = """
             CREATE TABLE IF NOT EXISTS collaborators (
               id TEXT PRIMARY KEY,
@@ -102,13 +102,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
     }
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        var db: OpaquePointer?
-        guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
-            throw StoreError.open(message(db))
-        }
-        sqlite3_busy_timeout(db, 5_000)
-        defer { sqlite3_close(db) }
-        return try body(db)
+        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {

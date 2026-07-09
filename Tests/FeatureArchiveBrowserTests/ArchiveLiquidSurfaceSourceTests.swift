@@ -67,7 +67,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
         XCTAssertTrue(miniPlayer.contains("stopGeneration"), "List players must observe global stop")
 
-        let viewModel = try featureSource("ArchiveBrowserViewModel.swift")
+        let viewModel = try archiveBrowserViewModelSources()
         XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
         XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
@@ -81,7 +81,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
 
     func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {
         let browser = try featureSource("ArchiveBrowserView.swift")
-        let viewModel = try featureSource("ArchiveBrowserViewModel.swift")
+        let viewModel = try archiveBrowserViewModelSources()
         let onboarding = try featureSource("ArchiveFirstRunView.swift")
         let smokeValidation = try featureSource("ArchiveUserFlowSmokeValidation.swift")
 
@@ -113,5 +113,12 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
             contentsOfFile: "Sources/FeatureArchiveBrowser/\(filename)",
             encoding: .utf8
         )
+    }
+
+    private func archiveBrowserViewModelSources() throws -> String {
+        let filenames = try FileManager.default.contentsOfDirectory(atPath: "Sources/FeatureArchiveBrowser")
+            .filter { $0.hasPrefix("ArchiveBrowserViewModel") && $0.hasSuffix(".swift") }
+            .sorted()
+        return try filenames.map(featureSource).joined(separator: "\n")
     }
 }

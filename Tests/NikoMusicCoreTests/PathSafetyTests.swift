@@ -31,6 +31,49 @@ final class PathSafetyTests: XCTestCase {
         XCTAssertTrue(resolved.path.hasPrefix(root.standardizedFileURL.path))
     }
 
+    func testResolveAcceptsPathInsideSymlinkedArchiveRoot() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("path-safety-resolve-root-link-\(UUID().uuidString)", isDirectory: true)
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let link = base.appendingPathComponent("archive-link", isDirectory: true)
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+
+        try fm.createSymbolicLink(at: link, withDestinationURL: archive)
+
+        let inside = archive.appendingPathComponent("song/file.wav")
+        try fm.createDirectory(at: inside.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "x".write(to: inside, atomically: true, encoding: .utf8)
+
+        let safety = PathSafety(fileManager: fm)
+        let resolved = try safety.resolve(inside, allowedRoots: [link])
+        XCTAssertEqual(
+            resolved.standardizedFileURL.resolvingSymlinksInPath().path,
+            inside.standardizedFileURL.resolvingSymlinksInPath().path
+        )
+    }
+
+    func testResolveRejectsPathEscapingAllowedRoots() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("path-safety-resolve-escape-\(UUID().uuidString)", isDirectory: true)
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let link = base.appendingPathComponent("archive-link", isDirectory: true)
+        let outside = base.appendingPathComponent("outside.txt")
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+
+        try fm.createSymbolicLink(at: link, withDestinationURL: archive)
+        try "outside".write(to: outside, atomically: true, encoding: .utf8)
+
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertThrowsError(try safety.resolve(outside, allowedRoots: [link])) { error in
+            XCTAssertEqual(
+                error as? PathSafetyError,
+                .pathOutsideAllowedRoots(outside.standardizedFileURL.resolvingSymlinksInPath())
+            )
+        }
+    }
+
     func testResolvedContainedDetectsSymlinkIntoRoot() throws {
         let fm = FileManager.default
         let base = fm.temporaryDirectory.appendingPathComponent("path-safety-symlink-\(UUID().uuidString)", isDirectory: true)

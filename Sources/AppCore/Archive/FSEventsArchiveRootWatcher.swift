@@ -29,13 +29,13 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         stop()
     }
 
-    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) {
+    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) -> Bool {
         stop()
         self.onChange = onChange
         pathsLock.lock()
         pendingChangedPaths.removeAll()
         pathsLock.unlock()
-        guard !roots.isEmpty else { return }
+        guard !roots.isEmpty else { return true }
 
         stoppedLock.withLock { $0 = false }
         let paths = roots.map(\.path) as CFArray
@@ -80,11 +80,13 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             flags
         ) else {
             Unmanaged<FSEventsArchiveRootWatcher>.fromOpaque(context.info!).release()
-            return
+            self.onChange = nil
+            return false
         }
         self.stream = stream
         FSEventStreamSetDispatchQueue(stream, eventQueue)
         FSEventStreamStart(stream)
+        return true
     }
 
     public func stop() {

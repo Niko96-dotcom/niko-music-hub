@@ -76,6 +76,25 @@ final class MusicItemOpenerTests: XCTestCase {
         XCTAssertEqual(fake.openedCount, 1)
     }
 
+    func testOpenAcceptsSymlinkedArchiveRoot() throws {
+        try CubaseFixtures.ensureGenerated()
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("music-item-opener-root-link-\(UUID().uuidString)", isDirectory: true)
+        let link = base.appendingPathComponent("archive-link", isDirectory: true)
+        try fm.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+        try fm.createSymbolicLink(at: link, withDestinationURL: CubaseFixtures.archiveRoot)
+
+        let scanner = CubaseArchiveScanner()
+        let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
+        let neon = try XCTUnwrap(result.songs.first { $0.displayTitle == "Neon Hook" })
+
+        let fake = FakeWorkspace()
+        let opener = MusicItemOpener(workspace: fake)
+        _ = try opener.openLatestCPR(for: neon, dryRun: false, allowedRoots: [link])
+        XCTAssertEqual(fake.openedCount, 1)
+    }
+
     func testOpenRejectsCPROutsideAllowedRoots() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

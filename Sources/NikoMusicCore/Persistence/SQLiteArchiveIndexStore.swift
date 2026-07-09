@@ -5,17 +5,12 @@ private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self
 
 /// SQLite-backed latest archive snapshot (single row).
 public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
-    private let databaseURL: URL
-    private let fileManager: FileManager
+    private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    public init(
-        databaseURL: URL,
-        fileManager: FileManager = .default
-    ) throws {
-        self.databaseURL = databaseURL
-        self.fileManager = fileManager
+    public init(database: SQLiteArchiveDatabase) throws {
+        self.database = database
         self.encoder = JSONEncoder()
         self.encoder.dateEncodingStrategy = .iso8601
         self.decoder = JSONDecoder()
@@ -23,12 +18,15 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         try prepareDatabase()
     }
 
+    public init(
+        databaseURL: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        try self.init(database: SQLiteArchiveDatabase(databaseURL: databaseURL, fileManager: fileManager))
+    }
+
     public static func defaultStoreURL(fileManager: FileManager = .default) -> URL {
-        let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return support
-            .appendingPathComponent("Niko Music Hub", isDirectory: true)
-            .appendingPathComponent("archive-index.sqlite", isDirectory: false)
+        SQLiteArchiveDatabase.defaultDatabaseURL(fileManager: fileManager)
     }
 
     public func loadLatest() throws -> ArchiveIndexSnapshot? {
@@ -106,9 +104,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     }
 
     private func prepareDatabase() throws {
-        let directory = databaseURL.deletingLastPathComponent()
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try withConnection { db in
+        try database.withConnection { db in
             let sql = """
             CREATE TABLE IF NOT EXISTS archive_snapshot (
               id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -124,13 +120,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     }
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        var db: OpaquePointer?
-        guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
-            throw StoreError.open(message(db))
-        }
-        sqlite3_busy_timeout(db, 5_000)
-        defer { sqlite3_close(db) }
-        return try body(db)
+        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {
@@ -138,23 +128,5 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         return String(cString: cString)
     }
 
-    public enum StoreError: Error, Equatable, CustomStringConvertible {
-        case open(String)
-        case prepare(String)
-        case step(String)
-        case exec(String)
-        case encode(String)
-        case decode(String)
-
-        public var description: String {
-            switch self {
-            case .open(let message): "sqlite open failed: \(message)"
-            case .prepare(let message): "sqlite prepare failed: \(message)"
-            case .step(let message): "sqlite step failed: \(message)"
-            case .exec(let message): "sqlite exec failed: \(message)"
-            case .encode(let message): "encode failed: \(message)"
-            case .decode(let message): "decode failed: \(message)"
-            }
-        }
-    }
+    public typealias StoreError = SQLiteArchiveDatabase.StoreError
 }

@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public typealias AudioConversionPipelineFactory = @Sendable (AppSettings) -> any AudioConverting
 public typealias BatchAudioConversionProgressHandler = @Sendable (BatchAudioConversionUpdate) -> Void
@@ -29,6 +30,10 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         guard !files.isEmpty else { return [] }
 
         let settings = try settingsStore.loadSettings()
+        try OutputWriteGuard().validateCanWriteOutput(
+            to: settings.outputFolder.url,
+            archiveRoots: settings.archiveRoots.map(\.url)
+        )
         let converter = converterFactory(settings)
         var outcomes: [BatchAudioConversionOutcome] = []
 

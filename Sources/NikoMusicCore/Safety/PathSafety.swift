@@ -22,7 +22,7 @@ public struct PathSafety: @unchecked Sendable {
         }
 
         let resolved = standardized.resolvingSymlinksInPath()
-        guard isContained(resolved, in: allowedRoots) else {
+        guard isResolvedContained(resolved, in: allowedRoots) else {
             throw PathSafetyError.pathOutsideAllowedRoots(resolved)
         }
         return resolved

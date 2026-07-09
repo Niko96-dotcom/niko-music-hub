@@ -12,7 +12,13 @@ public struct AudioRecorderView: View {
         self.context = context
 
         let capturePort = CoreAudioTapAdapter()
-        let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
+        let useCase = RecordSystemAudioUseCase(
+            capturePort: capturePort,
+            archiveRootsProvider: {
+                let settings = (try? context.settingsStore.loadSettings()) ?? .default
+                return settings.archiveRoots.map(\.url)
+            }
+        )
         let settings = (try? context.settingsStore.loadSettings()) ?? .default
         let outputURL = settings.outputFolder.url
         let outputInboxStore = context.outputInboxStore

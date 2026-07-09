@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public final class RecordSystemAudioUseCase: Sendable {
     public enum RecordingState: Sendable {
@@ -28,9 +29,14 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     private let capturePort: AudioCapturePort
+    private let archiveRootsProvider: @Sendable () -> [URL]
 
-    public init(capturePort: AudioCapturePort) {
+    public init(
+        capturePort: AudioCapturePort,
+        archiveRootsProvider: @escaping @Sendable () -> [URL] = { [] }
+    ) {
         self.capturePort = capturePort
+        self.archiveRootsProvider = archiveRootsProvider
     }
 
     public func resolvedOutputURL(config: Config) -> URL {
@@ -43,13 +49,22 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     public func prepareOutputURL(config: Config) throws -> URL {
+        try validateOutputLocation(config.outputURL)
         let finalURL = resolvedOutputURL(config: config)
         try ensureOutputDirectoryExists(for: finalURL)
         return finalURL
     }
 
+    private func validateOutputLocation(_ outputFolder: URL) throws {
+        try OutputWriteGuard().validateCanWriteOutput(
+            to: outputFolder,
+            archiveRoots: archiveRootsProvider()
+        )
+    }
+
     public func ensureOutputDirectoryExists(for fileURL: URL) throws {
         let outputDirectory = fileURL.deletingLastPathComponent()
+        try validateOutputLocation(outputDirectory)
         do {
             try FileManager.default.createDirectory(
                 at: outputDirectory,

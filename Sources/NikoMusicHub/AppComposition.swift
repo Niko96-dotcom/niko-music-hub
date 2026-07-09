@@ -45,27 +45,43 @@ struct AppComposition {
         }
         var persistenceIssues: [PersistenceIssue] = []
         let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
-        let archiveIndexStore: (any ArchiveIndexStoring)? = Self.makeSQLiteStore(
-            id: "archive-index-store",
-            title: "Archive cache unavailable",
+        let archiveDatabase: SQLiteArchiveDatabase? = Self.makeSQLiteStore(
+            id: "archive-database",
+            title: "Archive database unavailable",
             issues: &persistenceIssues
         ) {
-            try SQLiteArchiveIndexStore(databaseURL: archiveDatabaseURL)
+            try SQLiteArchiveDatabase(databaseURL: archiveDatabaseURL)
         }
-        let songMetadataStore: (any SongUserMetadataStoring)? = Self.makeSQLiteStore(
-            id: "song-metadata-store",
-            title: "Song metadata unavailable",
-            issues: &persistenceIssues
-        ) {
-            try SQLiteSongUserMetadataStore(databaseURL: archiveDatabaseURL)
-        }
-        let collaboratorStore: (any CollaboratorStoring)? = Self.makeSQLiteStore(
-            id: "collaborator-store",
-            title: "Collaborators unavailable",
-            issues: &persistenceIssues
-        ) {
-            try SQLiteCollaboratorStore(databaseURL: archiveDatabaseURL)
-        }
+        let archiveIndexStore: (any ArchiveIndexStoring)? = {
+            guard let archiveDatabase else { return nil }
+            return Self.makeSQLiteStore(
+                id: "archive-index-store",
+                title: "Archive cache unavailable",
+                issues: &persistenceIssues
+            ) {
+                try SQLiteArchiveIndexStore(database: archiveDatabase)
+            }
+        }()
+        let songMetadataStore: (any SongUserMetadataStoring)? = {
+            guard let archiveDatabase else { return nil }
+            return Self.makeSQLiteStore(
+                id: "song-metadata-store",
+                title: "Song metadata unavailable",
+                issues: &persistenceIssues
+            ) {
+                try SQLiteSongUserMetadataStore(database: archiveDatabase)
+            }
+        }()
+        let collaboratorStore: (any CollaboratorStoring)? = {
+            guard let archiveDatabase else { return nil }
+            return Self.makeSQLiteStore(
+                id: "collaborator-store",
+                title: "Collaborators unavailable",
+                issues: &persistenceIssues
+            ) {
+                try SQLiteCollaboratorStore(database: archiveDatabase)
+            }
+        }()
 
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
@@ -121,11 +137,35 @@ struct AppComposition {
             "registeredToolCount (\(registeredToolCount)) != features.count (\(features.count)) — "
                 + "update baseRegisteredToolCount / the append conditions to match the features array."
         )
-        let registry = try! ToolRegistry(features: features)
+        let registry: ToolRegistry
+        do {
+            registry = try ToolRegistry(features: features)
+        } catch {
+            diagnostics.log(.error, "Tool registry failed: \(error)")
+            persistenceIssues.append(
+                PersistenceIssue(
+                    id: "tool-registry",
+                    title: "Tool registry failed",
+                    message: String(describing: error)
+                )
+            )
+            registry = try! ToolRegistry(features: [])
+        }
+        let finalContext = ToolContext(
+            registeredToolCount: registeredToolCount,
+            settingsStore: settingsStore,
+            preferences: preferences,
+            outputInboxStore: outputInboxStore,
+            jobRunner: jobRunner,
+            fileActions: fileActions,
+            launchAtLogin: launchAtLogin,
+            diagnostics: diagnostics,
+            persistenceIssues: persistenceIssues
+        )
 
         return AppComposition(
             registry: registry,
-            context: context,
+            context: finalContext,
             router: quickAccessRouter,
             appearanceController: appearanceController
         )

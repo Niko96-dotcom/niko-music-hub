@@ -30,4 +30,21 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
         XCTAssertTrue(summary.pluginNames.isEmpty)
         XCTAssertEqual(summary.source, "empty")
     }
+
+    func testSkipsInMemoryParserForOversizedCPR() throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("large-\(UUID().uuidString).cpr")
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        var data = Data(repeating: 0, count: 9 * 1024 * 1024)
+        data.append(Data("Name=\"Huge Synth\"".utf8))
+        try data.write(to: file)
+
+        let summary = CPRPluginSummaryService.loadPlugins(
+            cprURL: file,
+            subprocessRunner: { _ in nil }
+        )
+        XCTAssertTrue(summary.pluginNames.isEmpty)
+        XCTAssertEqual(summary.source, "empty")
+    }
 }

@@ -15,6 +15,9 @@ public struct CPRPluginSummary: Equatable, Sendable {
 /// Read-only CPR plugin listing with mtime-keyed cache and graceful degradation.
 public enum CPRPluginSummaryService {
     private static let maxCacheEntries = 128
+    /// Skip in-memory parsing above this size; subprocess path is unaffected.
+    private static let maxInMemoryParseBytes = 8 * 1024 * 1024
+    private static let boundedReadChunkBytes = 256 * 1024
     private static let cacheLock = NSLock()
     private nonisolated(unsafe) static var cache: [String: CacheEntry] = [:]
 
@@ -46,7 +49,9 @@ public enum CPRPluginSummaryService {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "subprocess")
         } else if let names = parseEmbeddedMarker(in: standard, fileManager: fileManager), !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "marker")
-        } else if let names = parsePluginNamesFromData(standard, fileManager: fileManager), !names.isEmpty {
+        } else if fileSize(at: standard, fileManager: fileManager) <= maxInMemoryParseBytes,
+                  let names = parsePluginNamesFromData(standard, fileManager: fileManager),
+                  !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "parser")
         } else {
             summary = .empty
@@ -69,7 +74,7 @@ public enum CPRPluginSummaryService {
     }
 
     static func parseEmbeddedMarker(in url: URL, fileManager: FileManager) -> [String]? {
-        guard let data = fileManager.contents(atPath: url.path),
+        guard let data = readBoundedPrefixAndSuffix(at: url, fileManager: fileManager),
               let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
             return nil
         }
@@ -86,7 +91,7 @@ public enum CPRPluginSummaryService {
     }
 
     static func parsePluginNamesFromData(_ url: URL, fileManager: FileManager) -> [String]? {
-        guard let data = fileManager.contents(atPath: url.path) else { return nil }
+        guard let data = readBoundedPrefixAndSuffix(at: url, fileManager: fileManager) else { return nil }
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
             return nil
         }
@@ -109,6 +114,33 @@ public enum CPRPluginSummaryService {
             }
         }
         return names.isEmpty ? nil : Array(names)
+    }
+
+    static func fileSize(at url: URL, fileManager: FileManager) -> UInt64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        return UInt64(values?.fileSize ?? 0)
+    }
+
+    /// Reads the first and last bounded windows for marker/regex heuristics without loading whole CPR files.
+    static func readBoundedPrefixAndSuffix(at url: URL, fileManager: FileManager) -> Data? {
+        let size = fileSize(at: url, fileManager: fileManager)
+        guard size > 0 else { return nil }
+        if size <= UInt64(boundedReadChunkBytes) * 2 {
+            return fileManager.contents(atPath: url.path)
+        }
+        guard let handle = FileHandle(forReadingAtPath: url.path) else { return nil }
+        defer { try? handle.close() }
+        var data = Data()
+        if let prefix = try? handle.read(upToCount: boundedReadChunkBytes) {
+            data.append(prefix)
+        }
+        let suffixOffset = Int64(size) - Int64(boundedReadChunkBytes)
+        if suffixOffset > Int64(boundedReadChunkBytes),
+           (try? handle.seek(toOffset: UInt64(suffixOffset))) != nil,
+           let suffix = try? handle.read(upToCount: boundedReadChunkBytes) {
+            data.append(suffix)
+        }
+        return data.isEmpty ? nil : data
     }
 
     @usableFromInline static func runCubaseProjectPlugins(cprURL: URL) -> [String]? {

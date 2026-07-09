@@ -51,6 +51,25 @@ final class WaveformPeakLoaderTests: XCTestCase {
         XCTAssertLessThan(elapsed, 2.5, "Peak load took \(elapsed)s — expected sparse window sampling")
     }
 
+    @MainActor
+    func testSharedCacheEvictsBeyondMaxEntries() async throws {
+        await MainActor.run { WaveformPeakCache.shared.clear() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform-cache-evict-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        for index in 0..<(WaveformPeakCache.maxEntries + 3) {
+            let url = directory.appendingPathComponent("clip-\(index).wav")
+            try makeMono16BitWAV(samples: Array(repeating: Int16(1_000), count: 512), at: url)
+            _ = await WaveformPeakCache.shared.peaks(for: url, barCount: 16)
+        }
+
+        let mirror = Mirror(reflecting: WaveformPeakCache.shared)
+        let cacheField = mirror.children.first { $0.label == "cache" }?.value as? [String: Any]
+        XCTAssertLessThanOrEqual(cacheField?.count ?? Int.max, WaveformPeakCache.maxEntries)
+    }
+
     func testSharedCacheServesRowStripFromCanonicalHeroLoad() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("waveform-cache-\(UUID().uuidString).wav")

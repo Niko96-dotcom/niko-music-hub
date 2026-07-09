@@ -1,6 +1,7 @@
 import AppCore
 import Combine
 import Foundation
+import NikoMusicCore
 
 public enum DownloadState: Equatable {
     case idle
@@ -125,6 +126,17 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         let settings: AppSettings
         do {
             settings = try context.settingsStore.loadSettings()
+        } catch {
+            downloadState = .failed(error.localizedDescription)
+            statusMessage = nil
+            return
+        }
+
+        do {
+            try OutputWriteGuard().validateCanWriteOutput(
+                to: settings.outputFolder.url,
+                archiveRoots: settings.archiveRoots.map(\.url)
+            )
         } catch {
             downloadState = .failed(error.localizedDescription)
             statusMessage = nil

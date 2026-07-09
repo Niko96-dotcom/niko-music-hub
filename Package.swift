@@ -77,15 +77,15 @@ let package = Package(
         ),
         .target(
             name: "FeatureAudioConverter",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "NikoMusicCore"]
         ),
         .target(
             name: "FeatureAudioRecorder",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "NikoMusicCore"]
         ),
         .target(
             name: "FeatureDownloader",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "NikoMusicCore"]
         ),
         .target(
             name: "FeatureArchiveBrowser",
