@@ -268,16 +268,15 @@ struct ArchiveSidebarView: View {
             ScrollView {
                 LazyVStack(spacing: 3) {
                     ForEach(viewModel.filteredSongs, id: \.id) { song in
-                        Button {
-                            viewModel.selectSong(song)
-                        } label: {
-                            SongCardView(
-                                song: song,
-                                isSelected: viewModel.selectedSong?.id == song.id,
-                                matchSummary: viewModel.searchMatchSummaries[song.id]
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        SongCardView(
+                            song: song,
+                            isSelected: viewModel.selectedSong?.id == song.id,
+                            matchSummary: viewModel.searchMatchSummaries[song.id],
+                            onSelect: { viewModel.selectSong(song) },
+                            onWorkflowStatusChange: { status in
+                                viewModel.updateWorkflowStatus(for: song, status: status)
+                            }
+                        )
                     }
                 }
                 .padding(.vertical, 2)

@@ -7,6 +7,8 @@ struct SongCardView: View {
     let song: Song
     let isSelected: Bool
     var matchSummary: String?
+    var onSelect: (() -> Void)?
+    var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -35,7 +37,13 @@ struct SongCardView: View {
 
                 Spacer(minLength: 4)
 
-                if let status = song.workflowStatus {
+                if let onWorkflowStatusChange {
+                    ArchiveWorkflowStatusMenu(
+                        status: song.workflowStatus,
+                        compact: true,
+                        onSelect: onWorkflowStatusChange
+                    )
+                } else if let status = song.workflowStatus {
                     ArchiveWorkflowStatusPill(status: status, compact: true)
                 } else {
                     Text("No Status")
@@ -67,6 +75,9 @@ struct SongCardView: View {
                 .fill(rowFill)
         }
         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+        .onTapGesture {
+            onSelect?()
+        }
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering
