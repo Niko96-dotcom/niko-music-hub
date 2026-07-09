@@ -192,6 +192,10 @@ final class SettingsStoreTests: XCTestCase {
     }
 
     func testAudioRecorderSeedsMaxDurationFromSettings() throws {
+        let featureSource = try String(
+            contentsOfFile: "Sources/FeatureAudioRecorder/AudioRecorderFeature.swift",
+            encoding: .utf8
+        )
         let viewSource = try String(
             contentsOfFile: "Sources/FeatureAudioRecorder/AudioRecorderView.swift",
             encoding: .utf8
@@ -201,7 +205,8 @@ final class SettingsStoreTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(viewSource.contains("initialMaxDuration"))
+        XCTAssertTrue(featureSource.contains("initialMaxDurationMinutes"))
+        XCTAssertTrue(featureSource.contains("RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)"))
         XCTAssertTrue(viewSource.contains("persistMaxDuration"))
         XCTAssertTrue(viewSource.contains("lastPersistedMaxDurationMinutes"))
         XCTAssertTrue(viewSource.contains("syncMaxDurationFromSettings"))

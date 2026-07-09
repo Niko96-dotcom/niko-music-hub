@@ -34,7 +34,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let outputInboxStore: any OutputInboxStore
     private var isStartInFlight = false
 
-    public init(
+    public convenience init(
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
         outputURL: URL,
