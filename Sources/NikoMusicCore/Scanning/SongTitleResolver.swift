@@ -13,6 +13,25 @@ public struct SongTitleResolver: Sendable {
         "clip", "short", "long", "alt",
     ]
 
+    /// Track/stem/part labels that must never become a song display title on their own.
+    private static let stemOnlyTokenSet: Set<String> = [
+        "shaker", "tamb", "tambourine", "cowbell", "conga", "bongo", "clap", "snap", "rim",
+        "ride", "crash", "splash", "china", "tom", "toms", "kick", "snare", "hat", "hihat",
+        "oh", "ohh", "lt", "rt", "cymbal", "cymbals", "ovh", "overhead", "overheads",
+        "verse", "vers", "chorus", "hook", "bridge", "intro", "outro", "pre", "breakdown",
+        "drop", "buildup", "build", "interlude", "middle8", "m8",
+        "bass", "sub", "subbass", "guitar", "gtr", "piano", "keys", "synth", "pad", "pads",
+        "strings", "brass", "violin", "cello", "flute", "sax", "organ", "arp", "pluck",
+        "bell", "bells", "lead", "backing", "harmony", "choir",
+        "vocal", "vocals", "vox", "adlib", "adlibs", "topline", "melody",
+        "double", "doubles", "triple", "comp", "layer", "overdub", "dub",
+        "drums", "drum", "perc", "percussion",
+        "fx", "riser", "risers", "sweep", "noise", "texture", "ambience", "ambient", "atmo",
+        "atmos", "sfx",
+        "main", "guide", "scratch", "riff", "sample", "loop", "fill", "swell",
+        "instr", "instrumental", "acapella", "stem", "stems", "ref", "reference",
+    ]
+
     private static let uuidFilenamePattern =
         #"^[0-9a-f]{8}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{12}$"#
 
@@ -27,23 +46,26 @@ public struct SongTitleResolver: Sendable {
         let folderTitle = cleanedFolderTitle(trimmedFolder)
         let previewTitle = mainPreview.flatMap { inferredTitle(fromPreviewFileName: $0.fileName) }
         let cprTitle = bestTitle(from: projectVersions)
+        let bounceLikePreview = mainPreview.map(isBounceLikePreview) == true
+        let usablePreviewTitle = usablePreviewTitle(from: previewTitle, preview: mainPreview)
 
-        if let previewTitle,
-           isStrongTitle(previewTitle),
+        if let usablePreviewTitle,
+           bounceLikePreview,
+           isStrongProjectTitle(usablePreviewTitle),
            mainPreview.map(isTrustworthyPreviewForTitle) == true {
-            return previewTitle
+            return usablePreviewTitle
         }
 
-        if let cprTitle, isStrongTitle(cprTitle) {
-            if isWeakTitle(previewTitle) || isWeakTitle(folderTitle) {
+        if let cprTitle, isStrongProjectTitle(cprTitle) {
+            if !bounceLikePreview || isWeakStructuralTitle(usablePreviewTitle) || isWeakStructuralTitle(folderTitle) {
                 return cprTitle
             }
-            if let previewTitle, isWeakTitle(previewTitle, comparedTo: cprTitle) {
+            if let usablePreviewTitle, isWeakStructuralTitle(usablePreviewTitle, comparedTo: cprTitle) {
                 return cprTitle
             }
         }
 
-        if isStrongTitle(folderTitle) {
+        if isStrongProjectTitle(folderTitle) {
             return folderTitle
         }
 
@@ -51,8 +73,8 @@ public struct SongTitleResolver: Sendable {
             return cprTitle
         }
 
-        if let previewTitle, !previewTitle.isEmpty {
-            return previewTitle
+        if let usablePreviewTitle, !usablePreviewTitle.isEmpty, bounceLikePreview {
+            return usablePreviewTitle
         }
 
         return trimmedFolder
@@ -109,7 +131,7 @@ public struct SongTitleResolver: Sendable {
             return lhs.modifiedAt > rhs.modifiedAt
         }
         for version in ranked {
-            if let title = titleFromCPRFileName(version.fileName), isStrongTitle(title) {
+            if let title = titleFromCPRFileName(version.fileName), isStrongProjectTitle(title) {
                 return title
             }
         }
@@ -178,7 +200,69 @@ public struct SongTitleResolver: Sendable {
         return true
     }
 
-    private func isWeakTitle(_ title: String?, comparedTo other: String? = nil) -> Bool {
+    /// True when a title looks like a lone stem/part export — not a real song name.
+    /// Multi-word titles with ordinary words stay valid (e.g. "Turn Up The Bass").
+    func isLikelyStemExportTitle(_ title: String, preview: PreviewCandidate? = nil) -> Bool {
+        let words = normalizedTitleWords(title)
+        guard !words.isEmpty else { return false }
+
+        let stemWordCount = words.filter { Self.stemOnlyTokenSet.contains($0) }.count
+        let nonStemWordCount = words.count - stemWordCount
+
+        if words.count >= 3, nonStemWordCount >= 1 {
+            return false
+        }
+        if words.count == 2, nonStemWordCount >= 1 {
+            return false
+        }
+
+        if words.count == 1, Self.stemOnlyTokenSet.contains(words[0]) {
+            return true
+        }
+
+        if stemWordCount == words.count {
+            return true
+        }
+
+        if let preview, isStemExportPreview(preview), words.count <= 2 {
+            return true
+        }
+
+        return false
+    }
+
+    func isStemOnlyTitle(_ title: String) -> Bool {
+        isLikelyStemExportTitle(title)
+    }
+
+    private func usablePreviewTitle(from title: String?, preview: PreviewCandidate?) -> String? {
+        guard let title else { return nil }
+        guard !isLikelyStemExportTitle(title, preview: preview) else { return nil }
+        return title
+    }
+
+    private func isStemExportPreview(_ preview: PreviewCandidate) -> Bool {
+        preview.detectedRole == .stems || preview.folderRole == .stems
+    }
+
+    private func normalizedTitleWords(_ title: String) -> [String] {
+        title
+            .lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private func isBounceLikePreview(_ preview: PreviewCandidate) -> Bool {
+        switch preview.detectedRole {
+        case .mainMix, .master:
+            return true
+        case .instrumental, .acapella, .stems, .preview, .unknown:
+            return PreviewProductionMaturity.detect(from: preview.fileName) >= .sessionBounce
+        }
+    }
+
+    private func isWeakStructuralTitle(_ title: String?, comparedTo other: String? = nil) -> Bool {
         guard let title else { return true }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
@@ -198,7 +282,7 @@ public struct SongTitleResolver: Sendable {
         return false
     }
 
-    private func isStrongTitle(_ title: String) -> Bool {
-        !isWeakTitle(title)
+    private func isStrongProjectTitle(_ title: String) -> Bool {
+        !isWeakStructuralTitle(title)
     }
 }

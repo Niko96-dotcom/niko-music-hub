@@ -125,4 +125,141 @@ final class SongTitleResolverTests: XCTestCase {
             "90s Heart"
         )
     }
+
+    func testStemOnlyTitlesAreNeverUsedAsSongName() {
+        XCTAssertTrue(resolver.isLikelyStemExportTitle("Shaker"))
+        XCTAssertTrue(resolver.isLikelyStemExportTitle("Vers"))
+        XCTAssertTrue(resolver.isLikelyStemExportTitle("double"))
+        XCTAssertFalse(resolver.isLikelyStemExportTitle("Neon Hook"))
+        XCTAssertFalse(resolver.isLikelyStemExportTitle("Turn Up The Bass"))
+        XCTAssertFalse(resolver.isLikelyStemExportTitle("TURN UP THE BASS"))
+    }
+
+    func testDisplayTitleKeepsRealSongTitleWithStemWord() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/TURN UP THE BASS master.wav"),
+            fileName: "TURN UP THE BASS master.wav",
+            folderRole: .mixdown,
+            modifiedAt: .distantPast,
+            detectedRole: .master,
+            confidenceScore: 80
+        )
+        let versions = [
+            ProjectVersion(
+                filePath: URL(fileURLWithPath: "/tmp/x/TURN UP THE BASS.cpr"),
+                fileName: "TURN UP THE BASS.cpr",
+                modifiedAt: .distantPast
+            ),
+        ]
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "TURN UP THE BASS",
+                mainPreview: preview,
+                projectVersions: versions
+            ),
+            "Turn Up The Bass"
+        )
+    }
+
+    func testDisplayTitleKeepsSongTitleWhenStemPreviewCompetes() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/bass.wav"),
+            fileName: "bass.wav",
+            folderRole: .stems,
+            modifiedAt: .distantPast,
+            detectedRole: .stems,
+            confidenceScore: 80
+        )
+        let versions = [
+            ProjectVersion(
+                filePath: URL(fileURLWithPath: "/tmp/x/TURN UP THE BASS.cpr"),
+                fileName: "TURN UP THE BASS.cpr",
+                modifiedAt: .distantPast
+            ),
+        ]
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "TURN UP THE BASS",
+                mainPreview: preview,
+                projectVersions: versions
+            ),
+            "Turn Up The Bass"
+        )
+    }
+
+    func testDisplayTitleRejectsStemPreviewAndUsesCPR() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/shaker.wav"),
+            fileName: "shaker.wav",
+            folderRole: .stems,
+            modifiedAt: .distantPast,
+            detectedRole: .stems,
+            confidenceScore: 80
+        )
+        let versions = [
+            ProjectVersion(
+                filePath: URL(fileURLWithPath: "/tmp/x/Garden Of Eden.cpr"),
+                fileName: "Garden Of Eden.cpr",
+                modifiedAt: .distantPast
+            ),
+        ]
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "Session Exports",
+                mainPreview: preview,
+                projectVersions: versions
+            ),
+            "Garden Of Eden"
+        )
+    }
+
+    func testDisplayTitleRejectsStemPreviewAndUsesFolderWhenNoCPR() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/Vers.wav"),
+            fileName: "Vers.wav",
+            folderRole: .stems,
+            modifiedAt: .distantPast,
+            detectedRole: .unknown,
+            confidenceScore: 80
+        )
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "Midnight Drive",
+                mainPreview: preview,
+                projectVersions: []
+            ),
+            "Midnight Drive"
+        )
+    }
+
+    func testDisplayTitleRejectsNonBounceStemPreviewEvenWhenTrustworthy() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/x/double.wav"),
+            fileName: "double.wav",
+            folderRole: .root,
+            modifiedAt: .distantPast,
+            detectedRole: .unknown,
+            confidenceScore: 80
+        )
+        let versions = [
+            ProjectVersion(
+                filePath: URL(fileURLWithPath: "/tmp/x/Neon Hook.cpr"),
+                fileName: "Neon Hook.cpr",
+                modifiedAt: .distantPast
+            ),
+        ]
+
+        XCTAssertEqual(
+            resolver.displayTitle(
+                fromFolderName: "Wrong Folder Label",
+                mainPreview: preview,
+                projectVersions: versions
+            ),
+            "Neon Hook"
+        )
+    }
 }
