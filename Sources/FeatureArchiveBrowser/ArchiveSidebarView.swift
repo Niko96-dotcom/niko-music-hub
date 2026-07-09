@@ -10,17 +10,23 @@ struct ArchiveSidebarView: View {
     let onChooseRoot: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
             archiveToolbar
-
-            emptyRootsHint
-
-            collaboratorShelfPicker
 
             searchField
                 .disabled(viewModel.songs.isEmpty)
+                .padding(.top, HubToolLayout.secondaryRowGap)
+
+            if viewModel.roots.isEmpty {
+                emptyRootsHint
+                    .padding(.top, 14)
+            }
+
+            collaboratorShelfPicker
+                .padding(.top, viewModel.selectedShelf == .byCollaborator ? 14 : 0)
 
             songList
+                .padding(.top, 14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
 

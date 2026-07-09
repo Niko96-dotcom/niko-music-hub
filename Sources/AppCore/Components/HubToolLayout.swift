@@ -8,6 +8,9 @@ public enum HubToolLayout {
     public static let sectionSpacing: CGFloat = 20
     public static let maxContentWidth: CGFloat = 680
     public static let headerMinHeight: CGFloat = 56
+    /// Gap from a header band to the secondary content row (tool item, search, preview card).
+    public static let secondaryRowGap: CGFloat =
+        HubDesignSystem.Spacing.sectionHeaderTop + HubDesignSystem.Spacing.sectionHeaderBandHeight
 }
 
 /// Shared shell chrome insets for the unified title bar row.

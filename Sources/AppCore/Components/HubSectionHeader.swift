@@ -69,7 +69,7 @@ public struct HubSectionHeader: View {
             }
         }
         .padding(.top, HubDesignSystem.Spacing.sectionHeaderTop)
-        .padding(.bottom, 6)
+        .padding(.bottom, 4)
         .accessibilityAddTraits(.isHeader)
     }
 }

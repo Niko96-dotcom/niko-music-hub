@@ -83,7 +83,9 @@ public enum HubDesignSystem {
         /// Interior padding for a scrollable content column.
         public static let columnPadding: CGFloat = 20
         /// Vertical breathing room above a section header (references: ~20px before a new group).
-        public static let sectionHeaderTop: CGFloat = 20
+        public static let sectionHeaderTop: CGFloat = 0
+        /// Caption line + bottom padding in a section header band (pairs with `sectionHeaderTop`).
+        public static let sectionHeaderBandHeight: CGFloat = 12 + 4
         /// Standard nav/sidebar row height (references: 36-44px web ≈ 34pt native).
         public static let navRowHeight: CGFloat = 34
         /// Tall page-title header band (references: ~52-56px).

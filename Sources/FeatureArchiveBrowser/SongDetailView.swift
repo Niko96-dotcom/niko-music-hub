@@ -27,14 +27,20 @@ struct SongDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
+            VStack(alignment: .leading, spacing: 0) {
                 header
                 previewPanel
+                    .padding(.top, HubToolLayout.secondaryRowGap)
                 primaryActions
+                    .padding(.top, HubToolLayout.sectionSpacing)
                 essentialInfo
+                    .padding(.top, HubToolLayout.sectionSpacing)
                 metadataDisclosure
+                    .padding(.top, HubToolLayout.sectionSpacing)
                 moreDetailsDisclosure
+                    .padding(.top, HubToolLayout.sectionSpacing)
                 hideRow
+                    .padding(.top, HubToolLayout.sectionSpacing)
             }
             .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
