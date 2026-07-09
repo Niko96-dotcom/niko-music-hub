@@ -12,8 +12,8 @@ public enum HubToolLayout {
 
 /// Shared shell chrome insets for the unified title bar row.
 public enum HubShellLayout {
-    /// Height reserved for traffic lights + sidebar toggle row.
-    public static let titleBarHeight: CGFloat = 38
+    /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
+    public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
     /// Leading inset so toggles sit immediately after the traffic lights.
     public static let titleBarLeadingInset: CGFloat = 78
     public static let titleBarTrailingInset: CGFloat = 12

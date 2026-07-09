@@ -92,8 +92,9 @@ struct AppShellView: View {
                 onToggleToolSidebar: { setToolSidebarVisible(!showToolSidebar) },
                 onToggleOutputInbox: { setOutputInboxVisible(!showOutputInbox) }
             )
-            .ignoresSafeArea(edges: .top)
         }
+        .ignoresSafeArea(edges: .top)
+        .background(HubWindowChromeConfigurator())
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .onAppear {
             // Drain any pending router state that was set while the window was absent

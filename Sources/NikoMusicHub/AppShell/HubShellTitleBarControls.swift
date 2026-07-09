@@ -33,6 +33,5 @@ struct HubShellTitleBarControls: View {
         .padding(.leading, HubShellLayout.titleBarLeadingInset)
         .padding(.trailing, HubShellLayout.titleBarTrailingInset)
         .frame(height: HubShellLayout.titleBarHeight)
-        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
