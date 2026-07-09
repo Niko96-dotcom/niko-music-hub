@@ -1701,6 +1701,73 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await fullScanTask.value
     }
 
+    func testRevealInFinderRejectsOutsideAllowedRoots() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+
+        let outside = FileManager.default.temporaryDirectory
+            .appendingPathComponent("niko-reveal-outside.txt")
+        try "outside".write(to: outside, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        viewModel.revealInFinder(url: outside)
+        XCTAssertEqual(
+            viewModel.statusMessage,
+            "Path is outside allowed archive roots: \(outside.standardizedFileURL.path)"
+        )
+    }
+
+    func testCatalogRescanInvalidatesMixdownCacheWhenPreviewModifiedAtChanges() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+        guard let previewID = neon.mainPreviewCandidateID else {
+            XCTFail("Expected Neon Hook to have a main preview")
+            return
+        }
+        let cacheKey = "\(neon.id)|\(previewID)"
+        viewModel.mixdownBPMBySongID[cacheKey] = MixdownBPMEstimate(bpm: 120, confidence: "test")
+
+        var refreshed = neon
+        guard let previewIndex = refreshed.previewCandidates.firstIndex(where: { $0.id == previewID }) else {
+            XCTFail("Expected preview candidate")
+            return
+        }
+        let preview = refreshed.previewCandidates[previewIndex]
+        refreshed.previewCandidates[previewIndex] = PreviewCandidate(
+            filePath: preview.filePath,
+            fileName: preview.fileName,
+            folderRole: preview.folderRole,
+            modifiedAt: preview.modifiedAt.addingTimeInterval(60),
+            detectedRole: preview.detectedRole,
+            detectedVersionNumber: preview.detectedVersionNumber,
+            durationSeconds: preview.durationSeconds,
+            confidenceScore: preview.confidenceScore,
+            confidenceReasons: preview.confidenceReasons
+        )
+
+        viewModel.applyCatalogScanUpdate(
+            ArchiveCatalogCoordinator.CatalogScanApplyResult(
+                songs: viewModel.songs.map { $0.id == neon.id ? refreshed : $0 },
+                diagnostics: try XCTUnwrap(viewModel.scanDiagnostics),
+                statusMessage: "refreshed preview",
+                scannedAt: Date(),
+                shouldPersistUserMetadata: false
+            ),
+            roots: viewModel.roots
+        )
+
+        XCTAssertNil(viewModel.mixdownBPMBySongID[cacheKey])
+    }
+
 }
 
 private final class ScanReleaseGate: @unchecked Sendable {

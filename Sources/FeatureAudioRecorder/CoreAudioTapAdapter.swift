@@ -100,7 +100,16 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             ) { [weak self] level in
                 continuation.yield(level)
                 if let maxDuration, level.elapsedTime >= maxDuration {
-                    Task { try? await self?.stopRecording() }
+                    Task { [weak self] in
+                        guard let self else { return }
+                        do {
+                            _ = try await self.stopRecording()
+                        } catch {
+                            // Ensure the level stream ends and adapter state resets if auto-stop fails.
+                            self.resetRecordingState()
+                            continuation.finish()
+                        }
+                    }
                 }
             }
         } catch {

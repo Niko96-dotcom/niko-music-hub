@@ -56,6 +56,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// reflecting live metadata (titles/aliases) after catalog edits.
     private var cachedSearchIndex = MusicSearchIndex()
     private let opener: MusicItemOpener
+    private let pathSafety = PathSafety()
     private let fileActions: any FileActions
     private let settingsStore: SettingsStore
     let diagnostics: Diagnostics
@@ -181,6 +182,35 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
             ?? StoredFolderLocation.defaultOutputFolder
         return outputFolder.appendingPathComponent("New Song Drafts", isDirectory: true)
+    }
+
+    /// Archive roots plus the configured output folder (new-song drafts live there).
+    private func allowedOpenRoots(for song: Song? = nil, includingURL url: URL? = nil) -> [URL] {
+        var allowed = roots.map(\.standardizedFileURL)
+        let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
+            ?? StoredFolderLocation.defaultOutputFolder
+        let standardizedOutput = outputFolder.standardizedFileURL
+        if !allowed.contains(where: { $0.path == standardizedOutput.path }) {
+            allowed.append(standardizedOutput)
+        }
+        if let song {
+            appendSongFolderRoot(song.folderPath, to: &allowed)
+        } else if let url,
+                  let song = songs.first(where: { catalogSong in
+                      let folderPath = catalogSong.folderPath.standardizedFileURL.path
+                      let candidatePath = url.standardizedFileURL.path
+                      return candidatePath == folderPath || candidatePath.hasPrefix(folderPath + "/")
+                  }) {
+            appendSongFolderRoot(song.folderPath, to: &allowed)
+        }
+        return allowed
+    }
+
+    private func appendSongFolderRoot(_ folderPath: URL, to allowed: inout [URL]) {
+        let songFolder = folderPath.standardizedFileURL
+        if !allowed.contains(where: { songFolder.path == $0.path || songFolder.path.hasPrefix($0.path + "/") }) {
+            allowed.append(songFolder)
+        }
     }
 
     private func applyBootstrapRootWhenEmpty() {
@@ -469,6 +499,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 }.value
             }
             guard !Task.isCancelled, selectedSong?.id == songID else { return }
+            guard let currentSong = selectedSong,
+                  currentSong.id == songID,
+                  mixdownAnalysisCacheKey(for: currentSong) == cacheKey else { return }
             if needsBPM, let bpmEstimate, mixdownBPMBySongID[cacheKey] == nil {
                 mixdownBPMBySongID[cacheKey] = bpmEstimate
             }
@@ -485,8 +518,27 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     private func invalidateMixdownAnalysis(for songID: String) {
+        mixdownAnalysisTask?.cancel()
+        mixdownAnalysisTask = nil
         mixdownBPMBySongID = mixdownBPMBySongID.filter { !$0.key.hasPrefix("\(songID)|") }
         mixdownKeyBySongID = mixdownKeyBySongID.filter { !$0.key.hasPrefix("\(songID)|") }
+    }
+
+    private func mainPreviewModifiedAt(for song: Song) -> Date? {
+        guard let previewID = song.mainPreviewCandidateID,
+              let candidate = song.previewCandidates.first(where: { $0.id == previewID }) else { return nil }
+        return candidate.modifiedAt
+    }
+
+    private func effectiveCPRIdentity(for song: Song) -> (path: String, modifiedAt: Date)? {
+        guard let cpr = song.effectiveLatestCPR else { return nil }
+        return (cpr.filePath.standardizedFileURL.path, cpr.modifiedAt)
+    }
+
+    private func invalidateCPRPluginSummary(for path: String) {
+        pluginLoadTask?.cancel()
+        pluginLoadTask = nil
+        cprPluginSummaryByCPRPath.removeValue(forKey: path)
     }
 
     func refreshCPRPluginSummary(for song: Song) {
@@ -620,6 +672,10 @@ extension ArchiveBrowserViewModel {
         browseRefreshDriver.cancelPendingDebounce()
         intelligenceRefreshTask?.cancel()
         indexPersistTask?.cancel()
+        mixdownAnalysisTask?.cancel()
+        mixdownAnalysisTask = nil
+        pluginLoadTask?.cancel()
+        pluginLoadTask = nil
         persistenceWarningMessage = nil
         scanOrchestrator.clearPendingPaths()
         ArchivePlaybackCoordinator.shared.stopAllPlayback()
@@ -681,6 +737,18 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
                 return (song.id, previewID)
             }
         )
+        let previousPreviewModifiedAtBySongID = Dictionary(
+            uniqueKeysWithValues: songs.compactMap { song -> (String, Date)? in
+                guard let modifiedAt = mainPreviewModifiedAt(for: song) else { return nil }
+                return (song.id, modifiedAt)
+            }
+        )
+        let previousCPRBySongID = Dictionary(
+            uniqueKeysWithValues: songs.compactMap { song -> (String, (path: String, modifiedAt: Date))? in
+                guard let identity = effectiveCPRIdentity(for: song) else { return nil }
+                return (song.id, identity)
+            }
+        )
         mutateCatalog {
             songs = update.songs
             scanDiagnostics = update.diagnostics
@@ -689,10 +757,27 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         // Refresh or clear selection against the new catalog (keep if still present even when
         // filtered out — browse recompute will clear filtered-out selections next).
         reconcileSelectedSong(requireVisibleInFilteredList: false)
+        var invalidatedSelectedSongAnalysis = false
         for song in update.songs {
-            if previousPreviewBySongID[song.id] != song.mainPreviewCandidateID {
+            let previewIDChanged = previousPreviewBySongID[song.id] != song.mainPreviewCandidateID
+            let previewModifiedAtChanged = previousPreviewModifiedAtBySongID[song.id] != mainPreviewModifiedAt(for: song)
+            if previewIDChanged || previewModifiedAtChanged {
                 invalidateMixdownAnalysis(for: song.id)
+                if selectedSong?.id == song.id {
+                    invalidatedSelectedSongAnalysis = true
+                }
             }
+            if let currentCPR = effectiveCPRIdentity(for: song),
+               let previousCPR = previousCPRBySongID[song.id],
+               previousCPR.path != currentCPR.path || previousCPR.modifiedAt != currentCPR.modifiedAt {
+                invalidateCPRPluginSummary(for: previousCPR.path)
+                if previousCPR.path != currentCPR.path {
+                    invalidateCPRPluginSummary(for: currentCPR.path)
+                }
+            }
+        }
+        if invalidatedSelectedSongAnalysis, let selectedSong {
+            refreshMixdownAnalysis(for: selectedSong)
         }
         // Drop analysis for songs that disappeared.
         let remainingIDs = Set(update.songs.map(\.id))
@@ -1023,23 +1108,28 @@ extension ArchiveBrowserViewModel {
     }
 
     func openLatestCPR(for song: Song) throws {
-        if let result = try opener.openLatestCPR(
-            for: song,
-            dryRun: runtime.dryRunOpen,
-            allowedRoots: roots
-        ) {
-            lastDryRunLog = result.path
-            if runtime.dryRunOpen {
-                let displayPath = Song.displayDryRunPath(result.path)
-                print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
+        do {
+            if let result = try opener.openLatestCPR(
+                for: song,
+                dryRun: runtime.dryRunOpen,
+                allowedRoots: allowedOpenRoots(for: song)
+            ) {
+                lastDryRunLog = result.path
+                if runtime.dryRunOpen {
+                    let displayPath = Song.displayDryRunPath(result.path)
+                    print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
+                }
             }
+        } catch let error as MusicItemOpenerError {
+            setStatusMessage(musicItemOpenerStatusMessage(error))
+            throw error
         }
     }
 
     func openMainPreview(for song: Song) throws {
         guard let id = song.mainPreviewCandidateID,
               let candidate = song.previewCandidates.first(where: { $0.id == id }) else { return }
-        let resolved = try resolveRevealURL(candidate.filePath)
+        let resolved = try resolveRevealURL(candidate.filePath, for: song)
         if runtime.dryRunOpen {
             let path = resolved.path
             lastDryRunLog = path
@@ -1061,22 +1151,34 @@ extension ArchiveBrowserViewModel {
         do {
             let resolved = try resolveRevealURL(url)
             fileActions.revealInFinder(resolved)
+        } catch let error as MusicItemOpenerError {
+            setStatusMessage(musicItemOpenerStatusMessage(error))
+            diagnostics.log(.warning, "Reveal refused: \(error)")
         } catch {
-            setStatusMessage("Reveal blocked: path is outside configured archive roots.")
-            diagnostics.log(.warning, "Reveal refused outside archive roots: \(url.path)")
+            setStatusMessage("Cannot reveal path: \(error.localizedDescription)")
         }
     }
 
-    private func resolveRevealURL(_ url: URL) throws -> URL {
-        guard !roots.isEmpty else {
+    private func resolveRevealURL(_ url: URL, for song: Song? = nil) throws -> URL {
+        let allowed = song.map { allowedOpenRoots(for: $0) } ?? allowedOpenRoots(includingURL: url)
+        guard !allowed.isEmpty else {
             throw MusicItemOpenerError.pathOutsideAllowedRoots(url.standardizedFileURL)
         }
         do {
-            return try PathSafety().resolve(url, allowedRoots: roots)
+            return try pathSafety.resolve(url, allowedRoots: allowed)
         } catch PathSafetyError.pathOutsideAllowedRoots(let outside) {
             throw MusicItemOpenerError.pathOutsideAllowedRoots(outside)
         } catch PathSafetyError.pathDoesNotExist(let missing) {
             throw MusicItemOpenerError.pathDoesNotExist(missing)
+        }
+    }
+
+    private func musicItemOpenerStatusMessage(_ error: MusicItemOpenerError) -> String {
+        switch error {
+        case .pathDoesNotExist(let url):
+            return "Path does not exist: \(url.path)"
+        case .pathOutsideAllowedRoots(let url):
+            return "Path is outside allowed archive roots: \(url.path)"
         }
     }
 }
