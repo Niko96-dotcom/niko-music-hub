@@ -73,9 +73,47 @@ public struct HubTransportBar: View {
         }
     }
 
+    @ViewBuilder
     private var content: some View {
+        if style == .compact && title.isEmpty {
+            compactInlineContent
+        } else {
+            standardContent
+        }
+    }
+
+    private var standardContent: some View {
         VStack(alignment: .leading, spacing: style == .compact ? 4 : 8) {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            transportHeader
+
+            if showsSlider, isEnabled, duration > 0 {
+                progressSlider
+            }
+        }
+    }
+
+    private var compactInlineContent: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            transportButton(
+                systemImage: isPlaying ? "pause.fill" : "play.fill",
+                accessibilityLabel: isPlaying ? "Pause preview" : "Play preview",
+                prominent: true,
+                action: onPlayPause
+            )
+
+            if showsSlider, isEnabled, duration > 0 {
+                progressSlider
+                Text(elapsedLabel(current: currentTime))
+                    .font(HubDesignSystem.Typography.mono(size: 10))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    private var transportHeader: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 if showsSkipControls {
                     transportButton(
                         systemImage: "gobackward.5",
@@ -128,11 +166,12 @@ public struct HubTransportBar: View {
                     trailingStatus
                 }
             }
+    }
 
-            if showsSlider, isEnabled, duration > 0 {
-                progressSlider
-            }
-        }
+    private func elapsedLabel(current: Double) -> String {
+        let minutes = Int(current) / 60
+        let seconds = Int(current) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     private var trailingStatus: some View {

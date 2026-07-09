@@ -42,10 +42,9 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         }
 
         let songCard = try featureSource("SongCardView.swift")
-        XCTAssertTrue(songCard.contains("variant: .rowStrip"), "Song rows must use the thin rowStrip waveform")
-        XCTAssertFalse(songCard.contains("variant: .archivePreview"), "Song rows must not host the 72pt hero waveform")
-        XCTAssertTrue(songCard.contains("guard !Task.isCancelled"), "Peak load must ignore cancelled tasks")
-        XCTAssertTrue(songCard.contains("cardPeaks = []"), "Peak strip must clear before loading a new URL")
+        XCTAssertTrue(songCard.contains("SongCardMetadataChipRow"), "Song rows must show metadata chips")
+        XCTAssertTrue(songCard.contains("ArchiveMiniPlayerView"), "Song rows must keep inline preview transport")
+        XCTAssertFalse(songCard.contains("variant: .rowStrip"), "Song rows must not host the thin waveform strip")
 
         let detail = try featureSource("SongDetailView.swift")
         XCTAssertTrue(detail.contains("hubSurface(.raised"), "Song detail preview should use a quiet raised surface")
