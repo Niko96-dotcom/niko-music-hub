@@ -62,7 +62,8 @@ struct AppShellView: View {
                 } else {
                     CollapsedSidebarRail(
                         systemImage: "sidebar.left",
-                        accessibilityLabel: "Show tools sidebar"
+                        accessibilityLabel: "Show tools sidebar",
+                        topInset: HubShellLayout.toolSidebarControlTopInset
                     ) {
                         setToolSidebarVisible(true)
                     }
@@ -87,7 +88,8 @@ struct AppShellView: View {
                     shellDivider
                     CollapsedSidebarRail(
                         systemImage: "sidebar.right",
-                        accessibilityLabel: "Show output inbox"
+                        accessibilityLabel: "Show output inbox",
+                        topInset: HubShellLayout.outputInboxControlTopInset
                     ) {
                         setOutputInboxVisible(true)
                     }
@@ -210,45 +212,23 @@ struct AppShellView: View {
 }
 
 private struct CollapsedSidebarRail: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     let systemImage: String
     let accessibilityLabel: String
+    let topInset: CGFloat
     let action: () -> Void
 
-    @State private var isHovered = false
-
     var body: some View {
-        // Borderless collapsed rail: a slim strip with a centered icon, no boxed panel —
-        // hover reads as a quiet white 5% fill, never a bordered chip (spec §4).
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isHovered ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
-                .frame(width: 22, height: 22)
-                .background {
-                    if isHovered {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                    }
-                }
-                .frame(maxHeight: .infinity)
-                .frame(width: 32)
-                .contentShape(Rectangle())
+        // Pin the expand control to the same vertical slot as the expanded sidebar header.
+        VStack(spacing: 0) {
+            HubIconButton(
+                systemImage: systemImage,
+                accessibilityLabel: accessibilityLabel,
+                action: action
+            )
+            .padding(.top, topInset)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
-        .onHover(perform: updateHover)
-    }
-
-    private func updateHover(_ hovering: Bool) {
-        if reduceMotion {
-            isHovered = hovering
-        } else {
-            withAnimation(.easeInOut(duration: HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion))) {
-                isHovered = hovering
-            }
-        }
+        .frame(width: 32)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }

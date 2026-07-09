@@ -1,9 +1,7 @@
 import AppCore
 import SwiftUI
 
-/// Health, collaborators, intelligence, and diagnostics as a discoverable labeled section
-/// (reference: "Library" section header + labeled rows, not a bare disclosure triangle).
-/// Every function is visible with a text label per IA — no hidden chrome-only affordances.
+/// Health, collaborators, intelligence, and diagnostics tucked under a collapsible Library section.
 struct ArchiveSidebarMorePanel: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @Binding var isExpanded: Bool
@@ -11,53 +9,77 @@ struct ArchiveSidebarMorePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HubSectionHeader("Library")
-
-            libraryRow(
-                title: "Archive Health",
-                systemImage: "chart.bar.doc.horizontal",
-                isExpanded: $sidebarUI.healthRowExpanded
-            ) {
-                ArchiveHealthReportView(report: viewModel.sidebarHealthContext.report, compact: true)
+            Button {
+                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+                    Text("Library")
+                        .font(HubDesignSystem.Typography.caption())
+                        .tracking(0.7)
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.top, HubDesignSystem.Spacing.sectionHeaderTop)
+                .padding(.bottom, 6)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Library")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
-            libraryRow(
-                title: "Collaborators",
-                systemImage: "person.2",
-                isExpanded: $sidebarUI.collaboratorsRowExpanded
-            ) {
-                ArchiveCollaboratorAddressBookView(viewModel: viewModel)
-            }
-
-            libraryRow(
-                title: "Intelligence",
-                systemImage: "sparkles",
-                isExpanded: $sidebarUI.intelligenceRowExpanded
-            ) {
-                ArchiveIntelligencePanelView(viewModel: viewModel)
-            }
-
-            if let diagnostics = viewModel.scanDiagnostics {
+            if isExpanded {
                 libraryRow(
-                    title: "Diagnostics",
-                    systemImage: "stethoscope",
-                    isExpanded: $sidebarUI.diagnosticsRowExpanded
+                    title: "Archive Health",
+                    systemImage: "chart.bar.doc.horizontal",
+                    isExpanded: $sidebarUI.healthRowExpanded
                 ) {
-                    ScrollView {
-                        ArchiveDiagnosticsPanelView(
-                            diagnostics: diagnostics,
-                            selectedSong: viewModel.selectedSong,
-                            searchContext: viewModel.activeSearchExportContext(),
-                            skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                        ) {
-                            viewModel.performExport { try viewModel.exportDiagnostics() }
+                    ArchiveHealthReportView(report: viewModel.sidebarHealthContext.report, compact: true)
+                }
+
+                libraryRow(
+                    title: "Collaborators",
+                    systemImage: "person.2",
+                    isExpanded: $sidebarUI.collaboratorsRowExpanded
+                ) {
+                    ArchiveCollaboratorAddressBookView(viewModel: viewModel)
+                }
+
+                libraryRow(
+                    title: "Intelligence",
+                    systemImage: "sparkles",
+                    isExpanded: $sidebarUI.intelligenceRowExpanded
+                ) {
+                    ArchiveIntelligencePanelView(viewModel: viewModel)
+                }
+
+                if let diagnostics = viewModel.scanDiagnostics {
+                    libraryRow(
+                        title: "Diagnostics",
+                        systemImage: "stethoscope",
+                        isExpanded: $sidebarUI.diagnosticsRowExpanded
+                    ) {
+                        ScrollView {
+                            ArchiveDiagnosticsPanelView(
+                                diagnostics: diagnostics,
+                                selectedSong: viewModel.selectedSong,
+                                searchContext: viewModel.activeSearchExportContext(),
+                                skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                            ) {
+                                viewModel.performExport { try viewModel.exportDiagnostics() }
+                            }
                         }
+                        .frame(maxHeight: 140)
                     }
-                    .frame(maxHeight: 140)
                 }
             }
         }
-        .onAppear { isExpanded = true }
     }
 
     @ViewBuilder

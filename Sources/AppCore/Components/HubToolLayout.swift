@@ -10,6 +10,14 @@ public enum HubToolLayout {
     public static let headerMinHeight: CGFloat = 56
 }
 
+/// Shared shell chrome insets so collapse/expand controls stay in the same place.
+public enum HubShellLayout {
+    /// Matches `ToolSidebarView` app mark top padding.
+    public static let toolSidebarControlTopInset: CGFloat = 34
+    /// Matches `OutputInboxInspectorView` outer top padding in `AppShellView`.
+    public static let outputInboxControlTopInset: CGFloat = 12 + HubDesignSystem.Spacing.panel
+}
+
 public extension View {
     func hubToolContentPadding() -> some View {
         padding(.horizontal, HubToolLayout.horizontalPadding)

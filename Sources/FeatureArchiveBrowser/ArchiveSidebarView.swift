@@ -13,9 +13,7 @@ struct ArchiveSidebarView: View {
         VStack(alignment: .leading, spacing: 14) {
             archiveToolbar
 
-            rootsSection
-
-            shelfAndBrowseChipStrip
+            emptyRootsHint
 
             collaboratorShelfPicker
 
@@ -25,17 +23,6 @@ struct ArchiveSidebarView: View {
             songList
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
-
-            if let status = viewModel.statusMessage {
-                Text(status)
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .lineLimit(2)
-            }
-
-            if !viewModel.skippedSearchMatches.isEmpty {
-                skippedMatchesCallout
-            }
 
             if viewModel.showsSidebarMorePanel {
                 ArchiveSidebarMorePanel(
@@ -51,8 +38,7 @@ struct ArchiveSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// Header band (reference: 17pt semibold title, right-aligned muted count, borderless
-    /// icon actions — no boxed chip, no outlined buttons).
+    /// Header band (reference: 17pt semibold title, borderless icon actions — no boxed chip).
     private var archiveToolbar: some View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Archive")
@@ -62,15 +48,9 @@ struct ArchiveSidebarView: View {
                 .minimumScaleFactor(0.85)
                 .layoutPriority(1)
 
-            if !viewModel.songs.isEmpty {
-                Text("\(viewModel.songs.count) songs")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-
             Spacer(minLength: 4)
+
+            browseFilterMenu
 
             HubIconButton(
                 systemImage: "arrow.clockwise",
@@ -119,102 +99,99 @@ struct ArchiveSidebarView: View {
     }
 
     @ViewBuilder
-    private var rootsSection: some View {
+    private var emptyRootsHint: some View {
         if viewModel.roots.isEmpty {
             Text("Add an archive root to begin.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-        } else {
-            DisclosureGroup(isExpanded: $sidebarUI.rootsSectionExpanded) {
-                RootSelectionView(viewModel: viewModel, onAddRoot: onChooseRoot, compact: true)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    Text("\(viewModel.roots.count) root\(viewModel.roots.count == 1 ? "" : "s")")
-                        .font(HubDesignSystem.Typography.caption().weight(.medium))
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                }
-            }
-            .onChange(of: viewModel.roots.count) { _, count in
-                if count <= 1 {
-                    sidebarUI.rootsSectionExpanded = false
-                }
-            }
         }
     }
 
-    private var shelfAndBrowseChipStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ArchiveSmartShelf.allCases, id: \.self) { shelf in
-                    ArchiveShelfChip(
-                        title: shelf.sidebarChipTitle,
-                        isSelected: viewModel.selectedShelf == shelf
-                    ) {
-                        viewModel.selectShelf(shelf)
-                    }
-                    .disabled(viewModel.songs.isEmpty)
-                }
-
-                sortMenuChip
-
-                ForEach(ArchiveBrowseFilter.sidebarStatusFilters, id: \.filter.rawValue) { item in
-                    ArchiveShelfChip(
-                        title: item.title,
-                        isSelected: viewModel.browseFilter.contains(item.filter)
-                    ) {
-                        viewModel.toggleBrowseFilter(item.filter)
-                    }
-                    .disabled(viewModel.songs.isEmpty)
-                }
-
-                ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
-                    ArchiveIconFilterChip(
-                        systemImage: filter.sidebarSymbolName,
-                        accessibilityLabel: filter.sidebarAccessibilityLabel,
-                        isSelected: viewModel.browseFilter.contains(filter),
-                        isEnabled: !viewModel.songs.isEmpty
-                    ) {
-                        viewModel.toggleBrowseFilter(filter)
-                    }
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .disabled(viewModel.songs.isEmpty)
-    }
-
-    private var sortMenuChip: some View {
+    private var browseFilterMenu: some View {
         Menu {
-            Picker("Sort", selection: Binding(
-                get: { viewModel.sortMode },
-                set: { viewModel.setSortMode($0) }
-            )) {
+            Section("Shelf") {
+                ForEach(ArchiveSmartShelf.allCases, id: \.self) { shelf in
+                    Button {
+                        viewModel.selectShelf(shelf)
+                    } label: {
+                        if viewModel.selectedShelf == shelf {
+                            Label(shelf.title, systemImage: "checkmark")
+                        } else {
+                            Text(shelf.title)
+                        }
+                    }
+                }
+            }
+
+            Section("Sort") {
                 ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
-                    Text(mode.title).tag(mode)
+                    Button {
+                        viewModel.setSortMode(mode)
+                    } label: {
+                        if viewModel.sortMode == mode {
+                            Label(mode.title, systemImage: "checkmark")
+                        } else {
+                            Text(mode.title)
+                        }
+                    }
+                }
+            }
+
+            Section("Status") {
+                ForEach(ArchiveBrowseFilter.sidebarStatusFilters, id: \.filter.rawValue) { item in
+                    Button {
+                        viewModel.toggleBrowseFilter(item.filter)
+                    } label: {
+                        if viewModel.browseFilter.contains(item.filter) {
+                            Label(item.title, systemImage: "checkmark")
+                        } else {
+                            Text(item.title)
+                        }
+                    }
+                }
+            }
+
+            Section("Filter") {
+                ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
+                    Button {
+                        viewModel.toggleBrowseFilter(filter)
+                    } label: {
+                        if viewModel.browseFilter.contains(filter) {
+                            Label(filter.sidebarAccessibilityLabel, systemImage: "checkmark")
+                        } else {
+                            Label(filter.sidebarAccessibilityLabel, systemImage: filter.sidebarSymbolName)
+                        }
+                    }
                 }
             }
         } label: {
-            HStack(spacing: 4) {
-                Text(viewModel.sortMode.title)
-                    .font(HubDesignSystem.Typography.caption())
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            .padding(.horizontal, 10)
-            .frame(height: HubDesignSystem.Size.chipHeight)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(HubDesignSystem.Palette.accentFill)
-            }
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(
+                    browseFilterMenuIsActive
+                        ? HubDesignSystem.Palette.textPrimary
+                        : HubDesignSystem.Palette.textSecondary
+                )
+                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
+                .background {
+                    if browseFilterMenuIsActive {
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                            .fill(HubDesignSystem.Palette.accentFill)
+                    }
+                }
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
-        .fixedSize()
+        .help("Browse shelves and filters")
+        .accessibilityLabel("Browse shelves and filters")
         .disabled(viewModel.songs.isEmpty)
+    }
+
+    private var browseFilterMenuIsActive: Bool {
+        viewModel.selectedShelf != .allSongs
+            || viewModel.sortMode != .recentCPR
+            || !viewModel.browseFilter.isEmpty
     }
 
     @ViewBuilder
@@ -253,22 +230,6 @@ struct ArchiveSidebarView: View {
         .frame(height: 32)
         .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.songs.isEmpty ? 0.5 : 1)
-    }
-
-    private var skippedMatchesCallout: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("\(viewModel.skippedSearchMatches.count) skipped", systemImage: "line.3.horizontal.decrease.circle")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            ForEach(Array(viewModel.skippedSearchMatches.prefix(2).enumerated()), id: \.offset) { _, match in
-                Text(match.entry.label)
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.warning)
-                    .lineLimit(1)
-                }
-        }
-        .padding(10)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
     @ViewBuilder
