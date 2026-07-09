@@ -3,6 +3,7 @@ import XCTest
 final class HubShellChromeSourceTests: XCTestCase {
     func testShellUsesLiquidChromePrimitives() throws {
         let source = try shellSource("AppShellView.swift")
+        let cacheSource = try shellSource("ToolPaneCache.swift")
 
         // Reference-spec migration: sidebar toggles live in the unified title bar row
         // (`HubShellTitleBarControls`) beside the traffic lights; collapsed sidebars
@@ -13,8 +14,20 @@ final class HubShellChromeSourceTests: XCTestCase {
             "hubSurface(.card, state: .warning",
             "context.preferences.bool",
             "context.preferences.set",
+            "toolPaneCache",
+            "ensureMounted",
+            "ArchivePreviewPlayback.stopAll()",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing shell Liquid chrome source: \(required)")
+        }
+
+        [
+            "final class ToolPaneCache",
+            "func ensureMounted",
+            "mountedIDs",
+            "makeView(context:",
+        ].forEach { required in
+            XCTAssertTrue(cacheSource.contains(required), "Missing tool pane cache source: \(required)")
         }
 
         XCTAssertFalse(source.contains("@AppStorage"))
@@ -26,7 +39,7 @@ final class HubShellChromeSourceTests: XCTestCase {
         [
             "ToolFeatureID",
             "selectedToolID = metadata.id",
-            "registry.features.map(\\.metadata)",
+            "registry.metadata",
             "hoveredToolID",
             "hubSidebarNavRow",
             "HubSectionHeader",

@@ -8,30 +8,10 @@ public struct AudioRecorderView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastPersistedMaxDurationMinutes: Int?
 
-    public init(context: ToolContext) {
+    public init(context: ToolContext, viewModel: AudioRecorderViewModel) {
         self.context = context
-
-        let capturePort = CoreAudioTapAdapter()
-        let useCase = RecordSystemAudioUseCase(
-            capturePort: capturePort,
-            archiveRootsProvider: {
-                let settings = (try? context.settingsStore.loadSettings()) ?? .default
-                return settings.archiveRoots.map(\.url)
-            }
-        )
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        let outputURL = settings.outputFolder.url
-        let outputInboxStore = context.outputInboxStore
-        let initialMaxDuration = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
-
-        _viewModel = StateObject(wrappedValue: AudioRecorderViewModel(
-            capturePort: capturePort,
-            useCase: useCase,
-            outputURL: outputURL,
-            outputInboxStore: outputInboxStore,
-            initialMaxDurationMinutes: initialMaxDuration
-        ))
-        _lastPersistedMaxDurationMinutes = State(initialValue: initialMaxDuration)
+        _viewModel = StateObject(wrappedValue: viewModel)
+        _lastPersistedMaxDurationMinutes = State(initialValue: viewModel.maxDurationMinutes)
     }
 
     public var body: some View {

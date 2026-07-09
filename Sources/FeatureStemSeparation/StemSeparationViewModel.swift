@@ -21,6 +21,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let service: StemSeparationService
     private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
     private var jobObservationTask: Task<Void, Never>?
+    private var inboxObservationTask: Task<Void, Never>?
     private(set) var currentJobID: Job.ID?
 
     public init(
@@ -36,6 +37,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     deinit {
         jobObservationTask?.cancel()
+        inboxObservationTask?.cancel()
     }
 
     public var canStart: Bool {
@@ -159,9 +161,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func onAppear() {
         loadResults()
-        Task { @MainActor in
+        guard inboxObservationTask == nil else { return }
+        inboxObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
-                loadResults()
+                self?.loadResults()
             }
         }
     }

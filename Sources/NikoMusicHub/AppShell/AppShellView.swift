@@ -1,4 +1,5 @@
 import AppCore
+import FeatureArchiveBrowser
 import SwiftUI
 
 struct AppShellView: View {
@@ -11,12 +12,14 @@ struct AppShellView: View {
     let registry: ToolRegistry
     let context: ToolContext
     @ObservedObject var router: QuickAccessRouter
+    @StateObject private var toolPaneCache: ToolPaneCache
 
     @State private var selectedToolID: ToolFeatureID?
     @State private var showToolSidebar: Bool
     @State private var showOutputInbox: Bool
     @State private var windowWidth: CGFloat = 1400
 
+    @MainActor
     init(registry: ToolRegistry, context: ToolContext, router: QuickAccessRouter) {
         self.registry = registry
         self.context = context
@@ -24,6 +27,13 @@ struct AppShellView: View {
         let initialToolID = ToolRegistry.initialToolID()
             .flatMap { registry.feature(for: $0)?.metadata.id }
             ?? registry.preferredDefaultFeatureID
+        _toolPaneCache = StateObject(
+            wrappedValue: ToolPaneCache(
+                registry: registry,
+                context: context,
+                initialToolID: initialToolID
+            )
+        )
         _selectedToolID = State(initialValue: initialToolID)
         _showToolSidebar = State(initialValue: context.preferences.bool(forKey: Self.showToolSidebarKey) ?? true)
 
@@ -91,7 +101,7 @@ struct AppShellView: View {
             // openWindow() recreates this view; onChange only fires on transitions AFTER
             // subscription, so state set before appearance would be silently dropped.
             if let toolID = router.selectedToolID {
-                selectedToolID = toolID
+                selectTool(toolID)
                 router.clearSelectedToolID()
             }
             if router.revealOutputInbox {
@@ -99,9 +109,16 @@ struct AppShellView: View {
                 router.clearRevealOutputInbox()
             }
         }
+        .onChange(of: selectedToolID) { previousID, newID in
+            guard let newID else { return }
+            toolPaneCache.ensureMounted(newID)
+            if previousID == "archive-browser", newID != "archive-browser" {
+                ArchivePreviewPlayback.stopAll()
+            }
+        }
         .onChange(of: router.selectedToolID) { _, newID in
             if let newID {
-                selectedToolID = newID
+                selectTool(newID)
                 router.clearSelectedToolID()  // reset so the same ID fires again next time
             }
         }
@@ -113,9 +130,7 @@ struct AppShellView: View {
         }
         .onChange(of: router.prefilledConverterURLs) { _, urls in
             guard !urls.isEmpty else { return }
-            if selectedToolID != ToolFeatureID("wav-converter") {
-                selectedToolID = ToolFeatureID("wav-converter")
-            }
+            selectTool(ToolFeatureID("wav-converter"))
         }
         .background {
             GeometryReader { proxy in
@@ -178,13 +193,15 @@ struct AppShellView: View {
         context.preferences.set(visible, forKey: Self.showOutputInboxKey)
     }
 
+    private func selectTool(_ toolID: ToolFeatureID) {
+        toolPaneCache.ensureMounted(toolID)
+        selectedToolID = toolID
+    }
+
     @ViewBuilder
     private var activeToolView: some View {
         Group {
-            if let selectedToolID,
-               let feature = registry.features.first(where: { $0.metadata.id == selectedToolID }) {
-                feature.makeView(context: context)
-            } else {
+            if registry.features.isEmpty {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("No tools registered")
                         .font(HubDesignSystem.Typography.screenTitle())
@@ -193,6 +210,20 @@ struct AppShellView: View {
                         .foregroundStyle(.secondary)
                 }
                 .hubToolContentColumn()
+            } else {
+                // Keep visited tools alive so switching tabs is a visibility flip, not a
+                // full view/view-model rebuild (Stem Separation / Downloader / Archive).
+                ZStack {
+                    ForEach(toolPaneCache.mountedIDs, id: \.self) { toolID in
+                        if let toolView = toolPaneCache.view(for: toolID) {
+                            toolView
+                                .opacity(selectedToolID == toolID ? 1 : 0)
+                                .allowsHitTesting(selectedToolID == toolID)
+                                .accessibilityHidden(selectedToolID != toolID)
+                                .zIndex(selectedToolID == toolID ? 1 : 0)
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

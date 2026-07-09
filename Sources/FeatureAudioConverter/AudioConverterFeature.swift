@@ -12,6 +12,13 @@ public struct AudioConverterFeature: ToolFeature {
 
     private let router: QuickAccessRouter?
 
+    /// Owns the converter session so queued files survive tab switches.
+    private final class Session: @unchecked Sendable {
+        @MainActor var viewModel: AudioConverterViewModel?
+    }
+
+    private let session = Session()
+
     public init(router: QuickAccessRouter? = nil) {
         self.router = router
     }
@@ -20,8 +27,18 @@ public struct AudioConverterFeature: ToolFeature {
     public func makeView(context: ToolContext) -> AnyView {
         AnyView(AudioConverterView(
             context: context,
-            viewModel: AudioConverterViewModel(context: context),
+            viewModel: viewModel(for: context),
             router: router
         ))
+    }
+
+    @MainActor
+    private func viewModel(for context: ToolContext) -> AudioConverterViewModel {
+        if let viewModel = session.viewModel {
+            return viewModel
+        }
+        let viewModel = AudioConverterViewModel(context: context)
+        session.viewModel = viewModel
+        return viewModel
     }
 }

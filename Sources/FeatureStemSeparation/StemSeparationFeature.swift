@@ -11,10 +11,25 @@ public struct StemSeparationFeature: ToolFeature {
         capabilities: [.producesFiles, .runsJobs]
     )
 
+    /// Owns the tool session so tab switches reuse backends/workflows instead of rebuilding them.
+    private final class Session: @unchecked Sendable {
+        @MainActor var viewModel: StemSeparationViewModel?
+    }
+
+    private let session = Session()
+
     public init() {}
 
     @MainActor
     public func makeView(context: ToolContext) -> AnyView {
+        AnyView(StemSeparationView(viewModel: viewModel(for: context)))
+    }
+
+    @MainActor
+    private func viewModel(for context: ToolContext) -> StemSeparationViewModel {
+        if let viewModel = session.viewModel {
+            return viewModel
+        }
         let backend = DemucsMLXBackend(settings: (try? context.settingsStore.loadSettings().helperTools) ?? HelperToolSettings())
         let service = StemSeparationService(
             backend: backend,
@@ -38,6 +53,13 @@ public struct StemSeparationFeature: ToolFeature {
             service: service,
             youtubeWorkflow: youtubeWorkflow
         )
-        return AnyView(StemSeparationView(viewModel: viewModel))
+        session.viewModel = viewModel
+        return viewModel
+    }
+
+    /// Test seam: proves tab remounts reuse one StemSeparationViewModel session.
+    @MainActor
+    var sessionViewModelForTesting: StemSeparationViewModel? {
+        session.viewModel
     }
 }

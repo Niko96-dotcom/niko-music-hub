@@ -30,7 +30,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private var recordingTask: Task<Void, Never>?
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
-    private let outputURL: URL
+    private let outputURLProvider: @MainActor () -> URL
     private let outputInboxStore: any OutputInboxStore
     private var isStartInFlight = false
 
@@ -41,9 +41,25 @@ public final class AudioRecorderViewModel: ObservableObject {
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30
     ) {
+        self.init(
+            capturePort: capturePort,
+            useCase: useCase,
+            outputURLProvider: { outputURL },
+            outputInboxStore: outputInboxStore,
+            initialMaxDurationMinutes: initialMaxDurationMinutes
+        )
+    }
+
+    public init(
+        capturePort: AudioCapturePort,
+        useCase: RecordSystemAudioUseCase,
+        outputURLProvider: @escaping @MainActor () -> URL,
+        outputInboxStore: any OutputInboxStore,
+        initialMaxDurationMinutes: Int = 30
+    ) {
         self.capturePort = capturePort
         self.useCase = useCase
-        self.outputURL = outputURL
+        self.outputURLProvider = outputURLProvider
         self.outputInboxStore = outputInboxStore
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
     }
@@ -84,7 +100,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             : nil
 
         let config = RecordSystemAudioUseCase.Config(
-            outputURL: outputURL,
+            outputURL: outputURLProvider(),
             preset: .cubaseDefault,
             maxDuration: maxDuration,
             filenameOverride: filenameOverride.isEmpty ? nil : filenameOverride

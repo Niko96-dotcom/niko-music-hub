@@ -29,7 +29,7 @@ struct ToolSidebarView: View {
             HubSectionHeader("Tools")
 
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(registry.features.map(\.metadata), id: \.id) { metadata in
+                ForEach(registry.metadata, id: \.id) { metadata in
                     toolRow(metadata)
                 }
             }
