@@ -30,12 +30,16 @@ struct SongCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(song.effectiveDisplayTitle)
-                    .font(HubDesignSystem.Typography.body().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                    .lineLimit(1)
-
-                Spacer(minLength: 4)
+                rowSelectable {
+                    HStack(spacing: 6) {
+                        Text(song.effectiveDisplayTitle)
+                            .font(HubDesignSystem.Typography.body().weight(.semibold))
+                            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 if let onWorkflowStatusChange {
                     ArchiveWorkflowStatusMenu(
@@ -59,7 +63,9 @@ struct SongCardView: View {
                 }
             }
 
-            SongCardMetadataChipRow(chips: metadataChips)
+            rowSelectable {
+                SongCardMetadataChipRow(chips: metadataChips)
+            }
 
             ArchiveMiniPlayerView(
                 url: mainPreviewURL,
@@ -74,16 +80,21 @@ struct SongCardView: View {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(rowFill)
         }
-        .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
-        .onTapGesture {
-            onSelect?()
-        }
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
+    }
+
+    @ViewBuilder
+    private func rowSelectable<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect?()
+            }
     }
 
     private var rowFill: Color {

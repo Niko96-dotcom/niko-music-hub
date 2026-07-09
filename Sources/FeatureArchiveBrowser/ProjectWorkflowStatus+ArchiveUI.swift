@@ -64,43 +64,76 @@ struct ArchiveWorkflowStatusPill: View {
     }
 }
 
-/// Compact status control for song rows — opens a menu on click without selecting the row.
+/// Compact status control for song rows — one plain button shows the real pill; a popover
+/// handles selection so macOS menu label styling cannot duplicate or flatten the chip.
 struct ArchiveWorkflowStatusMenu: View {
     let status: ProjectWorkflowStatus?
     var compact = false
     let onSelect: (ProjectWorkflowStatus?) -> Void
 
+    @State private var isPresented = false
+
     var body: some View {
-        Picker(
-            selection: Binding<ProjectWorkflowStatus?>(
-                get: { status },
-                set: { onSelect($0) }
-            )
-        ) {
-            Text("No Status").tag(nil as ProjectWorkflowStatus?)
-            ForEach(ProjectWorkflowStatus.allCases, id: \.self) { option in
-                Label(option.displayTitle, systemImage: option.archiveSymbolName)
-                    .tag(option as ProjectWorkflowStatus?)
-            }
+        Button {
+            isPresented = true
         } label: {
-            Group {
-                if let status {
-                    ArchiveWorkflowStatusPill(status: status, compact: compact)
-                } else {
-                    Text("No Status")
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                }
-            }
-            .contentShape(Capsule(style: .continuous))
+            statusLabel
         }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            pickerContent
+                .frame(minWidth: 188)
+        }
         .fixedSize()
         .help("Change workflow status")
         .accessibilityLabel("Workflow status")
         .accessibilityValue(status?.displayTitle ?? "No status")
         .accessibilityHint("Opens menu to change workflow status")
+    }
+
+    @ViewBuilder
+    private var statusLabel: some View {
+        if let status {
+            ArchiveWorkflowStatusPill(status: status, compact: compact)
+        } else {
+            Text("No Status")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        }
+    }
+
+    private var pickerContent: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            pickerRow(nil, title: "No Status", icon: "tag")
+            ForEach(ProjectWorkflowStatus.allCases, id: \.self) { option in
+                pickerRow(option, title: option.displayTitle, icon: option.archiveSymbolName)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func pickerRow(_ value: ProjectWorkflowStatus?, title: String, icon: String) -> some View {
+        Button {
+            onSelect(value)
+            isPresented = false
+        } label: {
+            HStack(spacing: 8) {
+                Group {
+                    if status == value {
+                        Image(systemName: "checkmark")
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 10)
+
+                Label(title, systemImage: icon)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
