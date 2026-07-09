@@ -4,11 +4,17 @@ import NikoMusicCore
 
 @MainActor
 final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
-    func testMergeIncrementalScanPreservesUnaffectedSiblingsWhenRootCPRChanges() {
-        let root = URL(fileURLWithPath: "/Archive", isDirectory: true)
+    func testMergeIncrementalScanPreservesUnaffectedSiblingsWhenRootCPRChanges() throws {
+        let root = try makeMergeTestRoot()
         let songAFolder = root.appendingPathComponent("Song A", isDirectory: true)
         let songBFolder = root.appendingPathComponent("Song B", isDirectory: true)
         let looseCPR = root.appendingPathComponent("Loose.cpr")
+
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: songAFolder, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: songBFolder, withIntermediateDirectories: true)
+        fileManager.createFile(atPath: looseCPR.path, contents: Data("fixture".utf8))
+        defer { try? fileManager.removeItem(at: root) }
 
         let songA = makeFolderSong(folder: songAFolder, title: "Song A")
         let songB = makeFolderSong(folder: songBFolder, title: "Song B")
@@ -26,16 +32,21 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
             existing: [songA, songB, looseSong],
             incremental: incremental,
-            affectedSongIDs: affected
+            affectedSongIDs: affected,
+            fileManager: fileManager
         )
 
         XCTAssertEqual(Set(merged.map(\.displayTitle)), ["Song A", "Song B", "Loose Updated"])
     }
 
-    func testMergeIncrementalScanRemovesDeletedSongFolder() {
-        let root = URL(fileURLWithPath: "/Archive", isDirectory: true)
+    func testMergeIncrementalScanRemovesDeletedSongFolder() throws {
+        let root = try makeMergeTestRoot()
         let deletedFolder = root.appendingPathComponent("Removed", isDirectory: true)
         let remainingFolder = root.appendingPathComponent("Kept", isDirectory: true)
+
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: remainingFolder, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: root) }
 
         let removed = makeFolderSong(folder: deletedFolder, title: "Removed")
         let kept = makeFolderSong(folder: remainingFolder, title: "Kept")
@@ -46,16 +57,15 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
             existing: [removed, kept],
             incremental: incremental,
-            affectedSongIDs: affected
+            affectedSongIDs: affected,
+            fileManager: fileManager
         )
 
         XCTAssertEqual(merged.map(\.displayTitle), ["Kept"])
     }
 
     func testMergeIncrementalScanDropsGhostAfterFolderRename() throws {
-        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-            .appendingPathComponent(".build", isDirectory: true)
-            .appendingPathComponent("NikoMusicHubMergeRename-\(UUID().uuidString)", isDirectory: true)
+        let root = try makeMergeTestRoot()
         let oldFolder = root.appendingPathComponent("Old Name", isDirectory: true)
         let newFolder = root.appendingPathComponent("New Name", isDirectory: true)
         let siblingFolder = root.appendingPathComponent("Sibling", isDirectory: true)
@@ -85,9 +95,7 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
     }
 
     func testMergeIncrementalScanKeepsAffectedSongWhenFolderStillExistsButScanEmpty() throws {
-        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-            .appendingPathComponent(".build", isDirectory: true)
-            .appendingPathComponent("NikoMusicHubMergeKeep-\(UUID().uuidString)", isDirectory: true)
+        let root = try makeMergeTestRoot()
         let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
         let song = makeFolderSong(folder: songFolder, title: "Song A")
 
@@ -106,6 +114,14 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         )
 
         XCTAssertEqual(merged.map(\.displayTitle), ["Song A"])
+    }
+
+    private func makeMergeTestRoot() throws -> URL {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubMerge-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
     }
 
     private func makeFolderSong(folder: URL, title: String) -> Song {

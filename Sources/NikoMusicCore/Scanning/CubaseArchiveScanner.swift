@@ -91,20 +91,18 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                     )
                     continue
                 }
+                if values.isSymbolicLink == true {
+                    skippedEntries.append(
+                        SkippedScanEntry(
+                            kind: .unreadableChild,
+                            label: child.lastPathComponent,
+                            reason: "Skipped symbolic-link folder at archive root"
+                        )
+                    )
+                    continue
+                }
                 if values.isDirectory == true {
                     let folderName = child.lastPathComponent
-                    // Symlinked song folders can resolve outside configured archive roots and
-                    // would otherwise index/play external audio while appearing in-archive.
-                    if values.isSymbolicLink == true {
-                        skippedEntries.append(
-                            SkippedScanEntry(
-                                kind: .unreadableChild,
-                                label: folderName,
-                                reason: "Skipped symbolic-link folder at archive root"
-                            )
-                        )
-                        continue
-                    }
                     if ScanExclusionPolicy.shouldSkipFolder(named: folderName, terms: exclusionTerms) {
                         skippedEntries.append(
                             SkippedScanEntry(

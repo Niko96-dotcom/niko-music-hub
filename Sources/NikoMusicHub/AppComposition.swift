@@ -149,7 +149,7 @@ struct AppComposition {
                     message: String(describing: error)
                 )
             )
-            registry = try! ToolRegistry(features: [])
+            registry = ToolRegistry()
         }
         let finalContext = ToolContext(
             registeredToolCount: registeredToolCount,

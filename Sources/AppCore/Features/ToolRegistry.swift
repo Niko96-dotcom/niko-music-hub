@@ -32,6 +32,12 @@ public struct ToolRegistry: Sendable {
         self.metadata = orderedMetadata
     }
 
+    /// Degraded launch fallback when feature registration fails; cannot throw.
+    public init() {
+        self.features = []
+        self.metadata = []
+    }
+
     public var firstFeatureID: ToolFeatureID? {
         metadata.first?.id
     }
