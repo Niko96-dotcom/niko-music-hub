@@ -1095,7 +1095,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(reloaded.filteredSongs.count, 1)
 
         reloaded.setSearchQuery("", immediate: true)
-        reloaded.toggleBrowseFilter(.statusWaiting)
+        reloaded.toggleBrowseFilter(.workflowStatus(.waitingFeedback))
         XCTAssertEqual(reloaded.filteredSongs.map(\.id), [merged.id])
     }
 

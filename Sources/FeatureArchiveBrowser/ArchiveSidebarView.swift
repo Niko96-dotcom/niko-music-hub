@@ -145,14 +145,15 @@ struct ArchiveSidebarView: View {
             }
 
             Section("Status") {
-                ForEach(ArchiveBrowseFilter.sidebarStatusFilters, id: \.filter.rawValue) { item in
+                ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                    let filter = ArchiveBrowseFilter.workflowStatus(status)
                     Button {
-                        viewModel.toggleBrowseFilter(item.filter)
+                        viewModel.toggleBrowseFilter(filter)
                     } label: {
-                        if viewModel.browseFilter.contains(item.filter) {
-                            Label(item.title, systemImage: "checkmark")
+                        if viewModel.browseFilter.contains(filter) {
+                            Label(status.displayTitle, systemImage: "checkmark")
                         } else {
-                            Text(item.title)
+                            Label(status.displayTitle, systemImage: status.archiveSymbolName)
                         }
                     }
                 }

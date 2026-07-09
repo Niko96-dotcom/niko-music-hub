@@ -106,12 +106,18 @@ final class ArchivePhases15to18Tests: XCTestCase {
         XCTAssertEqual(filtered.map(\.displayTitle), ["n"])
     }
 
-    func testWorkflowStatusFiltersUseUserWorkflowGroups() {
+    func testWorkflowStatusFiltersMatchIndividualStatuses() {
         let idea = Song(
             folderPath: URL(fileURLWithPath: "/tmp/idea", isDirectory: true),
             originalFolderName: "Idea",
             displayTitle: "Idea",
             workflowStatus: .songstarterBeat
+        )
+        let session = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/session", isDirectory: true),
+            originalFolderName: "Session",
+            displayTitle: "Session",
+            workflowStatus: .sessionProd
         )
         let prod = Song(
             folderPath: URL(fileURLWithPath: "/tmp/prod", isDirectory: true),
@@ -131,22 +137,26 @@ final class ArchivePhases15to18Tests: XCTestCase {
             displayTitle: "Done",
             workflowStatus: .done
         )
+        let songs = [idea, session, prod, waiting, done]
 
         XCTAssertEqual(
-            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusIdeas).map(\.displayTitle),
+            ArchiveBrowseFilter.apply(songs, filter: .workflowStatus(.songstarterBeat)).map(\.displayTitle),
             ["Idea"]
         )
         XCTAssertEqual(
-            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusTodos).map(\.displayTitle),
+            ArchiveBrowseFilter.apply(songs, filter: .workflowStatus(.prod)).map(\.displayTitle),
             ["Prod"]
         )
         XCTAssertEqual(
-            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: .statusWaiting).map(\.displayTitle),
+            ArchiveBrowseFilter.apply(songs, filter: .workflowStatus(.waitingFeedback)).map(\.displayTitle),
             ["Waiting"]
         )
         XCTAssertEqual(
-            ArchiveBrowseFilter.apply([idea, prod, waiting, done], filter: [.statusIdeas, .statusTodos]).map(\.displayTitle),
-            ["Idea", "Prod"]
+            ArchiveBrowseFilter.apply(
+                songs,
+                filter: [.workflowStatus(.sessionProd), .workflowStatus(.prod)]
+            ).map(\.displayTitle),
+            ["Session", "Prod"]
         )
     }
 

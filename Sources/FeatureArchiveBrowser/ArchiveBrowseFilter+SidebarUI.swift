@@ -25,13 +25,6 @@ extension ArchiveBrowseFilter {
         ),
     ]
 
-    static let sidebarStatusFilters: [(filter: ArchiveBrowseFilter, title: String)] = [
-        (.statusIdeas, "Ideas"),
-        (.statusTodos, "Todos"),
-        (.statusWaiting, "Waiting"),
-        (.statusDone, "Done"),
-    ]
-
     /// Single-filter chips shown in the archive sidebar, in display order.
     static let sidebarFilters: [ArchiveBrowseFilter] = sidebarChipMetadata.map(\.filter)
 
