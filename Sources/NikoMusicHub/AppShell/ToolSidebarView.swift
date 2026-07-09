@@ -42,6 +42,7 @@ struct ToolSidebarView: View {
             }
         }
         .padding(.horizontal, 12)
+        .padding(.top, HubToolLayout.topPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(width: HubDesignSystem.Size.navWidth)
     }
@@ -66,6 +67,7 @@ struct ToolSidebarView: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, 4)
+        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Niko Music Hub \(appVersionLabel)")
         .help("Niko Music Hub \(appVersionLabel)")
