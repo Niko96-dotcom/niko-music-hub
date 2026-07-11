@@ -67,6 +67,11 @@ struct SongCardView: View {
                 SongCardMetadataChipRow(chips: metadataChips)
             }
 
+            if let status = song.workflowStatus {
+                SongCardStageProgressBar(status: status)
+                    .padding(.top, 1)
+            }
+
             ArchiveMiniPlayerView(
                 url: mainPreviewURL,
                 style: .compact,

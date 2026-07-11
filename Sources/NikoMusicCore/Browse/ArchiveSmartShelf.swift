@@ -6,6 +6,7 @@ public enum ArchiveSmartShelf: String, CaseIterable, Sendable, Codable {
     case recentCPRActivity = "recent_cpr"
     case hasStems = "has_stems"
     case byCollaborator = "by_collaborator"
+    case quietSongs = "quiet_songs"
 
     public var title: String {
         switch self {
@@ -14,6 +15,7 @@ public enum ArchiveSmartShelf: String, CaseIterable, Sendable, Codable {
         case .recentCPRActivity: "Recent CPR Activity"
         case .hasStems: "Has Stems"
         case .byCollaborator: "By Collaborator"
+        case .quietSongs: "Quiet Songs"
         }
     }
 }
@@ -55,10 +57,28 @@ public enum ArchiveShelfRanker {
             }
     }
 
+    /// Days without CPR activity before an unfinished song counts as quiet.
+    public static let quietSongThresholdDays = 30
+
+    /// Unfinished songs (status set, not Done) whose newest visible CPR is
+    /// older than the quiet threshold — most stuck first.
+    public static func quietSongs(_ songs: [Song], now: Date = Date()) -> [Song] {
+        let cutoff = now.addingTimeInterval(-TimeInterval(quietSongThresholdDays) * 86_400)
+        return songs
+            .compactMap { song -> (Song, Date)? in
+                guard let status = song.workflowStatus, status != .done else { return nil }
+                guard let latest = latestCPRActivity(for: song), latest <= cutoff else { return nil }
+                return (song, latest)
+            }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
+    }
+
     public static func filter(
         _ songs: [Song],
         shelf: ArchiveSmartShelf,
-        collaboratorID: String? = nil
+        collaboratorID: String? = nil,
+        now: Date = Date()
     ) -> [Song] {
         switch shelf {
         case .allSongs:
@@ -72,6 +92,8 @@ public enum ArchiveShelfRanker {
         case .byCollaborator:
             guard let collaboratorID else { return [] }
             return byCollaborator(songs, collaboratorID: collaboratorID)
+        case .quietSongs:
+            return quietSongs(songs, now: now)
         }
     }
 

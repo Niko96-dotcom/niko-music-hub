@@ -50,6 +50,20 @@ public enum ProjectWorkflowStatus: String, CaseIterable, Codable, Hashable, Send
         self == .waitingFeedback
     }
 
+    /// 1-based position in the production pipeline (Songstarter → … → Done).
+    public var stagePosition: Int {
+        (Self.allCases.firstIndex(of: self) ?? 0) + 1
+    }
+
+    public static var stageCount: Int {
+        allCases.count
+    }
+
+    /// Fraction of the pipeline completed at this stage (Done = 1.0).
+    public var pipelineProgress: Double {
+        Double(stagePosition) / Double(Self.stageCount)
+    }
+
     public var searchableText: String {
         switch self {
         case .songstarterBeat: "songstarter beat idea starter"

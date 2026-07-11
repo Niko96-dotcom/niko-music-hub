@@ -9,6 +9,7 @@ extension ArchiveSmartShelf {
         case .recentCPRActivity: "CPR"
         case .hasStems: "Stems"
         case .byCollaborator: "Collabs"
+        case .quietSongs: "Quiet"
         }
     }
 }

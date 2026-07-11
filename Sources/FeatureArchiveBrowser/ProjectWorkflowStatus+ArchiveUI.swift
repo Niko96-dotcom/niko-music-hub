@@ -28,6 +28,29 @@ extension ProjectWorkflowStatus {
     }
 }
 
+/// Thin pipeline progress bar for song cards: how far through the workflow
+/// stages the song is, tinted with the status color (soft fill, no stroke).
+struct SongCardStageProgressBar: View {
+    let status: ProjectWorkflowStatus
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                Capsule(style: .continuous)
+                    .fill(status.archiveTint.opacity(0.65))
+                    .frame(width: max(4, proxy.size.width * status.pipelineProgress))
+            }
+        }
+        .frame(height: 3)
+        .help("\(status.displayTitle) — stage \(status.stagePosition) of \(ProjectWorkflowStatus.stageCount)")
+        .accessibilityElement()
+        .accessibilityLabel("Workflow progress")
+        .accessibilityValue("\(status.displayTitle), stage \(status.stagePosition) of \(ProjectWorkflowStatus.stageCount)")
+    }
+}
+
 /// Soft status chip (reference: `color.opacity(0.16)` fill + colored text, never a saturated
 /// block, never a stroke). Status color only carries meaning when a real status is set — the
 /// "No Status" case is rendered as quiet `textTertiary` text at the call site instead of this
