@@ -88,7 +88,13 @@ struct ArchiveBrowserView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let song = viewModel.selectedSong {
+        if viewModel.showBoard {
+            ArchiveBoardView(viewModel: viewModel)
+                .padding(.horizontal, HubToolLayout.horizontalPadding)
+                .padding(.top, HubToolLayout.topPadding)
+                .padding(.bottom, HubToolLayout.bottomPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else if let song = viewModel.selectedSong {
             // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)

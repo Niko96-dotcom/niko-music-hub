@@ -59,6 +59,17 @@ struct ArchiveSidebarView: View {
             browseFilterMenu
 
             HubIconButton(
+                systemImage: "rectangle.split.3x1",
+                accessibilityLabel: viewModel.showBoard ? "Hide board" : "Show board",
+                help: "Board — songs as cards in workflow stage columns",
+                isSelected: viewModel.showBoard,
+                isToggle: true,
+                isEnabled: !viewModel.songs.isEmpty
+            ) {
+                viewModel.showBoard.toggle()
+            }
+
+            HubIconButton(
                 systemImage: "arrow.clockwise",
                 accessibilityLabel: viewModel.isScanning ? "Scanning archive" : "Scan archive",
                 help: "Rescan archive roots",

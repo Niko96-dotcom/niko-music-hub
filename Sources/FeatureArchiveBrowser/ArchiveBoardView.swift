@@ -1,0 +1,192 @@
+import AppCore
+import NikoMusicCore
+import SwiftUI
+
+/// Kanban board over the current browse list: one column per workflow stage,
+/// drag a card onto a column to change its status (recorded in status history).
+struct ArchiveBoardView: View {
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
+
+    private var columns: [ArchiveBoardColumn] {
+        ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(columns) { column in
+                        ArchiveBoardColumnView(column: column, viewModel: viewModel)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.controlGap) {
+            Text("Board")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+
+            Spacer(minLength: 4)
+
+            Text("Drag cards between stages · click to open")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        }
+        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
+    }
+}
+
+private struct ArchiveBoardColumnView: View {
+    let column: ArchiveBoardColumn
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
+
+    @State private var isDropTargeted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            columnHeader
+
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    ForEach(column.songs, id: \.id) { song in
+                        ArchiveBoardCardView(
+                            song: song,
+                            isSelected: viewModel.selectedSong?.id == song.id,
+                            onSelect: { viewModel.selectSong(song) }
+                        )
+                        .draggable(song.id)
+                    }
+                }
+            }
+
+            if column.songs.isEmpty {
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(8)
+        .frame(width: 200)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(isDropTargeted ? HubDesignSystem.Palette.accentFill : Color.white.opacity(0.03))
+        }
+        .dropDestination(for: String.self) { songIDs, _ in
+            var moved = false
+            for songID in songIDs {
+                guard let song = viewModel.songs.first(where: { $0.id == songID }),
+                      song.workflowStatus != column.status else { continue }
+                viewModel.updateWorkflowStatus(for: song, status: column.status)
+                moved = true
+            }
+            return moved
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(column.title) column, \(column.songs.count) songs")
+    }
+
+    private var columnHeader: some View {
+        HStack(spacing: 6) {
+            Image(systemName: column.status?.archiveSymbolName ?? "tray")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(column.status?.archiveTint ?? HubDesignSystem.Palette.textTertiary)
+            Text(column.title)
+                .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 2)
+            Text("\(column.songs.count)")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
+private struct ArchiveBoardCardView: View {
+    let song: Song
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(song.effectiveDisplayTitle)
+                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                if !song.displayScanWarnings().isEmpty {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.warning)
+                }
+            }
+
+            Text(captionLine)
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .lineLimit(1)
+
+            if let status = song.workflowStatus {
+                SongCardStageProgressBar(status: status)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .fill(cardFill)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
+                isHovered = hovering
+            }
+        }
+        .help("Click to open \(song.effectiveDisplayTitle) — drag to change stage")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(song.effectiveDisplayTitle)
+    }
+
+    private var captionLine: String {
+        var parts: [String] = []
+        if let latest = ArchiveShelfRanker.latestCPRActivity(for: song) {
+            parts.append(Self.dayFormatter.string(from: latest))
+        }
+        let versions = song.visibleProjectVersions.count
+        if versions > 0 {
+            parts.append("\(versions) version\(versions == 1 ? "" : "s")")
+        }
+        if song.hasStems {
+            parts.append("stems")
+        }
+        return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
+    }
+
+    private var cardFill: Color {
+        if isSelected { return HubDesignSystem.Palette.selection }
+        return isHovered ? Color.white.opacity(0.08) : Color.white.opacity(0.05)
+    }
+}
