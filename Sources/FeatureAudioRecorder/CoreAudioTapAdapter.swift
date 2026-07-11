@@ -18,6 +18,10 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     private var levelContinuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
     private var preset: AudioPreset?
+    /// Result of the most recently completed recording. Max-duration auto-stop
+    /// consumes the session internally; the caller's own `stopRecording()`
+    /// (issued after the level stream ends) collects this instead of failing.
+    private var lastCompletedResult: RecorderResult?
     private let sessionFactory: @Sendable () -> any SystemAudioRecordingSession
 
     public var recording: Bool { _isRecording }
@@ -83,6 +87,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             throw RecorderError.apiError("Recording already in progress")
         }
         _isRecording = true
+        lastCompletedResult = nil
         self.outputURL = outputURL
         self.preset = preset
 
@@ -122,6 +127,10 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
 
     public func stopRecording() async throws -> RecorderResult {
         guard _isRecording else {
+            if let completed = lastCompletedResult {
+                lastCompletedResult = nil
+                return completed
+            }
             throw RecorderError.apiError("No active recording")
         }
 
@@ -139,7 +148,11 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         }
 
         do {
-            return try tapSession.stop()
+            let result = try tapSession.stop()
+            // Stored before the deferred continuation.finish() so a caller
+            // waiting on the stream always finds the result afterwards.
+            lastCompletedResult = result
+            return result
         } catch {
             throw mapRecordingError(error)
         }
