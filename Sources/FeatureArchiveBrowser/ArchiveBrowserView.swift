@@ -82,6 +82,14 @@ struct ArchiveBrowserView: View {
             viewModel.showBoard = false
             return .handled
         }
+        .onKeyPress(.space) {
+            // Board only: exactly one player view (the bottom bar) is mounted
+            // per URL there, so the toggle broadcast has a single receiver.
+            guard archiveFocused, viewModel.showBoard,
+                  let url = viewModel.selectedSong?.mainPreviewURL else { return .ignored }
+            ArchivePlaybackCoordinator.shared.requestTogglePlayPause(for: url)
+            return .handled
+        }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
         }

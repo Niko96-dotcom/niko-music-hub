@@ -23,7 +23,7 @@ struct SongCardView: View {
     }
 
     private var isRowPlaying: Bool {
-        guard let mainPreviewURL else { return false }
+        guard let mainPreviewURL = song.mainPreviewURL else { return false }
         return playbackCoordinator.activeURL == mainPreviewURL
     }
 
@@ -73,7 +73,7 @@ struct SongCardView: View {
             }
 
             ArchiveMiniPlayerView(
-                url: mainPreviewURL,
+                url: song.mainPreviewURL,
                 style: .compact,
                 showsSlider: isRowPlaying
             )
@@ -105,13 +105,5 @@ struct SongCardView: View {
     private var rowFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
         return isHovered ? Color.white.opacity(0.05) : Color.clear
-    }
-
-    private var mainPreviewURL: URL? {
-        guard let id = song.mainPreviewCandidateID,
-              let candidate = song.previewCandidates.first(where: { $0.id == id }) else {
-            return nil
-        }
-        return candidate.filePath
     }
 }

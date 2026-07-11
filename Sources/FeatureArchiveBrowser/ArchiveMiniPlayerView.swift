@@ -65,6 +65,10 @@ struct ArchiveMiniPlayerView: View {
         .onChange(of: coordinator.stopGeneration) { _, _ in
             playback.forceStop()
         }
+        .onChange(of: coordinator.togglePlayPauseGeneration) { _, _ in
+            guard let url, coordinator.togglePlayPauseURL == url else { return }
+            playback.toggle(at: url)
+        }
     }
 
     private var displayLabel: String {

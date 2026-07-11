@@ -40,7 +40,7 @@ struct ArchiveBoardView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .layoutPriority(1)
 
-            Text("Drag between stages · click to preview · double-click to open")
+            Text("Drag between stages · click + Space to play · double-click to open")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .lineLimit(1)
@@ -254,8 +254,8 @@ private struct ArchiveBoardPlayerBar: View {
             }
             .frame(minWidth: 120, maxWidth: 260, alignment: .leading)
 
-            if mainPreviewURL != nil {
-                ArchiveMiniPlayerView(url: mainPreviewURL, style: .full, showsSlider: true)
+            if song.mainPreviewURL != nil {
+                ArchiveMiniPlayerView(url: song.mainPreviewURL, style: .full, showsSlider: true)
                     .frame(maxWidth: .infinity)
             } else {
                 Text("No preview file for this song")
@@ -278,13 +278,5 @@ private struct ArchiveBoardPlayerBar: View {
         .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Board player, \(song.effectiveDisplayTitle)")
-    }
-
-    private var mainPreviewURL: URL? {
-        guard let id = song.mainPreviewCandidateID,
-              let candidate = song.previewCandidates.first(where: { $0.id == id }) else {
-            return nil
-        }
-        return candidate.filePath
     }
 }

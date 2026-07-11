@@ -37,6 +37,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         return displayTitle
     }
 
+    /// Resolved file URL of the main preview candidate, when one is set.
+    public var mainPreviewURL: URL? {
+        guard let mainPreviewCandidateID else { return nil }
+        return previewCandidates.first { $0.id == mainPreviewCandidateID }?.filePath
+    }
+
     /// True when stems-like exports are detected (SPEC §10 Has Stems shelf).
     public var hasStems: Bool {
         previewCandidates.contains {
