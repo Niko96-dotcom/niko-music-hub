@@ -24,6 +24,11 @@ struct ArchiveBoardView: View {
                 .padding(.vertical, 2)
             }
             .padding(.top, 14)
+
+            if let song = viewModel.selectedSong {
+                ArchiveBoardPlayerBar(song: song, viewModel: viewModel)
+                    .padding(.top, 10)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -35,7 +40,7 @@ struct ArchiveBoardView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .layoutPriority(1)
 
-            Text("Drag cards between stages · click to open")
+            Text("Drag between stages · click to preview · double-click to open")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .lineLimit(1)
@@ -93,7 +98,8 @@ private struct ArchiveBoardColumnView: View {
                         ArchiveBoardCardView(
                             song: song,
                             isSelected: viewModel.selectedSong?.id == song.id,
-                            onSelect: { viewModel.selectSong(song) }
+                            onSelect: { viewModel.selectSongOnBoard(song) },
+                            onOpenDetail: { viewModel.selectSong(song) }
                         )
                         .draggable(song.id)
                     }
@@ -149,6 +155,7 @@ private struct ArchiveBoardCardView: View {
     let song: Song
     let isSelected: Bool
     let onSelect: () -> Void
+    let onOpenDetail: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -192,13 +199,16 @@ private struct ArchiveBoardCardView: View {
                 .fill(cardFill)
         }
         .contentShape(Rectangle())
+        // Double-click before single so both register: first click selects
+        // (loads the player bar), the second opens detail.
+        .onTapGesture(count: 2, perform: onOpenDetail)
         .onTapGesture(perform: onSelect)
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering
             }
         }
-        .help("Click to open \(song.effectiveDisplayTitle) — drag to change stage")
+        .help("Click to preview \(song.effectiveDisplayTitle) — double-click to open, drag to change stage")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(song.effectiveDisplayTitle)
     }
@@ -221,5 +231,60 @@ private struct ArchiveBoardCardView: View {
     private var cardFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
         return isHovered ? Color.white.opacity(0.08) : Color.white.opacity(0.05)
+    }
+}
+
+/// Persistent transport at the bottom of the board: the selected card's
+/// preview player plus a jump into song detail — audition without leaving
+/// the board.
+private struct ArchiveBoardPlayerBar: View {
+    let song: Song
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.effectiveDisplayTitle)
+                    .font(HubDesignSystem.Typography.body().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    .lineLimit(1)
+                if let status = song.workflowStatus {
+                    ArchiveWorkflowStatusPill(status: status, compact: true)
+                }
+            }
+            .frame(minWidth: 120, maxWidth: 260, alignment: .leading)
+
+            if mainPreviewURL != nil {
+                ArchiveMiniPlayerView(url: mainPreviewURL, style: .full, showsSlider: true)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text("No preview file for this song")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HubIconButton(
+                systemImage: "info.circle",
+                accessibilityLabel: "Open song detail",
+                help: "Open \(song.effectiveDisplayTitle) in song detail"
+            ) {
+                viewModel.selectSong(song)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Board player, \(song.effectiveDisplayTitle)")
+    }
+
+    private var mainPreviewURL: URL? {
+        guard let id = song.mainPreviewCandidateID,
+              let candidate = song.previewCandidates.first(where: { $0.id == id }) else {
+            return nil
+        }
+        return candidate.filePath
     }
 }

@@ -315,6 +315,17 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         refreshMixdownAnalysis(for: song)
     }
 
+    /// Board single-click: highlight the card and load it into the board's
+    /// player bar without leaving the board. Double-click uses `selectSong`.
+    func selectSongOnBoard(_ song: Song) {
+        guard selectedSong?.id != song.id else { return }
+        // One audible source at a time — same rule as list/detail selection.
+        ArchivePlaybackCoordinator.shared.stopAllPlayback()
+        selectedSong = song
+        songDetailsExpanded = false
+        pluginsSectionExpanded = false
+    }
+
     /// Keeps `selectedSong` in sync with the live catalog and current browse results.
     /// - Clears selection when the song disappeared from the catalog.
     /// - Refreshes the snapshot after scan/metadata so detail never shows stale CPR/previews.
