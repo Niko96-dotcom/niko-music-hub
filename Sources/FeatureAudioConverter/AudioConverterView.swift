@@ -234,17 +234,11 @@ public struct AudioConverterView: View {
         )
     }
 
+    // Unboxed action band — buttons are chrome, not a bounded object, and the
+    // dropzone above already owns file intake ("Add Files" was a duplicate).
     private var actionRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                HubLabeledButton(
-                    icon: "plus",
-                    label: "Add Files",
-                    style: .secondary
-                ) {
-                    fileImporterVisible = true
-                }
-
                 HubLabeledButton(
                     icon: "waveform.badge.plus",
                     label: "Convert",
@@ -272,8 +266,6 @@ public struct AudioConverterView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
         }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 

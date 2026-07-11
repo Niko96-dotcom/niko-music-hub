@@ -191,8 +191,6 @@ public struct StemSeparationView: View {
                 }
             }
         }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     @ViewBuilder

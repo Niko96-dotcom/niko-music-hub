@@ -10,7 +10,7 @@ public enum RecordingDurationOptions {
     }
 
     public static func chipLabel(for minutes: Int) -> String {
-        minutes == 0 ? "Unlimited" : "\(minutes) min"
+        minutes == 0 ? "∞" : "\(minutes) min"
     }
 
     /// Maps a persisted settings value to the nearest supported chip value.

@@ -155,8 +155,6 @@ public struct DownloaderView: View {
                     .truncationMode(.middle)
             }
         }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         .disabled(viewModel.downloadState == .downloading)
     }
 

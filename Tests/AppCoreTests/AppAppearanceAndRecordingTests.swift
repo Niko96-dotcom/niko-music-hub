@@ -31,7 +31,10 @@ final class RecordingDurationOptionsTests: XCTestCase {
 
     func testLabelsDistinguishUnlimited() {
         XCTAssertEqual(RecordingDurationOptions.label(for: 30), "30 minutes")
-        XCTAssertEqual(RecordingDurationOptions.chipLabel(for: 0), "Unlimited")
+        // Chip row space is tight — unlimited renders as ∞ with the full
+        // word carried by the chip's help text.
+        XCTAssertEqual(RecordingDurationOptions.chipLabel(for: 0), "∞")
+        XCTAssertEqual(RecordingDurationOptions.label(for: 0), "Unlimited")
     }
 }
 

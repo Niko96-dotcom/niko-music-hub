@@ -275,7 +275,6 @@ final class AudioConverterViewModelTests: XCTestCase {
             "WAV Converter",
             "Drop audio files to convert",
             "Choose Files",
-            "Add Files",
             "Convert",
             "Stop",
             "viewModel.presetSummaryText",

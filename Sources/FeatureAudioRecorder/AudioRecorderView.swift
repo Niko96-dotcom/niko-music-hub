@@ -128,17 +128,15 @@ public struct AudioRecorderView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: viewModel.currentLevel?.peak)
     }
 
+    // Bare display type — a timer is not a bounded object, so no card (DS:
+    // "cards only for bounded objects").
     private var timeDisplay: some View {
         Text(formatElapsedTime(viewModel.elapsedTime))
             .font(HubDesignSystem.Typography.display())
             .monospacedDigit()
             .foregroundStyle(viewModel.isRecording ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
-            .padding(14)
+            .padding(.vertical, 10)
             .frame(maxWidth: HubToolLayout.maxContentWidth)
-            .hubCard(
-                cornerRadius: HubDesignSystem.Radius.card,
-                state: viewModel.isRecording ? .selected : .normal
-            )
     }
 
     private var controlSection: some View {
@@ -180,20 +178,26 @@ public struct AudioRecorderView: View {
         .padding(12)
     }
 
+    // Quiet unboxed preference row — chips are already chips; a card around
+    // them is box-in-box.
     private var settingsSection: some View {
-        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            Text("Max duration")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             HubChoiceChips("Max Duration", selection: $viewModel.maxDurationMinutes, choices:
                 RecordingDurationOptions.supportedMinutes.map { minutes in
-                    .init(minutes, label: RecordingDurationOptions.chipLabel(for: minutes))
+                    .init(
+                        minutes,
+                        label: RecordingDurationOptions.chipLabel(for: minutes),
+                        help: RecordingDurationOptions.label(for: minutes)
+                    )
                 }
             )
             .disabled(viewModel.isRecording)
             .opacity(viewModel.isRecording ? 0.45 : 1)
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     @ViewBuilder
