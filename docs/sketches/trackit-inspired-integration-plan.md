@@ -54,7 +54,10 @@ inline status editing on cards, status filters, collaborators, notes, aliases.
 - Kanban board view (No Status triage column + 7 stage columns, drag to change
   status, click to open detail) — **shipped** (`fc38f15`). This is what Niko
   actually meant by "timeline/board": the TRACKIT screenshots' layout.
-- Next: Phase 3 checklists (upgrade the stage bar to checklist-driven %), Phase 4 analytics
+- Phase 4 analytics — **shipped** (2026-07-12): board chart button opens an
+  analytics view mode (overview stats + finish rate, saves-per-month from CPR
+  dates, stage distribution, dwell-per-stage from the status history log).
+- Next: Phase 3 checklists (upgrade the stage bar to checklist-driven %)
 
 ## Phased plan
 
