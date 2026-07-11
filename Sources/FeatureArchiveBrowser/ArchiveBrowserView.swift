@@ -111,31 +111,30 @@ struct ArchiveBrowserView: View {
     }
 
     /// Fullscreen detail reached from the board — back returns to the board.
+    /// The content column is width-capped and centered so a wide window reads
+    /// as one calm reading column instead of content pinned to the left edge.
     @ViewBuilder
     private var boardDetailPage: some View {
         if let song = viewModel.selectedSong {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    HubIconButton(
-                        systemImage: "chevron.backward",
-                        accessibilityLabel: "Back to board",
-                        help: "Back to the board (Esc)"
-                    ) {
-                        viewModel.viewMode = .board
-                    }
-                    Text("Board")
-                        .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
+                HubLabeledButton(
+                    icon: "chevron.backward",
+                    label: "Board",
+                    style: .ghost,
+                    help: "Back to the board (Esc)"
+                ) {
+                    viewModel.viewMode = .board
                 }
 
                 SongDetailView(song: song, viewModel: viewModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, HubToolLayout.horizontalPadding)
             .padding(.top, HubToolLayout.topPadding)
             .padding(.bottom, HubToolLayout.bottomPadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
             // Selection vanished (rescan/filter) — fall back to the board.
             ArchiveBoardView(viewModel: viewModel)
