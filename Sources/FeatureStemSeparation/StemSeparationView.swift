@@ -12,8 +12,7 @@ public struct StemSeparationView: View {
     public var body: some View {
         HubToolPage {
             header
-            fileWell
-            youtubeWell
+            intakeWell
             controls
             progressSection
             errorBanner
@@ -34,7 +33,38 @@ public struct StemSeparationView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var fileWell: some View {
+    /// One intake object: drop/choose a local file, or paste a YouTube URL —
+    /// two routes into the same separation, so they share one card.
+    private var intakeWell: some View {
+        VStack(spacing: 12) {
+            fileIntakeContent
+
+            Divider().opacity(0.35)
+
+            youtubeRow
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card, interactive: true)
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            Task {
+                var urls: [URL] = []
+                for provider in providers {
+                    guard let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) else { continue }
+                    guard let data = item as? Data else { continue }
+                    guard let string = String(data: data, encoding: .utf8) else { continue }
+                    guard let url = URL(string: string) else { continue }
+                    urls.append(url)
+                }
+                await MainActor.run {
+                    _ = viewModel.handleDrop(urls: urls)
+                }
+            }
+            return true
+        }
+    }
+
+    private var fileIntakeContent: some View {
         VStack(spacing: 12) {
             if let fileURL = viewModel.droppedFileURL {
                 VStack(spacing: 4) {
@@ -80,28 +110,10 @@ public struct StemSeparationView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .padding()
-        .hubCard(cornerRadius: HubDesignSystem.Radius.card, interactive: true)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            Task {
-                var urls: [URL] = []
-                for provider in providers {
-                    guard let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) else { continue }
-                    guard let data = item as? Data else { continue }
-                    guard let string = String(data: data, encoding: .utf8) else { continue }
-                    guard let url = URL(string: string) else { continue }
-                    urls.append(url)
-                }
-                await MainActor.run {
-                    _ = viewModel.handleDrop(urls: urls)
-                }
-            }
-            return true
-        }
+        .frame(maxWidth: .infinity, minHeight: 108)
     }
 
-    private var youtubeWell: some View {
+    private var youtubeRow: some View {
         HStack(spacing: 10) {
             Image(systemName: "play.rectangle")
                 .font(.system(size: 13, weight: .medium))
