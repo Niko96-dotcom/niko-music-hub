@@ -63,6 +63,64 @@ final class SQLiteSongUserMetadataStoreTests: XCTestCase {
         XCTAssertEqual(loaded.workflowStatus, .waitingFeedback)
     }
 
+    func testStatusHistoryRecordsTransitions() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("song-metadata-history-\(UUID().uuidString).sqlite")
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let firstSet = Date(timeIntervalSince1970: 1_000)
+        let changed = Date(timeIntervalSince1970: 2_000)
+        let cleared = Date(timeIntervalSince1970: 3_000)
+        try store.upsert(SongUserMetadata(songID: "/tmp/a", workflowStatus: .songstarterBeat, updatedAt: firstSet))
+        try store.upsert(SongUserMetadata(songID: "/tmp/a", workflowStatus: .prod, updatedAt: changed))
+        try store.upsert(SongUserMetadata(songID: "/tmp/a", workflowStatus: nil, updatedAt: cleared))
+
+        let history = try store.statusHistory(forSongID: "/tmp/a")
+        XCTAssertEqual(history.count, 3)
+        XCTAssertEqual(history[0].fromStatus, nil)
+        XCTAssertEqual(history[0].toStatus, .songstarterBeat)
+        XCTAssertEqual(history[1].fromStatus, .songstarterBeat)
+        XCTAssertEqual(history[1].toStatus, .prod)
+        XCTAssertEqual(history[2].fromStatus, .prod)
+        XCTAssertEqual(history[2].toStatus, nil)
+        XCTAssertEqual(
+            history.map(\.changedAt).map { $0.timeIntervalSince1970 },
+            [1_000, 2_000, 3_000]
+        )
+    }
+
+    func testStatusHistorySkipsUnchangedUpserts() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("song-metadata-history-\(UUID().uuidString).sqlite")
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        try store.upsert(SongUserMetadata(songID: "/tmp/a", workflowStatus: .prod))
+        try store.upsert(SongUserMetadata(songID: "/tmp/a", appNote: "note edit", workflowStatus: .prod))
+        try store.upsert(SongUserMetadata(songID: "/tmp/no-status"))
+        try store.upsert(SongUserMetadata(songID: "/tmp/no-status", appNote: "still no status"))
+
+        XCTAssertEqual(try store.statusHistory(forSongID: "/tmp/a").count, 1)
+        XCTAssertTrue(try store.statusHistory(forSongID: "/tmp/no-status").isEmpty)
+    }
+
+    func testLoadAllStatusHistorySpansSongs() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("song-metadata-history-\(UUID().uuidString).sqlite")
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        try store.upsertAll([
+            SongUserMetadata(songID: "/tmp/a", workflowStatus: .song, updatedAt: Date(timeIntervalSince1970: 1_000)),
+            SongUserMetadata(songID: "/tmp/b", workflowStatus: .done, updatedAt: Date(timeIntervalSince1970: 2_000)),
+        ])
+
+        let history = try store.loadAllStatusHistory()
+        XCTAssertEqual(history.map(\.songID), ["/tmp/a", "/tmp/b"])
+        XCTAssertEqual(history.map(\.toStatus), [.song, .done])
+    }
+
     func testMalformedAliasJSONThrows() throws {
         let databaseURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("song-metadata-\(UUID().uuidString).sqlite")

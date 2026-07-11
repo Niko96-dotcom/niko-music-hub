@@ -101,6 +101,19 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
         let formatter = ISO8601DateFormatter()
         try withConnection { db in
             for item in metadata {
+                let previousStatus = try storedWorkflowStatus(for: item.songID, db: db)
+                if previousStatus != item.workflowStatus {
+                    try insertStatusChange(
+                        WorkflowStatusChange(
+                            songID: item.songID,
+                            fromStatus: previousStatus,
+                            toStatus: item.workflowStatus,
+                            changedAt: item.updatedAt
+                        ),
+                        formatter: formatter,
+                        db: db
+                    )
+                }
                 let aliasesData = try encoder.encode(item.aliases)
                 let ignoredPreviewData = try encoder.encode(item.ignoredPreviewCandidateIDs)
                 let collaboratorData = try encoder.encode(item.collaboratorIDs)
@@ -160,6 +173,96 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
         }
     }
 
+    /// Recorded workflow status transitions for one song, oldest first.
+    public func statusHistory(forSongID songID: String) throws -> [WorkflowStatusChange] {
+        try loadStatusHistory(songID: songID)
+    }
+
+    /// All recorded workflow status transitions, oldest first.
+    public func loadAllStatusHistory() throws -> [WorkflowStatusChange] {
+        try loadStatusHistory(songID: nil)
+    }
+
+    private func loadStatusHistory(songID: String?) throws -> [WorkflowStatusChange] {
+        try withConnection { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            var sql = "SELECT song_id, from_status, to_status, changed_at FROM song_status_history"
+            if songID != nil { sql += " WHERE song_id = ?" }
+            sql += " ORDER BY changed_at ASC, id ASC;"
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw StoreError.prepare(message(db))
+            }
+            if let songID {
+                sqlite3_bind_text(statement, 1, songID, -1, sqliteTransient)
+            }
+            let formatter = ISO8601DateFormatter()
+            var result: [WorkflowStatusChange] = []
+            while true {
+                let stepResult = sqlite3_step(statement)
+                switch stepResult {
+                case SQLITE_ROW:
+                    break
+                case SQLITE_DONE:
+                    return result
+                default:
+                    throw StoreError.step(message(db))
+                }
+                guard let idCString = sqlite3_column_text(statement, 0) else { continue }
+                let changedText = textColumn(statement, column: 3) ?? ""
+                result.append(
+                    WorkflowStatusChange(
+                        songID: String(cString: idCString),
+                        fromStatus: optionalText(statement, column: 1).flatMap(ProjectWorkflowStatus.init(rawValue:)),
+                        toStatus: optionalText(statement, column: 2).flatMap(ProjectWorkflowStatus.init(rawValue:)),
+                        changedAt: formatter.date(from: changedText) ?? Date()
+                    )
+                )
+            }
+        }
+    }
+
+    private func storedWorkflowStatus(for songID: String, db: OpaquePointer) throws -> ProjectWorkflowStatus? {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = "SELECT workflow_status FROM song_metadata WHERE song_id = ?;"
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(statement, 1, songID, -1, sqliteTransient)
+        switch sqlite3_step(statement) {
+        case SQLITE_ROW:
+            return optionalText(statement, column: 0).flatMap(ProjectWorkflowStatus.init(rawValue:))
+        case SQLITE_DONE:
+            return nil
+        default:
+            throw StoreError.step(message(db))
+        }
+    }
+
+    private func insertStatusChange(
+        _ change: WorkflowStatusChange,
+        formatter: ISO8601DateFormatter,
+        db: OpaquePointer
+    ) throws {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = """
+        INSERT INTO song_status_history (song_id, from_status, to_status, changed_at)
+        VALUES (?, ?, ?, ?);
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(statement, 1, change.songID, -1, sqliteTransient)
+        bindOptionalText(statement, index: 2, value: change.fromStatus?.rawValue)
+        bindOptionalText(statement, index: 3, value: change.toStatus?.rawValue)
+        sqlite3_bind_text(statement, 4, formatter.string(from: change.changedAt), -1, sqliteTransient)
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw StoreError.step(message(db))
+        }
+    }
+
     private func prepareDatabase() throws {
         try database.withConnection { db in
             let sql = """
@@ -181,6 +284,20 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked S
             );
             """
             guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
+            }
+            let historySQL = """
+            CREATE TABLE IF NOT EXISTS song_status_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              song_id TEXT NOT NULL,
+              from_status TEXT,
+              to_status TEXT,
+              changed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_song_status_history_song_id
+              ON song_status_history(song_id);
+            """
+            guard sqlite3_exec(db, historySQL, nil, nil, nil) == SQLITE_OK else {
                 throw StoreError.exec(message(db))
             }
             try migrateLegacyColumns(db)
