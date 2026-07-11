@@ -3,6 +3,7 @@ import Foundation
 public enum DownloaderCopy {
     public static let toolLabel = "Downloader"
     public static let urlPlaceholder = "Paste a supported URL..."
+    public static let idleSubtitle = "Downloads land in your Output Inbox."
     public static let checkingURL = "Checking URL..."
     public static let readyToDownload = "Ready to download"
     public static let downloading = "Downloading..."

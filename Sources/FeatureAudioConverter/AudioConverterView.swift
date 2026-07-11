@@ -254,13 +254,15 @@ public struct AudioConverterView: View {
                     viewModel.startConversion()
                 }
 
-                HubLabeledButton(
-                    icon: "stop.fill",
-                    label: "Stop",
-                    style: .secondary,
-                    isEnabled: viewModel.canRequestStopAfterCurrent
-                ) {
-                    viewModel.requestStopAfterCurrent()
+                if viewModel.isConverting {
+                    HubLabeledButton(
+                        icon: "stop.fill",
+                        label: "Stop",
+                        style: .secondary,
+                        isEnabled: viewModel.canRequestStopAfterCurrent
+                    ) {
+                        viewModel.requestStopAfterCurrent()
+                    }
                 }
             }
 

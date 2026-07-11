@@ -20,7 +20,11 @@ public struct AudioRecorderView: View {
             header
             filenameDisplay
             timeDisplay
-            meterSection
+            // Reference rule: live surfaces are hidden at rest — the level
+            // meter only appears while a recording is actually running.
+            if viewModel.isRecording {
+                meterSection
+            }
             controlSection
             settingsSection
             errorSection

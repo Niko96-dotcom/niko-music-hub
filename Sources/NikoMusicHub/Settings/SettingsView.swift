@@ -27,17 +27,21 @@ struct SettingsView: View {
                 importance: .high,
                 footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
             ) {
-                Picker("Appearance", selection: appearanceBinding) {
-                    ForEach(AppAppearance.allCases) { appearance in
-                        Text(appearance.label).tag(appearance)
-                    }
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    Text("Appearance")
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    HubChoiceChips(
+                        "Appearance",
+                        selection: appearanceBinding,
+                        choices: AppAppearance.allCases.map { .init($0, label: $0.label) }
+                    )
+                    .disabled(settingsLoadError != nil)
                 }
-                .pickerStyle(.segmented)
-                .disabled(settingsLoadError != nil)
-                .frame(maxWidth: 360, alignment: .leading)
 
                 Toggle("Open at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.accent)
                     .onChange(of: launchAtLogin) { _, enabled in
                         setLaunchAtLogin(enabled)
                     }
@@ -86,8 +90,18 @@ struct SettingsView: View {
                     Text("Scan exclusions")
                         .font(HubDesignSystem.Typography.caption().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    TextField("backup, tmp, archive", text: scanExclusionBinding)
-                        .textFieldStyle(.roundedBorder)
+                    TextField(
+                        "",
+                        text: scanExclusionBinding,
+                        prompt: Text("backup, tmp, archive")
+                            .foregroundColor(HubDesignSystem.Palette.textTertiary)
+                    )
+                    .textFieldStyle(.plain)
+                    .font(HubDesignSystem.Typography.body())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
                     Text("Comma-separated folder-name terms to skip during scan.")
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)

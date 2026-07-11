@@ -49,7 +49,7 @@ public struct DownloaderView: View {
     private var headerStatus: String {
         switch viewModel.downloadState {
         case .idle:
-            return DownloaderCopy.urlPlaceholder
+            return DownloaderCopy.idleSubtitle
         case .checkingURL:
             return DownloaderCopy.checkingURL
         case .readyToDownload:
@@ -85,16 +85,18 @@ public struct DownloaderView: View {
                 viewModel.startDownload()
             }
 
-            Button {
-                viewModel.clearInput()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            if !viewModel.urlText.isEmpty {
+                Button {
+                    viewModel.clearInput()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help(DownloaderCopy.clear)
+                .disabled(viewModel.downloadState == .downloading)
             }
-            .buttonStyle(.plain)
-            .help(DownloaderCopy.clear)
-            .disabled(viewModel.downloadState == .downloading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

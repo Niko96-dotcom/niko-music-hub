@@ -153,7 +153,7 @@ public struct StemSeparationView: View {
             )
 
             HStack {
-                Text("Output: \(viewModel.outputFolderURL.path)")
+                Text("Output: \(viewModel.outputFolderURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -180,13 +180,14 @@ public struct StemSeparationView: View {
                     viewModel.startSeparation()
                 }
 
-                HubLabeledButton(
-                    icon: "xmark",
-                    label: "Cancel",
-                    style: .secondary,
-                    isEnabled: viewModel.canCancel
-                ) {
-                    viewModel.cancelSeparation()
+                if viewModel.canCancel {
+                    HubLabeledButton(
+                        icon: "xmark",
+                        label: "Cancel",
+                        style: .secondary
+                    ) {
+                        viewModel.cancelSeparation()
+                    }
                 }
             }
         }
