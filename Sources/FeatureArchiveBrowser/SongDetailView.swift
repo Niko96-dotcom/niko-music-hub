@@ -39,8 +39,6 @@ struct SongDetailView: View {
                     .padding(.top, HubToolLayout.sectionSpacing)
                 moreDetailsDisclosure
                     .padding(.top, HubToolLayout.sectionSpacing)
-                hideRow
-                    .padding(.top, HubToolLayout.sectionSpacing)
             }
             .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -83,9 +81,21 @@ struct SongDetailView: View {
 
                 Spacer(minLength: 8)
 
+                if liveSong.isIgnored {
+                    Text("Hidden")
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .hubCard(state: .warning)
+                        .help("This song is hidden from browse")
+                }
+
                 if let status = liveSong.workflowStatus {
                     ArchiveWorkflowStatusPill(status: status)
                 }
+
+                overflowMenu
             }
 
             Text(headerStatusLine)
@@ -98,6 +108,31 @@ struct SongDetailView: View {
 
     private var headerStatusLine: String {
         liveSong.originalFolderName
+    }
+
+    /// Rare actions live behind the header ellipsis instead of loose controls
+    /// at the page bottom.
+    private var overflowMenu: some View {
+        Menu {
+            Button {
+                viewModel.setSongHidden(liveSong, hidden: !liveSong.isIgnored)
+            } label: {
+                Label(
+                    liveSong.isIgnored ? "Show song in browse" : "Hide song from browse",
+                    systemImage: liveSong.isIgnored ? "eye" : "eye.slash"
+                )
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More song actions")
+        .accessibilityLabel("More song actions")
     }
 
     // MARK: - Preview (one focused surface)
@@ -173,10 +208,6 @@ struct SongDetailView: View {
 
                 Spacer(minLength: 0)
             }
-
-            Text("P reveal preview · O Cubase · F Finder · D detail")
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
     }
 
@@ -205,9 +236,7 @@ struct SongDetailView: View {
             }
 
             if liveSong.hasStems {
-                Text("Stems detected")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                infoLine(label: "Stems", value: "Detected")
             }
 
             if let warning = liveSong.displayScanWarnings().first {
@@ -369,18 +398,6 @@ struct SongDetailView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             content()
         }
-    }
-
-    private var hideRow: some View {
-        Toggle("Hide song from browse", isOn: Binding(
-            get: { liveSong.isIgnored },
-            set: { viewModel.setSongHidden(liveSong, hidden: $0) }
-        ))
-        .font(HubDesignSystem.Typography.bodySmall())
-        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-        .padding(.vertical, 6)
-        .padding(.horizontal, liveSong.isIgnored ? 10 : 0)
-        .modifier(HideSongChrome(isHidden: liveSong.isIgnored))
     }
 
     private var collaboratorsSection: some View {
@@ -666,14 +683,3 @@ struct SongDetailView: View {
     }
 }
 
-private struct HideSongChrome: ViewModifier {
-    let isHidden: Bool
-
-    func body(content: Content) -> some View {
-        if isHidden {
-            content.hubCard(state: .warning)
-        } else {
-            content
-        }
-    }
-}

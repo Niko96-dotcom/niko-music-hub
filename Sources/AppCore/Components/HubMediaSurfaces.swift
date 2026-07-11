@@ -86,10 +86,25 @@ public struct HubTransportBar: View {
         VStack(alignment: .leading, spacing: style == .compact ? 4 : 8) {
             transportHeader
 
-            if showsSlider, isEnabled, duration > 0 {
-                progressSlider
+            if showsSlider, isEnabled {
+                if duration > 0 {
+                    progressSlider
+                } else {
+                    idleSliderPlaceholder
+                }
             }
         }
+    }
+
+    /// Same footprint as the live slider so the bar keeps its height while
+    /// duration is still loading (first play would otherwise grow the surface).
+    private var idleSliderPlaceholder: some View {
+        Capsule(style: .continuous)
+            .fill(HubDesignSystem.Palette.textPrimary.opacity(0.08))
+            .frame(height: 3)
+            .frame(maxWidth: .infinity)
+            .frame(height: style == .compact ? 16 : 22)
+            .accessibilityHidden(true)
     }
 
     private var compactInlineContent: some View {

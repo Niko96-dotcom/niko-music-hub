@@ -20,7 +20,7 @@ struct ArchiveBrowserView: View {
             ZStack {
                 switch viewModel.viewMode {
                 case .board:
-                    ArchiveBoardView(viewModel: viewModel)
+                    ArchiveBoardView(viewModel: viewModel, onChooseRoot: chooseRoot)
                         .padding(.horizontal, HubToolLayout.horizontalPadding)
                         .padding(.top, HubToolLayout.topPadding)
                         .padding(.bottom, HubToolLayout.bottomPadding)
@@ -137,7 +137,7 @@ struct ArchiveBrowserView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
             // Selection vanished (rescan/filter) — fall back to the board.
-            ArchiveBoardView(viewModel: viewModel)
+            ArchiveBoardView(viewModel: viewModel, onChooseRoot: chooseRoot)
                 .padding(.horizontal, HubToolLayout.horizontalPadding)
                 .padding(.top, HubToolLayout.topPadding)
                 .padding(.bottom, HubToolLayout.bottomPadding)

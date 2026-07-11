@@ -6,6 +6,8 @@ import SwiftUI
 /// drag a card onto a column to change its status (recorded in status history).
 struct ArchiveBoardView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    /// Opens the archive-root folder picker (owned by the browser shell).
+    let onChooseRoot: () -> Void
 
     private var columns: [ArchiveBoardColumn] {
         ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
@@ -56,6 +58,14 @@ struct ArchiveBoardView: View {
                 .frame(maxWidth: 240)
 
             HubIconButton(
+                systemImage: "folder.badge.plus",
+                accessibilityLabel: "Add archive root",
+                help: "Add a folder of Cubase song folders"
+            ) {
+                onChooseRoot()
+            }
+
+            HubIconButton(
                 systemImage: "sidebar.leading",
                 accessibilityLabel: "Open list view",
                 help: "Switch to the song list layout"
@@ -78,13 +88,26 @@ struct ArchiveBoardView: View {
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(viewModel.isScanning
                 ? "Songs will appear on the board as the scan finds them."
-                : "Add an archive root and scan from the list view to fill the board.")
+                : "Add a folder of Cubase song folders to fill the board.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !viewModel.isScanning {
-                Button("Open list view") {
-                    viewModel.viewMode = .list
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(
+                        icon: "folder.badge.plus",
+                        label: "Add archive root",
+                        style: .primary
+                    ) {
+                        onChooseRoot()
+                    }
+                    HubLabeledButton(
+                        icon: "sidebar.leading",
+                        label: "Open list view",
+                        style: .ghost
+                    ) {
+                        viewModel.viewMode = .list
+                    }
                 }
             }
         }
