@@ -44,8 +44,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
-    /// Detail pane shows the kanban board (columns per workflow stage) instead of song detail.
-    @Published var showBoard = false
+    /// Archive page layout: the board is home, opening a card goes to
+    /// fullscreen detail, and the classic sidebar+detail list stays reachable.
+    enum ArchiveViewMode {
+        case board
+        case boardDetail
+        case list
+    }
+
+    @Published var viewMode: ArchiveViewMode = .board
 
     let catalog: ArchiveCatalogCoordinator
     let browseRefreshDriver: ArchiveBrowseRefreshDriver
@@ -310,8 +317,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // Keep the first viewport calm when changing songs (ARCH-07).
         songDetailsExpanded = false
         pluginsSectionExpanded = false
-        // Explicit selection always lands on song detail, never behind the board.
-        showBoard = false
+        // Opening from the board goes to fullscreen detail; list stays list.
+        if viewMode == .board {
+            viewMode = .boardDetail
+        }
         refreshMixdownAnalysis(for: song)
     }
 

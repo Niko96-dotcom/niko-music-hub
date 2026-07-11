@@ -60,13 +60,11 @@ struct ArchiveSidebarView: View {
 
             HubIconButton(
                 systemImage: "rectangle.split.3x1",
-                accessibilityLabel: viewModel.showBoard ? "Hide board" : "Show board",
+                accessibilityLabel: "Show board",
                 help: "Board — songs as cards in workflow stage columns",
-                isSelected: viewModel.showBoard,
-                isToggle: true,
                 isEnabled: !viewModel.songs.isEmpty
             ) {
-                viewModel.showBoard.toggle()
+                viewModel.viewMode = .board
             }
 
             HubIconButton(

@@ -15,19 +15,24 @@ struct ArchiveBoardView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(columns) { column in
-                        ArchiveBoardColumnView(column: column, viewModel: viewModel)
+            if viewModel.songs.isEmpty {
+                emptyArchiveState
+                    .padding(.top, 14)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(columns) { column in
+                            ArchiveBoardColumnView(column: column, viewModel: viewModel)
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
-            }
-            .padding(.top, 14)
+                .padding(.top, 14)
 
-            if let song = viewModel.selectedSong {
-                ArchiveBoardPlayerBar(song: song, viewModel: viewModel)
-                    .padding(.top, 10)
+                if let song = viewModel.selectedSong {
+                    ArchiveBoardPlayerBar(song: song, viewModel: viewModel)
+                        .padding(.top, 10)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -52,13 +57,40 @@ struct ArchiveBoardView: View {
 
             HubIconButton(
                 systemImage: "sidebar.leading",
-                accessibilityLabel: "Back to list",
-                help: "Back to the song list (Esc)"
+                accessibilityLabel: "Open list view",
+                help: "Switch to the song list layout"
             ) {
-                viewModel.showBoard = false
+                viewModel.viewMode = .list
             }
         }
         .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
+    }
+
+    /// Roots and scanning live in the list layout's sidebar, so an empty
+    /// archive points there instead of showing eight bare columns.
+    private var emptyArchiveState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                viewModel.isScanning ? "Scanning archive" : "No songs yet",
+                systemImage: viewModel.isScanning ? "arrow.triangle.2.circlepath" : "music.note.list"
+            )
+            .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            Text(viewModel.isScanning
+                ? "Songs will appear on the board as the scan finds them."
+                : "Add an archive root and scan from the list view to fill the board.")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !viewModel.isScanning {
+                Button("Open list view") {
+                    viewModel.viewMode = .list
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 420, alignment: .leading)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     /// Same quiet inset search style as the sidebar — the sidebar is hidden

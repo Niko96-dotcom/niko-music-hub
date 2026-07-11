@@ -18,13 +18,16 @@ struct ArchiveBrowserView: View {
             let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
 
             ZStack {
-                if viewModel.showBoard {
+                switch viewModel.viewMode {
+                case .board:
                     ArchiveBoardView(viewModel: viewModel)
                         .padding(.horizontal, HubToolLayout.horizontalPadding)
                         .padding(.top, HubToolLayout.topPadding)
                         .padding(.bottom, HubToolLayout.bottomPadding)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                } else {
+                case .boardDetail:
+                    boardDetailPage
+                case .list:
                     HStack(spacing: 0) {
                         ArchiveSidebarView(
                             viewModel: viewModel,
@@ -78,14 +81,14 @@ struct ArchiveBrowserView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            guard viewModel.showBoard else { return .ignored }
-            viewModel.showBoard = false
+            guard viewModel.viewMode == .boardDetail else { return .ignored }
+            viewModel.viewMode = .board
             return .handled
         }
         .onKeyPress(.space) {
             // Board only: exactly one player view (the bottom bar) is mounted
             // per URL there, so the toggle broadcast has a single receiver.
-            guard archiveFocused, viewModel.showBoard,
+            guard archiveFocused, viewModel.viewMode == .board,
                   let url = viewModel.selectedSong?.mainPreviewURL else { return .ignored }
             ArchivePlaybackCoordinator.shared.requestTogglePlayPause(for: url)
             return .handled
@@ -104,6 +107,42 @@ struct ArchiveBrowserView: View {
             // is still empty (first open / roots just added).
             guard viewModel.songs.isEmpty else { return }
             await viewModel.scan()
+        }
+    }
+
+    /// Fullscreen detail reached from the board — back returns to the board.
+    @ViewBuilder
+    private var boardDetailPage: some View {
+        if let song = viewModel.selectedSong {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    HubIconButton(
+                        systemImage: "chevron.backward",
+                        accessibilityLabel: "Back to board",
+                        help: "Back to the board (Esc)"
+                    ) {
+                        viewModel.viewMode = .board
+                    }
+                    Text("Board")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    Spacer(minLength: 0)
+                }
+
+                SongDetailView(song: song, viewModel: viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .padding(.horizontal, HubToolLayout.horizontalPadding)
+            .padding(.top, HubToolLayout.topPadding)
+            .padding(.bottom, HubToolLayout.bottomPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            // Selection vanished (rescan/filter) — fall back to the board.
+            ArchiveBoardView(viewModel: viewModel)
+                .padding(.horizontal, HubToolLayout.horizontalPadding)
+                .padding(.top, HubToolLayout.topPadding)
+                .padding(.bottom, HubToolLayout.bottomPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
