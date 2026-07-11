@@ -51,6 +51,9 @@ inline status editing on cards, status filters, collaborators, notes, aliases.
   "timeline" idea meant *progress visualization*, not an activity feed. The
   projection code is recoverable from git history if the analytics phase wants it.
 - Workflow-stage progress bars on cards + Quiet Songs shelf — **shipped** (`c19fff0`)
+- Kanban board view (No Status triage column + 7 stage columns, drag to change
+  status, click to open detail) — **shipped** (`fc38f15`). This is what Niko
+  actually meant by "timeline/board": the TRACKIT screenshots' layout.
 - Next: Phase 3 checklists (upgrade the stage bar to checklist-driven %), Phase 4 analytics
 
 ## Phased plan
