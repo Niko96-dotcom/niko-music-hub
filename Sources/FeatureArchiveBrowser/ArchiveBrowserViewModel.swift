@@ -50,9 +50,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         case board
         case boardDetail
         case list
+        case analytics
     }
 
     @Published var viewMode: ArchiveViewMode = .board
+    @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?
 
     let catalog: ArchiveCatalogCoordinator
     let browseRefreshDriver: ArchiveBrowseRefreshDriver
@@ -322,6 +324,19 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             viewMode = .boardDetail
         }
         refreshMixdownAnalysis(for: song)
+    }
+
+    /// Opens the analytics page over the board with a fresh snapshot built
+    /// from the live catalog and the recorded status history.
+    func showAnalytics() {
+        refreshAnalytics()
+        viewMode = .analytics
+    }
+
+    func refreshAnalytics() {
+        let history = (catalog.songMetadataStore as? WorkflowStatusHistoryReading)
+            .flatMap { try? $0.loadAllStatusHistory() } ?? []
+        analyticsSnapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history)
     }
 
     /// Board single-click: highlight the card and load it into the board's

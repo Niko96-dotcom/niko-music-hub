@@ -69,6 +69,15 @@ struct ArchiveBoardView: View {
                 .frame(maxWidth: 240)
 
             HubIconButton(
+                systemImage: "chart.bar",
+                accessibilityLabel: "Show analytics",
+                help: "Analytics — activity, finish rate, and where songs get stuck",
+                isEnabled: !viewModel.songs.isEmpty
+            ) {
+                viewModel.showAnalytics()
+            }
+
+            HubIconButton(
                 systemImage: "folder.badge.plus",
                 accessibilityLabel: "Add archive root",
                 help: "Add a folder of Cubase song folders"

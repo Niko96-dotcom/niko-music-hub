@@ -27,6 +27,11 @@ struct ArchiveBrowserView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 case .boardDetail:
                     boardDetailPage
+                case .analytics:
+                    ArchiveAnalyticsView(viewModel: viewModel)
+                        .padding(.horizontal, HubToolLayout.horizontalPadding)
+                        .padding(.top, HubToolLayout.topPadding)
+                        .padding(.bottom, HubToolLayout.bottomPadding)
                 case .list:
                     HStack(spacing: 0) {
                         ArchiveSidebarView(
@@ -81,9 +86,13 @@ struct ArchiveBrowserView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            guard viewModel.viewMode == .boardDetail else { return .ignored }
-            viewModel.viewMode = .board
-            return .handled
+            switch viewModel.viewMode {
+            case .boardDetail, .analytics:
+                viewModel.viewMode = .board
+                return .handled
+            case .board, .list:
+                return .ignored
+            }
         }
         .onKeyPress(.space) {
             // Board only: exactly one player view (the bottom bar) is mounted

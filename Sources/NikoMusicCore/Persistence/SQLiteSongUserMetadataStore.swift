@@ -3,7 +3,7 @@ import SQLite3
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, @unchecked Sendable {
+public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStatusHistoryReading, @unchecked Sendable {
     private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
