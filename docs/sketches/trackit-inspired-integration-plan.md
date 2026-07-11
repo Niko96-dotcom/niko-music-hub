@@ -44,6 +44,15 @@ inline status editing on cards, status filters, collaborators, notes, aliases.
 | Streaks/momentum | **Skip** | Gamification noise; CPR-derived activity view shows momentum honestly |
 | Scenes | **Skip** | Single-producer archive; roots + filters already separate concerns |
 
+## Status (2026-07-11)
+
+- Phase 1 (status history log) — **shipped** (`7fbc10c`)
+- Chronological timeline view — built, then **reverted** (`2f1f6e9`): Niko's
+  "timeline" idea meant *progress visualization*, not an activity feed. The
+  projection code is recoverable from git history if the analytics phase wants it.
+- Workflow-stage progress bars on cards + Quiet Songs shelf — **shipped** (`c19fff0`)
+- Next: Phase 3 checklists (upgrade the stage bar to checklist-driven %), Phase 4 analytics
+
 ## Phased plan
 
 ### Phase 1 — Status history log (small, do first)
