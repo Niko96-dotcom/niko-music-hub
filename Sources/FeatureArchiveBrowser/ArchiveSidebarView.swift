@@ -59,17 +59,6 @@ struct ArchiveSidebarView: View {
             browseFilterMenu
 
             HubIconButton(
-                systemImage: "calendar.day.timeline.left",
-                accessibilityLabel: viewModel.showTimeline ? "Hide timeline" : "Show timeline",
-                help: "Archive timeline — real activity from project file dates",
-                isSelected: viewModel.showTimeline,
-                isToggle: true,
-                isEnabled: !viewModel.songs.isEmpty
-            ) {
-                viewModel.showTimeline.toggle()
-            }
-
-            HubIconButton(
                 systemImage: "arrow.clockwise",
                 accessibilityLabel: viewModel.isScanning ? "Scanning archive" : "Scan archive",
                 help: "Rescan archive roots",
