@@ -18,23 +18,31 @@ struct ArchiveBrowserView: View {
             let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
 
             ZStack {
-                HStack(spacing: 0) {
-                    ArchiveSidebarView(
-                        viewModel: viewModel,
-                        compactList: compactList,
-                        showNewSongSheet: $showNewSongSheet,
-                        onChooseRoot: chooseRoot
-                    )
-                    .frame(width: listWidth)
-
-                    Divider().opacity(0.35)
-
-                    detailPane
+                if viewModel.showBoard {
+                    ArchiveBoardView(viewModel: viewModel)
+                        .padding(.horizontal, HubToolLayout.horizontalPadding)
+                        .padding(.top, HubToolLayout.topPadding)
+                        .padding(.bottom, HubToolLayout.bottomPadding)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(Color.clear)
-                        .clipped()
+                } else {
+                    HStack(spacing: 0) {
+                        ArchiveSidebarView(
+                            viewModel: viewModel,
+                            compactList: compactList,
+                            showNewSongSheet: $showNewSongSheet,
+                            onChooseRoot: chooseRoot
+                        )
+                        .frame(width: listWidth)
+
+                        Divider().opacity(0.35)
+
+                        detailPane
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(Color.clear)
+                            .clipped()
+                    }
+                    .background(Color.clear)
                 }
-                .background(Color.clear)
 
                 if viewModel.needsFirstRunOnboarding {
                     Color.black.opacity(0.35)
@@ -69,6 +77,11 @@ struct ArchiveBrowserView: View {
             viewModel.songDetailsExpanded.toggle()
             return .handled
         }
+        .onKeyPress(.escape) {
+            guard viewModel.showBoard else { return .ignored }
+            viewModel.showBoard = false
+            return .handled
+        }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
         }
@@ -88,13 +101,7 @@ struct ArchiveBrowserView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if viewModel.showBoard {
-            ArchiveBoardView(viewModel: viewModel)
-                .padding(.horizontal, HubToolLayout.horizontalPadding)
-                .padding(.top, HubToolLayout.topPadding)
-                .padding(.bottom, HubToolLayout.bottomPadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else if let song = viewModel.selectedSong {
+        if let song = viewModel.selectedSong {
             // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)

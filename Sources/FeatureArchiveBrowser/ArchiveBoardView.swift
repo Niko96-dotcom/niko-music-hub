@@ -29,18 +29,51 @@ struct ArchiveBoardView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.controlGap) {
+        HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
             Text("Board")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-
-            Spacer(minLength: 4)
+                .layoutPriority(1)
 
             Text("Drag cards between stages · click to open")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            searchField
+                .frame(maxWidth: 240)
+
+            HubIconButton(
+                systemImage: "sidebar.leading",
+                accessibilityLabel: "Back to list",
+                help: "Back to the song list (Esc)"
+            ) {
+                viewModel.showBoard = false
+            }
         }
         .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
+    }
+
+    /// Same quiet inset search style as the sidebar — the sidebar is hidden
+    /// while the board owns the page, so search must live here too.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            TextField("", text: Binding(
+                get: { viewModel.searchQuery },
+                set: { viewModel.setSearchQuery($0) }
+            ), prompt: Text("Search songs").foregroundColor(HubDesignSystem.Palette.textTertiary))
+            .textFieldStyle(.plain)
+            .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
     }
 }
 
