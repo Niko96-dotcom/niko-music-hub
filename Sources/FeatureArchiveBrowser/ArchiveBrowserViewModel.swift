@@ -44,6 +44,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
+    /// Detail pane shows the archive timeline (CPR activity by month) instead of song detail.
+    @Published var showTimeline = false
 
     let catalog: ArchiveCatalogCoordinator
     let browseRefreshDriver: ArchiveBrowseRefreshDriver
@@ -308,6 +310,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // Keep the first viewport calm when changing songs (ARCH-07).
         songDetailsExpanded = false
         pluginsSectionExpanded = false
+        // Explicit selection always lands on song detail, never behind the timeline.
+        showTimeline = false
         refreshMixdownAnalysis(for: song)
     }
 
