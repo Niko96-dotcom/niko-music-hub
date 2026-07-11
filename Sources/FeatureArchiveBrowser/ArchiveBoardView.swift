@@ -47,10 +47,21 @@ struct ArchiveBoardView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .layoutPriority(1)
 
-            Text("Drag between stages · click + Space to play · double-click to open")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                .lineLimit(1)
+            if viewModel.isScanning {
+                HStack(spacing: 5) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Scanning archive…")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                }
+                .help("New songs appear as the scan finds them")
+            } else {
+                Text("Drag between stages · click + Space to play · double-click to open")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 8)
 
