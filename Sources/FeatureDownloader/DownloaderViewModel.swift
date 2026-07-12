@@ -26,6 +26,10 @@ public enum DownloadState: Equatable {
 
 @MainActor
 public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
+    public static let toolID = ToolFeatureID("downloader")
+    /// How many finished downloads stay visible on the tool page (full history lives in the Output Inbox).
+    static let recentDownloadsLimit = 5
+
     @Published public var urlText: String = ""
     @Published public var formatSelection: DownloadFormatSelection
     @Published public var playlistMode: DownloadPlaylistMode = .single
@@ -37,6 +41,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public private(set) var progress: Double = 0
     @Published public private(set) var logEntries: [String] = []
     @Published public private(set) var outputURLs: [URL] = []
+    @Published public private(set) var recentDownloads: [OutputInboxItem] = []
 
     private let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
@@ -44,6 +49,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private let healthChecker: YtDlpHealthChecker
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
+    private var inboxObservationTask: Task<Void, Never>?
     private static let formatSelectionDefaultsKey = "downloader.formatSelection"
 
     public init(
@@ -211,7 +217,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         for outputURL in foundURLs {
             let item = OutputInboxItem(
                 fileURL: outputURL,
-                sourceToolID: ToolFeatureID("downloader"),
+                sourceToolID: Self.toolID,
                 status: .available,
                 metadata: ["dlSourceURL": sourceURL.absoluteString]
             )
@@ -227,6 +233,27 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         } else {
             errorMessage = nil
         }
+        loadRecentDownloads()
+    }
+
+    public func onAppear() {
+        loadRecentDownloads()
+        guard inboxObservationTask == nil else { return }
+        inboxObservationTask = Task { @MainActor [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
+                self?.loadRecentDownloads()
+            }
+        }
+    }
+
+    public func loadRecentDownloads() {
+        let items = (try? context.outputInboxStore.listItems()) ?? []
+        recentDownloads = Array(
+            items
+                .filter { $0.sourceToolID == Self.toolID }
+                .sorted { $0.createdAt > $1.createdAt }
+                .prefix(Self.recentDownloadsLimit)
+        )
     }
 
     public func retryAfterFailure() {
@@ -250,6 +277,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         outputURLs = []
         observeTask?.cancel()
         debounceTask?.cancel()
+    }
+
+    deinit {
+        inboxObservationTask?.cancel()
     }
 
     public var outputFolder: URL {

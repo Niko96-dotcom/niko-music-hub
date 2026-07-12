@@ -80,6 +80,31 @@ struct StemSeparationServiceTests {
     }
 
     @Test
+    func startJob_prefixesStemFilenamesWithSourceTitle() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+
+        let input = makeInputFile()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let inbox = FakeOutputInboxStore()
+        let (service, runner, _) = makeService(backend: backend, inbox: inbox)
+        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4, title: "Neon Hook")
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let names = Set(inbox.items.map(\.fileURL.lastPathComponent))
+        #expect(names == [
+            "Neon Hook - Vocals.wav",
+            "Neon Hook - Drums.wav",
+            "Neon Hook - Bass.wav",
+            "Neon Hook - Other.wav"
+        ])
+        #expect(inbox.items.allSatisfy { FileManager.default.fileExists(atPath: $0.fileURL.path) })
+    }
+
+    @Test
     func startJob_failedBackend_doesNotAddInboxItems() async throws {
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: "mock failure")

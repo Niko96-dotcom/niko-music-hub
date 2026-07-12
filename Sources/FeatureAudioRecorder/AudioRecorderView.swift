@@ -27,12 +27,14 @@ public struct AudioRecorderView: View {
             }
             controlSection
             settingsSection
+            recordingsSection
             errorSection
             permissionSection
             incompatibleSection
         }
         .onAppear {
             syncMaxDurationFromSettings()
+            viewModel.onAppear()
         }
         .onChange(of: viewModel.maxDurationMinutes) { _, newValue in
             let normalized = RecordingDurationOptions.normalized(newValue)
@@ -198,6 +200,32 @@ public struct AudioRecorderView: View {
             .opacity(viewModel.isRecording ? 0.45 : 1)
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth)
+    }
+
+    /// Latest finished recordings, each a draggable card — drop one straight into a DAW.
+    private var recordingsSection: some View {
+        ToolOutputShelf(
+            title: "Recordings",
+            items: viewModel.recentRecordings,
+            subtitle: recordingSubtitle,
+            onReveal: { item in
+                context.fileActions.revealInFinder(item.fileURL)
+            }
+        )
+        .frame(maxWidth: HubToolLayout.maxContentWidth)
+    }
+
+    private func recordingSubtitle(for item: OutputInboxItem) -> String? {
+        var parts: [String] = []
+        if let durationText = item.metadata["duration"], let duration = TimeInterval(durationText) {
+            let minutes = Int(duration) / 60
+            let seconds = Int(duration) % 60
+            parts.append(String(format: "%d:%02d", minutes, seconds))
+        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        parts.append(formatter.localizedString(for: item.createdAt, relativeTo: Date()))
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder

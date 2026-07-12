@@ -13,6 +13,10 @@ public enum RecordingDisplayState: Equatable {
 
 @MainActor
 public final class AudioRecorderViewModel: ObservableObject {
+    public static let toolID = ToolFeatureID("audio-recorder")
+    /// How many finished recordings stay visible on the tool page (full history lives in the Output Inbox).
+    static let recentRecordingsLimit = 5
+
     @Published public private(set) var recordingState: RecordingDisplayState = .idle
     @Published public var filenameOverride: String = ""
     @Published public var maxDurationMinutes: Int = 30
@@ -22,12 +26,14 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var lastRecordedURL: URL?
     @Published public private(set) var showSaveConfirmation = false
     @Published public private(set) var handoffWarningMessage: String?
+    @Published public private(set) var recentRecordings: [OutputInboxItem] = []
 
     public var isRecording: Bool {
         recordingState == .recording
     }
 
     private var recordingTask: Task<Void, Never>?
+    private var inboxObservationTask: Task<Void, Never>?
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
     private let outputURLProvider: @MainActor () -> URL
@@ -62,6 +68,10 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.outputURLProvider = outputURLProvider
         self.outputInboxStore = outputInboxStore
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
+    }
+
+    deinit {
+        inboxObservationTask?.cancel()
     }
 
     public func startRecording() async {
@@ -220,7 +230,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         let item = OutputInboxItem(
             id: UUID(),
             fileURL: result.outputURL,
-            sourceToolID: ToolFeatureID("audio-recorder"),
+            sourceToolID: Self.toolID,
             createdAt: Date(),
             status: .available,
             metadata: [
@@ -242,11 +252,32 @@ public final class AudioRecorderViewModel: ObservableObject {
         recordingState = .idle
         elapsedTime = 0
         currentLevel = nil
+        loadRecentRecordings()
     }
 
     public func dismissSaveConfirmation() {
         showSaveConfirmation = false
         handoffWarningMessage = nil
+    }
+
+    public func onAppear() {
+        loadRecentRecordings()
+        guard inboxObservationTask == nil else { return }
+        inboxObservationTask = Task { @MainActor [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
+                self?.loadRecentRecordings()
+            }
+        }
+    }
+
+    public func loadRecentRecordings() {
+        let items = (try? outputInboxStore.listItems()) ?? []
+        recentRecordings = Array(
+            items
+                .filter { $0.sourceToolID == Self.toolID }
+                .sorted { $0.createdAt > $1.createdAt }
+                .prefix(Self.recentRecordingsLimit)
+        )
     }
 
     private static func handoffWarningMessage(for error: Error) -> String {

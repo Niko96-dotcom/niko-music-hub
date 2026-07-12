@@ -234,55 +234,12 @@ public struct StemSeparationView: View {
         }
     }
 
-    @ViewBuilder
     private var resultsList: some View {
-        if !viewModel.results.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                HubSectionHeader("Separated Stems", count: viewModel.results.count)
-
-                ForEach(viewModel.results) { item in
-                    resultRow(item)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func resultRow(_ item: OutputInboxItem) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.fileURL.lastPathComponent)
-                    .font(HubDesignSystem.Typography.body().weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let role = item.metadata["displayName"] {
-                    Text(role)
-                        .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HubLabeledButton(
-                icon: "folder",
-                label: "Reveal",
-                style: .ghost
-            ) {
-                viewModel.reveal(item: item)
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .onDrag {
-            guard let url = viewModel.dragURL(for: item) else {
-                return NSItemProvider()
-            }
-            return NSItemProvider(object: url as NSURL)
-        }
+        ToolOutputShelf(
+            title: "Separated Stems",
+            items: viewModel.results,
+            subtitle: { $0.metadata["displayName"] },
+            onReveal: { viewModel.reveal(item: $0) }
+        )
     }
 }

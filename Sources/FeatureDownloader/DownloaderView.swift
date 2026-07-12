@@ -34,7 +34,33 @@ public struct DownloaderView: View {
             if case let .failed(message) = viewModel.downloadState {
                 errorSection(message: message)
             }
+            downloadsSection
         }
+        .onAppear { viewModel.onAppear() }
+    }
+
+    /// Latest finished downloads, each a draggable card — drop one straight into a DAW.
+    private var downloadsSection: some View {
+        ToolOutputShelf(
+            title: "Downloads",
+            items: viewModel.recentDownloads,
+            subtitle: downloadSubtitle,
+            onReveal: { item in
+                context.fileActions.revealInFinder(item.fileURL)
+            }
+        )
+    }
+
+    private func downloadSubtitle(for item: OutputInboxItem) -> String? {
+        var parts: [String] = []
+        if let source = item.metadata["dlSourceURL"],
+           let host = URL(string: source)?.host {
+            parts.append(host)
+        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        parts.append(formatter.localizedString(for: item.createdAt, relativeTo: Date()))
+        return parts.joined(separator: " · ")
     }
 
     private var header: some View {

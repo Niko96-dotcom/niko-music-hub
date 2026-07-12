@@ -82,16 +82,24 @@ final class HandoffSurfacingSourceTests: XCTestCase {
             "HAND-03: Choose File button must call viewModel.selectFile()"
         )
         XCTAssertTrue(
-            source.contains(".onDrag {"),
-            "HAND-03: completed stem rows must expose drag via .onDrag"
-        )
-        XCTAssertTrue(
-            source.contains("viewModel.dragURL(for:"),
-            "HAND-03: stem drag must obtain its URL from viewModel.dragURL(for:) — not a raw path"
+            source.contains("ToolOutputShelf("),
+            "HAND-03: completed stem rows must render through the shared ToolOutputShelf"
         )
         XCTAssertTrue(
             source.contains("viewModel.reveal(item:"),
             "HAND-03: Reveal button must call viewModel.reveal(item:)"
+        )
+
+        // The shelf is the shared drag surface for stems, recordings, and downloads —
+        // the .onDrag + verified-URL gate invariant lives there now.
+        let shelf = try toolOutputShelfSource()
+        XCTAssertTrue(
+            shelf.contains(".onDrag {"),
+            "HAND-03: ToolOutputShelf rows must expose drag via .onDrag"
+        )
+        XCTAssertTrue(
+            shelf.contains("OutputHandoff.dragFileURL("),
+            "HAND-03: ToolOutputShelf drag must obtain its URL from OutputHandoff.dragFileURL — not a raw path"
         )
     }
 
@@ -188,6 +196,14 @@ final class HandoffSurfacingSourceTests: XCTestCase {
 
     private func stemSeparationViewSource() throws -> String {
         let path = "Sources/FeatureStemSeparation/StemSeparationView.swift"
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
+        }
+        return try String(contentsOfFile: path, encoding: .utf8)
+    }
+
+    private func toolOutputShelfSource() throws -> String {
+        let path = "Sources/AppCore/OutputInbox/ToolOutputShelf.swift"
         guard FileManager.default.fileExists(atPath: path) else {
             throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
         }

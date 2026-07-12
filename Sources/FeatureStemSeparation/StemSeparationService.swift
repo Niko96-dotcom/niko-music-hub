@@ -44,6 +44,7 @@ public struct StemSeparationService: Sendable {
         try await runJob(
             backendRequest: backendRequest,
             preset: request.preset,
+            title: title,
             progress: progress
         )
     }
@@ -51,6 +52,7 @@ public struct StemSeparationService: Sendable {
     private func runJob(
         backendRequest: StemSeparationBackendRequest,
         preset: StemSeparationPreset,
+        title: String,
         progress: JobProgress
     ) async throws {
         progress.log("Creating output folder...")
@@ -72,6 +74,7 @@ public struct StemSeparationService: Sendable {
             try await handleSuccess(
                 outputFolderURL: outputFolderURL,
                 preset: preset,
+                title: title,
                 progress: progress
             )
         }
@@ -80,6 +83,7 @@ public struct StemSeparationService: Sendable {
     private func handleSuccess(
         outputFolderURL: URL,
         preset: StemSeparationPreset,
+        title: String,
         progress: JobProgress
     ) async throws {
         progress.log("Scanning outputs...")
@@ -90,8 +94,30 @@ public struct StemSeparationService: Sendable {
             throw StemSeparationServiceError(message)
         case .success(let scannedStems):
             progress.log("Found \(scannedStems.count) stems.")
-            progress.setOutputFileURLs(scannedStems.map(\.fileURL))
-            try addInboxItems(stems: scannedStems)
+            let stems = renamedWithTitle(scannedStems, title: title)
+            progress.setOutputFileURLs(stems.map(\.fileURL))
+            try addInboxItems(stems: stems)
+        }
+    }
+
+    /// Backends emit bare role names ("vocals.wav"); carry the source title into the
+    /// filename ("Song Name - Vocals.wav") so dragged stems identify their song in a DAW.
+    /// Best effort per stem — a failed rename keeps the scanned file usable.
+    private func renamedWithTitle(_ stems: [StemOutput], title: String) -> [StemOutput] {
+        let sanitized = sanitizedTitle(title)
+        guard !sanitized.isEmpty else { return stems }
+        return stems.map { stem in
+            let target = stem.fileURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("\(sanitized) - \(stem.role.displayName)")
+                .appendingPathExtension(stem.fileURL.pathExtension)
+            guard target.path != stem.fileURL.path else { return stem }
+            do {
+                try FileManager.default.moveItem(at: stem.fileURL, to: target)
+                return StemOutput(role: stem.role, fileURL: target)
+            } catch {
+                return stem
+            }
         }
     }
 
@@ -118,15 +144,19 @@ public struct StemSeparationService: Sendable {
         )
     }
 
+    private func sanitizedTitle(_ title: String) -> String {
+        title
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     private func uniqueOutputFolder(
         root: URL,
         title: String,
         preset: StemSeparationPreset
     ) -> URL {
-        let sanitized = title
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: "\\", with: "-")
-            .trimmingCharacters(in: .whitespaces)
+        let sanitized = sanitizedTitle(title)
         let timestamp = Date().timeIntervalSince1970
         let folderName = "\(sanitized) - \(preset.displayName) - \(timestamp)"
         return root
