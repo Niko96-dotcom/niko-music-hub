@@ -1,6 +1,8 @@
 import AppCore
+import Foundation
 import NikoMusicCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Kanban board over the current browse list: one column per workflow stage,
 /// drag a card onto a column to change its status (recorded in status history).
@@ -8,6 +10,10 @@ struct ArchiveBoardView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     /// Opens the archive-root folder picker (owned by the browser shell).
     let onChooseRoot: () -> Void
+
+    @State private var columnOrigins: [String: CGFloat] = [:]
+    @State private var boardViewportWidth: CGFloat = 0
+    @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
 
     private var columns: [ArchiveBoardColumn] {
         ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
@@ -21,13 +27,52 @@ struct ArchiveBoardView: View {
                 emptyArchiveState
                     .padding(.top, 14)
             } else {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 10) {
-                        ForEach(columns) { column in
-                            ArchiveBoardColumnView(column: column, viewModel: viewModel)
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: 10) {
+                            ForEach(columns) { column in
+                                ArchiveBoardColumnView(
+                                    column: column,
+                                    viewModel: viewModel,
+                                    onDragLocationChanged: { columnID, localX in
+                                        handleDragLocation(
+                                            columnID: columnID,
+                                            localX: localX,
+                                            scrollProxy: scrollProxy
+                                        )
+                                    },
+                                    onDragEnded: {
+                                        edgeAutoScroller.stop()
+                                    }
+                                )
+                                .id(column.id)
+                                .background {
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(
+                                            key: ArchiveBoardColumnOriginPreferenceKey.self,
+                                            value: [column.id: proxy.frame(in: .named(ArchiveBoardCoordinateSpace.name)).minX]
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .coordinateSpace(name: ArchiveBoardCoordinateSpace.name)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear {
+                                    boardViewportWidth = proxy.size.width
+                                }
+                                .onChange(of: proxy.size) { _, size in
+                                    boardViewportWidth = size.width
+                                }
                         }
                     }
-                    .padding(.vertical, 2)
+                    .onPreferenceChange(ArchiveBoardColumnOriginPreferenceKey.self) { origins in
+                        columnOrigins = origins
+                    }
                 }
                 .padding(.top, 14)
 
@@ -57,7 +102,7 @@ struct ArchiveBoardView: View {
                 }
                 .help("New songs appear as the scan finds them")
             } else {
-                Text("Drag between stages · click + Space to play · double-click to open")
+                Text("Drag between stages · hold at an edge to scroll · click + Space to play · double-click to open")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .lineLimit(1)
@@ -155,11 +200,54 @@ struct ArchiveBoardView: View {
         .frame(height: 32)
         .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
     }
+
+    /// A `DropInfo` location is local to the lane receiving the card. Combine
+    /// it with that lane's measured board-space origin to know whether the
+    /// pointer is held at the left or right edge of the visible viewport.
+    private func handleDragLocation(
+        columnID: String,
+        localX: CGFloat,
+        scrollProxy: ScrollViewProxy
+    ) {
+        guard let columnX = columnOrigins[columnID] else { return }
+        let leadingIndex = leadingVisibleColumnIndex()
+        edgeAutoScroller.update(
+            pointerX: columnX + localX,
+            viewportWidth: boardViewportWidth,
+            leadingColumnIndex: leadingIndex,
+            columnCount: columns.count
+        ) { targetIndex, direction in
+            guard columns.indices.contains(targetIndex) else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                scrollProxy.scrollTo(
+                    columns[targetIndex].id,
+                    anchor: direction == .right ? .leading : .trailing
+                )
+            }
+        }
+    }
+
+    private func leadingVisibleColumnIndex() -> Int {
+        let origins = columns.enumerated().compactMap { index, column in
+            columnOrigins[column.id].map { (index, $0) }
+        }
+        guard !origins.isEmpty else { return 0 }
+
+        // Prefer the right-most lane already touching the viewport's leading
+        // edge; before the first scroll, all origins are positive, so use the
+        // left-most lane instead.
+        if let leading = origins.filter({ $0.1 <= 0 }).max(by: { $0.1 < $1.1 }) {
+            return leading.0
+        }
+        return origins.min(by: { $0.1 < $1.1 })?.0 ?? 0
+    }
 }
 
 private struct ArchiveBoardColumnView: View {
     let column: ArchiveBoardColumn
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    let onDragLocationChanged: (String, CGFloat) -> Void
+    let onDragEnded: () -> Void
 
     @State private var isDropTargeted = false
 
@@ -192,18 +280,16 @@ private struct ArchiveBoardColumnView: View {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(isDropTargeted ? HubDesignSystem.Palette.accentFill : Color.white.opacity(0.03))
         }
-        .dropDestination(for: String.self) { songIDs, _ in
-            var moved = false
-            for songID in songIDs {
-                guard let song = viewModel.songs.first(where: { $0.id == songID }),
-                      song.workflowStatus != column.status else { continue }
-                viewModel.updateWorkflowStatus(for: song, status: column.status)
-                moved = true
-            }
-            return moved
-        } isTargeted: { targeted in
-            isDropTargeted = targeted
-        }
+        .onDrop(
+            of: [.plainText],
+            delegate: ArchiveBoardColumnDropDelegate(
+                column: column,
+                viewModel: viewModel,
+                onDragLocationChanged: onDragLocationChanged,
+                onDragEnded: onDragEnded,
+                setDropTargeted: { isDropTargeted = $0 }
+            )
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(column.title) column, \(column.songs.count) songs")
     }
@@ -223,6 +309,134 @@ private struct ArchiveBoardColumnView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
         .padding(.horizontal, 2)
+    }
+}
+
+private struct ArchiveBoardColumnDropDelegate: DropDelegate {
+    let column: ArchiveBoardColumn
+    let viewModel: ArchiveBrowserViewModel
+    let onDragLocationChanged: (String, CGFloat) -> Void
+    let onDragEnded: () -> Void
+    let setDropTargeted: (Bool) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.plainText])
+    }
+
+    func dropEntered(info: DropInfo) {
+        setDropTargeted(true)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        onDragLocationChanged(column.id, info.location.x)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        setDropTargeted(false)
+        onDragEnded()
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        setDropTargeted(false)
+        onDragEnded()
+
+        guard let provider = info.itemProviders(for: [.plainText]).first else { return false }
+        provider.loadObject(ofClass: NSString.self) { item, _ in
+            guard let songID = item as? String else { return }
+            Task { @MainActor in
+                guard let song = viewModel.songs.first(where: { $0.id == songID }),
+                      song.workflowStatus != column.status else { return }
+                viewModel.updateWorkflowStatus(for: song, status: column.status)
+            }
+        }
+        return true
+    }
+}
+
+private enum ArchiveBoardCoordinateSpace {
+    static let name = "archive-board-viewport"
+}
+
+private struct ArchiveBoardColumnOriginPreferenceKey: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+@MainActor
+private final class ArchiveBoardEdgeAutoScroller {
+    enum Direction {
+        case left
+        case right
+    }
+
+    private var task: Task<Void, Never>?
+    private var direction: Direction?
+    private var nextColumnIndex = 0
+
+    func update(
+        pointerX: CGFloat,
+        viewportWidth: CGFloat,
+        leadingColumnIndex: Int,
+        columnCount: Int,
+        scrollTo: @escaping (Int, Direction) -> Void
+    ) {
+        guard let target = ArchiveBoardEdgeAutoScrollPolicy.targetColumnIndex(
+            pointerX: pointerX,
+            viewportWidth: viewportWidth,
+            leadingColumnIndex: leadingColumnIndex,
+            columnCount: columnCount
+        ) else {
+            stop()
+            return
+        }
+
+        let requestedDirection: Direction = target > leadingColumnIndex ? .right : .left
+        guard requestedDirection != direction || task == nil else { return }
+
+        stop()
+        direction = requestedDirection
+        nextColumnIndex = leadingColumnIndex
+        advance(columnCount: columnCount, scrollTo: scrollTo)
+
+        task = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                guard !Task.isCancelled, let self else { return }
+                self.advance(columnCount: columnCount, scrollTo: scrollTo)
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+        direction = nil
+    }
+
+    private func advance(
+        columnCount: Int,
+        scrollTo: @escaping (Int, Direction) -> Void
+    ) {
+        guard let direction else {
+            stop()
+            return
+        }
+
+        let target = switch direction {
+        case .left: max(0, nextColumnIndex - 1)
+        case .right: min(columnCount - 1, nextColumnIndex + 1)
+        }
+        guard target != nextColumnIndex else {
+            stop()
+            return
+        }
+
+        nextColumnIndex = target
+        scrollTo(target, direction)
     }
 }
 
