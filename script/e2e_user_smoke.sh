@@ -9,8 +9,24 @@ if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]
 fi
 
 FIXTURE_ROOT="$ROOT/Fixtures/CubaseArchive"
-SMOKE_SUPPORT="$ROOT/.build/e2e-app-support"
 LOG_FILE="$ROOT/.build/e2e-smoke.log"
+
+# Every app launch in this script must run with NIKO_MUSIC_HUB_SETTINGS_SUITE set.
+# The suite routes settings AND Application Support (archive-index.sqlite,
+# output-inbox.json) into "Niko Music Hub/Isolated/<suite>/". Overriding $HOME does
+# NOT isolate anything — FileManager.urls(for: .applicationSupportDirectory) ignores
+# the environment variable and resolves the real home, so a suite-less smoke run
+# overwrites the user's real archive cache with fixture data.
+ISOLATED_ROOT="$HOME/Library/Application Support/Niko Music Hub/Isolated"
+ARCHIVE_SUITE="NikoMusicHubE2E.archive.$(uuidgen)"
+UI_SUITE="NikoMusicHubE2E.$(uuidgen)"
+cleanup_smoke_suites() {
+  launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
+  rm -rf "$ISOLATED_ROOT/$ARCHIVE_SUITE" "$ISOLATED_ROOT/$UI_SUITE"
+  defaults delete "$ARCHIVE_SUITE" >/dev/null 2>&1 || true
+  defaults delete "$UI_SUITE" >/dev/null 2>&1 || true
+}
+trap cleanup_smoke_suites EXIT
 
 echo "== generate fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
@@ -27,17 +43,13 @@ if [[ ! -x "$APP_BINARY" ]]; then
   chmod +x "$APP_BINARY"
 fi
 
-echo "== reset test Application Support =="
-rm -rf "$SMOKE_SUPPORT"
-mkdir -p "$SMOKE_SUPPORT"
-
 echo "== archive smoke (Swift validator owns archive assertions) =="
 rm -f "$LOG_FILE"
 (
   export NIKO_MUSIC_HUB_E2E_SMOKE=1
   export NIKO_MUSIC_HUB_FIXTURE_ROOT="$FIXTURE_ROOT"
   export NIKO_MUSIC_HUB_DRY_RUN_OPEN=1
-  export HOME="$SMOKE_SUPPORT"
+  export NIKO_MUSIC_HUB_SETTINGS_SUITE="$ARCHIVE_SUITE"
   cd "$ROOT"
   "$APP_BINARY"
 ) 2>&1 | tee "$LOG_FILE"
@@ -63,12 +75,7 @@ done
 echo "== public first-run UI smoke =="
 PUBLIC_UI_TEXT="$ROOT/.build/e2e-public-ui.txt"
 PUBLIC_UI_SCREENSHOT="$ROOT/.build/e2e-public-ui.png"
-UI_SUITE="NikoMusicHubE2E.$(uuidgen)"
 launchctl setenv NIKO_MUSIC_HUB_SETTINGS_SUITE "$UI_SUITE" >/dev/null 2>&1 || true
-cleanup_public_ui() {
-  launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
-}
-trap cleanup_public_ui EXIT
 
 NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" ./script/build_and_run.sh --verify >/dev/null
 sleep 1
