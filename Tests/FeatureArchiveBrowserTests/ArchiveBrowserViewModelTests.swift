@@ -576,6 +576,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         while viewModel.songs.first?.displayTitle != "Fresh Demo", Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
+        _ = await viewModel.indexPersistTask?.value
 
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Fresh Demo"])
         XCTAssertEqual(indexStore.savedSnapshots.last?.songs.map(\.displayTitle), ["Fresh Demo"])
@@ -602,6 +603,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.roots = [root]
 
         await viewModel.scan()
+        _ = await viewModel.indexPersistTask?.value
 
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Cache Song"])
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be saved") == true)
@@ -1381,6 +1383,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(updatedA.previewCandidates.count, 1)
         XCTAssertTrue(unchangedB.previewCandidates.isEmpty)
         XCTAssertEqual(viewModel.songs.count, 2)
+        _ = await viewModel.indexPersistTask?.value
         XCTAssertEqual(indexStore.savedSnapshots.count, 2)
     }
 
@@ -1548,6 +1551,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
 
         XCTAssertEqual(viewModel.songs.first?.previewCandidates.count, 1)
+        _ = await viewModel.indexPersistTask?.value
         XCTAssertEqual(indexStore.savedSnapshots.count, 2)
     }
 

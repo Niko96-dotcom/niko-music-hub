@@ -15,7 +15,9 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         try accessQueue.sync {
             try Self.configureWAL(at: databaseURL)
-            self.connection = try Self.openConnection(at: databaseURL)
+            let db = try Self.openConnection(at: databaseURL)
+            self.connection = db
+            Self.performVacuumMaintenanceBestEffort(db)
         }
     }
 
@@ -99,6 +101,24 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
         guard mode.caseInsensitiveCompare("wal") == .orderedSame else {
             throw StoreError.exec("expected WAL journal mode, got \(mode)")
         }
+    }
+
+    /// Whole-snapshot rewrites historically left the file almost entirely freelist (50+ MB of
+    /// dead pages around ~100 KB of live data). auto_vacuum keeps commits reclaiming pages, but
+    /// on databases created before the pragma it only takes effect after a one-time VACUUM —
+    /// so this vacuums exactly once per legacy database, then becomes a no-op.
+    private static func performVacuumMaintenanceBestEffort(_ db: OpaquePointer) {
+        guard sqlite3_exec(db, "PRAGMA auto_vacuum = FULL;", nil, nil, nil) == SQLITE_OK else { return }
+        guard intPragma(db, "auto_vacuum") != 1 else { return }
+        _ = sqlite3_exec(db, "VACUUM;", nil, nil, nil)
+    }
+
+    private static func intPragma(_ db: OpaquePointer, _ name: String) -> Int64? {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA \(name);", -1, &statement, nil) == SQLITE_OK,
+              sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return sqlite3_column_int64(statement, 0)
     }
 
     private static func message(_ db: OpaquePointer?) -> String {

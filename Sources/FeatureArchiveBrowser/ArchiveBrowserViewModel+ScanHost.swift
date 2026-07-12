@@ -59,15 +59,14 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             bpmCache: &mixdownBPMBySongID,
             keyCache: &mixdownKeyBySongID
         )
-        // Scan already writes a fresh index — cancel any pending metadata-edit persist.
-        indexPersistTask?.cancel()
-        if let warning = catalog.persistCachedIndex(roots: roots, songs: songs, scannedAt: update.scannedAt) {
-            recordPersistenceWarning(warning)
-        }
+        // Scan writes a fresh index. Scheduling supersedes any pending metadata-edit persist
+        // and keeps the whole-catalog encode+write off the main actor. Metadata upserts stay
+        // synchronous so an in-flight snapshot write can never clobber a fresh edit.
         if update.shouldPersistUserMetadata,
            let warning = catalog.persistUserMetadata(for: songs) {
             recordPersistenceWarning(warning)
         }
+        scheduleIndexPersist(afterNanoseconds: 0)
     }
 
     func applyScanFailure(_ error: Error) {

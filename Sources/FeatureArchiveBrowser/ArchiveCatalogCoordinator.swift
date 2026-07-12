@@ -118,11 +118,15 @@ struct ArchiveCatalogCoordinator {
             return nil
         }
 
-        let merged = Self.mergeIncrementalScan(
-            existing: existingSongs,
-            incremental: incremental.result,
-            affectedSongIDs: incremental.affectedSongIDs
-        )
+        // The merge stats every existing song folder — keep it off the main actor
+        // (archives on slow/external volumes make each stat call visible).
+        let merged = await Task.detached(priority: .userInitiated) { [result = incremental.result, affectedSongIDs = incremental.affectedSongIDs] in
+            Self.mergeIncrementalScan(
+                existing: existingSongs,
+                incremental: result,
+                affectedSongIDs: affectedSongIDs
+            )
+        }.value
         let withMetadata = mergeUserMetadata(into: merged, collaborators: collaborators)
         let mergedResult = ScanResult(
             songs: withMetadata,
@@ -160,7 +164,7 @@ struct ArchiveCatalogCoordinator {
         return (result, affectedSongIDs)
     }
 
-    static func mergeIncrementalScan(
+    nonisolated static func mergeIncrementalScan(
         existing: [Song],
         incremental: ScanResult,
         affectedSongIDs: Set<String>,
@@ -271,22 +275,6 @@ struct ArchiveCatalogCoordinator {
         return .loaded(songs: songs, scannedAt: snapshot.scannedAt)
     }
 
-    func persistCachedIndex(roots: [URL], songs: [Song], scannedAt: Date) -> String? {
-        guard let archiveIndexStore else { return nil }
-        let snapshot = ArchiveIndexSnapshot(
-            roots: roots.map { $0.standardizedFileURL.path },
-            songs: songs,
-            scannedAt: scannedAt
-        )
-        do {
-            try archiveIndexStore.save(snapshot)
-        } catch {
-            diagnostics.log(.error, "Archive cache save failed: \(error)")
-            return "Archive cache could not be saved: \(error.localizedDescription)"
-        }
-        return nil
-    }
-
     func persistUserMetadata(for songs: [Song]) -> String? {
         guard let songMetadataStore, !songs.isEmpty else { return nil }
         let items = songs.map { SongUserMetadata.from(song: $0) }
@@ -297,6 +285,28 @@ struct ArchiveCatalogCoordinator {
             return "Song metadata could not be saved: \(error.localizedDescription)"
         }
         return nil
+    }
+
+    /// Off-main-actor variant of ``persistCachedIndex(roots:songs:scannedAt:)`` — encoding the
+    /// whole catalog to JSON is proportional to catalog size and stalls the UI on the main actor.
+    func persistCachedIndexDetached(roots: [URL], songs: [Song], scannedAt: Date) async -> String? {
+        guard let archiveIndexStore else { return nil }
+        let snapshot = ArchiveIndexSnapshot(
+            roots: roots.map { $0.standardizedFileURL.path },
+            songs: songs,
+            scannedAt: scannedAt
+        )
+        let failure = await Task.detached(priority: .utility) { () -> (log: String, warning: String)? in
+            do {
+                try archiveIndexStore.save(snapshot)
+                return nil
+            } catch {
+                return ("\(error)", error.localizedDescription)
+            }
+        }.value
+        guard let failure else { return nil }
+        diagnostics.log(.error, "Archive cache save failed: \(failure.log)")
+        return "Archive cache could not be saved: \(failure.warning)"
     }
 }
 

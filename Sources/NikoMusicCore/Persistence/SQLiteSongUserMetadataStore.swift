@@ -100,76 +100,94 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
         guard !metadata.isEmpty else { return }
         let formatter = ISO8601DateFormatter()
         try withConnection { db in
-            for item in metadata {
-                let previousStatus = try storedWorkflowStatus(for: item.songID, db: db)
-                if previousStatus != item.workflowStatus {
-                    try insertStatusChange(
-                        WorkflowStatusChange(
-                            songID: item.songID,
-                            fromStatus: previousStatus,
-                            toStatus: item.workflowStatus,
-                            changedAt: item.updatedAt
-                        ),
-                        formatter: formatter,
-                        db: db
-                    )
-                }
-                let aliasesData = try encoder.encode(item.aliases)
-                let ignoredPreviewData = try encoder.encode(item.ignoredPreviewCandidateIDs)
-                let collaboratorData = try encoder.encode(item.collaboratorIDs)
-                let ignoredCPRData = try encoder.encode(item.ignoredCPRVersionIDs)
-                guard let aliasesJSON = String(data: aliasesData, encoding: .utf8),
-                      let ignoredPreviewJSON = String(data: ignoredPreviewData, encoding: .utf8),
-                      let collaboratorJSON = String(data: collaboratorData, encoding: .utf8),
-                      let ignoredCPRJSON = String(data: ignoredCPRData, encoding: .utf8) else {
-                    throw StoreError.encode("utf8")
-                }
-                let updatedText = formatter.string(from: item.updatedAt)
-                var statement: OpaquePointer?
-                defer { sqlite3_finalize(statement) }
-                let sql = """
-                INSERT INTO song_metadata (
-                  song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
-                  manual_main_preview_id, ignored_preview_ids_json, updated_at,
-                  collaborator_ids_json, is_ignored, cpr_selection_mode,
-                  manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(song_id) DO UPDATE SET
-                  virtual_title = excluded.virtual_title,
-                  aliases_json = excluded.aliases_json,
-                  app_note = excluded.app_note,
-                  preview_selection_mode = excluded.preview_selection_mode,
-                  manual_main_preview_id = excluded.manual_main_preview_id,
-                  ignored_preview_ids_json = excluded.ignored_preview_ids_json,
-                  updated_at = excluded.updated_at,
-                  collaborator_ids_json = excluded.collaborator_ids_json,
-                  is_ignored = excluded.is_ignored,
-                  cpr_selection_mode = excluded.cpr_selection_mode,
-                  manual_main_cpr_id = excluded.manual_main_cpr_id,
-                  ignored_cpr_ids_json = excluded.ignored_cpr_ids_json,
-                  workflow_status = excluded.workflow_status;
-                """
-                guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                    throw StoreError.prepare(message(db))
-                }
-                sqlite3_bind_text(statement, 1, item.songID, -1, sqliteTransient)
-                bindOptionalText(statement, index: 2, value: item.virtualTitle)
-                sqlite3_bind_text(statement, 3, aliasesJSON, -1, sqliteTransient)
-                bindOptionalText(statement, index: 4, value: item.appNote)
-                sqlite3_bind_text(statement, 5, item.previewSelectionMode.rawValue, -1, sqliteTransient)
-                bindOptionalText(statement, index: 6, value: item.manualMainPreviewID)
-                sqlite3_bind_text(statement, 7, ignoredPreviewJSON, -1, sqliteTransient)
-                sqlite3_bind_text(statement, 8, updatedText, -1, sqliteTransient)
-                sqlite3_bind_text(statement, 9, collaboratorJSON, -1, sqliteTransient)
-                sqlite3_bind_int(statement, 10, item.isIgnored ? 1 : 0)
-                sqlite3_bind_text(statement, 11, item.cprSelectionMode.rawValue, -1, sqliteTransient)
-                bindOptionalText(statement, index: 12, value: item.manualMainCPRID)
-                sqlite3_bind_text(statement, 13, ignoredCPRJSON, -1, sqliteTransient)
-                bindOptionalText(statement, index: 14, value: item.workflowStatus?.rawValue)
-                guard sqlite3_step(statement) == SQLITE_DONE else {
-                    throw StoreError.step(message(db))
-                }
+            // Scan-time persists write the whole catalog; without an explicit transaction
+            // SQLite commits (and fsyncs) once per row.
+            guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
             }
+            do {
+                for item in metadata {
+                    try upsertItem(item, formatter: formatter, db: db)
+                }
+            } catch {
+                _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw error
+            }
+            guard sqlite3_exec(db, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
+                _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw StoreError.exec(message(db))
+            }
+        }
+    }
+
+    private func upsertItem(_ item: SongUserMetadata, formatter: ISO8601DateFormatter, db: OpaquePointer) throws {
+        let previousStatus = try storedWorkflowStatus(for: item.songID, db: db)
+        if previousStatus != item.workflowStatus {
+            try insertStatusChange(
+                WorkflowStatusChange(
+                    songID: item.songID,
+                    fromStatus: previousStatus,
+                    toStatus: item.workflowStatus,
+                    changedAt: item.updatedAt
+                ),
+                formatter: formatter,
+                db: db
+            )
+        }
+        let aliasesData = try encoder.encode(item.aliases)
+        let ignoredPreviewData = try encoder.encode(item.ignoredPreviewCandidateIDs)
+        let collaboratorData = try encoder.encode(item.collaboratorIDs)
+        let ignoredCPRData = try encoder.encode(item.ignoredCPRVersionIDs)
+        guard let aliasesJSON = String(data: aliasesData, encoding: .utf8),
+              let ignoredPreviewJSON = String(data: ignoredPreviewData, encoding: .utf8),
+              let collaboratorJSON = String(data: collaboratorData, encoding: .utf8),
+              let ignoredCPRJSON = String(data: ignoredCPRData, encoding: .utf8) else {
+            throw StoreError.encode("utf8")
+        }
+        let updatedText = formatter.string(from: item.updatedAt)
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = """
+        INSERT INTO song_metadata (
+          song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
+          manual_main_preview_id, ignored_preview_ids_json, updated_at,
+          collaborator_ids_json, is_ignored, cpr_selection_mode,
+          manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(song_id) DO UPDATE SET
+          virtual_title = excluded.virtual_title,
+          aliases_json = excluded.aliases_json,
+          app_note = excluded.app_note,
+          preview_selection_mode = excluded.preview_selection_mode,
+          manual_main_preview_id = excluded.manual_main_preview_id,
+          ignored_preview_ids_json = excluded.ignored_preview_ids_json,
+          updated_at = excluded.updated_at,
+          collaborator_ids_json = excluded.collaborator_ids_json,
+          is_ignored = excluded.is_ignored,
+          cpr_selection_mode = excluded.cpr_selection_mode,
+          manual_main_cpr_id = excluded.manual_main_cpr_id,
+          ignored_cpr_ids_json = excluded.ignored_cpr_ids_json,
+          workflow_status = excluded.workflow_status;
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(statement, 1, item.songID, -1, sqliteTransient)
+        bindOptionalText(statement, index: 2, value: item.virtualTitle)
+        sqlite3_bind_text(statement, 3, aliasesJSON, -1, sqliteTransient)
+        bindOptionalText(statement, index: 4, value: item.appNote)
+        sqlite3_bind_text(statement, 5, item.previewSelectionMode.rawValue, -1, sqliteTransient)
+        bindOptionalText(statement, index: 6, value: item.manualMainPreviewID)
+        sqlite3_bind_text(statement, 7, ignoredPreviewJSON, -1, sqliteTransient)
+        sqlite3_bind_text(statement, 8, updatedText, -1, sqliteTransient)
+        sqlite3_bind_text(statement, 9, collaboratorJSON, -1, sqliteTransient)
+        sqlite3_bind_int(statement, 10, item.isIgnored ? 1 : 0)
+        sqlite3_bind_text(statement, 11, item.cprSelectionMode.rawValue, -1, sqliteTransient)
+        bindOptionalText(statement, index: 12, value: item.manualMainCPRID)
+        sqlite3_bind_text(statement, 13, ignoredCPRJSON, -1, sqliteTransient)
+        bindOptionalText(statement, index: 14, value: item.workflowStatus?.rawValue)
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw StoreError.step(message(db))
         }
     }
 

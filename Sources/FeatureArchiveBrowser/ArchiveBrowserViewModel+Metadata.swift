@@ -144,15 +144,7 @@ extension ArchiveBrowserViewModel {
         if let warning = catalog.persistUserMetadata(for: [created]) {
             recordPersistenceWarning(warning)
         }
-        if !roots.isEmpty {
-            if let warning = catalog.persistCachedIndex(
-                roots: roots,
-                songs: songs,
-                scannedAt: scanDiagnostics?.scannedAt ?? Date()
-            ) {
-                recordPersistenceWarning(warning)
-            }
-        }
+        scheduleIndexPersist(afterNanoseconds: 0)
         selectSong(created)
         if created.effectiveLatestCPR != nil {
             try openLatestCPR(for: created)
@@ -188,15 +180,28 @@ extension ArchiveBrowserViewModel {
     }
 
     /// Coalesce full-catalog JSON index writes while the user edits metadata.
-    /// Reads live catalog state at fire time so a later scan cannot be overwritten by a stale snapshot.
     func scheduleDebouncedIndexPersist() {
+        scheduleIndexPersist(afterNanoseconds: 500_000_000)
+    }
+
+    /// Serialized off-main-actor index-snapshot persist. Reads live catalog state at fire time so a
+    /// later scan cannot be overwritten by a stale snapshot, and chains on the previous persist task
+    /// so writes land in schedule order even when an older write is still in flight. Only the cache
+    /// snapshot goes through here — the metadata store stays synchronous (and authoritative), so a
+    /// stale in-flight snapshot can never clobber a fresh edit.
+    func scheduleIndexPersist(afterNanoseconds delay: UInt64) {
         guard !roots.isEmpty else { return }
-        indexPersistTask?.cancel()
+        let previous = indexPersistTask
+        previous?.cancel()
+        let generation = rootGeneration
         indexPersistTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            _ = await previous?.value
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
             guard let self, !Task.isCancelled else { return }
-            guard !self.roots.isEmpty else { return }
-            if let warning = self.catalog.persistCachedIndex(
+            guard !self.roots.isEmpty, self.rootGeneration == generation else { return }
+            if let warning = await self.catalog.persistCachedIndexDetached(
                 roots: self.roots,
                 songs: self.songs,
                 scannedAt: self.scanDiagnostics?.scannedAt ?? Date()
