@@ -58,23 +58,38 @@ extension ArchiveBrowserViewModel {
         setStatusMessage(nextStatusMessage)
     }
 
-    @discardableResult
-    func loadCachedIndexIfAvailable() -> Bool {
-        let cached = catalog.loadCachedSongs(roots: roots, collaborators: collaborators)
-        guard case .loaded(let songs, let scannedAt) = cached else {
-            if case .failed(let warning) = cached {
-                recordPersistenceWarning(warning)
+    /// Launch-time cache bootstrap. The snapshot decode runs off the main actor; the result
+    /// is dropped when roots changed while loading or a scan already applied fresher data.
+    func loadCachedIndexIfAvailable() {
+        let rootsSnapshot = roots
+        let generation = rootGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let cached = await self.catalog.loadCachedSongsDetached(
+                roots: rootsSnapshot,
+                collaborators: self.collaborators
+            )
+            guard self.rootGeneration == generation else { return }
+            switch cached {
+            case .failed(let warning):
+                self.recordPersistenceWarning(warning)
+            case .empty:
+                break
+            case .loaded(let songs, let scannedAt):
+                // A finished scan already applied fresher results; keep them.
+                guard self.songs.isEmpty, self.scanDiagnostics == nil else { return }
+                self.mutateCatalog {
+                    self.songs = songs
+                }
+                // While the launch scan runs, its status line stays in charge.
+                if !self.isScanning {
+                    let formatter = RelativeDateTimeFormatter()
+                    formatter.unitsStyle = .abbreviated
+                    let relative = formatter.localizedString(for: scannedAt, relativeTo: Date())
+                    self.setStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
+                }
             }
-            return false
         }
-        mutateCatalog {
-            self.songs = songs
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
-            let relative = formatter.localizedString(for: scannedAt, relativeTo: Date())
-            setStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
-        }
-        return true
     }
 
     func restartArchiveRootWatching() {

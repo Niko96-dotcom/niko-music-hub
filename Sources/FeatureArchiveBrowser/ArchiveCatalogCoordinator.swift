@@ -257,22 +257,52 @@ struct ArchiveCatalogCoordinator {
         )
     }
 
-    func loadCachedSongs(
+    /// Launch-time cache bootstrap. Decoding a real catalog snapshot is tens of MB of JSON,
+    /// so the load, metadata merge, and decode all run off the main actor.
+    func loadCachedSongsDetached(
         roots: [URL],
         collaborators: [Collaborator]
-    ) -> ArchiveCacheLoadResult {
+    ) async -> ArchiveCacheLoadResult {
         guard let archiveIndexStore else { return .empty }
-        let snapshot: ArchiveIndexSnapshot?
-        do {
-            snapshot = try archiveIndexStore.loadLatest()
-        } catch {
-            diagnostics.log(.error, "Archive cache load failed: \(error)")
-            return .failed("Archive cache could not be loaded: \(error.localizedDescription)")
+        let songMetadataStore = self.songMetadataStore
+        let hasMetadataSources = songMetadataStore != nil || collaboratorStore != nil
+        let outcome = await Task.detached(priority: .userInitiated) {
+            () -> (result: ArchiveCacheLoadResult, logs: [String]) in
+            let snapshot: ArchiveIndexSnapshot?
+            do {
+                snapshot = try archiveIndexStore.loadLatest()
+            } catch {
+                return (
+                    .failed("Archive cache could not be loaded: \(error.localizedDescription)"),
+                    ["Archive cache load failed: \(error)"]
+                )
+            }
+            guard let snapshot, snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else {
+                return (.empty, [])
+            }
+            guard hasMetadataSources else {
+                return (.loaded(songs: snapshot.songs, scannedAt: snapshot.scannedAt), [])
+            }
+            var logs: [String] = []
+            let metadata: [String: SongUserMetadata]
+            do {
+                metadata = try songMetadataStore?.loadAll() ?? [:]
+            } catch {
+                logs.append("Song metadata load failed: \(error)")
+                metadata = [:]
+            }
+            let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
+            let merged = ArchiveMetadataMerger.merge(
+                scanned: snapshot.songs,
+                metadataByID: metadata,
+                collaboratorsByID: map
+            )
+            return (.loaded(songs: merged, scannedAt: snapshot.scannedAt), logs)
+        }.value
+        for log in outcome.logs {
+            diagnostics.log(.error, log)
         }
-        guard let snapshot else { return .empty }
-        guard snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else { return .empty }
-        let songs = mergeUserMetadata(into: snapshot.songs, collaborators: collaborators)
-        return .loaded(songs: songs, scannedAt: snapshot.scannedAt)
+        return outcome.result
     }
 
     func persistUserMetadata(for songs: [Song]) -> String? {

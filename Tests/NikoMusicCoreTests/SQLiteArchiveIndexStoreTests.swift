@@ -40,9 +40,100 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: databaseURL) }
         let snapshot = ArchiveIndexSnapshot(roots: ["/archive"], songs: [], scannedAt: Date(timeIntervalSince1970: 1))
         try store.save(snapshot)
-        try executeSQL("UPDATE archive_snapshot SET roots_json = '{not-json}' WHERE id = 1;", databaseURL: databaseURL)
+        try executeSQL("UPDATE archive_snapshot_meta SET roots_json = '{not-json}' WHERE id = 1;", databaseURL: databaseURL)
 
         XCTAssertThrowsError(try store.loadLatest())
+    }
+
+    func testMalformedSongRowJSONThrows() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")
+        let store = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Song A", isDirectory: true),
+            originalFolderName: "Song A",
+            displayTitle: "Song A"
+        )
+        try store.save(ArchiveIndexSnapshot(roots: ["/archive"], songs: [song], scannedAt: Date(timeIntervalSince1970: 1)))
+        try executeSQL("UPDATE archive_snapshot_song SET song_json = '{not-json}';", databaseURL: databaseURL)
+
+        XCTAssertThrowsError(try store.loadLatest())
+    }
+
+    func testSavePreservesSongOrderAndDropsRemovedSongs() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")
+        let store = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        func song(_ title: String) -> Song {
+            Song(
+                folderPath: URL(fileURLWithPath: "/tmp/\(title)", isDirectory: true),
+                originalFolderName: title,
+                displayTitle: title
+            )
+        }
+        let first = ArchiveIndexSnapshot(
+            roots: ["/archive"],
+            songs: [song("Zebra"), song("Apple"), song("Mango")],
+            scannedAt: Date(timeIntervalSince1970: 1)
+        )
+        try store.save(first)
+        XCTAssertEqual(try store.loadLatest(), first)
+
+        let second = ArchiveIndexSnapshot(
+            roots: ["/archive"],
+            songs: [song("Mango"), song("Apple")],
+            scannedAt: Date(timeIntervalSince1970: 2)
+        )
+        try store.save(second)
+        XCTAssertEqual(try store.loadLatest(), second)
+    }
+
+    func testLegacySingleBlobSnapshotLoadsAndMigratesOnSave() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Legacy Song", isDirectory: true),
+            originalFolderName: "Legacy Song",
+            displayTitle: "Legacy Song"
+        )
+        let legacy = ArchiveIndexSnapshot(
+            roots: ["/archive/active"],
+            songs: [song],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let rootsJSON = String(data: try encoder.encode(legacy.roots), encoding: .utf8)!
+        let songsJSON = String(data: try encoder.encode(legacy.songs), encoding: .utf8)!
+        let scannedText = ISO8601DateFormatter().string(from: legacy.scannedAt)
+        try executeSQL(
+            """
+            CREATE TABLE archive_snapshot (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              roots_json TEXT NOT NULL,
+              songs_json TEXT NOT NULL,
+              scanned_at TEXT NOT NULL
+            );
+            INSERT INTO archive_snapshot (id, roots_json, songs_json, scanned_at)
+            VALUES (1, '\(rootsJSON)', '\(songsJSON)', '\(scannedText)');
+            """,
+            databaseURL: databaseURL
+        )
+
+        let store = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        XCTAssertEqual(try store.loadLatest(), legacy)
+
+        try store.save(legacy)
+        XCTAssertEqual(try store.loadLatest(), legacy)
+        XCTAssertThrowsError(
+            try executeSQL("SELECT * FROM archive_snapshot;", databaseURL: databaseURL),
+            "legacy blob table must be dropped after the first per-song save"
+        )
     }
 
     func testSQLiteArchiveIndexStoreUsesTruthfulStepHandlingAndBusyTimeout() throws {

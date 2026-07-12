@@ -509,7 +509,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
     }
 
-    func testArchiveCacheLoadFailureIsVisibleOnLaunch() throws {
+    func testArchiveCacheLoadFailureIsVisibleOnLaunch() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
@@ -529,6 +529,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
+        let deadline = Date().addingTimeInterval(2)
+        while viewModel.statusMessage?.contains("Archive cache could not be loaded") != true, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be loaded") == true)
     }
 
