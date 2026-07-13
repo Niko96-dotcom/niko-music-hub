@@ -164,6 +164,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         guard inboxObservationTask == nil else { return }
         inboxObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
+                guard !Task.isCancelled else { return }
                 self?.loadResults()
             }
         }
@@ -171,32 +172,34 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     private func observe(job: Job) {
         jobObservationTask?.cancel()
+        let jobRunner = context.jobRunner
         jobObservationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                guard let current = self.context.jobRunner.job(id: job.id) else {
-                    self.finish(message: "Job no longer tracked.")
-                    return
-                }
-                self.progress = current.progress
-                if !current.message.isEmpty {
-                    self.statusMessage = current.message
-                }
-                if current.state == .completed {
-                    self.finish(message: "Separation complete.")
-                    self.loadResults()
-                    return
-                }
-                if current.state == .failed {
-                    self.finish(message: current.message, error: current.message)
-                    return
-                }
-                if current.state == .canceled {
-                    self.finish(message: "Canceled.")
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 100_000_000)
+            for await current in jobRunner.updates(for: job.id) {
+                guard !Task.isCancelled else { return }
+                guard self?.applyObservedJob(current, expectedID: job.id) == false else { return }
             }
+        }
+    }
+
+    private func applyObservedJob(_ current: Job, expectedID: Job.ID) -> Bool {
+        guard currentJobID == expectedID else { return true }
+        progress = current.progress
+        if !current.message.isEmpty {
+            statusMessage = current.message
+        }
+        switch current.state {
+        case .completed:
+            finish(message: "Separation complete.")
+            loadResults()
+            return true
+        case .failed:
+            finish(message: current.message, error: current.message)
+            return true
+        case .canceled:
+            finish(message: "Canceled.")
+            return true
+        case .queued, .running:
+            return false
         }
     }
 
@@ -232,10 +235,17 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
               let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme),
               let host = url.host?.lowercased(),
-              host.contains("youtube.com") || host.contains("youtu.be") else {
+              Self.isApprovedYouTubeHost(host) else {
             return nil
         }
         return url
+    }
+
+    static func isApprovedYouTubeHost(_ host: String) -> Bool {
+        host == "youtube.com"
+            || host.hasSuffix(".youtube.com")
+            || host == "youtu.be"
+            || host.hasSuffix(".youtu.be")
     }
 
     private func diagnosticsError(_ error: Error) {

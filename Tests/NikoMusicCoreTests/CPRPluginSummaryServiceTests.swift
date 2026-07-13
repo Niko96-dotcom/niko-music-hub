@@ -2,14 +2,14 @@ import XCTest
 @testable import NikoMusicCore
 
 final class CPRPluginSummaryServiceTests: XCTestCase {
-    func testParsesEmbeddedMarkerFromFixtureCPR() throws {
+    func testParsesEmbeddedMarkerFromFixtureCPR() async throws {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("plugins-\(UUID().uuidString).cpr")
         let contents = "binary\u{0}NIKO_PLUGINS:EQ One,Compressor Pro\u{0}trailer"
         FileManager.default.createFile(atPath: file.path, contents: Data(contents.utf8))
         defer { try? FileManager.default.removeItem(at: file) }
 
-        let summary = CPRPluginSummaryService.loadPlugins(
+        let summary = await CPRPluginSummaryService.loadPlugins(
             cprURL: file,
             subprocessRunner: { _ in nil }
         )
@@ -17,13 +17,13 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
         XCTAssertEqual(summary.source, "marker")
     }
 
-    func testReturnsEmptyWhenNoPluginsFound() throws {
+    func testReturnsEmptyWhenNoPluginsFound() async throws {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("empty-\(UUID().uuidString).cpr")
         FileManager.default.createFile(atPath: file.path, contents: Data("fixture".utf8))
         defer { try? FileManager.default.removeItem(at: file) }
 
-        let summary = CPRPluginSummaryService.loadPlugins(
+        let summary = await CPRPluginSummaryService.loadPlugins(
             cprURL: file,
             subprocessRunner: { _ in nil }
         )
@@ -31,7 +31,7 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
         XCTAssertEqual(summary.source, "empty")
     }
 
-    func testSkipsInMemoryParserForOversizedCPR() throws {
+    func testSkipsInMemoryParserForOversizedCPR() async throws {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("large-\(UUID().uuidString).cpr")
         defer { try? FileManager.default.removeItem(at: file) }
@@ -40,11 +40,18 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
         data.append(Data("Name=\"Huge Synth\"".utf8))
         try data.write(to: file)
 
-        let summary = CPRPluginSummaryService.loadPlugins(
+        let summary = await CPRPluginSummaryService.loadPlugins(
             cprURL: file,
             subprocessRunner: { _ in nil }
         )
         XCTAssertTrue(summary.pluginNames.isEmpty)
         XCTAssertEqual(summary.source, "empty")
+    }
+
+    func testParsesSubprocessOutputWithoutCommentsOrBlankLines() {
+        XCTAssertEqual(
+            CPRPluginSummaryService.parsePluginListOutput("# generated\nEQ One\n\nCompressor Pro\n"),
+            ["EQ One", "Compressor Pro"]
+        )
     }
 }

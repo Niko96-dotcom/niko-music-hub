@@ -1,4 +1,5 @@
 import AppCore
+import Darwin
 import XCTest
 
 final class ExternalProcessRunningTests: XCTestCase {
@@ -87,6 +88,129 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertTrue(streamed.joined().contains("first"))
         XCTAssertTrue(streamed.joined().contains("warn"))
         XCTAssertTrue(result.standardOutput.contains("second"))
+    }
+
+    func testTimeoutReturnsPromptlyWhenChildIgnoresSIGTERM() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let startedAt = ContinuousClock.now
+
+        do {
+            _ = try await runner.run(
+                ExternalProcessRequest(
+                    executableURL: perlURL,
+                    arguments: ["-e", "$SIG{TERM}='IGNORE'; sleep 10"],
+                    timeoutSeconds: 0.1
+                )
+            )
+            XCTFail("Expected timeout")
+        } catch let error as ExternalProcessError {
+            XCTAssertEqual(error, .timedOut(executable: "perl", seconds: 0.1))
+        }
+
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
+    }
+
+    func testTimeoutKillsDescendantProcessGroup() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let pidFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("process-descendant-\(UUID().uuidString).pid")
+        defer { try? FileManager.default.removeItem(at: pidFile) }
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let script = """
+        $child=fork();
+        if ($child == 0) {
+          $SIG{TERM}='IGNORE';
+          open($fh, '>', $ARGV[0]) or die $!;
+          print $fh $$;
+          close($fh);
+          sleep 10;
+          exit 0;
+        }
+        $SIG{TERM}='IGNORE';
+        sleep 10;
+        """
+
+        do {
+            _ = try await runner.run(
+                ExternalProcessRequest(
+                    executableURL: perlURL,
+                    arguments: ["-e", script, pidFile.path],
+                    timeoutSeconds: 0.3
+                )
+            )
+            XCTFail("Expected timeout")
+        } catch let error as ExternalProcessError {
+            XCTAssertEqual(error, .timedOut(executable: "perl", seconds: 0.3))
+        }
+
+        let pidText = try String(contentsOf: pidFile, encoding: .utf8)
+        let descendantPID = try XCTUnwrap(pid_t(pidText))
+        for _ in 0..<100 where kill(descendantPID, 0) == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(kill(descendantPID, 0), -1, "Descendant process survived group termination")
+        XCTAssertEqual(errno, ESRCH)
+    }
+
+    func testCapturedOutputUsesBoundedRingBuffer() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let limit = 32 * 1024
+        let runner = FoundationExternalProcessRunner(maximumCapturedOutputBytes: limit)
+
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: perlURL,
+                arguments: ["-e", "print 'a' x (2 * 1024 * 1024)"]
+            )
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput.utf8.count, limit)
+        XCTAssertTrue(result.standardOutputWasTruncated)
+    }
+
+    func testTaskCancellationReturnsWithoutWaitingForIgnoredTERMChild() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let task = Task {
+            try await runner.run(
+                ExternalProcessRequest(
+                    executableURL: perlURL,
+                    arguments: ["-e", "$SIG{TERM}='IGNORE'; sleep 10"]
+                )
+            )
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        let canceledAt = ContinuousClock.now
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertLessThan(canceledAt.duration(to: .now), .seconds(1))
+    }
+
+    func testSignalTerminationIsTyped() async throws {
+        let shellURL = URL(fileURLWithPath: "/bin/sh")
+        let runner = FoundationExternalProcessRunner()
+
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: shellURL,
+                arguments: ["-c", "kill -KILL $$"]
+            )
+        )
+
+        XCTAssertEqual(result.exitCode, 128 + SIGKILL)
+        XCTAssertEqual(result.termination, .signaled(signal: SIGKILL))
     }
 
     func testNoShellExecutionStringsAppearInRunnerSource() throws {

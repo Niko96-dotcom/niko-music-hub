@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 import NikoMusicCore
 
@@ -97,6 +98,11 @@ final class ArchiveMixdownAnalysisCoordinator {
 @MainActor
 final class ArchiveCPRPluginCoordinator {
     private var loadTask: Task<Void, Never>?
+    private let processRunner: any ExternalProcessRunning
+
+    init(processRunner: any ExternalProcessRunning = FoundationExternalProcessRunner()) {
+        self.processRunner = processRunner
+    }
 
     func cancel() {
         loadTask?.cancel()
@@ -123,10 +129,26 @@ final class ArchiveCPRPluginCoordinator {
         let path = cpr.filePath.standardizedFileURL.path
         guard cache[path] == nil else { return }
         let songID = song.id
+        let processRunner = processRunner
         loadTask = Task {
-            let summary = await Task.detached(priority: .utility) {
-                CPRPluginSummaryService.loadPlugins(cprURL: cpr.filePath)
-            }.value
+            let summary = await CPRPluginSummaryService.loadPlugins(
+                cprURL: cpr.filePath,
+                subprocessRunner: { cprURL in
+                    do {
+                        let result = try await processRunner.run(
+                            ExternalProcessRequest(
+                                executableURL: URL(fileURLWithPath: "/usr/bin/env"),
+                                arguments: ["cubase-project-plugins", cprURL.path],
+                                timeoutSeconds: 5
+                            )
+                        )
+                        guard result.exitCode == 0 else { return nil }
+                        return CPRPluginSummaryService.parsePluginListOutput(result.standardOutput)
+                    } catch {
+                        return nil
+                    }
+                }
+            )
             guard !Task.isCancelled, isStillSelected(songID) else { return }
             apply(path, summary)
         }

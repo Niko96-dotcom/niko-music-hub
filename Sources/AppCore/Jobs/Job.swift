@@ -8,6 +8,17 @@ public enum JobState: String, Codable, Sendable, CaseIterable {
     case canceled
 }
 
+public extension JobState {
+    var isTerminal: Bool {
+        switch self {
+        case .completed, .failed, .canceled:
+            true
+        case .queued, .running:
+            false
+        }
+    }
+}
+
 public struct JobLogEntry: Equatable, Codable, Sendable, Identifiable {
     public let id: UUID
     public var message: String

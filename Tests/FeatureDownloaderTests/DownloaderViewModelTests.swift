@@ -4,6 +4,103 @@ import XCTest
 
 @MainActor
 final class DownloaderViewModelTests: XCTestCase {
+    func testValidatedHTTPURLRejectsDeceptiveSchemesAndMissingHosts() {
+        XCTAssertNil(DownloaderViewModel.validatedHTTPURL("httpx://example.com/file"))
+        XCTAssertNil(DownloaderViewModel.validatedHTTPURL("file:///tmp/audio.wav"))
+        XCTAssertNil(DownloaderViewModel.validatedHTTPURL("https:///missing-host"))
+        XCTAssertNotNil(DownloaderViewModel.validatedHTTPURL("https://example.com/file"))
+    }
+
+    func testCanceledDebounceNeverInvokesHealthChecker() async throws {
+        let runner = SequencedHealthRunner()
+        let checker = YtDlpHealthChecker(
+            runner: runner,
+            fileExists: { _ in true }
+        )
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: Job(sourceToolID: "downloader", title: "Download")),
+            jobRunner: StaticJobRunner(job: Job(sourceToolID: "downloader", title: "Download")),
+            outputInboxStore: RecordingOutputInboxStore(),
+            healthChecker: checker,
+            debounceDuration: .milliseconds(40)
+        )
+        viewModel.urlText = "https://example.com/a"
+        viewModel.urlTextDidChange()
+        viewModel.clearInput()
+
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(runner.callCount, 0)
+        XCTAssertEqual(viewModel.downloadState, .idle)
+    }
+
+    func testSlowURLAResultCannotOverwriteURLB() async throws {
+        let runner = SequencedHealthRunner(firstDelay: .milliseconds(150), firstExitCode: 1)
+        let checker = YtDlpHealthChecker(runner: runner, fileExists: { _ in true })
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            healthChecker: checker,
+            debounceDuration: .milliseconds(5)
+        )
+        viewModel.urlText = "https://example.com/a"
+        viewModel.urlTextDidChange()
+        try await waitUntil { runner.callCount == 1 }
+
+        viewModel.urlText = "https://example.com/b"
+        viewModel.urlTextDidChange()
+        try await waitUntil { viewModel.downloadState == .readyToDownload }
+        try await Task.sleep(for: .milliseconds(180))
+
+        XCTAssertEqual(viewModel.downloadState, .readyToDownload)
+        XCTAssertEqual(viewModel.detectedFileName, "b")
+        XCTAssertEqual(runner.callCount, 2)
+    }
+
+    func testClearInputCancelsInFlightHealthCheck() async throws {
+        let runner = CancellableHealthRunner()
+        let checker = YtDlpHealthChecker(runner: runner, fileExists: { _ in true })
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            healthChecker: checker,
+            debounceDuration: .milliseconds(5)
+        )
+        viewModel.urlText = "https://example.com/a"
+        viewModel.urlTextDidChange()
+        try await waitUntil { runner.didStart }
+
+        viewModel.clearInput()
+
+        try await waitUntil { runner.wasCanceled }
+        XCTAssertEqual(viewModel.downloadState, .idle)
+    }
+
+    func testViewModelCanDeallocateWithPendingDebounce() async throws {
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        weak var weakViewModel: DownloaderViewModel?
+        do {
+            var viewModel: DownloaderViewModel? = makeViewModel(
+                useCase: FakeDownloaderUseCase(job: job),
+                jobRunner: StaticJobRunner(job: job),
+                outputInboxStore: RecordingOutputInboxStore(),
+                debounceDuration: .seconds(5)
+            )
+            viewModel?.urlText = "https://example.com/a"
+            viewModel?.urlTextDidChange()
+            weakViewModel = viewModel
+            viewModel = nil
+        }
+
+        for _ in 0..<20 where weakViewModel != nil {
+            await Task.yield()
+        }
+        XCTAssertNil(weakViewModel)
+    }
+
     func testStartDownloadSetsDownloadingSynchronouslyAndRejectsDuplicateStarts() async throws {
         let job = Job(
             sourceToolID: "downloader",
@@ -133,12 +230,15 @@ final class DownloaderViewModelTests: XCTestCase {
         useCase: FakeDownloaderUseCase,
         jobRunner: any JobRunning,
         outputInboxStore: any OutputInboxStore,
-        preferences: any PreferenceStore = UserDefaultsPreferenceStore()
+        preferences: any PreferenceStore = UserDefaultsPreferenceStore(),
+        healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
+        debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: FixtureSettingsStore(settings: AppSettings(
-                outputFolder: StoredFolderLocation(url: outputFolder)
+                outputFolder: StoredFolderLocation(url: outputFolder),
+                helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
             )),
             preferences: preferences,
             outputInboxStore: outputInboxStore,
@@ -148,7 +248,9 @@ final class DownloaderViewModelTests: XCTestCase {
         )
         return DownloaderViewModel(
             context: context,
-            useCase: useCase
+            useCase: useCase,
+            healthChecker: healthChecker,
+            debounceDuration: debounceDuration
         )
     }
 
@@ -163,6 +265,59 @@ final class DownloaderViewModelTests: XCTestCase {
         let url = directory.appendingPathComponent(name)
         try Data("download".utf8).write(to: url)
         return url
+    }
+}
+
+private final class SequencedHealthRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let firstDelay: Duration?
+    private let firstExitCode: Int32
+    private var storedCallCount = 0
+
+    init(firstDelay: Duration? = nil, firstExitCode: Int32 = 0) {
+        self.firstDelay = firstDelay
+        self.firstExitCode = firstExitCode
+    }
+
+    var callCount: Int {
+        lock.downloaderTestWithLock { storedCallCount }
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        let index = lock.downloaderTestWithLock { () -> Int in
+            let current = storedCallCount
+            storedCallCount += 1
+            return current
+        }
+        if index == 0, let firstDelay {
+            try? await Task.sleep(for: firstDelay)
+        }
+        let exitCode = index == 0 ? firstExitCode : 0
+        return ExternalProcessResult(
+            exitCode: exitCode,
+            standardOutput: exitCode == 0 ? "2099.01.01\n" : "",
+            standardError: exitCode == 0 ? "" : "unsupported"
+        )
+    }
+}
+
+private final class CancellableHealthRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedDidStart = false
+    private var storedWasCanceled = false
+
+    var didStart: Bool { lock.downloaderTestWithLock { storedDidStart } }
+    var wasCanceled: Bool { lock.downloaderTestWithLock { storedWasCanceled } }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        lock.downloaderTestWithLock { storedDidStart = true }
+        do {
+            try await Task.sleep(for: .seconds(10))
+            return ExternalProcessResult(exitCode: 0, standardOutput: "2099.01.01\n", standardError: "")
+        } catch {
+            lock.downloaderTestWithLock { storedWasCanceled = true }
+            throw error
+        }
     }
 }
 

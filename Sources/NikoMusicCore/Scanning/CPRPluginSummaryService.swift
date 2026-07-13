@@ -29,23 +29,24 @@ public enum CPRPluginSummaryService {
     public static func loadPlugins(
         cprURL: URL,
         fileManager: FileManager = .default,
-        subprocessRunner: @escaping @Sendable (URL) -> [String]? = { runCubaseProjectPlugins(cprURL: $0) }
-    ) -> CPRPluginSummary {
+        subprocessRunner: @escaping @Sendable (URL) async -> [String]? = { _ in nil }
+    ) async -> CPRPluginSummary {
         let standard = cprURL.standardizedFileURL
         let cacheKey = standard.path
         let modifiedAt = (try? standard.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
             ?? .distantPast
 
-        cacheLock.lock()
-        if let cached = cache[cacheKey], cached.modifiedAt == modifiedAt {
-            let summary = cached.summary
-            cacheLock.unlock()
-            return summary
+        if let cachedSummary = cacheLock.withLock({ () -> CPRPluginSummary? in
+            guard let cached = cache[cacheKey], cached.modifiedAt == modifiedAt else { return nil }
+            return cached.summary
+        }) {
+            return cachedSummary
         }
-        cacheLock.unlock()
 
         let summary: CPRPluginSummary
-        if let names = subprocessRunner(standard), !names.isEmpty {
+        if !Task.isCancelled,
+           let names = await subprocessRunner(standard),
+           !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "subprocess")
         } else if let names = parseEmbeddedMarker(in: standard, fileManager: fileManager), !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "marker")
@@ -57,20 +58,20 @@ public enum CPRPluginSummaryService {
             summary = .empty
         }
 
-        cacheLock.lock()
-        cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)
-        if cache.count > maxCacheEntries,
-           let keyToRemove = cache.min(by: { $0.value.modifiedAt < $1.value.modifiedAt })?.key {
-            cache.removeValue(forKey: keyToRemove)
+        cacheLock.withLock {
+            cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)
+            if cache.count > maxCacheEntries,
+               let keyToRemove = cache.min(by: { $0.value.modifiedAt < $1.value.modifiedAt })?.key {
+                cache.removeValue(forKey: keyToRemove)
+            }
         }
-        cacheLock.unlock()
         return summary
     }
 
     public static func clearCache() {
-        cacheLock.lock()
-        cache.removeAll()
-        cacheLock.unlock()
+        cacheLock.withLock {
+            cache.removeAll()
+        }
     }
 
     static func parseEmbeddedMarker(in url: URL, fileManager: FileManager) -> [String]? {
@@ -143,26 +144,19 @@ public enum CPRPluginSummaryService {
         return data.isEmpty ? nil : data
     }
 
-    @usableFromInline static func runCubaseProjectPlugins(cprURL: URL) -> [String]? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["cubase-project-plugins", cprURL.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return nil }
+    public static func parsePluginListOutput(_ output: String) -> [String]? {
         let names = output
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !$0.hasPrefix("#") }
         return names.isEmpty ? nil : names
+    }
+}
+
+private extension NSLock {
+    func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
     }
 }

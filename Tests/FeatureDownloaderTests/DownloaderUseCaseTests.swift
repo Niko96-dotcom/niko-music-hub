@@ -258,8 +258,13 @@ final class DownloaderUseCaseTests: XCTestCase {
             }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
-        throw XCTSkip("Timed out waiting for downloader job to finish")
+        XCTFail("Timed out waiting for downloader job to finish")
+        throw DownloaderUseCaseTestError.timeout
     }
+}
+
+private enum DownloaderUseCaseTestError: Error {
+    case timeout
 }
 
 private final class CapturingSimulateRunner: ExternalProcessRunning, @unchecked Sendable {

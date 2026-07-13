@@ -84,6 +84,16 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func youtubeURLValidationRejectsDeceptiveHosts() {
+        #expect(StemSeparationViewModel.isApprovedYouTubeHost("youtube.com"))
+        #expect(StemSeparationViewModel.isApprovedYouTubeHost("music.youtube.com"))
+        #expect(StemSeparationViewModel.isApprovedYouTubeHost("youtu.be"))
+        #expect(!StemSeparationViewModel.isApprovedYouTubeHost("notyoutube.com"))
+        #expect(!StemSeparationViewModel.isApprovedYouTubeHost("youtube.com.evil.example"))
+        #expect(!StemSeparationViewModel.isApprovedYouTubeHost("evilyoutu.be"))
+    }
+
+    @Test
     func startYouTubeSeparation_enqueuesWorkflowJob() async throws {
         let runner = JobRunner()
         let inbox = FakeOutputInboxStore()

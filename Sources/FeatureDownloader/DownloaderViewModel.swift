@@ -47,9 +47,13 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private let useCase: any DownloaderUseCaseRunning
     private let jobFactory: DownloaderJobFactory
     private let healthChecker: YtDlpHealthChecker
+    private let debounceDuration: Duration
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
+    private var downloadStartTask: Task<Void, Never>?
     private var inboxObservationTask: Task<Void, Never>?
+    private var validationGeneration: UInt64 = 0
+    private var observationGeneration: UInt64 = 0
     private static let formatSelectionDefaultsKey = "downloader.formatSelection"
 
     public init(
@@ -57,12 +61,14 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         useCase: any DownloaderUseCaseRunning,
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
         jobFactory: DownloaderJobFactory = DownloaderJobFactory(),
-        formatSelection: DownloadFormatSelection? = nil
+        formatSelection: DownloadFormatSelection? = nil,
+        debounceDuration: Duration = .milliseconds(500)
     ) {
         self.context = context
         self.useCase = useCase
         self.healthChecker = healthChecker
         self.jobFactory = jobFactory
+        self.debounceDuration = debounceDuration
         self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection(preferences: context.preferences)
     }
 
@@ -81,51 +87,86 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     }
 
     public func urlTextDidChange() {
+        validationGeneration &+= 1
+        let generation = validationGeneration
+        let input = urlText
+        let duration = debounceDuration
+        let healthChecker = healthChecker
+        let settingsStore = context.settingsStore
         debounceTask?.cancel()
-        debounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            await checkURL()
+        debounceTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: duration)
+            } catch {
+                return
+            }
+            guard self?.beginURLCheck(input: input, generation: generation) == true else { return }
+
+            let availability: YtDlpAvailability
+            do {
+                let settings = try settingsStore.loadSettings()
+                availability = await healthChecker.availability(settings: settings.helperTools)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.applyURLCheckError(error, input: input, generation: generation)
+                return
+            }
+            guard !Task.isCancelled else { return }
+            self?.applyURLCheckResult(availability, input: input, generation: generation)
         }
     }
 
-    private func checkURL() async {
-        guard let url = URL(string: urlText), urlText.hasPrefix("http") else {
+    private func beginURLCheck(input: String, generation: UInt64) -> Bool {
+        guard isCurrentValidation(input: input, generation: generation),
+              Self.validatedHTTPURL(input) != nil else {
             downloadState = .idle
             statusMessage = nil
             detectedFileName = nil
-            return
+            return false
         }
 
         downloadState = .checkingURL
         statusMessage = DownloaderCopy.checkingURL
+        return true
+    }
 
-        do {
-            let settings = try context.settingsStore.loadSettings()
-            let availability = await healthChecker.availability(settings: settings.helperTools)
-            switch availability {
-            case .available:
-                downloadState = .readyToDownload
-                statusMessage = DownloaderCopy.readyToDownload
-                detectedFileName = url.lastPathComponent
-            case .missing:
-                downloadState = .failed(DownloaderCopy.missingYtDlp)
-                statusMessage = nil
-            case .unusable:
-                downloadState = .failed(DownloaderCopy.unsupportedURL)
-                statusMessage = nil
-            case let .outdated(current, minimumExpected):
-                downloadState = .failed(DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected))
-                statusMessage = nil
-            }
-        } catch {
-            downloadState = .failed(error.localizedDescription)
+    private func applyURLCheckResult(
+        _ availability: YtDlpAvailability,
+        input: String,
+        generation: UInt64
+    ) {
+        guard isCurrentValidation(input: input, generation: generation),
+              let url = Self.validatedHTTPURL(input) else { return }
+        switch availability {
+        case .available:
+            downloadState = .readyToDownload
+            statusMessage = DownloaderCopy.readyToDownload
+            detectedFileName = url.lastPathComponent
+        case .missing:
+            downloadState = .failed(DownloaderCopy.missingYtDlp)
+            statusMessage = nil
+        case .unusable:
+            downloadState = .failed(DownloaderCopy.unsupportedURL)
+            statusMessage = nil
+        case let .outdated(current, minimumExpected):
+            downloadState = .failed(DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected))
             statusMessage = nil
         }
     }
 
+    private func applyURLCheckError(_ error: any Error, input: String, generation: UInt64) {
+        guard isCurrentValidation(input: input, generation: generation) else { return }
+        downloadState = .failed(error.localizedDescription)
+        statusMessage = nil
+    }
+
+    private func isCurrentValidation(input: String, generation: UInt64) -> Bool {
+        validationGeneration == generation && urlText == input
+    }
+
     public func startDownload() {
         guard case .readyToDownload = downloadState,
-              let sourceURL = URL(string: urlText) else {
+              let sourceURL = Self.validatedHTTPURL(urlText) else {
             return
         }
 
@@ -167,46 +208,83 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         downloadState = .downloading
         statusMessage = DownloaderCopy.downloading
 
-        Task { @MainActor in
+        downloadStartTask?.cancel()
+        observeTask?.cancel()
+        observationGeneration &+= 1
+        let generation = observationGeneration
+        let useCase = useCase
+        downloadStartTask = Task { @MainActor [weak self] in
             do {
                 let observedJob = try await useCase.simulateAndEnqueue(url: sourceURL, options: options)
-                self.job = observedJob
-                observeJob(id: observedJob.id, sourceURL: sourceURL)
+                guard !Task.isCancelled else { return }
+                self?.acceptStartedJob(observedJob, sourceURL: sourceURL, generation: generation)
+            } catch is CancellationError {
+                return
             } catch {
-                downloadState = .failed(error.localizedDescription)
-                statusMessage = nil
+                guard !Task.isCancelled else { return }
+                self?.applyStartError(error, generation: generation)
             }
         }
     }
 
-    private func observeJob(id: Job.ID, sourceURL: URL) {
+    private func acceptStartedJob(_ observedJob: Job, sourceURL: URL, generation: UInt64) {
+        guard observationGeneration == generation, downloadState == .downloading else { return }
+        job = observedJob
+        observeJob(id: observedJob.id, sourceURL: sourceURL, generation: generation)
+    }
+
+    private func applyStartError(_ error: any Error, generation: UInt64) {
+        guard observationGeneration == generation else { return }
+        downloadState = .failed(error.localizedDescription)
+        statusMessage = nil
+    }
+
+    private func observeJob(id: Job.ID, sourceURL: URL, generation: UInt64) {
         observeTask?.cancel()
-        observeTask = Task { @MainActor in
-            while let job = context.jobRunner.job(id: id) {
-                self.progress = job.progress
-                self.logEntries = job.logEntries.map(\.message)
-
-                if job.state == .completed {
-                    self.downloadState = .completed
-                    self.statusMessage = "Downloaded"
-                    await self.addToInbox(job: job, sourceURL: sourceURL)
-                    break
-                } else if job.state == .failed {
-                    self.downloadState = .failed(job.message)
-                    self.statusMessage = nil
-                    break
-                } else if job.state == .canceled {
-                    self.downloadState = .failed("Download was cancelled.")
-                    self.statusMessage = nil
-                    break
-                }
-
-                try? await Task.sleep(nanoseconds: 100_000_000)
+        let jobRunner = context.jobRunner
+        observeTask = Task { @MainActor [weak self] in
+            for await observedJob in jobRunner.updates(for: id) {
+                guard !Task.isCancelled else { return }
+                guard self?.applyObservedJob(
+                    observedJob,
+                    id: id,
+                    sourceURL: sourceURL,
+                    generation: generation
+                ) == false else { return }
             }
         }
     }
 
-    private func addToInbox(job: Job, sourceURL: URL) async {
+    private func applyObservedJob(
+        _ observedJob: Job,
+        id: Job.ID,
+        sourceURL: URL,
+        generation: UInt64
+    ) -> Bool {
+        guard observationGeneration == generation, job?.id == id else { return true }
+        progress = observedJob.progress
+        logEntries = observedJob.logEntries.map(\.message)
+
+        switch observedJob.state {
+        case .completed:
+            downloadState = .completed
+            statusMessage = "Downloaded"
+            addToInbox(job: observedJob, sourceURL: sourceURL)
+            return true
+        case .failed:
+            downloadState = .failed(observedJob.message)
+            statusMessage = nil
+            return true
+        case .canceled:
+            downloadState = .failed("Download was cancelled.")
+            statusMessage = nil
+            return true
+        case .queued, .running:
+            return false
+        }
+    }
+
+    private func addToInbox(job: Job, sourceURL: URL) {
         let foundURLs = job.outputFileURLs.filter {
             Self.regularFileExists(at: $0)
         }
@@ -241,6 +319,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         guard inboxObservationTask == nil else { return }
         inboxObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
+                guard !Task.isCancelled else { return }
                 self?.loadRecentDownloads()
             }
         }
@@ -257,7 +336,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     }
 
     public func retryAfterFailure() {
-        guard urlText.hasPrefix("http"), URL(string: urlText) != nil else {
+        guard Self.validatedHTTPURL(urlText) != nil else {
             downloadState = .idle
             return
         }
@@ -266,6 +345,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     }
 
     public func clearInput() {
+        validationGeneration &+= 1
+        observationGeneration &+= 1
+        cancelOutstandingTasks()
         urlText = ""
         detectedFileName = nil
         downloadState = .idle
@@ -275,11 +357,12 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         progress = 0
         logEntries = []
         outputURLs = []
-        observeTask?.cancel()
-        debounceTask?.cancel()
     }
 
     deinit {
+        debounceTask?.cancel()
+        observeTask?.cancel()
+        downloadStartTask?.cancel()
         inboxObservationTask?.cancel()
     }
 
@@ -292,5 +375,28 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
         return exists && !isDirectory.boolValue
+    }
+
+    static func validatedHTTPURL(_ text: String) -> URL? {
+        guard let components = URLComponents(string: text),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host,
+              !host.isEmpty,
+              let url = components.url else {
+            return nil
+        }
+        return url
+    }
+
+    private func cancelOutstandingTasks() {
+        debounceTask?.cancel()
+        observeTask?.cancel()
+        downloadStartTask?.cancel()
+        inboxObservationTask?.cancel()
+        debounceTask = nil
+        observeTask = nil
+        downloadStartTask = nil
+        inboxObservationTask = nil
     }
 }

@@ -43,7 +43,8 @@ public struct YtDlpHealthChecker: Sendable {
 
         let request = ExternalProcessRequest(
             executableURL: ytDlpURL,
-            arguments: ["--version"]
+            arguments: ["--version"],
+            timeoutSeconds: 5
         )
 
         do {
@@ -66,24 +67,8 @@ public struct YtDlpHealthChecker: Sendable {
 
     public static func detectYtDlp() -> URL? {
         for path in homebrewPaths {
-            let exists = FileManager.default.fileExists(atPath: path)
-            if exists {
-                let url = URL(fileURLWithPath: path)
-                let process = Process()
-                process.executableURL = url
-                process.arguments = ["--version"]
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-                    if process.terminationStatus == 0 {
-                        return url
-                    }
-                } catch {
-                    continue
-                }
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return URL(fileURLWithPath: path)
             }
         }
         return nil
