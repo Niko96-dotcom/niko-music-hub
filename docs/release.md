@@ -73,5 +73,6 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 - GitHub Actions are not required for this repo; local gates are the truth.
 - Recorder hardware permission tests are intentionally skipped by `script/ci.sh` and must be checked manually on a machine with a usable system-audio capture setup.
 - Public mode additionally runs `script/ci-release.sh` and the focused `script/ci-tsan.sh` concurrency gate.
+- Public mode runs user E2E with `NMH_STRICT_UI_E2E=1`; missing Accessibility-visible first-run content is a failure, not a skip.
 - `--install-smoke` checks the already-installed `/Applications/NikoMusicHub.app`; the consolidated UAT record remains the authoritative clean-install/upgrade/uninstall proof.
 - App Store review is not part of this release path.

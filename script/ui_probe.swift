@@ -333,16 +333,15 @@ do {
     switch options.mode {
     case .axDump:
         let app = AXUIElementCreateApplication(pid)
-        dumpAX(app, depth: 0)
-        if let focusedWindow = axElement(of: app, attribute: kAXFocusedWindowAttribute) {
-            dumpAX(focusedWindow, depth: 1)
+        let window = axElement(of: app, attribute: kAXMainWindowAttribute)
+            ?? axElement(of: app, attribute: kAXFocusedWindowAttribute)
+            ?? axElements(of: app, attribute: kAXWindowsAttribute).first
+        guard let window else {
+            fputs("accessibility window unavailable for pid \(pid)\n", stderr)
+            exit(1)
         }
-        if let mainWindow = axElement(of: app, attribute: kAXMainWindowAttribute) {
-            dumpAX(mainWindow, depth: 1)
-        }
-        for window in axElements(of: app, attribute: kAXWindowsAttribute) {
-            dumpAX(window, depth: 1)
-        }
+        // Window-only output avoids collecting unrelated system menu/recent-item data.
+        dumpAX(window, depth: 0)
         exit(0)
 
     case .checkVisible, .capture:

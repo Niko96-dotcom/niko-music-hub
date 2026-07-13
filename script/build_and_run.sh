@@ -9,7 +9,7 @@ MODE="${1:-run}"
 
 cd "$NMH_ROOT_DIR"
 
-nmh_stop_app
+nmh_stop_app true
 nmh_build_bundle
 
 case "$MODE" in

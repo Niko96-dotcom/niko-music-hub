@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=lib/app_lifecycle.sh
+source "$ROOT/script/lib/app_lifecycle.sh"
 
 if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]]; then
   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -21,6 +23,7 @@ ISOLATED_ROOT="$HOME/Library/Application Support/Niko Music Hub/Isolated"
 ARCHIVE_SUITE="NikoMusicHubE2E.archive.$(uuidgen)"
 UI_SUITE="NikoMusicHubE2E.$(uuidgen)"
 cleanup_smoke_suites() {
+  nmh_stop_app true
   launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
   rm -rf "$ISOLATED_ROOT/$ARCHIVE_SUITE" "$ISOLATED_ROOT/$UI_SUITE"
   defaults delete "$ARCHIVE_SUITE" >/dev/null 2>&1 || true
@@ -32,16 +35,11 @@ echo "== generate fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
 
 echo "== build app bundle =="
-./script/build_and_run.sh --verify >/dev/null 2>&1 || ./script/build_and_run.sh run >/dev/null 2>&1 || true
-DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --product NikoMusicHub
-BUILD_DIR="$(DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" swift build --show-bin-path)"
+nmh_stop_app true
+nmh_build_bundle
 APP_BUNDLE="$ROOT/dist/NikoMusicHub.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/NikoMusicHub"
-if [[ ! -x "$APP_BINARY" ]]; then
-  mkdir -p "$APP_BUNDLE/Contents/MacOS"
-  cp "$BUILD_DIR/NikoMusicHub" "$APP_BINARY"
-  chmod +x "$APP_BINARY"
-fi
+[[ -x "$APP_BINARY" ]] || { echo "E2E failed: built app binary missing" >&2; exit 1; }
 
 echo "== archive smoke (Swift validator owns archive assertions) =="
 rm -f "$LOG_FILE"
@@ -91,8 +89,12 @@ if ! swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --ax-dump >"$PUB
   exit 1
 fi
 
-if ! grep -Fq "Start with an archive root" "$PUBLIC_UI_TEXT"; then
+if ! grep -Fq "Welcome to your Cubase archive" "$PUBLIC_UI_TEXT"; then
   if swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --check-visible >/dev/null; then
+    if [[ "${NMH_STRICT_UI_E2E:-0}" == "1" ]]; then
+      echo "E2E failed: strict UI mode requires AX-visible first-run content" >&2
+      exit 1
+    fi
     echo "public first-run UI text check skipped: AX dump did not expose window content"
     echo "E2E user smoke passed."
     exit 0
@@ -102,10 +104,10 @@ fi
 for required_text in \
   "Niko Music Hub" \
   "Archive Browser" \
-  "Start with an archive root" \
-  "Add an archive root" \
-  "Output Inbox" \
-  "Choose the folder that contains your Cubase song folders."; do
+  "Welcome to your Cubase archive" \
+  "Add archive root" \
+  "Show output inbox" \
+  "Choose the folder that contains your song projects."; do
   if ! grep -Fq "$required_text" "$PUBLIC_UI_TEXT"; then
     echo "E2E failed: public first-run UI missing: $required_text" >&2
     exit 1

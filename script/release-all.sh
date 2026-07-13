@@ -130,10 +130,12 @@ printf 'version=%s\nbundle_id=%s\ncommit=%s\ntag=%s\nbuild_id=%s\nmode=%s\n' "$V
 if [[ "$SKIP_TESTS" != true && "$EMERGENCY_SKIP_TESTS" != true ]]; then
   log "local gates"
   run ci "$ROOT/script/ci.sh"
-  run e2e "$ROOT/script/e2e_user_smoke.sh"
   if [[ "$MODE" == "public" ]]; then
+    run e2e env NMH_STRICT_UI_E2E=1 "$ROOT/script/e2e_user_smoke.sh"
     run release-config "$ROOT/script/ci-release.sh"
     run thread-sanitizer "$ROOT/script/ci-tsan.sh"
+  else
+    run e2e "$ROOT/script/e2e_user_smoke.sh"
   fi
 elif [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then
   log "emergency test override"
@@ -279,7 +281,7 @@ if [[ "$MODE" == "public" ]]; then
     --gate "clean-tagged-checkout|./script/release-preflight.sh|passed|$GATE_TIME"
     --gate "consolidated-mac-uat|./script/validate-release-uat.sh|passed|$GATE_TIME"
     --gate "debug-ci|./script/ci.sh|$TEST_RESULT|$GATE_TIME"
-    --gate "user-e2e|./script/e2e_user_smoke.sh|$TEST_RESULT|$GATE_TIME"
+    --gate "user-e2e|NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh|$TEST_RESULT|$GATE_TIME"
     --gate "release-configuration|./script/ci-release.sh|$TEST_RESULT|$GATE_TIME"
     --gate "thread-sanitizer|./script/ci-tsan.sh|$TEST_RESULT|$GATE_TIME"
     --gate "release-identity|./script/release-version-verify.sh|passed|$GATE_TIME"

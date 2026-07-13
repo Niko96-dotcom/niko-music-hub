@@ -95,6 +95,7 @@ assert_order 'log "local gates"' 'run ci "$ROOT/script/ci.sh"' "$ROOT/script/rel
 assert_order 'run ci "$ROOT/script/ci.sh"' 'run e2e "$ROOT/script/e2e_user_smoke.sh"' "$ROOT/script/release-all.sh"
 assert_contains "$ROOT/script/release-all.sh" 'run ci "$ROOT/script/ci.sh"'
 assert_contains "$ROOT/script/release-all.sh" 'run e2e "$ROOT/script/e2e_user_smoke.sh"'
+assert_contains "$ROOT/script/release-all.sh" 'run e2e env NMH_STRICT_UI_E2E=1 "$ROOT/script/e2e_user_smoke.sh"'
 
 echo "== release command order stays fail-closed =="
 assert_order 'log "build app bundle"' 'log "package dmg"' "$ROOT/script/release-all.sh"

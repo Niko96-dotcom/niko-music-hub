@@ -3,6 +3,7 @@ import AppCore
 import NikoMusicCore
 import XCTest
 
+#if DEBUG
 @MainActor
 final class ArchiveUserFlowTests: XCTestCase {
     func testFixtureUserFlowScanSearchOpenDryRunLeavesArchiveUnchanged() async throws {
@@ -45,3 +46,4 @@ final class ArchiveUserFlowTests: XCTestCase {
         )
     }
 }
+#endif

@@ -29,6 +29,31 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         )
     }
 
+    func testEveryBuildAndRunLaunchCarriesTheIsolatedSuite() throws {
+        let script = try smokeScriptSource()
+        let launchLines = script.split(separator: "\n").filter { $0.contains("./script/build_and_run.sh") }
+        XCTAssertFalse(launchLines.isEmpty)
+        XCTAssertTrue(
+            launchLines.allSatisfy { $0.contains(#"NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE""#) },
+            "A suite-less build_and_run launch can reuse the real app process and expose the user's archive"
+        )
+    }
+
+    func testSmokeForceStopsAppsBeforeAndAfterLaunches() throws {
+        let script = try smokeScriptSource()
+        XCTAssertGreaterThanOrEqual(
+            script.components(separatedBy: "nmh_stop_app true").count - 1,
+            2,
+            "Smoke must force-stop any old app before the isolated launch and stop the isolated app during cleanup"
+        )
+    }
+
+    func testAXDumpIsWindowOnlyAndCannotCollectSystemRecentItems() throws {
+        let probe = try SourceTestSupport.read("script/ui_probe.swift")
+        XCTAssertTrue(probe.contains("Window-only output avoids collecting unrelated system menu/recent-item data"))
+        XCTAssertFalse(probe.contains("dumpAX(app, depth:"))
+    }
+
     private func smokeScriptSource() throws -> String {
         try SourceTestSupport.read("script/e2e_user_smoke.sh")
     }
