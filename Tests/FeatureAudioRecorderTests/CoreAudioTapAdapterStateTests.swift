@@ -4,6 +4,69 @@ import XCTest
 @testable import FeatureAudioRecorder
 
 final class CoreAudioTapAdapterStateTests: XCTestCase {
+    func testThresholdBurstTriggersExactlyOneStopAndOneStreamFinish() async throws {
+        let session = CountingStopSession()
+        let adapter = CoreAudioTapAdapter(sessionFactory: { session })
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("adapter_threshold_\(UUID().uuidString).wav")
+        let stream = try await adapter.startRecording(
+            outputURL: outputURL,
+            preset: .cubaseDefault,
+            maxDuration: 1
+        )
+        let probe = StreamProbe()
+        let consumeTask = Task {
+            for await _ in stream {
+                await probe.recordValue()
+            }
+            await probe.recordFinished()
+        }
+
+        session.emitThresholdBurst(count: 100)
+        try await waitUntil { await probe.finished }
+        let result = try await adapter.stopRecording()
+        _ = await consumeTask.value
+        let finishCount = await probe.finishCount
+
+        XCTAssertEqual(session.stopCallCount, 1)
+        XCTAssertEqual(finishCount, 1)
+        XCTAssertEqual(result.outputURL, outputURL)
+        XCTAssertFalse(adapter.recording)
+    }
+
+    func testManualAndAutomaticStopsShareOneInFlightResult() async throws {
+        let session = CountingStopSession(stopDelayMicroseconds: 25_000)
+        let adapter = CoreAudioTapAdapter(sessionFactory: { session })
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("adapter_stop_race_\(UUID().uuidString).wav")
+        _ = try await adapter.startRecording(
+            outputURL: outputURL,
+            preset: .cubaseDefault,
+            maxDuration: 1
+        )
+
+        let resultsTask = Task {
+            try await withThrowingTaskGroup(of: RecorderResult.self) { group in
+                for _ in 0..<20 {
+                    group.addTask {
+                        try await adapter.stopRecording()
+                    }
+                }
+                var results: [RecorderResult] = []
+                for try await result in group {
+                    results.append(result)
+                }
+                return results
+            }
+        }
+        session.emitThresholdBurst(count: 100)
+        let results = try await resultsTask.value
+
+        XCTAssertEqual(results.count, 20)
+        XCTAssertTrue(results.allSatisfy { $0.outputURL == outputURL })
+        XCTAssertEqual(session.stopCallCount, 1)
+    }
+
     func testStartFailureRemovesPartialOutputAndResetsState() async throws {
         let tempDir = FileManager.default.temporaryDirectory
         let outputURL = tempDir.appendingPathComponent("adapter_partial_\(UUID().uuidString).wav")
@@ -93,14 +156,71 @@ private final class StopFailingSession: SystemAudioRecordingSession, @unchecked 
 
 private actor StreamProbe {
     private(set) var valueCount = 0
-    private(set) var finished = false
+    private(set) var finishCount = 0
+    var finished: Bool { finishCount > 0 }
 
     func recordValue() {
         valueCount += 1
     }
 
     func recordFinished() {
-        finished = true
+        finishCount += 1
+    }
+}
+
+private final class CountingStopSession: SystemAudioRecordingSession, @unchecked Sendable {
+    private let lock = NSLock()
+    private let stopDelayMicroseconds: useconds_t
+    private var levelHandler: (@Sendable (RecorderAudioLevel) -> Void)?
+    private var outputURL: URL?
+    private var _stopCallCount = 0
+
+    init(stopDelayMicroseconds: useconds_t = 0) {
+        self.stopDelayMicroseconds = stopDelayMicroseconds
+    }
+
+    var stopCallCount: Int {
+        lock.withLock { _stopCallCount }
+    }
+
+    func start(
+        outputURL: URL,
+        preset: AudioPreset,
+        maxDuration: TimeInterval?,
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
+    ) throws {
+        lock.withLock {
+            self.outputURL = outputURL
+            levelHandler = onLevel
+        }
+    }
+
+    func emitThresholdBurst(count: Int) {
+        let handler = lock.withLock { levelHandler }
+        for _ in 0..<count {
+            handler?(RecorderAudioLevel(peak: 0.8, average: 0.4, elapsedTime: 1))
+        }
+    }
+
+    func stop() throws -> RecorderResult {
+        let url = lock.withLock { () -> URL? in
+            _stopCallCount += 1
+            return outputURL
+        }
+        if stopDelayMicroseconds > 0 {
+            usleep(stopDelayMicroseconds)
+        }
+        guard let url else {
+            throw RecorderError.apiError("Missing output URL")
+        }
+        return RecorderResult(
+            outputURL: url,
+            duration: 1,
+            sampleRate: 44_100,
+            bitDepth: 24,
+            channelCount: 2,
+            frameCount: 44_100
+        )
     }
 }
 

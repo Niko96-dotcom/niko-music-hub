@@ -13,18 +13,98 @@ protocol SystemAudioRecordingSession: AnyObject, Sendable {
 }
 
 public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
-    private var _isRecording = false
-    private var session: (any SystemAudioRecordingSession)?
-    private var levelContinuation: AsyncStream<RecorderAudioLevel>.Continuation?
-    private var outputURL: URL?
-    private var preset: AudioPreset?
-    /// Result of the most recently completed recording. Max-duration auto-stop
-    /// consumes the session internally; the caller's own `stopRecording()`
-    /// (issued after the level stream ends) collects this instead of failing.
-    private var lastCompletedResult: RecorderResult?
+    private final class RecordingContext: @unchecked Sendable {
+        let session: any SystemAudioRecordingSession
+        let outputURL: URL
+        let continuation: AsyncStream<RecorderAudioLevel>.Continuation
+        private let lock = NSLock()
+        private var didFinishStream = false
+        private var didFinishStart = false
+        private var startWaiters: [CheckedContinuation<Void, Never>] = []
+
+        init(
+            session: any SystemAudioRecordingSession,
+            outputURL: URL,
+            continuation: AsyncStream<RecorderAudioLevel>.Continuation
+        ) {
+            self.session = session
+            self.outputURL = outputURL
+            self.continuation = continuation
+        }
+
+        func finishStream() {
+            let shouldFinish = lock.withLock { () -> Bool in
+                guard !didFinishStream else { return false }
+                didFinishStream = true
+                return true
+            }
+            if shouldFinish {
+                continuation.finish()
+            }
+        }
+
+        func waitUntilStartFinishes() async {
+            await withCheckedContinuation { continuation in
+                let resumeImmediately = lock.withLock { () -> Bool in
+                    guard !didFinishStart else { return true }
+                    startWaiters.append(continuation)
+                    return false
+                }
+                if resumeImmediately {
+                    continuation.resume()
+                }
+            }
+        }
+
+        func signalStartFinished() {
+            let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+                guard !didFinishStart else { return [] }
+                didFinishStart = true
+                let pending = startWaiters
+                startWaiters.removeAll()
+                return pending
+            }
+            waiters.forEach { $0.resume() }
+        }
+    }
+
+    private final class StopFlight: @unchecked Sendable {
+        let task: Task<RecorderResult, any Error>
+
+        init(task: Task<RecorderResult, any Error>) {
+            self.task = task
+        }
+    }
+
+    private enum State {
+        case idle
+        case starting(RecordingContext, autoStopRequested: Bool)
+        case recording(RecordingContext)
+        case stopping(RecordingContext, StopFlight)
+        case completed(RecorderResult)
+    }
+
+    private enum StopAction {
+        case awaitStart(RecordingContext)
+        case awaitStop(Task<RecorderResult, any Error>)
+        case returnCompleted(RecorderResult)
+        case noRecording
+    }
+
+    private let stateLock = NSLock()
+    private var state: State = .idle
     private let sessionFactory: @Sendable () -> any SystemAudioRecordingSession
 
-    public var recording: Bool { _isRecording }
+    public var recording: Bool {
+        stateLock.withLock {
+            switch state {
+            case .starting, .recording, .stopping:
+                true
+            case .idle, .completed:
+                false
+            }
+        }
+    }
 
     public init() {
         self.sessionFactory = { SystemAudioProcessTapSession() }
@@ -83,19 +163,26 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             throw RecorderError.permissionDenied
         }
 
-        if _isRecording {
+        let tapSession = sessionFactory()
+        let (stream, continuation) = AsyncStream.makeStream(of: RecorderAudioLevel.self)
+        let context = RecordingContext(
+            session: tapSession,
+            outputURL: outputURL,
+            continuation: continuation
+        )
+        let accepted = stateLock.withLock { () -> Bool in
+            switch state {
+            case .idle, .completed:
+                state = .starting(context, autoStopRequested: false)
+                return true
+            case .starting, .recording, .stopping:
+                return false
+            }
+        }
+        guard accepted else {
+            context.finishStream()
             throw RecorderError.apiError("Recording already in progress")
         }
-        _isRecording = true
-        lastCompletedResult = nil
-        self.outputURL = outputURL
-        self.preset = preset
-
-        let tapSession = sessionFactory()
-        session = tapSession
-
-        let (stream, continuation) = AsyncStream.makeStream(of: RecorderAudioLevel.self)
-        levelContinuation = continuation
 
         do {
             try tapSession.start(
@@ -104,75 +191,114 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                 maxDuration: maxDuration
             ) { [weak self] level in
                 continuation.yield(level)
-                if let maxDuration, level.elapsedTime >= maxDuration {
-                    Task { [weak self] in
-                        guard let self else { return }
-                        do {
-                            _ = try await self.stopRecording()
-                        } catch {
-                            // Ensure the level stream ends and adapter state resets if auto-stop fails.
-                            self.resetRecordingState()
-                            continuation.finish()
-                        }
-                    }
-                }
+                self?.requestAutoStopIfNeeded(level: level, maxDuration: maxDuration)
             }
         } catch {
-            cleanupAfterFailedStart(outputURL: outputURL, continuation: continuation)
+            stateLock.withLock {
+                if case let .starting(current, _) = state, current === context {
+                    state = .idle
+                }
+            }
+            context.finishStream()
+            context.signalStartFinished()
+            try? FileManager.default.removeItem(at: outputURL)
             throw mapRecordingError(error)
         }
+
+        stateLock.withLock {
+            guard case let .starting(current, autoStopRequested) = state,
+                  current === context else { return }
+            if autoStopRequested {
+                _ = beginStopLocked(context: context)
+            } else {
+                state = .recording(context)
+            }
+        }
+        context.signalStartFinished()
 
         return stream
     }
 
     public func stopRecording() async throws -> RecorderResult {
-        guard _isRecording else {
-            if let completed = lastCompletedResult {
-                lastCompletedResult = nil
-                return completed
+        while true {
+            let action = stateLock.withLock { () -> StopAction in
+                switch state {
+                case .idle:
+                    return .noRecording
+                case let .starting(context, _):
+                    state = .starting(context, autoStopRequested: true)
+                    return .awaitStart(context)
+                case let .recording(context):
+                    return .awaitStop(beginStopLocked(context: context).task)
+                case let .stopping(_, flight):
+                    return .awaitStop(flight.task)
+                case let .completed(result):
+                    return .returnCompleted(result)
+                }
             }
-            throw RecorderError.apiError("No active recording")
-        }
 
-        guard let tapSession = session else {
-            let continuation = levelContinuation
-            resetRecordingState()
-            continuation?.finish()
-            throw RecorderError.apiError("Recording session not initialized")
-        }
-
-        let continuation = levelContinuation
-        defer {
-            resetRecordingState()
-            continuation?.finish()
-        }
-
-        do {
-            let result = try tapSession.stop()
-            // Stored before the deferred continuation.finish() so a caller
-            // waiting on the stream always finds the result afterwards.
-            lastCompletedResult = result
-            return result
-        } catch {
-            throw mapRecordingError(error)
+            switch action {
+            case let .awaitStart(context):
+                await context.waitUntilStartFinishes()
+                try Task.checkCancellation()
+            case let .awaitStop(task):
+                return try await task.value
+            case let .returnCompleted(result):
+                return result
+            case .noRecording:
+                throw RecorderError.apiError("No active recording")
+            }
         }
     }
 
-    private func resetRecordingState() {
-        _isRecording = false
-        session = nil
-        outputURL = nil
-        preset = nil
-        levelContinuation = nil
+    private func requestAutoStopIfNeeded(level: RecorderAudioLevel, maxDuration: TimeInterval?) {
+        guard let maxDuration, level.elapsedTime >= maxDuration else { return }
+        stateLock.withLock {
+            switch state {
+            case let .starting(context, autoStopRequested):
+                if !autoStopRequested {
+                    state = .starting(context, autoStopRequested: true)
+                }
+            case let .recording(context):
+                _ = beginStopLocked(context: context)
+            case .idle, .stopping, .completed:
+                break
+            }
+        }
     }
 
-    private func cleanupAfterFailedStart(
-        outputURL: URL,
-        continuation: AsyncStream<RecorderAudioLevel>.Continuation
-    ) {
-        resetRecordingState()
-        continuation.finish()
-        try? FileManager.default.removeItem(at: outputURL)
+    /// Must be called while `stateLock` is held.
+    private func beginStopLocked(context: RecordingContext) -> StopFlight {
+        let task = Task<RecorderResult, any Error> { [self] in
+            do {
+                let result = try context.session.stop()
+                completeStop(context: context, result: result)
+                return result
+            } catch {
+                let mapped = mapRecordingError(error)
+                failStop(context: context)
+                throw mapped
+            }
+        }
+        let flight = StopFlight(task: task)
+        state = .stopping(context, flight)
+        return flight
+    }
+
+    private func completeStop(context: RecordingContext, result: RecorderResult) {
+        stateLock.withLock {
+            guard case let .stopping(current, _) = state, current === context else { return }
+            state = .completed(result)
+        }
+        context.finishStream()
+    }
+
+    private func failStop(context: RecordingContext) {
+        stateLock.withLock {
+            guard case let .stopping(current, _) = state, current === context else { return }
+            state = .idle
+        }
+        context.finishStream()
     }
 
     private func mapRecordingError(_ error: Error) -> RecorderError {
@@ -183,5 +309,13 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             return RecorderError.apiError(error.localizedDescription)
         }
         return RecorderError.apiError(error.localizedDescription)
+    }
+}
+
+private extension NSLock {
+    func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 
 public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
     public static let defaultOutputFolderDisplayPath = "~/Music/Niko Music Hub/Inbox"
+    private static let serializationLock = NSLock()
 
     private let userDefaults: UserDefaults
     private let key: String
@@ -15,6 +16,12 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
     }
 
     public func loadSettings() throws -> AppSettings {
+        try Self.serializationLock.withLock {
+            try loadSettingsLocked()
+        }
+    }
+
+    private func loadSettingsLocked() throws -> AppSettings {
         guard let data = userDefaults.data(forKey: key) else {
             return .default
         }
@@ -23,14 +30,22 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
     }
 
     public func saveSettings(_ settings: AppSettings) throws {
+        try Self.serializationLock.withLock {
+            try saveSettingsLocked(settings)
+        }
+    }
+
+    private func saveSettingsLocked(_ settings: AppSettings) throws {
         let data = try JSONEncoder().encode(settings)
         userDefaults.set(data, forKey: key)
         userDefaults.synchronize()
     }
 
     public func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
-        var settings = try loadSettings()
-        update(&settings)
-        try saveSettings(settings)
+        try Self.serializationLock.withLock {
+            var settings = try loadSettingsLocked()
+            update(&settings)
+            try saveSettingsLocked(settings)
+        }
     }
 }

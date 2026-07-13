@@ -126,6 +126,35 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.loadSettings())
     }
 
+    func testConcurrentAtomicUpdatesPreserveUnrelatedFields() throws {
+        let suiteName = uniqueSuiteName()
+        let storeA = makeStore(suiteName: suiteName, reset: true)
+        let storeB = makeStore(suiteName: suiteName)
+        let outputURL = URL(fileURLWithPath: "/tmp/concurrent-settings-output")
+        let failures = LockedSettingsFailures()
+
+        DispatchQueue.concurrentPerform(iterations: 500) { index in
+            do {
+                if index.isMultiple(of: 2) {
+                    try storeA.updateSettings { settings in
+                        settings.outputFolder = StoredFolderLocation(url: outputURL)
+                    }
+                } else {
+                    try storeB.updateSettings { settings in
+                        settings.appearance = .dark
+                    }
+                }
+            } catch {
+                failures.append(error)
+            }
+        }
+
+        XCTAssertTrue(failures.isEmpty)
+        let reloaded = try storeA.loadSettings()
+        XCTAssertEqual(reloaded.outputFolder.url, outputURL)
+        XCTAssertEqual(reloaded.appearance, .dark)
+    }
+
     func testSettingsViewSurfacesLoadErrorsAndBlocksSaveFallback() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
@@ -240,5 +269,18 @@ final class SettingsStoreTests: XCTestCase {
 
     private func uniqueSuiteName() -> String {
         "OutsideCubaseHubTests.\(UUID().uuidString)"
+    }
+}
+
+private final class LockedSettingsFailures: @unchecked Sendable {
+    private let lock = NSLock()
+    private var errors: [any Error] = []
+
+    func append(_ error: any Error) {
+        lock.withLock { errors.append(error) }
+    }
+
+    var isEmpty: Bool {
+        lock.withLock { errors.isEmpty }
     }
 }

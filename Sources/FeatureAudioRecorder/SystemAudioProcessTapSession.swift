@@ -30,6 +30,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
     private let ioQueue = DispatchQueue(label: "NikoMusicHub.SystemAudioProcessTapSession.io", qos: .userInitiated)
     private var diagnostics = RecorderDiagnosticsAccumulator()
     private let stateLock = NSLock()
+    private let lifecycleLock = NSRecursiveLock()
     private var isRunning = false
 
     deinit {
@@ -42,6 +43,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
         maxDuration: TimeInterval?,
         onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
     ) throws {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         guard !isSessionRunning else {
             throw RecorderError.apiError("Recording session already active")
         }
@@ -97,6 +100,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
     }
 
     func stop() throws -> RecorderResult {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         let wasRunning = stopRunningFlag()
         guard wasRunning || hasWriter else {
             throw RecorderError.apiError("No active recording")
@@ -134,6 +139,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, SystemAudioRecord
     }
 
     private func tearDown() {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
         setRunning(false)
         stopIODeviceOnly()
         destroyTapAndAggregate()

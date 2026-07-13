@@ -208,12 +208,14 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
 
         do {
-            var settings = try context.settingsStore.loadSettings()
-            settings.helperTools.ffmpeg = ffmpegURL
+            var helperTools = try context.settingsStore.loadSettings().helperTools
+            helperTools.ffmpeg = ffmpegURL
 
-            switch await ffmpegHealthChecker.availability(settings: settings.helperTools) {
+            switch await ffmpegHealthChecker.availability(settings: helperTools) {
             case .available:
-                try context.settingsStore.saveSettings(settings)
+                try context.settingsStore.updateSettings { settings in
+                    settings.helperTools.ffmpeg = ffmpegURL
+                }
                 retryAfterChoosingFFmpeg(rowID: rowID)
             case .missing:
                 markFFmpegSelectionFailed(

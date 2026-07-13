@@ -28,10 +28,26 @@ public struct NewSongRequest: Sendable, Equatable {
 public enum NewSongFolderCreator {
     public static let standardSubfolders = ["Mixdown", "Stems"]
 
+    typealias CopyFailureInjector = @Sendable (_ source: URL, _ destination: URL) throws -> Void
+
     public static func create(
         request: NewSongRequest,
         fileManager: FileManager = .default,
         protectedRoots: [URL] = []
+    ) throws -> Song {
+        try create(
+            request: request,
+            fileManager: fileManager,
+            protectedRoots: protectedRoots,
+            copyFailureInjector: nil
+        )
+    }
+
+    static func create(
+        request: NewSongRequest,
+        fileManager: FileManager,
+        protectedRoots: [URL],
+        copyFailureInjector: CopyFailureInjector?
     ) throws -> Song {
         let trimmed = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -52,25 +68,114 @@ public enum NewSongFolderCreator {
         } catch ReadOnlyArchivePolicyError.writeDenied {
             throw CreationError.archiveRootIsReadOnly
         }
+
+        let resolvedDestinationRoot = destinationRoot.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedSongFolder = resolvedDestinationRoot
+            .appendingPathComponent(trimmed, isDirectory: true)
+            .standardizedFileURL
+        if let template = request.templateFolder {
+            try validateTemplate(
+                template,
+                destinationRoot: resolvedDestinationRoot,
+                songFolder: resolvedSongFolder,
+                fileManager: fileManager
+            )
+        }
+
         guard !fileManager.fileExists(atPath: songFolder.path) else {
             throw CreationError.folderExists
         }
-        try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
-        for subfolder in standardSubfolders {
-            try fileManager.createDirectory(
-                at: songFolder.appendingPathComponent(subfolder, isDirectory: true),
-                withIntermediateDirectories: true
+
+        do {
+            try fileManager.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+        } catch {
+            throw CreationError.destinationUnavailable
+        }
+        guard fileManager.isWritableFile(atPath: destinationRoot.path) else {
+            throw CreationError.destinationUnavailable
+        }
+
+        let stagingFolder = destinationRoot.appendingPathComponent(
+            ".niko-music-hub-\(UUID().uuidString).staging",
+            isDirectory: true
+        )
+        var didMoveStaging = false
+        defer {
+            if !didMoveStaging {
+                try? fileManager.removeItem(at: stagingFolder)
+            }
+        }
+
+        do {
+            try fileManager.createDirectory(at: stagingFolder, withIntermediateDirectories: false)
+            for subfolder in standardSubfolders {
+                try fileManager.createDirectory(
+                    at: stagingFolder.appendingPathComponent(subfolder, isDirectory: true),
+                    withIntermediateDirectories: false
+                )
+            }
+        } catch {
+            throw CreationError.stagingFailed
+        }
+
+        if let template = request.templateFolder {
+            do {
+                try copyTemplate(
+                    from: template,
+                    into: stagingFolder,
+                    fileManager: fileManager,
+                    copyFailureInjector: copyFailureInjector
+                )
+            } catch let creationError as CreationError {
+                throw creationError
+            } catch {
+                throw CreationError.templateCopyFailed
+            }
+        }
+
+        if let note = request.appNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            let notesURL = stagingFolder.appendingPathComponent("notes.txt")
+            guard !fileManager.fileExists(atPath: notesURL.path) else {
+                throw CreationError.templateConflict("notes.txt")
+            }
+            do {
+                try note.write(to: notesURL, atomically: true, encoding: .utf8)
+            } catch {
+                throw CreationError.stagingFailed
+            }
+        }
+
+        let cprDetector = CPRVersionDetector(fileManager: fileManager)
+        let stagingVersions: [ProjectVersion]
+        do {
+            stagingVersions = try cprDetector.detectVersions(in: stagingFolder)
+        } catch {
+            throw CreationError.stagingValidationFailed
+        }
+        let versions = stagingVersions.compactMap { version -> ProjectVersion? in
+            guard let relativePath = version.filePath.relativePath(from: stagingFolder) else { return nil }
+            let finalPath = songFolder.appendingPathComponent(relativePath)
+            return ProjectVersion(
+                filePath: finalPath,
+                fileName: version.fileName,
+                modifiedAt: version.modifiedAt,
+                detectedVersionNumber: version.detectedVersionNumber
             )
         }
-        if let template = request.templateFolder {
-            try copyTemplate(from: template, into: songFolder, fileManager: fileManager)
+        guard versions.count == stagingVersions.count else {
+            throw CreationError.stagingValidationFailed
         }
-        if let note = request.appNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            let notesURL = songFolder.appendingPathComponent("notes.txt")
-            try note.write(to: notesURL, atomically: true, encoding: .utf8)
+
+        do {
+            try fileManager.moveItem(at: stagingFolder, to: songFolder)
+            didMoveStaging = true
+        } catch {
+            if fileManager.fileExists(atPath: songFolder.path) {
+                throw CreationError.folderExists
+            }
+            throw CreationError.finalizationFailed
         }
-        let cprDetector = CPRVersionDetector(fileManager: fileManager)
-        let versions = try cprDetector.detectVersions(in: songFolder)
+
         let latest = cprDetector.latestCPR(from: versions)
         var song = Song(
             folderPath: songFolder,
@@ -94,29 +199,106 @@ public enum NewSongFolderCreator {
     private static func copyTemplate(
         from template: URL,
         into songFolder: URL,
+        fileManager: FileManager,
+        copyFailureInjector: CopyFailureInjector?
+    ) throws {
+        try copyDirectoryContents(
+            from: template.standardizedFileURL,
+            into: songFolder,
+            relativePath: "",
+            fileManager: fileManager,
+            copyFailureInjector: copyFailureInjector
+        )
+    }
+
+    private static func copyDirectoryContents(
+        from sourceDirectory: URL,
+        into destinationRoot: URL,
+        relativePath: String,
+        fileManager: FileManager,
+        copyFailureInjector: CopyFailureInjector?
+    ) throws {
+        let children: [URL]
+        do {
+            children = try fileManager.contentsOfDirectory(
+                at: sourceDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+                options: []
+            ).sorted { $0.lastPathComponent < $1.lastPathComponent }
+        } catch {
+            throw CreationError.templateCopyFailed
+        }
+
+        for child in children where !child.lastPathComponent.hasPrefix(".") {
+            let childRelativePath = relativePath.isEmpty
+                ? child.lastPathComponent
+                : relativePath + "/" + child.lastPathComponent
+            let destination = destinationRoot.appendingPathComponent(childRelativePath)
+            let values: URLResourceValues
+            do {
+                values = try child.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
+            } catch {
+                throw CreationError.templateCopyFailed
+            }
+
+            if values.isSymbolicLink == true {
+                throw CreationError.templateConflict(childRelativePath)
+            } else if values.isDirectory == true {
+                var destinationIsDirectory: ObjCBool = false
+                if fileManager.fileExists(atPath: destination.path, isDirectory: &destinationIsDirectory) {
+                    guard destinationIsDirectory.boolValue else {
+                        throw CreationError.templateConflict(childRelativePath)
+                    }
+                } else {
+                    try fileManager.createDirectory(at: destination, withIntermediateDirectories: false)
+                }
+                try copyDirectoryContents(
+                    from: child,
+                    into: destinationRoot,
+                    relativePath: childRelativePath,
+                    fileManager: fileManager,
+                    copyFailureInjector: copyFailureInjector
+                )
+            } else if values.isRegularFile == true {
+                guard !fileManager.fileExists(atPath: destination.path) else {
+                    throw CreationError.templateConflict(childRelativePath)
+                }
+                do {
+                    try copyFailureInjector?(child, destination)
+                    try fileManager.copyItem(at: child, to: destination)
+                } catch let creationError as CreationError {
+                    throw creationError
+                } catch {
+                    throw CreationError.templateCopyFailed
+                }
+            } else {
+                throw CreationError.templateConflict(childRelativePath)
+            }
+        }
+    }
+
+    private static func validateTemplate(
+        _ template: URL,
+        destinationRoot: URL,
+        songFolder: URL,
         fileManager: FileManager
     ) throws {
-        let standardizedTemplate = template.standardizedFileURL
-        guard let enumerator = fileManager.enumerator(
-            at: standardizedTemplate,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return }
-        for case let item as URL in enumerator {
-            let item = item.standardizedFileURL
-            let templatePrefix = standardizedTemplate.path + "/"
-            guard item.path.hasPrefix(templatePrefix) else { continue }
-            let relative = String(item.path.dropFirst(templatePrefix.count))
-            let destination = songFolder.appendingPathComponent(relative)
-            let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            if isDir {
-                try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
-            } else {
-                try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-                if !fileManager.fileExists(atPath: destination.path) {
-                    try fileManager.copyItem(at: item, to: destination)
-                }
-            }
+        let standardized = template.standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: standardized.path, isDirectory: &isDirectory) else {
+            throw CreationError.templateMissing
+        }
+        guard isDirectory.boolValue, fileManager.isReadableFile(atPath: standardized.path) else {
+            throw CreationError.templateUnreadable
+        }
+
+        let resolvedTemplate = standardized.resolvingSymlinksInPath().standardizedFileURL
+        let templatePath = resolvedTemplate.path
+        let destinationRootPath = destinationRoot.path
+        if templatePath == destinationRootPath
+            || destinationRootPath.hasPrefix(templatePath + "/")
+            || resolvedTemplate.overlapsHierarchy(with: songFolder) {
+            throw CreationError.templateOverlap
         }
     }
 
@@ -125,6 +307,15 @@ public enum NewSongFolderCreator {
         case invalidName
         case folderExists
         case archiveRootIsReadOnly
+        case destinationUnavailable
+        case templateMissing
+        case templateUnreadable
+        case templateOverlap
+        case templateConflict(String)
+        case templateCopyFailed
+        case stagingFailed
+        case stagingValidationFailed
+        case finalizationFailed
     }
 }
 
@@ -133,5 +324,18 @@ private extension URL {
         let path = standardizedFileURL.path
         let ancestorPath = ancestor.standardizedFileURL.path
         return path.hasPrefix(ancestorPath + "/")
+    }
+
+    func overlapsHierarchy(with other: URL) -> Bool {
+        let lhs = standardizedFileURL.path
+        let rhs = other.standardizedFileURL.path
+        return lhs == rhs || lhs.hasPrefix(rhs + "/") || rhs.hasPrefix(lhs + "/")
+    }
+
+    func relativePath(from root: URL) -> String? {
+        let path = standardizedFileURL.path
+        let rootPath = root.standardizedFileURL.path
+        guard path.hasPrefix(rootPath + "/") else { return nil }
+        return String(path.dropFirst(rootPath.count + 1))
     }
 }

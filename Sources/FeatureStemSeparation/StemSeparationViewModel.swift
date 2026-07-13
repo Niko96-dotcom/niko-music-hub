@@ -221,9 +221,9 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     private func saveOutputFolder(_ url: URL) {
         do {
-            var settings = try context.settingsStore.loadSettings()
-            settings.outputFolder = StoredFolderLocation(url: url)
-            try context.settingsStore.saveSettings(settings)
+            try context.settingsStore.updateSettings { settings in
+                settings.outputFolder = StoredFolderLocation(url: url)
+            }
         } catch {
             diagnosticsError(error)
         }

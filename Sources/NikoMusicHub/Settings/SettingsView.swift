@@ -165,19 +165,19 @@ struct SettingsView: View {
             ) {
                 helperPathRow(label: "FFmpeg", url: settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
                     settings.helperTools.ffmpeg = url
-                    persistSettings()
+                    persistSettings { $0.helperTools.ffmpeg = url }
                 }
                 helperPathRow(label: "ffprobe", url: settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
                     settings.helperTools.ffprobe = url
-                    persistSettings()
+                    persistSettings { $0.helperTools.ffprobe = url }
                 }
                 helperPathRow(label: "yt-dlp", url: settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
                     settings.helperTools.ytDlp = url
-                    persistSettings()
+                    persistSettings { $0.helperTools.ytDlp = url }
                 }
                 helperPathRow(label: "demucs-mlx", url: settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
                     settings.helperTools.demucsMlx = url
-                    persistSettings()
+                    persistSettings { $0.helperTools.demucsMlx = url }
                 }
             }
 
@@ -278,7 +278,7 @@ struct SettingsView: View {
                 let normalized = RecordingDurationOptions.normalized(newValue)
                 let previous = settings.maxRecordingDurationMinutes
                 settings.maxRecordingDurationMinutes = normalized
-                if !persistSettings() {
+                if !persistSettings({ $0.maxRecordingDurationMinutes = normalized }) {
                     settings.maxRecordingDurationMinutes = previous
                 }
             }
@@ -292,7 +292,7 @@ struct SettingsView: View {
                 let previous = settings.appearance
                 settings.appearance = newValue
                 appearanceController.apply(newValue)
-                if !persistSettings() {
+                if !persistSettings({ $0.appearance = newValue }) {
                     settings.appearance = previous
                     appearanceController.apply(previous)
                 }
@@ -306,7 +306,7 @@ struct SettingsView: View {
             set: { newValue in
                 let previous = settings.scanExclusionTerms
                 settings.scanExclusionTerms = newValue
-                if !persistSettings() {
+                if !persistSettings({ $0.scanExclusionTerms = newValue }) {
                     settings.scanExclusionTerms = previous
                 }
             }
@@ -445,13 +445,14 @@ struct SettingsView: View {
     }
 
     @discardableResult
-    private func persistSettings() -> Bool {
+    private func persistSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
         guard settingsLoadError == nil else {
             saveError = "Settings were not saved because the current settings could not be loaded."
             return false
         }
         do {
-            try context.settingsStore.saveSettings(settings)
+            try context.settingsStore.updateSettings(update)
+            settings = try context.settingsStore.loadSettings()
             saveError = nil
             return true
         } catch {
@@ -494,7 +495,7 @@ struct SettingsView: View {
             return
         }
         settings.outputFolder = StoredFolderLocation(url: folder)
-        persistSettings()
+        persistSettings { $0.outputFolder = StoredFolderLocation(url: folder) }
     }
 
     private func addArchiveRoot() {
