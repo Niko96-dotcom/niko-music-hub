@@ -1,0 +1,14 @@
+Loading model htdemucs...
+Model loaded.
+Separating track /Users/music/input.wav
+0%
+10%
+25%
+50%
+75%
+100%
+Writing vocals to /Users/music/output/vocals.wav
+Writing drums to /Users/music/output/drums.wav
+Writing bass to /Users/music/output/bass.wav
+Writing other to /Users/music/output/other.wav
+Done.

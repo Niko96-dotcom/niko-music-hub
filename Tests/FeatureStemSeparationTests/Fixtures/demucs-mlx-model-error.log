@@ -1,0 +1,12 @@
+Loading model htdemucs_ft...
+Downloading model weights...
+25%
+50%
+Connection reset by peer
+Failed to download model weights
+Traceback (most recent call last):
+  File "demucs_mlx/cli.py", line 42, in <module>
+    load_model(model_id)
+  File "demucs_mlx/model.py", line 88, in load_model
+    raise ModelDownloadError("could not fetch weights")
+ModelDownloadError: could not fetch weights
