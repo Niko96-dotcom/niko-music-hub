@@ -25,7 +25,8 @@ Use the existing Swift app as the seed. Do not start blank. Do not embed Electro
 
 ## Source/reference inputs
 
-- Main plan: `docs/niko-music-hub-composer-execution-plan.md`
+- Product scope: `docs/product-scope.md`
+- Architecture: `docs/architecture.md`
 - Seed app source: current repo, copied from `/Users/example/Documents/OutSideCubaseHub`
 - Cubase reference docs: `docs/reference/cubase-file-orga/`
 - SwiftUI style reference: `/Users/example/src/automation-health`
@@ -41,17 +42,6 @@ If the user says **hub-polish-waves**, **run hub-polish-waves**, or **Run hub-po
 5. Prefer **one wave per session** (max two if small). Then stop and tell the user to send the **same kickoff phrase** again in a new chat — do not ask them to say “next”.
 
 Waves A–C are already **done**; start at **D** unless the manifest says otherwise.
-
-## Composer/Pi workflow
-
-Niko explicitly wants product implementation by Composer 2.5 via Pi Agent SDK, sequentially:
-
-1. Planner: docs/task queue only.
-2. Critic: docs/task queue only.
-3. Executor: product code, tests, scripts, green commits.
-4. Reviewer: final review, blocker fixes only.
-
-No Hermes worker fan-out. No parallel coding agents. One checkout, one Composer process at a time.
 
 ## Isolation
 

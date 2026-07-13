@@ -307,7 +307,7 @@ Items worth tracking that came from GitHub/commercial peers but are **outside** 
 | NN-06 | Google Drive / cloud backup | Off-machine sync | DAW PM | **P3** | SPEC non-goal v1 |
 | NN-07 | Per-project todos and releases | Producer PM features | DAW PM | **P3** | Different product surface |
 | NN-08 | AI similarity search on mixdowns | Find “sounds like” | Crate CLAP | **P3** | Heavy; optional far future |
-| NN-09 | MCP / CLI export of archive index for agents | Automation | ableton-proj-mcp | **P2** | Fits Composer/agent workflow |
+| NN-09 | MCP / CLI export of archive index for agents | Automation | ableton-proj-mcp | **P2** | Fits automation and agent workflows |
 | NN-10 | Integrate **DAWFileKit** for marker XML only | Structured interchange | DAWFileKit | **P3** | Narrow use case |
 
 ---
