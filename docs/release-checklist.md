@@ -1,18 +1,23 @@
 # Release Checklist
 
-- [ ] Git status is clean or release branch state is documented.
+- [ ] Git status is completely clean, including untracked files.
 - [ ] `VERSION` was bumped once.
+- [ ] `BUNDLE_ID` is the permanent `com.niko96.NikoMusicHub` identity.
 - [ ] `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh` passed.
 - [ ] `CHANGELOG.md` matches `VERSION`.
 - [ ] `./script/public-tree-hygiene.sh` passed.
 - [ ] `./script/ci.sh` passed.
 - [ ] `./script/e2e_user_smoke.sh` passed.
-- [ ] `tests/test_release_scripts.sh` passed.
+- [ ] `Tests/test_release_scripts.sh` passed.
+- [ ] `./script/ci-release.sh` passed.
+- [ ] `./script/ci-tsan.sh` passed.
 - [ ] Public tag `v<VERSION>` points at the intended commit.
+- [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved.
 - [ ] `./script/release-all.sh --public --dry-run-publish` passed.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
 - [ ] `./script/release-all.sh --public --publish` uploaded exactly the expected GitHub assets.
 - [ ] Hosted assets were downloaded and revalidated.
-- [ ] Installed `/Applications/NikoMusicHub.app` matches `VERSION` and `NMHBuildID`.
-- [ ] Skipped hardware, credential-gated, destructive install, or App Store checks are named in the release report.
+- [ ] Installed `/Applications/NikoMusicHub.app` matches `VERSION`, `BUNDLE_ID`, and `NMHBuildID`.
+- [ ] Approval JSON records every gate, command, result, timestamp, machine, commit, bundle ID, UAT hash, and artifact hash.
+- [ ] No release-critical check is pending or `human_needed`; any emergency override is explicit and justified.

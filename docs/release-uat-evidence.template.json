@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "version": "REPLACE_WITH_VERSION",
+  "commit": "REPLACE_WITH_FULL_GIT_COMMIT",
+  "bundle_id": "com.niko96.NikoMusicHub",
+  "status": "pending",
+  "approved_by": "TODO",
+  "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP",
+  "machine": "TODO",
+  "checks": {
+    "clean_install": "pending",
+    "upgrade_preserves_settings": "pending",
+    "uninstall": "pending",
+    "launch_at_login": "pending",
+    "privacy_permissions": "pending",
+    "recorder_real_audio": "pending",
+    "downloader_live": "pending",
+    "archive_read_only": "pending",
+    "output_handoffs": "pending",
+    "e2e_user_smoke": "pending"
+  },
+  "notes": "Attach durable evidence locations or references before approval. Do not approve from automated checks alone."
+}

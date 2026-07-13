@@ -7,10 +7,14 @@ Run these from a clean checkout on the release machine.
 ```bash
 git status --short --branch
 cat VERSION
+cat BUNDLE_ID
+./script/release-preflight.sh
 ./script/release-version-verify.sh
 ./script/public-tree-hygiene.sh
 ./script/ci.sh
 ./script/e2e_user_smoke.sh
+./script/ci-release.sh
+./script/ci-tsan.sh
 ```
 
 For a version bump, also run:
@@ -36,6 +40,9 @@ This validates:
 - checksum generation after finalization
 - basename-only checksum verification
 - manifest provenance
+- exact `com.niko96.NikoMusicHub` identity in source, bundle, artifact, manifest, and installed app
+- exact-commit approved Mac UAT
+- immutable approval data tying every gate to the artifact and evidence hashes
 
 ## Hosted Artifact Truth
 
@@ -59,7 +66,7 @@ After installing from the DMG:
 ./script/verify-installed-release.sh /Applications/NikoMusicHub.app
 ```
 
-The installed bundle must report `CFBundleShortVersionString` from `VERSION` and an `NMHBuildID` beginning with that version plus the source commit.
+The installed bundle must report `CFBundleShortVersionString` from `VERSION`, `CFBundleIdentifier` from `BUNDLE_ID`, and an `NMHBuildID` beginning with that version plus the source commit.
 
 ## Rollback
 

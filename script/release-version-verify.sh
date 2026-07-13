@@ -42,6 +42,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 VERSION="$(nmh_release_version)"
+BUNDLE_ID="$(nmh_bundle_id)"
+
+CHANGELOG_HEADING="$(grep -E "^## ${VERSION} - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$ROOT/CHANGELOG.md" || true)"
+if [[ -z "$CHANGELOG_HEADING" ]]; then
+  echo "release version violation: CHANGELOG.md needs a dated '## $VERSION - YYYY-MM-DD' heading" >&2
+  exit 1
+fi
+if grep -Eq "^## ${VERSION} - Unreleased$" "$ROOT/CHANGELOG.md"; then
+  echo "release version violation: CHANGELOG.md still marks $VERSION as Unreleased" >&2
+  exit 1
+fi
 
 if rg -n 'NMH_MARKETING_VERSION="\$\{NMH_MARKETING_VERSION:-[0-9]' "$ROOT/script" >/dev/null; then
   echo "release version violation: app lifecycle scripts must not hard-code marketing version defaults" >&2
@@ -57,6 +68,11 @@ if [[ -n "$BUNDLE_PATH" ]]; then
   BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
   if [[ "$BUNDLE_VERSION" != "$VERSION" ]]; then
     echo "release version violation: bundle has CFBundleShortVersionString=$BUNDLE_VERSION but VERSION=$VERSION" >&2
+    exit 1
+  fi
+  ACTUAL_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST")"
+  if [[ "$ACTUAL_BUNDLE_ID" != "$BUNDLE_ID" ]]; then
+    echo "release identity violation: bundle has CFBundleIdentifier=$ACTUAL_BUNDLE_ID but BUNDLE_ID=$BUNDLE_ID" >&2
     exit 1
   fi
   BUILD_ID="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildID' "$INFO_PLIST" 2>/dev/null || true)"
@@ -99,4 +115,4 @@ if [[ -n "$PREVIOUS_VERSION" ]]; then
   fi
 fi
 
-echo "release version ok: VERSION=$VERSION"
+echo "release identity ok: VERSION=$VERSION BUNDLE_ID=$BUNDLE_ID"

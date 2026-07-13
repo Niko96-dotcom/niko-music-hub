@@ -206,7 +206,7 @@ Fixtures/CubaseArchive/
 | Target `OutsideCubaseHub` | `NikoMusicHub` |
 | `OutsideCubaseHubApp` | `NikoMusicHubApp` |
 | `dist/OutsideCubaseHub.app` | `dist/NikoMusicHub.app` |
-| Bundle id `local.outside-cubase-hub.app` | `local.niko-music-hub.app` |
+| Bundle id `local.outside-cubase-hub.app` | `com.niko96.NikoMusicHub` |
 | App Support `Outside Cubase Hub` | `Niko Music Hub` |
 
 Use mechanical rename + test run; avoid drive-by refactors in feature modules.

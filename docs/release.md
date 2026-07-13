@@ -2,7 +2,7 @@
 
 Niko Music Hub is a native macOS Swift Package app. The public artifact contract is a DMG containing `NikoMusicHub.app`.
 
-`VERSION` is the only canonical release version source. Bundle metadata, artifact names, release manifests, checksums, release notes, and docs must derive from that file.
+`VERSION` is the canonical release version source. `BUNDLE_ID` is the permanent app identity source and currently contains `com.niko96.NikoMusicHub`. Bundle metadata, artifact names, release manifests, checksums, release notes, and docs must derive from those files.
 
 ## Distribution
 
@@ -10,6 +10,8 @@ Niko Music Hub is a native macOS Swift Package app. The public artifact contract
 - Public artifact: `NikoMusicHub-<version>.dmg`.
 - Checksum: `NikoMusicHub-<version>.dmg.sha256`, with a basename-only entry.
 - Manifest: `NikoMusicHub-<version>-manifest.json`.
+- Approval record: `NikoMusicHub-<version>-release-approval.json`.
+- Release notes: only the dated current-version section extracted from `CHANGELOG.md`.
 - Install path for smoke verification: `/Applications/NikoMusicHub.app`.
 
 ## Prerequisites
@@ -25,6 +27,7 @@ Required environment for public mode:
 ```bash
 export NMH_DEVELOPER_ID_APPLICATION="Developer ID Application: ..."
 export NMH_NOTARY_PROFILE="niko-music-hub-notary"
+export NMH_RELEASE_UAT_EVIDENCE="/absolute/path/to/NikoMusicHub-$(cat VERSION)-uat.json"
 ```
 
 ## Commands
@@ -48,7 +51,11 @@ git tag "v$(cat VERSION)"
 ./script/release-all.sh --public --publish --install-smoke
 ```
 
-Public mode fails if signing/notary credentials are missing, if the tag does not point at `HEAD`, or if validation fails. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
+Public mode fails if signing/notary credentials or approved UAT evidence are missing, the tree has any tracked or untracked changes, the exact version tag does not resolve to `HEAD`, an identity differs from `BUNDLE_ID`, or any gate fails. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
+
+Copy `docs/release-uat-evidence.template.json` outside the repository and fill it only after testing the exact commit. The validator requires clean install, upgrade/settings retention, uninstall, launch-at-login, privacy permissions, real recorder audio, live downloader, archive read-only behavior, output handoffs, and user-style E2E to be passed and approved. Historical UAT does not satisfy a new commit.
+
+Public `--skip-tests` is rejected. A release owner can use `--emergency-skip-tests --reason "..."` only as a conspicuous, recorded override; the approval JSON preserves the reason and every overridden gate.
 
 ## Version Bump
 
@@ -65,5 +72,6 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 
 - GitHub Actions are not required for this repo; local gates are the truth.
 - Recorder hardware permission tests are intentionally skipped by `script/ci.sh` and must be checked manually on a machine with a usable system-audio capture setup.
-- Install smoke writes to `/Applications` and is opt-in via `--install-smoke`.
+- Public mode additionally runs `script/ci-release.sh` and the focused `script/ci-tsan.sh` concurrency gate.
+- `--install-smoke` checks the already-installed `/Applications/NikoMusicHub.app`; the consolidated UAT record remains the authoritative clean-install/upgrade/uninstall proof.
 - App Store review is not part of this release path.

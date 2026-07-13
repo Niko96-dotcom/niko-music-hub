@@ -4,9 +4,16 @@
 NMH_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NMH_SCRIPT_DIR="$(cd "$NMH_LIB_DIR/.." && pwd)"
 NMH_ROOT_DIR="$(cd "$NMH_SCRIPT_DIR/.." && pwd)"
+# shellcheck source=../release-env.sh
+source "$NMH_SCRIPT_DIR/release-env.sh"
 
 NMH_APP_NAME="${NMH_APP_NAME:-NikoMusicHub}"
-NMH_BUNDLE_ID="${NMH_BUNDLE_ID:-local.niko-music-hub.app}"
+NMH_CANONICAL_BUNDLE_ID="$(nmh_bundle_id)"
+NMH_BUNDLE_ID="${NMH_BUNDLE_ID:-$NMH_CANONICAL_BUNDLE_ID}"
+if [[ "$NMH_BUNDLE_ID" != "$NMH_CANONICAL_BUNDLE_ID" ]]; then
+  echo "bundle identifier override '$NMH_BUNDLE_ID' does not match canonical '$NMH_CANONICAL_BUNDLE_ID'" >&2
+  exit 1
+fi
 NMH_VERSION_FILE="${NMH_VERSION_FILE:-$NMH_ROOT_DIR/VERSION}"
 if [[ -z "${NMH_MARKETING_VERSION:-}" ]]; then
   if [[ ! -f "$NMH_VERSION_FILE" ]]; then

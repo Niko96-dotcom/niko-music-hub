@@ -9,6 +9,8 @@ MODE=""
 PUBLISH=false
 DRY_RUN_PUBLISH=false
 SKIP_TESTS=false
+EMERGENCY_SKIP_TESTS=false
+EMERGENCY_REASON=""
 INSTALL_SMOKE=false
 RELEASE_DIR="${NMH_RELEASE_DIR:-$ROOT/dist/release}"
 LOG_FILE="${NMH_RELEASE_LOG:-}"
@@ -17,12 +19,15 @@ usage() {
   cat >&2 <<'USAGE'
 usage:
   script/release-all.sh --local-only [--skip-tests] [--install-smoke]
-  script/release-all.sh --public (--publish|--dry-run-publish) [--skip-tests] [--install-smoke]
+  script/release-all.sh --public (--publish|--dry-run-publish) [--install-smoke]
+  script/release-all.sh --public (--publish|--dry-run-publish) --emergency-skip-tests --reason "..."
 
 Public mode requires:
   NMH_DEVELOPER_ID_APPLICATION
   NMH_NOTARY_PROFILE
+  NMH_RELEASE_UAT_EVIDENCE (approved JSON matching the exact version and commit)
   Git tag v<VERSION> pointing at HEAD
+  Completely clean working tree, including untracked files
   gh auth when --publish is used
 
 Local-only mode is explicitly unsigned/unnotarized and cannot publish.
@@ -55,6 +60,8 @@ while [[ $# -gt 0 ]]; do
     --publish) PUBLISH=true; shift ;;
     --dry-run-publish) DRY_RUN_PUBLISH=true; shift ;;
     --skip-tests) SKIP_TESTS=true; shift ;;
+    --emergency-skip-tests) EMERGENCY_SKIP_TESTS=true; shift ;;
+    --reason) EMERGENCY_REASON="${2:-}"; shift 2 ;;
     --install-smoke) INSTALL_SMOKE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
@@ -70,8 +77,25 @@ if [[ "$MODE" == "public" && "$PUBLISH" == "$DRY_RUN_PUBLISH" ]]; then
   echo "public release requires exactly one of --publish or --dry-run-publish" >&2
   exit 2
 fi
+if [[ "$MODE" == "public" && "$SKIP_TESTS" == true ]]; then
+  echo "public release rejects --skip-tests; use --emergency-skip-tests --reason \"...\" for an auditable override" >&2
+  exit 2
+fi
+if [[ "$EMERGENCY_SKIP_TESTS" == true && -z "${EMERGENCY_REASON//[[:space:]]/}" ]]; then
+  echo "--emergency-skip-tests requires a non-empty --reason" >&2
+  exit 2
+fi
+if [[ -n "$EMERGENCY_REASON" && "$EMERGENCY_SKIP_TESTS" != true ]]; then
+  echo "--reason is valid only with --emergency-skip-tests" >&2
+  exit 2
+fi
+if [[ "$MODE" == "local-only" && "$EMERGENCY_SKIP_TESTS" == true ]]; then
+  echo "local-only mode uses --skip-tests; emergency overrides are public-release records" >&2
+  exit 2
+fi
 
 VERSION="$(nmh_release_version)"
+BUNDLE_ID="$(nmh_bundle_id)"
 TAG="v$VERSION"
 COMMIT="$(nmh_git_commit)"
 SHORT_COMMIT="$(nmh_git_short_commit)"
@@ -86,10 +110,9 @@ ARTIFACT_NAME="NikoMusicHub-$ARTIFACT_LABEL.dmg"
 if [[ "$MODE" == "public" ]]; then
   : "${NMH_DEVELOPER_ID_APPLICATION:?public release requires NMH_DEVELOPER_ID_APPLICATION}"
   : "${NMH_NOTARY_PROFILE:?public release requires NMH_NOTARY_PROFILE}"
-  if ! git -C "$ROOT" tag --points-at HEAD | grep -Fxq "$TAG"; then
-    echo "public release requires tag $TAG pointing at HEAD $COMMIT" >&2
-    exit 1
-  fi
+  : "${NMH_RELEASE_UAT_EVIDENCE:?public release requires NMH_RELEASE_UAT_EVIDENCE}"
+  "$ROOT/script/release-preflight.sh"
+  "$ROOT/script/validate-release-uat.sh" --evidence "$NMH_RELEASE_UAT_EVIDENCE" --commit "$COMMIT"
   if [[ "$PUBLISH" == true ]]; then
     command -v gh >/dev/null || { echo "public publish requires gh CLI" >&2; exit 1; }
     gh auth status >/dev/null
@@ -102,12 +125,19 @@ LOG_FILE="${LOG_FILE:-$RELEASE_DIR/release.log}"
 : >"$LOG_FILE"
 
 log "release identity"
-printf 'version=%s\ncommit=%s\ntag=%s\nbuild_id=%s\nmode=%s\n' "$VERSION" "$COMMIT" "$TAG" "$BUILD_ID" "$MODE" | tee -a "$LOG_FILE"
+printf 'version=%s\nbundle_id=%s\ncommit=%s\ntag=%s\nbuild_id=%s\nmode=%s\n' "$VERSION" "$BUNDLE_ID" "$COMMIT" "$TAG" "$BUILD_ID" "$MODE" | tee -a "$LOG_FILE"
 
-if [[ "$SKIP_TESTS" != true ]]; then
+if [[ "$SKIP_TESTS" != true && "$EMERGENCY_SKIP_TESTS" != true ]]; then
   log "local gates"
   run ci "$ROOT/script/ci.sh"
   run e2e "$ROOT/script/e2e_user_smoke.sh"
+  if [[ "$MODE" == "public" ]]; then
+    run release-config "$ROOT/script/ci-release.sh"
+    run thread-sanitizer "$ROOT/script/ci-tsan.sh"
+  fi
+elif [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then
+  log "emergency test override"
+  printf 'EMERGENCY OVERRIDE: automated test gates skipped; reason=%s\n' "$EMERGENCY_REASON" | tee -a "$LOG_FILE"
 fi
 
 log "version and public-tree hygiene"
@@ -128,7 +158,7 @@ if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleExecutable</key><string>NikoMusicHub</string>
-  <key>CFBundleIdentifier</key><string>local.niko-music-hub.app</string>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleName</key><string>Niko Music Hub</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
@@ -195,47 +225,95 @@ if rg -n '/' "$DMG.sha256" >/dev/null; then
 fi
 ARTIFACT_SHA="$(awk '{print $1}' "$DMG.sha256")"
 MANIFEST="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-manifest.json"
-cat >"$MANIFEST" <<JSON
-{
-  "product": "Niko Music Hub",
-  "artifact_contract": "DMG containing NikoMusicHub.app",
-  "public_release": $([[ "$MODE" == "public" ]] && echo true || echo false),
-  "version": "$VERSION",
-  "tag": "$TAG",
-  "commit": "$COMMIT",
-  "build_id": "$BUILD_ID",
-  "build_number": "$BUILD_NUMBER",
-  "artifact": "$ARTIFACT_NAME",
-  "artifact_sha256": "$ARTIFACT_SHA",
-  "checksum": "$ARTIFACT_NAME.sha256",
-  "signing_identity": "$([[ "$MODE" == "public" ]] && printf '%s' "$NMH_DEVELOPER_ID_APPLICATION" || printf 'ad-hoc local-only')",
-  "notary_profile": "$([[ "$MODE" == "public" ]] && printf '%s' "$NMH_NOTARY_PROFILE" || printf 'skipped local-only')",
-  "created_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "validation_status": "pending"
-}
-JSON
+MANIFEST_ARGS=(
+  manifest
+  --output "$MANIFEST"
+  --version "$VERSION"
+  --bundle-id "$BUNDLE_ID"
+  --tag "$TAG"
+  --commit "$COMMIT"
+  --build-id "$BUILD_ID"
+  --build-number "$BUILD_NUMBER"
+  --artifact "$ARTIFACT_NAME"
+  --artifact-sha256 "$ARTIFACT_SHA"
+  --created-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+)
+if [[ "$MODE" == "public" ]]; then
+  MANIFEST_ARGS+=(--public-release)
+fi
+"$ROOT/script/generate-release-record.py" "${MANIFEST_ARGS[@]}" --validation-status pending
+run validate-artifact-candidate "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE" --allow-pending
+"$ROOT/script/generate-release-record.py" "${MANIFEST_ARGS[@]}" --validation-status passed
+run validate-artifact-final "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE"
 
-run validate-artifact "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE"
+RELEASE_NOTES="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-release-notes.md"
+run release-notes "$ROOT/script/extract-release-notes.sh" "$RELEASE_NOTES"
 
-log "publication"
-if [[ "$PUBLISH" == true ]]; then
-  gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Niko Music Hub $VERSION" --notes-file "$ROOT/CHANGELOG.md"
-  gh release upload "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" --clobber
-  HOSTED_DIR="$RELEASE_DIR/hosted-download"
-  mkdir -p "$HOSTED_DIR"
-  gh release download "$TAG" --dir "$HOSTED_DIR" --pattern "$(basename "$DMG")" --pattern "$(basename "$DMG.sha256")" --pattern "$(basename "$MANIFEST")"
-  run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE"
-elif [[ "$DRY_RUN_PUBLISH" == true ]]; then
-  echo "DRY-RUN: publication skipped after full local public artifact validation" | tee -a "$LOG_FILE"
-else
-  echo "LOCAL-ONLY: hosted artifact verification skipped because this mode cannot publish" | tee -a "$LOG_FILE"
+APPROVAL=""
+if [[ "$MODE" == "public" ]]; then
+  MANIFEST_SHA="$(shasum -a 256 "$MANIFEST" | awk '{print $1}')"
+  UAT_SHA="$(shasum -a 256 "$NMH_RELEASE_UAT_EVIDENCE" | awk '{print $1}')"
+  UAT_APPROVER="$(nmh_json_value "$NMH_RELEASE_UAT_EVIDENCE" approved_by)"
+  UAT_APPROVED_AT="$(nmh_json_value "$NMH_RELEASE_UAT_EVIDENCE" approved_at_utc)"
+  APPROVAL="$RELEASE_DIR/NikoMusicHub-$VERSION-release-approval.json"
+  GATE_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  TEST_RESULT="passed"
+  if [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then TEST_RESULT="emergency-override"; fi
+  APPROVAL_ARGS=(
+    approval
+    --output "$APPROVAL"
+    --version "$VERSION"
+    --bundle-id "$BUNDLE_ID"
+    --tag "$TAG"
+    --commit "$COMMIT"
+    --artifact "$ARTIFACT_NAME"
+    --artifact-sha256 "$ARTIFACT_SHA"
+    --manifest "$(basename "$MANIFEST")"
+    --manifest-sha256 "$MANIFEST_SHA"
+    --machine "$(uname -m) macOS $(sw_vers -productVersion)"
+    --created-utc "$GATE_TIME"
+    --uat-file "$(basename "$NMH_RELEASE_UAT_EVIDENCE")"
+    --uat-sha256 "$UAT_SHA"
+    --uat-approved-by "$UAT_APPROVER"
+    --uat-approved-at-utc "$UAT_APPROVED_AT"
+    --gate "clean-tagged-checkout|./script/release-preflight.sh|passed|$GATE_TIME"
+    --gate "consolidated-mac-uat|./script/validate-release-uat.sh|passed|$GATE_TIME"
+    --gate "debug-ci|./script/ci.sh|$TEST_RESULT|$GATE_TIME"
+    --gate "user-e2e|./script/e2e_user_smoke.sh|$TEST_RESULT|$GATE_TIME"
+    --gate "release-configuration|./script/ci-release.sh|$TEST_RESULT|$GATE_TIME"
+    --gate "thread-sanitizer|./script/ci-tsan.sh|$TEST_RESULT|$GATE_TIME"
+    --gate "release-identity|./script/release-version-verify.sh|passed|$GATE_TIME"
+    --gate "public-tree-hygiene|./script/public-tree-hygiene.sh|passed|$GATE_TIME"
+    --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|$GATE_TIME"
+    --gate "artifact-validation|./script/validate-release-artifact.sh|passed|$GATE_TIME"
+  )
+  if [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then
+    APPROVAL_ARGS+=(--emergency-reason "$EMERGENCY_REASON")
+  fi
+  "$ROOT/script/generate-release-record.py" "${APPROVAL_ARGS[@]}"
+  run validate-approval "$ROOT/script/validate-release-approval.sh" --approval "$APPROVAL" --artifact "$DMG" --manifest "$MANIFEST" --uat "$NMH_RELEASE_UAT_EVIDENCE"
 fi
 
 log "installed truth"
 if [[ "$INSTALL_SMOKE" == true ]]; then
   "$ROOT/script/verify-installed-release.sh"
 else
-  echo "install smoke skipped: rerun with --install-smoke on a release machine after installing the DMG" | tee -a "$LOG_FILE"
+  echo "installed bundle smoke skipped; consolidated exact-commit UAT remains mandatory for public mode" | tee -a "$LOG_FILE"
+fi
+
+log "publication"
+if [[ "$PUBLISH" == true ]]; then
+  gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Niko Music Hub $VERSION" --notes-file "$RELEASE_NOTES"
+  gh release upload "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" --clobber
+  HOSTED_DIR="$RELEASE_DIR/hosted-download"
+  mkdir -p "$HOSTED_DIR"
+  gh release download "$TAG" --dir "$HOSTED_DIR" --pattern "$(basename "$DMG")" --pattern "$(basename "$DMG.sha256")" --pattern "$(basename "$MANIFEST")" --pattern "$(basename "$APPROVAL")" --pattern "$(basename "$RELEASE_NOTES")"
+  run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE"
+  run validate-hosted-approval "$ROOT/script/validate-release-approval.sh" --approval "$HOSTED_DIR/$(basename "$APPROVAL")" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --uat "$NMH_RELEASE_UAT_EVIDENCE"
+elif [[ "$DRY_RUN_PUBLISH" == true ]]; then
+  echo "DRY-RUN: publication skipped after full local public artifact validation" | tee -a "$LOG_FILE"
+else
+  echo "LOCAL-ONLY: hosted artifact verification skipped because this mode cannot publish" | tee -a "$LOG_FILE"
 fi
 
 REPORT="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-release-report.md"
@@ -246,16 +324,18 @@ cat >"$REPORT" <<REPORT
 - Tag: $TAG
 - Commit: $COMMIT
 - Build ID: $BUILD_ID
+- Bundle ID: $BUNDLE_ID
 - Artifact: $ARTIFACT_NAME
 - SHA-256: $ARTIFACT_SHA
 - Manifest: $(basename "$MANIFEST")
+- Approval: $([[ -n "$APPROVAL" ]] && basename "$APPROVAL" || echo "not generated for local-only mode")
 - Publish: $([[ "$PUBLISH" == true ]] && echo "GitHub release uploaded and downloaded for validation" || ([[ "$DRY_RUN_PUBLISH" == true ]] && echo "dry-run publication" || echo "skipped local-only"))
 - Install smoke: $([[ "$INSTALL_SMOKE" == true ]] && echo "ran" || echo "skipped")
 
 ## Caveats
 
 $([[ "$MODE" == "local-only" ]] && echo "- Local-only artifacts are ad-hoc signed, unnotarized, and not public release candidates." || echo "- Public artifact signing/notarization validation ran before checksum generation.")
-$([[ "$INSTALL_SMOKE" != true ]] && echo "- Installed /Applications truth was not checked in this run." || echo "- Installed bundle metadata matched VERSION.")
+$([[ "$INSTALL_SMOKE" != true ]] && echo "- Installed /Applications metadata was not checked in this run; public mode still required consolidated exact-commit UAT evidence." || echo "- Installed bundle metadata matched VERSION and BUNDLE_ID.")
 REPORT
 
 echo "release finished: $REPORT"
