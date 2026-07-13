@@ -41,4 +41,20 @@ final class ReadOnlyArchivePolicyTests: XCTestCase {
             XCTAssertEqual(error as? ReadOnlyArchivePolicyError, .writeDenied(link))
         }
     }
+
+    func testWriteProbeDeniedUnderArchiveReachedThroughTmpSymlink() throws {
+        let fm = FileManager.default
+        let archive = URL(
+            fileURLWithPath: "/tmp/readonly-write-probe-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: archive) }
+
+        let policy = ReadOnlyArchivePolicy(fileManager: fm)
+        XCTAssertTrue(policy.writeProbeDenied(under: archive))
+        XCTAssertFalse(
+            fm.fileExists(atPath: archive.appendingPathComponent(".niko-music-hub-write-probe").path)
+        )
+    }
 }

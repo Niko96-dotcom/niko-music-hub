@@ -41,14 +41,40 @@ public struct PathSafety: @unchecked Sendable {
 
     /// Containment check that resolves symlinks on both sides before comparing.
     /// Use for write/open safety so a symlink outside a root cannot escape into it.
+    ///
+    /// The candidate may not exist yet (for example, a prospective output file).
+    /// Foundation does not reliably resolve symlinks in the existing parent chain
+    /// when the final component is missing, notably for `/tmp` -> `/private/tmp`.
+    /// Resolve the nearest existing ancestor, then append the missing tail.
     public func isResolvedContained(_ path: URL, in roots: [URL]) -> Bool {
-        let candidate = path.standardizedFileURL.resolvingSymlinksInPath().path
+        let candidate = resolvedURLAllowingMissingTail(path).path
         for root in roots {
-            let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+            let rootPath = resolvedURLAllowingMissingTail(root).path
             if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
                 return true
             }
         }
         return false
+    }
+
+    private func resolvedURLAllowingMissingTail(_ url: URL) -> URL {
+        var existingAncestor = url.standardizedFileURL
+        var missingComponents: [String] = []
+
+        while !fileManager.fileExists(atPath: existingAncestor.path) {
+            let parent = existingAncestor.deletingLastPathComponent()
+            guard parent.path != existingAncestor.path else { break }
+            let component = existingAncestor.lastPathComponent
+            if !component.isEmpty {
+                missingComponents.append(component)
+            }
+            existingAncestor = parent
+        }
+
+        var resolved = existingAncestor.resolvingSymlinksInPath()
+        for component in missingComponents.reversed() {
+            resolved.appendPathComponent(component, isDirectory: false)
+        }
+        return resolved.standardizedFileURL
     }
 }

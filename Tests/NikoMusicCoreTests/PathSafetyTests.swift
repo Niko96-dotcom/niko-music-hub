@@ -90,4 +90,39 @@ final class PathSafetyTests: XCTestCase {
         XCTAssertTrue(safety.isResolvedContained(link, in: [archive]))
         XCTAssertFalse(safety.isResolvedContained(outside, in: [archive]))
     }
+
+    func testResolvedContainedHandlesMissingChildUnderTmpSymlink() throws {
+        let fm = FileManager.default
+        let visibleRoot = URL(
+            fileURLWithPath: "/tmp/path-safety-missing-child-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try fm.createDirectory(at: visibleRoot, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: visibleRoot) }
+
+        let missingChild = visibleRoot.appendingPathComponent("not-created-yet.wav")
+        XCTAssertFalse(fm.fileExists(atPath: missingChild.path))
+
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertTrue(safety.isResolvedContained(missingChild, in: [visibleRoot]))
+    }
+
+    func testResolvedContainedHandlesMissingChildThroughDirectorySymlink() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent(
+            "path-safety-missing-child-link-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let outside = base.appendingPathComponent("outside", isDirectory: true)
+        let link = outside.appendingPathComponent("into-archive", isDirectory: true)
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+        try fm.createSymbolicLink(at: link, withDestinationURL: archive)
+
+        let missingChild = link.appendingPathComponent("not-created-yet.wav")
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertTrue(safety.isResolvedContained(missingChild, in: [archive]))
+    }
 }
