@@ -5,8 +5,7 @@ import XCTest
 /// wired in Phases 46 and 47 are intact.
 ///
 /// Covers: HAND-01, HAND-02, HAND-03, ROUT-06, HAND-04.
-/// All source reads use `String(contentsOfFile:)` with a `fileExists`/`XCTSkip`
-/// guard — tests run from the repo root via `swift test`.
+/// All source reads resolve from `#filePath`; missing inputs are test failures.
 final class HandoffSurfacingSourceTests: XCTestCase {
 
     // MARK: - HAND-01: Output Inbox reveal seam (AppShellView)
@@ -129,10 +128,7 @@ final class HandoffSurfacingSourceTests: XCTestCase {
 
     func testStemSeparationServiceToolIDEqualsExpected() throws {
         let path = "Sources/FeatureStemSeparation/StemSeparationService.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertTrue(
             source.contains(#"toolID: ToolFeatureID = "stem-separation""#),
             "ROUT-06: StemSeparationService.toolID must be declared with value 'stem-separation'"
@@ -148,10 +144,7 @@ final class HandoffSurfacingSourceTests: XCTestCase {
         // StemSeparationFeature.makeView(context:). It MUST NOT be a separately registered
         // ToolFeature.
         let path = "Sources/FeatureStemSeparation/YouTubeStemSeparationWorkflow.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertFalse(
             source.contains(": ToolFeature"),
             "ROUT-06: YouTubeStemSeparationWorkflow must not conform to ToolFeature — it is an internal orchestrator, not a separately registered tool"
@@ -179,42 +172,22 @@ final class HandoffSurfacingSourceTests: XCTestCase {
     // MARK: - Private helpers
 
     private func appShellViewSource() throws -> String {
-        let path = "Sources/NikoMusicHub/AppShell/AppShellView.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
     }
 
     private func audioConverterViewSource() throws -> String {
-        let path = "Sources/FeatureAudioConverter/AudioConverterView.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/FeatureAudioConverter/AudioConverterView.swift")
     }
 
     private func stemSeparationViewSource() throws -> String {
-        let path = "Sources/FeatureStemSeparation/StemSeparationView.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/FeatureStemSeparation/StemSeparationView.swift")
     }
 
     private func toolOutputShelfSource() throws -> String {
-        let path = "Sources/AppCore/OutputInbox/ToolOutputShelf.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/AppCore/OutputInbox/ToolOutputShelf.swift")
     }
 
     private func outputInboxInspectorViewSource() throws -> String {
-        let path = "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift")
     }
 }

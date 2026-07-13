@@ -18,6 +18,7 @@ public enum MixdownKeyEstimator {
     private static let minorProfile: [Double] = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
 
     public static func estimate(url: URL) -> MixdownKeyEstimate? {
+        guard !Task.isCancelled else { return nil }
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let sampleRate = file.processingFormat.sampleRate
         guard sampleRate > 0 else { return nil }
@@ -39,6 +40,7 @@ public enum MixdownKeyEstimator {
         let hop = max(512, frameCount / 200)
         var index = 0
         while index + 1024 < frameCount {
+            guard !Task.isCancelled else { return nil }
             let pitch = estimatePitchClass(
                 samples: channelData,
                 start: index,
@@ -68,9 +70,11 @@ public enum MixdownKeyEstimator {
         let maxLag = Int(sampleRate / 70)
         guard maxLag < count else { return nil }
         for lag in minLag...maxLag {
+            guard !Task.isCancelled else { return nil }
             var sum = 0.0
             var index = 0
             while index + lag < count {
+                if index.isMultiple(of: 128), Task.isCancelled { return nil }
                 sum += Double(samples[start + index] * samples[start + index + lag])
                 index += 1
             }

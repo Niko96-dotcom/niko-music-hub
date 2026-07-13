@@ -14,6 +14,7 @@ public struct MixdownBPMEstimate: Equatable, Sendable {
 /// Best-effort BPM read from a mixdown file (display only; no network).
 public enum MixdownBPMEstimator {
     public static func estimate(url: URL) -> MixdownBPMEstimate? {
+        guard !Task.isCancelled else { return nil }
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let sampleRate = file.processingFormat.sampleRate
         guard sampleRate > 0 else { return nil }
@@ -43,6 +44,7 @@ public enum MixdownBPMEstimator {
         var index = 0
         let stride = max(1, hop / 4)
         while index < frameCount {
+            guard !Task.isCancelled else { return nil }
             let sample = abs(channelData[index])
             let farEnoughFromLastPeak = lastPeak.map { index - $0 > hop } ?? true
             if sample >= threshold, farEnoughFromLastPeak {
@@ -67,6 +69,7 @@ public enum MixdownBPMEstimator {
         let step = max(1, count / 500)
         var samplesRead = 0
         while index < count {
+            if Task.isCancelled { return 1 }
             sum += abs(samples[index])
             samplesRead += 1
             index += step

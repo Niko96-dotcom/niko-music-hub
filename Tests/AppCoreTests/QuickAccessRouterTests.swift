@@ -103,10 +103,7 @@ final class QuickAccessRouterTests: XCTestCase {
 
     func testRouterSourceDoesNotReferenceOutputHandoff() throws {
         let path = "Sources/AppCore/QuickAccess/QuickAccessRouter.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertFalse(
             source.contains("OutputHandoff"),
             "QuickAccessRouter must not reference OutputHandoff — HAND-04 boundary"

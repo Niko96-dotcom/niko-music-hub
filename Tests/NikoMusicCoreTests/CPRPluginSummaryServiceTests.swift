@@ -54,4 +54,57 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
             ["EQ One", "Compressor Pro"]
         )
     }
+
+    func testCancellationStopsSubprocessPathAndDoesNotCacheEmptyFallback() async throws {
+        CPRPluginSummaryService.clearCache()
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plugins-cancel-\(UUID().uuidString).cpr")
+        let contents = "binary\u{0}NIKO_PLUGINS:Marker Synth\u{0}trailer"
+        FileManager.default.createFile(atPath: file.path, contents: Data(contents.utf8))
+        defer { try? FileManager.default.removeItem(at: file) }
+        let probe = PluginSubprocessProbe()
+
+        let task = Task {
+            await CPRPluginSummaryService.loadPlugins(
+                cprURL: file,
+                subprocessRunner: { _ in await probe.run() }
+            )
+        }
+        for _ in 0..<100 where await !probe.started {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let didStart = await probe.started
+        XCTAssertTrue(didStart)
+        task.cancel()
+        let canceledSummary = await task.value
+        let didCancel = await probe.canceled
+
+        XCTAssertTrue(canceledSummary.pluginNames.isEmpty)
+        XCTAssertTrue(didCancel)
+
+        let uncanceledSummary = await CPRPluginSummaryService.loadPlugins(
+            cprURL: file,
+            subprocessRunner: { _ in nil }
+        )
+        XCTAssertEqual(uncanceledSummary.pluginNames, ["Marker Synth"])
+        XCTAssertEqual(uncanceledSummary.source, "marker")
+    }
+}
+
+private actor PluginSubprocessProbe {
+    private(set) var started = false
+    private(set) var canceled = false
+
+    func run() async -> [String]? {
+        started = true
+        do {
+            try await Task.sleep(for: .seconds(10))
+            return ["Should Not Complete"]
+        } catch is CancellationError {
+            canceled = true
+            return nil
+        } catch {
+            return nil
+        }
+    }
 }

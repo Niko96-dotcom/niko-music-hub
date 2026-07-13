@@ -6,9 +6,8 @@ final class MixdownBPMEstimatorTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let url = CubaseFixtures.archiveRoot
             .appendingPathComponent("90s Rave/Mixdown/Graffiti master.wav")
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw XCTSkip("Fixture wav missing")
-        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "Required fixture WAV is missing")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
 
         _ = MixdownBPMEstimator.estimate(url: url)
     }

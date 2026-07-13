@@ -13,11 +13,8 @@ final class QuickAccessSourceTests: XCTestCase {
             "Sources/AppCore/QuickAccess/QuickAccessResolver.swift",
             "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
         ]
-        guard FileManager.default.fileExists(atPath: files[0]) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
         for path in files {
-            let source = try String(contentsOfFile: path, encoding: .utf8)
+            let source = try SourceTestSupport.read(path)
             XCTAssertFalse(
                 source.contains("makeView"),
                 "QuickAccess source must not call makeView — ROUT-07: \(path)"
@@ -29,10 +26,7 @@ final class QuickAccessSourceTests: XCTestCase {
 
     func testQuickAccessRouterDoesNotReferenceOutputHandoff() throws {
         let path = "Sources/AppCore/QuickAccess/QuickAccessRouter.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertFalse(
             source.contains("OutputHandoff"),
             "QuickAccessRouter must not reference OutputHandoff — HAND-04 boundary"
@@ -45,11 +39,8 @@ final class QuickAccessSourceTests: XCTestCase {
         let files = [
             "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
         ]
-        guard FileManager.default.fileExists(atPath: files[0]) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
         for path in files {
-            let source = try String(contentsOfFile: path, encoding: .utf8)
+            let source = try SourceTestSupport.read(path)
             XCTAssertFalse(
                 source.contains("@Observable"),
                 "Project convention: use ObservableObject, not @Observable macro: \(path)"

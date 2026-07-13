@@ -42,12 +42,15 @@ public enum CPRPluginSummaryService {
         }) {
             return cachedSummary
         }
+        guard !Task.isCancelled else { return .empty }
 
         let summary: CPRPluginSummary
         if !Task.isCancelled,
            let names = await subprocessRunner(standard),
            !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "subprocess")
+        } else if Task.isCancelled {
+            return .empty
         } else if let names = parseEmbeddedMarker(in: standard, fileManager: fileManager), !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "marker")
         } else if fileSize(at: standard, fileManager: fileManager) <= maxInMemoryParseBytes,
@@ -57,6 +60,8 @@ public enum CPRPluginSummaryService {
         } else {
             summary = .empty
         }
+
+        guard !Task.isCancelled else { return .empty }
 
         cacheLock.withLock {
             cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)

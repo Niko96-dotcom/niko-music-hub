@@ -92,10 +92,7 @@ final class MenuBarSourceTests: XCTestCase {
 
     func testNikoMusicHubAppContainsMenuBarExtra() throws {
         let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertTrue(
             source.contains("MenuBarExtra"),
             "NikoMusicHubApp.swift must contain MenuBarExtra — MBAR-01 acceptance gate"
@@ -112,10 +109,7 @@ final class MenuBarSourceTests: XCTestCase {
 
     func testNikoMusicHubAppUsesLabelClosureInitNotPrimarySceneForm() throws {
         let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         // The label: { } closure form is required; the string "MenuBarExtra(" with an inline
         // string title is the forbidden primary-scene form.
         // Check for label closure pattern: "} label: {" appears in the scene block.
@@ -129,10 +123,7 @@ final class MenuBarSourceTests: XCTestCase {
 
     func testNikoMusicHubAppPreservesActivationPolicy() throws {
         let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        let source = try String(contentsOfFile: path, encoding: .utf8)
+        let source = try SourceTestSupport.read(path)
         XCTAssertTrue(
             source.contains("setActivationPolicy(.regular)"),
             "NikoMusicHubApp.swift must keep setActivationPolicy(.regular) — MBAR-03: app remains a regular windowed app"
@@ -142,10 +133,6 @@ final class MenuBarSourceTests: XCTestCase {
     // MARK: - Private helpers
 
     private func menuBarMenuViewSource() throws -> String {
-        let path = "Sources/NikoMusicHub/MenuBar/MenuBarMenuView.swift"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Source file not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("Sources/NikoMusicHub/MenuBar/MenuBarMenuView.swift")
     }
 }

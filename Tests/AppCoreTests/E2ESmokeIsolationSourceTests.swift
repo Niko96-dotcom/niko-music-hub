@@ -30,10 +30,6 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
     }
 
     private func smokeScriptSource() throws -> String {
-        let path = "script/e2e_user_smoke.sh"
-        guard FileManager.default.fileExists(atPath: path) else {
-            throw XCTSkip("Script not found relative to cwd — run tests from repo root")
-        }
-        return try String(contentsOfFile: path, encoding: .utf8)
+        try SourceTestSupport.read("script/e2e_user_smoke.sh")
     }
 }

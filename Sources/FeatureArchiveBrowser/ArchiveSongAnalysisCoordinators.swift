@@ -5,7 +5,20 @@ import NikoMusicCore
 /// BPM/key analysis for the active preview file. Owned by ``ArchiveBrowserViewModel``.
 @MainActor
 final class ArchiveMixdownAnalysisCoordinator {
+    typealias BPMEstimator = @Sendable (URL) async -> MixdownBPMEstimate?
+    typealias KeyEstimator = @Sendable (URL) async -> MixdownKeyEstimate?
+
     private var analysisTask: Task<Void, Never>?
+    private let bpmEstimator: BPMEstimator
+    private let keyEstimator: KeyEstimator
+
+    init(
+        bpmEstimator: @escaping BPMEstimator = { await MixdownAnalysisWorker.estimateBPM(url: $0) },
+        keyEstimator: @escaping KeyEstimator = { await MixdownAnalysisWorker.estimateKey(url: $0) }
+    ) {
+        self.bpmEstimator = bpmEstimator
+        self.keyEstimator = keyEstimator
+    }
 
     /// BPM/key must key off the active preview file, not just song folder id.
     static func cacheKey(for song: Song) -> String? {
@@ -65,32 +78,40 @@ final class ArchiveMixdownAnalysisCoordinator {
         let songID = song.id
         let url = song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID })?.filePath
         guard let url else { return }
+        let bpmEstimator = bpmEstimator
+        let keyEstimator = keyEstimator
         analysisTask = Task {
             let bpmEstimate: MixdownBPMEstimate?
             let keyEstimate: MixdownKeyEstimate?
             if needsBPM, needsKey {
-                async let bpm = Task.detached(priority: .utility) {
-                    MixdownBPMEstimator.estimate(url: url)
-                }.value
-                async let key = Task.detached(priority: .utility) {
-                    MixdownKeyEstimator.estimate(url: url)
-                }.value
+                async let bpm = bpmEstimator(url)
+                async let key = keyEstimator(url)
                 bpmEstimate = await bpm
                 keyEstimate = await key
             } else if needsBPM {
-                bpmEstimate = await Task.detached(priority: .utility) {
-                    MixdownBPMEstimator.estimate(url: url)
-                }.value
+                bpmEstimate = await bpmEstimator(url)
                 keyEstimate = nil
             } else {
                 bpmEstimate = nil
-                keyEstimate = await Task.detached(priority: .utility) {
-                    MixdownKeyEstimator.estimate(url: url)
-                }.value
+                keyEstimate = await keyEstimator(url)
             }
             guard !Task.isCancelled, isStillSelected(songID, cacheKey) else { return }
             apply(cacheKey, needsBPM ? bpmEstimate : nil, needsKey ? keyEstimate : nil)
         }
+    }
+}
+
+private enum MixdownAnalysisWorker {
+    static func estimateBPM(url: URL) async -> MixdownBPMEstimate? {
+        await Task.yield()
+        guard !Task.isCancelled else { return nil }
+        return MixdownBPMEstimator.estimate(url: url)
+    }
+
+    static func estimateKey(url: URL) async -> MixdownKeyEstimate? {
+        await Task.yield()
+        guard !Task.isCancelled else { return nil }
+        return MixdownKeyEstimator.estimate(url: url)
     }
 }
 
