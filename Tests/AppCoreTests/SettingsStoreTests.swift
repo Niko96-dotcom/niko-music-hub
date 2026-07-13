@@ -88,10 +88,10 @@ final class SettingsStoreTests: XCTestCase {
         {
           "helperTools": {},
           "outputFolder": {
-            "url": "file:///Users/example/Music/Niko%20Music%20Hub/Inbox/"
+            "url": "file:///Users/tester/Music/Niko%20Music%20Hub/Inbox/"
           },
           "archiveRoots": [
-            { "path": "/Users/example/Music/00_Cubase Project" }
+            { "path": "/Users/tester/Music/00_Cubase Project" }
           ],
           "maxRecordingDurationMinutes": 30,
           "audioPreset": {
@@ -106,8 +106,8 @@ final class SettingsStoreTests: XCTestCase {
 
         let settings = try UserDefaultsSettingsStore(userDefaults: userDefaults).loadSettings()
 
-        XCTAssertEqual(settings.outputFolder.url.path, "/Users/example/Music/Niko Music Hub/Inbox")
-        XCTAssertEqual(settings.archiveRoots.map(\.path), ["/Users/example/Music/00_Cubase Project"])
+        XCTAssertEqual(settings.outputFolder.url.path, "/Users/tester/Music/Niko Music Hub/Inbox")
+        XCTAssertEqual(settings.archiveRoots.map(\.path), ["/Users/tester/Music/00_Cubase Project"])
         XCTAssertFalse(settings.archiveOnboardingCompleted)
         XCTAssertEqual(settings.appearance, .followSystem)
         XCTAssertEqual(settings.audioPreset.sampleRate, 44100)

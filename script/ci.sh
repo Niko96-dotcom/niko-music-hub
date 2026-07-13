@@ -13,7 +13,7 @@ swift build
 echo "== swift test (local deterministic gate) =="
 # The always-on Mac reports system-audio permission as authorized but cannot reliably
 # start a CoreAudio aggregate capture device. Keep these real-device tests out of the
-# default automation gate; run them manually/on the MacBook when checking recorder hardware.
+# default automation gate; run them manually on a supported release Mac when checking recorder hardware.
 swift test \
   --skip CoreAudioTapAdapterTests \
   --skip 'RecorderIntegrationTests/testMaxDurationAutoStop' \
@@ -61,3 +61,4 @@ echo "== release engineering regression gate =="
 ./script/release-version-verify.sh
 ./script/public-tree-hygiene.sh
 ./Tests/test_release_scripts.sh
+./Tests/test_source_distribution_scripts.sh

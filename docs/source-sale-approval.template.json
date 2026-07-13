@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "commit": "REPLACE_WITH_FULL_GIT_COMMIT",
+  "legal_entity": "TODO",
+  "approved_by": "TODO",
+  "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP",
+  "attestations": {
+    "source_rights_transferable": false,
+    "seed_project_rights_transferable": false,
+    "brand_asset_rights_transferable": false,
+    "fixtures_are_synthetic_and_private_data_free": false,
+    "excluded_material_reviewed": false,
+    "written_sale_or_license_terms_exist": false
+  }
+}

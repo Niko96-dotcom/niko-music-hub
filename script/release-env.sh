@@ -15,7 +15,7 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     value = json.load(handle)
 for component in sys.argv[2].split("."):
-    value = value[component]
+    value = value[int(component)] if isinstance(value, list) else value[component]
 if isinstance(value, bool):
     print("true" if value else "false")
 elif value is None:

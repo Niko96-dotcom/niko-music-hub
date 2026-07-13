@@ -44,6 +44,18 @@ done
 VERSION="$(nmh_release_version)"
 BUNDLE_ID="$(nmh_bundle_id)"
 
+for commercial_file in LICENSE THIRD_PARTY_NOTICES.md SOURCE_PROVENANCE.md SBOM.spdx.json; do
+  if [[ ! -f "$ROOT/$commercial_file" ]]; then
+    echo "release commercial record missing: $commercial_file" >&2
+    exit 1
+  fi
+done
+SBOM_VERSION="$(nmh_json_value "$ROOT/SBOM.spdx.json" packages.0.versionInfo 2>/dev/null || true)"
+if [[ "$SBOM_VERSION" != "$VERSION" ]]; then
+  echo "release version violation: SBOM package version '$SBOM_VERSION' does not match VERSION=$VERSION" >&2
+  exit 1
+fi
+
 CHANGELOG_HEADING="$(grep -E "^## ${VERSION} - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$ROOT/CHANGELOG.md" || true)"
 if [[ -z "$CHANGELOG_HEADING" ]]; then
   echo "release version violation: CHANGELOG.md needs a dated '## $VERSION - YYYY-MM-DD' heading" >&2

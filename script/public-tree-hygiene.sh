@@ -24,7 +24,15 @@ done
 cd "$ROOT"
 
 FILES=()
-if [[ "$INCLUDE_UNTRACKED" == true ]]; then
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  while IFS= read -r file; do
+    FILES+=("${file#./}")
+  done < <(find . -type f \
+    -not -path './.build/*' \
+    -not -path './dist/*' \
+    -not -path './.git/*' \
+    -print | LC_ALL=C sort)
+elif [[ "$INCLUDE_UNTRACKED" == true ]]; then
   while IFS= read -r file; do
     FILES+=("$file")
   done < <(git ls-files --cached --others --exclude-standard)
@@ -57,7 +65,7 @@ fi
 SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})'
 for file in "${FILES[@]}"; do
   case "$file" in
-    script/public-tree-hygiene.sh|docs/release.md|docs/release-validation.md) continue ;;
+    script/public-tree-hygiene.sh|script/verify-source-distribution.py|Tests/test_source_distribution_scripts.sh|docs/release.md|docs/release-validation.md) continue ;;
   esac
   if [[ -f "$file" ]]; then
     while IFS= read -r hit; do

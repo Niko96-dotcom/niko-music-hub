@@ -2,8 +2,6 @@
 
 Native macOS SwiftUI app for music-production chores around Cubase: browse a local Cubase archive, tap tempos, convert audio to Cubase-ready WAV, record system audio, download media, separate stems locally, and collect generated files in one output inbox.
 
-![Niko Music Hub first-run screen](docs/assets/niko-music-hub-first-run.png)
-
 The app is local-first. Archive scanning is read-only by default: it never renames, moves, deletes, or rewrites real Cubase/music files.
 
 ## Local dev flow
@@ -83,7 +81,7 @@ GitHub Actions are intentionally not required for this project.
 
 ## Release engineering
 
-`VERSION` is the canonical release version. Maintainer release commands live in `script/release-all.sh`; public mode signs, notarizes, staples, validates, checksums, manifests, and optionally publishes GitHub Release assets. Local-only mode is explicitly labeled and cannot publish.
+`VERSION` is the canonical release version and `BUNDLE_ID` is the permanent app identity. Maintainer release commands live in `script/release-all.sh`; public mode signs, notarizes, staples, validates, checksums, creates an approval record, and optionally publishes GitHub Release assets. Local-only mode is explicitly labeled and cannot publish.
 
 ```bash
 ./script/release-all.sh --local-only
@@ -133,6 +131,6 @@ Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broke
 
 `./script/e2e_user_smoke.sh` covers the fixture archive flow, dry-run CPR open, read-only archive proof, diagnostics export parity, and a public first-run UI smoke that rejects prototype labels, fixture paths, temp paths, and exposed diagnostics in the normal app window.
 
-The real public-release UAT record is in `docs/public-release-real-uat-2026-05-26.md`. It covers live archive, BPM, converter, downloader, output-folder, helper-health, and Output Inbox flows. Recorder remains blocked on local macOS microphone/audio-capture permission until the user grants access.
+Every public build requires a newly approved exact-commit UAT record. See `docs/release.md` for the evidence format and `docs/user-e2e.md` for smoke details.
 
-See `docs/user-e2e.md` for smoke details and `AGENTS.md` for agent workflow rules.
+For a commercial source handoff, use `script/export-source-sale.sh`. It creates a buyer-safe export without private planning/agent history and refuses a sale-labeled archive without an exact-commit provenance attestation.
