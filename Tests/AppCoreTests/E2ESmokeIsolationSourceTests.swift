@@ -29,13 +29,20 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         )
     }
 
-    func testEveryBuildAndRunLaunchCarriesTheIsolatedSuite() throws {
+    func testPublicUILaunchUsesExactBinaryPIDAndIsolatedSuite() throws {
         let script = try smokeScriptSource()
-        let launchLines = script.split(separator: "\n").filter { $0.contains("./script/build_and_run.sh") }
-        XCTAssertFalse(launchLines.isEmpty)
-        XCTAssertTrue(
-            launchLines.allSatisfy { $0.contains(#"NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE""#) },
-            "A suite-less build_and_run launch can reuse the real app process and expose the user's archive"
+        XCTAssertTrue(script.contains(#"NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" \"#))
+        XCTAssertTrue(script.contains(#""$APP_BINARY" >"$PUBLIC_UI_LOG" 2>&1 &"#))
+        XCTAssertTrue(script.contains("PUBLIC_UI_PID=$!"))
+        XCTAssertTrue(script.contains(#"--pid "$PUBLIC_UI_PID""#))
+        XCTAssertTrue(script.contains(#"--binary-path "$APP_BINARY""#))
+        XCTAssertFalse(
+            script.contains("pgrep -x NikoMusicHub"),
+            "Selecting the newest process can attach to a normally configured app and expose the user's archive"
+        )
+        XCTAssertFalse(
+            script.contains("./script/build_and_run.sh"),
+            "The public UI smoke must launch the already-built exact binary, not ask LaunchServices to find or reuse an app"
         )
     }
 
@@ -52,6 +59,20 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         let probe = try SourceTestSupport.read("script/ui_probe.swift")
         XCTAssertTrue(probe.contains("Window-only output avoids collecting unrelated system menu/recent-item data"))
         XCTAssertFalse(probe.contains("dumpAX(app, depth:"))
+
+        let script = try smokeScriptSource()
+        XCTAssertFalse(
+            script.contains("screencapture -x"),
+            "Smoke screenshots must target the isolated app window instead of capturing the user's full desktop"
+        )
+        XCTAssertTrue(script.contains(#"--capture "$PUBLIC_UI_SCREENSHOT""#))
+    }
+
+    func testPublicUIAccessibilityReadinessIsBoundedAndFailClosed() throws {
+        let script = try smokeScriptSource()
+        XCTAssertTrue(script.contains("PUBLIC_UI_DEADLINE=$((SECONDS + 20))"))
+        XCTAssertTrue(script.contains(#"grep -Fq "Welcome to your Cubase archive""#))
+        XCTAssertTrue(script.contains("strict UI mode requires AX-visible first-run content"))
     }
 
     private func smokeScriptSource() throws -> String {

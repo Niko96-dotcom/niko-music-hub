@@ -23,6 +23,10 @@ ISOLATED_ROOT="$HOME/Library/Application Support/Niko Music Hub/Isolated"
 ARCHIVE_SUITE="NikoMusicHubE2E.archive.$(uuidgen)"
 UI_SUITE="NikoMusicHubE2E.$(uuidgen)"
 cleanup_smoke_suites() {
+  if [[ -n "${PUBLIC_UI_PID:-}" ]]; then
+    kill "$PUBLIC_UI_PID" >/dev/null 2>&1 || true
+    wait "$PUBLIC_UI_PID" 2>/dev/null || true
+  fi
   nmh_stop_app true
   launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
   rm -rf "$ISOLATED_ROOT/$ARCHIVE_SUITE" "$ISOLATED_ROOT/$UI_SUITE"
@@ -73,24 +77,54 @@ done
 echo "== public first-run UI smoke =="
 PUBLIC_UI_TEXT="$ROOT/.build/e2e-public-ui.txt"
 PUBLIC_UI_SCREENSHOT="$ROOT/.build/e2e-public-ui.png"
-launchctl setenv NIKO_MUSIC_HUB_SETTINGS_SUITE "$UI_SUITE" >/dev/null 2>&1 || true
+PUBLIC_UI_TEXT_TMP="$PUBLIC_UI_TEXT.tmp"
+PUBLIC_UI_LOG="$ROOT/.build/e2e-public-ui.log"
+rm -f "$PUBLIC_UI_TEXT" "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_SCREENSHOT" "$PUBLIC_UI_LOG"
 
-NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" ./script/build_and_run.sh --verify >/dev/null
-sleep 1
-PUBLIC_UI_PID="$(pgrep -x NikoMusicHub | sort -n | tail -1 || true)"
-if [[ -z "$PUBLIC_UI_PID" ]]; then
-  echo "E2E failed: public UI app process missing" >&2
-  exit 1
-fi
+# Launch the exact binary directly and retain its PID. `open`/LaunchServices can
+# activate a different installed or already-running copy, which would bypass the
+# isolated suite and expose the user's real archive to this test.
+nmh_stop_app true
+NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" \
+  "$APP_BINARY" >"$PUBLIC_UI_LOG" 2>&1 &
+PUBLIC_UI_PID=$!
 
-screencapture -x "$PUBLIC_UI_SCREENSHOT" >/dev/null 2>&1 || true
-if ! swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --ax-dump >"$PUBLIC_UI_TEXT"; then
-  echo "E2E failed: ui_probe ax-dump failed for pid $PUBLIC_UI_PID" >&2
-  exit 1
-fi
+# SwiftUI may publish the window before its accessibility children are ready.
+# Poll the exact process for a bounded interval instead of accepting a partial
+# tree or attaching to whichever NikoMusicHub process happens to be newest.
+PUBLIC_UI_READY=false
+PUBLIC_UI_DEADLINE=$((SECONDS + 20))
+while (( SECONDS < PUBLIC_UI_DEADLINE )); do
+  if ! kill -0 "$PUBLIC_UI_PID" >/dev/null 2>&1; then
+    echo "E2E failed: isolated public UI process $PUBLIC_UI_PID exited" >&2
+    sed -n '1,120p' "$PUBLIC_UI_LOG" >&2 || true
+    exit 1
+  fi
 
-if ! grep -Fq "Welcome to your Cubase archive" "$PUBLIC_UI_TEXT"; then
-  if swift "$ROOT/script/ui_probe.swift" --pid "$PUBLIC_UI_PID" --check-visible >/dev/null; then
+  if swift "$ROOT/script/ui_probe.swift" \
+      --pid "$PUBLIC_UI_PID" \
+      --binary-path "$APP_BINARY" \
+      --ax-dump >"$PUBLIC_UI_TEXT_TMP" 2>/dev/null; then
+    mv "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_TEXT"
+    if grep -Fq "Welcome to your Cubase archive" "$PUBLIC_UI_TEXT"; then
+      PUBLIC_UI_READY=true
+      break
+    fi
+  fi
+  sleep 1
+done
+
+swift "$ROOT/script/ui_probe.swift" \
+  --pid "$PUBLIC_UI_PID" \
+  --binary-path "$APP_BINARY" \
+  --capture "$PUBLIC_UI_SCREENSHOT" \
+  --require-nonempty-capture >/dev/null 2>&1 || true
+
+if [[ "$PUBLIC_UI_READY" != "true" ]]; then
+  if swift "$ROOT/script/ui_probe.swift" \
+      --pid "$PUBLIC_UI_PID" \
+      --binary-path "$APP_BINARY" \
+      --check-visible >/dev/null; then
     if [[ "${NMH_STRICT_UI_E2E:-0}" == "1" ]]; then
       echo "E2E failed: strict UI mode requires AX-visible first-run content" >&2
       exit 1
