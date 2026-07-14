@@ -1,10 +1,42 @@
 import AppCore
 import AVFAudio
+import Combine
 import XCTest
 @testable import FeatureAudioRecorder
 
 @MainActor
 final class AudioRecorderViewModelTests: XCTestCase {
+    func testStartingStatePersistsUntilCaptureReadiness() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-starting-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let startEntered = expectation(description: "capture start entered")
+        let port = ReadinessControlledCapturePort(onStart: { startEntered.fulfill() })
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: directory,
+            outputInboxStore: InMemoryOutputInboxStore()
+        )
+        let recording = expectation(description: "recording only after readiness")
+        var cancellable: AnyCancellable?
+        cancellable = vm.$recordingState.sink { state in
+            if state == .recording { recording.fulfill() }
+        }
+
+        await vm.startRecording()
+        XCTAssertEqual(vm.recordingState, .starting)
+        XCTAssertNil(vm.currentLevel)
+
+        await fulfillment(of: [startEntered], timeout: 1)
+        port.completeHealthyStart()
+        await fulfillment(of: [recording], timeout: 1)
+        XCTAssertEqual(vm.recordingState, .recording)
+        await vm.stopRecording()
+        cancellable?.cancel()
+    }
+
     func testStartRecordingWhenPermissionDenied() async throws {
         let port = DenyingCapturePort()
         let useCase = RecordSystemAudioUseCase(capturePort: port)
@@ -549,6 +581,67 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
                 writtenFrameCount: writesAudioFrames ? 512 : 0,
                 writeErrorCount: writeErrorCount
             )
+        )
+    }
+}
+
+private final class ReadinessControlledCapturePort: AudioCapturePort, @unchecked Sendable {
+    private let lock = NSLock()
+    private var startContinuation: CheckedContinuation<AsyncStream<RecorderAudioLevel>, any Error>?
+    private var levelContinuation: AsyncStream<RecorderAudioLevel>.Continuation?
+    private var outputURL: URL?
+    private var _recording = false
+    private let onStart: @Sendable () -> Void
+
+    init(onStart: @escaping @Sendable () -> Void) {
+        self.onStart = onStart
+    }
+
+    var recording: Bool { lock.withLock { _recording } }
+    func checkPermission() async -> RecorderPermissionState { .authorized }
+    func requestPermission() async -> RecorderPermissionState { .authorized }
+    func isCompatibleMacOS() -> Bool { true }
+
+    func startRecording(
+        outputURL: URL,
+        preset: AudioPreset,
+        maxDuration: TimeInterval?
+    ) async throws -> AsyncStream<RecorderAudioLevel> {
+        lock.withLock { self.outputURL = outputURL }
+        return try await withCheckedThrowingContinuation { continuation in
+            lock.withLock { startContinuation = continuation }
+            onStart()
+        }
+    }
+
+    func completeHealthyStart() {
+        let stream = AsyncStream<RecorderAudioLevel> { continuation in
+            lock.withLock { levelContinuation = continuation }
+            continuation.yield(RecorderAudioLevel(peak: 0, average: 0, elapsedTime: 0.01))
+        }
+        let pending = lock.withLock { () -> CheckedContinuation<AsyncStream<RecorderAudioLevel>, any Error>? in
+            _recording = true
+            let value = startContinuation
+            startContinuation = nil
+            return value
+        }
+        pending?.resume(returning: stream)
+    }
+
+    func stopRecording() async throws -> RecorderResult {
+        guard let url = lock.withLock({ outputURL }) else {
+            throw RecorderError.apiError("Missing output URL")
+        }
+        try NaturalEndCapturePort.writeValidWAV(to: url)
+        lock.withLock { _recording = false }
+        levelContinuation?.finish()
+        return RecorderResult(
+            outputURL: url,
+            duration: 0.1,
+            sampleRate: 44_100,
+            bitDepth: 24,
+            channelCount: 2,
+            frameCount: 512
         )
     }
 }

@@ -127,14 +127,15 @@ private final class FailingStartSession: SystemAudioRecordingSession, @unchecked
         outputURL: URL,
         preset: AudioPreset,
         maxDuration: TimeInterval?,
-        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
-    ) throws {
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
+        onEnded: @escaping @Sendable () -> Void
+    ) async throws {
         didStart = true
         try Data("partial".utf8).write(to: outputURL)
         throw RecorderError.apiError("forced start failure")
     }
 
-    func stop() throws -> RecorderResult {
+    func stop() async throws -> RecorderResult {
         throw RecorderError.apiError("unexpected stop")
     }
 }
@@ -144,12 +145,13 @@ private final class StopFailingSession: SystemAudioRecordingSession, @unchecked 
         outputURL: URL,
         preset: AudioPreset,
         maxDuration: TimeInterval?,
-        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
-    ) throws {
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
+        onEnded: @escaping @Sendable () -> Void
+    ) async throws {
         onLevel(RecorderAudioLevel(peak: 0.5, average: 0.25, elapsedTime: 0.1))
     }
 
-    func stop() throws -> RecorderResult {
+    func stop() async throws -> RecorderResult {
         throw RecorderError.apiError("forced stop failure")
     }
 }
@@ -187,8 +189,9 @@ private final class CountingStopSession: SystemAudioRecordingSession, @unchecked
         outputURL: URL,
         preset: AudioPreset,
         maxDuration: TimeInterval?,
-        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
-    ) throws {
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
+        onEnded: @escaping @Sendable () -> Void
+    ) async throws {
         lock.withLock {
             self.outputURL = outputURL
             levelHandler = onLevel
@@ -202,7 +205,7 @@ private final class CountingStopSession: SystemAudioRecordingSession, @unchecked
         }
     }
 
-    func stop() throws -> RecorderResult {
+    func stop() async throws -> RecorderResult {
         let url = lock.withLock { () -> URL? in
             _stopCallCount += 1
             return outputURL

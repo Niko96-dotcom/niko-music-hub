@@ -6,7 +6,9 @@ public enum RecordingDisplayState: Equatable {
     case idle
     case permissionNeeded
     case incompatibleMacOS(version: String)
+    case starting
     case recording
+    case reconnecting
     case stopping
     case error(RecorderError)
 }
@@ -30,6 +32,15 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     public var isRecording: Bool {
         recordingState == .recording
+    }
+
+    public var isCaptureActive: Bool {
+        switch recordingState {
+        case .starting, .recording, .reconnecting:
+            true
+        default:
+            false
+        }
     }
 
     private var recordingTask: Task<Void, Never>?
@@ -76,7 +87,7 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     public func startRecording() async {
         guard !isStartInFlight,
-              recordingState != .recording,
+              !isCaptureActive,
               recordingState != .stopping
         else {
             return
@@ -98,7 +109,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             return
         }
 
-        recordingState = .recording
+        recordingState = .starting
         elapsedTime = 0
         currentLevel = nil
         error = nil
@@ -137,18 +148,28 @@ public final class AudioRecorderViewModel: ObservableObject {
                     maxDuration: config.maxDuration
                 )
 
+                guard !Task.isCancelled else { return }
+                recordingState = .recording
+
                 for await level in stream {
                     if Task.isCancelled { break }
                     elapsedTime = level.elapsedTime
                     currentLevel = level
                 }
 
-                if !Task.isCancelled, recordingState == .recording {
+                if !Task.isCancelled,
+                   recordingState == .recording || recordingState == .reconnecting {
                     Task { @MainActor [weak self] in
                         await self?.stopRecording()
                     }
                 }
+            } catch is CancellationError {
+                currentLevel = nil
+                if recordingState != .stopping {
+                    recordingState = .idle
+                }
             } catch let recorderError as RecorderError {
+                currentLevel = nil
                 recordingState = .error(recorderError)
                 error = recorderError
             } catch {
@@ -164,7 +185,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
 
     private func stopRecording(awaitingCurrentTask: Bool) async {
-        guard recordingState == .recording else { return }
+        guard isCaptureActive else { return }
         recordingState = .stopping
         let taskToAwait = recordingTask
 
@@ -176,6 +197,12 @@ public final class AudioRecorderViewModel: ObservableObject {
             }
             recordingTask = nil
             try await finalizeRecording(result)
+        } catch is CancellationError {
+            taskToAwait?.cancel()
+            recordingTask = nil
+            currentLevel = nil
+            recordingState = .idle
+            error = nil
         } catch let recorderError as RecorderError {
             taskToAwait?.cancel()
             recordingTask = nil
@@ -216,6 +243,21 @@ public final class AudioRecorderViewModel: ObservableObject {
             _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
             let file = try AVAudioFile(forReading: result.outputURL)
             guard file.length > 0 else {
+                // The IO cycle ran (input callbacks fired) but no PCM frames ever reached
+                // the writer. This is macOS not delivering system-audio frames — it is not
+                // a route/device problem and not a malformed WAV. Surface it as the
+                // terminal no-audio error with actionable, permission-focused guidance.
+                if let diagnostics = result.diagnostics,
+                   diagnostics.inputBufferCallbackCount > 0,
+                   diagnostics.inputFrameCount == 0 {
+                    throw RecorderError.noAudioCaptured(
+                        "macOS did not deliver any audio frames to the recorder. "
+                            + "Check that Screen & System Audio Recording permission is granted "
+                            + "for Niko Music Hub, then retry. CoreAudio diagnostics: \(diagnostics.summary)."
+                    )
+                }
+                // Frames arrived but nothing was written (a genuine converter/write/WAV-spec
+                // failure) — keep this as a verification failure.
                 var message = "Recording contained no audio frames."
                 if let diagnostics = result.diagnostics {
                     message += " CoreAudio diagnostics: \(diagnostics.summary)."

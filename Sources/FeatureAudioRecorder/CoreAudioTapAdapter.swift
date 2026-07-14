@@ -7,9 +7,15 @@ protocol SystemAudioRecordingSession: AnyObject, Sendable {
         outputURL: URL,
         preset: AudioPreset,
         maxDuration: TimeInterval?,
-        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
-    ) throws
-    func stop() throws -> RecorderResult
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
+        onEnded: @escaping @Sendable () -> Void
+    ) async throws
+    func cancelStart() async
+    func stop() async throws -> RecorderResult
+}
+
+extension SystemAudioRecordingSession {
+    func cancelStart() async {}
 }
 
 public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
@@ -85,7 +91,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     }
 
     private enum StopAction {
-        case awaitStart(RecordingContext)
+        case cancelStart(RecordingContext)
         case awaitStop(Task<RecorderResult, any Error>)
         case returnCompleted(RecorderResult)
         case noRecording
@@ -107,7 +113,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     }
 
     public init() {
-        self.sessionFactory = { SystemAudioProcessTapSession() }
+        self.sessionFactory = { ResilientSystemAudioRecordingSession() }
     }
 
     init(sessionFactory: @escaping @Sendable () -> any SystemAudioRecordingSession) {
@@ -185,13 +191,15 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         }
 
         do {
-            try tapSession.start(
+            try await tapSession.start(
                 outputURL: outputURL,
                 preset: preset,
                 maxDuration: maxDuration
             ) { [weak self] level in
                 continuation.yield(level)
                 self?.requestAutoStopIfNeeded(level: level, maxDuration: maxDuration)
+            } onEnded: {
+                continuation.finish()
             }
         } catch {
             stateLock.withLock {
@@ -202,6 +210,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             context.finishStream()
             context.signalStartFinished()
             try? FileManager.default.removeItem(at: outputURL)
+            if error is CancellationError { throw error }
             throw mapRecordingError(error)
         }
 
@@ -227,7 +236,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                     return .noRecording
                 case let .starting(context, _):
                     state = .starting(context, autoStopRequested: true)
-                    return .awaitStart(context)
+                    return .cancelStart(context)
                 case let .recording(context):
                     return .awaitStop(beginStopLocked(context: context).task)
                 case let .stopping(_, flight):
@@ -238,9 +247,10 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             }
 
             switch action {
-            case let .awaitStart(context):
+            case let .cancelStart(context):
+                await context.session.cancelStart()
                 await context.waitUntilStartFinishes()
-                try Task.checkCancellation()
+                throw CancellationError()
             case let .awaitStop(task):
                 return try await task.value
             case let .returnCompleted(result):
@@ -271,7 +281,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
     private func beginStopLocked(context: RecordingContext) -> StopFlight {
         let task = Task<RecorderResult, any Error> { [self] in
             do {
-                let result = try context.session.stop()
+                let result = try await context.session.stop()
                 completeStop(context: context, result: result)
                 return result
             } catch {

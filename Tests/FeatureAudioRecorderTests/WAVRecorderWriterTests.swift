@@ -112,7 +112,10 @@ final class WAVRecorderWriterTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
-    func testCaptureFormatResolverUsesAggregateSampleRate() throws {
+    func testCaptureUsesExactTapSourceFormat() throws {
+        // A 48 kHz tap source must remain a 48 kHz source while the converter targets the
+        // 44.1 kHz writer format. We prove the two formats differ and that the converter
+        // is configured to bridge them (real sample-rate conversion, not relabeling).
         let tapFormat = try XCTUnwrap(AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: 48_000,
@@ -120,44 +123,31 @@ final class WAVRecorderWriterTests: XCTestCase {
             interleaved: false
         ))
 
-        let resolved = RecorderCaptureFormatResolver.resolve(
-            tapFormat: tapFormat,
-            aggregateNominalSampleRate: 44_100
-        )
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact_source_\(UUID().uuidString).wav")
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let destinationFormat = writer.processingFormat
 
-        XCTAssertEqual(resolved.sampleRate, 44_100)
-        XCTAssertEqual(resolved.channelCount, 2)
-        XCTAssertEqual(resolved.commonFormat, tapFormat.commonFormat)
-        XCTAssertEqual(resolved.isInterleaved, tapFormat.isInterleaved)
+        XCTAssertEqual(tapFormat.sampleRate, 48_000)
+        XCTAssertEqual(destinationFormat.sampleRate, 44_100)
+        XCTAssertNotEqual(tapFormat.sampleRate, destinationFormat.sampleRate)
+
+        let converter = try XCTUnwrap(AVAudioConverter(from: tapFormat, to: destinationFormat))
+        XCTAssertEqual(converter.inputFormat.sampleRate, 48_000)
+        XCTAssertEqual(converter.outputFormat.sampleRate, 44_100)
     }
 
-    func testCaptureFormatResolverKeepsTapRateWhenAggregateRateMatches() throws {
-        let tapFormat = try XCTUnwrap(AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: 44_100,
-            channels: 2,
-            interleaved: false
-        ))
-
-        let resolved = RecorderCaptureFormatResolver.resolve(
-            tapFormat: tapFormat,
-            aggregateNominalSampleRate: 44_100
-        )
-
-        XCTAssertTrue(resolved === tapFormat)
-    }
-
-    func testRecorderDiagnosticsSummaryIncludesCaptureAndOutputRates() {
+    func testRecorderDiagnosticsSummaryIncludesExactSourceAndOutputRates() {
         let diagnostics = RecorderDiagnostics(
             outputDeviceUID: "device",
             tapSampleRate: 48_000,
             tapChannelCount: 2,
-            captureSampleRate: 44_100,
+            captureSampleRate: 48_000,
             outputSampleRate: 44_100
         )
 
-        XCTAssertTrue(diagnostics.summary.contains("tap=48000Hz/2ch"))
-        XCTAssertTrue(diagnostics.summary.contains("capture=44100Hz"))
+        XCTAssertTrue(diagnostics.summary.contains("source=48000Hz/2ch"))
         XCTAssertTrue(diagnostics.summary.contains("output=44100Hz"))
     }
 

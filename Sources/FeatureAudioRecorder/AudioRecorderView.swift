@@ -143,14 +143,14 @@ public struct AudioRecorderView: View {
 
     private var controlSection: some View {
         Button {
-            if viewModel.isRecording {
+            if viewModel.isCaptureActive {
                 Task { await viewModel.stopRecording() }
             } else {
                 Task { await viewModel.startRecording() }
             }
         } label: {
             HStack(spacing: 8) {
-                if viewModel.isRecording {
+                if viewModel.isCaptureActive {
                     Circle()
                         .fill(HubDesignSystem.Palette.danger)
                         .frame(width: 10, height: 10)
@@ -160,8 +160,8 @@ public struct AudioRecorderView: View {
                         )
                 }
                 Label(
-                    viewModel.isRecording ? "Stop" : "Record",
-                    systemImage: viewModel.isRecording ? "stop.fill" : "record.circle"
+                    viewModel.isCaptureActive ? "Stop" : "Record",
+                    systemImage: viewModel.isCaptureActive ? "stop.fill" : "record.circle"
                 )
                 .font(HubDesignSystem.Typography.body())
                 .fontWeight(.semibold)
@@ -173,10 +173,10 @@ public struct AudioRecorderView: View {
         .buttonStyle(.plain)
         .background {
             Capsule()
-                .fill(viewModel.isRecording ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
+                .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
         }
         .disabled(viewModel.recordingState == .stopping)
-        .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Start recording")
+        .accessibilityLabel(viewModel.isCaptureActive ? "Stop recording" : "Start recording")
         .padding(12)
     }
 
@@ -196,8 +196,8 @@ public struct AudioRecorderView: View {
                     )
                 }
             )
-            .disabled(viewModel.isRecording)
-            .opacity(viewModel.isRecording ? 0.45 : 1)
+            .disabled(viewModel.isCaptureActive)
+            .opacity(viewModel.isCaptureActive ? 0.45 : 1)
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
@@ -366,6 +366,17 @@ public struct AudioRecorderView: View {
                     AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
                 ]
             )
+        case .noAudioCaptured:
+            return AppErrorCard(
+                category: .conversionFile,
+                label: "No Audio Captured",
+                icon: "waveform.badge.exclamationmark",
+                body: "macOS did not deliver any audio frames to the recorder. Check that Screen & System Audio Recording permission is granted for Niko Music Hub, then retry.",
+                recoveryActions: [
+                    AppErrorCard.RecoveryAction(label: "Open System Audio Recording Settings", style: .secondary, action: .openSystemSettings),
+                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                ]
+            )
         case .incompatibleMacOS(let minimum, let current):
             return AppErrorCard(
                 category: .permission,
@@ -385,8 +396,12 @@ public struct AudioRecorderView: View {
             return "Permission required"
         case .incompatibleMacOS(let version):
             return "macOS \(version) not supported"
+        case .starting:
+            return "Starting…"
         case .recording:
             return "Recording..."
+        case .reconnecting:
+            return "Reconnecting audio…"
         case .stopping:
             return "Stopping..."
         case .error(let error):
@@ -399,6 +414,8 @@ public struct AudioRecorderView: View {
         case .idle:
             return HubDesignSystem.Palette.textSecondary
         case .permissionNeeded, .incompatibleMacOS:
+            return HubDesignSystem.Colors.warning
+        case .starting, .reconnecting:
             return HubDesignSystem.Colors.warning
         case .recording, .stopping:
             return HubDesignSystem.Colors.success

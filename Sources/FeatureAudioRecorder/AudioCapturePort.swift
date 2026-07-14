@@ -14,6 +14,7 @@ public enum RecorderError: LocalizedError, Equatable, Sendable {
     case apiError(String)
     case writeError(String)
     case verificationFailed(String)
+    case noAudioCaptured(String)
     case incompatibleMacOS(minimumVersion: String, currentVersion: String)
 
     public var errorDescription: String? {
@@ -28,6 +29,8 @@ public enum RecorderError: LocalizedError, Equatable, Sendable {
             return "Could not save recording: \(message)"
         case .verificationFailed(let message):
             return "Recording verification failed: \(message)"
+        case .noAudioCaptured(let message):
+            return message
         case .incompatibleMacOS(let minimum, let current):
             return "macOS \(current) is too old. This feature requires macOS \(minimum) or later."
         }
@@ -75,6 +78,12 @@ public struct RecorderResult: Sendable {
 }
 
 public struct RecorderDiagnostics: Equatable, Sendable {
+    public let selectedBackend: String
+    public let attemptedBackends: [String]
+    public let coreAudioRebuildCount: Int
+    public let screenCaptureKitFallbackCount: Int
+    public let routeChangeCount: Int
+    public let startupTimeoutCount: Int
     public let outputDeviceUID: String
     public let tapSampleRate: Double
     public let tapChannelCount: Int
@@ -84,6 +93,7 @@ public struct RecorderDiagnostics: Equatable, Sendable {
     public let inputBufferCallbackCount: Int
     public let outputBufferCallbackCount: Int
     public let zeroBufferCallbackCount: Int
+    public let inputByteCount: Int64
     public let inputFrameCount: Int64
     public let convertedFrameCount: Int64
     public let writtenFrameCount: Int64
@@ -91,6 +101,12 @@ public struct RecorderDiagnostics: Equatable, Sendable {
     public let writeErrorCount: Int
 
     public init(
+        selectedBackend: String = "",
+        attemptedBackends: [String] = [],
+        coreAudioRebuildCount: Int = 0,
+        screenCaptureKitFallbackCount: Int = 0,
+        routeChangeCount: Int = 0,
+        startupTimeoutCount: Int = 0,
         outputDeviceUID: String,
         tapSampleRate: Double,
         tapChannelCount: Int,
@@ -100,12 +116,19 @@ public struct RecorderDiagnostics: Equatable, Sendable {
         inputBufferCallbackCount: Int = 0,
         outputBufferCallbackCount: Int = 0,
         zeroBufferCallbackCount: Int = 0,
+        inputByteCount: Int64 = 0,
         inputFrameCount: Int64 = 0,
         convertedFrameCount: Int64 = 0,
         writtenFrameCount: Int64 = 0,
         converterErrorCount: Int = 0,
         writeErrorCount: Int = 0
     ) {
+        self.selectedBackend = selectedBackend
+        self.attemptedBackends = attemptedBackends
+        self.coreAudioRebuildCount = coreAudioRebuildCount
+        self.screenCaptureKitFallbackCount = screenCaptureKitFallbackCount
+        self.routeChangeCount = routeChangeCount
+        self.startupTimeoutCount = startupTimeoutCount
         self.outputDeviceUID = outputDeviceUID
         self.tapSampleRate = tapSampleRate
         self.tapChannelCount = tapChannelCount
@@ -115,6 +138,7 @@ public struct RecorderDiagnostics: Equatable, Sendable {
         self.inputBufferCallbackCount = inputBufferCallbackCount
         self.outputBufferCallbackCount = outputBufferCallbackCount
         self.zeroBufferCallbackCount = zeroBufferCallbackCount
+        self.inputByteCount = inputByteCount
         self.inputFrameCount = inputFrameCount
         self.convertedFrameCount = convertedFrameCount
         self.writtenFrameCount = writtenFrameCount
@@ -123,7 +147,7 @@ public struct RecorderDiagnostics: Equatable, Sendable {
     }
 
     public var summary: String {
-        "callbacks=\(ioCallbackCount), inputCallbacks=\(inputBufferCallbackCount), outputCallbacks=\(outputBufferCallbackCount), zeroBuffers=\(zeroBufferCallbackCount), inputFrames=\(inputFrameCount), convertedFrames=\(convertedFrameCount), writtenFrames=\(writtenFrameCount), converterErrors=\(converterErrorCount), writeErrors=\(writeErrorCount), tap=\(Int(tapSampleRate))Hz/\(tapChannelCount)ch, capture=\(Int(captureSampleRate))Hz, output=\(Int(outputSampleRate))Hz, outputDevice=\(outputDeviceUID)"
+        "backend=\(selectedBackend), attempted=\(attemptedBackends.joined(separator: ",")), coreRebuilds=\(coreAudioRebuildCount), screenFallbacks=\(screenCaptureKitFallbackCount), routeChanges=\(routeChangeCount), startupTimeouts=\(startupTimeoutCount), callbacks=\(ioCallbackCount), inputCallbacks=\(inputBufferCallbackCount), outputCallbacks=\(outputBufferCallbackCount), zeroBuffers=\(zeroBufferCallbackCount), inputBytes=\(inputByteCount), inputFrames=\(inputFrameCount), convertedFrames=\(convertedFrameCount), writtenFrames=\(writtenFrameCount), converterErrors=\(converterErrorCount), writeErrors=\(writeErrorCount), source=\(Int(tapSampleRate))Hz/\(tapChannelCount)ch, output=\(Int(outputSampleRate))Hz, outputDevice=\(outputDeviceUID)"
     }
 }
 
