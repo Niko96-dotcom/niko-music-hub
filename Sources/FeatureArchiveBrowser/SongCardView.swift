@@ -9,6 +9,7 @@ struct SongCardView: View {
     var matchSummary: String?
     var onSelect: (() -> Void)?
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
+    var vaultPresentation: ProjectVaultCardPresentation?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -60,6 +61,18 @@ struct SongCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.warning)
                         .help(song.displayScanWarnings().joined(separator: " "))
+                }
+            }
+
+            if let vaultPresentation {
+                HStack(spacing: 5) {
+                    Text(vaultPresentation.state.rawValue)
+                        .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.accent)
+                    Text(vaultPresentation.explanation)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .lineLimit(1)
                 }
             }
 

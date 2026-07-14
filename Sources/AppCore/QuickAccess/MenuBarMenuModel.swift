@@ -11,10 +11,17 @@ public enum MenuBarMenuModel {
     /// Delegates to `QuickAccessResolver.resolve` — unregistered tool entries are
     /// omitted; `.revealOutputInbox` always passes through (MBAR-04).
     public static func resolvedEntries(registry: ToolRegistry) -> [QuickAccessEntry] {
-        QuickAccessResolver.resolve(
+        let existingEntries = QuickAccessResolver.resolve(
             entries: QuickAccessEntry.allowlist,
             registry: registry
         )
+        let restoreEntry = QuickAccessEntry(
+            id: "restore-project",
+            label: "Restore Project…",
+            systemImage: "arrow.uturn.backward.circle",
+            command: .restoreProject
+        )
+        return [restoreEntry] + existingEntries
     }
 
     /// Returns `true` when a native `Divider()` should be placed immediately

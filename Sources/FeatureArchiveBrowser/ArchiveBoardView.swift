@@ -14,6 +14,7 @@ struct ArchiveBoardView: View {
     @State private var columnOrigins: [String: CGFloat] = [:]
     @State private var boardViewportWidth: CGFloat = 0
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
+    @FocusState private var searchFocused: Bool
 
     private var columns: [ArchiveBoardColumn] {
         ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
@@ -83,6 +84,9 @@ struct ArchiveBoardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
+            searchFocused = true
+        }
     }
 
     private var header: some View {
@@ -195,6 +199,7 @@ struct ArchiveBoardView: View {
             .textFieldStyle(.plain)
             .font(HubDesignSystem.Typography.body())
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            .focused($searchFocused)
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
@@ -261,6 +266,7 @@ private struct ArchiveBoardColumnView: View {
                         ArchiveBoardCardView(
                             song: song,
                             isSelected: viewModel.selectedSong?.id == song.id,
+                            vaultPresentation: viewModel.projectVaultPresentation(for: song),
                             onSelect: { viewModel.selectSongOnBoard(song) },
                             onOpenDetail: { viewModel.selectSong(song) }
                         )
@@ -443,6 +449,7 @@ private final class ArchiveBoardEdgeAutoScroller {
 private struct ArchiveBoardCardView: View {
     let song: Song
     let isSelected: Bool
+    let vaultPresentation: ProjectVaultCardPresentation?
     let onSelect: () -> Void
     let onOpenDetail: () -> Void
 
@@ -475,6 +482,12 @@ private struct ArchiveBoardCardView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .lineLimit(1)
+
+            if let vaultPresentation {
+                Text(vaultPresentation.state.rawValue)
+                    .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.accent)
+            }
 
             if let status = song.workflowStatus {
                 SongCardStageProgressBar(status: status)

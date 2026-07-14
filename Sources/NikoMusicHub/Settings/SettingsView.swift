@@ -108,6 +108,13 @@ struct SettingsView: View {
                 }
             }
 
+            ProjectVaultSettingsView(
+                context: context,
+                settings: $settings,
+                settingsAvailable: settingsLoadError == nil,
+                onSave: saveProjectVaultSettings
+            )
+
             SettingsSection(
                 title: "Audio conversion",
                 importance: .medium,
@@ -501,6 +508,13 @@ struct SettingsView: View {
     private func addArchiveRoot() {
         guard let folder = context.fileActions.chooseDirectory(prompt: "Choose Archive Root") else { return }
         archiveViewModel.addRoot(folder)
+    }
+
+    private func saveProjectVaultSettings(_ candidate: AppSettings) -> Bool {
+        persistSettings { stored in
+            stored.musicRoots = candidate.musicRoots
+            stored.vault = candidate.vault
+        }
     }
 }
 

@@ -72,7 +72,7 @@ final class QuickAccessCommandTests: XCTestCase {
             if case .openTool = $0.command { return true }
             return false
         }
-        XCTAssertEqual(toolEntries.count, 5, "Expected 5 tool entries; Output Inbox is the only non-tool entry")
+        XCTAssertEqual(toolEntries.count, 5)
     }
 
     func testAllEntryIDsAreUnique() {

@@ -26,7 +26,11 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
             return .default
         }
 
-        return try JSONDecoder().decode(AppSettings.self, from: data)
+        let settings = try JSONDecoder().decode(AppSettings.self, from: data)
+        if Self.needsTypedRootMigration(data) {
+            try saveSettingsLocked(settings)
+        }
+        return settings
     }
 
     public func saveSettings(_ settings: AppSettings) throws {
@@ -47,5 +51,12 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
             update(&settings)
             try saveSettingsLocked(settings)
         }
+    }
+
+    private static func needsTypedRootMigration(_ data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        return object["musicRoots"] == nil && object["archiveRoots"] != nil
     }
 }

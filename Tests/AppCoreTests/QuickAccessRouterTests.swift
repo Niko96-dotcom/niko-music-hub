@@ -74,6 +74,15 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertFalse(router.revealOutputInbox)
     }
 
+    func testRestoreProjectSelectsExistingArchiveAndEmitsRepeatableFocusRequests() {
+        let router = QuickAccessRouter()
+        router.execute(.restoreProject)
+        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.archiveSearchFocusRequest, 1)
+        router.execute(.restoreProject)
+        XCTAssertEqual(router.archiveSearchFocusRequest, 2)
+    }
+
     // MARK: - clearSelectedToolID
 
     func testSelectedToolIDIsNilAfterClear() {

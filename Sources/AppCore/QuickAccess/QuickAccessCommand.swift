@@ -11,4 +11,6 @@ public enum QuickAccessCommand: Hashable, Sendable {
     case openApp
     /// Show the Output Inbox panel in AppShellView.
     case revealOutputInbox
+    /// Open the existing Archive experience and request keyboard focus for search.
+    case restoreProject
 }

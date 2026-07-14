@@ -78,6 +78,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     public var requestConverterHandoff: ((URL) -> Void)?
     var statusBaseMessage: String?
     var persistenceWarningMessage: String?
+    private var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
 
     public convenience init(
         context: ToolContext,
@@ -150,7 +151,21 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         do {
             let settings = try settingsStore.loadSettings()
-            let loadedRoots = settings.archiveRoots.map(\.url)
+            let resolver = FoundationSecurityScopedBookmarks()
+            securityScopedRootAccesses.removeAll()
+            let loadedRoots = settings.effectiveScanRoots.compactMap { root -> URL? in
+                do {
+                    let resolved = try root.resolvedURL(using: resolver)
+                    if root.securityScopedBookmark != nil {
+                        securityScopedRootAccesses.append(SecurityScopedRootAccess(url: resolved))
+                    }
+                    return resolved
+                } catch {
+                    recordPersistenceWarning("Archive root access could not be restored: \(root.displayName).")
+                    diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
+                    return nil
+                }
+            }
             roots = ArchiveRootDisplayPolicy.storedRoots(from: loadedRoots)
         } catch {
             recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")

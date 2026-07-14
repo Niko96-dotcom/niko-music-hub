@@ -55,7 +55,8 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "AppCore"
+            name: "AppCore",
+            dependencies: ["NikoMusicCore"]
         ),
         .target(
             name: "NikoMusicCore",
@@ -110,7 +111,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AppCoreTests",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "NikoMusicCore"]
         ),
         .testTarget(
             name: "NikoMusicCoreTests",

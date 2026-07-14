@@ -25,6 +25,10 @@ struct SongDetailView: View {
         return "\(song.virtualTitle ?? "")\u{1e}\(song.appNote ?? "")\u{1e}\(song.aliases.joined(separator: ","))"
     }
 
+    private var vaultPresentation: ProjectVaultCardPresentation? {
+        viewModel.projectVaultPresentation(for: liveSong)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -179,11 +183,20 @@ struct SongDetailView: View {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 HubLabeledButton(
                     icon: "pianokeys",
-                    label: "Open in Cubase",
+                    label: vaultPresentation?.primaryAction.label ?? "Open in Cubase",
                     style: .primary,
-                    help: "Open latest CPR (O)"
+                    help: vaultPresentation?.explanation ?? "Open latest CPR (O)"
                 ) {
-                    try? viewModel.openLatestCPR(for: liveSong)
+                    viewModel.performProjectVaultPrimaryAction(for: liveSong)
+                }
+
+                if let vaultPresentation {
+                    Toggle("Keep Local", isOn: Binding(
+                        get: { vaultPresentation.state == .keepLocal },
+                        set: { viewModel.setProjectKeepLocal($0, for: liveSong) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .help("Pinned projects are never automatically archived")
                 }
 
                 HubLabeledButton(
@@ -682,4 +695,3 @@ struct SongDetailView: View {
         syncedAliases = aliasesDraft
     }
 }
-

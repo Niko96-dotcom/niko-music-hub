@@ -20,6 +20,9 @@ public final class QuickAccessRouter: ObservableObject {
     /// Audio files to prefill in the WAV converter after `openConverter(with:)`.
     @Published public private(set) var prefilledConverterURLs: [URL] = []
 
+    /// Monotonic request counter so repeated Restore Project commands are observable.
+    @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
+
     public init() {}
 
     /// Process a quick-access command.
@@ -33,7 +36,14 @@ public final class QuickAccessRouter: ObservableObject {
             break
         case .revealOutputInbox:
             revealOutputInbox = true
+        case .restoreProject:
+            selectedToolID = ToolFeatureID("archive-browser")
+            archiveSearchFocusRequest &+= 1
         }
+    }
+
+    public func consumeArchiveSearchFocusRequest() {
+        NotificationCenter.default.post(name: .archiveSearchFocusRequested, object: nil)
     }
 
     /// Reset the Output Inbox reveal trigger.
@@ -62,4 +72,8 @@ public final class QuickAccessRouter: ObservableObject {
         prefilledConverterURLs = []
         return urls
     }
+}
+
+public extension Notification.Name {
+    static let archiveSearchFocusRequested = Notification.Name("NikoMusicHub.archiveSearchFocusRequested")
 }

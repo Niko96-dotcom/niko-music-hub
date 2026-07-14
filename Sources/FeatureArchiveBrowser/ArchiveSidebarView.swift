@@ -8,6 +8,7 @@ struct ArchiveSidebarView: View {
     let compactList: Bool
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -42,6 +43,9 @@ struct ArchiveSidebarView: View {
         .padding(.top, HubToolLayout.topPadding)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
+            searchFocused = true
+        }
     }
 
     /// Header band (reference: 17pt semibold title, borderless icon actions — no boxed chip).
@@ -241,6 +245,7 @@ struct ArchiveSidebarView: View {
             .textFieldStyle(.plain)
             .font(HubDesignSystem.Typography.body())
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            .focused($searchFocused)
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
@@ -285,7 +290,8 @@ struct ArchiveSidebarView: View {
                             onSelect: { viewModel.selectSong(song) },
                             onWorkflowStatusChange: { status in
                                 viewModel.updateWorkflowStatus(for: song, status: status)
-                            }
+                            },
+                            vaultPresentation: viewModel.projectVaultPresentation(for: song)
                         )
                     }
                 }

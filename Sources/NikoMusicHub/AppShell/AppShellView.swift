@@ -109,6 +109,11 @@ struct AppShellView: View {
                 setOutputInboxVisible(true)
                 router.clearRevealOutputInbox()
             }
+            if router.archiveSearchFocusRequest > 0 {
+                DispatchQueue.main.async {
+                    router.consumeArchiveSearchFocusRequest()
+                }
+            }
         }
         .onChange(of: selectedToolID) { previousID, newID in
             guard let newID else { return }
@@ -132,6 +137,14 @@ struct AppShellView: View {
         .onChange(of: router.prefilledConverterURLs) { _, urls in
             guard !urls.isEmpty else { return }
             selectTool(ToolFeatureID("wav-converter"))
+        }
+        .onChange(of: router.archiveSearchFocusRequest) { _, request in
+            guard request > 0 else { return }
+            selectTool(ToolFeatureID("archive-browser"))
+            // Defer until the cached Archive pane is visible and can accept focus.
+            DispatchQueue.main.async {
+                router.consumeArchiveSearchFocusRequest()
+            }
         }
         .background {
             GeometryReader { proxy in

@@ -51,6 +51,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         UILaunchTool.applyFromLaunchArguments()
         #if DEBUG
+        if BookmarkRelaunchProofCommands.runIfRequested() {
+            return
+        }
         _ = ArchiveSmokeCommands.runIfRequested()
         #endif
     }

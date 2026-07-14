@@ -13,7 +13,7 @@ public enum QuickAccessResolver {
             switch entry.command {
             case .openTool(let id):
                 return registry.feature(for: id) != nil
-            case .openApp, .revealOutputInbox:
+            case .openApp, .revealOutputInbox, .restoreProject:
                 return true
             }
         }

@@ -11,6 +11,9 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
     public static let showDevToolKey = "NIKO_MUSIC_HUB_SHOW_DEV_TOOL"
     public static let disableArchiveWatcherKey = "NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER"
     public static let e2eSmokeKey = "NIKO_MUSIC_HUB_E2E_SMOKE"
+    public static let bookmarkProofModeKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_MODE"
+    public static let bookmarkProofActiveRootKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_ACTIVE_ROOT"
+    public static let bookmarkProofArchiveRootKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_ARCHIVE_ROOT"
 
     public let dryRunOpen: Bool
     public let fixtureRootURL: URL?
@@ -20,6 +23,9 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
     public let showsDevTool: Bool
     public let disableArchiveWatcher: Bool
     public let e2eSmoke: Bool
+    public let bookmarkProofMode: String?
+    public let bookmarkProofActiveRootURL: URL?
+    public let bookmarkProofArchiveRootURL: URL?
 
     public var usesFixtureRoot: Bool { fixtureRootURL != nil }
 
@@ -33,6 +39,9 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
         showsDevTool = environment[Self.showDevToolKey] == "1"
         disableArchiveWatcher = environment[Self.disableArchiveWatcherKey] == "1"
         e2eSmoke = environment[Self.e2eSmokeKey] == "1"
+        bookmarkProofMode = environment[Self.bookmarkProofModeKey]
+        bookmarkProofActiveRootURL = Self.directoryURL(for: environment[Self.bookmarkProofActiveRootKey])
+        bookmarkProofArchiveRootURL = Self.directoryURL(for: environment[Self.bookmarkProofArchiveRootKey])
     }
 
     /// Snapshot of the process environment at call time (safe for tests that `setenv` before init).

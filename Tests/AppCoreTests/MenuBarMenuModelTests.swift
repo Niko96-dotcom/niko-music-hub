@@ -25,7 +25,7 @@ final class MenuBarMenuModelTests: XCTestCase {
 
         XCTAssertEqual(
             ids,
-            ["audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox"]
+            ["restore-project", "audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox"]
         )
     }
 
@@ -80,8 +80,8 @@ final class MenuBarMenuModelTests: XCTestCase {
     func testEmptyRegistryYieldsOnlyOutputInbox() throws {
         let registry = try ToolRegistry(features: [])
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
-        XCTAssertEqual(entries.count, 1)
-        XCTAssertEqual(entries[0].id, "output-inbox")
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.map(\.id), ["restore-project", "output-inbox"])
     }
 
     func testSingleToolRegistryYieldsOneTool() throws {

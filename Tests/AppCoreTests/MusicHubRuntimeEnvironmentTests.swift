@@ -10,6 +10,9 @@ final class MusicHubRuntimeEnvironmentTests: XCTestCase {
             MusicHubRuntimeEnvironment.showDevToolKey: "1",
             MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             MusicHubRuntimeEnvironment.e2eSmokeKey: "1",
+            MusicHubRuntimeEnvironment.bookmarkProofModeKey: "verify",
+            MusicHubRuntimeEnvironment.bookmarkProofActiveRootKey: "/tmp/nmh-active",
+            MusicHubRuntimeEnvironment.bookmarkProofArchiveRootKey: "/tmp/nmh-archive",
         ])
 
         XCTAssertTrue(runtime.dryRunOpen)
@@ -20,6 +23,9 @@ final class MusicHubRuntimeEnvironmentTests: XCTestCase {
         XCTAssertTrue(runtime.showsDevTool)
         XCTAssertTrue(runtime.disableArchiveWatcher)
         XCTAssertTrue(runtime.e2eSmoke)
+        XCTAssertEqual(runtime.bookmarkProofMode, "verify")
+        XCTAssertEqual(runtime.bookmarkProofActiveRootURL?.path, "/tmp/nmh-active")
+        XCTAssertEqual(runtime.bookmarkProofArchiveRootURL?.path, "/tmp/nmh-archive")
     }
 
     func testEmptyFixtureRootIsIgnored() {

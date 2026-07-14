@@ -29,6 +29,13 @@ struct AppComposition {
         let fileActions = AppKitFileActions()
         let diagnostics = ConsoleDiagnostics()
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
+        if let vaultSettings = try? settingsStore.loadSettings().vault {
+            do {
+                try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
+            } catch {
+                diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
+            }
+        }
         let showsDevTool = runtime.showsDevTool
         // Must equal the final `features.count` below. The base list always registers 7
         // tools; `showsDevTool` appends DevToolFeature, and DEBUG builds additionally append
