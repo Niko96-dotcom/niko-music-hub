@@ -23,24 +23,32 @@ public struct VaultAutomationPolicy: Equatable, Sendable {
 }
 
 public struct VaultAutomationCandidate: Equatable, Sendable {
+    public enum Trigger: Equatable, Sendable {
+        case policy
+        case workflowDone
+    }
+
     public let projectID: ProjectID
     public let sourceURL: URL
     public let isKeepLocal: Bool
     public let lastActivityAt: Date?
     public let availableCapacityBytes: Int64?
+    public let trigger: Trigger
 
     public init(
         projectID: ProjectID,
         sourceURL: URL,
         isKeepLocal: Bool,
         lastActivityAt: Date?,
-        availableCapacityBytes: Int64?
+        availableCapacityBytes: Int64?,
+        trigger: Trigger = .policy
     ) {
         self.projectID = projectID
         self.sourceURL = sourceURL
         self.isKeepLocal = isKeepLocal
         self.lastActivityAt = lastActivityAt
         self.availableCapacityBytes = availableCapacityBytes
+        self.trigger = trigger
     }
 }
 
@@ -81,6 +89,7 @@ public struct VaultAutomationEligibilityEvaluator: Sendable {
         guard policy.inactivityDays > 0, policy.minimumFreeSpaceGiB >= 0, policy.writeQuietPeriod >= 0 else {
             return .postponed(.invalidPolicy)
         }
+        if candidate.trigger == .workflowDone { return .eligible(.inactivity) }
         guard let lastActivity = candidate.lastActivityAt, lastActivity <= now else {
             return .postponed(.unknownLastActivity)
         }
@@ -197,11 +206,13 @@ public actor VaultAutomationScheduler {
     private let archiver: any VaultAutomaticArchiving
     private let now: @Sendable () -> Date
     private let failureSink: FailureSink
+    private let removesActiveCopy: Bool
 
     public init(
         policy: VaultAutomationPolicy,
         activityProbe: any VaultAutomationActivityProbing,
         archiver: any VaultAutomaticArchiving,
+        removesActiveCopy: Bool = true,
         now: @escaping @Sendable () -> Date = Date.init,
         failureSink: @escaping FailureSink = { _ in }
     ) {
@@ -209,6 +220,7 @@ public actor VaultAutomationScheduler {
         self.evaluator = VaultAutomationEligibilityEvaluator()
         self.activityProbe = activityProbe
         self.archiver = archiver
+        self.removesActiveCopy = removesActiveCopy
         self.now = now
         self.failureSink = failureSink
     }
@@ -231,6 +243,10 @@ public actor VaultAutomationScheduler {
             }
             do {
                 let archived = try await archiver.archive(projectID: candidate.projectID, sourceURL: candidate.sourceURL)
+                if !removesActiveCopy {
+                    results.append(.archived(candidate.projectID, archived))
+                    continue
+                }
                 // Repeat every volatile safety check after the copy. If anything
                 // became busy or uncertain, retain both copies.
                 if let postponed = await activityPostponement(for: candidate) {

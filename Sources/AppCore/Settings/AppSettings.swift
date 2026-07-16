@@ -231,10 +231,30 @@ public struct AppSettings: Equatable, Codable, Sendable {
     /// Vault-off browsing is exactly the legacy Scan-only list. Opting in additionally
     /// exposes the selected Active and Archive locations to the read-only browser.
     public var effectiveScanRoots: [StoredMusicRoot] {
-        musicRoots.filter { root in
+        let eligible = musicRoots.filter { root in
             guard root.isEnabled else { return false }
             return root.role == .scanOnly || vault.isEnabled
         }
+        var indexByCanonicalPath: [String: Int] = [:]
+        var unique: [StoredMusicRoot] = []
+        for root in eligible {
+            let path = root.fallbackURL.resolvingSymlinksInPath().standardizedFileURL.path
+            if let index = indexByCanonicalPath[path] {
+                if Self.scanRootPriority(root, vault: vault) > Self.scanRootPriority(unique[index], vault: vault) {
+                    unique[index] = root
+                }
+            } else {
+                indexByCanonicalPath[path] = unique.count
+                unique.append(root)
+            }
+        }
+        return unique
+    }
+
+    private static func scanRootPriority(_ root: StoredMusicRoot, vault: VaultSettings) -> Int {
+        if root.id == vault.activeRootID, root.role == .active { return 3 }
+        if root.id == vault.archiveRootID, root.role == .archive { return 3 }
+        return root.role == .scanOnly ? 1 : 2
     }
 
     public static let `default` = AppSettings()

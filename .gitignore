@@ -9,6 +9,8 @@ dist/
 tmp/
 *.xcresult
 *.log
+__pycache__/
+*.py[cod]
 
 # Local scratch / tooling artifacts (not project source)
 .commandcode/

@@ -61,6 +61,23 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertEqual(settings.archiveRoots, legacy)
     }
 
+    func testEnabledVaultDeduplicatesScanOnlyAndSelectedActiveRootByCanonicalPath() {
+        let sharedURL = URL(fileURLWithPath: "/tmp/shared-projects")
+        let scanOnly = StoredMusicRoot(role: .scanOnly, url: sharedURL)
+        let active = StoredMusicRoot(role: .active, url: sharedURL)
+        let archive = StoredMusicRoot(role: .archive, url: URL(fileURLWithPath: "/tmp/vault-archive"))
+        let settings = AppSettings(
+            musicRoots: [scanOnly, active, archive],
+            vault: VaultSettings(
+                isEnabled: true,
+                activeRootID: active.id,
+                archiveRootID: archive.id
+            )
+        )
+
+        XCTAssertEqual(settings.effectiveScanRoots.map(\.id), [active.id, archive.id])
+    }
+
     func testReplacingRootsChangesOnlySettingsAndDoesNotMoveContent() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let active = base.appendingPathComponent("active", isDirectory: true)

@@ -89,6 +89,32 @@ struct AppComposition {
                 try SQLiteCollaboratorStore(database: archiveDatabase)
             }
         }()
+        let projectCatalogStore: SQLiteProjectCatalogStore? = {
+            guard let archiveDatabase else { return nil }
+            return Self.makeSQLiteStore(
+                id: "project-catalog-store",
+                title: "Project Vault catalog unavailable",
+                issues: &persistenceIssues
+            ) { try SQLiteProjectCatalogStore(database: archiveDatabase) }
+        }()
+        let vaultTransferStore: SQLiteVaultTransferStore? = {
+            guard let archiveDatabase else { return nil }
+            return Self.makeSQLiteStore(
+                id: "vault-transfer-store",
+                title: "Project Vault transfer history unavailable",
+                issues: &persistenceIssues
+            ) { try SQLiteVaultTransferStore(database: archiveDatabase) }
+        }()
+        let projectVaultRuntime: (any ProjectVaultOperating)? = {
+            guard let projectCatalogStore, let vaultTransferStore else { return nil }
+            let workspace: (any WorkspaceOpening)? = runtime.dryRunOpen ? nil : AppKitVaultWorkspaceOpener()
+            return LiveProjectVaultRuntime(
+                settingsStore: settingsStore,
+                transferStore: vaultTransferStore,
+                catalogStore: projectCatalogStore,
+                projectOpener: SafeVaultProjectOpener(workspace: workspace)
+            )
+        }()
 
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
@@ -111,6 +137,7 @@ struct AppComposition {
             songMetadataStore: songMetadataStore,
             archiveRootWatcher: archiveRootWatcher,
             collaboratorStore: collaboratorStore,
+            projectVaultRuntime: projectVaultRuntime,
             runtime: runtime
         )
 
@@ -203,6 +230,11 @@ struct AppComposition {
             return nil
         }
     }
+}
+
+private struct AppKitVaultWorkspaceOpener: WorkspaceOpening {
+    func open(_ url: URL) -> Bool { NSWorkspace.shared.open(url) }
+    func revealInFinder(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 }
 
 private enum AppPaths {

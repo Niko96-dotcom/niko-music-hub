@@ -44,15 +44,13 @@ public struct MissingAudioReport: Equatable, Sendable {
     public let orphanAudioBySongID: [String: [String]]
 
     public init(songs: [Song], fileManager: FileManager = .default) {
-        let visible = songs.filter { !$0.isIgnored }
+        let visible = SongCatalogDeduplicator.uniqueByID(songs).filter { !$0.isIgnored }
         noPreview = visible.filter { $0.mainPreviewCandidateID == nil }.map(\.effectiveDisplayTitle)
         noCPR = visible.filter { $0.effectiveLatestCPR == nil }.map(\.effectiveDisplayTitle)
-        orphanAudioBySongID = Dictionary(
-            uniqueKeysWithValues: visible.compactMap { song -> (String, [String])? in
-                let orphans = Self.orphanAudioPaths(for: song, fileManager: fileManager)
-                return orphans.isEmpty ? nil : (song.id, orphans)
-            }
-        )
+        orphanAudioBySongID = visible.reduce(into: [:]) { result, song in
+            let orphans = Self.orphanAudioPaths(for: song, fileManager: fileManager)
+            if !orphans.isEmpty { result[song.id] = orphans }
+        }
     }
 
     public init(noPreview: [String], noCPR: [String], orphanAudioBySongID: [String: [String]] = [:]) {

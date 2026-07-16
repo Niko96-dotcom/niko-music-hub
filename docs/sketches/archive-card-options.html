@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive card layout options — Niko Music Hub</title>
+  <style>
+    :root {
+      --canvas: #111215;
+      --sidebar: #16181c;
+      --raised: #1c1e24;
+      --field: #22252c;
+      --text: #edeef1;
+      --text-secondary: #a8adb8;
+      --text-tertiary: #6b7280;
+      --selection: #2e3036;
+      --separator: #2a2d34;
+      --accent: #e8e9ee;
+      --accent-fill: #3a3d46;
+      --warning: #d4a017;
+      --success: #6bbf8a;
+      --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: #0a0b0d;
+      color: var(--text);
+      line-height: 1.4;
+      padding: 32px 24px 64px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .intro {
+      color: var(--text-secondary);
+      font-size: 14px;
+      max-width: 720px;
+      margin-bottom: 32px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 28px;
+    }
+
+    .option-panel {
+      background: var(--canvas);
+      border: 1px solid var(--separator);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .option-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--separator);
+      background: var(--sidebar);
+    }
+
+    .option-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .option-header p {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .option-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+    }
+
+    .sidebar-mock {
+      width: 100%;
+      background: var(--sidebar);
+      padding: 12px 10px 16px;
+    }
+
+    .sidebar-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding-left: 4px;
+    }
+
+    .cards { display: flex; flex-direction: column; gap: 4px; }
+
+    /* shared tokens */
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .meta-small {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .pill {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--accent-fill);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .pill.waiting { color: #c9b87a; }
+    .pill.done { color: var(--success); }
+
+    .play-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: default;
+    }
+
+    .play-btn.active {
+      background: var(--accent);
+      color: var(--canvas);
+    }
+
+    .play-btn svg { width: 12px; height: 12px; fill: currentColor; }
+
+    .card {
+      border-radius: var(--radius);
+      padding: 9px 10px;
+      background: transparent;
+    }
+
+    .card.selected { background: var(--selection); }
+    .card.hover { background: rgba(255,255,255,0.05); }
+
+    .waveform {
+      height: 22px;
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      opacity: 0.55;
+    }
+
+    .waveform span {
+      flex: 1;
+      background: var(--text-tertiary);
+      border-radius: 1px;
+      min-width: 2px;
+    }
+
+    .player-box {
+      margin-top: 6px;
+      padding: 6px;
+      border-radius: var(--radius);
+      background: var(--raised);
+      border: 1px solid var(--separator);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .player-box.empty {
+      justify-content: flex-start;
+    }
+
+    .legend {
+      margin-top: 32px;
+      padding: 16px;
+      border: 1px solid var(--separator);
+      border-radius: 12px;
+      background: var(--canvas);
+      max-width: 900px;
+    }
+
+    .legend h3 { font-size: 14px; margin-bottom: 10px; }
+    .legend ul { padding-left: 18px; color: var(--text-secondary); font-size: 13px; }
+    .legend li { margin-bottom: 6px; }
+
+    .state-label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin: 10px 4px 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Option 0 — current */
+    .opt-current .row1 {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    /* Option A — inline row */
+    .opt-a .card-inner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .opt-a .main { min-width: 0; flex: 1; }
+
+    .opt-a .row1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Option B — waveform hero */
+    .opt-b .row1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .opt-b .wave-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .opt-b .wave-row .waveform { flex: 1; }
+
+    /* Option C — play-first */
+    .opt-c .card-inner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .opt-c .play-btn.large {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--field);
+    }
+
+    .opt-c .play-btn.large.active {
+      background: var(--accent);
+    }
+
+    .opt-c .main { min-width: 0; flex: 1; }
+
+    .opt-c .row1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Option D — metadata band */
+    .opt-d .row1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .opt-d .meta-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .opt-d .badge {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--field);
+    }
+
+    .opt-d .transport {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .opt-d .slider {
+      flex: 1;
+      height: 4px;
+      background: var(--field);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    .opt-d .slider::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 35%;
+      background: var(--text-tertiary);
+      border-radius: 2px;
+    }
+
+    /* Option E — icon tile */
+    .opt-e .card-inner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .opt-e .tile {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: var(--field);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-tertiary);
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .opt-e .main { min-width: 0; flex: 1; }
+
+    .opt-e .row1 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .warn {
+      color: var(--warning);
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Archive song card — 5 layout options</h1>
+  <p class="intro">
+    Mockups for the archive sidebar list rows. Filename removed from the mini player — these explore
+    what else could fill the card without showing the WAV/MP3 name. Dark theme approximates Niko Music Hub.
+    Open this file in a browser: <code>docs/sketches/archive-card-options.html</code>
+  </p>
+
+  <div class="grid">
+
+    <!-- CURRENT -->
+    <section class="option-panel opt-current">
+      <div class="option-header">
+        <div class="option-tag">Baseline</div>
+        <h2>Now — title + empty player box</h2>
+        <p>Bold title, status pill, play button in a nested card. Feels sparse because the player area has no label.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="state-label">Default</div>
+          <div class="card">
+            <div class="row1">
+              <span class="title">Neon Dreams Final Mix</span>
+              <span class="pill waiting">Waiting</span>
+            </div>
+            <div class="player-box empty">
+              <button class="play-btn" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+          </div>
+          <div class="state-label">Selected</div>
+          <div class="card selected">
+            <div class="row1">
+              <span class="title">CPR Collab w/ Maya</span>
+              <span class="pill">Ideas</span>
+            </div>
+            <div class="waveform" style="margin:6px 0">
+              <span style="height:40%"></span><span style="height:70%"></span><span style="height:55%"></span>
+              <span style="height:90%"></span><span style="height:45%"></span><span style="height:65%"></span>
+              <span style="height:30%"></span><span style="height:80%"></span><span style="height:50%"></span>
+              <span style="height:75%"></span><span style="height:35%"></span><span style="height:60%"></span>
+            </div>
+            <div class="player-box">
+              <button class="play-btn active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+              <div class="slider" style="flex:1;height:4px;background:var(--field);border-radius:2px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION A -->
+    <section class="option-panel opt-a">
+      <div class="option-header">
+        <div class="option-tag">Option A</div>
+        <h2>Single-line row</h2>
+        <p>Play on the left, title + one metadata line, status on the right. No nested player box — tight like Finder or Mail.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-inner">
+              <button class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+              <div class="main">
+                <div class="title">Neon Dreams Final Mix</div>
+                <div class="meta">CPR edited 3 days ago</div>
+              </div>
+              <span class="pill waiting">Waiting</span>
+            </div>
+          </div>
+          <div class="card selected">
+            <div class="card-inner">
+              <button class="play-btn active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+              <div class="main">
+                <div class="title">CPR Collab w/ Maya</div>
+                <div class="meta">Bounced yesterday · v3.cpr</div>
+              </div>
+              <span class="pill">Ideas</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-inner">
+              <button class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+              <div class="main">
+                <div class="title">Lo-Fi Sketch 04</div>
+                <div class="meta">Stems · no preview</div>
+              </div>
+              <span class="warn">⚠</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION B -->
+    <section class="option-panel opt-b">
+      <div class="option-header">
+        <div class="option-tag">Option B</div>
+        <h2>Waveform strip always on</h2>
+        <p>Thin waveform on every row (muted when idle). Gives visual rhythm down the list. Play sits beside the strip.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="card">
+            <div class="row1">
+              <span class="title">Neon Dreams Final Mix</span>
+              <span class="pill waiting">Waiting</span>
+            </div>
+            <div class="wave-row">
+              <button class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+              <div class="waveform">
+                <span style="height:25%"></span><span style="height:40%"></span><span style="height:30%"></span>
+                <span style="height:50%"></span><span style="height:35%"></span><span style="height:45%"></span>
+                <span style="height:28%"></span><span style="height:55%"></span><span style="height:32%"></span>
+                <span style="height:48%"></span><span style="height:38%"></span><span style="height:42%"></span>
+              </div>
+            </div>
+          </div>
+          <div class="card selected">
+            <div class="row1">
+              <span class="title">CPR Collab w/ Maya</span>
+              <span class="pill">Ideas</span>
+            </div>
+            <div class="wave-row">
+              <button class="play-btn active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+              <div class="waveform" style="opacity:1">
+                <span style="height:40%"></span><span style="height:70%"></span><span style="height:55%"></span>
+                <span style="height:90%"></span><span style="height:45%"></span><span style="height:65%"></span>
+                <span style="height:30%"></span><span style="height:80%"></span><span style="height:50%"></span>
+                <span style="height:75%"></span><span style="height:35%"></span><span style="height:60%"></span>
+              </div>
+            </div>
+            <div class="meta-small" style="margin-top:4px;padding-left:38px">0:42 / 3:18</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION C -->
+    <section class="option-panel opt-c">
+      <div class="option-header">
+        <div class="option-tag">Option C</div>
+        <h2>Play-first circle</h2>
+        <p>Large play/pause disc anchors the row. Title + status on one line, metadata below. Music-app list feel.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-inner">
+              <button class="play-btn large"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+              <div class="main">
+                <div class="row1">
+                  <span class="title">Neon Dreams Final Mix</span>
+                  <span class="pill waiting">Waiting</span>
+                </div>
+                <div class="meta">Recent bounce · 48 kHz</div>
+              </div>
+            </div>
+          </div>
+          <div class="card selected">
+            <div class="card-inner">
+              <button class="play-btn large active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+              <div class="main">
+                <div class="row1">
+                  <span class="title">CPR Collab w/ Maya</span>
+                  <span class="pill">Ideas</span>
+                </div>
+                <div class="meta">Playing · hook at 0:42</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION D -->
+    <section class="option-panel opt-d">
+      <div class="option-header">
+        <div class="option-tag">Option D</div>
+        <h2>Metadata chips + minimal transport</h2>
+        <p>Title row, then small chips (CPR age, stems, collaborator). Transport is just play + thin slider when active — no box.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="card">
+            <div class="row1">
+              <span class="title">Neon Dreams Final Mix</span>
+              <span class="pill waiting">Waiting</span>
+            </div>
+            <div class="meta-row">
+              <span class="badge">CPR 3d</span>
+              <span class="badge">Mixdown</span>
+              <span class="badge">Maya</span>
+            </div>
+            <div class="transport">
+              <button class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+          </div>
+          <div class="card selected">
+            <div class="row1">
+              <span class="title">CPR Collab w/ Maya</span>
+              <span class="pill">Ideas</span>
+            </div>
+            <div class="meta-row">
+              <span class="badge">CPR 1d</span>
+              <span class="badge">Stems</span>
+              <span class="badge">v3</span>
+            </div>
+            <div class="transport">
+              <button class="play-btn active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+              <div class="slider"></div>
+              <span class="meta-small">0:42</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPTION E -->
+    <section class="option-panel opt-e">
+      <div class="option-header">
+        <div class="option-tag">Option E</div>
+        <h2>Icon tile + inline play</h2>
+        <p>Muted square tile (note/folder) gives visual weight. Title + subtitle line, play on the far right. Balanced density.</p>
+      </div>
+      <div class="sidebar-mock">
+        <div class="sidebar-label">Archive</div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-inner">
+              <div class="tile">♪</div>
+              <div class="main">
+                <div class="row1">
+                  <span class="title">Neon Dreams Final Mix</span>
+                </div>
+                <div class="meta">Waiting · bounced 3 days ago</div>
+              </div>
+              <button class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+          </div>
+          <div class="card selected">
+            <div class="card-inner">
+              <div class="tile">♪</div>
+              <div class="main">
+                <div class="row1">
+                  <span class="title">CPR Collab w/ Maya</span>
+                  <span class="pill">Ideas</span>
+                </div>
+                <div class="meta">CPR v3 · stems detected</div>
+              </div>
+              <button class="play-btn active"><svg viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg></button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-inner">
+              <div class="tile">📁</div>
+              <div class="main">
+                <div class="row1">
+                  <span class="title">Lo-Fi Sketch 04</span>
+                </div>
+                <div class="meta">No preview · scan warning</div>
+              </div>
+              <span class="warn">⚠</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="legend">
+    <h3>Quick comparison</h3>
+    <ul>
+      <li><strong>A — Single-line row:</strong> Densest, least vertical space. Best if the list is long and you scan by title.</li>
+      <li><strong>B — Waveform strip:</strong> Most “audio app” feel. Costs height on every row; waveforms need cache/loading.</li>
+      <li><strong>C — Play-first circle:</strong> Clear affordance for preview. Slightly taller rows, friendly for mouse targets.</li>
+      <li><strong>D — Metadata chips:</strong> Surfaces CPR/stems/collab without filenames. Good if those facts matter more than waveforms.</li>
+      <li><strong>E — Icon tile:</strong> Fixes the “empty” look with minimal logic — tile + subtitle, no nested player card.</li>
+    </ul>
+    <p style="margin-top:12px;font-size:12px;color:var(--text-tertiary)">
+      Subtitle lines use human metadata (CPR age, bounce date, collaborator) — never the preview filename.
+    </p>
+  </div>
+</body>
+</html>

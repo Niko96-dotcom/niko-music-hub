@@ -93,18 +93,18 @@ enum ArchiveUserFlowSmokeScenarios {
     static let rankingLab = RankingLabScenario(
         folderName: "Preview Ranking Lab",
         exportMustContain: [
-            "selected_song_title=Lab Song",
+            "selected_song_title=Preview Ranking Lab",
             "main_preview_summary=",
             "preview_rank_line=",
             "v3",
             "preview_ranking_tiebreak_legend=",
             "too_short_non_main=",
             "songs_with_too_short=",
-            "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav",
+            "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav",
             "preview_ranking_scan_callout=",
             "preview_ranking_selected_header=",
         ],
-        tooShortSongTitle: "Lab Song",
+        tooShortSongTitle: "Preview Ranking Lab",
         tooShortClipSubstring: "Lab Song short clip.wav",
         scanCalloutSubstring: "too short",
         selectedHeaderSubstring: "Lab Song v3 mix.wav",
@@ -181,10 +181,10 @@ enum ArchiveUserFlowSmokeScenarios {
             diagnosticsExportStem: "preview",
             diagnosticsPanelStem: "preview",
             query: "lab song v3 mx",
-            expectedDisplayTitle: "Lab Song",
+            expectedDisplayTitle: "Preview Ranking Lab",
             summarySubstrings: ["preview file", "v3", "mx"],
             exportMustContain: [
-                "search_match title=Lab Song",
+                "search_match title=Preview Ranking Lab",
                 "preview file",
             ],
             minimumMatchCount: 1
@@ -207,7 +207,7 @@ enum ArchiveUserFlowSmokeScenarios {
             panelHeaderStem: "duration_tiebreak",
             folderName: "Equal Score Duration Tiebreak",
             exportMustContain: [
-                "selected_song_title=Tie Song",
+                "selected_song_title=Equal Score Duration Tiebreak",
                 "preview_rank_tiebreak=Equal score — longer preview",
                 "Tie Song mix long.wav",
             ],
@@ -221,7 +221,7 @@ enum ArchiveUserFlowSmokeScenarios {
             panelHeaderStem: nil,
             folderName: "Equal Score Version Tiebreak",
             exportMustContain: [
-                "selected_song_title=Tie Song",
+                "selected_song_title=Equal Score Version Tiebreak",
                 "preview_rank_tiebreak=Equal score — version v3 beat v2",
                 "Tie Song v3 mix.wav",
             ],
@@ -235,7 +235,7 @@ enum ArchiveUserFlowSmokeScenarios {
             panelHeaderStem: nil,
             folderName: "Equal Score Extension Tiebreak",
             exportMustContain: [
-                "selected_song_title=Tie Song",
+                "selected_song_title=Equal Score Extension Tiebreak",
                 "preview_rank_tiebreak=Equal score — preferred flac over mp3",
                 "Tie Song mix.flac",
             ],

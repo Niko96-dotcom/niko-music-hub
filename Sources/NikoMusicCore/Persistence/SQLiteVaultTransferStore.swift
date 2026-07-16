@@ -88,6 +88,10 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
         }).first { $0.projectID == projectID }
     }
 
+    public func allTransferRecords() throws -> [VaultTransferRecord] {
+        try query("SELECT record FROM vault_transfers ORDER BY updated_at DESC;", bind: { _ in })
+    }
+
     public func saveRestore(_ record: VaultRestoreRecord) throws {
         let data: Data
         do { data = try encoder.encode(record) }

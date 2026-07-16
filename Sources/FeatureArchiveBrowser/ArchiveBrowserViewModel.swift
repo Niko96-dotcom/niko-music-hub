@@ -44,6 +44,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
+    @Published var projectVaultBusySongIDs: Set<String> = []
+    var projectVaultSnapshotsByPath: [String: ProjectVaultRuntimeSnapshot] = [:]
+    var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
     /// Archive page layout: the board is home, opening a card goes to
     /// fullscreen detail, and the classic sidebar+detail list stays reachable.
     enum ArchiveViewMode {
@@ -75,6 +78,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let archiveRootWatcher: (any ArchiveRootWatching)?
     let runtime: MusicHubRuntimeEnvironment
     let scanOverride: (([URL]) async throws -> ScanResult)?
+    let projectVaultRuntime: (any ProjectVaultOperating)?
     public var requestConverterHandoff: ((URL) -> Void)?
     var statusBaseMessage: String?
     var persistenceWarningMessage: String?
@@ -95,6 +99,30 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             songMetadataStore: songMetadataStore,
             archiveRootWatcher: archiveRootWatcher,
             collaboratorStore: collaboratorStore,
+            projectVaultRuntime: nil,
+            browseSearchDebounceNanoseconds: browseSearchDebounceNanoseconds,
+            runtime: runtime,
+            scanOverride: nil
+        )
+    }
+
+    public convenience init(
+        context: ToolContext,
+        archiveIndexStore: (any ArchiveIndexStoring)? = nil,
+        songMetadataStore: (any SongUserMetadataStoring)? = nil,
+        archiveRootWatcher: (any ArchiveRootWatching)? = nil,
+        collaboratorStore: (any CollaboratorStoring)? = nil,
+        projectVaultRuntime: (any ProjectVaultOperating)?,
+        browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
+        runtime: MusicHubRuntimeEnvironment = .current
+    ) {
+        self.init(
+            context: context,
+            archiveIndexStore: archiveIndexStore,
+            songMetadataStore: songMetadataStore,
+            archiveRootWatcher: archiveRootWatcher,
+            collaboratorStore: collaboratorStore,
+            projectVaultRuntime: projectVaultRuntime,
             browseSearchDebounceNanoseconds: browseSearchDebounceNanoseconds,
             runtime: runtime,
             scanOverride: nil
@@ -107,6 +135,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         songMetadataStore: (any SongUserMetadataStoring)? = nil,
         archiveRootWatcher: (any ArchiveRootWatching)? = nil,
         collaboratorStore: (any CollaboratorStoring)? = nil,
+        projectVaultRuntime: (any ProjectVaultOperating)? = nil,
         browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
         runtime: MusicHubRuntimeEnvironment = .current,
         scanOverride: (([URL]) async throws -> ScanResult)?
@@ -117,6 +146,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
+        self.projectVaultRuntime = projectVaultRuntime
         self.scanOverride = scanOverride
         self.catalog = ArchiveCatalogCoordinator(
             archiveIndexStore: archiveIndexStore,
@@ -138,6 +168,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         refreshFirstRunState()
         restartArchiveRootWatching()
         loadCachedIndexIfAvailable()
+        Task {
+            await projectVaultRuntime?.recoverAtLaunch()
+            await refreshProjectVaultSnapshots()
+        }
         if archiveRootWatcher != nil, !roots.isEmpty, !runtime.usesFixtureRoot {
             setStatusMessage("Scanning archive...")
             Task { await scan() }
@@ -153,7 +187,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             let settings = try settingsStore.loadSettings()
             let resolver = FoundationSecurityScopedBookmarks()
             securityScopedRootAccesses.removeAll()
-            let loadedRoots = settings.effectiveScanRoots.compactMap { root -> URL? in
+            let loadedRoots = settings.effectiveScanRoots
+                .filter { root in
+                    !(settings.vault.isEnabled && root.id == settings.vault.archiveRootID)
+                }
+                .compactMap { root -> URL? in
                 do {
                     let resolved = try root.resolvedURL(using: resolver)
                     if root.securityScopedBookmark != nil {
@@ -165,7 +203,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                     diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
                     return nil
                 }
-            }
+                }
             roots = ArchiveRootDisplayPolicy.storedRoots(from: loadedRoots)
         } catch {
             recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")

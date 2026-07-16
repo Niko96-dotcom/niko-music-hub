@@ -197,6 +197,17 @@ struct SongDetailView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .help("Pinned projects are never automatically archived")
+
+                    if viewModel.canArchiveInProjectVault(liveSong) {
+                        HubLabeledButton(
+                            icon: "archivebox",
+                            label: viewModel.projectVaultBusySongIDs.contains(liveSong.id) ? "Archiving…" : "Archive Now",
+                            style: .secondary,
+                            help: "Copy and verify this project in Project Vault now"
+                        ) {
+                            viewModel.archiveInProjectVault(liveSong)
+                        }
+                    }
                 }
 
                 HubLabeledButton(

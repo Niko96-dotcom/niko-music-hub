@@ -25,7 +25,7 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
-    func testDisplayTitleUsesMainPreviewWhenPresent() {
+    func testDisplayTitlePrefersMeaningfulFolderOverMainPreview() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/Graffiti master.wav"),
             fileName: "Graffiti master.wav",
@@ -36,11 +36,11 @@ final class SongTitleResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             resolver.displayTitle(fromFolderName: "90s Rave", mainPreview: preview),
-            "Graffiti"
+            "90s Rave"
         )
     }
 
-    func testDisplayTitleUsesClearTrustworthyPreviewOverStrongCPRTitle() {
+    func testDisplayTitlePrefersMeaningfulRenamedFolderOverOlderPreviewAndCPRNames() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/GARDEN OF EDEN SESHY BOUNCE.wav"),
             fileName: "GARDEN OF EDEN SESHY BOUNCE.wav",
@@ -59,11 +59,11 @@ final class SongTitleResolverTests: XCTestCase {
 
         XCTAssertEqual(
             resolver.displayTitle(
-                fromFolderName: "Winter Last Day Sm Camp",
+                fromFolderName: "Garden Of Eden New Title",
                 mainPreview: preview,
                 projectVersions: versions
             ),
-            "Garden Of Eden"
+            "Garden Of Eden New Title"
         )
     }
 
@@ -189,7 +189,7 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
-    func testDisplayTitleRejectsStemPreviewAndUsesCPR() {
+    func testDisplayTitlePrefersMeaningfulFolderWhenStemPreviewCompetes() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/shaker.wav"),
             fileName: "shaker.wav",
@@ -212,7 +212,7 @@ final class SongTitleResolverTests: XCTestCase {
                 mainPreview: preview,
                 projectVersions: versions
             ),
-            "Garden Of Eden"
+            "Session Exports"
         )
     }
 
@@ -236,7 +236,7 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
-    func testDisplayTitleRejectsNonBounceStemPreviewEvenWhenTrustworthy() {
+    func testDisplayTitlePrefersMeaningfulFolderOverNonBounceStemAndCPR() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/double.wav"),
             fileName: "double.wav",
@@ -259,7 +259,7 @@ final class SongTitleResolverTests: XCTestCase {
                 mainPreview: preview,
                 projectVersions: versions
             ),
-            "Neon Hook"
+            "Wrong Folder Label"
         )
     }
 }

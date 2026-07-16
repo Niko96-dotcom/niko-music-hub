@@ -4,26 +4,27 @@ import NikoMusicCore
 
 extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL]) {
+        let uniqueIncomingSongs = SongCatalogDeduplicator.uniqueByID(update.songs)
         let previousPreviewBySongID = Dictionary(
-            uniqueKeysWithValues: songs.compactMap { song -> (String, String)? in
+            songs.compactMap { song -> (String, String)? in
                 guard let previewID = song.mainPreviewCandidateID else { return nil }
                 return (song.id, previewID)
-            }
+            }, uniquingKeysWith: { _, latest in latest }
         )
         let previousPreviewModifiedAtBySongID = Dictionary(
-            uniqueKeysWithValues: songs.compactMap { song -> (String, Date)? in
+            songs.compactMap { song -> (String, Date)? in
                 guard let modifiedAt = mainPreviewModifiedAt(for: song) else { return nil }
                 return (song.id, modifiedAt)
-            }
+            }, uniquingKeysWith: { _, latest in latest }
         )
         let previousCPRBySongID = Dictionary(
-            uniqueKeysWithValues: songs.compactMap { song -> (String, (path: String, modifiedAt: Date))? in
+            songs.compactMap { song -> (String, (path: String, modifiedAt: Date))? in
                 guard let identity = effectiveCPRIdentity(for: song) else { return nil }
                 return (song.id, identity)
-            }
+            }, uniquingKeysWith: { _, latest in latest }
         )
         mutateCatalog {
-            songs = update.songs
+            songs = uniqueIncomingSongs
             scanDiagnostics = update.diagnostics
             setStatusMessage(update.statusMessage)
         }
@@ -31,7 +32,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         // filtered out — browse recompute will clear filtered-out selections next).
         reconcileSelectedSong(requireVisibleInFilteredList: false)
         var invalidatedSelectedSongAnalysis = false
-        for song in update.songs {
+        for song in uniqueIncomingSongs {
             let previewIDChanged = previousPreviewBySongID[song.id] != song.mainPreviewCandidateID
             let previewModifiedAtChanged = previousPreviewModifiedAtBySongID[song.id] != mainPreviewModifiedAt(for: song)
             if previewIDChanged || previewModifiedAtChanged {
@@ -53,7 +54,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             refreshMixdownAnalysis(for: selectedSong)
         }
         // Drop analysis for songs that disappeared.
-        let remainingIDs = Set(update.songs.map(\.id))
+        let remainingIDs = Set(uniqueIncomingSongs.map(\.id))
         ArchiveMixdownAnalysisCoordinator.prune(
             remainingSongIDs: remainingIDs,
             bpmCache: &mixdownBPMBySongID,
@@ -67,6 +68,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             recordPersistenceWarning(warning)
         }
         scheduleIndexPersist(afterNanoseconds: 0)
+        Task { await refreshProjectVaultSnapshots() }
     }
 
     func applyScanFailure(_ error: Error) {

@@ -103,8 +103,14 @@ public enum ProjectVaultRolloutPolicy {
         settings.isEnabled
             && settings.automaticArchiving
             && !settings.automationEmergencyStop
-            && settings.rolloutStage == .friends
+            && settings.rolloutStage != .disabled
             && settings.activeRootID != nil
             && settings.archiveRootID != nil
+    }
+
+    public static func permitsActiveCopyRemoval(_ settings: VaultSettings) -> Bool {
+        permitsAutomaticArchiving(settings)
+            && settings.rolloutStage == .friends
+            && settings.independentBackupConfirmed
     }
 }

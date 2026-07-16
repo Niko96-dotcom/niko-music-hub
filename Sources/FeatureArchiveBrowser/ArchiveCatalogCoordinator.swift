@@ -85,7 +85,8 @@ struct ArchiveCatalogCoordinator {
         collaborators: [Collaborator],
         scannedAt: Date
     ) -> CatalogScanApplyResult {
-        let withMetadata = mergeUserMetadata(into: result.songs, collaborators: collaborators)
+        let uniqueSongs = SongCatalogDeduplicator.uniqueByID(result.songs)
+        let withMetadata = mergeUserMetadata(into: uniqueSongs, collaborators: collaborators)
         let mergedResult = ScanResult(
             songs: withMetadata,
             globalWarnings: result.globalWarnings,
@@ -127,7 +128,8 @@ struct ArchiveCatalogCoordinator {
                 affectedSongIDs: affectedSongIDs
             )
         }.value
-        let withMetadata = mergeUserMetadata(into: merged, collaborators: collaborators)
+        let uniqueMerged = SongCatalogDeduplicator.uniqueByID(merged)
+        let withMetadata = mergeUserMetadata(into: uniqueMerged, collaborators: collaborators)
         let mergedResult = ScanResult(
             songs: withMetadata,
             globalWarnings: incremental.result.globalWarnings,
@@ -170,11 +172,13 @@ struct ArchiveCatalogCoordinator {
         affectedSongIDs: Set<String>,
         fileManager: FileManager = .default
     ) -> [Song] {
-        let incomingByID = Dictionary(uniqueKeysWithValues: incremental.songs.map { ($0.id, $0) })
+        let uniqueExisting = SongCatalogDeduplicator.uniqueByID(existing)
+        let uniqueIncoming = SongCatalogDeduplicator.uniqueByID(incremental.songs)
+        let incomingByID = uniqueIncoming.reduce(into: [String: Song]()) { $0[$1.id] = $1 }
         var merged: [Song] = []
-        merged.reserveCapacity(existing.count + incremental.songs.count)
+        merged.reserveCapacity(uniqueExisting.count + uniqueIncoming.count)
 
-        for song in existing {
+        for song in uniqueExisting {
             let folderStillExists = fileManager.fileExists(atPath: song.folderPath.path)
             // Drop ghosts even when FSEvents did not mark the old path as affected
             // (common for Finder renames that only emit create events on the new name).
@@ -192,7 +196,7 @@ struct ArchiveCatalogCoordinator {
         }
 
         let mergedIDs = Set(merged.map(\.id))
-        for song in incremental.songs where !mergedIDs.contains(song.id) {
+        for song in uniqueIncoming where !mergedIDs.contains(song.id) {
             merged.append(song)
         }
 
@@ -281,7 +285,7 @@ struct ArchiveCatalogCoordinator {
                 return (.empty, [])
             }
             guard hasMetadataSources else {
-                return (.loaded(songs: snapshot.songs, scannedAt: snapshot.scannedAt), [])
+                return (.loaded(songs: SongCatalogDeduplicator.uniqueByID(snapshot.songs), scannedAt: snapshot.scannedAt), [])
             }
             var logs: [String] = []
             let metadata: [String: SongUserMetadata]
@@ -293,7 +297,7 @@ struct ArchiveCatalogCoordinator {
             }
             let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
             let merged = ArchiveMetadataMerger.merge(
-                scanned: snapshot.songs,
+                scanned: SongCatalogDeduplicator.uniqueByID(snapshot.songs),
                 metadataByID: metadata,
                 collaboratorsByID: map
             )
@@ -323,7 +327,7 @@ struct ArchiveCatalogCoordinator {
         guard let archiveIndexStore else { return nil }
         let snapshot = ArchiveIndexSnapshot(
             roots: roots.map { $0.standardizedFileURL.path },
-            songs: songs,
+            songs: SongCatalogDeduplicator.uniqueByID(songs),
             scannedAt: scannedAt
         )
         let failure = await Task.detached(priority: .utility) { () -> (log: String, warning: String)? in

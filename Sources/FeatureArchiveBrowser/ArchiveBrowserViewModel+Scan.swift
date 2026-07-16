@@ -26,6 +26,8 @@ extension ArchiveBrowserViewModel {
     func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         browseRefreshDriver.cancelPendingDebounce()
         intelligenceRefreshTask?.cancel()
+        projectVaultRetryTasks.values.forEach { $0.cancel() }
+        projectVaultRetryTasks.removeAll()
         indexPersistTask?.cancel()
         mixdownAnalysis.cancel()
         cprPlugins.cancel()

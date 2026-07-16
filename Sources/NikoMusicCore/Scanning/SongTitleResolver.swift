@@ -49,6 +49,13 @@ public struct SongTitleResolver: Sendable {
         let bounceLikePreview = mainPreview.map(isBounceLikePreview) == true
         let usablePreviewTitle = usablePreviewTitle(from: previewTitle, preview: mainPreview)
 
+        // The folder name is the user's filesystem-level title. Keep it authoritative
+        // when it is meaningful so a Finder rename is reflected on the next scan even
+        // when older CPR or mixdown filenames still contain the previous working title.
+        if isStrongProjectTitle(folderTitle) {
+            return folderTitle
+        }
+
         if let usablePreviewTitle,
            bounceLikePreview,
            isStrongProjectTitle(usablePreviewTitle),
@@ -63,10 +70,6 @@ public struct SongTitleResolver: Sendable {
             if let usablePreviewTitle, isWeakStructuralTitle(usablePreviewTitle, comparedTo: cprTitle) {
                 return cprTitle
             }
-        }
-
-        if isStrongProjectTitle(folderTitle) {
-            return folderTitle
         }
 
         if let cprTitle, !cprTitle.isEmpty {

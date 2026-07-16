@@ -33,6 +33,9 @@ extension ArchiveBrowserViewModel {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
         }
+        if status == .done, song.workflowStatus != .done {
+            archiveInProjectVault(song, trigger: .workflowDone)
+        }
     }
 
     func setManualMainPreview(for song: Song, candidateID: String) {
