@@ -104,6 +104,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         )
         let transfer: VaultTransferRecord
         if trigger == .workflowDone {
+            let previousVerifiedTransferID = try transferStore
+                .verifiedArchiveGeneration(projectID: entry.record.id)?.id
             let policy = VaultAutomationPolicy(
                 isVaultEnabled: settings.vault.isEnabled,
                 isAutomaticArchivingEnabled: settings.vault.automaticArchiving,
@@ -129,7 +131,16 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             }
             switch result {
             case .archived(_, let record): transfer = record
-            case .postponed(_, let reason): throw ProjectVaultRuntimeError.activityPostponed(String(describing: reason))
+            case .postponed(_, let reason):
+                guard let verified = try transferStore.verifiedArchiveGeneration(projectID: entry.record.id),
+                      verified.id != previousVerifiedTransferID else {
+                    throw ProjectVaultRuntimeError.activityPostponed(String(describing: reason))
+                }
+                // The copy and provider verification completed, but a volatile
+                // safety probe blocked Active-copy removal. Surface the verified
+                // generation as success so the UI does not schedule another full
+                // Dropbox copy; the Active project remains untouched.
+                transfer = verified
             case .failed(let failure): throw ProjectVaultRuntimeError.activityPostponed(failure.message)
             }
         } else {

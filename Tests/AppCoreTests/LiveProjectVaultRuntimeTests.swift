@@ -55,11 +55,37 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
     }
+
+    func testPostCopyActivityPostponementReturnsVerifiedGenerationWithoutDuplicateRetry() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        let runtime = try fixture.runtime(activityProbe: AfterCopyBusyProbe())
+
+        let snapshot = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+
+        XCTAssertEqual(snapshot.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(snapshot.transfer).destinationURL.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
 }
 
 private extension LiveProjectVaultRuntimeTests {
     struct ClearProbe: VaultAutomationActivityProbing {
         func cubaseStatus() async -> VaultActivityStatus { .clear }
+        func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
+        func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
+    }
+
+    actor AfterCopyBusyProbe: VaultAutomationActivityProbing {
+        private var cubaseChecks = 0
+
+        func cubaseStatus() async -> VaultActivityStatus {
+            cubaseChecks += 1
+            return cubaseChecks == 1 ? .clear : .busy
+        }
+
         func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
         func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
     }
@@ -118,13 +144,15 @@ private extension LiveProjectVaultRuntimeTests {
             try settingsStore.saveSettings(settings)
         }
 
-        func runtime() throws -> LiveProjectVaultRuntime {
+        func runtime(
+            activityProbe: any VaultAutomationActivityProbing = ClearProbe()
+        ) throws -> LiveProjectVaultRuntime {
             try LiveProjectVaultRuntime(
                 settingsStore: settingsStore,
                 transferStore: transferStore(),
                 catalogStore: SQLiteProjectCatalogStore(database: database),
                 projectOpener: SafeVaultProjectOpener(),
-                activityProbe: ClearProbe()
+                activityProbe: activityProbe
             )
         }
 
