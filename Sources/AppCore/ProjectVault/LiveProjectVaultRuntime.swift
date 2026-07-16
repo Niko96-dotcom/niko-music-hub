@@ -68,7 +68,14 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
 
     public func snapshots() throws -> [ProjectVaultRuntimeSnapshot] {
         let configuration = try configuration()
-        let entries = try catalogStore.loadEntries()
+        var entries = try catalogStore.loadEntries()
+        if reconcileActiveLocationAvailability(in: &entries, configuration: configuration) {
+            try catalogStore.apply(ProjectCatalogReconciliation(
+                entries: entries,
+                reviews: try catalogStore.loadReviews(),
+                metadataMigrations: [:]
+            ))
+        }
         let transfers = try transferStore.allTransferRecords()
         return entries.map { entry in
             let transfer = transfers.first { $0.projectID == entry.record.id }
@@ -268,6 +275,56 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             }
         }
         return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer)
+    }
+
+    /// Repairs availability flags written by older incremental reconciliation.
+    /// This is metadata-only: it checks configured Active paths and never creates,
+    /// moves, removes, or rewrites anything in a music root.
+    private func reconcileActiveLocationAvailability(
+        in entries: inout [ProjectCatalogEntry],
+        configuration: Configuration
+    ) -> Bool {
+        var changed = false
+        for entryIndex in entries.indices {
+            for locationIndex in entries[entryIndex].record.locations.indices {
+                let location = entries[entryIndex].record.locations[locationIndex]
+                guard location.rootID == configuration.active.id,
+                      location.kind == .active,
+                      let url = safeActiveLocationURL(
+                        relativePath: location.relativePath,
+                        activeRoot: configuration.active.url
+                      ) else { continue }
+                var isDirectory: ObjCBool = false
+                let availability: Availability = FileManager.default.fileExists(
+                    atPath: url.path,
+                    isDirectory: &isDirectory
+                ) && isDirectory.boolValue ? .local : .missing
+                if location.availability != availability {
+                    entries[entryIndex].record.locations[locationIndex].availability = availability
+                    changed = true
+                }
+            }
+        }
+        return changed
+    }
+
+    private func safeActiveLocationURL(relativePath: String, activeRoot: URL) -> URL? {
+        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard !relativePath.isEmpty,
+              !relativePath.hasPrefix("/"),
+              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            return nil
+        }
+        let root = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = root.appendingPathComponent(relativePath, isDirectory: true)
+            .standardizedFileURL.resolvingSymlinksInPath()
+        let rootComponents = root.pathComponents
+        let candidateComponents = candidate.pathComponents
+        guard candidateComponents.count > rootComponents.count,
+              Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
+            return nil
+        }
+        return candidate
     }
 
     private func archiveProvider(root: URL) -> any ArchiveStorageProvider {

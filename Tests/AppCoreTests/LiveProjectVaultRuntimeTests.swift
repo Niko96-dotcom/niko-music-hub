@@ -69,6 +69,60 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(snapshot.transfer).destinationURL.path))
         XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
     }
+
+    func testSnapshotsRepairOnlyRealActiveLocationAvailability() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let existingProject = ProjectID()
+        let absentProject = ProjectID()
+        let entries = [
+            ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: existingProject,
+                    canonicalTitle: "Synthetic Song",
+                    locations: [ProjectLocation(
+                        rootID: fixture.activeID,
+                        relativePath: "Synthetic Song",
+                        kind: .active,
+                        availability: .missing
+                    )]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: "Synthetic Song", cubaseFiles: [])
+            ),
+            ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: absentProject,
+                    canonicalTitle: "Absent Song",
+                    locations: [ProjectLocation(
+                        rootID: fixture.activeID,
+                        relativePath: "Absent Song",
+                        kind: .active,
+                        availability: .local
+                    )]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: "Absent Song", cubaseFiles: [])
+            ),
+        ]
+        try fixture.catalogStore().apply(ProjectCatalogReconciliation(
+            entries: entries,
+            reviews: [],
+            metadataMigrations: [:]
+        ))
+        let runtime = try fixture.runtime()
+
+        _ = try await runtime.snapshots()
+
+        let persisted = try fixture.catalogStore().loadEntries()
+        XCTAssertEqual(
+            persisted.first { $0.record.id == existingProject }?.record.locations.first?.availability,
+            .local
+        )
+        XCTAssertEqual(
+            persisted.first { $0.record.id == absentProject }?.record.locations.first?.availability,
+            .missing
+        )
+    }
 }
 
 private extension LiveProjectVaultRuntimeTests {
@@ -150,7 +204,7 @@ private extension LiveProjectVaultRuntimeTests {
             try LiveProjectVaultRuntime(
                 settingsStore: settingsStore,
                 transferStore: transferStore(),
-                catalogStore: SQLiteProjectCatalogStore(database: database),
+                catalogStore: catalogStore(),
                 projectOpener: SafeVaultProjectOpener(),
                 activityProbe: activityProbe
             )
@@ -158,6 +212,10 @@ private extension LiveProjectVaultRuntimeTests {
 
         func transferStore() throws -> SQLiteVaultTransferStore {
             try SQLiteVaultTransferStore(database: database)
+        }
+
+        func catalogStore() throws -> SQLiteProjectCatalogStore {
+            try SQLiteProjectCatalogStore(database: database)
         }
 
         func cleanup() {
