@@ -100,7 +100,7 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
     }
 }
 
-private struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecked Sendable {
+struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecked Sendable {
     private let fileManager = FileManager.default
     private let timeoutNanoseconds: UInt64 = 120_000_000_000
     private let pollNanoseconds: UInt64 = 250_000_000
@@ -117,15 +117,11 @@ private struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @
 
     func materialize(root: URL) async throws {
         try fileManager.startDownloadingUbiquitousItem(at: root)
-        guard let enumerator = fileManager.enumerator(
+        try Self.forEachItem(
+            fileManager: fileManager,
             at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [],
-            errorHandler: { _, _ in false }
-        ) else {
-            throw FileProviderArchiveStorageError.materializationUnavailable
-        }
-        while let url = enumerator.nextObject() as? URL {
+            keys: [.isRegularFileKey]
+        ) { url in
             let values = try url.resourceValues(forKeys: [.isRegularFileKey])
             if values.isRegularFile == true {
                 try fileManager.startDownloadingUbiquitousItem(at: url)
@@ -159,29 +155,45 @@ private struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @
             .ubiquitousItemDownloadingStatusKey,
             .ubiquitousItemDownloadingErrorKey
         ]
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: Array(keys),
-            options: [],
-            errorHandler: { _, _ in false }
-        ) else {
-            throw FileProviderArchiveStorageError.lookupUnavailable
-        }
-
         var sawRegularFile = false
-        while let url = enumerator.nextObject() as? URL {
+        var allFilesReady = true
+        try Self.forEachItem(fileManager: fileManager, at: root, keys: keys) { url in
             let values = try url.resourceValues(forKeys: keys)
-            guard values.isRegularFile == true else { continue }
+            guard values.isRegularFile == true else { return }
             sawRegularFile = true
             switch mode {
             case .uploaded:
                 if values.ubiquitousItemUploadingError != nil { throw FileProviderArchiveStorageError.durabilityUnavailable }
-                guard values.ubiquitousItemIsUploaded == true else { return false }
+                if values.ubiquitousItemIsUploaded != true { allFilesReady = false }
             case .downloaded:
                 if values.ubiquitousItemDownloadingError != nil { throw FileProviderArchiveStorageError.materializationUnavailable }
-                guard values.ubiquitousItemDownloadingStatus == .current else { return false }
+                if values.ubiquitousItemDownloadingStatus != .current { allFilesReady = false }
             }
         }
-        return sawRegularFile
+        return sawRegularFile && allFilesReady
+    }
+
+    static func forEachItem(
+        fileManager: FileManager,
+        at root: URL,
+        keys: Set<URLResourceKey>,
+        _ visit: (URL) throws -> Void
+    ) throws {
+        var enumerationError: Error?
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: Array(keys),
+            options: [],
+            errorHandler: { _, error in
+                enumerationError = error
+                return false
+            }
+        ) else {
+            throw FileProviderArchiveStorageError.lookupUnavailable
+        }
+        while let url = enumerator.nextObject() as? URL {
+            try visit(url)
+        }
+        if let enumerationError { throw enumerationError }
     }
 }

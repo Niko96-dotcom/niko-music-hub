@@ -1,3 +1,5 @@
+import Darwin
+import Foundation
 import XCTest
 @testable import NikoMusicCore
 
@@ -144,5 +146,25 @@ final class FileProviderArchiveStorageTests: XCTestCase {
         )
         let result = try await storage.evictIfSupported(root)
         XCTAssertEqual(result, .evicted)
+    }
+
+    func testSystemProviderEnumerationFailsClosedOnUnreadableSubtree() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let blocked = root.appendingPathComponent("blocked", isDirectory: true)
+        try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true)
+        try Data("hidden".utf8).write(to: blocked.appendingPathComponent("hidden.cpr"))
+        defer {
+            chmod(blocked.path, S_IRWXU)
+            try? FileManager.default.removeItem(at: root)
+        }
+        XCTAssertEqual(chmod(blocked.path, 0), 0)
+
+        XCTAssertThrowsError(
+            try SystemFileProviderArchiveService.forEachItem(
+                fileManager: .default,
+                at: root,
+                keys: [.isRegularFileKey]
+            ) { _ in }
+        )
     }
 }
