@@ -32,6 +32,29 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: archived.transfer!.destinationURL.path))
     }
+
+    func testKeepLocalStoredBySourcePathPreventsLaterAutomaticRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime()
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        let sourcePath = try XCTUnwrap(archived.transfer).sourceURL.path
+        try fixture.settingsStore.updateSettings { settings in
+            settings.vault.rolloutStage = .friends
+            settings.vault.keepLocalProjectIDs.insert(sourcePath)
+        }
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("expected Keep Local to refuse automatic archiving")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
 }
 
 private extension LiveProjectVaultRuntimeTests {
@@ -98,11 +121,15 @@ private extension LiveProjectVaultRuntimeTests {
         func runtime() throws -> LiveProjectVaultRuntime {
             try LiveProjectVaultRuntime(
                 settingsStore: settingsStore,
-                transferStore: SQLiteVaultTransferStore(database: database),
+                transferStore: transferStore(),
                 catalogStore: SQLiteProjectCatalogStore(database: database),
                 projectOpener: SafeVaultProjectOpener(),
                 activityProbe: ClearProbe()
             )
+        }
+
+        func transferStore() throws -> SQLiteVaultTransferStore {
+            try SQLiteVaultTransferStore(database: database)
         }
 
         func cleanup() {

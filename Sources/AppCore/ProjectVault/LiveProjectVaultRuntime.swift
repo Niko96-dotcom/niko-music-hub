@@ -84,7 +84,14 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             guard settings.vault.automaticArchiving else { throw ProjectVaultRuntimeError.automaticArchivingDisabled }
             guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
             guard settings.vault.rolloutStage != .disabled else { throw ProjectVaultRuntimeError.automaticArchivingDisabled }
-            guard !settings.vault.keepLocalProjectIDs.contains(song.id) else { throw ProjectVaultRuntimeError.keepLocal }
+            let keepLocalKeys = Set([
+                song.id,
+                song.folderPath.standardizedFileURL.path,
+                song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
+            ])
+            guard settings.vault.keepLocalProjectIDs.isDisjoint(with: keepLocalKeys) else {
+                throw ProjectVaultRuntimeError.keepLocal
+            }
         }
 
         let entry = try ensureCatalogEntry(for: song, configuration: configuration)
