@@ -75,6 +75,45 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         XCTAssertTrue(result.reviews.allSatisfy { $0.existingProjectID != $0.candidateProjectID })
     }
 
+    func testIncrementalObservationPreservesOtherLocationsAndExistingReviewDecisions() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let first = reconciler.reconcile(
+            existing: [],
+            observations: [
+                observation(rootID: activeRootID, path: "Neon Sky", kind: .active),
+                ProjectCatalogObservation(
+                    canonicalTitle: "Other Song",
+                    location: ProjectLocation(rootID: activeRootID, relativePath: "Other Song", kind: .active),
+                    evidence: ProjectIdentityEvidence(
+                        folderName: "Other Song",
+                        cubaseFiles: [ProjectFileIdentity(name: "Other Song.cpr", byteCount: 123, modifiedAt: .distantPast)]
+                    )
+                )
+            ],
+            observedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let neon = try XCTUnwrap(first.entries.first { $0.record.canonicalTitle == "Neon Sky" })
+        let other = try XCTUnwrap(first.entries.first { $0.record.canonicalTitle == "Other Song" })
+        var resolvedReview = ProjectIdentityReview(
+            existingProjectID: neon.record.id,
+            candidateProjectID: other.record.id,
+            reason: "Previously reviewed"
+        )
+        resolvedReview.resolution = .keepSeparate
+
+        let incremental = reconciler.reconcile(
+            existing: first.entries,
+            existingReviews: [resolvedReview],
+            observations: [observation(rootID: activeRootID, path: "Neon Sky", kind: .active)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(incremental.entries.count, 2)
+        XCTAssertTrue(incremental.entries.flatMap(\.record.locations).allSatisfy { $0.availability == .local })
+        XCTAssertEqual(incremental.reviews, [resolvedReview])
+    }
+
     private func observation(
         rootID: UUID,
         path: String,

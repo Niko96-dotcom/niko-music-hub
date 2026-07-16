@@ -188,19 +188,23 @@ public struct ProjectCatalogReconciler: Sendable {
 
     public func reconcile(
         existing: [ProjectCatalogEntry],
+        existingReviews: [ProjectIdentityReview] = [],
         observations: [ProjectCatalogObservation],
+        markUnobservedMissing: Bool = true,
         observedAt: Date = Date()
     ) -> ProjectCatalogReconciliation {
         var entries = existing.map { entry in
             var copy = entry
-            copy.record.locations = copy.record.locations.map { location in
-                var missing = location
-                missing.availability = .missing
-                return missing
+            if markUnobservedMissing {
+                copy.record.locations = copy.record.locations.map { location in
+                    var missing = location
+                    missing.availability = .missing
+                    return missing
+                }
             }
             return copy
         }
-        var reviews: [ProjectIdentityReview] = []
+        var reviews = existingReviews
         var migrations: [String: ProjectID] = [:]
 
         for observation in observations {
@@ -226,24 +230,32 @@ public struct ProjectCatalogReconciler: Sendable {
                     && $0.evidence.normalizedFolderName == observation.evidence.normalizedFolderName
             }
             for weak in weakMatches {
-                reviews.append(ProjectIdentityReview(
+                appendReviewIfNeeded(ProjectIdentityReview(
                     existingProjectID: weak.record.id,
                     candidateProjectID: newEntry.record.id,
                     reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
-                ))
+                ), to: &reviews)
             }
             if strongMatches.count > 1 {
                 for index in strongMatches {
-                    reviews.append(ProjectIdentityReview(
+                    appendReviewIfNeeded(ProjectIdentityReview(
                         existingProjectID: entries[index].record.id,
                         candidateProjectID: newEntry.record.id,
                         reason: "Multiple projects share strong identity evidence. Review before linking."
-                    ))
+                    ), to: &reviews)
                 }
             }
         }
 
         return ProjectCatalogReconciliation(entries: entries, reviews: reviews, metadataMigrations: migrations)
+    }
+
+    private func appendReviewIfNeeded(_ review: ProjectIdentityReview, to reviews: inout [ProjectIdentityReview]) {
+        let pair = Set([review.existingProjectID, review.candidateProjectID])
+        guard !reviews.contains(where: {
+            Set([$0.existingProjectID, $0.candidateProjectID]) == pair
+        }) else { return }
+        reviews.append(review)
     }
 
     private func merge(_ observation: ProjectCatalogObservation, into entry: inout ProjectCatalogEntry, observedAt: Date) {

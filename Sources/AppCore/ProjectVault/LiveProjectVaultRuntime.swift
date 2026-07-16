@@ -220,7 +220,9 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         )
         let reconciliation = ProjectCatalogReconciler().reconcile(
             existing: existing,
-            observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)]
+            existingReviews: try catalogStore.loadReviews(),
+            observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)],
+            markUnobservedMissing: false
         )
         var updated = reconciliation
         guard let index = updated.entries.firstIndex(where: { $0.record.locations.contains(location) }) else {
