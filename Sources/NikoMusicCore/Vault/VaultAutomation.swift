@@ -126,7 +126,24 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
     public init(fileManager: FileManager = .default) { self.fileManager = fileManager }
 
     public func cubaseStatus() async -> VaultActivityStatus {
-        commandStatus(executable: "/usr/bin/pgrep", arguments: ["-if", "Cubase"])
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-axo", "comm="]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0,
+                  let text = String(data: data, encoding: .utf8) else {
+                return .uncertain("probe-failed-\(process.terminationStatus)")
+            }
+            return CubaseProcessDetector.containsCubase(inProcessList: text) ? .busy : .clear
+        } catch {
+            return .uncertain("probe-failed")
+        }
     }
 
     public func openFileStatus(in projectURL: URL) async -> VaultActivityStatus {
@@ -167,6 +184,25 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
             default: return .uncertain("probe-failed-\(process.terminationStatus)")
             }
         } catch { return .uncertain("probe-failed") }
+    }
+}
+
+struct CubaseProcessDetector: Sendable {
+    static func containsCubase(inProcessList text: String) -> Bool {
+        text.split(whereSeparator: \.isNewline).contains { line in
+            isCubaseExecutable(String(line))
+        }
+    }
+
+    static func isCubaseExecutable(_ command: String) -> Bool {
+        let executable = URL(fileURLWithPath: command.trimmingCharacters(in: .whitespacesAndNewlines))
+            .lastPathComponent
+        let components = executable.split(separator: " ", omittingEmptySubsequences: true)
+        guard components.first == "Cubase" else { return false }
+        guard components.count > 1 else { return true }
+        let version = components.dropFirst().joined(separator: " ")
+        return version.contains(where: \.isNumber)
+            && version.allSatisfy { $0.isNumber || $0 == "." }
     }
 }
 

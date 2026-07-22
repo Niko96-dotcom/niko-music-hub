@@ -150,13 +150,13 @@ extension ArchiveBrowserViewModel {
     }
 
     private func projectVaultSnapshot(for song: Song) -> ProjectVaultRuntimeSnapshot? {
-        projectVaultSnapshotsByPath[song.folderPath.standardizedFileURL.path]
+        projectVaultSnapshotsByPath[Self.vaultCanonicalPath(song.folderPath)]
     }
 
     private func cacheProjectVaultSnapshot(_ snapshot: ProjectVaultRuntimeSnapshot) {
         if let transfer = snapshot.transfer {
-            projectVaultSnapshotsByPath[transfer.sourceURL.standardizedFileURL.path] = snapshot
-            projectVaultSnapshotsByPath[transfer.destinationURL.standardizedFileURL.path] = snapshot
+            projectVaultSnapshotsByPath[Self.vaultCanonicalPath(transfer.sourceURL)] = snapshot
+            projectVaultSnapshotsByPath[Self.vaultCanonicalPath(transfer.destinationURL)] = snapshot
         }
     }
 
@@ -183,11 +183,23 @@ extension ArchiveBrowserViewModel {
             let archivedSourcePaths: Set<String> = Set(snapshots.compactMap { snapshot -> String? in
                 guard let transfer = snapshot.transfer,
                       !FileManager.default.fileExists(atPath: transfer.sourceURL.path) else { return nil }
-                return transfer.sourceURL.standardizedFileURL.path
+                return Self.vaultCanonicalPath(transfer.sourceURL)
             })
-            songs.removeAll { archivedIDs.contains($0.id) || archivedSourcePaths.contains($0.folderPath.standardizedFileURL.path) }
+            songs.removeAll {
+                archivedIDs.contains($0.id)
+                    || archivedSourcePaths.contains(Self.vaultCanonicalPath($0.folderPath))
+            }
             songs.append(contentsOf: archived)
         }
+    }
+
+    private static func vaultCanonicalPath(_ url: URL) -> String {
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
+        for alias in ["/private/var", "/private/tmp"] {
+            if path == alias { return String(alias.dropFirst("/private".count)) }
+            if path.hasPrefix(alias + "/") { return String(path.dropFirst("/private".count)) }
+        }
+        return path
     }
 
     private static func vaultContains(_ root: URL, _ candidate: URL) -> Bool {

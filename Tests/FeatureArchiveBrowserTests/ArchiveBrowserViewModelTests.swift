@@ -1105,6 +1105,34 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(reloaded.filteredSongs.map(\.id), [merged.id])
     }
 
+    func testMarkingDoneArchivesTheUpdatedWorkflowSnapshot() async throws {
+        let runtime = RecordingProjectVaultRuntime()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime
+        )
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("workflow-done-\(UUID().uuidString)", isDirectory: true)
+        let song = Song(
+            folderPath: folder,
+            originalFolderName: "Workflow Song",
+            displayTitle: "Workflow Song"
+        )
+        viewModel.songs = [song]
+        viewModel.filteredSongs = [song]
+
+        viewModel.updateWorkflowStatus(for: song, status: .done)
+
+        var archivedSong: Song?
+        for _ in 0..<100 {
+            archivedSong = await runtime.lastArchivedSong()
+            if archivedSong != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(archivedSong?.workflowStatus, .done)
+    }
+
     func testManualPreviewSurvivesRescan() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -1864,6 +1892,32 @@ private final class RecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked 
     }
 
     func clear() throws {}
+}
+
+private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
+    private var archivedSong: Song?
+
+    func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] { [] }
+
+    func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot {
+        archivedSong = song
+        return ProjectVaultRuntimeSnapshot(
+            record: ProjectRecord(
+                canonicalTitle: song.effectiveDisplayTitle,
+                locations: [],
+                workflowState: song.workflowStatus
+            ),
+            transfer: nil
+        )
+    }
+
+    func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
+        fatalError("restore is not part of this test")
+    }
+
+    func recoverAtLaunch() async {}
+
+    func lastArchivedSong() -> Song? { archivedSong }
 }
 
 private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {

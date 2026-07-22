@@ -28,8 +28,13 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     public let state: ProjectVaultLocationState
     public let primaryAction: ProjectVaultPrimaryAction
     public let explanation: String
+    public let isKeepLocal: Bool
 
     public init(record: ProjectRecord, transferState: VaultTransferState? = nil, restorePhase: VaultRestorePhase? = nil) {
+        isKeepLocal = record.pinned
+        let hasLocalActiveCopy = record.locations.contains {
+            $0.kind == .active && $0.availability == .local
+        }
         if restorePhase != nil {
             state = .restoring
             primaryAction = .review
@@ -42,11 +47,11 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             state = .archiving
             primaryAction = .review
             explanation = ProjectVaultActivityExplanation.transfer(transferState)
-        } else if record.pinned {
+        } else if record.pinned, hasLocalActiveCopy {
             state = .keepLocal
             primaryAction = .openInCubase
             explanation = "Pinned here. Automatic archiving will leave this project in Active Projects."
-        } else if record.locations.contains(where: { $0.kind == .active && $0.availability == .local }) {
+        } else if hasLocalActiveCopy {
             state = .active
             primaryAction = .openInCubase
             explanation = "Ready in Active Projects."

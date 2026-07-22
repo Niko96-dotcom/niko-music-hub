@@ -33,8 +33,9 @@ extension ArchiveBrowserViewModel {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
         }
-        if status == .done, song.workflowStatus != .done {
-            archiveInProjectVault(song, trigger: .workflowDone)
+        if status == .done, song.workflowStatus != .done,
+           let updatedSong = songs.first(where: { $0.id == song.id }) {
+            archiveInProjectVault(updatedSong, trigger: .workflowDone)
         }
     }
 

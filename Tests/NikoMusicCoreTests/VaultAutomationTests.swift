@@ -138,6 +138,25 @@ final class VaultAutomationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path))
     }
 
+    func testCubaseProcessDetectionMatchesOnlyTheSteinbergExecutableShape() {
+        XCTAssertTrue(CubaseProcessDetector.isCubaseExecutable("/Applications/Cubase 15.app/Contents/MacOS/Cubase 15"))
+        XCTAssertTrue(CubaseProcessDetector.isCubaseExecutable("Cubase"))
+        XCTAssertFalse(CubaseProcessDetector.isCubaseExecutable("/Applications/Ableton Cubase Keys.app/Contents/MacOS/ableton-cubase-keys"))
+        XCTAssertFalse(CubaseProcessDetector.isCubaseExecutable("/Applications/Cubase Song Archive Browser.app/Contents/MacOS/Cubase Song Archive Browser"))
+        XCTAssertFalse(CubaseProcessDetector.isCubaseExecutable("Cubase helper"))
+    }
+
+    func testCubaseProcessListDetectionIgnoresUnrelatedNames() {
+        let unrelated = """
+        /Applications/Ableton Cubase Keys.app/Contents/MacOS/ableton-cubase-keys
+        /Applications/Cubase Song Archive Browser.app/Contents/MacOS/Cubase Song Archive Browser
+        """
+        XCTAssertFalse(CubaseProcessDetector.containsCubase(inProcessList: unrelated))
+        XCTAssertTrue(CubaseProcessDetector.containsCubase(
+            inProcessList: unrelated + "\n/Applications/Cubase 15.app/Contents/MacOS/Cubase 15\n"
+        ))
+    }
+
     private var candidateID: ProjectID {
         ProjectID(rawValue: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!)
     }

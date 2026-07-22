@@ -44,4 +44,42 @@ final class ProjectVaultPolishTests: XCTestCase {
         settings.automationEmergencyStop = true
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsAutomaticArchiving(settings))
     }
+
+    func testArchivedKeepLocalProjectStillRequiresRestoreBeforeOpen() {
+        let record = ProjectRecord(
+            canonicalTitle: "Archived Song",
+            locations: [ProjectLocation(
+                rootID: UUID(),
+                relativePath: "generations/project/generation",
+                kind: .archive,
+                availability: .onlineOnly
+            )],
+            pinned: true
+        )
+
+        let presentation = ProjectVaultCardPresentation(record: record)
+
+        XCTAssertTrue(presentation.isKeepLocal)
+        XCTAssertEqual(presentation.state, .archived)
+        XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
+    }
+
+    func testKeepLocalWithActiveCopyRemainsDirectlyOpenable() {
+        let record = ProjectRecord(
+            canonicalTitle: "Active Song",
+            locations: [ProjectLocation(
+                rootID: UUID(),
+                relativePath: "Active Song",
+                kind: .active,
+                availability: .local
+            )],
+            pinned: true
+        )
+
+        let presentation = ProjectVaultCardPresentation(record: record)
+
+        XCTAssertTrue(presentation.isKeepLocal)
+        XCTAssertEqual(presentation.state, .keepLocal)
+        XCTAssertEqual(presentation.primaryAction, .openInCubase)
+    }
 }

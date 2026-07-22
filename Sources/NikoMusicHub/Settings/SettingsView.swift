@@ -189,12 +189,26 @@ struct SettingsView: View {
             }
 
             SettingsSection(title: "About", importance: .low) {
+                let buildIdentity = AppBuildIdentity()
                 LabeledContent("App") {
                     Text("Niko Music Hub")
                 }
-                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                if let version = buildIdentity.marketingVersion {
                     LabeledContent("Version") {
                         Text(version)
+                    }
+                }
+                if let buildID = buildIdentity.buildID {
+                    LabeledContent("Build") {
+                        Text(buildID)
+                            .textSelection(.enabled)
+                    }
+                }
+                if let commit = buildIdentity.shortSourceCommit {
+                    LabeledContent("Source") {
+                        Text(commit)
+                            .monospaced()
+                            .textSelection(.enabled)
                     }
                 }
                 Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")

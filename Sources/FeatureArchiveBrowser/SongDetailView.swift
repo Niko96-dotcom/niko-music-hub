@@ -192,7 +192,7 @@ struct SongDetailView: View {
 
                 if let vaultPresentation {
                     Toggle("Keep Local", isOn: Binding(
-                        get: { vaultPresentation.state == .keepLocal },
+                        get: { vaultPresentation.isKeepLocal },
                         set: { viewModel.setProjectKeepLocal($0, for: liveSong) }
                     ))
                     .toggleStyle(.checkbox)

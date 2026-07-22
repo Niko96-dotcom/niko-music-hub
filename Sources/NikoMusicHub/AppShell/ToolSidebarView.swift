@@ -17,9 +17,7 @@ struct ToolSidebarView: View {
     @State private var helperHealthHovered = false
 
     private var appVersionLabel: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        guard let version, !version.isEmpty else { return "" }
-        return "v\(version)"
+        AppBuildIdentity().compactLabel
     }
 
     var body: some View {
