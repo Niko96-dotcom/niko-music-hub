@@ -1,26 +1,36 @@
+# Swift build output
 .build/
 .swiftpm/
 DerivedData/
 dist/
-.DS_Store
-.ai/runs/
-.ai/ui-review-*.png
-.ai/ui-review-tabs/
-tmp/
 *.xcresult
-*.log
+
+# Python bytecode (vendored skill scripts)
 __pycache__/
 *.py[cod]
 
-# Local scratch / tooling artifacts (not project source)
-.commandcode/
-.opencode/
+# Logs — except checked-in test fixtures that happen to be .log files
+*.log
+!Tests/**/Fixtures/*.log
+
+# macOS
+.DS_Store
+Bildschirmfoto*.png
+
+# Local scratch: agent run output, UI captures, working dirs
+tmp/
 output/
-goal-agents/
+.ai/runs/
+.ai/ui-review-*.png
+.ai/ui-review-tabs/
+
+# Generated planning intel (regenerate with gsd-map-codebase)
 .planning/codebase/
 
-# Ultimate De-Slop runtime state (skill is vendored under .cursor/skills/)
-.deslop/
+# Other agent harnesses' local state (not project source)
+.commandcode/
+.opencode/
+goal-agents/
 
-# Stray screenshots in repo root
-Bildschirmfoto*.png
+# Ultimate De-Slop runtime state (the skill itself is vendored under .cursor/skills/)
+.deslop/

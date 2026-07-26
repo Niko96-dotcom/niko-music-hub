@@ -99,20 +99,22 @@ final class HubDesignSystemTokenTests: XCTestCase {
         )
     }
 
-    /// Liquid namespace deprecated in Plan 02 (deleted in Phase 57). Only
-    /// `Intent` / `SurfaceLevel` / `Motion` remain as deprecated shims — the decorative
-    /// sub-namespaces (Prismatic / AccessibilityFallback / Depth / SurfaceFill / Stroke)
-    /// were deleted because the deprecated adapters now delegate to semantic `hubCard()` /
-    /// `Palette.*`. These assertions verify the surviving shims still compile so
-    /// `HubLiquidGlass.swift` / `AppShellView.swift` / `ToolSidebarView.swift` keep working.
-    func testLiquidStudioGlassTokensExposeFoundationScale() {
-        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.allCases, [.backdrop, .panel, .card, .field, .chip])
-        XCTAssertEqual(HubDesignSystem.Liquid.Intent.allCases, [.normal, .hover, .selected, .disabled, .warning, .error])
-        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.panel.cornerRadius, HubDesignSystem.Radius.panel)
-        XCTAssertEqual(HubDesignSystem.Liquid.SurfaceLevel.chip.cornerRadius, HubDesignSystem.Radius.chip)
-        XCTAssertEqual(
-            HubDesignSystem.Liquid.Motion.duration(reduceMotion: true),
-            HubDesignSystem.Liquid.Motion.disabledResponse
+    /// The legacy `HubDesignSystem.Liquid` namespace (`SurfaceLevel` / `Intent` / `Motion`) is
+    /// deleted. It had no production call sites, and the Phase 57 that was meant to remove it was
+    /// cancelled when v1.9 phases 52–57 were superseded by reference-glass on `main`.
+    /// Radius and motion coverage now lives on the semantic tokens directly, above.
+    func testLegacyLiquidNamespaceIsGone() throws {
+        let source = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(
+            source.contains("public enum Liquid"),
+            "HubDesignSystem.Liquid was deleted — do not reintroduce the legacy namespace."
+        )
+        XCTAssertFalse(
+            source.contains("Removed in Phase 57"),
+            "Phase 57 was cancelled; deprecation messages must not promise it."
         )
     }
 }

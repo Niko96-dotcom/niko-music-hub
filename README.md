@@ -97,7 +97,12 @@ See `docs/release.md` and `docs/release-validation.md`.
 swift run NikoMusicCoreSelfTest
 ```
 
-Fixture archive layout: `Fixtures/CubaseArchive/` (Neon Hook, Second Song, Broken Folder Example).
+Fixture archive layout: `Fixtures/CubaseArchive/` — synthetic song folders covering the happy path
+(Neon Hook, Second Song), preview ranking and score tiebreaks (Preview Ranking Lab, Equal Score
+Duration/Version/Extension Tiebreak), real-world naming (90s Rave, Amber Moth), and malformed input
+(Broken Folder Example, LOOSE_FILE.txt). `.cpr` files are empty placeholders and `.wav` files are
+minimal silence — never copy a real user archive into this tree. See
+`Fixtures/CubaseArchive/README.md`.
 
 ## Visible tools
 

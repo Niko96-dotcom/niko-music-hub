@@ -180,7 +180,7 @@ PathSafety.resolve(userPath, allowedRoots: settings.roots) -> URL?
 |-------|-----------|
 | Core scanner/ranker/search | `Tests/NikoMusicCoreTests/` + fixtures under `Fixtures/CubaseArchive/` |
 | Feature VM/UI logic | `Tests/FeatureArchiveBrowserTests/` |
-| Registry integration | extend `AppCoreTests/FeatureRegistryTests` |
+| Registry integration | extend `Tests/AppCoreTests/FeatureRegistryTests.swift` |
 | CLI smoke | `NikoMusicCoreSelfTest` |
 | User E2E | `script/e2e_user_smoke.sh` + env vars `NIKO_MUSIC_HUB_FIXTURE_ROOT`, `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` |
 

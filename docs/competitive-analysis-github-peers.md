@@ -336,7 +336,7 @@ Improvements inspired by peers for **BPM / converter / recorder / downloader / i
 | Crate **cloud sync / Stripe / AI** | Different product; native local-first hub |
 | SampleSolution **web duplicate of library** | Storage doubling; not producer workflow |
 | ableton-proj-mcp as **runtime dependency** | Keep optional export; don’t require MCP server for app |
-| Electron + npm stack from MacBook reference | `docs/source-inventory.md` — port semantics only |
+| Electron + npm stack from MacBook reference | `SOURCE_PROVENANCE.md` — port semantics only, never embed the prior runtime |
 
 ---
 
@@ -420,9 +420,8 @@ Multi-DAW, cloud sync, todos/releases, cross-library plugin dashboard, AI search
 
 - `docs/reference/cubase-file-orga/SPEC.md` — milestone source of truth for archive behavior
 - `docs/reference/cubase-file-orga/DESIGN_SYSTEM.md` — waveform hero, song card visuals
-- `docs/source-inventory.md` — what to port vs not import from Electron reference
+- `SOURCE_PROVENANCE.md` — what to port vs not import from the Electron reference
 - `README.md` — shipped tool list
-- `.ai/tasks/hub-polish-waves.json` — completed polish waves A–G
 
 ### Commercial reference
 

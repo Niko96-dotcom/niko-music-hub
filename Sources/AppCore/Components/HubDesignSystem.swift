@@ -47,11 +47,10 @@ extension Color {
 
 /// Shared visual tokens for Niko Music Hub — calm, human, Apple-native chrome.
 ///
-/// Phase 51 ships the semantic token surface (Palette / Typography / Spacing / Radius /
-/// Motion / ControlState). Dark-mode RGB values are locked by `calm-native.css`; light-mode
-/// values are coherent low-chroma variants. The legacy `Liquid` namespace is kept intact
-/// this plan (deleted in Plan 02 after the adapters are rewritten) so `HubLiquidGlass.swift`
-/// and `HubMediaSurfaces.swift` compile unchanged.
+/// This is the semantic token surface (Palette / Typography / Spacing / Radius / Motion /
+/// ControlState). Dark-mode RGB values are locked by `calm-native.css`; light-mode values are
+/// coherent low-chroma variants. The legacy `Liquid` namespace and its `HubLiquidGlass.swift`
+/// adapters are deleted — use the semantic tokens directly.
 public enum HubDesignSystem {
     // MARK: - Corner Radii
 
@@ -358,65 +357,5 @@ public enum HubDesignSystem {
         case disabled
         case warning
         case error
-    }
-
-    // MARK: - Liquid Studio Glass (LEGACY — deprecated shims, deleted in Phase 57 — MIG-08/13/14)
-    //
-    // Plan 02 deleted the decorative Liquid sub-namespaces (prismatic light, accessibility
-    // fallback struct, depth/shadow, surface fill, stroke) — the deprecated adapters in
-    // `HubLiquidGlass.swift` now delegate to semantic `hubCard()` / `Palette.*`, so those
-    // sub-namespaces have no remaining consumers. `Intent` / `SurfaceLevel` / `Motion` stay
-    // as deprecated shims because feature code still references them via
-    // `HubLiquidSurfaceIntent` (typealias to `ControlState`) and `Liquid.Motion.duration`
-    // (AppShellView / ToolSidebarView, migrated in Phase 52). Phase 57 deletes the namespace
-    // outright. DO NOT grow new feature call sites (enforced by the no-new-call-sites check).
-
-    public enum Liquid {
-        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.Radius.*.")
-        public enum SurfaceLevel: CaseIterable, Sendable {
-            case backdrop
-            case panel
-            case card
-            case field
-            case chip
-
-            public var cornerRadius: CGFloat {
-                switch self {
-                case .backdrop:
-                    return Radius.shell
-                case .panel:
-                    return Radius.panel
-                case .card:
-                    return Radius.card
-                case .field:
-                    return Radius.row
-                case .chip:
-                    return Radius.chip
-                }
-            }
-        }
-
-        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.ControlState.")
-        public enum Intent: CaseIterable, Sendable {
-            case normal
-            case hover
-            case selected
-            case disabled
-            case warning
-            case error
-        }
-
-        @available(*, deprecated, message: "Removed in Phase 57. Use HubDesignSystem.Motion.*.")
-        public enum Motion {
-            public static let quickResponse: Double = 0.15
-            public static let standardResponse: Double = 0.22
-            public static let disabledResponse: Double = 0
-
-            /// Delegates to the semantic `HubDesignSystem.Motion` short tier (150ms).
-            /// Returns 0 when Reduce Motion is on (A11Y-07).
-            public static func duration(reduceMotion: Bool) -> Double {
-                HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
-            }
-        }
     }
 }

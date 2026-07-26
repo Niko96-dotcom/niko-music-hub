@@ -6,8 +6,8 @@ import SwiftUI
 /// warning, compact job/result group). The default section is unboxed.
 ///
 /// On macOS 26 this resolves to native SwiftUI Liquid Glass through `HubSurface`; older systems
-/// keep the semantic opaque fallback. The deprecated `hubLiquidCard()` adapter in
-/// `HubLiquidGlass.swift` delegates here; Phase 57 deletes the adapter.
+/// keep the semantic opaque fallback. The old `hubLiquidCard()` adapter and its
+/// `HubLiquidGlass.swift` file are already deleted — this is the only card surface.
 public struct HubCard: ViewModifier {
     private let cornerRadius: CGFloat
     private let state: HubDesignSystem.ControlState
