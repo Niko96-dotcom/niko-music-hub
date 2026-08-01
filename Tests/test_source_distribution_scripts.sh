@@ -47,6 +47,7 @@ assert_fail wrong-commit "$ROOT/script/validate-source-sale-approval.py" --appro
 assert_contains "$TMP/wrong-commit.err" "commit mismatch"
 
 echo "== source scanner rejects PII, credentials, and private workflow state =="
+assert_contains "$ROOT/script/export-source-sale.sh" "  RELEASE_ARCHITECTURES"
 SCAN="$TMP/scan"
 mkdir -p "$SCAN"
 printf 'safe source\n' >"$SCAN/safe.txt"

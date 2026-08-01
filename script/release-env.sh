@@ -46,6 +46,75 @@ nmh_release_version() {
   printf '%s\n' "$version"
 }
 
+nmh_release_min_macos_version() {
+  local package_file="${NMH_PACKAGE_FILE:-$NMH_RELEASE_ROOT/Package.swift}"
+  if [[ ! -f "$package_file" ]]; then
+    echo "missing Package.swift for minimum macOS contract: $package_file" >&2
+    return 1
+  fi
+  local minimum_version
+  minimum_version="$(sed -nE 's/.*\.macOS\("([0-9]+(\.[0-9]+)*)"\).*/\1/p' "$package_file" | head -n 1)"
+  if [[ ! "$minimum_version" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+    echo "invalid minimum macOS version in $package_file: '$minimum_version'" >&2
+    return 1
+  fi
+  printf '%s\n' "$minimum_version"
+}
+
+nmh_release_architectures() {
+  local architecture_file="${NMH_RELEASE_ARCHITECTURES_FILE:-$NMH_RELEASE_ROOT/RELEASE_ARCHITECTURES}"
+  if [[ ! -f "$architecture_file" ]]; then
+    echo "missing canonical release architecture file: $architecture_file" >&2
+    return 1
+  fi
+
+  local entries
+  if ! entries="$(awk '
+    /^[[:space:]]*(#|$)/ { next }
+    NF != 1 { exit 2 }
+    { print $1 }
+  ' "$architecture_file")"; then
+    echo "invalid release architecture file (one architecture per non-comment line): $architecture_file" >&2
+    return 1
+  fi
+  if [[ -z "$entries" ]]; then
+    echo "release architecture contract is empty: $architecture_file" >&2
+    return 1
+  fi
+
+  local architecture
+  for architecture in $entries; do
+    case "$architecture" in
+      arm64|x86_64) ;;
+      *)
+        echo "unsupported release architecture '$architecture' in $architecture_file" >&2
+        return 1
+        ;;
+    esac
+  done
+
+  local entry_count unique_count normalized
+  entry_count="$(printf '%s\n' $entries | wc -l | tr -d '[:space:]')"
+  unique_count="$(printf '%s\n' $entries | sort -u | wc -l | tr -d '[:space:]')"
+  if [[ "$entry_count" != "$unique_count" ]]; then
+    echo "duplicate release architecture in $architecture_file" >&2
+    return 1
+  fi
+  normalized="$(printf '%s\n' $entries | sort -u | paste -sd' ' -)"
+  printf '%s\n' "$normalized"
+}
+
+nmh_validate_release_host_architecture() {
+  local host_architecture
+  host_architecture="$(uname -m)"
+  local supported_architectures
+  supported_architectures="$(nmh_release_architectures)"
+  if ! printf '%s\n' "$supported_architectures" | tr ' ' '\n' | grep -Fxq "$host_architecture"; then
+    echo "release architecture contract does not include host architecture '$host_architecture' (supported: $supported_architectures)" >&2
+    return 1
+  fi
+}
+
 nmh_bundle_id() {
   local bundle_id_file="${NMH_BUNDLE_ID_FILE:-$NMH_RELEASE_ROOT/BUNDLE_ID}"
   if [[ ! -f "$bundle_id_file" ]]; then

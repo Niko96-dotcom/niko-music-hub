@@ -66,6 +66,7 @@ EXPORT_PATHS=(
   LICENSE
   Package.swift
   README.md
+  RELEASE_ARCHITECTURES
   Resources
   SBOM.spdx.json
   SOURCE_PROVENANCE.md

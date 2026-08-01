@@ -32,6 +32,7 @@ NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh
 This validates:
 
 - app bundle layout and metadata
+- supported `arm64` architecture and `LSMinimumSystemVersion` derived from the package contract
 - Developer ID signing
 - hardened runtime, accepting either `Runtime Version` or runtime flags in `codesign`
 - app notarization and stapling
@@ -40,6 +41,7 @@ This validates:
 - checksum generation after finalization
 - basename-only checksum verification
 - manifest provenance
+- manifest artifact size, architecture, minimum-macOS, and signing/notarization attestation
 - exact `com.niko96.NikoMusicHub` identity in source, bundle, artifact, manifest, and installed app
 - exact-commit approved Mac UAT
 - immutable approval data tying every gate to the artifact and evidence hashes

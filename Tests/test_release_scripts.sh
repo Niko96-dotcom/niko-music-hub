@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../script/release-env.sh
+source "$ROOT/script/release-env.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/nmh-release-tests.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -23,7 +25,7 @@ assert_pass() {
 assert_contains() {
   local file="$1"
   local needle="$2"
-  if ! grep -Fq "$needle" "$file"; then
+  if ! grep -Fq -- "$needle" "$file"; then
     echo "expected '$needle' in $file" >&2
     sed -n '1,120p' "$file" >&2
     exit 1
@@ -56,6 +58,8 @@ assert_contains "$TMP/stale-version.err" "previous version 1.4 appears outside a
 
 echo "== permanent bundle identity =="
 EXPECTED_BUNDLE_ID="$(tr -d '[:space:]' <"$ROOT/BUNDLE_ID")"
+EXPECTED_MIN_MACOS="$(nmh_release_min_macos_version)"
+EXPECTED_ARCHITECTURES="$(nmh_release_architectures)"
 [[ "$EXPECTED_BUNDLE_ID" == "com.niko96.NikoMusicHub" ]] || {
   echo "unexpected canonical bundle identifier: $EXPECTED_BUNDLE_ID" >&2
   exit 1
@@ -71,6 +75,7 @@ cat >"$BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>$EXPECTED_BUNDLE_ID</string>
   <key>CFBundleShortVersionString</key><string>$(cat "$ROOT/VERSION")</string>
   <key>NMHBuildID</key><string>$(cat "$ROOT/VERSION")+test</string>
+  <key>LSMinimumSystemVersion</key><string>$EXPECTED_MIN_MACOS</string>
 </dict></plist>
 PLIST
 assert_pass bundle-id-ok "$ROOT/script/release-version-verify.sh" --bundle "$BUNDLE"
@@ -106,6 +111,11 @@ assert_order 'run validate-approval' 'log "publication"' "$ROOT/script/release-a
 assert_order 'log "public app signature validation"' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"
 assert_order 'run notary-dmg' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"
 assert_order 'run hdiutil-create' '(cd "$RELEASE_DIR" && shasum' "$ROOT/script/release-all.sh"
+assert_contains "$ROOT/script/release-all.sh" 'nmh_validate_release_host_architecture'
+assert_contains "$ROOT/script/release-all.sh" '--architectures "$RELEASE_ARCHITECTURES"'
+assert_contains "$ROOT/script/release-all.sh" '--minimum-macos "$MIN_MACOS_VERSION"'
+assert_contains "$ROOT/script/release-all.sh" '--artifact-size "$ARTIFACT_SIZE"'
+assert_contains "$ROOT/script/validate-release-artifact.sh" 'lipo -archs "$BINARY"'
 
 echo "== hardened runtime output variants are accepted =="
 for script in "$ROOT/script/release-all.sh" "$ROOT/script/validate-release-artifact.sh"; do
@@ -206,9 +216,13 @@ APPROVAL_MANIFEST="$TMP/NikoMusicHub-$(cat "$ROOT/VERSION")-manifest.json"
   --commit "$CURRENT_COMMIT" \
   --build-id "$(cat "$ROOT/VERSION")+test" \
   --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
   --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
   --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
   --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "Developer ID Application: Release Test (TEAM)" \
   --validation-status passed \
   --public-release
 APPROVAL_MANIFEST_SHA="$(shasum -a 256 "$APPROVAL_MANIFEST" | awk '{print $1}')"

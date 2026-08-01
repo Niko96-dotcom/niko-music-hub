@@ -3,6 +3,7 @@
 - [ ] Git status is completely clean, including untracked files.
 - [ ] `VERSION` was bumped once.
 - [ ] `BUNDLE_ID` is the permanent `com.niko96.NikoMusicHub` identity.
+- [ ] `RELEASE_ARCHITECTURES` and the package minimum macOS contract match the intended release machine and artifact.
 - [ ] `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh` passed.
 - [ ] `CHANGELOG.md` matches `VERSION`.
 - [ ] `./script/public-tree-hygiene.sh` passed.

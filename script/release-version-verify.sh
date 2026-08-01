@@ -43,6 +43,8 @@ done
 
 VERSION="$(nmh_release_version)"
 BUNDLE_ID="$(nmh_bundle_id)"
+MIN_MACOS_VERSION="$(nmh_release_min_macos_version)"
+RELEASE_ARCHITECTURES="$(nmh_release_architectures)"
 
 for commercial_file in LICENSE THIRD_PARTY_NOTICES.md SOURCE_PROVENANCE.md SBOM.spdx.json; do
   if [[ ! -f "$ROOT/$commercial_file" ]]; then
@@ -92,6 +94,11 @@ if [[ -n "$BUNDLE_PATH" ]]; then
     echo "release version violation: bundle NMHBuildID '$BUILD_ID' does not start with $VERSION+" >&2
     exit 1
   fi
+  BUNDLE_MIN_MACOS_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$INFO_PLIST" 2>/dev/null || true)"
+  if [[ "$BUNDLE_MIN_MACOS_VERSION" != "$MIN_MACOS_VERSION" ]]; then
+    echo "release platform violation: bundle has LSMinimumSystemVersion=$BUNDLE_MIN_MACOS_VERSION but Package.swift requires $MIN_MACOS_VERSION" >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "$PREVIOUS_VERSION" ]]; then
@@ -127,4 +134,4 @@ if [[ -n "$PREVIOUS_VERSION" ]]; then
   fi
 fi
 
-echo "release identity ok: VERSION=$VERSION BUNDLE_ID=$BUNDLE_ID"
+echo "release identity ok: VERSION=$VERSION BUNDLE_ID=$BUNDLE_ID architectures=$RELEASE_ARCHITECTURES minimum_macos=$MIN_MACOS_VERSION"

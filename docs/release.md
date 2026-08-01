@@ -4,19 +4,22 @@ Niko Music Hub is a native macOS Swift Package app. The public artifact contract
 
 `VERSION` is the canonical release version source. `BUNDLE_ID` is the permanent app identity source and currently contains `com.niko96.NikoMusicHub`. Bundle metadata, artifact names, release manifests, checksums, release notes, and docs must derive from those files.
 
+The supported release platform is Apple silicon (`arm64`) on macOS 14.2 or newer. `RELEASE_ARCHITECTURES` is the canonical architecture contract; the release host, mounted DMG executable, installed executable, and manifest must all agree. This project does not claim an Intel or universal binary until that contract is deliberately changed and revalidated.
+
 ## Distribution
 
 - Channel: GitHub Releases.
 - Public artifact: `NikoMusicHub-<version>.dmg`.
 - Checksum: `NikoMusicHub-<version>.dmg.sha256`, with a basename-only entry.
 - Manifest: `NikoMusicHub-<version>-manifest.json`.
+- Manifest provenance: exact commit/build ID, artifact size/hash, supported architecture list, minimum macOS version, and signing/notarization attestation.
 - Approval record: `NikoMusicHub-<version>-release-approval.json`.
 - Release notes: only the dated current-version section extracted from `CHANGELOG.md`.
 - Install path for smoke verification: `/Applications/NikoMusicHub.app`.
 
 ## Prerequisites
 
-- macOS 14.2 or newer.
+- macOS 14.2 or newer on Apple silicon (`arm64`).
 - Xcode with Swift 6.x.
 - Developer ID Application certificate in the keychain for public releases.
 - Notary profile created with `xcrun notarytool store-credentials`.

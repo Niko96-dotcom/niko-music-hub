@@ -31,7 +31,7 @@ fi
 if [[ -z "${NMH_BUILD_ID:-}" ]]; then
   NMH_BUILD_ID="$NMH_MARKETING_VERSION+$(git -C "$NMH_ROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')"
 fi
-NMH_MIN_SYSTEM_VERSION="${NMH_MIN_SYSTEM_VERSION:-14.2}"
+NMH_MIN_SYSTEM_VERSION="${NMH_MIN_SYSTEM_VERSION:-$(nmh_release_min_macos_version)}"
 NMH_LAUNCH_WAIT_SEC="${NMH_LAUNCH_WAIT_SEC:-8}"
 NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-Niko Music Hub}"
 NMH_WINDOW_MIN_WIDTH="${NMH_WINDOW_MIN_WIDTH:-400}"

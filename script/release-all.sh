@@ -101,11 +101,15 @@ COMMIT="$(nmh_git_commit)"
 SHORT_COMMIT="$(nmh_git_short_commit)"
 BUILD_NUMBER="$(nmh_git_build_number)"
 BUILD_ID="$VERSION+$SHORT_COMMIT"
+RELEASE_ARCHITECTURES="$(nmh_release_architectures)"
+MIN_MACOS_VERSION="$(nmh_release_min_macos_version)"
+nmh_validate_release_host_architecture
 ARTIFACT_LABEL="$VERSION"
 if [[ "$MODE" == "local-only" ]]; then
   ARTIFACT_LABEL="$VERSION+$SHORT_COMMIT.LOCAL-ONLY-UNSIGNED"
 fi
 ARTIFACT_NAME="NikoMusicHub-$ARTIFACT_LABEL.dmg"
+SIGNING_IDENTITY_RECORD="ad-hoc"
 
 if [[ "$MODE" == "public" ]]; then
   : "${NMH_DEVELOPER_ID_APPLICATION:?public release requires NMH_DEVELOPER_ID_APPLICATION}"
@@ -125,7 +129,11 @@ LOG_FILE="${LOG_FILE:-$RELEASE_DIR/release.log}"
 : >"$LOG_FILE"
 
 log "release identity"
-printf 'version=%s\nbundle_id=%s\ncommit=%s\ntag=%s\nbuild_id=%s\nmode=%s\n' "$VERSION" "$BUNDLE_ID" "$COMMIT" "$TAG" "$BUILD_ID" "$MODE" | tee -a "$LOG_FILE"
+if [[ "$MODE" == "public" ]]; then
+  SIGNING_IDENTITY_RECORD="$NMH_DEVELOPER_ID_APPLICATION"
+fi
+printf 'version=%s\nbundle_id=%s\ncommit=%s\ntag=%s\nbuild_id=%s\narchitectures=%s\nminimum_macos=%s\nsigning_identity=%s\nmode=%s\n' \
+  "$VERSION" "$BUNDLE_ID" "$COMMIT" "$TAG" "$BUILD_ID" "$RELEASE_ARCHITECTURES" "$MIN_MACOS_VERSION" "$SIGNING_IDENTITY_RECORD" "$MODE" | tee -a "$LOG_FILE"
 
 if [[ "$SKIP_TESTS" != true && "$EMERGENCY_SKIP_TESTS" != true ]]; then
   log "local gates"
@@ -226,6 +234,7 @@ if rg -n '/' "$DMG.sha256" >/dev/null; then
   exit 1
 fi
 ARTIFACT_SHA="$(awk '{print $1}' "$DMG.sha256")"
+ARTIFACT_SIZE="$(stat -f%z "$DMG")"
 MANIFEST="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-manifest.json"
 MANIFEST_ARGS=(
   manifest
@@ -236,9 +245,13 @@ MANIFEST_ARGS=(
   --commit "$COMMIT"
   --build-id "$BUILD_ID"
   --build-number "$BUILD_NUMBER"
+  --architectures "$RELEASE_ARCHITECTURES"
+  --minimum-macos "$MIN_MACOS_VERSION"
   --artifact "$ARTIFACT_NAME"
+  --artifact-size "$ARTIFACT_SIZE"
   --artifact-sha256 "$ARTIFACT_SHA"
   --created-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  --signing-identity "$SIGNING_IDENTITY_RECORD"
 )
 if [[ "$MODE" == "public" ]]; then
   MANIFEST_ARGS+=(--public-release)
@@ -285,6 +298,7 @@ if [[ "$MODE" == "public" ]]; then
     --gate "release-configuration|./script/ci-release.sh|$TEST_RESULT|$GATE_TIME"
     --gate "thread-sanitizer|./script/ci-tsan.sh|$TEST_RESULT|$GATE_TIME"
     --gate "release-identity|./script/release-version-verify.sh|passed|$GATE_TIME"
+    --gate "release-platform-contract|RELEASE_ARCHITECTURES,Package.swift minimum macOS|passed|$GATE_TIME"
     --gate "public-tree-hygiene|./script/public-tree-hygiene.sh|passed|$GATE_TIME"
     --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|$GATE_TIME"
     --gate "artifact-validation|./script/validate-release-artifact.sh|passed|$GATE_TIME"
@@ -327,7 +341,10 @@ cat >"$REPORT" <<REPORT
 - Commit: $COMMIT
 - Build ID: $BUILD_ID
 - Bundle ID: $BUNDLE_ID
+- Architectures: $RELEASE_ARCHITECTURES
+- Minimum macOS: $MIN_MACOS_VERSION
 - Artifact: $ARTIFACT_NAME
+- Artifact size: $ARTIFACT_SIZE bytes
 - SHA-256: $ARTIFACT_SHA
 - Manifest: $(basename "$MANIFEST")
 - Approval: $([[ -n "$APPROVAL" ]] && basename "$APPROVAL" || echo "not generated for local-only mode")
