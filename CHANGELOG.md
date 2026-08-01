@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.2 - 2026-08-01
+
+- Clean stale project metadata and close the release-preparation debt carried forward from 1.4.1.
+- Harden public artifact provenance with an explicit arm64/macOS 14.2 platform contract, exact artifact size, signing, and manifest validation.
+- Preserve fail-closed local release engineering across local-only and public workflows, including exact-commit checks and hosted-artifact verification.
+
 ## 1.4.1 - 2026-07-22
 
 - Harden Project Vault Done-trigger archiving, Keep Local restore behavior, canonical path matching, and Cubase activity detection.
