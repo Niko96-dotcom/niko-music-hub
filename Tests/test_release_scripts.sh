@@ -7,6 +7,11 @@ source "$ROOT/script/release-env.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/nmh-release-tests.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
+# These tests intentionally exercise the missing-credential fail-closed path.
+# Keep them deterministic when the surrounding public release command has
+# valid signing/notary/UAT credentials in its environment.
+unset NMH_DEVELOPER_ID_APPLICATION NMH_NOTARY_PROFILE NMH_RELEASE_UAT_EVIDENCE
+
 assert_fail() {
   local name="$1"
   shift
