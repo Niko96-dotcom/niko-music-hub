@@ -42,7 +42,9 @@ LOG_FILE="$OUTPUT_DIR/smoke.log"
 mkdir -p "$OUTPUT_DIR"
 trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
-SUCCESS_URL="https://www.youtube.com/watch?v=BaW_jenozKc"
+# Keep this aligned with the durable public clip used by the real UAT record.
+# The historical yt-dlp test clip BaW_jenozKc is no longer available.
+SUCCESS_URL="https://youtu.be/jNQXAC9IVRw"
 FAIL_URL="https://www.youtube.com/watch?v=invalidvideo123456789"
 
 echo "== helper path smoke (stripped PATH + --ffmpeg-location) =="
