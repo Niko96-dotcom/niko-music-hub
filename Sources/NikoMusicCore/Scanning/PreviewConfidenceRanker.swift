@@ -157,7 +157,11 @@ public struct PreviewConfidenceRanker: Sendable {
             score -= 35
             reasons.append("filename:negative-\(token)")
         }
-        if filenameTokens.contains("cover"), PreviewFilenameSemantics.isPartialExport(filenameTokens) {
+        for token in PreviewFilenameSemantics.taggedPartialExportTokens(in: candidate.fileName).sorted() {
+            score -= 35
+            reasons.append("filename:negative-\(token)")
+        }
+        if filenameTokens.contains("cover"), PreviewFilenameSemantics.isPartialExport(in: candidate.fileName) {
             score -= 35
             reasons.append("filename:negative-cover")
         }

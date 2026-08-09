@@ -82,18 +82,8 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
     }
 
     static func detectedRole(from fileName: String) -> PreviewDetectedRole {
-        let tokens = PreviewFilenameSemantics.tokens(in: fileName)
-        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.drumStemTokens, in: tokens) {
-            return .stems
-        }
-        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.instrumentalTokens, in: tokens) {
-            return .instrumental
-        }
-        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.vocalStemTokens, in: tokens) {
-            return .acapella
-        }
-        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.stemTokens, in: tokens) {
-            return .stems
+        if let partialExportRole = PreviewFilenameSemantics.partialExportRole(in: fileName) {
+            return partialExportRole
         }
 
         let lower = fileName.lowercased()

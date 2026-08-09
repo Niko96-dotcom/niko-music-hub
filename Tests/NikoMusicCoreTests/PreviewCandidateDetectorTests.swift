@@ -57,6 +57,33 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         )
     }
 
+    func testTaggedInstrumentAndEffectsExportsAreDetectedWithoutDemotingSongTitles() {
+        [
+            "Song demo (Cover) (Bass).wav",
+            "Song demo (Cover) (FX).wav",
+            "Song demo (Cover) (Synth).wav",
+            "Song demo (Cover) (Guitar).wav",
+            "Song demo (Cover) (Piano).wav",
+        ].forEach { fileName in
+            XCTAssertEqual(
+                PreviewCandidateDetector.detectedRole(from: fileName),
+                .stems,
+                fileName
+            )
+        }
+
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Turn Up The Bass master.wav"),
+            .master,
+            "An untagged word in a real song title is not an isolated-instrument export."
+        )
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Song cover demo.wav"),
+            .mainMix,
+            "A full-song cover without a component tag stays eligible as the preview."
+        )
+    }
+
     func testSkipsWAVDurationReadsForCloudStoragePaths() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubPreview-\(UUID().uuidString)", isDirectory: true)

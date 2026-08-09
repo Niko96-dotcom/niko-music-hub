@@ -433,6 +433,56 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         }
     }
 
+    func testFullDemoBeatsTaggedCoverComponentExports() {
+        let demoName = "drinking kinda situation demo v1 (day one 4).wav"
+        let fullDemo = candidate(
+            name: demoName,
+            role: PreviewCandidateDetector.detectedRole(from: demoName),
+            modifiedAt: baseDate,
+            version: 1,
+            ext: "wav",
+            duration: nil,
+            folderRole: .other
+        )
+        let context = PreviewRankingProjectContext(
+            anchorCPRVersion: 4,
+            titleTokens: ["drinking", "situation"]
+        )
+
+        for label in ["Bass", "FX", "Synth", "Guitar", "Piano"] {
+            let componentName = demoName.replacingOccurrences(
+                of: ".wav",
+                with: " (Cover) (\(label)).wav"
+            )
+            let component = candidate(
+                name: componentName,
+                role: PreviewCandidateDetector.detectedRole(from: componentName),
+                modifiedAt: baseDate.addingTimeInterval(86_400),
+                version: 1,
+                ext: "wav",
+                duration: 599,
+                folderRole: .other
+            )
+
+            let ranked = ranker.rank([component, fullDemo], projectContext: context)
+            let scoredComponent = ranked.first { $0.fileName == componentName }
+
+            XCTAssertEqual(ranked.first?.fileName, demoName, label)
+            XCTAssertEqual(scoredComponent?.detectedRole, .stems, label)
+            XCTAssertTrue(scoredComponent?.confidenceReasons.contains("role:stem-like") == true, label)
+            XCTAssertTrue(
+                scoredComponent?.confidenceReasons.contains("filename:negative-\(label.lowercased())") == true,
+                label
+            )
+            XCTAssertTrue(scoredComponent?.confidenceReasons.contains("filename:negative-cover") == true, label)
+            XCTAssertEqual(
+                ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
+                .score,
+                "\(label) must not reach a recency or duration tiebreak."
+            )
+        }
+    }
+
     func testFullSongCoverIsNotPenalizedWithoutAPartialExportLabel() {
         let fullCover = candidate(
             name: "Song cover demo.wav",

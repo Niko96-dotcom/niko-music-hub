@@ -22,11 +22,72 @@ enum PreviewFilenameSemantics {
         "stem", "stems",
     ]
 
+    /// Isolated-instrument and effects exports are commonly labelled in a trailing
+    /// parenthesized tag, for example `Song demo (Cover) (Bass).wav`.  Do not
+    /// match these labels everywhere in a filename: a legitimate full song can
+    /// be titled "Turn Up The Bass".  The tag requirement lets us reject the
+    /// exported part without misclassifying the song title.
+    static let taggedStemTokens: Set<String> = [
+        "bass", "sub", "subbass",
+        "guitar", "guitars",
+        "key", "keys", "piano",
+        "synth", "synths", "synthesizer",
+        "fx", "sfx", "effect", "effects",
+        "pad", "pads",
+        "string", "strings",
+        "brass", "horn", "horns",
+    ]
+
     static func isPartialExport(_ tokens: Set<String>) -> Bool {
         containsAny(drumStemTokens, in: tokens)
             || containsAny(instrumentalTokens, in: tokens)
             || containsAny(vocalStemTokens, in: tokens)
             || containsAny(stemTokens, in: tokens)
+    }
+
+    static func isPartialExport(in fileName: String) -> Bool {
+        let allTokens = tokens(in: fileName)
+        return isPartialExport(allTokens)
+            || !taggedPartialExportTokens(in: fileName).isEmpty
+    }
+
+    /// Returns the role implied by a filename's explicit partial-export labels.
+    /// The order deliberately preserves the more descriptive historic roles for
+    /// vocals and instrumentals before falling back to the generic stem role.
+    static func partialExportRole(in fileName: String) -> PreviewDetectedRole? {
+        let allTokens = tokens(in: fileName)
+        if containsAny(vocalStemTokens, in: allTokens) {
+            return .acapella
+        }
+        if containsAny(instrumentalTokens, in: allTokens) {
+            return .instrumental
+        }
+        if containsAny(drumStemTokens, in: allTokens)
+            || containsAny(stemTokens, in: allTokens)
+            || !taggedPartialExportTokens(in: fileName).isEmpty {
+            return .stems
+        }
+        return nil
+    }
+
+    /// Extracts role labels from parenthesized filename annotations.  This is
+    /// intentionally conservative: `Bass` in a song title is not enough to
+    /// declare a preview a stem, while `(Bass)` is an export annotation.
+    static func taggedPartialExportTokens(in fileName: String) -> Set<String> {
+        let stem = (fileName as NSString).deletingPathExtension
+        var tagTokens: Set<String> = []
+        var remaining = Substring(stem)
+
+        while let opening = remaining.firstIndex(of: "(") {
+            let afterOpening = remaining.index(after: opening)
+            guard let closing = remaining[afterOpening...].firstIndex(of: ")") else {
+                break
+            }
+            tagTokens.formUnion(tokens(in: String(remaining[afterOpening..<closing])))
+            remaining = remaining[remaining.index(after: closing)...]
+        }
+
+        return tagTokens.intersection(taggedStemTokens)
     }
 
     static func tokens(in fileName: String) -> Set<String> {

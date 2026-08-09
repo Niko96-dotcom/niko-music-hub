@@ -17,6 +17,47 @@ final class PreviewAutoSelectionNormalizerTests: XCTestCase {
         XCTAssertTrue(normalizedVocals?.confidenceReasons.contains("filename:negative-vocals") == true)
     }
 
+    func testLegacyAutoSnapshotReclassifiesTaggedComponentsAndSelectsFullDemo() {
+        let folder = URL(fileURLWithPath: "/tmp/legacy-preview-components", isDirectory: true)
+        let demoName = "drinking kinda situation demo v1 (day one 4).wav"
+        let demo = legacyCandidate(name: demoName, folder: folder, duration: 39)
+        let components = ["Bass", "FX", "Synth"].map { label in
+            legacyCandidate(
+                name: "drinking kinda situation demo v1 (day one 4) (Cover) (\(label)).wav",
+                folder: folder,
+                duration: 87
+            )
+        }
+        let legacy = Song(
+            folderPath: folder,
+            originalFolderName: "ONE LIME CAMP 4",
+            displayTitle: "ONE LIME CAMP 4",
+            projectVersions: [
+                ProjectVersion(
+                    filePath: folder.appendingPathComponent("ONE LIME CAMP 4.cpr"),
+                    fileName: "ONE LIME CAMP 4.cpr",
+                    modifiedAt: date,
+                    detectedVersionNumber: 4
+                ),
+            ],
+            previewCandidates: components + [demo],
+            mainPreviewCandidateID: components[0].id
+        )
+
+        let normalized = PreviewAutoSelectionNormalizer.normalized(legacy)
+
+        XCTAssertEqual(normalized.mainPreviewCandidateID, demo.id)
+        XCTAssertEqual(normalized.previewCandidates.first?.id, demo.id)
+        for label in ["Bass", "FX", "Synth"] {
+            let component = try! XCTUnwrap(
+                normalized.previewCandidates.first { $0.fileName.contains("(\(label))") }
+            )
+            XCTAssertEqual(component.detectedRole, .stems, label)
+            XCTAssertTrue(component.confidenceReasons.contains("filename:negative-\(label.lowercased())"), label)
+            XCTAssertTrue(component.confidenceReasons.contains("filename:negative-cover"), label)
+        }
+    }
+
     func testManualSnapshotIsNotReclassifiedOrReselected() {
         var song = legacySong().song
         song.previewSelectionMode = .manual
