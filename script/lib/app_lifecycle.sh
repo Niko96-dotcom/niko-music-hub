@@ -74,8 +74,9 @@ NMH_INFO_PLIST="$NMH_APP_CONTENTS/Info.plist"
 NMH_ENTITLEMENTS_PLIST="$NMH_APP_CONTENTS/NikoMusicHub.entitlements"
 NMH_UI_PROBE="${NMH_UI_PROBE:-$NMH_SCRIPT_DIR/ui_probe.swift}"
 
-nmh_running_dist_app_pids() {
-  /bin/ps -axo pid=,command= | /usr/bin/awk -v binary="$NMH_APP_BINARY" '
+nmh_running_app_binary_pids() {
+  local app_binary="${1:?missing app binary path}"
+  /bin/ps -axo pid=,command= | /usr/bin/awk -v binary="$app_binary" '
     {
       pid = $1
       sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0)
@@ -87,19 +88,30 @@ nmh_running_dist_app_pids() {
   '
 }
 
-nmh_stop_app() {
-  local force="${1:-false}"
+nmh_running_dist_app_pids() {
+  nmh_running_app_binary_pids "$NMH_APP_BINARY"
+}
+
+nmh_stop_app_binary() {
+  local app_binary="${1:?missing app binary path}"
+  local force="${2:-false}"
   local -a pids=()
   local pid attempt
+
+  if [[ "$app_binary" != /* ]]; then
+    echo "app binary path must be absolute: $app_binary" >&2
+    return 2
+  fi
+
   while IFS= read -r pid; do
     [[ "$pid" =~ ^[0-9]+$ ]] && pids+=("$pid")
-  done < <(nmh_running_dist_app_pids)
+  done < <(nmh_running_app_binary_pids "$app_binary")
   ((${#pids[@]} > 0)) || return 0
 
   /bin/kill -TERM "${pids[@]}" >/dev/null 2>&1 || true
   for attempt in {1..10}; do
     sleep 0.3
-    if ! nmh_running_dist_app_pids | /usr/bin/grep -q '[0-9]'; then
+    if ! nmh_running_app_binary_pids "$app_binary" | /usr/bin/grep -q '[0-9]'; then
       return 0
     fi
   done
@@ -108,13 +120,22 @@ nmh_stop_app() {
     pids=()
     while IFS= read -r pid; do
       [[ "$pid" =~ ^[0-9]+$ ]] && pids+=("$pid")
-    done < <(nmh_running_dist_app_pids)
+    done < <(nmh_running_app_binary_pids "$app_binary")
     ((${#pids[@]} == 0)) || /bin/kill -KILL "${pids[@]}" >/dev/null 2>&1 || true
-    return 0
+    for attempt in {1..10}; do
+      sleep 0.1
+      if ! nmh_running_app_binary_pids "$app_binary" | /usr/bin/grep -q '[0-9]'; then
+        return 0
+      fi
+    done
   fi
 
-  echo "timed out stopping dist app; refusing to signal unrelated installed copies" >&2
+  echo "timed out stopping app at $app_binary; refusing to signal unrelated installed copies" >&2
   return 1
+}
+
+nmh_stop_app() {
+  nmh_stop_app_binary "$NMH_APP_BINARY" "${1:-false}"
 }
 
 nmh_swift() {

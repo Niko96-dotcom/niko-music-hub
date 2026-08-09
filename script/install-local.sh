@@ -10,6 +10,7 @@ if [[ "${1:-}" == "--app-path" ]]; then
   shift 2
 fi
 [[ $# -eq 0 ]] || { echo "usage: $0 [--app-path PATH]" >&2; exit 2; }
+[[ "$APP_PATH" = /* ]] || { echo "--app-path must be absolute: $APP_PATH" >&2; exit 2; }
 
 EXPECTED_BUILD_ID="$("$ROOT/script/local-build-identity.sh")"
 export NMH_BUILD_ID="$EXPECTED_BUILD_ID"
@@ -18,7 +19,7 @@ export NMH_SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
 # shellcheck source=lib/app_lifecycle.sh
 source "$ROOT/script/lib/app_lifecycle.sh"
 
-nmh_stop_app true
+TARGET_APP_BINARY="$APP_PATH/Contents/MacOS/$NMH_APP_NAME"
 nmh_build_bundle
 
 SOURCE_BINARY_SHA256="$(shasum -a 256 "$NMH_APP_BINARY" | awk '{print $1}')"
@@ -45,6 +46,7 @@ NMH_EXPECTED_BINARY_SHA256="$SOURCE_BINARY_SHA256" \
   "$ROOT/script/verify-installed-release.sh" "$STAGING_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$STAGING_PATH"
 
+nmh_stop_app_binary "$TARGET_APP_BINARY" true
 if [[ -d "$APP_PATH" ]]; then
   mv "$APP_PATH" "$BACKUP_PATH"
 fi

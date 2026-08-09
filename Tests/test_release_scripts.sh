@@ -84,6 +84,9 @@ assert_fail derived-output-override env NMH_APP_BUNDLE="$TMP/unsafe.app" bash -c
 assert_contains "$TMP/derived-output-override.err" "derived from NMH_DIST_DIR"
 assert_fail output-outside-repo env NMH_DIST_DIR="$TMP/outside" bash -c "source '$ROOT/script/lib/app_lifecycle.sh'"
 assert_contains "$TMP/output-outside-repo.err" "output directory must stay beneath"
+assert_pass lifecycle-missing-target bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_stop_app_binary '$TMP/Missing.app/Contents/MacOS/NikoMusicHub' true"
+assert_fail lifecycle-relative-target bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_stop_app_binary 'relative/NikoMusicHub' true"
+assert_contains "$TMP/lifecycle-relative-target.err" "app binary path must be absolute"
 
 BUNDLE="$TMP/Test.app"
 mkdir -p "$BUNDLE/Contents"
@@ -154,6 +157,7 @@ assert_contains "$ROOT/script/validate-release-artifact.sh" 'lipo -archs "$BINAR
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME"'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'nmh_running_dist_app_pids'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'nmh_stop_app_binary()'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'refusing to signal unrelated installed copies'
 assert_contains "$ROOT/script/release-all.sh" 'RELEASE_BUILD_CONFIGURATION="release"'
 assert_contains "$ROOT/script/release-all.sh" 'export NMH_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION"'
@@ -165,6 +169,10 @@ assert_contains "$ROOT/script/release-all.sh" 'NMH_EXPECTED_BUILD_CONFIGURATION=
 assert_contains "$ROOT/script/verify-installed-release.sh" 'installed source commit mismatch'
 assert_contains "$ROOT/script/verify-installed-release.sh" 'installed build configuration mismatch'
 assert_contains "$ROOT/script/install-local.sh" 'NMH_EXPECTED_SOURCE_COMMIT="$NMH_SOURCE_COMMIT"'
+assert_contains "$ROOT/script/install-local.sh" 'TARGET_APP_BINARY="$APP_PATH/Contents/MacOS/$NMH_APP_NAME"'
+assert_contains "$ROOT/script/install-local.sh" 'nmh_stop_app_binary "$TARGET_APP_BINARY" true'
+assert_not_contains "$ROOT/script/install-local.sh" 'nmh_stop_app true'
+assert_order 'nmh_stop_app_binary "$TARGET_APP_BINARY" true' 'mv "$APP_PATH" "$BACKUP_PATH"' "$ROOT/script/install-local.sh"
 
 echo "== remote publication integrity stays fail-closed =="
 assert_contains "$ROOT/script/release-all.sh" 'git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}"'
