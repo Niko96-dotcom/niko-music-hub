@@ -485,8 +485,8 @@ final class PreviewConfidenceRankerTests: XCTestCase {
 
     func testFullSongCoverIsNotPenalizedWithoutAPartialExportLabel() {
         let fullCover = candidate(
-            name: "Song cover demo.wav",
-            role: PreviewCandidateDetector.detectedRole(from: "Song cover demo.wav"),
+            name: "Song demo (Cover).wav",
+            role: PreviewCandidateDetector.detectedRole(from: "Song demo (Cover).wav"),
             modifiedAt: baseDate,
             version: 1,
             ext: "wav",
