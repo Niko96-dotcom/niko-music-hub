@@ -11,13 +11,24 @@ struct ArchiveBoardView: View {
     /// Opens the archive-root folder picker (owned by the browser shell).
     let onChooseRoot: () -> Void
 
+    @StateObject private var projectionCache: ArchiveBoardProjectionCache
     @State private var columnOrigins: [String: CGFloat] = [:]
     @State private var boardViewportWidth: CGFloat = 0
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
     @FocusState private var searchFocused: Bool
 
+    init(viewModel: ArchiveBrowserViewModel, onChooseRoot: @escaping () -> Void) {
+        self.viewModel = viewModel
+        self.onChooseRoot = onChooseRoot
+        _projectionCache = StateObject(
+            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs)
+        )
+    }
+
+    /// Reading the cache is constant-time; `ArchiveBoardProjection.columns`
+    /// only runs when the filtered-song publisher emits a changed input.
     private var columns: [ArchiveBoardColumn] {
-        ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
+        projectionCache.columns
     }
 
     var body: some View {
@@ -86,6 +97,11 @@ struct ArchiveBoardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
             searchFocused = true
+        }
+        // Selection publishes on the same view model but never emits on this
+        // property publisher, so it cannot trigger a full board re-projection.
+        .onReceive(viewModel.$filteredSongs) { songs in
+            projectionCache.refresh(with: songs)
         }
     }
 
@@ -538,10 +554,20 @@ private struct ArchiveBoardCardView: View {
         }
         .opacity(vaultPresentation?.state == .archived ? 0.68 : 1)
         .contentShape(Rectangle())
-        // Double-click before single so both register: first click selects
-        // (loads the player bar), the second opens detail.
-        .onTapGesture(count: 2, perform: onOpenDetail)
-        .onTapGesture(perform: onSelect)
+        // A separate double-tap recognizer must not make the one-click
+        // selection wait for macOS's double-click disambiguation interval.
+        // The gestures are deliberately simultaneous: click one selects
+        // immediately; click two opens detail. `selectSongOnBoard` is
+        // idempotent for the already-selected card.
+        .onTapGesture {
+            performInteraction(.singleClick)
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded { _ in
+                performInteraction(.doubleClick)
+            },
+            including: .gesture
+        )
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering
@@ -553,6 +579,15 @@ private struct ArchiveBoardCardView: View {
             : "Click to preview \(song.effectiveDisplayTitle) — restore it locally before changing its stage")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(song.effectiveDisplayTitle)
+        .accessibilityHint("Press to preview. Use Open song detail to view details.")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(.default) {
+            performInteraction(.accessibilityDefault)
+        }
+        .accessibilityAction(named: "Open song detail") {
+            performInteraction(.accessibilityOpenDetail)
+        }
     }
 
     private var captionLine: String {
@@ -573,6 +608,41 @@ private struct ArchiveBoardCardView: View {
     private var cardFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
         return isHovered ? Color.white.opacity(0.08) : Color.white.opacity(0.05)
+    }
+
+    private func performInteraction(_ activation: ArchiveBoardCardInteractionPolicy.Activation) {
+        switch ArchiveBoardCardInteractionPolicy.action(for: activation) {
+        case .select:
+            onSelect()
+        case .openDetail:
+            onOpenDetail()
+        }
+    }
+}
+
+/// Keeps the interaction contract testable without making a gesture recognizer
+/// wait on another recognizer's failure. The single-click gesture owns preview
+/// selection; the simultaneous double-click gesture owns detail navigation.
+enum ArchiveBoardCardInteractionPolicy {
+    enum Activation: Equatable {
+        case singleClick
+        case doubleClick
+        case accessibilityDefault
+        case accessibilityOpenDetail
+    }
+
+    enum Action: Equatable {
+        case select
+        case openDetail
+    }
+
+    static func action(for activation: Activation) -> Action {
+        switch activation {
+        case .singleClick, .accessibilityDefault:
+            .select
+        case .doubleClick, .accessibilityOpenDetail:
+            .openDetail
+        }
     }
 }
 

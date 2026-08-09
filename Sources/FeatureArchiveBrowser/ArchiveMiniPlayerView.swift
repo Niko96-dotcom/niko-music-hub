@@ -269,9 +269,18 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         }
     }
 
-    /// Unconditional teardown — used when the coordinator broadcasts a global stop.
+    /// Releases a prepared or playing player when the coordinator broadcasts a global stop.
+    ///
+    /// List rows bind their URL without allocating AVFoundation state. Those bindings are
+    /// intentionally retained: resetting every idle row in response to another row's
+    /// playback would create a broad SwiftUI publication fan-out.
     func forceStop() {
+        guard hasPlaybackResources else { return }
         stop()
+    }
+
+    private var hasPlaybackResources: Bool {
+        player != nil || playerItem != nil || timeObserver != nil || prepareTask != nil
     }
 
     private func ensurePlayer(for url: URL) {

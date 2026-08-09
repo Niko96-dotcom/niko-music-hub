@@ -21,8 +21,13 @@ final class ArchivePlaybackCoordinator: ObservableObject {
         }
     }
 
-    /// Stops every archive preview player. Models observe `stopGeneration` and tear down.
+    /// Stops every archive preview player that could currently be audible.
+    ///
+    /// Selection changes are common, while an audible preview is not. Keeping an idle
+    /// coordinator silent avoids invalidating every mounted archive row just to confirm
+    /// that there is nothing to stop.
     func stopAllPlayback() {
+        guard activeURL != nil else { return }
         activeURL = nil
         stopGeneration &+= 1
     }

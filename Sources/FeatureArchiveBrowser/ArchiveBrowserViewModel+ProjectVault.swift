@@ -2,6 +2,20 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
+/// The small, immutable subset of settings that determines Project Vault card
+/// state. It is loaded once while refreshing the presentation cache, never from
+/// a SwiftUI card render.
+struct ProjectVaultPresentationContext: Equatable {
+    let activeRoot: StoredMusicRoot?
+    let keepLocalProjectIDs: Set<String>
+
+    init?(settings: AppSettings) {
+        guard settings.vault.isEnabled else { return nil }
+        activeRoot = settings.musicRoots.first { $0.id == settings.vault.activeRootID }
+        keepLocalProjectIDs = settings.vault.keepLocalProjectIDs
+    }
+}
+
 /// Archive-only Project Vault cards are restore targets, not workflow inputs.
 /// Keeping this decision shared between card surfaces and the view model prevents
 /// drag/drop or menu affordances from bypassing the same safety boundary.
@@ -17,6 +31,7 @@ extension ArchiveBrowserViewModel {
     /// restarts observation, and refreshes vault recovery/snapshots without requiring a relaunch.
     public func applyProjectVaultSettingsChange() {
         guard !runtime.usesFixtureRoot else {
+            refreshProjectVaultPresentationContext()
             Task {
                 await projectVaultRuntime?.recoverAtLaunch()
                 await refreshProjectVaultSnapshots()
@@ -26,6 +41,7 @@ extension ArchiveBrowserViewModel {
 
         let previousRoots = roots.standardizedArchivePaths
         loadRootsFromSettings()
+        refreshProjectVaultPresentationContext()
         let rootsChanged = previousRoots != roots.standardizedArchivePaths
 
         if rootsChanged {
@@ -52,9 +68,7 @@ extension ArchiveBrowserViewModel {
     /// archive scanner never walks the Dropbox root, but a verified vault snapshot can
     /// still project an archive-only project into the Hub when the user asks to see it.
     var canBrowseArchivedProjects: Bool {
-        guard projectVaultRuntime != nil,
-              let settings = try? settingsStore.loadSettings() else { return false }
-        return settings.vault.isEnabled
+        projectVaultRuntime != nil && projectVaultPresentationContext != nil
     }
 
     func setShowArchivedProjects(_ isShown: Bool) {
@@ -82,21 +96,71 @@ extension ArchiveBrowserViewModel {
     }
 
     func projectVaultPresentation(for song: Song) -> ProjectVaultCardPresentation? {
-        guard let settings = try? settingsStore.loadSettings(), settings.vault.isEnabled else { return nil }
+        projectVaultPresentationsBySongID[song.id]
+    }
+
+    /// Loads the narrow settings context at an explicit settings boundary, then
+    /// rebuilds the card map. The render path itself never calls `SettingsStore`.
+    func refreshProjectVaultPresentationContext(notifyWhenChanged: Bool = true) {
+        let nextContext = (try? settingsStore.loadSettings())
+            .flatMap(ProjectVaultPresentationContext.init(settings:))
+        let contextChanged = nextContext != projectVaultPresentationContext
+        projectVaultPresentationContext = nextContext
+        let presentationsChanged = rebuildProjectVaultPresentationCache(notifyWhenChanged: false)
+        if notifyWhenChanged && (contextChanged || presentationsChanged) {
+            objectWillChange.send()
+        }
+    }
+
+    /// Rebuilds immutable card data at a catalog or snapshot boundary. This is
+    /// intentionally internal: `songs` is owned in the primary view-model file
+    /// and calls this before it publishes a replacement catalog.
+    @discardableResult
+    func rebuildProjectVaultPresentationCache(
+        for songs: [Song]? = nil,
+        notifyWhenChanged: Bool = true
+    ) -> Bool {
+        let context = projectVaultPresentationContext
+        let cacheSongs = songs ?? self.songs
+        var nextPresentations: [String: ProjectVaultCardPresentation] = [:]
+        nextPresentations.reserveCapacity(cacheSongs.count)
+        if let context {
+            for song in cacheSongs {
+                if let presentation = makeProjectVaultPresentation(for: song, context: context) {
+                    // Catalogs are normally de-duplicated before publication. Keep
+                    // this assignment safe for malformed/manual test input too.
+                    nextPresentations[song.id] = presentation
+                }
+            }
+        }
+
+        guard nextPresentations != projectVaultPresentationsBySongID else {
+            return false
+        }
+        projectVaultPresentationsBySongID = nextPresentations
+        if notifyWhenChanged {
+            objectWillChange.send()
+        }
+        return true
+    }
+
+    private func makeProjectVaultPresentation(
+        for song: Song,
+        context: ProjectVaultPresentationContext
+    ) -> ProjectVaultCardPresentation? {
         if let snapshot = projectVaultSnapshot(for: song) {
             var record = snapshot.record
-            record.pinned = settings.vault.keepLocalProjectIDs.contains(snapshot.transfer?.sourceURL.path ?? song.id)
+            record.pinned = context.keepLocalProjectIDs.contains(snapshot.transfer?.sourceURL.path ?? song.id)
             let transferState = snapshot.transfer?.state == .archiveVerified ? nil : snapshot.transfer?.state
             return ProjectVaultCardPresentation(record: record, transferState: transferState)
         }
+        guard let active = context.activeRoot else { return nil }
         let path = song.folderPath.standardizedFileURL.resolvingSymlinksInPath()
-        guard let active = settings.musicRoots.first(where: {
-            $0.id == settings.vault.activeRootID && Self.vaultContains($0.fallbackURL, path)
-        }) else { return nil }
+        guard Self.vaultContains(active.fallbackURL, path) else { return nil }
         let record = ProjectRecord(
             canonicalTitle: song.effectiveDisplayTitle,
             locations: [ProjectLocation(rootID: active.id, relativePath: song.folderPath.lastPathComponent, kind: .active)],
-            pinned: settings.vault.keepLocalProjectIDs.contains(song.id),
+            pinned: context.keepLocalProjectIDs.contains(song.id),
             workflowState: song.workflowStatus,
             lastActivityAt: song.effectiveLatestCPR?.modifiedAt
         )
@@ -116,7 +180,7 @@ extension ArchiveBrowserViewModel {
                 if keepLocal { settings.vault.keepLocalProjectIDs.insert(key) }
                 else { settings.vault.keepLocalProjectIDs.remove(key) }
             }
-            objectWillChange.send()
+            refreshProjectVaultPresentationContext()
         } catch {
             diagnostics.log(.error, "Project Vault Keep Local setting failed: \(error)")
             setStatusMessage("Keep Local could not be saved. No project files were changed.")
@@ -134,6 +198,7 @@ extension ArchiveBrowserViewModel {
                 let snapshot = try await projectVaultRuntime.archive(song: song, trigger: trigger)
                 self.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
                 self.cacheProjectVaultSnapshot(snapshot)
+                self.rebuildProjectVaultPresentationCache()
                 await self.refreshProjectVaultSnapshots()
                 let activeRetained = FileManager.default.fileExists(atPath: song.folderPath.path)
                 self.setStatusMessage(activeRetained
@@ -174,12 +239,14 @@ extension ArchiveBrowserViewModel {
             snapshots.forEach(cacheProjectVaultSnapshot)
             archivedProjectCount = archivedOnlySnapshots(from: snapshots).count
             rebuildProjectVaultCatalog()
+            rebuildProjectVaultPresentationCache()
             enqueueDoneVaultProjectsIfNeeded()
         } catch ProjectVaultRuntimeError.unavailable {
             projectVaultSnapshots = []
             projectVaultSnapshotsByPath.removeAll()
             archivedProjectCount = 0
             rebuildProjectVaultCatalog()
+            rebuildProjectVaultPresentationCache()
         } catch {
             diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
         }

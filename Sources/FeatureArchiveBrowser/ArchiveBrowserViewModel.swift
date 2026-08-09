@@ -15,7 +15,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             invalidateActiveScanForRootChange()
         }
     }
-    @Published var songs: [Song] = []
+    @Published var songs: [Song] = [] {
+        willSet {
+            // Cards ask for their Project Vault state while SwiftUI reconciles a
+            // selection change. Build that immutable lookup before publishing a
+            // new catalog so card rendering never needs to decode settings or
+            // canonicalize filesystem paths.
+            guard newValue != songs else { return }
+            rebuildProjectVaultPresentationCache(for: newValue, notifyWhenChanged: false)
+        }
+    }
     /// Songs discovered by the configured active/scan roots. Project Vault archive
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
@@ -54,6 +63,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
     @Published var projectVaultBusySongIDs: Set<String> = []
+    /// Per-song Project Vault card state prepared when catalog, snapshot, or
+    /// settings inputs change. `projectVaultPresentation(for:)` is deliberately
+    /// a dictionary lookup so list and board re-renders stay main-thread cheap.
+    var projectVaultPresentationsBySongID: [String: ProjectVaultCardPresentation] = [:]
+    /// Cached separately from the card map so a catalog/snapshot update can
+    /// rebuild cards without reloading settings. Settings changes replace this
+    /// context through `refreshProjectVaultPresentationContext()`.
+    var projectVaultPresentationContext: ProjectVaultPresentationContext?
     var projectVaultSnapshotsByPath: [String: ProjectVaultRuntimeSnapshot] = [:]
     /// The latest runtime snapshot list is retained separately from the path lookup
     /// map so changing the archived-project visibility toggle can rebuild the catalog
@@ -177,6 +194,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
         )
         loadRootsFromSettings()
+        refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         loadCollaborators()
         refreshFirstRunState()
         restartArchiveRootWatching()
@@ -383,8 +401,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
-        songDetailsExpanded = false
-        pluginsSectionExpanded = false
+        if songDetailsExpanded {
+            songDetailsExpanded = false
+        }
+        if pluginsSectionExpanded {
+            pluginsSectionExpanded = false
+        }
         // Opening from the board goes to fullscreen detail; list stays list.
         if viewMode == .board {
             viewMode = .boardDetail
@@ -412,8 +434,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // One audible source at a time — same rule as list/detail selection.
         ArchivePlaybackCoordinator.shared.stopAllPlayback()
         selectedSong = song
-        songDetailsExpanded = false
-        pluginsSectionExpanded = false
+        if songDetailsExpanded {
+            songDetailsExpanded = false
+        }
+        if pluginsSectionExpanded {
+            pluginsSectionExpanded = false
+        }
     }
 
     /// Keeps `selectedSong` in sync with the live catalog and current browse results.
