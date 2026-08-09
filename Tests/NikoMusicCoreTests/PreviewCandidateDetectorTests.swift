@@ -38,6 +38,25 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         }
     }
 
+    func testVocalStemLabelsAreDetectedWithoutMatchingUnrelatedWords() {
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "drinking kinda situation demo v1 (day one 4) (Cover) (Vocals).wav"),
+            .acapella
+        )
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Song a cappella.wav"),
+            .acapella
+        )
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Vocaloid demo.wav"),
+            .mainMix
+        )
+        XCTAssertEqual(
+            PreviewCandidateDetector.detectedRole(from: "Song cover demo.wav"),
+            .mainMix
+        )
+    }
+
     func testSkipsWAVDurationReadsForCloudStoragePaths() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubPreview-\(UUID().uuidString)", isDirectory: true)

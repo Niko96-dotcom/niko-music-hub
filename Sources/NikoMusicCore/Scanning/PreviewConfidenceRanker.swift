@@ -4,7 +4,8 @@ public struct PreviewConfidenceRanker: Sendable {
     private static let negativeTokens = [
         "instr", "instrumental", "acapella", "vox only", "drums only",
         "drum", "drums", "perc", "percussion", "drumkit", "kit only",
-        "stem", "stems", "ref", "reference", "test", "temp", "old", "backup",
+        "stem", "stems", "vocal", "vocals", "vox", "cappella", "capella",
+        "ref", "reference", "test", "temp", "old", "backup",
     ]
 
     private static let extensionPreference: [String: Double] = [
@@ -145,15 +146,20 @@ public struct PreviewConfidenceRanker: Sendable {
         }
 
         let lower = candidate.fileName.lowercased()
+        let filenameTokens = PreviewFilenameSemantics.tokens(in: candidate.fileName)
         if maturity == .none {
             if lower.contains("mixdown") || lower.contains("mix") || lower.contains("master") || lower.contains("bounce") {
                 score += 15
                 reasons.append("filename:positive")
             }
         }
-        for token in Self.negativeTokens where lower.contains(token) {
+        for token in Self.negativeTokens where PreviewFilenameSemantics.containsLabel(token, in: filenameTokens) {
             score -= 35
             reasons.append("filename:negative-\(token)")
+        }
+        if filenameTokens.contains("cover"), PreviewFilenameSemantics.isPartialExport(filenameTokens) {
+            score -= 35
+            reasons.append("filename:negative-cover")
         }
 
         if let version = candidate.detectedVersionNumber {

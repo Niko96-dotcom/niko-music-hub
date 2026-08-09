@@ -82,11 +82,21 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
     }
 
     static func detectedRole(from fileName: String) -> PreviewDetectedRole {
+        let tokens = PreviewFilenameSemantics.tokens(in: fileName)
+        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.drumStemTokens, in: tokens) {
+            return .stems
+        }
+        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.instrumentalTokens, in: tokens) {
+            return .instrumental
+        }
+        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.vocalStemTokens, in: tokens) {
+            return .acapella
+        }
+        if PreviewFilenameSemantics.containsAny(PreviewFilenameSemantics.stemTokens, in: tokens) {
+            return .stems
+        }
+
         let lower = fileName.lowercased()
-        if lower.contains("drum") || lower.contains("perc") { return .stems }
-        if lower.contains("instr") || lower.contains("instrumental") { return .instrumental }
-        if lower.contains("acapella") || lower.contains("vox only") { return .acapella }
-        if lower.contains("stem") { return .stems }
         if lower.contains("master") { return .master }
         if lower.contains("mixdown")
             || lower.contains(" mix")

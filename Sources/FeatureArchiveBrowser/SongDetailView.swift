@@ -14,6 +14,7 @@ struct SongDetailView: View {
     @State private var syncedAppNote = ""
     @State private var syncedAliases = ""
     @State private var metadataExpanded = false
+    @State private var previewCandidatePage = 0
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
     private var liveSong: Song {
@@ -53,6 +54,7 @@ struct SongDetailView: View {
         .onChange(of: liveSong.id) { _, _ in
             syncDrafts(from: liveSong)
             metadataExpanded = false
+            previewCandidatePage = 0
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
         }
@@ -60,6 +62,7 @@ struct SongDetailView: View {
             refreshDraftsFromCatalogIfUnedited()
         }
         .onChange(of: liveSong.mainPreviewCandidateID) { _, _ in
+            previewCandidatePage = 0
             viewModel.refreshMixdownAnalysis(for: liveSong)
         }
         .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
@@ -143,12 +146,19 @@ struct SongDetailView: View {
 
     private var previewPanel: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-                Text(mainPreviewLabel ?? "No preview")
-                    .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            HStack(alignment: .top, spacing: HubDesignSystem.Spacing.inlineGap) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CURRENT PREVIEW")
+                        .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+
+                    Text(mainPreviewLabel ?? "No preview")
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 Spacer(minLength: 0)
                 Text(liveSong.previewSelectionMode == .manual ? "Manual" : "Auto")
                     .font(HubDesignSystem.Typography.micro())
@@ -157,7 +167,7 @@ struct SongDetailView: View {
 
             ArchiveWaveformHeroView(
                 url: mainPreviewURL,
-                label: "Preview",
+                label: mainPreviewLabel ?? "No preview",
                 playback: heroPlayback
             )
 
@@ -583,36 +593,74 @@ struct SongDetailView: View {
     @ViewBuilder
     private var alternatePreviewsSection: some View {
         let alternates = rankedPreviews.filter { $0.id != liveSong.mainPreviewCandidateID }
-        if !alternates.isEmpty {
+        let page = ArchivePreviewCandidatePagination.page(
+            from: alternates,
+            requestedIndex: previewCandidatePage
+        )
+        if !page.elements.isEmpty {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-                HubSectionHeader("Preview candidates")
+                HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.inlineGap) {
+                    HubSectionHeader("Preview candidates")
+                    Text("\(page.totalCount)")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    Spacer(minLength: 0)
+                    Text("Page \(page.index + 1) of \(page.pageCount)")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
 
-                ForEach(alternates, id: \.id) { candidate in
-                    VStack(alignment: .leading, spacing: 6) {
-                        ArchiveMiniPlayerView(
-                            url: candidate.filePath,
-                            style: .full,
-                            label: candidate.fileName
-                        )
-                        HStack(spacing: 6) {
-                            HubLabeledButton(
-                                icon: "star",
-                                label: "Set Main",
-                                style: .ghost,
-                                help: "Use this file as the main preview"
-                            ) {
-                                viewModel.setManualMainPreview(for: liveSong, candidateID: candidate.id)
-                            }
-                            HubLabeledButton(
-                                icon: "eye.slash",
-                                label: "Ignore",
-                                style: .ghost,
-                                help: "Hide this preview candidate"
-                            ) {
-                                viewModel.ignorePreviewCandidate(for: liveSong, candidateID: candidate.id)
+                Text("The current preview is shown above. Browse alternates in small pages to keep this detail view responsive.")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                    ForEach(page.elements, id: \.id) { candidate in
+                        VStack(alignment: .leading, spacing: 6) {
+                            ArchiveMiniPlayerView(
+                                url: candidate.filePath,
+                                style: .full,
+                                label: candidate.fileName
+                            )
+                            HStack(spacing: 6) {
+                                HubLabeledButton(
+                                    icon: "star",
+                                    label: "Set Main",
+                                    style: .ghost,
+                                    help: "Use this file as the main preview"
+                                ) {
+                                    viewModel.setManualMainPreview(for: liveSong, candidateID: candidate.id)
+                                }
+                                HubLabeledButton(
+                                    icon: "eye.slash",
+                                    label: "Ignore",
+                                    style: .ghost,
+                                    help: "Hide this preview candidate"
+                                ) {
+                                    viewModel.ignorePreviewCandidate(for: liveSong, candidateID: candidate.id)
+                                }
                             }
                         }
                     }
+                }
+
+                if page.pageCount > 1 {
+                    HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                        Button("Previous") {
+                            previewCandidatePage = page.index - 1
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!page.hasPreviousPage)
+
+                        Button("Next page") {
+                            previewCandidatePage = page.index + 1
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!page.hasNextPage)
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Preview candidate pages")
                 }
             }
         }

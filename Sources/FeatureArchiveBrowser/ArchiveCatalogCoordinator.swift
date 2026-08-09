@@ -300,8 +300,15 @@ struct ArchiveCatalogCoordinator {
             guard let snapshot, snapshot.matchesCurrentRoots(roots), !snapshot.songs.isEmpty else {
                 return (.empty, [])
             }
+            let uniqueSongs = SongCatalogDeduplicator.uniqueByID(snapshot.songs)
             guard hasMetadataSources else {
-                return (.loaded(songs: SongCatalogDeduplicator.uniqueByID(snapshot.songs), scannedAt: snapshot.scannedAt), [])
+                return (
+                    .loaded(
+                        songs: PreviewAutoSelectionNormalizer.normalized(uniqueSongs),
+                        scannedAt: snapshot.scannedAt
+                    ),
+                    []
+                )
             }
             var logs: [String] = []
             let metadata: [String: SongUserMetadata]
@@ -313,11 +320,17 @@ struct ArchiveCatalogCoordinator {
             }
             let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
             let merged = ArchiveMetadataMerger.merge(
-                scanned: SongCatalogDeduplicator.uniqueByID(snapshot.songs),
+                scanned: uniqueSongs,
                 metadataByID: metadata,
                 collaboratorsByID: map
             )
-            return (.loaded(songs: merged, scannedAt: snapshot.scannedAt), logs)
+            return (
+                .loaded(
+                    songs: PreviewAutoSelectionNormalizer.normalized(merged),
+                    scannedAt: snapshot.scannedAt
+                ),
+                logs
+            )
         }.value
         for log in outcome.logs {
             diagnostics.log(.error, log)

@@ -355,6 +355,100 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertEqual(ranked.first?.fileName, "y so serious demo.mp3")
     }
 
+    func testFullDemoBeatsLongerCoverVocalArtifact() {
+        let demoName = "drinking kinda situation demo v1 (day one 4).wav"
+        let vocalsName = "drinking kinda situation demo v1 (day one 4) (Cover) (Vocals).wav"
+        let fullDemo = candidate(
+            name: demoName,
+            role: PreviewCandidateDetector.detectedRole(from: demoName),
+            modifiedAt: baseDate,
+            version: 4,
+            ext: "wav",
+            duration: 39
+        )
+        let vocalArtifact = candidate(
+            name: vocalsName,
+            role: PreviewCandidateDetector.detectedRole(from: vocalsName),
+            modifiedAt: baseDate.addingTimeInterval(60),
+            version: 4,
+            ext: "wav",
+            duration: 87
+        )
+
+        let ranked = ranker.rank([vocalArtifact, fullDemo])
+        let vocals = ranked.first { $0.fileName == vocalsName }
+
+        XCTAssertEqual(ranked.first?.fileName, demoName)
+        XCTAssertEqual(vocals?.detectedRole, .acapella)
+        XCTAssertTrue(vocals?.confidenceReasons.contains("role:stem-like") == true)
+        XCTAssertTrue(vocals?.confidenceReasons.contains("filename:negative-cover") == true)
+        XCTAssertTrue(vocals?.confidenceReasons.contains("filename:negative-vocals") == true)
+        XCTAssertEqual(
+            ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
+            .score,
+            "The longer vocal artifact must not win on the duration tiebreak."
+        )
+    }
+
+    func testFullDemoAndMixBeatCoverVocalArtifactsDespiteVersionRecencyAndDuration() {
+        let fullCandidates = [
+            "Song demo.wav",
+            "Song mix.wav",
+        ]
+        let folders: [PreviewFolderRole] = [.root, .other]
+
+        for fullName in fullCandidates {
+            for fullFolder in folders {
+                for artifactFolder in folders {
+                    let full = candidate(
+                        name: fullName,
+                        role: PreviewCandidateDetector.detectedRole(from: fullName),
+                        modifiedAt: baseDate,
+                        version: 1,
+                        ext: "wav",
+                        duration: 31,
+                        folderRole: fullFolder
+                    )
+                    let artifactName = fullName.replacingOccurrences(of: ".wav", with: " (Cover) (Vocals).wav")
+                    let artifact = candidate(
+                        name: artifactName,
+                        role: PreviewCandidateDetector.detectedRole(from: artifactName),
+                        modifiedAt: baseDate.addingTimeInterval(86_400),
+                        version: 99,
+                        ext: "wav",
+                        duration: 599,
+                        folderRole: artifactFolder
+                    )
+
+                    let ranked = ranker.rank([artifact, full])
+
+                    XCTAssertEqual(ranked.first?.fileName, fullName, "\(fullFolder) versus \(artifactFolder): \(fullName)")
+                    XCTAssertEqual(
+                        ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
+                        .score,
+                        "The artifact must not reach version, duration, or recency tie-breaks."
+                    )
+                }
+            }
+        }
+    }
+
+    func testFullSongCoverIsNotPenalizedWithoutAPartialExportLabel() {
+        let fullCover = candidate(
+            name: "Song cover demo.wav",
+            role: PreviewCandidateDetector.detectedRole(from: "Song cover demo.wav"),
+            modifiedAt: baseDate,
+            version: 1,
+            ext: "wav",
+            duration: 180
+        )
+
+        let ranked = ranker.rank([fullCover])
+
+        XCTAssertEqual(ranked.first?.detectedRole, .mainMix)
+        XCTAssertFalse(ranked.first?.confidenceReasons.contains("filename:negative-cover") == true)
+    }
+
     func testNamedDemoBeatsVersionishPlaceholderWithCPRAnchor() {
         let context = PreviewRankingProjectContext(anchorCPRVersion: 3, titleTokens: ["topline", "day"])
         let placeholder = candidate(
@@ -482,14 +576,15 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         modifiedAt: Date,
         version: Int?,
         ext: String,
-        duration: Double?
+        duration: Double?,
+        folderRole: PreviewFolderRole = .mixdown
     ) -> PreviewCandidate {
-        let folder = URL(fileURLWithPath: "/tmp/fixture/Mixdown", isDirectory: true)
+        let folder = URL(fileURLWithPath: "/tmp/fixture/\(folderRole.rawValue)", isDirectory: true)
         let url = folder.appendingPathComponent(name)
         return PreviewCandidate(
             filePath: url,
             fileName: name,
-            folderRole: .mixdown,
+            folderRole: folderRole,
             modifiedAt: modifiedAt,
             detectedRole: role,
             fileExtension: ext,

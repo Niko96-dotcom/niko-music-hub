@@ -209,6 +209,36 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertEqual(updated.previewCandidates.first?.fileName, "Song A mix.wav")
     }
 
+    func testAutoPreviewPrefersFullDemoOverCoverVocalExport() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let songFolder = root.appendingPathComponent("S2 Seoul", isDirectory: true)
+        let mixdown = songFolder.appendingPathComponent("Mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdown, withIntermediateDirectories: true)
+        let demoName = "drinking kinda situation demo v1 (day one 4).wav"
+        let vocalsName = "drinking kinda situation demo v1 (day one 4) (Cover) (Vocals).wav"
+        FileManager.default.createFile(
+            atPath: mixdown.appendingPathComponent(demoName).path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: mixdown.appendingPathComponent(vocalsName).path,
+            contents: Data("fixture".utf8)
+        )
+
+        let result = try CubaseArchiveScanner().scan(roots: [root])
+        let song = try XCTUnwrap(result.songs.first { $0.originalFolderName == "S2 Seoul" })
+        let main = try XCTUnwrap(song.previewCandidates.first)
+        let vocals = try XCTUnwrap(song.previewCandidates.first { $0.fileName == vocalsName })
+
+        XCTAssertEqual(main.fileName, demoName)
+        XCTAssertEqual(song.mainPreviewCandidateID, main.id)
+        XCTAssertEqual(vocals.detectedRole, .acapella)
+        XCTAssertTrue(vocals.confidenceReasons.contains("filename:negative-cover"))
+        XCTAssertTrue(vocals.confidenceReasons.contains("filename:negative-vocals"))
+    }
+
     func testUnreadableImmediateChildIsSkippedWhileSiblingsScan() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }

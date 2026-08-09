@@ -16,15 +16,28 @@ enum WaveformPeakLoader {
 
     static func loadPeaks(from url: URL, barCount: Int = defaultBarCount) async -> [Float] {
         let targetBars = max(barCount, 8)
-        return await Task.detached(priority: .userInitiated) {
+        let work: Task<[Float], Never> = Task.detached(priority: .utility) {
+            guard !Task.isCancelled else { return [Float]() }
             if let peaks = loadPeaksWithAudioFile(from: url, barCount: targetBars) {
-                return peaks
+                return Task.isCancelled ? [Float]() : peaks
             }
-            return await loadPeaksWithAssetReader(from: url, barCount: targetBars)
-        }.value
+            guard !Task.isCancelled else { return [Float]() }
+            let peaks = await loadPeaksWithAssetReader(from: url, barCount: targetBars)
+            return Task.isCancelled ? [Float]() : peaks
+        }
+
+        // A detail switch cancels its SwiftUI task. Propagate that cancellation into
+        // the detached decoder rather than letting old audio reads compete with the
+        // newly selected song.
+        return await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
     private static func loadPeaksWithAudioFile(from url: URL, barCount: Int) -> [Float]? {
+        guard !Task.isCancelled else { return [] }
         guard let audioFile = try? AVAudioFile(forReading: url) else {
             return nil
         }
@@ -48,6 +61,7 @@ enum WaveformPeakLoader {
         let channelCount = Int(format.channelCount)
 
         for bar in 0..<barCount {
+            guard !Task.isCancelled else { return [] }
             let start = AVAudioFramePosition(
                 (Double(bar) / Double(barCount)) * Double(framesToCover)
             )
@@ -120,6 +134,7 @@ enum WaveformPeakLoader {
 
     /// Fallback for formats `AVAudioFile` rejects — still streams into buckets (no giant array).
     private static func loadPeaksWithAssetReader(from url: URL, barCount: Int) async -> [Float] {
+        guard !Task.isCancelled else { return [] }
         let asset = AVURLAsset(url: url)
         let track: AVAssetTrack
         do {
@@ -130,7 +145,9 @@ enum WaveformPeakLoader {
         } catch {
             return []
         }
+        guard !Task.isCancelled else { return [] }
         let duration = try? await asset.load(.duration)
+        guard !Task.isCancelled else { return [] }
         let reader: AVAssetReader
         do {
             reader = try AVAssetReader(asset: asset)
@@ -167,6 +184,10 @@ enum WaveformPeakLoader {
         let stride = max(1, estimatedSamples / (barCount * 64))
 
         while reader.status == .reading {
+            if Task.isCancelled {
+                reader.cancelReading()
+                return []
+            }
             guard let buffer = output.copyNextSampleBuffer(),
                   let block = CMSampleBufferGetDataBuffer(buffer) else { break }
             var length = 0
@@ -195,6 +216,7 @@ enum WaveformPeakLoader {
             if sampleIndex >= estimatedSamples { break }
         }
 
+        guard !Task.isCancelled else { return [] }
         guard buckets.contains(where: { $0 > 0 }) else { return [] }
         return buckets
     }

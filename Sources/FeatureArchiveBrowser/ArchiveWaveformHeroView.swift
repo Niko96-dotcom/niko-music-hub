@@ -74,6 +74,10 @@ struct ArchiveWaveformHeroView: View {
             // Drop prior song peaks immediately so rapid selection never shows stale bars.
             peaks = []
             isLoadingPeaks = true
+            // Let the detail's first frame commit before asking the cache to inspect a
+            // potentially cloud-backed audio file.
+            await Task.yield()
+            guard !Task.isCancelled else { return }
             // Shared cache — same decode as the list row strip, no second full read.
             let loaded = await WaveformPeakCache.shared.peaks(
                 for: url,
@@ -84,11 +88,12 @@ struct ArchiveWaveformHeroView: View {
             isLoadingPeaks = false
         }
         .onAppear {
-            // Detail hero warms the player; list rows stay lazy until play.
-            playback.prepare(url: url)
+            // Detail hero warms only lightweight metadata. AVPlayer creation and hook
+            // scanning wait for an explicit play/seek action so navigation stays instant.
+            playback.prefetch(url: url)
         }
         .onChange(of: url?.path) { _, _ in
-            playback.prepare(url: url)
+            playback.prefetch(url: url)
         }
         .onChange(of: coordinator.activeURL) { _, active in
             // Pause hero when a list/alternate player takes over (same coordinator contract).

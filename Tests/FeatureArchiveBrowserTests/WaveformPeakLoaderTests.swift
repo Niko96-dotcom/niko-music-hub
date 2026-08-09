@@ -51,6 +51,24 @@ final class WaveformPeakLoaderTests: XCTestCase {
         XCTAssertLessThan(elapsed, 2.5, "Peak load took \(elapsed)s — expected sparse window sampling")
     }
 
+    func testCancelledPeakLoadDoesNotBeginAudioDecode() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("peaks-cancelled-\(UUID().uuidString).wav")
+        try makeMono16BitWAV(samples: Array(repeating: Int16(1_000), count: 44_100 * 30), at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let task = Task { () -> [Float] in
+            // Ensure the cancellation reaches the loader before it creates its detached
+            // AVFoundation work item.
+            await Task.yield()
+            return await WaveformPeakLoader.loadPeaks(from: url, barCount: 120)
+        }
+        task.cancel()
+
+        let peaks = await task.value
+        XCTAssertTrue(peaks.isEmpty)
+    }
+
     @MainActor
     func testSharedCacheEvictsBeyondMaxEntries() async throws {
         await MainActor.run { WaveformPeakCache.shared.clear() }

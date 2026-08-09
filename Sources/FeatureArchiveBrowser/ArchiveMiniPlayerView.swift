@@ -101,6 +101,8 @@ private extension ArchiveMiniPlayerStyle {
 
 @MainActor
 final class ArchiveMiniPlayerModel: ObservableObject {
+    typealias MetadataRevisionLoader = @Sendable (URL) async -> Date?
+
     @Published private(set) var currentTime: Double = 0
     @Published private(set) var duration: Double = 0
     @Published private(set) var hookTime: Double?
@@ -110,7 +112,11 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     private var playerItem: AVPlayerItem?
     private var timeObserver: Any?
     private var hookSeekPending = false
+    /// A hook discovered after play starts may still be applied, but only for the exact
+    /// play request that asked for it. Pausing, stopping, or manually scrubbing revokes it.
+    private var playbackIntentActive = false
     private var prepareTask: Task<Void, Never>?
+    private let metadataRevisionLoader: MetadataRevisionLoader
 
     /// Shared hook/duration caches so list + detail don't re-scan the same mixdown.
     private static var hookCache: [String: CachedTime] = [:]
@@ -119,6 +125,14 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     private struct CachedTime {
         let modifiedAt: Date
         let value: Double
+    }
+
+    init() {
+        metadataRevisionLoader = Self.defaultMetadataRevisionLoader
+    }
+
+    init(metadataRevisionLoader: @escaping MetadataRevisionLoader) {
+        self.metadataRevisionLoader = metadataRevisionLoader
     }
 
     static func clearMetadataCaches() {
@@ -132,14 +146,12 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         durationCache.removeValue(forKey: key)
     }
 
-    private static func fileModifiedAt(_ url: URL) -> Date {
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
-            ?? .distantPast
-    }
-
-    private static func cachedValue(in cache: [String: CachedTime], url: URL) -> Double? {
+    private static func cachedValue(
+        in cache: [String: CachedTime],
+        url: URL,
+        modifiedAt: Date
+    ) -> Double? {
         let key = url.standardizedFileURL.path
-        let modifiedAt = fileModifiedAt(url)
         guard let entry = cache[key], entry.modifiedAt == modifiedAt else { return nil }
         return entry.value
     }
@@ -147,10 +159,24 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     private static func store(
         _ value: Double,
         for url: URL,
+        modifiedAt: Date,
         in cache: inout [String: CachedTime]
     ) {
         let key = url.standardizedFileURL.path
-        cache[key] = CachedTime(modifiedAt: fileModifiedAt(url), value: value)
+        cache[key] = CachedTime(modifiedAt: modifiedAt, value: value)
+    }
+
+    /// A missing revision is intentionally not represented by a sentinel date. Treating an
+    /// unavailable stat as a cache revision would allow stale archive metadata to become valid.
+    private static let defaultMetadataRevisionLoader: MetadataRevisionLoader = { url in
+        let standard = url.standardizedFileURL
+        return await Task.detached(priority: .utility) {
+            guard let values = try? standard.resourceValues(forKeys: [.contentModificationDateKey]),
+                  let modifiedAt = values.contentModificationDate else {
+                return nil
+            }
+            return modifiedAt
+        }.value
     }
 
     func isPlaying(_ url: URL?) -> Bool {
@@ -158,7 +184,10 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         return player.timeControlStatus == .playing
     }
 
-    /// Lightweight bind for list rows — no AVPlayer, no hook scan until play.
+    /// Lightweight bind for list rows — no AVPlayer, no hook scan, and no filesystem
+    /// metadata read until a background warmup explicitly asks for one. Cached metadata
+    /// is intentionally withheld here: a same-path render can have been overwritten since
+    /// its cache entry was stored, and an immediate play must never seek using stale data.
     func bind(url: URL?) {
         guard let url else {
             stop()
@@ -167,42 +196,55 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         if activeURL == url { return }
         stop()
         activeURL = url
-        duration = Self.cachedValue(in: Self.durationCache, url: url) ?? 0
-        hookTime = Self.cachedValue(in: Self.hookCache, url: url)
+        duration = 0
+        hookTime = nil
         currentTime = 0
-        hookSeekPending = hookTime == nil
+        hookSeekPending = true
+        playbackIntentActive = false
     }
 
-    /// Eager prepare for detail/hero — creates the player and warms duration/hook in background.
+    /// Detail-view metadata warmup. This deliberately avoids constructing an AVPlayer or
+    /// running hook analysis: both can trigger expensive audio-file work and must stay off
+    /// the first rendered frame of a song detail view.
+    func prefetch(url: URL?) {
+        guard let url else {
+            stop()
+            return
+        }
+        bind(url: url)
+        scheduleMetadataWarmup(for: url, includesHook: false)
+    }
+
+    /// Allocates playback resources only for an explicit transport action. Duration is warmed
+    /// in the background; hook analysis waits until playback is requested.
     func prepare(url: URL?) {
         guard let url else {
             stop()
             return
         }
-        if activeURL == url, player != nil { return }
-        stop()
-        activeURL = url
+        if activeURL != url {
+            bind(url: url)
+        }
+        if player != nil { return }
         ensurePlayer(for: url)
         currentTime = 0
         hookSeekPending = true
+        playbackIntentActive = false
+        scheduleMetadataWarmup(for: url, includesHook: false)
+    }
 
-        if let cachedDuration = Self.cachedValue(in: Self.durationCache, url: url) {
-            duration = cachedDuration
-        } else {
-            duration = 0
-        }
-        if let cachedHook = Self.cachedValue(in: Self.hookCache, url: url) {
-            hookTime = cachedHook
-            // Keep pending so the first play still jumps to the hook.
-            hookSeekPending = true
-        } else {
-            hookTime = nil
-            hookSeekPending = true
-        }
-
+    private func scheduleMetadataWarmup(
+        for url: URL,
+        seekToHookIfIdle: Bool = false,
+        includesHook: Bool
+    ) {
         prepareTask?.cancel()
         prepareTask = Task { [weak self] in
-            await self?.warmMetadata(for: url)
+            await self?.warmMetadata(
+                for: url,
+                seekToHookIfIdle: seekToHookIfIdle,
+                includesHook: includesHook
+            )
         }
     }
 
@@ -213,23 +255,22 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         }
         guard let player else { return }
 
-        if isPlaying(url) {
+        // AVPlayer can still be buffering when the user taps pause. Intent, rather than only
+        // timeControlStatus, makes that second tap cancel both playback and a pending hook seek.
+        if playbackIntentActive || isPlaying(url) {
+            playbackIntentActive = false
             player.pause()
             ArchivePlaybackCoordinator.shared.endPlayback(for: url)
             return
         }
 
+        playbackIntentActive = true
         ArchivePlaybackCoordinator.shared.beginPlayback(for: url)
 
-        // Play immediately — don't block on hook analysis.
-        if hookSeekPending, let hook = hookTime {
-            seekToHook(hook)
-        } else if hookTime == nil {
-            prepareTask?.cancel()
-            prepareTask = Task { [weak self] in
-                await self?.warmMetadata(for: url, seekToHookIfIdle: true)
-            }
-        }
+        // Play immediately — do not synchronously stat the file or seek from an
+        // unvalidated cache entry. The warmup validates its revision off-main and
+        // applies the hook only while this fresh play is still at its start.
+        scheduleMetadataWarmup(for: url, seekToHookIfIdle: true, includesHook: true)
         player.play()
     }
 
@@ -240,6 +281,7 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         }
         guard activeURL == url, let player else { return }
         hookSeekPending = false
+        playbackIntentActive = false
         let upper = duration > 0 ? duration : seconds + 1
         let clamped = min(max(0, seconds), upper)
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
@@ -256,17 +298,16 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     }
 
     func pauseIfPlaying(url: URL?) {
+        guard let url, activeURL == url else { return }
+        playbackIntentActive = false
         guard isPlaying(url) else { return }
         player?.pause()
-        if let url {
-            ArchivePlaybackCoordinator.shared.endPlayback(for: url)
-        }
+        ArchivePlaybackCoordinator.shared.endPlayback(for: url)
     }
 
     func stopIfPlaying(url: URL?) {
-        if activeURL == url {
-            stop()
-        }
+        guard activeURL == url, hasPlaybackResources else { return }
+        stop()
     }
 
     /// Releases a prepared or playing player when the coordinator broadcasts a global stop.
@@ -291,42 +332,98 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         installTimeObserver()
     }
 
-    private func warmMetadata(for url: URL, seekToHookIfIdle: Bool = false) async {
-        let cachedHook = Self.cachedValue(in: Self.hookCache, url: url)
-        let cachedDuration = Self.cachedValue(in: Self.durationCache, url: url)
+    private func warmMetadata(
+        for url: URL,
+        seekToHookIfIdle: Bool = false,
+        includesHook: Bool
+    ) async {
+        guard !Task.isCancelled else { return }
+        // File revision reads can block on cloud-backed archive roots. Do them in the
+        // background, never as part of mounting a detail or alternate-preview row.
+        guard let modifiedAt = await metadataRevisionLoader(url) else { return }
+        guard !Task.isCancelled, activeURL == url else { return }
 
-        async let hookResult: TimeInterval? = {
-            if let cachedHook { return cachedHook }
-            return await PreviewHookLocator.hookStartSeconds(for: url)
-        }()
+        let cachedHook = Self.cachedValue(in: Self.hookCache, url: url, modifiedAt: modifiedAt)
+        let cachedDuration = Self.cachedValue(in: Self.durationCache, url: url, modifiedAt: modifiedAt)
+        let needsHook = includesHook && cachedHook == nil
+        let needsDuration = cachedDuration == nil
 
-        async let durationResult: Double? = {
-            if let cachedDuration { return cachedDuration }
-            let asset = AVURLAsset(url: url)
-            if let loaded = try? await asset.load(.duration).seconds, loaded.isFinite, loaded > 0 {
-                return loaded
-            }
-            return nil
-        }()
+        guard needsHook || needsDuration else {
+            applyMetadata(
+                duration: cachedDuration,
+                hook: cachedHook,
+                seekToHookIfIdle: seekToHookIfIdle,
+                includesHook: includesHook
+            )
+            return
+        }
+
+        async let hookResult: TimeInterval? = needsHook
+            ? PreviewHookLocator.hookStartSeconds(for: url)
+            : nil
+        async let durationResult: Double? = needsDuration
+            ? loadDuration(for: url)
+            : nil
 
         let (hook, loadedDuration) = await (hookResult, durationResult)
         guard !Task.isCancelled, activeURL == url else { return }
 
-        if let loadedDuration {
-            Self.store(loadedDuration, for: url, in: &Self.durationCache)
-            duration = loadedDuration
+        // The file can be replaced while AVFoundation is reading it. Never publish or cache
+        // results from the old revision; the next explicit warmup will analyze the replacement.
+        guard let completedModifiedAt = await metadataRevisionLoader(url),
+              completedModifiedAt == modifiedAt else { return }
+        guard !Task.isCancelled, activeURL == url else { return }
+
+        if cachedDuration == nil, let loadedDuration {
+            Self.store(loadedDuration, for: url, modifiedAt: modifiedAt, in: &Self.durationCache)
         }
-        if let hook {
-            Self.store(hook, for: url, in: &Self.hookCache)
-            hookTime = hook
-            if seekToHookIfIdle, hookSeekPending, currentTime < 0.35 {
-                seekToHook(hook)
-            } else if hookSeekPending {
-                // Metadata ready before first play — next play will seek.
-            }
-        } else {
+        if cachedHook == nil, let hook {
+            Self.store(hook, for: url, modifiedAt: modifiedAt, in: &Self.hookCache)
+        }
+        applyMetadata(
+            duration: cachedDuration ?? loadedDuration,
+            hook: cachedHook ?? hook,
+            seekToHookIfIdle: seekToHookIfIdle,
+            includesHook: includesHook
+        )
+    }
+
+    private func applyMetadata(
+        duration: Double?,
+        hook: TimeInterval?,
+        seekToHookIfIdle: Bool,
+        includesHook: Bool
+    ) {
+        self.duration = duration ?? 0
+        hookTime = hook
+        if includesHook, let hook {
+            // A cached hook is usable only after revision validation. It may arrive after
+            // playback has advanced; explicit intent, rather than elapsed time, decides
+            // whether it still belongs to the user's current transport request.
+            applyHook(hook, seekToHookIfIdle: seekToHookIfIdle)
+        } else if includesHook, hook == nil {
             hookSeekPending = false
         }
+    }
+
+    private func applyHook(_ hook: TimeInterval, seekToHookIfIdle: Bool) {
+        hookTime = hook
+        if seekToHookIfIdle, playbackIntentActive, hookSeekPending {
+            seekToHook(hook)
+        }
+    }
+
+    private func loadDuration(for url: URL) async -> Double? {
+        let standard = url.standardizedFileURL
+        return await Task.detached(priority: .utility) {
+            let asset = AVURLAsset(url: standard)
+            if let loaded = try? await asset.load(.duration).seconds,
+               loaded.isFinite,
+               loaded > 0 {
+                return loaded
+            }
+            return nil
+        }.value
     }
 
     private func seekToHook(_ hook: TimeInterval) {
@@ -349,12 +446,19 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         playerItem = nil
         if let activeURL {
             ArchivePlaybackCoordinator.shared.endPlayback(for: activeURL)
+            self.activeURL = nil
         }
-        activeURL = nil
-        currentTime = 0
-        duration = 0
-        hookTime = nil
+        if currentTime != 0 {
+            currentTime = 0
+        }
+        if duration != 0 {
+            duration = 0
+        }
+        if hookTime != nil {
+            hookTime = nil
+        }
         hookSeekPending = false
+        playbackIntentActive = false
     }
 
     private func installTimeObserver() {
