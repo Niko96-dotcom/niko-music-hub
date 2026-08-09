@@ -81,6 +81,8 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
         let downloadDirectory = request.outputRootURL
             .appendingPathComponent("Downloads", isDirectory: true)
             .appendingPathComponent("YouTube to Stems", isDirectory: true)
+        try Task.checkCancellation()
+        try stemService.validateOutputDirectory(downloadDirectory)
         try FileManager.default.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
 
         progress.update(progress: 0, message: "Downloading audio...")

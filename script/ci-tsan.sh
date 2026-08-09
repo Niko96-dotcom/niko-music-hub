@@ -10,4 +10,4 @@ fi
 
 echo "== focused Thread Sanitizer gate =="
 swift test --sanitize=thread \
-  --filter '(JobRunnerTests|CoreAudioTapAdapterStateTests|FSEventsArchiveRootWatcherTests|DownloaderViewModelTests)'
+  --filter '(JobRunnerTests|CoreAudioTapAdapterStateTests|ExternalProcessRunningTests|FSEventsArchiveRootWatcherTests|DownloaderViewModelTests)'

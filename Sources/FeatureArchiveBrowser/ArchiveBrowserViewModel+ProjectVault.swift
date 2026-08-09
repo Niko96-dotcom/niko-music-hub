@@ -2,7 +2,85 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
+/// Archive-only Project Vault cards are restore targets, not workflow inputs.
+/// Keeping this decision shared between card surfaces and the view model prevents
+/// drag/drop or menu affordances from bypassing the same safety boundary.
+enum ProjectVaultCardWorkflowPolicy {
+    static func allowsWorkflowMutation(for presentation: ProjectVaultCardPresentation?) -> Bool {
+        presentation?.state != .archived
+    }
+}
+
 extension ArchiveBrowserViewModel {
+    /// Applies a Project Vault setup change to the already-mounted Archive Browser.
+    /// Settings owns persistence; this method deliberately reloads the effective scan roots,
+    /// restarts observation, and refreshes vault recovery/snapshots without requiring a relaunch.
+    public func applyProjectVaultSettingsChange() {
+        guard !runtime.usesFixtureRoot else {
+            Task {
+                await projectVaultRuntime?.recoverAtLaunch()
+                await refreshProjectVaultSnapshots()
+            }
+            return
+        }
+
+        let previousRoots = roots.standardizedArchivePaths
+        loadRootsFromSettings()
+        let rootsChanged = previousRoots != roots.standardizedArchivePaths
+
+        if rootsChanged {
+            clearRootBoundArchiveState(
+                statusMessage: roots.isEmpty
+                    ? "Project Vault settings updated. Add an Active Projects root to scan."
+                    : "Project Vault settings updated. Scanning Active Projects…"
+            )
+            restartArchiveRootWatching()
+            if !roots.isEmpty {
+                Task { await scan() }
+            }
+        } else {
+            rebuildProjectVaultCatalog()
+        }
+
+        Task {
+            await projectVaultRuntime?.recoverAtLaunch()
+            await refreshProjectVaultSnapshots()
+        }
+    }
+
+    /// Project Vault is deliberately exposed as a separate browse layer. The generic
+    /// archive scanner never walks the Dropbox root, but a verified vault snapshot can
+    /// still project an archive-only project into the Hub when the user asks to see it.
+    var canBrowseArchivedProjects: Bool {
+        guard projectVaultRuntime != nil,
+              let settings = try? settingsStore.loadSettings() else { return false }
+        return settings.vault.isEnabled
+    }
+
+    func setShowArchivedProjects(_ isShown: Bool) {
+        guard showArchivedProjects != isShown else {
+            if isShown {
+                Task { await refreshProjectVaultSnapshots() }
+            }
+            return
+        }
+        showArchivedProjects = isShown
+        rebuildProjectVaultCatalog()
+        if isShown {
+            Task { await refreshProjectVaultSnapshots() }
+        }
+    }
+
+    func isArchivedProject(_ song: Song) -> Bool {
+        projectVaultPresentation(for: song)?.state == .archived
+    }
+
+    func canMutateWorkflowStatus(for song: Song) -> Bool {
+        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
+            for: projectVaultPresentation(for: song)
+        )
+    }
+
     func projectVaultPresentation(for song: Song) -> ProjectVaultCardPresentation? {
         guard let settings = try? settingsStore.loadSettings(), settings.vault.isEnabled else { return nil }
         if let snapshot = projectVaultSnapshot(for: song) {
@@ -91,12 +169,17 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
+            projectVaultSnapshots = snapshots
             projectVaultSnapshotsByPath.removeAll()
             snapshots.forEach(cacheProjectVaultSnapshot)
-            mergeArchivedVaultSongs(from: snapshots)
+            archivedProjectCount = archivedOnlySnapshots(from: snapshots).count
+            rebuildProjectVaultCatalog()
             enqueueDoneVaultProjectsIfNeeded()
         } catch ProjectVaultRuntimeError.unavailable {
+            projectVaultSnapshots = []
             projectVaultSnapshotsByPath.removeAll()
+            archivedProjectCount = 0
+            rebuildProjectVaultCatalog()
         } catch {
             diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
         }
@@ -160,37 +243,68 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    private func mergeArchivedVaultSongs(from snapshots: [ProjectVaultRuntimeSnapshot]) {
-        let archived = snapshots.compactMap { snapshot -> Song? in
+    private func archivedOnlySnapshots(from snapshots: [ProjectVaultRuntimeSnapshot]) -> [ProjectVaultRuntimeSnapshot] {
+        snapshots.filter { snapshot in
             guard let transfer = snapshot.transfer,
-                  [.archiveVerified, .archivedLocal, .archivedOnlineOnly].contains(transfer.state),
-                  !FileManager.default.fileExists(atPath: transfer.sourceURL.path),
-                  FileManager.default.fileExists(atPath: transfer.destinationURL.path) else { return nil }
-            let detector = CPRVersionDetector()
-            let versions = (try? detector.detectVersions(in: transfer.destinationURL)) ?? []
-            return Song(
-                folderPath: transfer.destinationURL,
-                originalFolderName: transfer.sourceURL.lastPathComponent,
-                displayTitle: snapshot.record.canonicalTitle,
-                projectVersions: versions,
-                latestCPR: detector.latestCPR(from: versions),
-                workflowStatus: snapshot.record.workflowState
-            )
-        }
-        guard !archived.isEmpty else { return }
-        mutateCatalog {
-            let archivedIDs = Set(archived.map(\.id))
-            let archivedSourcePaths: Set<String> = Set(snapshots.compactMap { snapshot -> String? in
-                guard let transfer = snapshot.transfer,
-                      !FileManager.default.fileExists(atPath: transfer.sourceURL.path) else { return nil }
-                return Self.vaultCanonicalPath(transfer.sourceURL)
-            })
-            songs.removeAll {
-                archivedIDs.contains($0.id)
-                    || archivedSourcePaths.contains(Self.vaultCanonicalPath($0.folderPath))
+                  [.archiveVerified, .archivedLocal, .archivedOnlineOnly].contains(transfer.state) else {
+                return false
             }
-            songs.append(contentsOf: archived)
+            // The Active copy is the deciding signal. The archive destination may be
+            // an online-only Dropbox generation with no materialized local directory;
+            // the verified transfer record is still enough to show and restore it.
+            return !FileManager.default.fileExists(atPath: transfer.sourceURL.path)
         }
+    }
+
+    func rebuildProjectVaultCatalog() {
+        let projected = projectVaultCatalog(from: scannedSongs)
+        guard projected.scannedSongs != scannedSongs || projected.visibleSongs != songs else { return }
+        mutateCatalog {
+            scannedSongs = projected.scannedSongs
+            songs = projected.visibleSongs
+        }
+    }
+
+    func projectVaultCatalog(from baselineSongs: [Song]) -> (scannedSongs: [Song], visibleSongs: [Song]) {
+        let archivedSnapshots = archivedOnlySnapshots(from: projectVaultSnapshots)
+        let archivedDestinationPaths = Set(archivedSnapshots.compactMap { snapshot in
+            snapshot.transfer.map { Self.vaultCanonicalPath($0.destinationURL) }
+        })
+        let archivedSourcePaths = Set(archivedSnapshots.compactMap { snapshot in
+            snapshot.transfer.map { Self.vaultCanonicalPath($0.sourceURL) }
+        })
+
+        // Old cache snapshots may contain an archive projection from a previous app
+        // version. Remove those paths from the scan baseline once the vault snapshot
+        // is known, even when the user keeps archived projects hidden.
+        let cleanScannedSongs = baselineSongs.filter { song in
+            let path = Self.vaultCanonicalPath(song.folderPath)
+            return !archivedDestinationPaths.contains(path) && !archivedSourcePaths.contains(path)
+        }
+        let archivedSongs = showArchivedProjects
+            ? archivedSnapshots.compactMap(makeArchivedSong)
+            : []
+        let visibleSongs = SongCatalogDeduplicator.uniqueByID(cleanScannedSongs + archivedSongs)
+        return (cleanScannedSongs, visibleSongs)
+    }
+
+    private func makeArchivedSong(from snapshot: ProjectVaultRuntimeSnapshot) -> Song? {
+        guard let transfer = snapshot.transfer else { return nil }
+        let destination = transfer.destinationURL.standardizedFileURL
+        let detector = CPRVersionDetector()
+        let hasMaterializedDestination = FileManager.default.fileExists(atPath: destination.path)
+        let versions = hasMaterializedDestination
+            ? ((try? detector.detectVersions(in: destination)) ?? [])
+            : []
+        let title = snapshot.record.canonicalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Song(
+            folderPath: destination,
+            originalFolderName: transfer.sourceURL.lastPathComponent,
+            displayTitle: title.isEmpty ? transfer.sourceURL.lastPathComponent : title,
+            projectVersions: versions,
+            latestCPR: detector.latestCPR(from: versions),
+            workflowStatus: snapshot.record.workflowState
+        )
     }
 
     private static func vaultCanonicalPath(_ url: URL) -> String {

@@ -6,6 +6,132 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testArchiveOnlyProjectionRejectsWorkflowMutationAndFSEventDoesNotPromoteIt() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let sibling = fixture.active.appendingPathComponent("Still Active", isDirectory: true)
+        try FileManager.default.createDirectory(at: sibling, withIntermediateDirectories: true)
+        try Data("still-active-cpr".utf8)
+            .write(to: sibling.appendingPathComponent("Still Active.cpr"))
+
+        let watcher = TestArchiveRootWatcher()
+        let indexStore = ProjectVaultRecordingArchiveIndexStore()
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(
+            runtime: runtime,
+            archiveIndexStore: indexStore,
+            archiveRootWatcher: watcher
+        )
+
+        await viewModel.scan()
+        let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        viewModel.setShowArchivedProjects(true)
+
+        try await waitUntil {
+            !FileManager.default.fileExists(atPath: fixture.project.path)
+                && viewModel.projectVaultBusySongIDs.isEmpty
+                && viewModel.songs.contains {
+                    $0.originalFolderName == "Friends Workflow Song"
+                        && viewModel.projectVaultPresentation(for: $0)?.state == .archived
+                }
+        }
+
+        let archivedSong = try XCTUnwrap(viewModel.songs.first {
+            $0.originalFolderName == "Friends Workflow Song"
+                && viewModel.projectVaultPresentation(for: $0)?.state == .archived
+        })
+        let archivePath = archivedSong.folderPath.standardizedFileURL.path
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
+        XCTAssertFalse(ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
+            for: viewModel.projectVaultPresentation(for: archivedSong)
+        ))
+
+        viewModel.selectedSong = archivedSong
+        viewModel.applyCatalogScanUpdate(
+            ArchiveCatalogCoordinator.CatalogScanApplyResult(
+                songs: viewModel.scannedSongs,
+                diagnostics: try XCTUnwrap(viewModel.scanDiagnostics),
+                statusMessage: "Fixture scan update",
+                scannedAt: Date(),
+                shouldPersistUserMetadata: false
+            ),
+            roots: viewModel.roots
+        )
+        XCTAssertEqual(viewModel.selectedSong?.id, archivedSong.id)
+        XCTAssertTrue(
+            viewModel.songs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
+            "A scan apply must synchronously retain the opt-in archive projection."
+        )
+
+        viewModel.updateWorkflowStatus(for: archivedSong, status: .prod)
+        XCTAssertEqual(
+            viewModel.songs.first(where: { $0.folderPath.standardizedFileURL.path == archivePath })?.workflowStatus,
+            .done,
+            "Archive-only cards are restore targets and must not accept workflow edits."
+        )
+
+        _ = await viewModel.indexPersistTask?.value
+        let persistedSnapshotCount = indexStore.savedSnapshots.count
+        let mixdownFolder = sibling.appendingPathComponent("mixdown", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
+        let mixdown = mixdownFolder.appendingPathComponent("Still Active mix.wav")
+        try Data("incremental-mixdown".utf8).write(to: mixdown)
+        watcher.simulateFilesystemChange(paths: [mixdown])
+
+        try await waitUntil {
+            viewModel.songs.first(where: { $0.originalFolderName == "Still Active" })?
+                .previewCandidates.isEmpty == false
+        }
+        _ = await viewModel.indexPersistTask?.value
+
+        XCTAssertGreaterThan(indexStore.savedSnapshots.count, persistedSnapshotCount)
+        XCTAssertTrue(
+            viewModel.songs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
+            "The visible archive projection should survive an unrelated active-root FSEvent."
+        )
+        XCTAssertFalse(
+            viewModel.scannedSongs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
+            "An archive projection must not become scanner baseline state."
+        )
+        let persisted = try XCTUnwrap(indexStore.savedSnapshots.last)
+        XCTAssertFalse(
+            persisted.songs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
+            "An archive projection must not be written into the scanner index after an FSEvent."
+        )
+    }
+
+    func testOnlineOnlyDropboxGenerationRemainsVisibleWithoutLocalArchiveFolder() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+
+        await viewModel.scan()
+        let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        viewModel.setShowArchivedProjects(true)
+
+        try await waitUntil {
+            !FileManager.default.fileExists(atPath: fixture.project.path)
+                && viewModel.projectVaultBusySongIDs.isEmpty
+                && viewModel.songs.contains { $0.originalFolderName == "Friends Workflow Song" }
+        }
+
+        let transferStore = try fixture.transferStore()
+        var transfer = try XCTUnwrap(try transferStore.verifiedArchiveGeneration(projectID: fixture.projectID()))
+        try FileManager.default.removeItem(at: transfer.destinationURL)
+        transfer.state = .archivedOnlineOnly
+        try transferStore.save(transfer)
+
+        await viewModel.refreshProjectVaultSnapshots()
+
+        let archivedSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        XCTAssertTrue(archivedSong.projectVersions.isEmpty, "The online-only generation should not be read as local files")
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: archivedSong)?.state, .archived)
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: archivedSong)?.primaryAction, .restoreAndOpen)
+    }
+
     func testFriendsArchiveRemainsVisibleRestoresVerifiesAndKeepsLocalAcrossRelaunch() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -15,6 +141,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        XCTAssertFalse(viewModel.showArchivedProjects)
+        viewModel.setShowArchivedProjects(true)
 
         try await waitUntil {
             !FileManager.default.fileExists(atPath: fixture.project.path)
@@ -33,13 +161,18 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(archivedPresentation.state, .archived)
         XCTAssertEqual(archivedPresentation.primaryAction, .restoreAndOpen)
 
-        viewModel.setProjectKeepLocal(true, for: archivedSong)
-        let pinnedArchivedPresentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: archivedSong))
+        viewModel.setShowArchivedProjects(false)
+        XCTAssertFalse(viewModel.songs.contains { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.setShowArchivedProjects(true)
+        let reShownArchivedSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+
+        viewModel.setProjectKeepLocal(true, for: reShownArchivedSong)
+        let pinnedArchivedPresentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: reShownArchivedSong))
         XCTAssertTrue(pinnedArchivedPresentation.isKeepLocal)
         XCTAssertEqual(pinnedArchivedPresentation.state, .archived)
         XCTAssertEqual(pinnedArchivedPresentation.primaryAction, .restoreAndOpen)
 
-        viewModel.performProjectVaultPrimaryAction(for: archivedSong)
+        viewModel.performProjectVaultPrimaryAction(for: reShownArchivedSong)
         try await waitUntil {
             FileManager.default.fileExists(atPath: fixture.project.path)
                 && viewModel.projectVaultBusySongIDs.isEmpty
@@ -68,6 +201,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await relaunchedRuntime.recoverAtLaunch()
         let relaunchedViewModel = fixture.viewModel(runtime: relaunchedRuntime)
         await relaunchedViewModel.scan()
+        relaunchedViewModel.setShowArchivedProjects(true)
         await relaunchedViewModel.refreshProjectVaultSnapshots()
 
         XCTAssertEqual(
@@ -160,10 +294,15 @@ private final class FriendsWorkflowFixture {
     }
 
     @MainActor
-    func viewModel(runtime: any ProjectVaultOperating) -> ArchiveBrowserViewModel {
+    func viewModel(
+        runtime: any ProjectVaultOperating,
+        archiveIndexStore: (any ArchiveIndexStoring)? = nil,
+        archiveRootWatcher: (any ArchiveRootWatching)? = NoopArchiveRootWatcher()
+    ) -> ArchiveBrowserViewModel {
         ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: settingsStore),
-            archiveRootWatcher: NoopArchiveRootWatcher(),
+            archiveIndexStore: archiveIndexStore,
+            archiveRootWatcher: archiveRootWatcher,
             projectVaultRuntime: runtime,
             runtime: MusicHubRuntimeEnvironment(environment: [
                 MusicHubRuntimeEnvironment.settingsSuiteKey: suite,
@@ -188,4 +327,16 @@ private final class FriendsWorkflowFixture {
         UserDefaults.standard.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
     }
+}
+
+private final class ProjectVaultRecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
+    private(set) var savedSnapshots: [ArchiveIndexSnapshot] = []
+
+    func loadLatest() throws -> ArchiveIndexSnapshot? { nil }
+
+    func save(_ snapshot: ArchiveIndexSnapshot) throws {
+        savedSnapshots.append(snapshot)
+    }
+
+    func clear() throws {}
 }

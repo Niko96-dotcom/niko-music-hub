@@ -118,6 +118,11 @@ BUILD_ID="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildID' "$INFO" 2>/dev/null |
   echo "artifact build id mismatch: '$BUILD_ID' does not start with $VERSION+" >&2
   exit 1
 }
+BUILD_CONFIGURATION="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildConfiguration' "$INFO" 2>/dev/null || true)"
+[[ "$BUILD_CONFIGURATION" == "release" ]] || {
+  echo "artifact build configuration mismatch: '$BUILD_CONFIGURATION' != release" >&2
+  exit 1
+}
 ACTUAL_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")"
 [[ "$ACTUAL_BUNDLE_ID" == "$BUNDLE_ID" ]] || {
   echo "artifact bundle identifier mismatch: $ACTUAL_BUNDLE_ID != $BUNDLE_ID" >&2

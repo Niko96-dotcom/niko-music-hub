@@ -23,8 +23,10 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
                 return (song.id, identity)
             }, uniquingKeysWith: { _, latest in latest }
         )
+        let projected = projectVaultCatalog(from: uniqueIncomingSongs)
         mutateCatalog {
-            songs = uniqueIncomingSongs
+            scannedSongs = projected.scannedSongs
+            songs = projected.visibleSongs
             scanDiagnostics = update.diagnostics
             setStatusMessage(update.statusMessage)
         }
@@ -54,7 +56,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             refreshMixdownAnalysis(for: selectedSong)
         }
         // Drop analysis for songs that disappeared.
-        let remainingIDs = Set(uniqueIncomingSongs.map(\.id))
+        let remainingIDs = Set(songs.map(\.id))
         ArchiveMixdownAnalysisCoordinator.prune(
             remainingSongIDs: remainingIDs,
             bpmCache: &mixdownBPMBySongID,
@@ -64,7 +66,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         // and keeps the whole-catalog encode+write off the main actor. Metadata upserts stay
         // synchronous so an in-flight snapshot write can never clobber a fresh edit.
         if update.shouldPersistUserMetadata,
-           let warning = catalog.persistUserMetadata(for: songs) {
+           let warning = catalog.persistUserMetadata(for: scannedSongs) {
             recordPersistenceWarning(warning)
         }
         scheduleIndexPersist(afterNanoseconds: 0)

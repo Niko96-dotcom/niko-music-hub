@@ -37,6 +37,15 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local file="$1"
+  local needle="$2"
+  if grep -Fq -- "$needle" "$file"; then
+    echo "did not expect '$needle' in $file" >&2
+    exit 1
+  fi
+}
+
 line_number() {
   local needle="$1"
   local file="$2"
@@ -71,6 +80,10 @@ EXPECTED_ARCHITECTURES="$(nmh_release_architectures)"
 }
 assert_fail bundle-id-override env NMH_BUNDLE_ID=local.niko-music-hub.app bash -c "source '$ROOT/script/lib/app_lifecycle.sh'"
 assert_contains "$TMP/bundle-id-override.err" "does not match canonical"
+assert_fail derived-output-override env NMH_APP_BUNDLE="$TMP/unsafe.app" bash -c "source '$ROOT/script/lib/app_lifecycle.sh'"
+assert_contains "$TMP/derived-output-override.err" "derived from NMH_DIST_DIR"
+assert_fail output-outside-repo env NMH_DIST_DIR="$TMP/outside" bash -c "source '$ROOT/script/lib/app_lifecycle.sh'"
+assert_contains "$TMP/output-outside-repo.err" "output directory must stay beneath"
 
 BUNDLE="$TMP/Test.app"
 mkdir -p "$BUNDLE/Contents"
@@ -90,6 +103,20 @@ assert_contains "$TMP/bundle-id-placeholder.err" "release identity violation"
 
 echo "== public-tree hygiene =="
 assert_pass hygiene "$ROOT/script/public-tree-hygiene.sh"
+PUBLIC_TREE="$TMP/public-tree"
+mkdir -p "$PUBLIC_TREE/script" "$PUBLIC_TREE/.planning" "$PUBLIC_TREE/docs"
+cp "$ROOT/script/public-tree-hygiene.sh" "$PUBLIC_TREE/script/public-tree-hygiene.sh"
+chmod +x "$PUBLIC_TREE/script/public-tree-hygiene.sh"
+git -C "$PUBLIC_TREE" init -q
+git -C "$PUBLIC_TREE" config user.name "Release Test"
+git -C "$PUBLIC_TREE" config user.email "release-test@example.invalid"
+printf 'local proof: /Users/private-user/Music/project.cpr\n' >"$PUBLIC_TREE/docs/uat.md"
+printf 'private planning state\n' >"$PUBLIC_TREE/.planning/STATE.md"
+git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md
+git -C "$PUBLIC_TREE" commit -qm initial
+assert_fail hygiene-public-private-state "$PUBLIC_TREE/script/public-tree-hygiene.sh" --public-release
+assert_contains "$TMP/hygiene-public-private-state.err" "private planning or agent state"
+assert_contains "$TMP/hygiene-public-private-state.err" "real home-directory path"
 
 echo "== checksum basename validation =="
 CHECK_DIR="$TMP/checksum"
@@ -106,6 +133,9 @@ assert_order 'run ci "$ROOT/script/ci.sh"' 'run e2e "$ROOT/script/e2e_user_smoke
 assert_contains "$ROOT/script/release-all.sh" 'run ci "$ROOT/script/ci.sh"'
 assert_contains "$ROOT/script/release-all.sh" 'run e2e "$ROOT/script/e2e_user_smoke.sh"'
 assert_contains "$ROOT/script/release-all.sh" 'run e2e env NMH_STRICT_UI_E2E=1 "$ROOT/script/e2e_user_smoke.sh"'
+assert_contains "$ROOT/script/release-all.sh" 'run hygiene "$ROOT/script/public-tree-hygiene.sh" --public-release'
+assert_contains "$ROOT/script/release-all.sh" 'require_clean_release_worktree'
+assert_contains "$ROOT/script/release-all.sh" 'use ./script/dev.sh run for dirty local development builds'
 
 echo "== release command order stays fail-closed =="
 assert_order 'log "build app bundle"' 'log "package dmg"' "$ROOT/script/release-all.sh"
@@ -121,6 +151,37 @@ assert_contains "$ROOT/script/release-all.sh" '--architectures "$RELEASE_ARCHITE
 assert_contains "$ROOT/script/release-all.sh" '--minimum-macos "$MIN_MACOS_VERSION"'
 assert_contains "$ROOT/script/release-all.sh" '--artifact-size "$ARTIFACT_SIZE"'
 assert_contains "$ROOT/script/validate-release-artifact.sh" 'lipo -archs "$BINARY"'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME"'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'nmh_running_dist_app_pids'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'refusing to signal unrelated installed copies'
+assert_contains "$ROOT/script/release-all.sh" 'RELEASE_BUILD_CONFIGURATION="release"'
+assert_contains "$ROOT/script/release-all.sh" 'export NMH_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION"'
+assert_contains "$ROOT/script/validate-release-artifact.sh" 'artifact build configuration mismatch'
+assert_contains "$ROOT/script/release-all.sh" 'run_candidate_install_smoke "$DMG" "candidate" "$APP"'
+assert_contains "$ROOT/script/release-all.sh" 'run_candidate_install_smoke "$HOSTED_DIR/$(basename "$DMG")" "hosted" "$APP"'
+assert_contains "$ROOT/script/release-all.sh" 'NMH_EXPECTED_SOURCE_COMMIT="$COMMIT"'
+assert_contains "$ROOT/script/release-all.sh" 'NMH_EXPECTED_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION"'
+assert_contains "$ROOT/script/verify-installed-release.sh" 'installed source commit mismatch'
+assert_contains "$ROOT/script/verify-installed-release.sh" 'installed build configuration mismatch'
+assert_contains "$ROOT/script/install-local.sh" 'NMH_EXPECTED_SOURCE_COMMIT="$NMH_SOURCE_COMMIT"'
+
+echo "== remote publication integrity stays fail-closed =="
+assert_contains "$ROOT/script/release-all.sh" 'git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}"'
+assert_contains "$ROOT/script/release-all.sh" 'remote tag $TAG on origin to resolve exactly to local release commit $COMMIT'
+assert_contains "$ROOT/script/release-all.sh" 'run gh-release-create gh release create "$TAG"'
+assert_contains "$ROOT/script/release-all.sh" '--verify-tag'
+assert_contains "$ROOT/script/release-all.sh" 'verify_hosted_release_contract'
+assert_contains "$ROOT/script/release-all.sh" 'actual_name_set != expected_names'
+assert_contains "$ROOT/script/release-all.sh" 'asset.get("state") != "uploaded"'
+assert_contains "$ROOT/script/release-all.sh" 'cmp -s "$source" "$hosted"'
+assert_not_contains "$ROOT/script/release-all.sh" 'gh release view "$TAG" >/dev/null 2>&1 ||'
+assert_not_contains "$ROOT/script/release-all.sh" 'gh release upload "$TAG"'
+assert_not_contains "$ROOT/script/release-all.sh" '--clobber'
+assert_order 'run remote-tag-before-create verify_remote_release_tag' 'run gh-release-create gh release create "$TAG"' "$ROOT/script/release-all.sh"
+assert_order 'run gh-release-create gh release create "$TAG"' 'run remote-tag-after-create verify_remote_release_tag' "$ROOT/script/release-all.sh"
+assert_order 'run remote-tag-after-create verify_remote_release_tag' 'run hosted-release-contract verify_hosted_release_contract' "$ROOT/script/release-all.sh"
+assert_order 'run hosted-release-contract verify_hosted_release_contract' 'run hosted-asset-byte-equality verify_hosted_release_asset_bytes' "$ROOT/script/release-all.sh"
 
 echo "== hardened runtime output variants are accepted =="
 for script in "$ROOT/script/release-all.sh" "$ROOT/script/validate-release-artifact.sh"; do
@@ -147,6 +208,10 @@ assert_contains "$TMP/public-missing-creds.err" "NMH_DEVELOPER_ID_APPLICATION"
 echo "== explicit local-only mode does not publish =="
 assert_fail local-publish "$ROOT/script/release-all.sh" --local-only --publish --skip-tests
 assert_contains "$TMP/local-publish.err" "local-only release cannot publish"
+assert_fail release-output-outside-repo env NMH_RELEASE_DIR="$TMP" "$ROOT/script/release-all.sh" --local-only --skip-tests
+assert_contains "$TMP/release-output-outside-repo.err" "release output must be a child"
+assert_fail local-dirty-worktree env NMH_RELEASE_DIR="$ROOT/dist/release-script-test-dirty-$$" "$ROOT/script/release-all.sh" --local-only --skip-tests
+assert_contains "$TMP/local-dirty-worktree.err" "release artifacts require a completely clean working tree"
 
 echo "== clean tagged checkout preflight =="
 PREFLIGHT_REPO="$TMP/preflight-repo"

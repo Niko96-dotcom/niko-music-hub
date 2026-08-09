@@ -75,6 +75,14 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         XCTAssertTrue(script.contains("strict UI mode requires AX-visible first-run content"))
     }
 
+    func testFullDeveloperCheckRequiresAccessibilityVisibleUI() throws {
+        let devScript = try SourceTestSupport.read("script/dev.sh")
+        XCTAssertTrue(
+            devScript.contains("env NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh"),
+            "A green ./script/dev.sh check must not silently downgrade an inaccessible UI smoke to a visible-window-only result"
+        )
+    }
+
     private func smokeScriptSource() throws -> String {
         try SourceTestSupport.read("script/e2e_user_smoke.sh")
     }

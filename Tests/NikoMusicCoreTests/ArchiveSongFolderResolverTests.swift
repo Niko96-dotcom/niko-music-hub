@@ -83,6 +83,26 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
         XCTAssertTrue(resolution.isEmpty)
     }
 
+    func testIgnoresHiddenRootChildrenLikeVaultStaging() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let stagingFile = root
+            .appendingPathComponent(".niko-staging", isDirectory: true)
+            .appendingPathComponent("project", isDirectory: true)
+            .appendingPathComponent("restore.cpr")
+        try FileManager.default.createDirectory(
+            at: stagingFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let resolution = ArchiveSongFolderResolver.resolve(
+            changedPaths: [stagingFile],
+            roots: [root]
+        )
+
+        XCTAssertTrue(resolution.isEmpty)
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubResolver-\(UUID().uuidString)", isDirectory: true)

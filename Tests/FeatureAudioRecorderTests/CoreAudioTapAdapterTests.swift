@@ -31,7 +31,7 @@ final class CoreAudioTapAdapterTests: XCTestCase {
         let stream = try await adapter.startRecording(outputURL: outputURL, preset: .cubaseDefault, maxDuration: 1.0)
 
         for await _ in stream {}
-        let result = try await adapter.stopRecording()
+        _ = try await adapter.stopRecording()
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
 

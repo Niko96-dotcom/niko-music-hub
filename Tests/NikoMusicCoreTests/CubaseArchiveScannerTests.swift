@@ -2,6 +2,23 @@ import XCTest
 @testable import NikoMusicCore
 
 final class CubaseArchiveScannerTests: XCTestCase {
+    func testCancelledTaskStopsBeforeScanningRoots() async throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let task = Task.detached { () throws -> ScanResult in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try CubaseArchiveScanner().scan(roots: [root])
+        }
+
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled scans must stop before enumerating archive roots")
+        } catch is CancellationError {
+            // Expected: the scanner's cooperative cancellation check runs before I/O.
+        }
+    }
+
     func testScansOneSongPerImmediateChildFolder() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

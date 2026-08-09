@@ -15,12 +15,13 @@ The supported release platform is Apple silicon (`arm64`) on macOS 14.2 or newer
 - Manifest provenance: exact commit/build ID, artifact size/hash, supported architecture list, minimum macOS version, and signing/notarization attestation.
 - Approval record: `NikoMusicHub-<version>-release-approval.json`.
 - Release notes: only the dated current-version section extracted from `CHANGELOG.md`.
-- Install path for smoke verification: `/Applications/NikoMusicHub.app`.
+- Install smoke: mount the candidate DMG, copy its app to an isolated release-directory location, then verify the exact build ID, release configuration, source commit, and executable SHA-256. It never trusts an unrelated `/Applications` copy.
 
 ## Prerequisites
 
 - macOS 14.2 or newer on Apple silicon (`arm64`).
 - Xcode with Swift 6.x.
+- A completely clean Git working tree, including untracked files, for every `release-all.sh` artifact. Use `./script/dev.sh run` for dirty local development builds.
 - Developer ID Application certificate in the keychain for public releases.
 - Notary profile created with `xcrun notarytool store-credentials`.
 - GitHub CLI authenticated for `--publish`.
@@ -35,7 +36,7 @@ export NMH_RELEASE_UAT_EVIDENCE="/absolute/path/to/NikoMusicHub-$(cat VERSION)-u
 
 ## Commands
 
-Credential-free local artifact dry run:
+Credential-free local artifact validation (from a clean checkout):
 
 ```bash
 ./script/release-all.sh --local-only
@@ -51,10 +52,11 @@ Public GitHub release:
 
 ```bash
 git tag "v$(cat VERSION)"
+git push origin "v$(cat VERSION)"
 ./script/release-all.sh --public --publish --install-smoke
 ```
 
-Public mode fails if signing/notary credentials or approved UAT evidence are missing, the tree has any tracked or untracked changes, the exact version tag does not resolve to `HEAD`, an identity differs from `BUNDLE_ID`, or any gate fails. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
+`release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin`, an identity differs from `BUNDLE_ID`, or any gate fails. Publishing creates one new Release with its complete five-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
 
 Copy `docs/release-uat-evidence.template.json` outside the repository and fill it only after testing the exact commit. The validator requires clean install, upgrade/settings retention, uninstall, launch-at-login, privacy permissions, real recorder audio, live downloader, archive read-only behavior, output handoffs, and user-style E2E to be passed and approved. Historical UAT does not satisfy a new commit.
 
@@ -77,5 +79,6 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 - Recorder hardware permission tests are intentionally skipped by `script/ci.sh` and must be checked manually on a machine with a usable system-audio capture setup.
 - Public mode additionally runs `script/ci-release.sh` and the focused `script/ci-tsan.sh` concurrency gate.
 - Public mode runs user E2E with `NMH_STRICT_UI_E2E=1`; missing Accessibility-visible first-run content is a failure, not a skip.
-- `--install-smoke` checks the already-installed `/Applications/NikoMusicHub.app`; the consolidated UAT record remains the authoritative clean-install/upgrade/uninstall proof.
+- `--install-smoke` mounts and installs an isolated copy from the candidate DMG, then proves its exact build ID, release configuration, source commit, and executable hash; the consolidated UAT record remains the authoritative clean-install/upgrade/uninstall proof.
+- The local post-publish checks cannot prevent a later privileged tag force-move; protect release tags on the GitHub repository before enabling public publishing.
 - App Store review is not part of this release path.

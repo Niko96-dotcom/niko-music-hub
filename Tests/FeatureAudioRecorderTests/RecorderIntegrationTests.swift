@@ -76,7 +76,7 @@ final class RecorderIntegrationTests: XCTestCase {
         let stream = try await adapter.startRecording(outputURL: outputURL, preset: .cubaseDefault, maxDuration: 1.0)
 
         for await _ in stream {}
-        let result = try await adapter.stopRecording()
+        _ = try await adapter.stopRecording()
         let elapsed = Date().timeIntervalSince(startTime)
 
         XCTAssertTrue(elapsed >= 1.0 && elapsed < 2.0, "Duration should be ~1 second, got \(elapsed)")

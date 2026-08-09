@@ -12,7 +12,9 @@ extension [URL] {
 @MainActor
 protocol ArchiveScanHost: AnyObject {
     var roots: [URL] { get }
-    var songs: [Song] { get }
+    /// Scanner-owned baseline. This intentionally excludes opt-in Project Vault
+    /// archive projections which can appear in the visible `songs` catalog.
+    var scannedSongs: [Song] { get }
     var collaborators: [Collaborator] { get }
     var scanDiagnostics: ArchiveScanDiagnostics? { get }
     var rootGeneration: UInt64 { get }
@@ -30,6 +32,8 @@ protocol ArchiveScanHost: AnyObject {
 
 @MainActor
 final class ArchiveScanOrchestrator {
+    private static let maximumPendingIncrementalPathCount = 1_024
+
     private struct ScanRequest {
         let roots: [URL]
         let generation: UInt64
@@ -37,29 +41,42 @@ final class ArchiveScanOrchestrator {
 
     private weak var host: (any ArchiveScanHost)?
     private var activeScanGeneration: UInt64?
+    /// Owns the async full-scan request rather than only its generation marker, so
+    /// a root replacement can stop the underlying detached filesystem traversal.
+    private var activeFullScanTask: Task<ScanResult, Error>?
     private var pendingIncrementalPaths: Set<String> = []
+    private var fullRescanPending = false
 
     init(host: any ArchiveScanHost) {
         self.host = host
     }
 
     func invalidateForRootChange() {
+        activeFullScanTask?.cancel()
+        activeFullScanTask = nil
         activeScanGeneration = nil
         pendingIncrementalPaths.removeAll()
+        fullRescanPending = false
     }
 
     func clearPendingPaths() {
         pendingIncrementalPaths.removeAll()
+        fullRescanPending = false
     }
 
     func restartArchiveRootWatching() {
         guard let host else { return }
         guard let archiveRootWatcher = host.archiveRootWatcher else { return }
         let rootsSnapshot = host.roots
-        let started = archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] changedPaths in
+        let started = archiveRootWatcher.setRoots(rootsSnapshot) { [weak self] event in
             guard let self else { return }
             guard let host = self.host, !host.roots.isEmpty else { return }
-            self.enqueueIncrementalRescan(paths: changedPaths)
+            switch event {
+            case .paths(let changedPaths):
+                self.enqueueIncrementalRescan(paths: changedPaths)
+            case .fullRescanRequired:
+                self.enqueueFullRescan()
+            }
         }
         if !started {
             host.diagnostics.log(
@@ -73,7 +90,7 @@ final class ArchiveScanOrchestrator {
     }
 
     func scan() async {
-        await runFullScan { roots in try await performScanDetached(roots: roots) }
+        await runFullScan()
     }
 
     func scanSync() {
@@ -81,15 +98,24 @@ final class ArchiveScanOrchestrator {
         runFullScanSync { roots in try host.catalog.performScanSynchronously(roots: roots) }
     }
 
-    private func runFullScan(
-        _ perform: ([URL]) async throws -> ScanResult
-    ) async {
+    private func runFullScan() async {
         guard let request = beginScan() else { return }
         defer { finishScan(request) }
         do {
             let scannedAt = Date()
-            let result = try await perform(request.roots)
+            let scanTask = Task { @MainActor [weak self] () throws -> ScanResult in
+                guard let self else { throw CancellationError() }
+                return try await self.performScanDetached(roots: request.roots)
+            }
+            activeFullScanTask = scanTask
+            let result = try await withTaskCancellationHandler(operation: {
+                try await scanTask.value
+            }, onCancel: {
+                scanTask.cancel()
+            })
             try applyFullScanResult(result, request: request, scannedAt: scannedAt)
+        } catch is CancellationError {
+            guard isCurrentScan(request) else { return }
         } catch {
             guard isCurrentScan(request) else { return }
             recordScanFailure(error)
@@ -143,6 +169,7 @@ final class ArchiveScanOrchestrator {
     private func finishScan(_ request: ScanRequest) {
         guard let host else { return }
         guard activeScanGeneration == request.generation else { return }
+        activeFullScanTask = nil
         activeScanGeneration = nil
         host.isScanning = false
         Task { await drainPendingIncrementalRescan() }
@@ -164,21 +191,53 @@ final class ArchiveScanOrchestrator {
             throw CancellationError()
         }
         if let scanOverride = host.scanOverride {
-            return try await scanOverride(roots)
+            let result = try await scanOverride(roots)
+            try Task.checkCancellation()
+            return result
         }
         return try await host.catalog.performScanDetached(roots: roots)
     }
 
     private func enqueueIncrementalRescan(paths: [URL]) {
-        pendingIncrementalPaths.formUnion(paths.map { $0.standardizedFileURL.path })
+        guard !paths.isEmpty, !fullRescanPending else { return }
+        for path in paths {
+            let standardizedPath = path.standardizedFileURL.path
+            guard !pendingIncrementalPaths.contains(standardizedPath) else { continue }
+            guard pendingIncrementalPaths.count < Self.maximumPendingIncrementalPathCount else {
+                enqueueFullRescan()
+                return
+            }
+            pendingIncrementalPaths.insert(standardizedPath)
+        }
+        schedulePendingRescanDrainIfIdle()
+    }
+
+    private func enqueueFullRescan() {
+        pendingIncrementalPaths.removeAll(keepingCapacity: true)
+        guard !fullRescanPending else { return }
+        fullRescanPending = true
+        schedulePendingRescanDrainIfIdle()
+    }
+
+    private func schedulePendingRescanDrainIfIdle() {
         guard let host, !host.isScanning else { return }
         Task { await drainPendingIncrementalRescan() }
     }
 
     private func drainPendingIncrementalRescan() async {
-        guard let host, !host.isScanning, !pendingIncrementalPaths.isEmpty else { return }
+        guard let host, !host.isScanning else { return }
+        if fullRescanPending {
+            fullRescanPending = false
+            host.diagnostics.log(
+                .warning,
+                "Archive filesystem watcher requested a full rescan after incomplete event delivery."
+            )
+            await scan()
+            return
+        }
+        guard !pendingIncrementalPaths.isEmpty else { return }
         let batch = pendingIncrementalPaths
-        pendingIncrementalPaths.removeAll()
+        pendingIncrementalPaths.removeAll(keepingCapacity: true)
         await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) })
     }
 
@@ -208,7 +267,7 @@ final class ArchiveScanOrchestrator {
             guard let update = try await host.catalog.applyIncrementalFilesystemUpdate(
                 changedPaths: changedPaths,
                 roots: rootsSnapshot,
-                existingSongs: host.songs,
+                existingSongs: host.scannedSongs,
                 collaborators: host.collaborators,
                 priorDiagnostics: host.scanDiagnostics
             ) else { return }
@@ -218,7 +277,11 @@ final class ArchiveScanOrchestrator {
 
             host.applyCatalogScanUpdate(update.catalogApplyResult, roots: rootsSnapshot)
             host.diagnostics.log(.info, "Incremental archive rescan updated \(update.incrementalSongCount) song(s)")
+        } catch is CancellationError {
+            return
         } catch {
+            guard host.rootGeneration == generationSnapshot,
+                  host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else { return }
             host.setStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
             host.diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }

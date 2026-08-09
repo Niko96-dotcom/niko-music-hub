@@ -140,7 +140,7 @@ public struct YtDlpDownloader: DownloadRunning {
                         collector.consume(result.standardOutput)
                         collector.consume(result.standardError)
                     }
-                    let outputURLs = collector.finish()
+                    let outputURLs = try collector.finish()
 
                     return DownloadResult(
                         outputURLs: outputURLs,

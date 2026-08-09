@@ -10,6 +10,7 @@ struct SongCardView: View {
     var onSelect: (() -> Void)?
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
     var vaultPresentation: ProjectVaultCardPresentation?
+    var onProjectVaultPrimaryAction: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -28,6 +29,14 @@ struct SongCardView: View {
         return playbackCoordinator.activeURL == mainPreviewURL
     }
 
+    private var isArchivedProject: Bool {
+        vaultPresentation?.state == .archived
+    }
+
+    private var allowsWorkflowMutation: Bool {
+        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(for: vaultPresentation)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -42,7 +51,7 @@ struct SongCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let onWorkflowStatusChange {
+                if allowsWorkflowMutation, let onWorkflowStatusChange {
                     ArchiveWorkflowStatusMenu(
                         status: song.workflowStatus,
                         compact: true,
@@ -68,11 +77,28 @@ struct SongCardView: View {
                 HStack(spacing: 5) {
                     Text(vaultPresentation.state.rawValue)
                         .font(HubDesignSystem.Typography.micro().weight(.semibold))
-                        .foregroundStyle(HubDesignSystem.Palette.accent)
+                        .foregroundStyle(isArchivedProject ? HubDesignSystem.Palette.textSecondary : HubDesignSystem.Palette.accent)
                     Text(vaultPresentation.explanation)
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
+
+                    Spacer(minLength: 3)
+
+                    if vaultPresentation.primaryAction == .restoreAndOpen,
+                       let onProjectVaultPrimaryAction {
+                        Button(action: onProjectVaultPrimaryAction) {
+                            Label("Get", systemImage: "arrow.down.circle")
+                                .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.07), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Get a verified local copy and open it in Cubase")
+                        .accessibilityLabel("Get local copy and open in Cubase")
+                    }
                 }
             }
 
@@ -98,6 +124,7 @@ struct SongCardView: View {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(rowFill)
         }
+        .opacity(isArchivedProject ? 0.68 : 1)
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering

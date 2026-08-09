@@ -15,6 +15,39 @@ INSTALL_SMOKE=false
 RELEASE_DIR="${NMH_RELEASE_DIR:-$ROOT/dist/release}"
 LOG_FILE="${NMH_RELEASE_LOG:-}"
 
+validate_release_output_directory() {
+  /usr/bin/python3 - "$ROOT/dist" "$RELEASE_DIR" <<'PY'
+import os
+import sys
+
+root = os.path.realpath(sys.argv[1])
+candidate = os.path.abspath(sys.argv[2])
+if candidate == root or os.path.commonpath([root, candidate]) != root:
+    raise SystemExit(f"release output must be a child of {root}: {candidate}")
+
+current = os.path.sep
+for component in candidate.strip(os.path.sep).split(os.path.sep):
+    current = os.path.join(current, component)
+    if os.path.lexists(current) and os.path.islink(current):
+        raise SystemExit(f"release output must not traverse a symlink: {current}")
+
+resolved = os.path.realpath(candidate)
+if os.path.commonpath([root, resolved]) != root:
+    raise SystemExit(f"release output resolves outside {root}: {resolved}")
+print(resolved)
+PY
+}
+
+require_clean_release_worktree() {
+  local status
+  status="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+  if [[ -n "$status" ]]; then
+    echo "release artifacts require a completely clean working tree, including untracked files; use ./script/dev.sh run for dirty local development builds" >&2
+    printf '%s\n' "$status" >&2
+    return 1
+  fi
+}
+
 usage() {
   cat >&2 <<'USAGE'
 usage:
@@ -30,7 +63,8 @@ Public mode requires:
   Completely clean working tree, including untracked files
   gh auth when --publish is used
 
-Local-only mode is explicitly unsigned/unnotarized and cannot publish.
+All release artifacts require a completely clean working tree, including untracked files.
+Local-only mode is explicitly unsigned/unnotarized and cannot publish; use `./script/dev.sh run` for dirty local development builds.
 USAGE
 }
 
@@ -51,6 +85,182 @@ run() {
   else
     "$@"
   fi
+}
+
+verify_remote_release_tag() {
+  local remote_refs remote_tag_ref="" remote_tag_peeled="" remote_tag_commit="" object ref
+
+  if ! remote_refs="$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"; then
+    echo "public publish could not inspect remote tag $TAG on origin" >&2
+    return 1
+  fi
+
+  while IFS=$'\t' read -r object ref; do
+    case "$ref" in
+      "refs/tags/$TAG") remote_tag_ref="$object" ;;
+      "refs/tags/$TAG^{}") remote_tag_peeled="$object" ;;
+    esac
+  done <<<"$remote_refs"
+
+  # An annotated tag has a peeled commit ref; a lightweight tag points directly
+  # to its commit. Either form must resolve to the exact local release commit.
+  remote_tag_commit="${remote_tag_peeled:-$remote_tag_ref}"
+  if [[ -z "$remote_tag_ref" || "$remote_tag_commit" != "$COMMIT" ]]; then
+    echo "public publish requires remote tag $TAG on origin to resolve exactly to local release commit $COMMIT; got ${remote_tag_commit:-missing}" >&2
+    return 1
+  fi
+
+  printf 'remote tag verified: %s -> %s\n' "$TAG" "$remote_tag_commit"
+}
+
+verify_hosted_release_contract() {
+  local record="$1"
+  shift
+
+  if [[ "$#" -eq 0 ]]; then
+    echo "hosted release contract requires expected asset names" >&2
+    return 2
+  fi
+
+  gh release view "$TAG" --json tagName,targetCommitish,isDraft,isPrerelease,assets >"$record"
+  /usr/bin/python3 - "$record" "$TAG" "$@" <<'PY'
+import json
+import pathlib
+import sys
+
+record_path = pathlib.Path(sys.argv[1])
+tag = sys.argv[2]
+expected_name_list = sys.argv[3:]
+expected_names = set(expected_name_list)
+if len(expected_names) != len(expected_name_list):
+    raise SystemExit("hosted GitHub Release contract received duplicate expected asset names")
+
+try:
+    payload = json.loads(record_path.read_text())
+except (OSError, json.JSONDecodeError) as error:
+    raise SystemExit(f"could not parse hosted GitHub Release response: {error}")
+
+failures = []
+if payload.get("tagName") != tag:
+    failures.append(f"tagName is {payload.get('tagName')!r}, expected {tag!r}")
+if payload.get("isDraft") is not False:
+    failures.append("release is a draft")
+if payload.get("isPrerelease") is not False:
+    failures.append("release is a prerelease")
+
+assets = payload.get("assets")
+if not isinstance(assets, list):
+    failures.append("release assets are missing or malformed")
+    assets = []
+
+actual_names = []
+for asset in assets:
+    if not isinstance(asset, dict):
+        failures.append("release contains a malformed asset record")
+        continue
+    name = asset.get("name")
+    if not isinstance(name, str) or not name:
+        failures.append("release contains an asset without a valid name")
+        continue
+    actual_names.append(name)
+    if asset.get("state") != "uploaded":
+        failures.append(f"asset {name!r} is not uploaded")
+    size = asset.get("size")
+    if not isinstance(size, int) or size <= 0:
+        failures.append(f"asset {name!r} has invalid size {size!r}")
+
+actual_name_set = set(actual_names)
+if actual_name_set != expected_names:
+    failures.append(
+        "asset set mismatch; "
+        f"missing={sorted(expected_names - actual_name_set)!r} "
+        f"unexpected={sorted(actual_name_set - expected_names)!r}"
+    )
+if len(actual_names) != len(actual_name_set):
+    failures.append("release contains duplicate asset names")
+
+if failures:
+    raise SystemExit("hosted GitHub Release contract failed:\n" + "\n".join(f"- {failure}" for failure in failures))
+
+# GitHub may return a branch name for targetCommitish. The remote Git tag is
+# checked before and after publication as the authoritative commit binding.
+print(f"hosted GitHub Release contract verified for {tag}: {len(actual_names)} exact assets")
+PY
+}
+
+verify_hosted_release_asset_bytes() {
+  local hosted_dir="$1"
+  shift
+  local source hosted
+
+  for source in "$@"; do
+    hosted="$hosted_dir/$(basename "$source")"
+    if [[ ! -f "$source" || ! -f "$hosted" ]]; then
+      echo "hosted asset byte check missing file: source=$source hosted=$hosted" >&2
+      return 1
+    fi
+    if ! cmp -s "$source" "$hosted"; then
+      echo "hosted asset differs from candidate: $(basename "$source")" >&2
+      return 1
+    fi
+  done
+}
+
+run_candidate_install_smoke() {
+  local artifact="$1"
+  local label="$2"
+  local source_app="$3"
+  local smoke_root mount_point mounted_app installed_app expected_binary expected_binary_sha
+
+  case "$label" in
+    candidate|hosted) ;;
+    *)
+      echo "unsupported install-smoke label: $label" >&2
+      return 2
+      ;;
+  esac
+
+  smoke_root="$RELEASE_DIR/install-smoke-$label"
+  mount_point="$smoke_root/mount"
+  mounted_app="$mount_point/NikoMusicHub.app"
+  installed_app="$smoke_root/NikoMusicHub.app"
+  expected_binary="$source_app/Contents/MacOS/NikoMusicHub"
+
+  if [[ ! -f "$artifact" || ! -x "$expected_binary" ]]; then
+    echo "install smoke input missing: artifact=$artifact source_binary=$expected_binary" >&2
+    return 1
+  fi
+  if [[ -e "$smoke_root" ]]; then
+    echo "install smoke directory already exists: $smoke_root" >&2
+    return 1
+  fi
+  expected_binary_sha="$(shasum -a 256 "$expected_binary" | awk '{print $1}')"
+  mkdir -p "$mount_point"
+
+  log "install smoke ($label): mount candidate artifact"
+  if ! run install-smoke-attach hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$artifact"; then
+    return 1
+  fi
+  if [[ ! -d "$mounted_app" ]]; then
+    echo "install smoke mounted artifact has no NikoMusicHub.app: $artifact" >&2
+    hdiutil detach "$mount_point" >/dev/null 2>&1 || hdiutil detach -force "$mount_point" >/dev/null 2>&1 || true
+    return 1
+  fi
+  if ! /usr/bin/ditto "$mounted_app" "$installed_app"; then
+    hdiutil detach "$mount_point" >/dev/null 2>&1 || hdiutil detach -force "$mount_point" >/dev/null 2>&1 || true
+    return 1
+  fi
+  if ! run install-smoke-detach hdiutil detach "$mount_point"; then
+    return 1
+  fi
+
+  NMH_EXPECTED_BUILD_ID="$BUILD_ID" \
+  NMH_EXPECTED_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION" \
+  NMH_EXPECTED_SOURCE_COMMIT="$COMMIT" \
+  NMH_EXPECTED_BINARY_SHA256="$expected_binary_sha" \
+    "$ROOT/script/verify-installed-release.sh" "$installed_app"
+  run install-smoke-codesign codesign --verify --deep --strict --verbose=2 "$installed_app"
+  log "install smoke ($label): exact candidate installation verified"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -94,6 +304,21 @@ if [[ "$MODE" == "local-only" && "$EMERGENCY_SKIP_TESTS" == true ]]; then
   exit 2
 fi
 
+RELEASE_DIR="$(validate_release_output_directory)" || exit 2
+if [[ -n "$LOG_FILE" ]]; then
+  LOG_FILE="$(/usr/bin/python3 - "$RELEASE_DIR" "$LOG_FILE" <<'PY'
+import os
+import sys
+
+release_dir = os.path.realpath(sys.argv[1])
+candidate = os.path.realpath(sys.argv[2])
+if os.path.commonpath([release_dir, candidate]) != release_dir:
+    raise SystemExit(f"release log must stay beneath {release_dir}: {candidate}")
+print(candidate)
+PY
+)" || exit 2
+fi
+
 VERSION="$(nmh_release_version)"
 BUNDLE_ID="$(nmh_bundle_id)"
 TAG="v$VERSION"
@@ -101,6 +326,7 @@ COMMIT="$(nmh_git_commit)"
 SHORT_COMMIT="$(nmh_git_short_commit)"
 BUILD_NUMBER="$(nmh_git_build_number)"
 BUILD_ID="$VERSION+$SHORT_COMMIT"
+RELEASE_BUILD_CONFIGURATION="release"
 RELEASE_ARCHITECTURES="$(nmh_release_architectures)"
 MIN_MACOS_VERSION="$(nmh_release_min_macos_version)"
 nmh_validate_release_host_architecture
@@ -120,8 +346,13 @@ if [[ "$MODE" == "public" ]]; then
   if [[ "$PUBLISH" == true ]]; then
     command -v gh >/dev/null || { echo "public publish requires gh CLI" >&2; exit 1; }
     gh auth status >/dev/null
+    verify_remote_release_tag
   fi
 fi
+
+# A release artifact records an exact source commit. Never package a dirty
+# worktree and then misrepresent the resulting binary as that commit.
+require_clean_release_worktree
 
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
@@ -152,7 +383,11 @@ fi
 
 log "version and public-tree hygiene"
 run version-verify "$ROOT/script/release-version-verify.sh"
-run hygiene "$ROOT/script/public-tree-hygiene.sh"
+if [[ "$MODE" == "public" ]]; then
+  run hygiene "$ROOT/script/public-tree-hygiene.sh" --public-release
+else
+  run hygiene "$ROOT/script/public-tree-hygiene.sh"
+fi
 
 BUILD_DIST="$RELEASE_DIR/build"
 APP="$BUILD_DIST/NikoMusicHub.app"
@@ -174,6 +409,7 @@ if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
   <key>NMHBuildID</key><string>$BUILD_ID</string>
+  <key>NMHBuildConfiguration</key><string>$RELEASE_BUILD_CONFIGURATION</string>
   <key>NMHSourceCommit</key><string>$COMMIT</string>
 </dict></plist>
 PLIST
@@ -182,6 +418,7 @@ else
   export NMH_MARKETING_VERSION="$VERSION"
   export NMH_BUILD_VERSION="$BUILD_NUMBER"
   export NMH_BUILD_ID="$BUILD_ID"
+  export NMH_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION"
   export NMH_SOURCE_COMMIT="$COMMIT"
   if [[ "$MODE" == "public" ]]; then
     export NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION"
@@ -260,6 +497,9 @@ fi
 run validate-artifact-candidate "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE" --allow-pending
 "$ROOT/script/generate-release-record.py" "${MANIFEST_ARGS[@]}" --validation-status passed
 run validate-artifact-final "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE"
+if [[ "$INSTALL_SMOKE" == true ]]; then
+  run_candidate_install_smoke "$DMG" "candidate" "$APP"
+fi
 
 RELEASE_NOTES="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-release-notes.md"
 run release-notes "$ROOT/script/extract-release-notes.sh" "$RELEASE_NOTES"
@@ -299,7 +539,7 @@ if [[ "$MODE" == "public" ]]; then
     --gate "thread-sanitizer|./script/ci-tsan.sh|$TEST_RESULT|$GATE_TIME"
     --gate "release-identity|./script/release-version-verify.sh|passed|$GATE_TIME"
     --gate "release-platform-contract|RELEASE_ARCHITECTURES,Package.swift minimum macOS|passed|$GATE_TIME"
-    --gate "public-tree-hygiene|./script/public-tree-hygiene.sh|passed|$GATE_TIME"
+    --gate "public-tree-hygiene|./script/public-tree-hygiene.sh --public-release|passed|$GATE_TIME"
     --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|$GATE_TIME"
     --gate "artifact-validation|./script/validate-release-artifact.sh|passed|$GATE_TIME"
   )
@@ -311,21 +551,26 @@ if [[ "$MODE" == "public" ]]; then
 fi
 
 log "installed truth"
-if [[ "$INSTALL_SMOKE" == true ]]; then
-  "$ROOT/script/verify-installed-release.sh"
-else
-  echo "installed bundle smoke skipped; consolidated exact-commit UAT remains mandatory for public mode" | tee -a "$LOG_FILE"
+if [[ "$INSTALL_SMOKE" != true ]]; then
+  echo "candidate installation smoke skipped; consolidated exact-commit UAT remains mandatory for public mode" | tee -a "$LOG_FILE"
 fi
 
 log "publication"
 if [[ "$PUBLISH" == true ]]; then
-  gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Niko Music Hub $VERSION" --notes-file "$RELEASE_NOTES"
-  gh release upload "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" --clobber
+  run remote-tag-before-create verify_remote_release_tag
+  run gh-release-create gh release create "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" --verify-tag --title "Niko Music Hub $VERSION" --notes-file "$RELEASE_NOTES"
+  run remote-tag-after-create verify_remote_release_tag
+  HOSTED_RELEASE_RECORD="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-hosted-release.json"
+  run hosted-release-contract verify_hosted_release_contract "$HOSTED_RELEASE_RECORD" "$(basename "$DMG")" "$(basename "$DMG.sha256")" "$(basename "$MANIFEST")" "$(basename "$APPROVAL")" "$(basename "$RELEASE_NOTES")"
   HOSTED_DIR="$RELEASE_DIR/hosted-download"
   mkdir -p "$HOSTED_DIR"
   gh release download "$TAG" --dir "$HOSTED_DIR" --pattern "$(basename "$DMG")" --pattern "$(basename "$DMG.sha256")" --pattern "$(basename "$MANIFEST")" --pattern "$(basename "$APPROVAL")" --pattern "$(basename "$RELEASE_NOTES")"
+  run hosted-asset-byte-equality verify_hosted_release_asset_bytes "$HOSTED_DIR" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES"
   run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE"
   run validate-hosted-approval "$ROOT/script/validate-release-approval.sh" --approval "$HOSTED_DIR/$(basename "$APPROVAL")" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --uat "$NMH_RELEASE_UAT_EVIDENCE"
+  if [[ "$INSTALL_SMOKE" == true ]]; then
+    run_candidate_install_smoke "$HOSTED_DIR/$(basename "$DMG")" "hosted" "$APP"
+  fi
 elif [[ "$DRY_RUN_PUBLISH" == true ]]; then
   echo "DRY-RUN: publication skipped after full local public artifact validation" | tee -a "$LOG_FILE"
 else
@@ -354,7 +599,7 @@ cat >"$REPORT" <<REPORT
 ## Caveats
 
 $([[ "$MODE" == "local-only" ]] && echo "- Local-only artifacts are ad-hoc signed, unnotarized, and not public release candidates." || echo "- Public artifact signing/notarization validation ran before checksum generation.")
-$([[ "$INSTALL_SMOKE" != true ]] && echo "- Installed /Applications metadata was not checked in this run; public mode still required consolidated exact-commit UAT evidence." || echo "- Installed bundle metadata matched VERSION and BUNDLE_ID.")
+$([[ "$INSTALL_SMOKE" != true ]] && echo "- Exact candidate installation smoke was not run; public mode still required consolidated exact-commit UAT evidence." || echo "- Mounted candidate DMG was copied to an isolated install location and matched the exact build ID, release configuration, source commit, and executable SHA-256.")
 REPORT
 
 echo "release finished: $REPORT"

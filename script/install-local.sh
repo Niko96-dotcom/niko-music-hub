@@ -40,6 +40,7 @@ mkdir -p "$(dirname "$APP_PATH")"
 /usr/bin/ditto "$NMH_APP_BUNDLE" "$STAGING_PATH"
 
 NMH_EXPECTED_BUILD_ID="$EXPECTED_BUILD_ID" \
+NMH_EXPECTED_SOURCE_COMMIT="$NMH_SOURCE_COMMIT" \
 NMH_EXPECTED_BINARY_SHA256="$SOURCE_BINARY_SHA256" \
   "$ROOT/script/verify-installed-release.sh" "$STAGING_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$STAGING_PATH"
@@ -50,6 +51,7 @@ fi
 mv "$STAGING_PATH" "$APP_PATH"
 
 NMH_EXPECTED_BUILD_ID="$EXPECTED_BUILD_ID" \
+NMH_EXPECTED_SOURCE_COMMIT="$NMH_SOURCE_COMMIT" \
 NMH_EXPECTED_BINARY_SHA256="$SOURCE_BINARY_SHA256" \
   "$ROOT/script/verify-installed-release.sh" "$APP_PATH"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"

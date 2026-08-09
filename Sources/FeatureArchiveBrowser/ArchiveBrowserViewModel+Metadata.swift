@@ -30,6 +30,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func updateWorkflowStatus(for song: Song, status: ProjectWorkflowStatus?) {
+        guard canMutateWorkflowStatus(for: song) else { return }
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
         }
@@ -134,17 +135,18 @@ extension ArchiveBrowserViewModel {
         var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)
         created = catalog.mergeUserMetadata(into: [created], collaborators: collaborators).first ?? created
         mutateCatalog {
-            var updatedSongs = songs
-            if let index = updatedSongs.firstIndex(where: { $0.id == created.id }) {
-                updatedSongs[index] = created
+            var updatedScannedSongs = scannedSongs
+            if let index = updatedScannedSongs.firstIndex(where: { $0.id == created.id }) {
+                updatedScannedSongs[index] = created
             } else {
-                updatedSongs.append(created)
-                updatedSongs.sort {
+                updatedScannedSongs.append(created)
+                updatedScannedSongs.sort {
                     $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
                 }
             }
-            songs = updatedSongs
+            scannedSongs = updatedScannedSongs
         }
+        rebuildProjectVaultCatalog()
         if let warning = catalog.persistUserMetadata(for: [created]) {
             recordPersistenceWarning(warning)
         }
@@ -207,7 +209,7 @@ extension ArchiveBrowserViewModel {
             guard !self.roots.isEmpty, self.rootGeneration == generation else { return }
             if let warning = await self.catalog.persistCachedIndexDetached(
                 roots: self.roots,
-                songs: self.songs,
+                songs: self.scannedSongs,
                 scannedAt: self.scanDiagnostics?.scannedAt ?? Date()
             ) {
                 self.recordPersistenceWarning(warning)
@@ -221,6 +223,16 @@ extension ArchiveBrowserViewModel {
                 var updatedSongs = songs
                 updatedSongs[index] = updated
                 songs = updatedSongs
+            }
+            if let index = scannedSongs.firstIndex(where: { $0.id == updated.id }) {
+                var updatedScannedSongs = scannedSongs
+                updatedScannedSongs[index] = updated
+                scannedSongs = updatedScannedSongs
+            } else if !isArchivedProject(updated) {
+                // Keep manually injected/test catalogs and newly-created local
+                // projects on the scan baseline as well. Archive-only projections
+                // are intentionally not promoted back into that baseline.
+                scannedSongs.append(updated)
             }
         }
         if selectedSong?.id == updated.id {

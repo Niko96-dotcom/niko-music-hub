@@ -9,8 +9,9 @@ git status --short --branch
 cat VERSION
 cat BUNDLE_ID
 ./script/release-preflight.sh
+git ls-remote --tags origin "refs/tags/v$(cat VERSION)" "refs/tags/v$(cat VERSION)^{}"
 ./script/release-version-verify.sh
-./script/public-tree-hygiene.sh
+./script/public-tree-hygiene.sh --public-release
 ./script/ci.sh
 ./script/e2e_user_smoke.sh
 ./script/ci-release.sh
@@ -48,34 +49,35 @@ This validates:
 
 ## Hosted Artifact Truth
 
-Publishing mode uploads to GitHub Releases, downloads the hosted assets into `dist/release/hosted-download`, and re-runs artifact validation there:
+Publishing mode requires the exact release tag to already exist on `origin`, creates one new Release with its complete asset set, downloads the hosted assets into `dist/release/hosted-download`, byte-compares every hosted asset against its candidate, and re-runs artifact validation there:
 
 ```bash
 ./script/release-all.sh --public --publish
 ```
 
-Confirm the release has exactly the expected assets:
+Confirm the release has exactly the expected assets and that the tag remains bound to the intended commit:
 
 ```bash
 gh release view "v$(cat VERSION)" --json tagName,targetCommitish,assets,url,publishedAt
+git ls-remote --tags origin "refs/tags/v$(cat VERSION)" "refs/tags/v$(cat VERSION)^{}"
 ```
 
 ## Installed Truth
 
-After installing from the DMG:
+For a separate manual install, after installing from the DMG:
 
 ```bash
 ./script/verify-installed-release.sh /Applications/NikoMusicHub.app
 ```
 
-The installed bundle must report `CFBundleShortVersionString` from `VERSION`, `CFBundleIdentifier` from `BUNDLE_ID`, and an `NMHBuildID` beginning with that version plus the source commit.
+The installed bundle must report `CFBundleShortVersionString` from `VERSION`, `CFBundleIdentifier` from `BUNDLE_ID`, and an `NMHBuildID` beginning with that version plus the source commit. `release-all.sh --install-smoke` performs the equivalent check from an isolated copy of the mounted candidate rather than trusting `/Applications`.
 
 ## Rollback
 
 If a hosted artifact fails validation:
 
-1. Delete or mark the GitHub Release as prerelease/draft.
-2. Remove bad assets.
-3. Do not move the release tag unless the bad tag has not been consumed; otherwise bump `VERSION`.
-4. Rebuild from the intended commit and re-run the full validation path.
-5. Document the failed asset hashes and replacement hashes in the release report.
+1. Do not overwrite or replace a published asset set.
+2. If the release was never consumed, take it down under the repository's release incident policy; otherwise leave the evidence intact.
+3. Do not move the release tag. Bump `VERSION`, rebuild from the intended commit, and publish a new immutable release.
+4. Re-run the full validation path, including remote-tag and hosted byte-equality checks.
+5. Document the failed artifact hashes and the successor release in the incident record.

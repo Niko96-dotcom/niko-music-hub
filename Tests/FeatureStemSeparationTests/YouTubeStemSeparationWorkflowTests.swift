@@ -39,6 +39,47 @@ struct YouTubeStemSeparationWorkflowTests {
         #expect(inbox.items.count == 4)
         #expect(runner.job(id: job.id)?.outputFileURLs.count == 4)
     }
+
+    @Test
+    func startJob_rejectsArchiveOutputBeforeCreatingDownloadDirectoryOrLaunchingDownloader() async throws {
+        let fileManager = FileManager.default
+        let base = fileManager.temporaryDirectory
+            .appendingPathComponent("youtube-stem-output-guard-\(UUID().uuidString)", isDirectory: true)
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let configuredArchiveAlias = base.appendingPathComponent("configured-archive", isDirectory: true)
+        defer { try? fileManager.removeItem(at: base) }
+        try fileManager.createDirectory(at: archive, withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: configuredArchiveAlias, withDestinationURL: archive)
+
+        let runner = JobRunner()
+        let backend = MockStemSeparationBackend()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: runner,
+            archiveRootsProvider: { [configuredArchiveAlias] }
+        )
+        let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: downloader,
+            stemService: service,
+            jobRunner: runner
+        )
+
+        let job = workflow.startJob(
+            request: YouTubeStemSeparationRequest(
+                sourceURL: URL(string: "https://www.youtube.com/watch?v=test")!,
+                outputRootURL: archive,
+                preset: .fast4
+            )
+        )
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .failed)
+        #expect(downloader.requests.isEmpty)
+        #expect(backend.requests.isEmpty)
+        #expect(!fileManager.fileExists(atPath: archive.appendingPathComponent("Downloads", isDirectory: true).path))
+    }
 }
 
 private final class FakeYouTubeAudioDownloader: YouTubeAudioDownloading, @unchecked Sendable {

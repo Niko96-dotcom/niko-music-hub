@@ -15,7 +15,8 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     private let lock = NSLock()
     private var currentTask: Task<StemSeparationResult, Never>?
-    private var currentProcessRequest: ExternalProcessRequest?
+    private var currentTaskID: UUID?
+    private var cancellationRequestedTaskID: UUID?
 
     public init(
         settings: HelperToolSettings = HelperToolSettings(),
@@ -45,34 +46,50 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         request: StemSeparationBackendRequest,
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
-        let work = Task {
-            await self.performSeparation(request: request, onProgress: onProgress)
+        let taskID = UUID()
+        let didReserveOperation = lock.withLock { () -> Bool in
+            guard currentTaskID == nil else { return false }
+            currentTaskID = taskID
+            return true
         }
-        lock.withLock {
+        guard didReserveOperation else {
+            return .failed(message: "A stem separation is already running.")
+        }
+
+        let parentWasAlreadyCancelled = Task.isCancelled
+        let work: Task<StemSeparationResult, Never> = Task {
+            guard !parentWasAlreadyCancelled else { return .canceled }
+            return await self.performSeparation(request: request, onProgress: onProgress)
+        }
+        let cancellationWasRequested = lock.withLock { () -> Bool in
+            guard currentTaskID == taskID else { return true }
             currentTask = work
+            return cancellationRequestedTaskID == taskID
         }
-        defer {
-            lock.withLock {
-                currentTask = nil
-                currentProcessRequest = nil
-            }
+        if parentWasAlreadyCancelled || cancellationWasRequested {
+            work.cancel()
         }
-        return await work.value
+        return await withTaskCancellationHandler(operation: {
+            defer { self.clearCurrentTask(id: taskID) }
+            return await work.value
+        }, onCancel: {
+            // `Task {}` is unstructured, so explicitly forward job-task cancellation
+            // to the task awaiting the process. FoundationExternalProcessRunner then
+            // terminates the helper's dedicated process group.
+            work.cancel()
+        })
     }
 
     private func performSeparation(
         request: StemSeparationBackendRequest,
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
+        guard !Task.isCancelled else { return .canceled }
         guard let processRequest = try? commandBuilder.buildRequest(
             backendRequest: request,
             settings: settings
         ) else {
             return .failed(message: "Could not build demucs-mlx command. Is the executable configured?")
-        }
-
-        lock.withLock {
-            currentProcessRequest = processRequest
         }
 
         let startTime = Date()
@@ -155,9 +172,20 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
     }
 
     public func cancel() {
+        let task = lock.withLock { () -> Task<StemSeparationResult, Never>? in
+            guard let currentTaskID else { return nil }
+            cancellationRequestedTaskID = currentTaskID
+            return currentTask
+        }
+        task?.cancel()
+    }
+
+    private func clearCurrentTask(id: UUID) {
         lock.withLock {
-            currentTask?.cancel()
+            guard currentTaskID == id else { return }
             currentTask = nil
+            currentTaskID = nil
+            cancellationRequestedTaskID = nil
         }
     }
 

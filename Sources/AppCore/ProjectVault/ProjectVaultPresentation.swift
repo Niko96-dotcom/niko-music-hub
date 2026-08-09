@@ -18,7 +18,7 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
     public var label: String {
         switch self {
         case .openInCubase: "Open in Cubase"
-        case .restoreAndOpen: "Restore & Open"
+        case .restoreAndOpen: "Get Local & Open"
         case .review: "Review"
         }
     }

@@ -20,11 +20,13 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     }
 
     public func scan(roots: [URL]) throws -> ScanResult {
+        try Task.checkCancellation()
         var songs: [Song] = []
         var globalWarnings: [String] = []
         var skippedEntries: [SkippedScanEntry] = []
 
         for root in roots {
+            try Task.checkCancellation()
             let standardizedRoot = root.standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: standardizedRoot.path, isDirectory: &isDirectory),
@@ -62,7 +64,10 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             }
             let rootLevelVersions: [ProjectVersion]
             do {
+                try Task.checkCancellation()
                 rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 globalWarnings.append("Could not read root-level CPR files: \(standardizedRoot.path)")
                 skippedEntries.append(
@@ -78,6 +83,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
 
             for child in children {
+                try Task.checkCancellation()
                 let values: URLResourceValues
                 do {
                     values = try child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -117,6 +123,8 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                         if let song = try scanSongFolder(child) {
                             songs.append(song)
                         }
+                    } catch is CancellationError {
+                        throw CancellationError()
                     } catch {
                         skippedEntries.append(
                             SkippedScanEntry(
@@ -143,6 +151,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             }
         }
 
+        try Task.checkCancellation()
         songs.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
         skippedEntries.sort {
             let kindOrder = $0.kind.rawValue.localizedCaseInsensitiveCompare($1.kind.rawValue)
@@ -161,10 +170,12 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         resolution: ArchiveSongFolderResolver.Resolution,
         roots: [URL]
     ) throws -> ScanResult {
+        try Task.checkCancellation()
         var songs: [Song] = []
         var skippedEntries: [SkippedScanEntry] = []
 
         for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
+            try Task.checkCancellation()
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
                   isDirectory.boolValue else {
@@ -174,6 +185,8 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                 if let song = try scanSongFolder(folder) {
                     songs.append(song)
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 skippedEntries.append(
                     SkippedScanEntry(
@@ -186,6 +199,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         }
 
         for root in resolution.rootsForRootLevelScan.sorted(by: { $0.path < $1.path }) {
+            try Task.checkCancellation()
             let standardizedRoot = root.standardizedFileURL
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: standardizedRoot.path, isDirectory: &isDirectory),
@@ -195,6 +209,8 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             do {
                 let rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
                 songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 skippedEntries.append(
                     SkippedScanEntry(
@@ -206,6 +222,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             }
         }
 
+        try Task.checkCancellation()
         songs.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
         skippedEntries.sort {
             let kindOrder = $0.kind.rawValue.localizedCaseInsensitiveCompare($1.kind.rawValue)
@@ -243,6 +260,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
     }
 
     private func scanSongFolder(_ folder: URL) throws -> Song? {
+        try Task.checkCancellation()
         let folderName = folder.lastPathComponent
         var warnings: [String] = []
         guard fileManager.isReadableFile(atPath: folder.path) else {
@@ -250,11 +268,13 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         }
 
         let versions = try cprDetector.detectVersions(in: folder)
+        try Task.checkCancellation()
         if versions.isEmpty {
             warnings.append("No CPR project files found")
         }
 
         var previews = try previewDetector.detectCandidates(in: folder)
+        try Task.checkCancellation()
         let previewContext = PreviewRankingProjectContext.from(projectVersions: versions)
         let ranked = previewRanker.rank(previews, projectContext: previewContext)
         previews = ranked

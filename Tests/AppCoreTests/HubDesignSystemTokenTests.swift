@@ -3,6 +3,7 @@ import AppKit
 import SwiftUI
 import XCTest
 
+@MainActor
 final class HubDesignSystemTokenTests: XCTestCase {
     /// 2026-07 muted reference spec: compact grouped radii, closer to Cursor/Codex
     /// settings surfaces than raised card slabs.
@@ -27,11 +28,15 @@ final class HubDesignSystemTokenTests: XCTestCase {
     }
 
     func testAccentIsNeutralNotTinted() {
+        let application = NSApplication.shared
         for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-            let appearance = NSAppearance(named: appearanceName)!
-            let previous = NSApp.appearance
-            NSApp.appearance = appearance
-            defer { NSApp.appearance = previous }
+            guard let appearance = NSAppearance(named: appearanceName) else {
+                XCTFail("Missing appearance \(appearanceName.rawValue)")
+                continue
+            }
+            let previous = application.appearance
+            application.appearance = appearance
+            defer { application.appearance = previous }
 
             let components = rgbaComponents(HubDesignSystem.Colors.accent)
             XCTAssertNotNil(components, "accent components missing under \(appearanceName.rawValue)")
@@ -125,6 +130,7 @@ private struct RGBAComponents {
     let blue: CGFloat
 }
 
+@MainActor
 private func rgbaComponents(_ color: Color) -> RGBAComponents? {
     guard let nsColor = NSColor(color).usingColorSpace(.sRGB) else { return nil }
     return RGBAComponents(

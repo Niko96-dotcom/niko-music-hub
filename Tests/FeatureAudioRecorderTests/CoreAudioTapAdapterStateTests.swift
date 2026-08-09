@@ -34,6 +34,29 @@ final class CoreAudioTapAdapterStateTests: XCTestCase {
         XCTAssertFalse(adapter.recording)
     }
 
+    func testLevelStreamCoalescesToLatestValueWhenConsumerFallsBehind() async throws {
+        let session = CountingStopSession()
+        let adapter = CoreAudioTapAdapter(sessionFactory: { session })
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("adapter_levels_\(UUID().uuidString).wav")
+        let stream = try await adapter.startRecording(
+            outputURL: outputURL,
+            preset: .cubaseDefault,
+            maxDuration: nil
+        )
+
+        // Do not start consuming until after a burst, as a busy main actor would behave.
+        session.emitLevelBurst(count: 100)
+        _ = try await adapter.stopRecording()
+
+        var receivedElapsedTimes: [TimeInterval] = []
+        for await level in stream {
+            receivedElapsedTimes.append(level.elapsedTime)
+        }
+
+        XCTAssertEqual(receivedElapsedTimes, [100])
+    }
+
     func testManualAndAutomaticStopsShareOneInFlightResult() async throws {
         let session = CountingStopSession(stopDelayMicroseconds: 25_000)
         let adapter = CoreAudioTapAdapter(sessionFactory: { session })
@@ -202,6 +225,19 @@ private final class CountingStopSession: SystemAudioRecordingSession, @unchecked
         let handler = lock.withLock { levelHandler }
         for _ in 0..<count {
             handler?(RecorderAudioLevel(peak: 0.8, average: 0.4, elapsedTime: 1))
+        }
+    }
+
+    func emitLevelBurst(count: Int) {
+        let handler = lock.withLock { levelHandler }
+        for elapsedTime in 1...count {
+            handler?(
+                RecorderAudioLevel(
+                    peak: 0.8,
+                    average: 0.4,
+                    elapsedTime: TimeInterval(elapsedTime)
+                )
+            )
         }
     }
 

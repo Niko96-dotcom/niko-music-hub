@@ -32,17 +32,28 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     private let lock = NSLock()
     private let maximumRetainedJobs: Int
     private let maximumLogEntriesPerJob: Int
+    private let maximumLogBytesPerJob: Int
+    private let maximumLogEntryBytes: Int
+    private let maximumSnapshotTextBytes: Int
     private var jobs: [Job.ID: Job] = [:]
     private var order: [Job.ID] = []
     private var tasks: [Job.ID: Task<Void, Never>] = [:]
     private var observers: [Job.ID: [UUID: AsyncStream<Job>.Continuation]] = [:]
+    private var retainedLogBytes: [Job.ID: Int] = [:]
 
     public init(
         maximumRetainedJobs: Int = 500,
-        maximumLogEntriesPerJob: Int = 1_000
+        maximumLogEntriesPerJob: Int = 1_000,
+        maximumLogBytesPerJob: Int = 256 * 1_024,
+        maximumLogEntryBytes: Int = 16 * 1_024,
+        maximumSnapshotTextBytes: Int = 16 * 1_024
     ) {
         self.maximumRetainedJobs = max(1, maximumRetainedJobs)
         self.maximumLogEntriesPerJob = max(1, maximumLogEntriesPerJob)
+        let logByteBudget = max(1, maximumLogBytesPerJob)
+        self.maximumLogBytesPerJob = logByteBudget
+        self.maximumLogEntryBytes = min(max(1, maximumLogEntryBytes), logByteBudget)
+        self.maximumSnapshotTextBytes = max(1, maximumSnapshotTextBytes)
     }
 
     public func listJobs() -> [Job] {
@@ -58,7 +69,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     }
 
     public func updates(for id: Job.ID) -> AsyncStream<Job> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let observerID = UUID()
             let terminalSnapshot = lock.withLock { () -> Job? in
                 guard let current = jobs[id] else { return nil }
@@ -85,7 +96,11 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         sourceToolID: ToolFeatureID,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
-        let job = Job(sourceToolID: sourceToolID, title: title, message: "Queued")
+        let job = Job(
+            sourceToolID: sourceToolID,
+            title: boundedText(title, maximumUTF8Bytes: maximumSnapshotTextBytes),
+            message: "Queued"
+        )
         lock.withLock {
             jobs[job.id] = job
             order.append(job.id)
@@ -93,21 +108,19 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
 
         let progress = JobProgress(
             updateHandler: { [weak self] progress, message in
-                self?.mutateActiveJob(id: job.id) { current in
+                guard let self else { return }
+                let boundedMessage = message.map {
+                    self.boundedText($0, maximumUTF8Bytes: self.maximumSnapshotTextBytes)
+                }
+                self.mutateActiveJob(id: job.id) { current in
                     current.progress = progress
-                    if let message {
-                        current.message = message
+                    if let boundedMessage {
+                        current.message = boundedMessage
                     }
                 }
             },
             logHandler: { [weak self] message in
-                self?.mutateActiveJob(id: job.id) { [weak self] current in
-                    current.logEntries.append(JobLogEntry(message: message))
-                    guard let self else { return }
-                    if current.logEntries.count > self.maximumLogEntriesPerJob {
-                        current.logEntries.removeFirst(current.logEntries.count - self.maximumLogEntriesPerJob)
-                    }
-                }
+                self?.appendLog(message, to: job.id)
             },
             outputHandler: { [weak self] urls in
                 self?.mutateActiveJob(id: job.id) { current in
@@ -182,10 +195,11 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     }
 
     private func markFailed(id: Job.ID, message: String) {
+        let boundedMessage = boundedText(message, maximumUTF8Bytes: maximumSnapshotTextBytes)
         mutateJob(id: id) { job in
             guard job.state == .running else { return false }
             job.state = .failed
-            job.message = message
+            job.message = boundedMessage
             job.finishedAt = Date()
             return true
         }
@@ -206,6 +220,23 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             guard !job.state.isTerminal else { return false }
             update(&job)
             return true
+        }
+    }
+
+    private func appendLog(_ message: String, to id: Job.ID) {
+        let boundedMessage = boundedText(message, maximumUTF8Bytes: maximumLogEntryBytes)
+        let messageBytes = boundedMessage.utf8.count
+        mutateActiveJob(id: id) { job in
+            var byteCount = retainedLogBytes[id] ?? job.logEntries.reduce(into: 0) {
+                $0 += $1.message.utf8.count
+            }
+            job.logEntries.append(JobLogEntry(message: boundedMessage))
+            byteCount += messageBytes
+            while job.logEntries.count > maximumLogEntriesPerJob || byteCount > maximumLogBytesPerJob {
+                let removed = job.logEntries.removeFirst()
+                byteCount -= removed.message.utf8.count
+            }
+            retainedLogBytes[id] = byteCount
         }
     }
 
@@ -269,12 +300,38 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             if removableCount > 0, jobs[id]?.state.isTerminal == true {
                 jobs.removeValue(forKey: id)
                 observers.removeValue(forKey: id)
+                retainedLogBytes.removeValue(forKey: id)
                 removableCount -= 1
             } else {
                 retained.append(id)
             }
         }
         order = retained
+    }
+
+    private func boundedText(_ text: String, maximumUTF8Bytes: Int) -> String {
+        guard text.utf8.count > maximumUTF8Bytes else { return text }
+
+        let suffix = "…"
+        guard maximumUTF8Bytes >= suffix.utf8.count else {
+            return String(text[..<utf8EndIndex(in: text, maximumBytes: maximumUTF8Bytes)])
+        }
+        let prefix = String(text[..<utf8EndIndex(
+            in: text,
+            maximumBytes: maximumUTF8Bytes - suffix.utf8.count
+        )])
+        return prefix + suffix
+    }
+
+    private func utf8EndIndex(in text: String, maximumBytes: Int) -> String.Index {
+        guard maximumBytes > 0 else { return text.startIndex }
+        let utf8 = text.utf8
+        guard utf8.count > maximumBytes else { return text.endIndex }
+        var end = utf8.index(utf8.startIndex, offsetBy: maximumBytes)
+        while end != utf8.startIndex, (utf8[end] & 0b1100_0000) == 0b1000_0000 {
+            end = utf8.index(before: end)
+        }
+        return end
     }
 }
 

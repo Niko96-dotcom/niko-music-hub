@@ -118,12 +118,162 @@ public protocol VaultAutomationActivityProbing: Sendable {
     func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus
 }
 
+enum VaultActivityCommandStatus: Equatable, Sendable {
+    case exited(Int32)
+    case timedOut
+    case cancelled
+    case unavailable
+    case failed
+}
+
+protocol VaultActivityCommandRunning: Sendable {
+    func status(
+        executable: String,
+        arguments: [String],
+        timeout: TimeInterval
+    ) async -> VaultActivityCommandStatus
+}
+
+struct FoundationVaultActivityCommandRunner: VaultActivityCommandRunning {
+    func status(
+        executable: String,
+        arguments: [String],
+        timeout: TimeInterval
+    ) async -> VaultActivityCommandStatus {
+        guard FileManager.default.isExecutableFile(atPath: executable) else { return .unavailable }
+        guard timeout > 0 else { return .timedOut }
+        guard !Task.isCancelled else { return .cancelled }
+
+        let execution = VaultActivityProcessExecution(
+            executable: executable,
+            arguments: arguments,
+            timeout: timeout
+        )
+        return await withTaskCancellationHandler {
+            await execution.start()
+        } onCancel: {
+            execution.cancel()
+        }
+    }
+}
+
+private final class VaultActivityProcessExecution: @unchecked Sendable {
+    private let executable: String
+    private let arguments: [String]
+    private let timeout: TimeInterval
+    private let lock = NSLock()
+    private var process: Process?
+    private var continuation: CheckedContinuation<VaultActivityCommandStatus, Never>?
+    private var result: VaultActivityCommandStatus?
+    private var timeoutWorkItem: DispatchWorkItem?
+
+    init(executable: String, arguments: [String], timeout: TimeInterval) {
+        self.executable = executable
+        self.arguments = arguments
+        self.timeout = timeout
+    }
+
+    func start() async -> VaultActivityCommandStatus {
+        await withCheckedContinuation { continuation in
+            let pendingResult = lock.withLock { () -> VaultActivityCommandStatus? in
+                self.continuation = continuation
+                return result
+            }
+            if let pendingResult {
+                continuation.resume(returning: pendingResult)
+                return
+            }
+            launch()
+        }
+    }
+
+    func cancel() {
+        finish(.cancelled, terminateRunningProcess: true)
+    }
+
+    private func launch() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.terminationHandler = { [weak self] completedProcess in
+            self?.finish(.exited(completedProcess.terminationStatus), terminateRunningProcess: false)
+        }
+
+        let shouldLaunch = lock.withLock { () -> Bool in
+            guard result == nil else { return false }
+            self.process = process
+            return true
+        }
+        guard shouldLaunch else { return }
+
+        do {
+            try process.run()
+        } catch {
+            finish(.failed, terminateRunningProcess: false)
+            return
+        }
+
+        let timedOut = DispatchWorkItem { [weak self] in
+            self?.finish(.timedOut, terminateRunningProcess: true)
+        }
+        let shouldScheduleTimeout = lock.withLock { () -> Bool in
+            guard result == nil else { return false }
+            timeoutWorkItem = timedOut
+            return true
+        }
+        if shouldScheduleTimeout {
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: timedOut)
+        } else {
+            process.terminate()
+        }
+    }
+
+    private func finish(
+        _ result: VaultActivityCommandStatus,
+        terminateRunningProcess: Bool
+    ) {
+        let completion = lock.withLock { () -> (Process?, DispatchWorkItem?, CheckedContinuation<VaultActivityCommandStatus, Never>?)? in
+            guard self.result == nil else { return nil }
+            self.result = result
+            let completion = (process, timeoutWorkItem, continuation)
+            process = nil
+            timeoutWorkItem = nil
+            continuation = nil
+            return completion
+        }
+        guard let (process, timeoutWorkItem, continuation) = completion else { return }
+        timeoutWorkItem?.cancel()
+        if terminateRunningProcess { process?.terminate() }
+        continuation?.resume(returning: result)
+    }
+}
+
 /// Production probe. Exit statuses other than the documented clear/busy values
 /// are uncertainty and therefore postpone work.
 public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing, @unchecked Sendable {
     private let fileManager: FileManager
+    private let commandRunner: any VaultActivityCommandRunning
+    private let activeUseProbeTimeout: TimeInterval
 
-    public init(fileManager: FileManager = .default) { self.fileManager = fileManager }
+    public init(fileManager: FileManager = .default) {
+        self.init(
+            fileManager: fileManager,
+            commandRunner: FoundationVaultActivityCommandRunner(),
+            activeUseProbeTimeout: 5
+        )
+    }
+
+    init(
+        fileManager: FileManager = .default,
+        commandRunner: any VaultActivityCommandRunning,
+        activeUseProbeTimeout: TimeInterval
+    ) {
+        self.fileManager = fileManager
+        self.commandRunner = commandRunner
+        self.activeUseProbeTimeout = max(0, activeUseProbeTimeout)
+    }
 
     public func cubaseStatus() async -> VaultActivityStatus {
         let process = Process()
@@ -147,44 +297,61 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
     }
 
     public func openFileStatus(in projectURL: URL) async -> VaultActivityStatus {
-        commandStatus(executable: "/usr/sbin/lsof", arguments: ["+D", projectURL.path])
+        let status = await commandRunner.status(
+            executable: "/usr/sbin/lsof",
+            arguments: ["-nP", "+D", projectURL.path],
+            timeout: activeUseProbeTimeout
+        )
+        switch status {
+        case .exited(0): return .busy
+        case .exited(1): return .clear
+        case .exited(let code): return .uncertain("probe-failed-\(code)")
+        case .timedOut: return .uncertain("probe-timed-out")
+        case .cancelled: return .uncertain("probe-cancelled")
+        case .unavailable: return .uncertain("probe-unavailable")
+        case .failed: return .uncertain("probe-failed")
+        }
     }
 
     public func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus {
         guard fileManager.fileExists(atPath: projectURL.path) else { return .uncertain("project-missing") }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(activeUseProbeTimeout))
+        guard !Task.isCancelled else { return .uncertain("probe-cancelled") }
+        guard ContinuousClock.now < deadline else { return .uncertain("probe-timed-out") }
         guard let enumerator = fileManager.enumerator(
             at: projectURL,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsPackageDescendants]
         ) else { return .uncertain("project-unreadable") }
-        while let url = enumerator.nextObject() as? URL {
-            do {
+
+        do {
+            while true {
+                try checkActivityScanContinues(until: deadline)
+                guard let url = enumerator.nextObject() as? URL else { break }
+                try checkActivityScanContinues(until: deadline)
                 if let modified = try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
                    modified >= since {
                     return .busy
                 }
-            } catch { return .uncertain("metadata-unreadable") }
+            }
+            return .clear
+        } catch is CancellationError {
+            return .uncertain("probe-cancelled")
+        } catch is VaultActivityProbeError {
+            return .uncertain("probe-timed-out")
+        } catch {
+            return .uncertain("metadata-unreadable")
         }
-        return .clear
     }
 
-    private func commandStatus(executable: String, arguments: [String]) -> VaultActivityStatus {
-        guard fileManager.isExecutableFile(atPath: executable) else { return .uncertain("probe-unavailable") }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            switch process.terminationStatus {
-            case 0: return .busy
-            case 1: return .clear
-            default: return .uncertain("probe-failed-\(process.terminationStatus)")
-            }
-        } catch { return .uncertain("probe-failed") }
+    private func checkActivityScanContinues(until deadline: ContinuousClock.Instant) throws {
+        try Task.checkCancellation()
+        guard ContinuousClock.now < deadline else { throw VaultActivityProbeError.timedOut }
     }
+}
+
+private enum VaultActivityProbeError: Error {
+    case timedOut
 }
 
 struct CubaseProcessDetector: Sendable {

@@ -60,6 +60,20 @@ struct ArchiveSidebarView: View {
 
             Spacer(minLength: 4)
 
+            if viewModel.canBrowseArchivedProjects {
+                HubIconButton(
+                    systemImage: "archivebox",
+                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects",
+                    help: viewModel.showArchivedProjects
+                        ? "Hide Project Vault archive-only projects"
+                        : "Show \(viewModel.archivedProjectCount) Project Vault archive-only project(s)",
+                    isSelected: viewModel.showArchivedProjects,
+                    isToggle: true
+                ) {
+                    viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                }
+            }
+
             browseFilterMenu
 
             HubIconButton(
@@ -185,6 +199,20 @@ struct ArchiveSidebarView: View {
                     }
                 }
             }
+
+            if viewModel.canBrowseArchivedProjects {
+                Section("Project Vault") {
+                    Button {
+                        viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    } label: {
+                        if viewModel.showArchivedProjects {
+                            Label("Hide archived projects", systemImage: "checkmark")
+                        } else {
+                            Label("Show archived projects", systemImage: "archivebox")
+                        }
+                    }
+                }
+            }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 14, weight: .semibold))
@@ -291,7 +319,10 @@ struct ArchiveSidebarView: View {
                             onWorkflowStatusChange: { status in
                                 viewModel.updateWorkflowStatus(for: song, status: status)
                             },
-                            vaultPresentation: viewModel.projectVaultPresentation(for: song)
+                            vaultPresentation: viewModel.projectVaultPresentation(for: song),
+                            onProjectVaultPrimaryAction: {
+                                viewModel.performProjectVaultPrimaryAction(for: song)
+                            }
                         )
                     }
                 }

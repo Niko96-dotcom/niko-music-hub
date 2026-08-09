@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public struct StemSeparationService: Sendable {
     public static let toolID: ToolFeatureID = "stem-separation"
@@ -7,15 +8,21 @@ public struct StemSeparationService: Sendable {
     private let backend: any StemSeparationBackend
     private let outputInboxStore: any OutputInboxStore
     private let jobRunner: any JobRunning
+    private let archiveRootsProvider: @Sendable () throws -> [URL]
+    private let outputWriteGuard: OutputWriteGuard
 
     public init(
         backend: any StemSeparationBackend,
         outputInboxStore: any OutputInboxStore,
-        jobRunner: any JobRunning
+        jobRunner: any JobRunning,
+        archiveRootsProvider: @escaping @Sendable () throws -> [URL] = { [] },
+        outputWriteGuard: OutputWriteGuard = OutputWriteGuard()
     ) {
         self.backend = backend
         self.outputInboxStore = outputInboxStore
         self.jobRunner = jobRunner
+        self.archiveRootsProvider = archiveRootsProvider
+        self.outputWriteGuard = outputWriteGuard
     }
 
     @discardableResult
@@ -41,6 +48,8 @@ public struct StemSeparationService: Sendable {
             outputFolderURL: outputFolderURL,
             preset: request.preset
         )
+        try Task.checkCancellation()
+        try validateOutputDirectory(outputFolderURL)
         try await runJob(
             backendRequest: backendRequest,
             preset: request.preset,
@@ -56,12 +65,19 @@ public struct StemSeparationService: Sendable {
         progress: JobProgress
     ) async throws {
         progress.log("Creating output folder...")
+        try Task.checkCancellation()
         try createDirectory(at: backendRequest.outputFolderURL)
 
         progress.log("Starting \(preset.displayName) separation...")
-        let result = await backend.separate(request: backendRequest) { fraction, message in
-            progress.update(progress: fraction, message: message)
-        }
+        let backend = self.backend
+        let result = await withTaskCancellationHandler(operation: {
+            await backend.separate(request: backendRequest) { fraction, message in
+                progress.update(progress: fraction, message: message)
+            }
+        }, onCancel: {
+            backend.cancel()
+        })
+        try Task.checkCancellation()
 
         switch result {
         case .canceled:
@@ -141,6 +157,15 @@ public struct StemSeparationService: Sendable {
             at: url,
             withIntermediateDirectories: true,
             attributes: nil
+        )
+    }
+
+    /// Enforces the archive write boundary before a workflow creates output folders.
+    /// The provider is read at job time so cached tool sessions still honor current settings.
+    func validateOutputDirectory(_ outputDirectoryURL: URL) throws {
+        try outputWriteGuard.validateCanWriteOutput(
+            to: outputDirectoryURL,
+            archiveRoots: try archiveRootsProvider()
         )
     }
 

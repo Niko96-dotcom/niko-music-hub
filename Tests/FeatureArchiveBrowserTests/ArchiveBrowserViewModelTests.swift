@@ -373,6 +373,71 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.selectedSong)
     }
 
+    func testIntelligenceRefreshRetainsOnlyMissingAudioSummary() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubIntelligenceSummary-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = root.appendingPathComponent("Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        FileManager.default.createFile(
+            atPath: songFolder.appendingPathComponent("orphan.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        let song = Song(
+            folderPath: songFolder,
+            originalFolderName: "Song",
+            displayTitle: "Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.songs = [song]
+
+        viewModel.refreshIntelligenceNow()
+        let deadline = Date().addingTimeInterval(1)
+        while viewModel.missingAudioReport == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let summary = try XCTUnwrap(viewModel.missingAudioReport)
+        XCTAssertEqual(summary.noPreview, ["Song"])
+        XCTAssertEqual(summary.noCPR, ["Song"])
+        XCTAssertTrue(summary.orphanAudioBySongID.isEmpty)
+    }
+
+    func testImmediateIntelligenceRefreshCancelsSupersededSnapshot() async throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let firstSong = Song(
+            folderPath: root.appendingPathComponent("First", isDirectory: true),
+            originalFolderName: "First",
+            displayTitle: "First"
+        )
+        let secondSong = Song(
+            folderPath: root.appendingPathComponent("Second", isDirectory: true),
+            originalFolderName: "Second",
+            displayTitle: "Second"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+
+        viewModel.songs = [firstSong]
+        viewModel.refreshIntelligenceNow()
+        viewModel.songs = [secondSong]
+        viewModel.refreshIntelligenceNow()
+
+        let deadline = Date().addingTimeInterval(1)
+        while viewModel.missingAudioReport == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let summary = try XCTUnwrap(viewModel.missingAudioReport)
+        XCTAssertEqual(summary.noPreview, ["Second"])
+        XCTAssertEqual(summary.noCPR, ["Second"])
+    }
+
     func testRemoveRootClearsRootBoundArchiveState() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -487,6 +552,63 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.filteredSongs.isEmpty)
         XCTAssertNil(viewModel.scanDiagnostics)
         XCTAssertEqual(indexStore.savedSnapshots.count, 0)
+    }
+
+    func testRootChangeCancelsActiveFullScanBeforeReplacementApplies() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let firstRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cancel-stale-scan-a-\(UUID().uuidString)", isDirectory: true)
+        let secondRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cancel-stale-scan-b-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: firstRoot)
+            try? FileManager.default.removeItem(at: secondRoot)
+        }
+
+        let staleScan = CancellationAwareScanGate()
+        let replacementSong = Song(
+            folderPath: secondRoot.appendingPathComponent("Replacement Song", isDirectory: true),
+            originalFolderName: "Replacement Song",
+            displayTitle: "Replacement Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { requestedRoots in
+                if requestedRoots.standardizedArchivePaths == [firstRoot.standardizedFileURL.path] {
+                    return try await staleScan.wait()
+                }
+                return ScanResult(songs: [replacementSong])
+            }
+        )
+        viewModel.roots = [firstRoot]
+
+        let staleTask = Task { await viewModel.scan() }
+        let startDeadline = Date().addingTimeInterval(2)
+        while !staleScan.isWaiting, Date() < startDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(staleScan.isWaiting)
+
+        viewModel.roots = [secondRoot]
+        let replacementTask = Task { await viewModel.scan() }
+        await replacementTask.value
+
+        let cancellationDeadline = Date().addingTimeInterval(2)
+        while !staleScan.wasCancelled, Date() < cancellationDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let wasCancelled = staleScan.wasCancelled
+        if !wasCancelled {
+            staleScan.release()
+        }
+        await staleTask.value
+
+        XCTAssertTrue(wasCancelled, "Replacing roots must cancel the prior full scan work")
+        XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Replacement Song"])
     }
 
     func testArchiveRootPersistenceFailureIsVisible() throws {
@@ -1520,6 +1642,75 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Brand New"])
     }
 
+    func testFilesystemOverflowAndPendingPathOverflowFallBackToFullRescan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubIncrementalOverflow-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: watcher
+        )
+        await viewModel.scan()
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A"])
+
+        let songB = root.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songB.appendingPathComponent("Song B.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+
+        watcher.simulateFilesystemOverflow()
+        let watcherOverflowDeadline = Date().addingTimeInterval(2)
+        while !viewModel.songs.contains(where: { $0.displayTitle == "Song B" }),
+              Date() < watcherOverflowDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Song B"])
+
+        let songC = root.appendingPathComponent("Song C", isDirectory: true)
+        try FileManager.default.createDirectory(at: songC, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songC.appendingPathComponent("Song C.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+
+        // The changed song is deliberately absent from this event batch. A
+        // partial incremental scan would miss it; the 1,025th distinct path
+        // must instead compact to one full-rescan request.
+        watcher.simulateFilesystemChange(paths: (0...1_024).map {
+            root.appendingPathComponent("storm-noise-\($0)", isDirectory: true)
+        })
+
+        let deadline = Date().addingTimeInterval(2)
+        while !viewModel.songs.contains(where: { $0.displayTitle == "Song C" }), Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Song B", "Song C"])
+    }
+
     func testPendingIncrementalPathsDrainAfterFullScan() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -1854,6 +2045,61 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.mixdownBPMBySongID[cacheKey])
     }
 
+}
+
+private final class CancellationAwareScanGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<ScanResult, Error>?
+    private var waiting = false
+    private var cancelled = false
+
+    var isWaiting: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return waiting
+    }
+
+    var wasCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func wait() async throws -> ScanResult {
+        try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                waiting = true
+                let shouldCancel = cancelled
+                if !shouldCancel {
+                    self.continuation = continuation
+                }
+                lock.unlock()
+                if shouldCancel {
+                    continuation.resume(throwing: CancellationError())
+                }
+            }
+        }, onCancel: {
+            cancel()
+        })
+    }
+
+    func release() {
+        lock.lock()
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: ScanResult())
+    }
+
+    private func cancel() {
+        lock.lock()
+        cancelled = true
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(throwing: CancellationError())
+    }
 }
 
 private final class ScanReleaseGate: @unchecked Sendable {

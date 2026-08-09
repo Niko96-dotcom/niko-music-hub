@@ -3,23 +3,33 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INCLUDE_UNTRACKED=false
+PUBLIC_RELEASE=false
 
 usage() {
   cat >&2 <<'USAGE'
-usage: script/public-tree-hygiene.sh [--include-untracked]
+usage: script/public-tree-hygiene.sh [--include-untracked] [--public-release]
 
 Checks the public/tracked tree for release-hostile files and credential-shaped
-content. --include-untracked performs a stricter local sweep.
+content. --include-untracked performs a stricter local sweep. --public-release
+also rejects private planning/agent state and real home-directory paths; use it
+for a source tree that is about to become publicly visible.
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --include-untracked) INCLUDE_UNTRACKED=true; shift ;;
+    --public-release) PUBLIC_RELEASE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
   esac
 done
+
+# Kept for compatibility with existing callers. New public-release callers use
+# the explicit flag so the strict policy is visible in their command record.
+if [[ -n "${NMH_PUBLIC_TREE_STRICT_PLANNING:-}" ]]; then
+  PUBLIC_RELEASE=true
+fi
 
 cd "$ROOT"
 
@@ -52,15 +62,14 @@ for file in "${FILES[@]}"; do
     DerivedData/*|dist/*|.build/*|tmp/*|*.xcresult) FAILURES+=("$file: build output must not ship") ;;
     .ai/runs/*) FAILURES+=("$file: local AI run logs must not ship") ;;
   esac
-done
-
-if [[ -n "${NMH_PUBLIC_TREE_STRICT_PLANNING:-}" ]]; then
-  for file in "${FILES[@]}"; do
+  if [[ "$PUBLIC_RELEASE" == true ]]; then
     case "$file" in
-      .planning/*) FAILURES+=("$file: strict public release mode forbids planning archive files") ;;
+      .planning/*|.codex/*|.cursor/*|.ai/*)
+        FAILURES+=("$file: public source tree must not ship private planning or agent state")
+        ;;
     esac
-  done
-fi
+  fi
+done
 
 SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})'
 for file in "${FILES[@]}"; do
@@ -73,6 +82,22 @@ for file in "${FILES[@]}"; do
     done < <(rg -n -I "$SECRET_PATTERN" "$file" || true)
   fi
 done
+
+if [[ "$PUBLIC_RELEASE" == true ]]; then
+  # Source/test fixtures often use generic synthetic paths. Public-facing docs,
+  # evidence, and state files must never retain a real local home path.
+  HOME_PATH_PATTERN='/(Users|home)/[[:alnum:]_.-]+(/|$)'
+  for file in "${FILES[@]}"; do
+    case "$file" in
+      Sources/*|Tests/*|Fixtures/*|script/*) continue ;;
+    esac
+    if [[ -f "$file" ]]; then
+      while IFS= read -r hit; do
+        [[ -n "$hit" ]] && FAILURES+=("$hit: real home-directory path must not ship in a public source tree")
+      done < <(rg -n -I "$HOME_PATH_PATTERN" "$file" || true)
+    fi
+  done
+fi
 
 if [[ ${#FAILURES[@]} -gt 0 ]]; then
   echo "public tree hygiene failed:" >&2

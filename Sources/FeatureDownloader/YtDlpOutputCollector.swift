@@ -1,53 +1,66 @@
 import Foundation
 
+enum YtDlpOutputCollectorError: LocalizedError, Equatable, Sendable {
+    case candidateLimitExceeded(maximum: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .candidateLimitExceeded(maximum):
+            return "yt-dlp reported more than \(maximum) output paths. The download was not recorded as complete; reduce the playlist size and retry."
+        }
+    }
+}
+
 final class YtDlpOutputCollector: @unchecked Sendable {
+    static let defaultMaximumPendingLineBytes = 16 * 1_024
+    // A playlist is currently capped at 25 downloads. Leave room for several
+    // yt-dlp intermediate/final-path messages per output while bounding noise.
+    static let defaultMaximumCandidatePaths = 256
+
     private let outputDirectory: URL
     private let fileManager: FileManager
     private let progressHandler: @Sendable (String) -> Void
     private let onActivity: (@Sendable () -> Void)?
+    private let maximumPendingLineBytes: Int
+    private let maximumCandidatePaths: Int
     private let lock = NSLock()
     private var pending = ""
-    private var accumulatedOutput = ""
+    private var isDiscardingOversizedLine = false
     private var candidatePaths: [String] = []
+    private var candidatePathSet: Set<String> = []
+    private var didReportCandidateLimit = false
+    private var didExceedCandidateLimit = false
 
     init(
         outputDirectory: URL,
         fileManager: FileManager,
         progressHandler: @escaping @Sendable (String) -> Void,
-        onActivity: (@Sendable () -> Void)? = nil
+        onActivity: (@Sendable () -> Void)? = nil,
+        maximumPendingLineBytes: Int = defaultMaximumPendingLineBytes,
+        maximumCandidatePaths: Int = defaultMaximumCandidatePaths
     ) {
         self.outputDirectory = outputDirectory
         self.fileManager = fileManager
         self.progressHandler = progressHandler
         self.onActivity = onActivity
+        self.maximumPendingLineBytes = max(1, maximumPendingLineBytes)
+        self.maximumCandidatePaths = max(1, maximumCandidatePaths)
     }
 
     func consume(_ chunk: String) {
         guard !chunk.isEmpty else { return }
         onActivity?()
-        let lines = lock.withLock {
-            accumulatedOutput += chunk
-            pending += chunk
-            return drainCompleteLines()
-        }
-        for line in lines {
-            process(line)
+        lock.withLock {
+            consumeLocked(chunk)
         }
     }
 
-    func finish() -> [URL] {
-        let finalLines = lock.withLock {
-            let remaining = pending
-            pending = ""
-            return remaining.isEmpty ? [] : [remaining]
-        }
-        for line in finalLines {
-            process(line)
-        }
-
-        reparseAccumulatedOutput()
-
-        return lock.withLock {
+    func finish() throws -> [URL] {
+        try lock.withLock {
+            finishPendingLineLocked()
+            if didExceedCandidateLimit {
+                throw YtDlpOutputCollectorError.candidateLimitExceeded(maximum: maximumCandidatePaths)
+            }
             var resolved: [URL] = []
             for path in candidatePaths {
                 for url in urls(for: path) where !resolved.contains(url) {
@@ -61,58 +74,57 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         }
     }
 
-    private func process(_ line: String) {
+    private func consumeLocked(_ chunk: String) {
+        var remaining = chunk[...]
+        while let newline = remaining.firstIndex(where: \.isNewline) {
+            appendToPendingLineLocked(remaining[..<newline])
+            finishPendingLineLocked()
+            remaining = remaining[remaining.index(after: newline)...]
+        }
+        appendToPendingLineLocked(remaining)
+    }
+
+    private func appendToPendingLineLocked(_ fragment: Substring) {
+        guard !isDiscardingOversizedLine else { return }
+        let availableBytes = maximumPendingLineBytes - pending.utf8.count
+        guard fragment.utf8.count <= availableBytes else {
+            pending = ""
+            isDiscardingOversizedLine = true
+            return
+        }
+        pending.append(contentsOf: fragment)
+    }
+
+    private func finishPendingLineLocked() {
+        defer {
+            pending = ""
+            isDiscardingOversizedLine = false
+        }
+        guard !isDiscardingOversizedLine, !pending.isEmpty else { return }
+        processLocked(pending)
+    }
+
+    private func processLocked(_ line: String) {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         onActivity?()
         progressHandler(trimmed)
         let paths = YtDlpDownloader.outputPathCandidates(from: trimmed)
         guard !paths.isEmpty else { return }
-        lock.withLock {
-            for path in paths where !candidatePaths.contains(path) {
-                candidatePaths.append(path)
+        var reachedCandidateLimit = false
+        for path in paths where !candidatePathSet.contains(path) {
+            guard candidatePaths.count < maximumCandidatePaths else {
+                reachedCandidateLimit = true
+                continue
             }
+            candidatePathSet.insert(path)
+            candidatePaths.append(path)
         }
-    }
-
-    private func reparseAccumulatedOutput() {
-        let snapshot = lock.withLock { accumulatedOutput }
-        let lines = snapshot.split(whereSeparator: \.isNewline).map(String.init)
-        var tail = ""
-        if !snapshot.isEmpty, !snapshot.hasSuffix("\n") {
-            tail = String(lines.last ?? "")
+        if reachedCandidateLimit, !didReportCandidateLimit {
+            didReportCandidateLimit = true
+            didExceedCandidateLimit = true
+            progressHandler("Output path detection limit reached; additional paths were ignored.")
         }
-        let completeLines = tail.isEmpty ? lines : Array(lines.dropLast())
-
-        for line in completeLines {
-            let paths = YtDlpDownloader.outputPathCandidates(from: line)
-            guard !paths.isEmpty else { continue }
-            lock.withLock {
-                for path in paths where !candidatePaths.contains(path) {
-                    candidatePaths.append(path)
-                }
-            }
-        }
-
-        if !tail.isEmpty {
-            let paths = YtDlpDownloader.outputPathCandidates(from: tail)
-            guard !paths.isEmpty else { return }
-            lock.withLock {
-                for path in paths where !candidatePaths.contains(path) {
-                    candidatePaths.append(path)
-                }
-            }
-        }
-    }
-
-    private func drainCompleteLines() -> [String] {
-        var lines: [String] = []
-        while let newline = pending.firstIndex(where: \.isNewline) {
-            let line = String(pending[..<newline])
-            lines.append(line)
-            pending.removeSubrange(...newline)
-        }
-        return lines
     }
 
     private func urls(for path: String) -> [URL] {

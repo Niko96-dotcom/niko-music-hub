@@ -49,6 +49,44 @@ final class ExternalProcessRunningTests: XCTestCase {
         }
     }
 
+    func testTimeoutRacesPromptChildExitAcrossConcurrentRuns() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let request = ExternalProcessRequest(
+            executableURL: perlURL,
+            arguments: [
+                "-e",
+                """
+                $| = 1;
+                $SIG{TERM} = sub { print \"terminating\\n\"; exit 0; };
+                print \"ready\\n\";
+                sleep 10;
+                """
+            ],
+            timeoutSeconds: 0.03
+        )
+        let expectedError = ExternalProcessError.timedOut(executable: "perl", seconds: 0.03)
+
+        // The timeout runs on a global queue while the exited child is flushed
+        // on the I/O queue. Repeating this in parallel makes their cleanup race
+        // observable under Thread Sanitizer without relying on a long sleep.
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<12 {
+                group.addTask {
+                    do {
+                        _ = try await runner.run(request)
+                        throw ExternalProcessRaceTestError.expectedTimeout
+                    } catch let error as ExternalProcessError {
+                        guard error == expectedError else { throw error }
+                    }
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
     func testFoundationRunnerCapturesLargeStandardErrorWithoutBlocking() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
@@ -223,6 +261,10 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertFalse(source.contains("\"sh\", \"-c\""))
         XCTAssertFalse(source.contains("shell"))
     }
+}
+
+private enum ExternalProcessRaceTestError: Error {
+    case expectedTimeout
 }
 
 private final class LockedStringArray: @unchecked Sendable {

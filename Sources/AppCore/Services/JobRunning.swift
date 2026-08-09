@@ -22,7 +22,7 @@ public extension JobRunning {
     /// Compatibility stream for lightweight test doubles. `JobRunner` provides
     /// a lock-backed event stream and does not use polling.
     func updates(for id: Job.ID) -> AsyncStream<Job> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
                 while !Task.isCancelled {
                     guard let current = job(id: id) else {

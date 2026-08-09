@@ -1,5 +1,7 @@
 # Install Niko Music Hub
 
+Niko Music Hub supports Apple silicon (`arm64`) Macs running macOS 14.2 or newer. Intel and universal builds are not supported release targets.
+
 Download the DMG and matching `.sha256` file from the GitHub Release.
 
 Verify the checksum from the download folder:

@@ -111,6 +111,54 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_rejectsSecondOperationWhileFirstProcessIsActive() async throws {
+        let firstOutput = makeOutputFolder()
+        let secondOutput = makeOutputFolder()
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = BlockingConcurrentRunner()
+        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let firstRequest = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/first.wav"),
+            outputFolderURL: firstOutput,
+            preset: .fast4
+        )
+        let secondRequest = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/second.wav"),
+            outputFolderURL: secondOutput,
+            preset: .fast4
+        )
+
+        let firstTask = Task {
+            await backend.separate(request: firstRequest) { _, _ in }
+        }
+        for _ in 0..<100 where runner.invocationCount < 1 {
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        #expect(runner.invocationCount == 1)
+
+        let secondResult = StemSeparationResultCollector()
+        let secondTask = Task {
+            await secondResult.set(await backend.separate(request: secondRequest) { _, _ in })
+        }
+        for _ in 0..<100 {
+            if await secondResult.value != nil || runner.invocationCount > 1 {
+                break
+            }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        let capturedSecondResult = await secondResult.value
+        #expect(runner.invocationCount == 1)
+        #expect(capturedSecondResult == .failed(message: "A stem separation is already running."))
+
+        // Release every call even if a regression started a second process, so the test
+        // leaves no intentionally blocked task behind before recording its failure.
+        runner.releaseAll()
+        _ = await firstTask.value
+        _ = await secondTask.value
+    }
+
+    @Test
     func separate_missingExecutable_returnsFailed() async {
         let request = StemSeparationBackendRequest(
             inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
@@ -233,6 +281,62 @@ private final class MessageCollector: @unchecked Sendable {
     private let lock = NSLock()
     private(set) var messages: [String] = []
     func add(_ message: String) { lock.withLock { messages.append(message) } }
+}
+
+private actor StemSeparationResultCollector {
+    private(set) var value: StemSeparationResult?
+
+    func set(_ result: StemSeparationResult) {
+        value = result
+    }
+}
+
+private final class BlockingConcurrentRunner: StreamingExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: CheckedContinuation<ExternalProcessResult, any Error>] = [:]
+    private var invocationTotal = 0
+    private var wasReleased = false
+
+    var invocationCount: Int { lock.withLock { invocationTotal } }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        lock.withLock { invocationTotal += 1 }
+        let invocationID = UUID()
+        return try await withCheckedThrowingContinuation { continuation in
+            let releaseImmediately = lock.withLock { () -> Bool in
+                guard !wasReleased else { return true }
+                continuations[invocationID] = continuation
+                return false
+            }
+            if releaseImmediately {
+                continuation.resume(returning: Self.releasedResult)
+            }
+        }
+    }
+
+    func releaseAll() {
+        let stored = lock.withLock { () -> [CheckedContinuation<ExternalProcessResult, any Error>] in
+            wasReleased = true
+            let stored = Array(continuations.values)
+            continuations.removeAll()
+            return stored
+        }
+        stored.forEach { $0.resume(returning: Self.releasedResult) }
+    }
+
+    private static let releasedResult = ExternalProcessResult(
+        exitCode: 1,
+        standardOutput: "",
+        standardError: "stopped by test"
+    )
 }
 
 private final class FakeStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {

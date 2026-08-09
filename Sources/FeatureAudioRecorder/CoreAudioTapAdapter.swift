@@ -170,7 +170,14 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         }
 
         let tapSession = sessionFactory()
-        let (stream, continuation) = AsyncStream.makeStream(of: RecorderAudioLevel.self)
+        // Levels are display-only snapshots: PCM has already been written synchronously
+        // before this callback, and auto-stop is evaluated below on the producer side.
+        // Retaining only the newest value prevents a stalled UI consumer from accumulating
+        // an unbounded real-time callback backlog.
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: RecorderAudioLevel.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
         let context = RecordingContext(
             session: tapSession,
             outputURL: outputURL,

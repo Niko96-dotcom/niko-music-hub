@@ -9,6 +9,15 @@ import Foundation
 public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked Sendable {
     typealias StreamStarter = (FSEventStreamRef) -> Bool
 
+    /// FSEvents cannot provide a complete path-level delta for these cases.
+    /// Treat all of them as one full-rescan request rather than mis-scoping a
+    /// synthetic path (such as `/`) to an incremental scan.
+    private static let fullRescanFlags = FSEventStreamEventFlags(
+        kFSEventStreamEventFlagMustScanSubDirs
+            | kFSEventStreamEventFlagUserDropped
+            | kFSEventStreamEventFlagKernelDropped
+    )
+
     private final class DeliveryToken: @unchecked Sendable {
         private let lock = NSLock()
         private var isActive = true
@@ -29,6 +38,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private let debounceInterval: TimeInterval
     private let eventQueue: DispatchQueue
     private let streamStarter: StreamStarter
+    private let maximumPendingPathCount: Int
     private let queueKey = DispatchSpecificKey<UUID>()
     private let queueID = UUID()
 
@@ -36,30 +46,36 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private var stream: FSEventStreamRef?
     private var streamStarted = false
     private var debounceWorkItem: DispatchWorkItem?
-    private var onChange: (@MainActor ([URL]) -> Void)?
+    private var onChange: (@MainActor (ArchiveRootWatchEvent) -> Void)?
     private var pendingChangedPaths: Set<String> = []
+    private var fullRescanRequired = false
     private var deliveryToken: DeliveryToken?
     private var isActive = false
 
     public convenience init(
         debounceInterval: TimeInterval = 2.0,
-        eventQueue: DispatchQueue = DispatchQueue(label: "com.nikomusichub.archive.fsevents")
+        eventQueue: DispatchQueue = DispatchQueue(label: "com.nikomusichub.archive.fsevents"),
+        maximumPendingPathCount: Int = 1_024
     ) {
         self.init(
             debounceInterval: debounceInterval,
             eventQueue: eventQueue,
-            streamStarter: { FSEventStreamStart($0) }
+            streamStarter: { FSEventStreamStart($0) },
+            maximumPendingPathCount: maximumPendingPathCount
         )
     }
 
     init(
         debounceInterval: TimeInterval,
         eventQueue: DispatchQueue,
-        streamStarter: @escaping StreamStarter
+        streamStarter: @escaping StreamStarter,
+        maximumPendingPathCount: Int = 1_024
     ) {
+        precondition(maximumPendingPathCount > 0, "maximumPendingPathCount must be positive")
         self.debounceInterval = debounceInterval
         self.eventQueue = eventQueue
         self.streamStarter = streamStarter
+        self.maximumPendingPathCount = maximumPendingPathCount
         eventQueue.setSpecific(key: queueKey, value: queueID)
     }
 
@@ -69,7 +85,10 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         }
     }
 
-    public func setRoots(_ roots: [URL], onChange: @escaping @MainActor ([URL]) -> Void) -> Bool {
+    public func setRoots(
+        _ roots: [URL],
+        onChange: @escaping @MainActor (ArchiveRootWatchEvent) -> Void
+    ) -> Bool {
         withEventQueueSync {
             stopLocked()
             guard !roots.isEmpty else { return true }
@@ -92,20 +111,17 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             )
             guard let createdStream = FSEventStreamCreate(
                 nil,
-                { _, info, numEvents, eventPaths, _, _ in
+                { _, info, numEvents, eventPaths, eventFlags, _ in
                     guard let info, numEvents > 0 else { return }
                     let watcher = Unmanaged<FSEventsArchiveRootWatcher>
                         .fromOpaque(info)
                         .takeUnretainedValue()
                     let array = unsafeBitCast(eventPaths, to: CFArray.self)
-                    let paths = (0..<numEvents).compactMap { index -> String? in
-                        let pointer = CFArrayGetValueAtIndex(array, index)
-                        guard let pointer else { return nil }
-                        return Unmanaged<CFString>
-                            .fromOpaque(pointer)
-                            .takeUnretainedValue() as String
-                    }
-                    watcher.recordChangedPathsLocked(paths)
+                    watcher.recordFSEventBatchLocked(
+                        paths: array,
+                        eventFlags: eventFlags,
+                        count: numEvents
+                    )
                 },
                 &context,
                 paths,
@@ -142,6 +158,23 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         }
     }
 
+    /// Behavioral test hook that exercises the event-flag overflow path before
+    /// paths are decoded, as the native FSEvents callback does.
+    func simulateFSEventBatch(
+        paths: [String],
+        eventFlags: [FSEventStreamEventFlags]
+    ) {
+        eventQueue.async { [weak self] in
+            guard let self else { return }
+            if paths.count > self.maximumPendingPathCount
+                || eventFlags.contains(where: Self.requiresFullRescan) {
+                self.recordFullRescanRequiredLocked()
+            } else {
+                self.recordChangedPathsLocked(paths)
+            }
+        }
+    }
+
     private func stopLocked() {
         dispatchPrecondition(condition: .onQueue(eventQueue))
         isActive = false
@@ -150,6 +183,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
         pendingChangedPaths.removeAll()
+        fullRescanRequired = false
         onChange = nil
 
         if let stream {
@@ -166,31 +200,114 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private func recordChangedPathsLocked(_ paths: [String]) {
         dispatchPrecondition(condition: .onQueue(eventQueue))
         guard isActive, !paths.isEmpty else { return }
-        pendingChangedPaths.formUnion(paths)
+        guard !fullRescanRequired else { return }
+        for path in paths {
+            guard appendChangedPathLocked(path) else { return }
+        }
+        scheduleDebouncedCallbackLocked()
+    }
+
+    /// Decodes only the bounded prefix required to detect an overflow. Do not
+    /// materialize the whole FSEvents callback as `[String]`: a single native
+    /// batch can contain an arbitrary number of paths during a filesystem storm.
+    private func recordFSEventBatchLocked(
+        paths: CFArray,
+        eventFlags: UnsafePointer<FSEventStreamEventFlags>?,
+        count: CFIndex
+    ) {
+        dispatchPrecondition(condition: .onQueue(eventQueue))
+        guard isActive, count > 0 else { return }
+        // A native batch larger than the budget is already an incomplete
+        // incremental unit, even when it happens to contain duplicates. Fall
+        // back before walking every flag/path in a storm callback.
+        guard count <= maximumPendingPathCount else {
+            recordFullRescanRequiredLocked()
+            return
+        }
+        if Self.requiresFullRescan(eventFlags: eventFlags, count: count) {
+            recordFullRescanRequiredLocked()
+            return
+        }
+        guard !fullRescanRequired else { return }
+
+        for index in 0..<count {
+            guard let pointer = CFArrayGetValueAtIndex(paths, index) else { continue }
+            let path = Unmanaged<CFString>
+                .fromOpaque(pointer)
+                .takeUnretainedValue() as String
+            guard appendChangedPathLocked(path) else { return }
+        }
+        scheduleDebouncedCallbackLocked()
+    }
+
+    /// Returns `false` after replacing the bounded incremental batch with a
+    /// full-rescan request, so callers stop decoding more paths immediately.
+    private func appendChangedPathLocked(_ path: String) -> Bool {
+        dispatchPrecondition(condition: .onQueue(eventQueue))
+        guard !pendingChangedPaths.contains(path) else { return true }
+        guard pendingChangedPaths.count < maximumPendingPathCount else {
+            recordFullRescanRequiredLocked()
+            return false
+        }
+        pendingChangedPaths.insert(path)
+        return true
+    }
+
+    private func recordFullRescanRequiredLocked() {
+        dispatchPrecondition(condition: .onQueue(eventQueue))
+        guard isActive else { return }
+        pendingChangedPaths.removeAll(keepingCapacity: true)
+        guard !fullRescanRequired else { return }
+        fullRescanRequired = true
         scheduleDebouncedCallbackLocked()
     }
 
     private func scheduleDebouncedCallbackLocked() {
         dispatchPrecondition(condition: .onQueue(eventQueue))
-        debounceWorkItem?.cancel()
+        // Keep one fixed coalescing window per batch. Replacing a delayed work
+        // item for every event leaves cancelled items queued until their
+        // deadlines and can itself become an unbounded storm allocation.
+        guard debounceWorkItem == nil else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self,
                   self.isActive,
                   let onChange = self.onChange,
                   let token = self.deliveryToken else { return }
-            let paths = self.pendingChangedPaths
-                .sorted()
-                .map { URL(fileURLWithPath: $0) }
-            self.pendingChangedPaths.removeAll()
-            guard !paths.isEmpty else { return }
+            let event: ArchiveRootWatchEvent
+            if self.fullRescanRequired {
+                self.fullRescanRequired = false
+                event = .fullRescanRequired
+            } else {
+                let paths = self.pendingChangedPaths
+                    .sorted()
+                    .map { URL(fileURLWithPath: $0) }
+                self.pendingChangedPaths.removeAll(keepingCapacity: true)
+                guard !paths.isEmpty else { return }
+                event = .paths(paths)
+            }
+            self.debounceWorkItem = nil
             Task { @MainActor in
                 token.performIfActive {
-                    onChange(paths)
+                    onChange(event)
                 }
             }
         }
         debounceWorkItem = work
         eventQueue.asyncAfter(deadline: .now() + debounceInterval, execute: work)
+    }
+
+    private static func requiresFullRescan(_ flags: FSEventStreamEventFlags) -> Bool {
+        (flags & fullRescanFlags) != 0
+    }
+
+    private static func requiresFullRescan(
+        eventFlags: UnsafePointer<FSEventStreamEventFlags>?,
+        count: CFIndex
+    ) -> Bool {
+        guard let eventFlags else { return false }
+        return (0..<count).contains { index in
+            requiresFullRescan(eventFlags[index])
+        }
     }
 
     private func withEventQueueSync<T>(_ body: () throws -> T) rethrows -> T {

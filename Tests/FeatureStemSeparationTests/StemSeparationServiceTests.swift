@@ -161,6 +161,92 @@ struct StemSeparationServiceTests {
         let folders = backend.requests.map(\.outputFolderURL.path)
         #expect(Set(folders).count == 2)
     }
+
+    @Test
+    func startJob_rejectsSymlinkResolvedArchiveRootBeforeCreatingDirectoryOrStartingBackend() async throws {
+        let fileManager = FileManager.default
+        let base = fileManager.temporaryDirectory
+            .appendingPathComponent("stem-output-guard-\(UUID().uuidString)", isDirectory: true)
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let configuredArchiveAlias = base.appendingPathComponent("configured-archive", isDirectory: true)
+        let input = base.appendingPathComponent("input.wav")
+        defer { try? fileManager.removeItem(at: base) }
+        try fileManager.createDirectory(at: archive, withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: configuredArchiveAlias, withDestinationURL: archive)
+        fileManager.createFile(atPath: input.path, contents: Data("input".utf8))
+
+        let backend = MockStemSeparationBackend()
+        let runner = JobRunner()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: runner,
+            archiveRootsProvider: { [configuredArchiveAlias] }
+        )
+
+        let job = service.startJob(
+            request: StemSeparationRequest(inputURL: input, outputRootURL: archive, preset: .fast4)
+        )
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .failed)
+        #expect(backend.requests.isEmpty)
+        #expect(!fileManager.fileExists(atPath: archive.appendingPathComponent("Stems", isDirectory: true).path))
+    }
+
+    @Test
+    func cancelingJob_terminatesDemucsProcessRunner() async throws {
+        let fileManager = FileManager.default
+        let outputRoot = fileManager.temporaryDirectory
+            .appendingPathComponent("stem-cancel-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: outputRoot) }
+
+        let processRunner = BlockingCancellationAwareProcessRunner()
+        let backend = DemucsMLXBackend(
+            settings: HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx")),
+            runner: processRunner
+        )
+        let runner = JobRunner()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: runner
+        )
+
+        let job = service.startJob(
+            request: StemSeparationRequest(
+                inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+                outputRootURL: outputRoot,
+                preset: .fast4
+            )
+        )
+
+        for _ in 0..<100 where !processRunner.didStart {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(processRunner.didStart)
+
+        runner.cancelJob(id: job.id)
+
+        var cancellationReachedProcessRunner = processRunner.cancellationRequested
+        for _ in 0..<100 where !cancellationReachedProcessRunner {
+            try await Task.sleep(nanoseconds: 10_000_000)
+            cancellationReachedProcessRunner = processRunner.cancellationRequested
+        }
+        if !cancellationReachedProcessRunner {
+            // Keep a regression failure from leaving its intentionally blocking fake running.
+            backend.cancel()
+        }
+
+        #expect(cancellationReachedProcessRunner)
+        #expect(runner.job(id: job.id)?.state == .canceled)
+        if let outputDirectory = processRunner.outputDirectory {
+            let contents = try fileManager.contentsOfDirectory(atPath: outputDirectory.path)
+            #expect(contents.isEmpty)
+        } else {
+            Issue.record("The process runner did not receive the demucs output directory.")
+        }
+    }
 }
 
 private func makeInputFile() -> URL {
@@ -176,6 +262,70 @@ private func waitUntilFinished(runner: JobRunner, job: Job) async throws {
             return
         }
         try await Task.sleep(nanoseconds: 10_000_000)
+    }
+}
+
+private final class BlockingCancellationAwareProcessRunner: StreamingExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<ExternalProcessResult, any Error>?
+    private var started = false
+    private var didReceiveCancellation = false
+    private var recordedOutputDirectory: URL?
+
+    var didStart: Bool { lock.withLock { started } }
+    var cancellationRequested: Bool { lock.withLock { didReceiveCancellation } }
+    var outputDirectory: URL? { lock.withLock { recordedOutputDirectory } }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        lock.withLock {
+            started = true
+            if let outputArgumentIndex = request.arguments.firstIndex(of: "--out"),
+               request.arguments.indices.contains(outputArgumentIndex + 1) {
+                recordedOutputDirectory = URL(
+                    fileURLWithPath: request.arguments[outputArgumentIndex + 1],
+                    isDirectory: true
+                )
+            }
+        }
+
+        return try await withTaskCancellationHandler(operation: {
+            try await self.waitForTermination()
+        }, onCancel: {
+            self.terminateProcess()
+        })
+    }
+
+    private func waitForTermination() async throws -> ExternalProcessResult {
+        try await withCheckedThrowingContinuation { continuation in
+            let cancelImmediately = lock.withLock { () -> Bool in
+                if didReceiveCancellation {
+                    return true
+                }
+                self.continuation = continuation
+                return false
+            }
+            if cancelImmediately {
+                continuation.resume(throwing: CancellationError())
+            }
+        }
+    }
+
+    private func terminateProcess() {
+        let continuation = lock.withLock { () -> CheckedContinuation<ExternalProcessResult, any Error>? in
+            didReceiveCancellation = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume(throwing: CancellationError())
     }
 }
 

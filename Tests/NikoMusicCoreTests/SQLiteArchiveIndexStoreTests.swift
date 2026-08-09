@@ -201,8 +201,7 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
 
         let group = DispatchGroup()
         let iterations = 24
-        let errorsLock = NSLock()
-        var errors: [Error] = []
+        let errors = ConcurrentErrorLog()
 
         for index in 0..<iterations {
             group.enter()
@@ -216,9 +215,7 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
                     )
                     try indexStore.save(nextSnapshot)
                 } catch {
-                    errorsLock.lock()
                     errors.append(error)
-                    errorsLock.unlock()
                 }
             }
 
@@ -230,21 +227,20 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
                     nextMetadata.updatedAt = Date(timeIntervalSince1970: Double(1_700_000_100 + index))
                     try metadataStore.upsert(nextMetadata)
                 } catch {
-                    errorsLock.lock()
                     errors.append(error)
-                    errorsLock.unlock()
                 }
             }
         }
 
         group.wait()
 
-        for error in errors {
+        let capturedErrors = errors.values
+        for error in capturedErrors {
             let description = String(describing: error)
             XCTAssertFalse(description.localizedCaseInsensitiveContains("SQLITE_BUSY"), description)
             XCTAssertFalse(description.localizedCaseInsensitiveContains("database is locked"), description)
         }
-        XCTAssertTrue(errors.isEmpty, "Unexpected persistence errors: \(errors)")
+        XCTAssertTrue(capturedErrors.isEmpty, "Unexpected persistence errors: \(capturedErrors)")
     }
 
     func testSQLiteArchiveDatabaseUsesWALAndBusyTimeout() throws {
@@ -274,5 +270,22 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
     private enum SQLiteTestError: Error {
         case open
         case exec
+    }
+}
+
+private final class ConcurrentErrorLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [any Error] = []
+
+    func append(_ error: any Error) {
+        lock.lock()
+        defer { lock.unlock() }
+        storage.append(error)
+    }
+
+    var values: [any Error] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
     }
 }

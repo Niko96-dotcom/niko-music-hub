@@ -94,7 +94,7 @@ let package = Package(
         ),
         .target(
             name: "FeatureStemSeparation",
-            dependencies: ["AppCore", "FeatureDownloader"]
+            dependencies: ["AppCore", "FeatureDownloader", "NikoMusicCore"]
         ),
         .executableTarget(
             name: "NikoMusicHub",
@@ -111,7 +111,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AppCoreTests",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser"]
         ),
         .testTarget(
             name: "NikoMusicCoreTests",

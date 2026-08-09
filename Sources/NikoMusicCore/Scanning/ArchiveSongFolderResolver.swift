@@ -46,6 +46,11 @@ public enum ArchiveSongFolderResolver {
             let components = relative.split(separator: "/").map(String.init)
             guard let first = components.first else { continue }
 
+            // Full scans use `.skipsHiddenFiles` at the archive root. Keep the
+            // incremental path consistent so vault staging folders (for example
+            // `.niko-staging`) never surface as phantom song cards after a restore.
+            guard !first.hasPrefix(".") else { continue }
+
             let immediateChild = root.appendingPathComponent(first, isDirectory: true)
 
             if components.count == 1 {

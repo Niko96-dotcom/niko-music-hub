@@ -33,6 +33,7 @@ See `docs/local-dev-flow.md` for the full no-dev workflow.
 Requirements:
 
 - macOS 14.2 or newer
+- Apple silicon (`arm64`); Intel and universal builds are not supported release targets
 - Xcode with the Swift 6 toolchain
 - Optional helper tools for all workflows: `ffmpeg` and `yt-dlp`
 

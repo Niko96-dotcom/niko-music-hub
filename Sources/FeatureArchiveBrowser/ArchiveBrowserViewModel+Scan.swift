@@ -49,6 +49,11 @@ extension ArchiveBrowserViewModel {
         selectedSong = nil
         songDetailsExpanded = false
         pluginsSectionExpanded = false
+        showArchivedProjects = false
+        scannedSongs = []
+        projectVaultSnapshots = []
+        projectVaultSnapshotsByPath.removeAll()
+        archivedProjectCount = 0
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []
         duplicateSongHints = []
@@ -81,6 +86,7 @@ extension ArchiveBrowserViewModel {
                 // A finished scan already applied fresher results; keep them.
                 guard self.songs.isEmpty, self.scanDiagnostics == nil else { return }
                 self.mutateCatalog {
+                    self.scannedSongs = songs
                     self.songs = songs
                 }
                 // While the launch scan runs, its status line stays in charge.

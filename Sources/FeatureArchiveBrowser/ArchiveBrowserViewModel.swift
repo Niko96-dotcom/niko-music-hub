@@ -16,6 +16,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
     @Published var songs: [Song] = []
+    /// Songs discovered by the configured active/scan roots. Project Vault archive
+    /// generations are projected into `songs` only when the user opts into them, so
+    /// toggling that view never loses the clean scan baseline.
+    var scannedSongs: [Song] = []
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
     @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
@@ -40,12 +44,21 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?
+    /// Archived Project Vault generations are opt-in in the browse projection so the
+    /// active workspace stays calm. Turning this on exposes verified archive-only
+    /// projects in their persisted workflow stage.
+    @Published var showArchivedProjects = false
+    @Published var archivedProjectCount = 0
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
     @Published var projectVaultBusySongIDs: Set<String> = []
     var projectVaultSnapshotsByPath: [String: ProjectVaultRuntimeSnapshot] = [:]
+    /// The latest runtime snapshot list is retained separately from the path lookup
+    /// map so changing the archived-project visibility toggle can rebuild the catalog
+    /// without another scan or Dropbox round trip.
+    var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
     var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
     /// Archive page layout: the board is home, opening a card goes to
     /// fullscreen detail, and the classic sidebar+detail list stays reachable.
@@ -452,7 +465,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     /// Immediate intelligence refresh (collaborator upsert, tests). Prefer the debounced path
-    /// for scan/catalog churn so FS walks don't stall the main actor after every mutate.
+    /// for scan/catalog churn so rapid updates coalesce before rebuilding the summary.
     func refreshIntelligenceNow() {
         scheduleIntelligenceRefresh(immediate: true)
     }
@@ -462,6 +475,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         let snapshotSongs = songs
         let snapshotCollaborators = collaborators
         intelligenceRefreshTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled else { return }
             if !immediate {
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 guard !Task.isCancelled else { return }
@@ -471,9 +485,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 collaborators: snapshotCollaborators
             )
             let duplicates = ArchiveIntelligence.duplicateSongHints(songs: snapshotSongs)
-            let missing = await Task.detached(priority: .utility) {
-                ArchiveIntelligence.missingAudioReport(songs: snapshotSongs)
-            }.value
+            // The live panel renders only the summary counts. Keeping this at a
+            // zero orphan-path budget avoids a recursive filesystem walk and makes
+            // the debounced task its complete, cancellable refresh lifecycle.
+            let missing = ArchiveIntelligence.missingAudioReport(
+                songs: snapshotSongs,
+                maximumRetainedOrphanAudioPaths: 0
+            )
             guard let self, !Task.isCancelled else { return }
             self.pendingCollaboratorSuggestions = suggestions
             self.duplicateSongHints = duplicates

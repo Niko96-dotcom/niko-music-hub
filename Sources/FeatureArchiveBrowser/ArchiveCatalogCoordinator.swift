@@ -40,10 +40,18 @@ struct ArchiveCatalogCoordinator {
     }
 
     func performScanDetached(roots: [URL]) async throws -> ScanResult {
+        try Task.checkCancellation()
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
-        return try await Task.detached(priority: .userInitiated) {
+        let scanTask = Task.detached(priority: .userInitiated) {
             try CubaseArchiveScanner(exclusionTerms: exclusionTerms).scan(roots: roots)
-        }.value
+        }
+        return try await withTaskCancellationHandler(operation: {
+            let result = try await scanTask.value
+            try Task.checkCancellation()
+            return result
+        }, onCancel: {
+            scanTask.cancel()
+        })
     }
 
     struct IncrementalFilesystemApplyResult: Sendable {
@@ -150,15 +158,23 @@ struct ArchiveCatalogCoordinator {
         roots: [URL],
         existingSongs: [Song]
     ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>) {
+        try Task.checkCancellation()
         let resolution = ArchiveSongFolderResolver.resolve(changedPaths: changedPaths, roots: roots)
         guard !resolution.isEmpty else {
             return (ScanResult(), [])
         }
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
-        let result = try await Task.detached(priority: .userInitiated) {
+        let scanTask = Task.detached(priority: .userInitiated) {
             try CubaseArchiveScanner(exclusionTerms: exclusionTerms)
                 .scanIncremental(resolution: resolution, roots: roots)
-        }.value
+        }
+        let result = try await withTaskCancellationHandler(operation: {
+            let result = try await scanTask.value
+            try Task.checkCancellation()
+            return result
+        }, onCancel: {
+            scanTask.cancel()
+        })
         let affectedSongIDs = Self.affectedSongIDs(
             resolution: resolution,
             existing: existingSongs

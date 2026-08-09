@@ -273,7 +273,7 @@ full_check() {
   doctor
   mkdir -p "$DEV_FLOW_LOG_DIR"
   run_logged_step "1/3 Compile and unit tests" "$DEV_FLOW_LOG_DIR/ci.log" ./script/ci.sh
-  run_logged_step "2/3 User E2E smoke" "$DEV_FLOW_LOG_DIR/e2e_user_smoke.log" ./script/e2e_user_smoke.sh
+  run_logged_step "2/3 User E2E smoke" "$DEV_FLOW_LOG_DIR/e2e_user_smoke.log" env NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh
   run_logged_step "3/3 Visible launch verification" "$DEV_FLOW_LOG_DIR/build_and_run_verify.log" ./script/build_and_run.sh --verify
   section "Done"
   ok "Local dev flow is green"

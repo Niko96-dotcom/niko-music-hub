@@ -17,13 +17,16 @@ enum WaveformPeakLoader {
     static func loadPeaks(from url: URL, barCount: Int = defaultBarCount) async -> [Float] {
         let targetBars = max(barCount, 8)
         return await Task.detached(priority: .userInitiated) {
-            loadPeaksSync(from: url, barCount: targetBars)
+            if let peaks = loadPeaksWithAudioFile(from: url, barCount: targetBars) {
+                return peaks
+            }
+            return await loadPeaksWithAssetReader(from: url, barCount: targetBars)
         }.value
     }
 
-    static func loadPeaksSync(from url: URL, barCount: Int) -> [Float] {
+    private static func loadPeaksWithAudioFile(from url: URL, barCount: Int) -> [Float]? {
         guard let audioFile = try? AVAudioFile(forReading: url) else {
-            return loadPeaksWithAssetReader(from: url, barCount: barCount)
+            return nil
         }
 
         let format = audioFile.processingFormat
@@ -116,9 +119,18 @@ enum WaveformPeakLoader {
     }
 
     /// Fallback for formats `AVAudioFile` rejects — still streams into buckets (no giant array).
-    private static func loadPeaksWithAssetReader(from url: URL, barCount: Int) -> [Float] {
+    private static func loadPeaksWithAssetReader(from url: URL, barCount: Int) async -> [Float] {
         let asset = AVURLAsset(url: url)
-        guard let track = asset.tracks(withMediaType: .audio).first else { return [] }
+        let track: AVAssetTrack
+        do {
+            guard let loadedTrack = try await asset.loadTracks(withMediaType: .audio).first else {
+                return []
+            }
+            track = loadedTrack
+        } catch {
+            return []
+        }
+        let duration = try? await asset.load(.duration)
         let reader: AVAssetReader
         do {
             reader = try AVAssetReader(asset: asset)
@@ -126,13 +138,15 @@ enum WaveformPeakLoader {
             return []
         }
 
-        let durationSeconds = CMTimeGetSeconds(asset.duration)
-        if durationSeconds.isFinite, durationSeconds > 0 {
-            let analysisDuration = min(durationSeconds, maxAnalysisSeconds)
-            reader.timeRange = CMTimeRange(
-                start: .zero,
-                duration: CMTime(seconds: analysisDuration, preferredTimescale: 600)
-            )
+        if let duration {
+            let durationSeconds = CMTimeGetSeconds(duration)
+            if durationSeconds.isFinite, durationSeconds > 0 {
+                let analysisDuration = min(durationSeconds, maxAnalysisSeconds)
+                reader.timeRange = CMTimeRange(
+                    start: .zero,
+                    duration: CMTime(seconds: analysisDuration, preferredTimescale: 600)
+                )
+            }
         }
 
         let outputSettings: [String: Any] = [

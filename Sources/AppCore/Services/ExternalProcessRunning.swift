@@ -369,10 +369,11 @@ private final class POSIXProcessExecution: @unchecked Sendable {
         let waitStatus = status
         ioQueue.async { [weak self] in
             guard let self else { return }
-            if let source = self.standardOutputSource {
+            let sources = self.readSourceSnapshot()
+            if let source = sources.output {
                 self.drain(descriptor: Int32(source.handle), stream: .standardOutput)
             }
-            if let source = self.standardErrorSource {
+            if let source = sources.error {
                 self.drain(descriptor: Int32(source.handle), stream: .standardError)
             }
             self.completeNormally(waitStatus: waitStatus)
@@ -490,6 +491,12 @@ private final class POSIXProcessExecution: @unchecked Sendable {
     private func signalProcessGroup(processID: pid_t, signal: Int32) {
         if kill(-processID, signal) != 0, errno != ESRCH {
             _ = kill(processID, signal)
+        }
+    }
+
+    private func readSourceSnapshot() -> (output: DispatchSourceRead?, error: DispatchSourceRead?) {
+        lock.withLock {
+            (output: standardOutputSource, error: standardErrorSource)
         }
     }
 

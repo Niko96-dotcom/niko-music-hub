@@ -545,9 +545,9 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false
         ]
-        let file = try AVAudioFile(forWriting: outputURL, settings: settings)
+        var file: AVAudioFile? = try AVAudioFile(forWriting: outputURL, settings: settings)
         if writesAudioFrames {
-            let format = file.processingFormat
+            let format = try XCTUnwrap(file?.processingFormat)
             let frameCount: AVAudioFrameCount = 512
             let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
             buffer.frameLength = frameCount
@@ -558,8 +558,12 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
                     }
                 }
             }
-            try file.write(from: buffer)
+            try file!.write(from: buffer)
         }
+        // AVAudioFile finalizes its WAV header when released. Drop the last
+        // writer reference before AudioRecorderViewModel verifies/reopens it so
+        // this fixture is independent of ARC lifetime optimization.
+        file = nil
 
         recording = false
         continuation?.finish()

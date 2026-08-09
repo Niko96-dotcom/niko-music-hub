@@ -44,13 +44,40 @@ public struct MissingAudioReport: Equatable, Sendable {
     public let orphanAudioBySongID: [String: [String]]
 
     public init(songs: [Song], fileManager: FileManager = .default) {
+        self.init(
+            songs: songs,
+            fileManager: fileManager,
+            maximumRetainedOrphanAudioPaths: .max
+        )
+    }
+
+    /// Bounded report variant for refresh-driven UI projections. A zero limit keeps
+    /// the missing-preview and missing-CPR summary without walking song folders;
+    /// positive limits retain at most that many orphan names across the catalog.
+    /// Use ``init(songs:fileManager:)`` for a complete one-shot diagnostics report.
+    public init(
+        songs: [Song],
+        fileManager: FileManager = .default,
+        maximumRetainedOrphanAudioPaths: Int
+    ) {
         let visible = SongCatalogDeduplicator.uniqueByID(songs).filter { !$0.isIgnored }
         noPreview = visible.filter { $0.mainPreviewCandidateID == nil }.map(\.effectiveDisplayTitle)
         noCPR = visible.filter { $0.effectiveLatestCPR == nil }.map(\.effectiveDisplayTitle)
-        orphanAudioBySongID = visible.reduce(into: [:]) { result, song in
-            let orphans = Self.orphanAudioPaths(for: song, fileManager: fileManager)
-            if !orphans.isEmpty { result[song.id] = orphans }
+
+        var remainingPathBudget = max(0, maximumRetainedOrphanAudioPaths)
+        var retainedOrphans: [String: [String]] = [:]
+        for song in visible {
+            guard remainingPathBudget > 0 else { break }
+            let orphans = Self.orphanAudioPaths(
+                for: song,
+                fileManager: fileManager,
+                maximumRetainedCount: remainingPathBudget
+            )
+            guard !orphans.isEmpty else { continue }
+            retainedOrphans[song.id] = orphans
+            remainingPathBudget -= orphans.count
         }
+        orphanAudioBySongID = retainedOrphans
     }
 
     public init(noPreview: [String], noCPR: [String], orphanAudioBySongID: [String: [String]] = [:]) {
@@ -61,7 +88,12 @@ public struct MissingAudioReport: Equatable, Sendable {
 
     private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aiff", "aif", "flac"]
 
-    static func orphanAudioPaths(for song: Song, fileManager: FileManager) -> [String] {
+    static func orphanAudioPaths(
+        for song: Song,
+        fileManager: FileManager,
+        maximumRetainedCount: Int = .max
+    ) -> [String] {
+        guard maximumRetainedCount > 0 else { return [] }
         var isDirectory: ObjCBool = false
         let folder = song.folderPath.standardizedFileURL
         guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
@@ -91,6 +123,7 @@ public struct MissingAudioReport: Equatable, Sendable {
             let path = fileURL.standardizedFileURL.path
             if !referenced.contains(path) {
                 orphans.append(fileURL.lastPathComponent)
+                if orphans.count == maximumRetainedCount { break }
             }
         }
         return orphans.sorted()
@@ -136,6 +169,19 @@ public enum ArchiveIntelligence {
 
     public static func missingAudioReport(songs: [Song]) -> MissingAudioReport {
         MissingAudioReport(songs: songs)
+    }
+
+    /// Returns the missing-preview/CPR summary while bounding retained orphan names.
+    /// A zero limit intentionally avoids filesystem enumeration and is appropriate
+    /// for live catalog refreshes whose UI only displays the summary counts.
+    public static func missingAudioReport(
+        songs: [Song],
+        maximumRetainedOrphanAudioPaths: Int
+    ) -> MissingAudioReport {
+        MissingAudioReport(
+            songs: songs,
+            maximumRetainedOrphanAudioPaths: maximumRetainedOrphanAudioPaths
+        )
     }
 
     private static func normalizeTitle(_ value: String) -> String {

@@ -157,6 +157,69 @@ final class VaultAutomationTests: XCTestCase {
         ))
     }
 
+    func testTimedOutLsofProbePostponesInsteadOfClaimingProjectIsClear() async {
+        let runner = FixedVaultActivityCommandRunner(status: .timedOut)
+        let probe = SystemVaultAutomationActivityProbe(
+            commandRunner: runner,
+            activeUseProbeTimeout: 0.01
+        )
+        let projectURL = URL(fileURLWithPath: "/tmp/project with spaces", isDirectory: true)
+
+        let result = await probe.openFileStatus(in: projectURL)
+
+        XCTAssertEqual(result, .uncertain("probe-timed-out"))
+        let calls = await runner.calls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.executable, "/usr/sbin/lsof")
+        XCTAssertEqual(calls.first?.arguments, ["-nP", "+D", projectURL.path])
+    }
+
+    func testBoundedActivityCommandRunnerReturnsAtDeadline() async throws {
+        let executable = "/bin/sleep"
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: executable))
+        let startedAt = ContinuousClock.now
+
+        let result = await FoundationVaultActivityCommandRunner().status(
+            executable: executable,
+            arguments: ["10"],
+            timeout: 0.05
+        )
+
+        XCTAssertEqual(result, .timedOut)
+        XCTAssertLessThan(startedAt.duration(to: .now), .seconds(1))
+    }
+
+    func testBoundedActivityCommandRunnerCancelsPromptly() async throws {
+        let executable = "/bin/sleep"
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: executable))
+        let runner = FoundationVaultActivityCommandRunner()
+        let task = Task {
+            await runner.status(executable: executable, arguments: ["10"], timeout: 10)
+        }
+        try await Task.sleep(for: .milliseconds(25))
+        let cancelledAt = ContinuousClock.now
+        task.cancel()
+
+        let result = await task.value
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertLessThan(cancelledAt.duration(to: .now), .seconds(1))
+    }
+
+    func testWriteActivityProbeTimesOutFailClosedBeforeRecursiveScan() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("fixture".utf8).write(to: root.appendingPathComponent("fixture.cpr"))
+        let probe = SystemVaultAutomationActivityProbe(
+            commandRunner: FixedVaultActivityCommandRunner(status: .exited(1)),
+            activeUseProbeTimeout: 0
+        )
+
+        let result = await probe.writeActivityStatus(in: root, since: .distantPast)
+
+        XCTAssertEqual(result, .uncertain("probe-timed-out"))
+    }
+
     private var candidateID: ProjectID {
         ProjectID(rawValue: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!)
     }
@@ -204,6 +267,30 @@ private actor SequencedActivityProbe: VaultAutomationActivityProbing {
     func cubaseStatus() async -> VaultActivityStatus { cubase.removeFirst() }
     func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { openFiles.removeFirst() }
     func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { writes.removeFirst() }
+}
+
+private struct VaultActivityCommandCall: Equatable, Sendable {
+    let executable: String
+    let arguments: [String]
+    let timeout: TimeInterval
+}
+
+private actor FixedVaultActivityCommandRunner: VaultActivityCommandRunning {
+    let nextStatus: VaultActivityCommandStatus
+    private(set) var calls: [VaultActivityCommandCall] = []
+
+    init(status: VaultActivityCommandStatus) {
+        self.nextStatus = status
+    }
+
+    func status(
+        executable: String,
+        arguments: [String],
+        timeout: TimeInterval
+    ) async -> VaultActivityCommandStatus {
+        calls.append(VaultActivityCommandCall(executable: executable, arguments: arguments, timeout: timeout))
+        return nextStatus
+    }
 }
 
 private actor RecordingAutomaticArchiver: VaultAutomaticArchiving {

@@ -19,6 +19,7 @@ fi
 INFO="$APP_PATH/Contents/Info.plist"
 BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO")"
 BUILD_ID="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildID' "$INFO" 2>/dev/null || true)"
+BUILD_CONFIGURATION="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildConfiguration' "$INFO" 2>/dev/null || true)"
 SOURCE_COMMIT="$(/usr/libexec/PlistBuddy -c 'Print :NMHSourceCommit' "$INFO" 2>/dev/null || true)"
 INSTALLED_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")"
 INSTALLED_BINARY="$APP_PATH/Contents/MacOS/NikoMusicHub"
@@ -54,6 +55,14 @@ if [[ -n "${NMH_EXPECTED_BUILD_ID:-}" && "$BUILD_ID" != "$NMH_EXPECTED_BUILD_ID"
   echo "installed build id mismatch: '$BUILD_ID' != '$NMH_EXPECTED_BUILD_ID'" >&2
   exit 1
 fi
+if [[ -n "${NMH_EXPECTED_BUILD_CONFIGURATION:-}" && "$BUILD_CONFIGURATION" != "$NMH_EXPECTED_BUILD_CONFIGURATION" ]]; then
+  echo "installed build configuration mismatch: '$BUILD_CONFIGURATION' != '$NMH_EXPECTED_BUILD_CONFIGURATION'" >&2
+  exit 1
+fi
+if [[ -n "${NMH_EXPECTED_SOURCE_COMMIT:-}" && "$SOURCE_COMMIT" != "$NMH_EXPECTED_SOURCE_COMMIT" ]]; then
+  echo "installed source commit mismatch: '$SOURCE_COMMIT' != '$NMH_EXPECTED_SOURCE_COMMIT'" >&2
+  exit 1
+fi
 if [[ -n "${NMH_EXPECTED_BINARY_SHA256:-}" ]]; then
   INSTALLED_BINARY_SHA256="$(shasum -a 256 "$INSTALLED_BINARY" | awk '{print $1}')"
   if [[ "$INSTALLED_BINARY_SHA256" != "$NMH_EXPECTED_BINARY_SHA256" ]]; then
@@ -62,4 +71,4 @@ if [[ -n "${NMH_EXPECTED_BINARY_SHA256:-}" ]]; then
   fi
 fi
 
-echo "installed release ok: $APP_PATH bundle_id=$INSTALLED_BUNDLE_ID version=$BUNDLE_VERSION build_id=$BUILD_ID source_commit=$SOURCE_COMMIT architectures=$INSTALLED_ARCHITECTURES minimum_macos=$INSTALLED_MIN_MACOS"
+echo "installed release ok: $APP_PATH bundle_id=$INSTALLED_BUNDLE_ID version=$BUNDLE_VERSION build_id=$BUILD_ID build_configuration=$BUILD_CONFIGURATION source_commit=$SOURCE_COMMIT architectures=$INSTALLED_ARCHITECTURES minimum_macos=$INSTALLED_MIN_MACOS"

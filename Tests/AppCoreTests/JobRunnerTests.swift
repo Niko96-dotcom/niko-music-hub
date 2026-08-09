@@ -82,6 +82,38 @@ final class JobRunnerTests: XCTestCase {
         XCTAssertEqual(completed.logEntries.map(\.message), ["entry-2", "entry-3", "entry-4"])
     }
 
+    func testLogRetentionHonorsByteBudgetAndKeepsNewestEntries() async throws {
+        let runner = JobRunner(
+            maximumLogEntriesPerJob: 10,
+            maximumLogBytesPerJob: 12,
+            maximumLogEntryBytes: 12
+        )
+        let id = runner.enqueue(title: "Logs", sourceToolID: "dev-tool") { progress in
+            progress.log("first")
+            progress.log("second")
+            progress.log("third")
+        }.id
+
+        let completed = try await waitForJob(id, in: runner, state: .completed)
+        XCTAssertEqual(completed.logEntries.map(\.message), ["second", "third"])
+        XCTAssertLessThanOrEqual(
+            completed.logEntries.reduce(into: 0) { $0 += $1.message.utf8.count },
+            12
+        )
+    }
+
+    func testFailureMessageIsBoundedWithoutChangingTerminalState() async throws {
+        let runner = JobRunner(maximumSnapshotTextBytes: 12)
+        let id = runner.enqueue(title: "Failure", sourceToolID: "dev-tool") { _ in
+            throw LongFailureError()
+        }.id
+
+        let failed = try await waitForJob(id, in: runner, state: .failed)
+        XCTAssertEqual(failed.state, .failed)
+        XCTAssertLessThanOrEqual(failed.message.utf8.count, 12)
+        XCTAssertTrue(failed.message.hasSuffix("…"))
+    }
+
     func testUpdateStreamEmitsTerminalStateAndFinishes() async throws {
         let runner = JobRunner()
         let release = AsyncGate()
@@ -105,6 +137,31 @@ final class JobRunnerTests: XCTestCase {
         XCTAssertEqual(states.last, .completed)
         XCTAssertTrue(states.contains(.running))
         XCTAssertEqual(states.filter(\.isTerminal).count, 1)
+    }
+
+    func testSlowUpdateStreamCoalescesToLatestFailedSnapshot() async throws {
+        let runner = JobRunner()
+        let release = AsyncGate()
+        let id = runner.enqueue(title: "Stream", sourceToolID: "dev-tool") { progress in
+            await release.wait()
+            for index in 0..<1_000 {
+                progress.update(progress: Double(index) / 1_000, message: "Update \(index)")
+                progress.log("log-\(index)")
+            }
+            throw SampleJobError.expected
+        }.id
+        let stream = runner.updates(for: id)
+
+        _ = try await waitForJob(id, in: runner, state: .running)
+        release.open()
+        _ = try await waitForJob(id, in: runner, state: .failed)
+
+        var iterator = stream.makeAsyncIterator()
+        let terminal = await iterator.next()
+        XCTAssertEqual(terminal?.state, .failed)
+        XCTAssertEqual(terminal?.message, SampleJobError.expected.localizedDescription)
+        let following = await iterator.next()
+        XCTAssertNil(following)
     }
 
     func testTenThousandImmediateJobsRemainBoundedAndReleaseHandles() async throws {
@@ -191,5 +248,11 @@ private enum SampleJobError: LocalizedError {
         case .timeout:
             "Timed out"
         }
+    }
+}
+
+private struct LongFailureError: LocalizedError {
+    var errorDescription: String? {
+        String(repeating: "failure", count: 100)
     }
 }

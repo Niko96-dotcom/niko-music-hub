@@ -36,25 +36,94 @@ NMH_LAUNCH_WAIT_SEC="${NMH_LAUNCH_WAIT_SEC:-8}"
 NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-Niko Music Hub}"
 NMH_WINDOW_MIN_WIDTH="${NMH_WINDOW_MIN_WIDTH:-400}"
 NMH_WINDOW_MIN_HEIGHT="${NMH_WINDOW_MIN_HEIGHT:-300}"
+NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"
+case "$NMH_BUILD_CONFIGURATION" in
+  debug|release) ;;
+  *)
+    echo "unsupported NMH_BUILD_CONFIGURATION '$NMH_BUILD_CONFIGURATION' (expected debug or release)" >&2
+    exit 2
+    ;;
+esac
 
 NMH_DIST_DIR="${NMH_DIST_DIR:-$NMH_ROOT_DIR/dist}"
-NMH_APP_BUNDLE="${NMH_APP_BUNDLE:-$NMH_DIST_DIR/$NMH_APP_NAME.app}"
-NMH_APP_CONTENTS="${NMH_APP_CONTENTS:-$NMH_APP_BUNDLE/Contents}"
-NMH_APP_MACOS="${NMH_APP_MACOS:-$NMH_APP_CONTENTS/MacOS}"
-NMH_APP_BINARY="${NMH_APP_BINARY:-$NMH_APP_MACOS/$NMH_APP_NAME}"
-NMH_INFO_PLIST="${NMH_INFO_PLIST:-$NMH_APP_CONTENTS/Info.plist}"
-NMH_ENTITLEMENTS_PLIST="${NMH_ENTITLEMENTS_PLIST:-$NMH_APP_CONTENTS/NikoMusicHub.entitlements}"
+NMH_DIST_DIR="$(/usr/bin/python3 - "$NMH_ROOT_DIR/dist" "$NMH_DIST_DIR" <<'PY'
+import os
+import sys
+
+allowed = os.path.realpath(sys.argv[1])
+candidate = os.path.realpath(sys.argv[2])
+if os.path.commonpath([allowed, candidate]) != allowed:
+    raise SystemExit(f"output directory must stay beneath {allowed}: {candidate}")
+print(candidate)
+PY
+)" || exit 1
+
+_nmh_expected_app_bundle="$NMH_DIST_DIR/$NMH_APP_NAME.app"
+for _nmh_output_override in NMH_APP_BUNDLE NMH_APP_CONTENTS NMH_APP_MACOS NMH_APP_BINARY NMH_INFO_PLIST NMH_ENTITLEMENTS_PLIST; do
+  if [[ -n "${!_nmh_output_override:-}" ]]; then
+    echo "$_nmh_output_override is derived from NMH_DIST_DIR and cannot be overridden" >&2
+    exit 1
+  fi
+done
+unset _nmh_output_override
+NMH_APP_BUNDLE="$_nmh_expected_app_bundle"
+NMH_APP_CONTENTS="$NMH_APP_BUNDLE/Contents"
+NMH_APP_MACOS="$NMH_APP_CONTENTS/MacOS"
+NMH_APP_BINARY="$NMH_APP_MACOS/$NMH_APP_NAME"
+NMH_INFO_PLIST="$NMH_APP_CONTENTS/Info.plist"
+NMH_ENTITLEMENTS_PLIST="$NMH_APP_CONTENTS/NikoMusicHub.entitlements"
 NMH_UI_PROBE="${NMH_UI_PROBE:-$NMH_SCRIPT_DIR/ui_probe.swift}"
+
+nmh_running_dist_app_pids() {
+  /bin/ps -axo pid=,command= | /usr/bin/awk -v binary="$NMH_APP_BINARY" '
+    {
+      pid = $1
+      sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0)
+      if (index($0, binary) == 1 &&
+          (length($0) == length(binary) || substr($0, length(binary) + 1, 1) ~ /[[:space:]]/)) {
+        print pid
+      }
+    }
+  '
+}
 
 nmh_stop_app() {
   local force="${1:-false}"
-  /usr/bin/pkill -x "$NMH_APP_NAME" >/dev/null 2>&1 || true
-  sleep 0.3
-  if /usr/bin/pgrep -x "$NMH_APP_NAME" >/dev/null 2>&1; then
-    if [[ "$force" == "true" ]]; then
-      /usr/bin/killall -9 "$NMH_APP_NAME" >/dev/null 2>&1 || true
-      sleep 0.3
+  local -a pids=()
+  local pid attempt
+  while IFS= read -r pid; do
+    [[ "$pid" =~ ^[0-9]+$ ]] && pids+=("$pid")
+  done < <(nmh_running_dist_app_pids)
+  ((${#pids[@]} > 0)) || return 0
+
+  /bin/kill -TERM "${pids[@]}" >/dev/null 2>&1 || true
+  for attempt in {1..10}; do
+    sleep 0.3
+    if ! nmh_running_dist_app_pids | /usr/bin/grep -q '[0-9]'; then
+      return 0
     fi
+  done
+
+  if [[ "$force" == "true" ]]; then
+    pids=()
+    while IFS= read -r pid; do
+      [[ "$pid" =~ ^[0-9]+$ ]] && pids+=("$pid")
+    done < <(nmh_running_dist_app_pids)
+    ((${#pids[@]} == 0)) || /bin/kill -KILL "${pids[@]}" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo "timed out stopping dist app; refusing to signal unrelated installed copies" >&2
+  return 1
+}
+
+nmh_swift() {
+  if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+    DEVELOPER_DIR="$DEVELOPER_DIR" swift "$@"
+  elif [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+    DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift "$@"
+  else
+    swift "$@"
   fi
 }
 
@@ -66,13 +135,11 @@ nmh_build_bundle() {
   # otherwise the bundle silently ships a stale binary (burned us on 2026-07-02).
   (
     cd "$NMH_ROOT_DIR" || exit 1
-    DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
-      swift build --product "$NMH_APP_NAME"
+    nmh_swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME"
   )
   build_dir="$(
     cd "$NMH_ROOT_DIR" || exit 1
-    DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
-      swift build --product "$NMH_APP_NAME" --show-bin-path
+    nmh_swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME" --show-bin-path
   )"
   build_binary="$build_dir/$NMH_APP_NAME"
 
@@ -117,6 +184,8 @@ nmh_build_bundle() {
   <string>$NMH_BUILD_VERSION</string>
   <key>NMHBuildID</key>
   <string>$NMH_BUILD_ID</string>
+  <key>NMHBuildConfiguration</key>
+  <string>$NMH_BUILD_CONFIGURATION</string>
   <key>NMHSourceCommit</key>
   <string>$NMH_SOURCE_COMMIT</string>
   <key>LSMultipleInstancesSupported</key>

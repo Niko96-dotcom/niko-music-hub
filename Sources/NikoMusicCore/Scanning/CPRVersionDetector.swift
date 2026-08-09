@@ -9,6 +9,7 @@ public struct CPRVersionDetector: @unchecked Sendable {
     }
 
     func detectImmediateVersions(in folder: URL) throws -> [ProjectVersion] {
+        try Task.checkCancellation()
         let children = try fileManager.contentsOfDirectory(
             at: folder,
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
@@ -17,6 +18,7 @@ public struct CPRVersionDetector: @unchecked Sendable {
 
         var versions: [ProjectVersion] = []
         for child in children {
+            try Task.checkCancellation()
             if let version = try projectVersionIfSupported(at: child) {
                 versions.append(version)
             }
@@ -25,6 +27,7 @@ public struct CPRVersionDetector: @unchecked Sendable {
     }
 
     public func detectVersions(in songFolder: URL) throws -> [ProjectVersion] {
+        try Task.checkCancellation()
         guard let enumerator = fileManager.enumerator(
             at: songFolder,
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
@@ -35,6 +38,7 @@ public struct CPRVersionDetector: @unchecked Sendable {
 
         var versions: [ProjectVersion] = []
         for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
             if let version = try projectVersionIfSupported(at: fileURL) {
                 versions.append(version)
             }

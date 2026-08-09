@@ -100,10 +100,91 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
     }
 }
 
+struct FileProviderPollPolicy: Sendable {
+    static let production = FileProviderPollPolicy(
+        timeout: .seconds(120),
+        initialBackoff: .milliseconds(250),
+        maximumBackoff: .seconds(5),
+        maximumReadinessProbes: 32
+    )
+
+    let timeout: Duration
+    let initialBackoff: Duration
+    let maximumBackoff: Duration
+    let maximumReadinessProbes: Int
+
+    init(
+        timeout: Duration,
+        initialBackoff: Duration,
+        maximumBackoff: Duration,
+        maximumReadinessProbes: Int
+    ) {
+        self.timeout = timeout
+        self.initialBackoff = initialBackoff
+        self.maximumBackoff = maximumBackoff
+        self.maximumReadinessProbes = maximumReadinessProbes
+    }
+}
+
+enum FileProviderReadinessPoller {
+    static func deadline(for policy: FileProviderPollPolicy) -> ContinuousClock.Instant {
+        ContinuousClock.now.advanced(by: policy.timeout)
+    }
+
+    static func pollUntilReady(
+        policy: FileProviderPollPolicy,
+        deadline: ContinuousClock.Instant? = nil,
+        probe: @escaping @Sendable (ContinuousClock.Instant) async throws -> Bool,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { duration in
+            try await Task.sleep(for: duration)
+        }
+    ) async throws {
+        guard policy.timeout > .zero,
+              policy.initialBackoff > .zero,
+              policy.maximumBackoff >= policy.initialBackoff,
+              policy.maximumReadinessProbes > 0 else {
+            throw FileProviderArchiveStorageError.operationTimedOut
+        }
+
+        let operationDeadline = deadline ?? Self.deadline(for: policy)
+        var readinessProbes = 0
+        var backoff = policy.initialBackoff
+
+        while readinessProbes < policy.maximumReadinessProbes {
+            try Task.checkCancellation()
+            guard ContinuousClock.now < operationDeadline else {
+                throw FileProviderArchiveStorageError.operationTimedOut
+            }
+
+            readinessProbes += 1
+            if try await probe(operationDeadline) { return }
+
+            try Task.checkCancellation()
+            guard readinessProbes < policy.maximumReadinessProbes else { break }
+
+            let remaining = ContinuousClock.now.duration(to: operationDeadline)
+            guard remaining > .zero else {
+                throw FileProviderArchiveStorageError.operationTimedOut
+            }
+            try await sleep(min(backoff, remaining))
+            backoff = min(backoff * 2, policy.maximumBackoff)
+        }
+
+        throw FileProviderArchiveStorageError.operationTimedOut
+    }
+}
+
 struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecked Sendable {
-    private let fileManager = FileManager.default
-    private let timeoutNanoseconds: UInt64 = 120_000_000_000
-    private let pollNanoseconds: UInt64 = 250_000_000
+    private let fileManager: FileManager
+    private let pollPolicy: FileProviderPollPolicy
+
+    init(
+        fileManager: FileManager = .default,
+        pollPolicy: FileProviderPollPolicy = .production
+    ) {
+        self.fileManager = fileManager
+        self.pollPolicy = pollPolicy
+    }
 
     func inspect(root: URL) async throws {
         guard fileManager.fileExists(atPath: root.path), fileManager.isUbiquitousItem(at: root) else {
@@ -112,22 +193,28 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
     }
 
     func waitForChanges(root: URL) async throws {
-        try await pollUntilReady(root: root, mode: .uploaded)
+        let deadline = FileProviderReadinessPoller.deadline(for: pollPolicy)
+        try await pollUntilReady(root: root, mode: .uploaded, deadline: deadline)
     }
 
     func materialize(root: URL) async throws {
+        let deadline = FileProviderReadinessPoller.deadline(for: pollPolicy)
+        try checkOperationContinues(until: deadline)
         try fileManager.startDownloadingUbiquitousItem(at: root)
         try Self.forEachItem(
             fileManager: fileManager,
             at: root,
-            keys: [.isRegularFileKey]
+            keys: [.isRegularFileKey],
+            shouldContinue: { try checkOperationContinues(until: deadline) }
         ) { url in
+            try checkOperationContinues(until: deadline)
             let values = try url.resourceValues(forKeys: [.isRegularFileKey])
             if values.isRegularFile == true {
+                try checkOperationContinues(until: deadline)
                 try fileManager.startDownloadingUbiquitousItem(at: url)
             }
         }
-        try await pollUntilReady(root: root, mode: .downloaded)
+        try await pollUntilReady(root: root, mode: .downloaded, deadline: deadline)
     }
 
     func evict(root: URL) async throws {
@@ -136,18 +223,30 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
 
     private enum ReadinessMode { case uploaded, downloaded }
 
-    private func pollUntilReady(root: URL, mode: ReadinessMode) async throws {
+    private func pollUntilReady(
+        root: URL,
+        mode: ReadinessMode,
+        deadline: ContinuousClock.Instant
+    ) async throws {
         try await inspect(root: root)
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .nanoseconds(Int64(timeoutNanoseconds)))
-        while clock.now < deadline {
-            if try isReady(root: root, mode: mode) { return }
-            try await Task.sleep(nanoseconds: pollNanoseconds)
-        }
-        throw FileProviderArchiveStorageError.operationTimedOut
+        try await FileProviderReadinessPoller.pollUntilReady(
+            policy: pollPolicy,
+            deadline: deadline,
+            probe: { deadline in
+                try isReady(root: root, mode: mode, deadline: deadline)
+            }
+        )
     }
 
-    private func isReady(root: URL, mode: ReadinessMode) throws -> Bool {
+    private enum ReadinessPending: Error {
+        case itemNotReady
+    }
+
+    private func isReady(
+        root: URL,
+        mode: ReadinessMode,
+        deadline: ContinuousClock.Instant
+    ) throws -> Bool {
         let keys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .ubiquitousItemIsUploadedKey,
@@ -156,27 +255,44 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
             .ubiquitousItemDownloadingErrorKey
         ]
         var sawRegularFile = false
-        var allFilesReady = true
-        try Self.forEachItem(fileManager: fileManager, at: root, keys: keys) { url in
-            let values = try url.resourceValues(forKeys: keys)
-            guard values.isRegularFile == true else { return }
-            sawRegularFile = true
-            switch mode {
-            case .uploaded:
-                if values.ubiquitousItemUploadingError != nil { throw FileProviderArchiveStorageError.durabilityUnavailable }
-                if values.ubiquitousItemIsUploaded != true { allFilesReady = false }
-            case .downloaded:
-                if values.ubiquitousItemDownloadingError != nil { throw FileProviderArchiveStorageError.materializationUnavailable }
-                if values.ubiquitousItemDownloadingStatus != .current { allFilesReady = false }
+        do {
+            try Self.forEachItem(
+                fileManager: fileManager,
+                at: root,
+                keys: keys,
+                shouldContinue: { try checkOperationContinues(until: deadline) }
+            ) { url in
+                try checkOperationContinues(until: deadline)
+                let values = try url.resourceValues(forKeys: keys)
+                guard values.isRegularFile == true else { return }
+                sawRegularFile = true
+                switch mode {
+                case .uploaded:
+                    if values.ubiquitousItemUploadingError != nil { throw FileProviderArchiveStorageError.durabilityUnavailable }
+                    if values.ubiquitousItemIsUploaded != true { throw ReadinessPending.itemNotReady }
+                case .downloaded:
+                    if values.ubiquitousItemDownloadingError != nil { throw FileProviderArchiveStorageError.materializationUnavailable }
+                    if values.ubiquitousItemDownloadingStatus != .current { throw ReadinessPending.itemNotReady }
+                }
             }
+        } catch is ReadinessPending {
+            return false
         }
-        return sawRegularFile && allFilesReady
+        return sawRegularFile
+    }
+
+    private func checkOperationContinues(until deadline: ContinuousClock.Instant) throws {
+        try Task.checkCancellation()
+        guard ContinuousClock.now < deadline else {
+            throw FileProviderArchiveStorageError.operationTimedOut
+        }
     }
 
     static func forEachItem(
         fileManager: FileManager,
         at root: URL,
         keys: Set<URLResourceKey>,
+        shouldContinue: () throws -> Void = { try Task.checkCancellation() },
         _ visit: (URL) throws -> Void
     ) throws {
         var enumerationError: Error?
@@ -191,7 +307,10 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
         ) else {
             throw FileProviderArchiveStorageError.lookupUnavailable
         }
-        while let url = enumerator.nextObject() as? URL {
+        while true {
+            try shouldContinue()
+            guard let url = enumerator.nextObject() as? URL else { break }
+            try shouldContinue()
             try visit(url)
         }
         if let enumerationError { throw enumerationError }

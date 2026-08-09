@@ -117,6 +117,20 @@ struct ArchiveBoardView: View {
             searchField
                 .frame(maxWidth: 240)
 
+            if viewModel.canBrowseArchivedProjects {
+                HubIconButton(
+                    systemImage: "archivebox",
+                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects",
+                    help: viewModel.showArchivedProjects
+                        ? "Hide Project Vault archive-only projects"
+                        : "Show \(viewModel.archivedProjectCount) Project Vault archive-only project(s)",
+                    isSelected: viewModel.showArchivedProjects,
+                    isToggle: true
+                ) {
+                    viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                }
+            }
+
             HubIconButton(
                 systemImage: "chart.bar",
                 accessibilityLabel: "Show analytics",
@@ -268,9 +282,11 @@ private struct ArchiveBoardColumnView: View {
                             isSelected: viewModel.selectedSong?.id == song.id,
                             vaultPresentation: viewModel.projectVaultPresentation(for: song),
                             onSelect: { viewModel.selectSongOnBoard(song) },
-                            onOpenDetail: { viewModel.selectSong(song) }
+                            onOpenDetail: { viewModel.selectSong(song) },
+                            onProjectVaultPrimaryAction: {
+                                viewModel.performProjectVaultPrimaryAction(for: song)
+                            }
                         )
-                        .draggable(song.id)
                     }
                 }
             }
@@ -352,6 +368,7 @@ private struct ArchiveBoardColumnDropDelegate: DropDelegate {
             guard let songID = item as? String else { return }
             Task { @MainActor in
                 guard let song = viewModel.songs.first(where: { $0.id == songID }),
+                      viewModel.canMutateWorkflowStatus(for: song),
                       song.workflowStatus != column.status else { return }
                 viewModel.updateWorkflowStatus(for: song, status: column.status)
             }
@@ -452,9 +469,14 @@ private struct ArchiveBoardCardView: View {
     let vaultPresentation: ProjectVaultCardPresentation?
     let onSelect: () -> Void
     let onOpenDetail: () -> Void
+    let onProjectVaultPrimaryAction: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+
+    private var allowsWorkflowMutation: Bool {
+        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(for: vaultPresentation)
+    }
 
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -484,9 +506,23 @@ private struct ArchiveBoardCardView: View {
                 .lineLimit(1)
 
             if let vaultPresentation {
-                Text(vaultPresentation.state.rawValue)
-                    .font(HubDesignSystem.Typography.micro().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.accent)
+                HStack(spacing: 4) {
+                    Text(vaultPresentation.state.rawValue)
+                        .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                        .foregroundStyle(vaultPresentation.state == .archived
+                            ? HubDesignSystem.Palette.textSecondary
+                            : HubDesignSystem.Palette.accent)
+                    Spacer(minLength: 0)
+                    if vaultPresentation.primaryAction == .restoreAndOpen,
+                       let onProjectVaultPrimaryAction {
+                        Button("Get", action: onProjectVaultPrimaryAction)
+                            .font(HubDesignSystem.Typography.micro().weight(.semibold))
+                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                            .buttonStyle(.plain)
+                            .help("Get a verified local copy and open it in Cubase")
+                            .accessibilityLabel("Get local copy and open in Cubase")
+                    }
+                }
             }
 
             if let status = song.workflowStatus {
@@ -500,6 +536,7 @@ private struct ArchiveBoardCardView: View {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(cardFill)
         }
+        .opacity(vaultPresentation?.state == .archived ? 0.68 : 1)
         .contentShape(Rectangle())
         // Double-click before single so both register: first click selects
         // (loads the player bar), the second opens detail.
@@ -510,7 +547,10 @@ private struct ArchiveBoardCardView: View {
                 isHovered = hovering
             }
         }
-        .help("Click to preview \(song.effectiveDisplayTitle) — double-click to open, drag to change stage")
+        .modifier(ArchiveBoardCardDragModifier(songID: song.id, isEnabled: allowsWorkflowMutation))
+        .help(allowsWorkflowMutation
+            ? "Click to preview \(song.effectiveDisplayTitle) — double-click to open, drag to change stage"
+            : "Click to preview \(song.effectiveDisplayTitle) — restore it locally before changing its stage")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(song.effectiveDisplayTitle)
     }
@@ -533,6 +573,20 @@ private struct ArchiveBoardCardView: View {
     private var cardFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
         return isHovered ? Color.white.opacity(0.08) : Color.white.opacity(0.05)
+    }
+}
+
+private struct ArchiveBoardCardDragModifier: ViewModifier {
+    let songID: String
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.draggable(songID)
+        } else {
+            content
+        }
     }
 }
 

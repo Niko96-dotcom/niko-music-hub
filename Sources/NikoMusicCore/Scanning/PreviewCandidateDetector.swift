@@ -25,6 +25,7 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
     }
 
     public func detectCandidates(in songFolder: URL) throws -> [PreviewCandidate] {
+        try Task.checkCancellation()
         guard let enumerator = fileManager.enumerator(
             at: songFolder,
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
@@ -36,6 +37,7 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
         let safety = PathSafety(fileManager: fileManager)
         var candidates: [PreviewCandidate] = []
         for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
             let ext = fileURL.pathExtension.lowercased()
             guard Self.audioExtensions.contains(ext) else { continue }
             // Reject audio that escapes the song folder via symlinks.

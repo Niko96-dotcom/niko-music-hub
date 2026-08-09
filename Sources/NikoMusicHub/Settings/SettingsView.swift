@@ -525,10 +525,14 @@ struct SettingsView: View {
     }
 
     private func saveProjectVaultSettings(_ candidate: AppSettings) -> Bool {
-        persistSettings { stored in
+        let saved = persistSettings { stored in
             stored.musicRoots = candidate.musicRoots
             stored.vault = candidate.vault
         }
+        if saved {
+            archiveViewModel.applyProjectVaultSettingsChange()
+        }
+        return saved
     }
 }
 
