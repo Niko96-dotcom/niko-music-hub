@@ -23,6 +23,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case emergencyStop
     case keepLocal
     case activityPostponed(String)
+    case archiveFailed(String)
     case noVerifiedArchive
 
     public var errorDescription: String? {
@@ -33,6 +34,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .emergencyStop: "Project Vault Emergency Stop is on."
         case .keepLocal: "Keep Local prevents automatic archiving."
         case .activityPostponed(let reason): "Archiving was postponed safely: \(reason)."
+        case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
         case .noVerifiedArchive: "No verified archive generation is available."
         }
     }
@@ -148,7 +150,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 // generation as success so the UI does not schedule another full
                 // Dropbox copy; the Active project remains untouched.
                 transfer = verified
-            case .failed(let failure): throw ProjectVaultRuntimeError.activityPostponed(failure.message)
+            case .failed(let failure): throw ProjectVaultRuntimeError.archiveFailed(failure.message)
             }
         } else {
             transfer = try await engine.archive(projectID: entry.record.id, sourceURL: song.folderPath)

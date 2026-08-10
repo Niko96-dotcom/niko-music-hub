@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 public struct VaultManifest: Codable, Equatable, Sendable, Identifiable {
@@ -103,19 +104,49 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         .init(relativePath: entry.relativePath, type: entry.type, byteCount: entry.byteCount, modifiedAt: .distantPast, sha256: entry.sha256)
     }
 
-    /// Cubase projects routinely contain multi-gigabyte audio. Hash in bounded
-    /// chunks so integrity verification cannot scale memory usage with file size.
+    /// Cubase projects routinely contain multi-gigabyte audio. Hash through one
+    /// reusable POSIX buffer so Foundation does not accumulate autoreleased
+    /// `NSData` chunks on a long-lived Swift concurrency worker.
     private func hashRegularFile(at url: URL) throws -> (byteCount: Int64, sha256: String) {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
+        let descriptor = try openForReading(url)
+        defer { Darwin.close(descriptor) }
+
+        var buffer = [UInt8](repeating: 0, count: 1_048_576)
         var hasher = SHA256()
         var byteCount: Int64 = 0
-        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
-            byteCount += Int64(chunk.count)
-            hasher.update(data: chunk)
+        while true {
+            let readCount = buffer.withUnsafeMutableBytes { bytes in
+                Darwin.read(descriptor, bytes.baseAddress, bytes.count)
+            }
+            if readCount < 0 {
+                if errno == EINTR { continue }
+                throw Self.posixReadError(url: url)
+            }
+            guard readCount > 0 else { break }
+            byteCount += Int64(readCount)
+            buffer.withUnsafeBytes { bytes in
+                hasher.update(bufferPointer: UnsafeRawBufferPointer(rebasing: bytes.prefix(readCount)))
+            }
         }
         let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         return (byteCount, digest)
+    }
+
+    private func openForReading(_ url: URL) throws -> Int32 {
+        let descriptor = url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return Int32(-1) }
+            return Darwin.open(path, O_RDONLY | O_CLOEXEC)
+        }
+        guard descriptor >= 0 else { throw Self.posixReadError(url: url) }
+        return descriptor
+    }
+
+    private static func posixReadError(url: URL) -> NSError {
+        NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(errno),
+            userInfo: [NSFilePathErrorKey: url.path]
+        )
     }
 
     private static func relativePath(of child: URL, below root: URL) throws -> String {

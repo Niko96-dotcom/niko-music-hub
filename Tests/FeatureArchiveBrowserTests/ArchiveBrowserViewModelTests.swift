@@ -1255,6 +1255,50 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(archivedSong?.workflowStatus, .done)
     }
 
+    func testDoneProjectWithPersistedFailedTransferIsNotAutomaticallyRequeued() async throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("workflow-failed-transfer-\(UUID().uuidString)", isDirectory: true)
+        let song = Song(
+            folderPath: folder,
+            originalFolderName: "Failed Workflow Song",
+            displayTitle: "Failed Workflow Song",
+            workflowStatus: .done
+        )
+        let projectID = ProjectID()
+        let transfer = VaultTransferRecord(
+            projectID: projectID,
+            sourceURL: folder,
+            stagingURL: folder.appendingPathComponent("staging"),
+            destinationURL: folder.appendingPathComponent("generation"),
+            state: .failedRecoverable
+        )
+        let runtime = RecordingProjectVaultRuntime(snapshots: [
+            ProjectVaultRuntimeSnapshot(
+                record: ProjectRecord(
+                    id: projectID,
+                    canonicalTitle: song.effectiveDisplayTitle,
+                    locations: [],
+                    workflowState: .done
+                ),
+                transfer: transfer
+            ),
+        ])
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime
+        )
+        viewModel.scannedSongs = [song]
+        viewModel.songs = [song]
+        viewModel.filteredSongs = [song]
+
+        await viewModel.refreshProjectVaultSnapshots()
+        try await Task.sleep(for: .milliseconds(100))
+
+        let archiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(archiveCallCount, 0)
+    }
+
     func testManualPreviewSurvivesRescan() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -2142,10 +2186,17 @@ private final class RecordingArchiveIndexStore: ArchiveIndexStoring, @unchecked 
 
 private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     private var archivedSong: Song?
+    private var snapshotValues: [ProjectVaultRuntimeSnapshot]
+    private var archiveCalls = 0
 
-    func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] { [] }
+    init(snapshots: [ProjectVaultRuntimeSnapshot] = []) {
+        snapshotValues = snapshots
+    }
+
+    func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] { snapshotValues }
 
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot {
+        archiveCalls += 1
         archivedSong = song
         return ProjectVaultRuntimeSnapshot(
             record: ProjectRecord(
@@ -2164,6 +2215,7 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     func recoverAtLaunch() async {}
 
     func lastArchivedSong() -> Song? { archivedSong }
+    func archiveCallCount() -> Int { archiveCalls }
 }
 
 private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {

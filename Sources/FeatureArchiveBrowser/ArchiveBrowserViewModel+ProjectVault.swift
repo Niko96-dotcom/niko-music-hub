@@ -207,7 +207,9 @@ extension ArchiveBrowserViewModel {
             } catch let error as ProjectVaultRuntimeError where trigger == .workflowDone {
                 self.setStatusMessage("Marked Done. \(error.localizedDescription)")
                 self.diagnostics.log(.warning, "Done auto-archive postponed: \(error)")
-                self.scheduleDoneArchiveRetry(for: song)
+                if case .activityPostponed = error {
+                    self.scheduleDoneArchiveRetry(for: song)
+                }
             } catch {
                 self.setStatusMessage("Project Vault could not archive this project: \(error.localizedDescription). No source files were changed.")
                 self.diagnostics.log(.error, "Project Vault archive failed: \(error)")
@@ -255,10 +257,10 @@ extension ArchiveBrowserViewModel {
     private func enqueueDoneVaultProjectsIfNeeded() {
         for song in songs where song.workflowStatus == .done {
             let transfer = projectVaultSnapshot(for: song)?.transfer
-            let isAlreadyArchived = transfer.map {
-                [.archiveVerified, .archivedLocal, .archivedOnlineOnly].contains($0.state)
-            } ?? false
-            if !isAlreadyArchived, !projectVaultBusySongIDs.contains(song.id) {
+            // A persisted transfer—terminal, in progress, or failed—is owned by
+            // recovery/manual review. Never create another automatic generation
+            // merely because the project remains marked Done.
+            if transfer == nil, !projectVaultBusySongIDs.contains(song.id) {
                 archiveInProjectVault(song, trigger: .workflowDone)
             }
         }

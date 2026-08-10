@@ -94,8 +94,27 @@ public actor LocalVaultTransferEngine {
     @discardableResult
     public func recoverAtLaunch() async -> [VaultTransferRecord] {
         guard let records = try? store.recoverableRecords() else { return [] }
+        // A failed automatic attempt used to create a fresh transfer every minute.
+        // Resume only the newest record for each project so launch recovery cannot
+        // replay several full-project copies and hashes for the same source.
+        let groupedRecords = Dictionary(grouping: records, by: \.projectID)
+        let newestRecords = groupedRecords.compactMap { _, projectRecords in
+            projectRecords.max(by: Self.isOlderRecoveryCandidate)
+        }
+            .sorted { $0.updatedAt < $1.updatedAt }
+        let newestRecordsByProject = Dictionary(uniqueKeysWithValues: newestRecords.map { ($0.projectID, $0) })
+        let verifiedRecoveryCopyByProject = Dictionary(uniqueKeysWithValues: newestRecords.map {
+            ($0.projectID, hasVerifiedRecoveryCopy($0))
+        })
+        for record in records {
+            guard let newestRecord = newestRecordsByProject[record.projectID], newestRecord.id != record.id else { continue }
+            discardObsoleteStagingIfSafe(
+                for: record,
+                preservedByVerifiedRecoveryCopy: verifiedRecoveryCopyByProject[record.projectID] == true
+            )
+        }
         var results: [VaultTransferRecord] = []
-        for var record in records {
+        for var record in newestRecords {
             if record.state == .failedRecoverable, let origin = record.error?.origin {
                 record.state = origin
                 record.error = nil
@@ -227,7 +246,6 @@ public actor LocalVaultTransferEngine {
         try fileManager.copyItem(at: record.sourceURL, to: record.stagingURL)
         let sourceAfter = try manifestBuilder.build(at: record.sourceURL, id: sourceBefore.id, createdAt: sourceBefore.createdAt)
         guard sourceBefore.entries == sourceAfter.entries else { throw LocalVaultTransferError.sourceMutated }
-        try manifestBuilder.verify(sourceBefore, at: record.stagingURL)
         record.manifestID = sourceBefore.id
         record.manifest = sourceBefore
         record.totalBytes = sourceBefore.totalBytes
@@ -314,5 +332,61 @@ public actor LocalVaultTransferEngine {
         let root = root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
         let candidate = candidate.standardizedFileURL.resolvingSymlinksInPath().pathComponents
         return candidate.count >= root.count && Array(candidate.prefix(root.count)) == root
+    }
+
+    private static func isOlderRecoveryCandidate(
+        _ lhs: VaultTransferRecord,
+        _ rhs: VaultTransferRecord
+    ) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+        // Prefer an in-progress state over a failed wrapper when timestamps tie;
+        // it retains the most precise idempotent resume point.
+        if lhs.state == .failedRecoverable, rhs.state != .failedRecoverable { return true }
+        if lhs.state != .failedRecoverable, rhs.state == .failedRecoverable { return false }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// Duplicate automatic attempts can leave complete project copies in staging.
+    /// Delete only superseded transfers whose persisted path exactly matches the
+    /// engine-owned staging layout. Either the Active source or a manifest-verified
+    /// recovery copy must remain, and no promoted destination may exist.
+    private func discardObsoleteStagingIfSafe(
+        for record: VaultTransferRecord,
+        preservedByVerifiedRecoveryCopy: Bool
+    ) {
+        let canDiscardState = record.state == .failedRecoverable || record.state == .awaitingProviderDurability
+        guard canDiscardState,
+              preservedByVerifiedRecoveryCopy || fileManager.fileExists(atPath: record.sourceURL.path),
+              !fileManager.fileExists(atPath: record.destinationURL.path) else { return }
+        let expectedStagingURL = expectedStagingURL(for: record)
+        guard record.stagingURL.standardizedFileURL.path == expectedStagingURL.path,
+              fileManager.fileExists(atPath: expectedStagingURL.path) else { return }
+        try? fileManager.removeItem(at: expectedStagingURL)
+    }
+
+    private func hasVerifiedRecoveryCopy(_ record: VaultTransferRecord) -> Bool {
+        let hasVerifiedStagingState = record.state == .awaitingProviderDurability
+            || (record.state == .failedRecoverable && record.error?.origin == .awaitingProviderDurability)
+        let expectedStagingURL = expectedStagingURL(for: record)
+        guard hasVerifiedStagingState,
+              record.manifestID != nil,
+              let manifest = record.manifest,
+              record.stagingURL.standardizedFileURL.path == expectedStagingURL.path,
+              fileManager.fileExists(atPath: expectedStagingURL.path) else { return false }
+        do {
+            try manifestBuilder.verify(manifest, at: expectedStagingURL)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func expectedStagingURL(for record: VaultTransferRecord) -> URL {
+        archiveRoot
+            .appendingPathComponent(".niko-staging", isDirectory: true)
+            .appendingPathComponent(record.projectID.description, isDirectory: true)
+            .appendingPathComponent(record.id.uuidString.lowercased(), isDirectory: true)
+            .standardizedFileURL
     }
 }

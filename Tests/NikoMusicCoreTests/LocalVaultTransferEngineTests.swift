@@ -132,6 +132,74 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             XCTAssertTrue(secondRecovery.isEmpty, "terminal record selected after \(point)")
         }
     }
+
+    func testLaunchRecoveryResumesOnlyNewestTransferForEachProject() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let projectID = ProjectID()
+        let olderID = UUID()
+        let newerID = UUID()
+        let olderStaging = fixture.archive
+            .appendingPathComponent(".niko-staging")
+            .appendingPathComponent(projectID.description)
+            .appendingPathComponent(olderID.uuidString.lowercased())
+        let newerStaging = fixture.archive
+            .appendingPathComponent(".niko-staging")
+            .appendingPathComponent(projectID.description)
+            .appendingPathComponent(newerID.uuidString.lowercased())
+        try FileManager.default.createDirectory(at: olderStaging, withIntermediateDirectories: true)
+        try Data("obsolete staging".utf8).write(to: olderStaging.appendingPathComponent("partial.cpr"))
+        try FileManager.default.copyItem(at: fixture.source, to: newerStaging)
+        let newerManifest = try VaultManifestBuilder().build(at: newerStaging)
+
+        var older = VaultTransferRecord(
+            id: olderID,
+            projectID: projectID,
+            sourceURL: fixture.source,
+            stagingURL: olderStaging,
+            destinationURL: fixture.archive.appendingPathComponent("generations/older"),
+            state: .failedRecoverable,
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        older.updatedAt = Date(timeIntervalSince1970: 200)
+        older.error = VaultTransferError(
+            origin: .copyingToArchiveStaging,
+            reason: .unknown,
+            message: "older failed attempt"
+        )
+        var newer = VaultTransferRecord(
+            id: newerID,
+            projectID: projectID,
+            sourceURL: fixture.source,
+            stagingURL: newerStaging,
+            destinationURL: fixture.archive.appendingPathComponent("generations/newer"),
+            state: .awaitingProviderDurability,
+            createdAt: Date(timeIntervalSince1970: 300)
+        )
+        newer.updatedAt = Date(timeIntervalSince1970: 400)
+        newer.manifestID = newerManifest.id
+        newer.manifest = newerManifest
+        newer.totalBytes = newerManifest.totalBytes
+        newer.completedBytes = newerManifest.totalBytes
+        try store.save(older)
+        try store.save(newer)
+        try FileManager.default.removeItem(at: fixture.source)
+
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store
+        )
+        let results = await recovery.recoverAtLaunch()
+
+        XCTAssertEqual(results.map(\.id), [newerID])
+        XCTAssertEqual(results.first?.state, .archiveVerified)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: olderStaging.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+        XCTAssertEqual(try store.record(id: olderID), older)
+        XCTAssertEqual(try store.record(id: newerID)?.state, .archiveVerified)
+    }
 }
 
 private actor PromotionDurabilityProvider: ArchiveStorageProvider {

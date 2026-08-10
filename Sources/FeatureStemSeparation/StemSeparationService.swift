@@ -183,7 +183,8 @@ public struct StemSeparationService: Sendable {
     ) -> URL {
         let sanitized = sanitizedTitle(title)
         let timestamp = Date().timeIntervalSince1970
-        let folderName = "\(sanitized) - \(preset.displayName) - \(timestamp)"
+        let uniqueSuffix = UUID().uuidString.lowercased()
+        let folderName = "\(sanitized) - \(preset.displayName) - \(timestamp) - \(uniqueSuffix)"
         return root
             .appendingPathComponent("Stems", isDirectory: true)
             .appendingPathComponent(folderName, isDirectory: true)
