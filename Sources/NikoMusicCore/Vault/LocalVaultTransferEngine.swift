@@ -103,8 +103,11 @@ public actor LocalVaultTransferEngine {
         }
             .sorted { $0.updatedAt < $1.updatedAt }
         let newestRecordsByProject = Dictionary(uniqueKeysWithValues: newestRecords.map { ($0.projectID, $0) })
-        let verifiedRecoveryCopyByProject = Dictionary(uniqueKeysWithValues: newestRecords.map {
-            ($0.projectID, hasVerifiedRecoveryCopy($0))
+        let verifiedRecoveryCopyByProject = Dictionary(uniqueKeysWithValues: newestRecords.map { newestRecord in
+            let needsVerification = groupedRecords[newestRecord.projectID]?.contains { candidate in
+                requiresVerifiedRecoveryCopyBeforeDiscarding(candidate, newestRecordID: newestRecord.id)
+            } == true
+            return (newestRecord.projectID, needsVerification && hasVerifiedRecoveryCopy(newestRecord))
         })
         for record in records {
             guard let newestRecord = newestRecordsByProject[record.projectID], newestRecord.id != record.id else { continue }
@@ -363,6 +366,20 @@ public actor LocalVaultTransferEngine {
         guard record.stagingURL.standardizedFileURL.path == expectedStagingURL.path,
               fileManager.fileExists(atPath: expectedStagingURL.path) else { return }
         try? fileManager.removeItem(at: expectedStagingURL)
+    }
+
+    private func requiresVerifiedRecoveryCopyBeforeDiscarding(
+        _ record: VaultTransferRecord,
+        newestRecordID: UUID
+    ) -> Bool {
+        let canDiscardState = record.state == .failedRecoverable || record.state == .awaitingProviderDurability
+        let expectedStagingURL = expectedStagingURL(for: record)
+        return record.id != newestRecordID
+            && canDiscardState
+            && !fileManager.fileExists(atPath: record.sourceURL.path)
+            && !fileManager.fileExists(atPath: record.destinationURL.path)
+            && record.stagingURL.standardizedFileURL.path == expectedStagingURL.path
+            && fileManager.fileExists(atPath: expectedStagingURL.path)
     }
 
     private func hasVerifiedRecoveryCopy(_ record: VaultTransferRecord) -> Bool {
