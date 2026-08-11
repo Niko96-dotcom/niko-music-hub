@@ -7,11 +7,15 @@ import NikoMusicCore
 /// a SwiftUI card render.
 struct ProjectVaultPresentationContext: Equatable {
     let activeRoot: StoredMusicRoot?
+    let archiveRoot: StoredMusicRoot?
+    let generationReviewResolver: ProjectVaultGenerationReviewResolver?
     let keepLocalProjectIDs: Set<String>
 
     init?(settings: AppSettings) {
         guard settings.vault.isEnabled else { return nil }
         activeRoot = settings.musicRoots.first { $0.id == settings.vault.activeRootID }
+        archiveRoot = settings.musicRoots.first { $0.id == settings.vault.archiveRootID }
+        generationReviewResolver = ProjectVaultGenerationReviewResolver(settings: settings)
         keepLocalProjectIDs = settings.vault.keepLocalProjectIDs
     }
 }
@@ -21,7 +25,13 @@ struct ProjectVaultPresentationContext: Equatable {
 /// drag/drop or menu affordances from bypassing the same safety boundary.
 enum ProjectVaultCardWorkflowPolicy {
     static func allowsWorkflowMutation(for presentation: ProjectVaultCardPresentation?) -> Bool {
-        presentation?.state != .archived
+        guard let presentation else { return true }
+        switch presentation.state {
+        case .active, .keepLocal:
+            return true
+        case .archived, .restoring, .archiving, .needsAttention:
+            return false
+        }
     }
 }
 
@@ -52,7 +62,7 @@ extension ArchiveBrowserViewModel {
             )
             restartArchiveRootWatching()
             if !roots.isEmpty {
-                Task { await scan() }
+                Task { await scanInBackground() }
             }
         } else {
             rebuildProjectVaultCatalog()
@@ -89,8 +99,56 @@ extension ArchiveBrowserViewModel {
         projectVaultPresentation(for: song)?.state == .archived
     }
 
+    /// Project Vault destinations are restore/review handles, never generic
+    /// filesystem authority. Source-path cards also stay non-actionable while a
+    /// destructive or binding review owns the project, even if the source path
+    /// happens to reappear before the next catalog rebuild.
+    func blocksGenericProjectVaultFileActions(for song: Song) -> Bool {
+        guard let snapshot = projectVaultSnapshot(for: song) else {
+            return false
+        }
+        let songPath = Self.vaultCanonicalPath(song.folderPath)
+        if let restore = snapshot.restore,
+           restore.projectID == snapshot.record.id,
+           restore.failureReason == .activeDestinationIntegrityMismatch,
+           songPath == Self.vaultCanonicalPath(restore.destinationURL) {
+            return true
+        }
+        guard let transfer = snapshot.transfer else { return false }
+        let isSourcePath = songPath == Self.vaultCanonicalPath(transfer.sourceURL)
+        let isDestinationPath = songPath == Self.vaultCanonicalPath(transfer.destinationURL)
+        guard isSourcePath || isDestinationPath else { return false }
+
+        let terminalDestinationBlocks = isDestinationPath && [
+            VaultTransferState.archiveVerified,
+            .archivedLocal,
+            .archivedOnlineOnly,
+        ].contains(transfer.state)
+        let restoreBlocks = snapshot.restore.map {
+            $0.failureReason == .archiveTransferBindingUnavailable
+                || $0.failureReason == .activeDestinationIntegrityMismatch
+                || $0.phase == .superseded
+                || $0.supersededBy != nil
+        } ?? false
+        let incompletePostPromotionRestoreBlocks = snapshot.restore.map {
+            guard $0.completedAt == nil else { return false }
+            return $0.phase == .persistingActiveLocation || $0.phase == .openingInCubase
+        } ?? false
+        let destructiveRecoveryBlocks = transfer.state == .recoveryRequired
+            && (transfer.error?.origin == .removingActiveCopy
+                || transfer.error?.origin == .evictingProviderCache)
+        let supersededTransferBlocks = transfer.state == .superseded
+            || transfer.supersededBy != nil
+        return terminalDestinationBlocks
+            || restoreBlocks
+            || incompletePostPromotionRestoreBlocks
+            || destructiveRecoveryBlocks
+            || supersededTransferBlocks
+    }
+
     func canMutateWorkflowStatus(for song: Song) -> Bool {
-        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
+        guard !blocksGenericProjectVaultFileActions(for: song) else { return false }
+        return ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
             for: projectVaultPresentation(for: song)
         )
     }
@@ -152,7 +210,68 @@ extension ArchiveBrowserViewModel {
             var record = snapshot.record
             record.pinned = context.keepLocalProjectIDs.contains(snapshot.transfer?.sourceURL.path ?? song.id)
             let transferState = snapshot.transfer?.state == .archiveVerified ? nil : snapshot.transfer?.state
-            return ProjectVaultCardPresentation(record: record, transferState: transferState)
+            let safeRestore = snapshot.restore.flatMap { restore -> VaultRestoreRecord? in
+                if restore.failureReason == .archiveTransferBindingUnavailable
+                    || restore.failureReason == .activeDestinationIntegrityMismatch
+                    || restore.phase == .superseded
+                    || restore.supersededBy != nil {
+                    return restore
+                }
+                guard let transferID = restore.archiveTransferID,
+                      context.generationReviewResolver?.isBoundGenerationPath(
+                        restore.archiveGenerationURL,
+                        projectID: restore.projectID,
+                        transferID: transferID
+                      ) == true else {
+                    return nil
+                }
+                return restore
+            }
+            let terminalStates: Set<VaultTransferState> = [
+                .archiveVerified, .archivedLocal, .archivedOnlineOnly,
+            ]
+            let hasBoundTerminalGeneration = snapshot.transfer.map { transfer in
+                terminalStates.contains(transfer.state)
+                    && context.generationReviewResolver?.isBoundGenerationPath(
+                        transfer.destinationURL,
+                        projectID: transfer.projectID,
+                        transferID: transfer.id
+                    ) == true
+            } ?? false
+            let hasUnsafeTransferGeneration = snapshot.transfer.map { transfer in
+                terminalStates.contains(transfer.state) && !hasBoundTerminalGeneration
+            } ?? false
+            if hasBoundTerminalGeneration,
+               let transfer = snapshot.transfer,
+               let archiveRoot = context.archiveRoot,
+               !record.locations.contains(where: {
+                   $0.kind == .archive && $0.availability != .missing
+               }) {
+                record.locations.append(ProjectLocation(
+                    rootID: archiveRoot.id,
+                    relativePath: transfer.destinationURL.path,
+                    kind: .archive,
+                    availability: transfer.state == .archivedOnlineOnly ? .onlineOnly : .local
+                ))
+            }
+            let isArchiveDestinationProjection = snapshot.transfer.map {
+                Self.vaultCanonicalPath(song.folderPath)
+                    == Self.vaultCanonicalPath($0.destinationURL)
+            } ?? false
+            if (snapshot.restore != nil && safeRestore == nil)
+                || (hasUnsafeTransferGeneration && isArchiveDestinationProjection) {
+                return ProjectVaultCardPresentation(
+                    record: record,
+                    transferState: .recoveryRequired
+                )
+            }
+            return ProjectVaultCardPresentation(
+                record: record,
+                transferState: transferState,
+                transferErrorOrigin: snapshot.transfer?.error?.origin,
+                restorePhase: safeRestore?.phase,
+                restore: safeRestore
+            )
         }
         guard let active = context.activeRoot else { return nil }
         let path = song.folderPath.standardizedFileURL.resolvingSymlinksInPath()
@@ -169,7 +288,16 @@ extension ArchiveBrowserViewModel {
 
     func canArchiveInProjectVault(_ song: Song) -> Bool {
         guard projectVaultRuntime != nil,
+              !blocksGenericProjectVaultFileActions(for: song),
               projectVaultPresentation(for: song)?.state != .archived else { return false }
+        if let restore = projectVaultSnapshot(for: song)?.restore,
+           restore.completedAt == nil {
+            return false
+        }
+        if let transfer = projectVaultSnapshot(for: song)?.transfer,
+           VaultTransferOwnershipPolicy.ownsProject(transfer.state) {
+            return false
+        }
         return !projectVaultBusySongIDs.contains(song.id)
     }
 
@@ -183,35 +311,41 @@ extension ArchiveBrowserViewModel {
             refreshProjectVaultPresentationContext()
         } catch {
             diagnostics.log(.error, "Project Vault Keep Local setting failed: \(error)")
-            setStatusMessage("Keep Local could not be saved. No project files were changed.")
+            setProjectVaultStatusMessage("Keep Local could not be saved. No project files were changed.")
         }
     }
 
     func archiveInProjectVault(_ song: Song, trigger: ProjectVaultArchiveTrigger = .manual) {
-        guard let projectVaultRuntime, !projectVaultBusySongIDs.contains(song.id) else { return }
+        guard let projectVaultRuntime,
+              canArchiveInProjectVault(song),
+              !projectVaultBusySongIDs.contains(song.id) else { return }
         projectVaultBusySongIDs.insert(song.id)
-        setStatusMessage(trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…")
+        setProjectVaultStatusMessage(trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…")
         Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.projectVaultBusySongIDs.remove(song.id) }
             do {
                 let snapshot = try await projectVaultRuntime.archive(song: song, trigger: trigger)
                 self.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+                self.projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
                 self.cacheProjectVaultSnapshot(snapshot)
                 self.rebuildProjectVaultPresentationCache()
                 await self.refreshProjectVaultSnapshots()
                 let activeRetained = FileManager.default.fileExists(atPath: song.folderPath.path)
-                self.setStatusMessage(activeRetained
+                self.setProjectVaultStatusMessage(activeRetained
                     ? "Archived and verified. The Active copy was kept."
                     : "Done and archived. The verified project is ready to restore when needed.")
             } catch let error as ProjectVaultRuntimeError where trigger == .workflowDone {
-                self.setStatusMessage("Marked Done. \(error.localizedDescription)")
+                _ = await self.refreshProjectVaultSnapshots()
+                self.setProjectVaultStatusMessage("Marked Done. \(error.localizedDescription)")
                 self.diagnostics.log(.warning, "Done auto-archive postponed: \(error)")
-                if case .activityPostponed = error {
+                if case .activityPostponed(let reason) = error,
+                   reason.permitsBoundedAutomaticRetry {
                     self.scheduleDoneArchiveRetry(for: song)
                 }
             } catch {
-                self.setStatusMessage("Project Vault could not archive this project: \(error.localizedDescription). No source files were changed.")
+                _ = await self.refreshProjectVaultSnapshots()
+                self.setProjectVaultStatusMessage("Project Vault could not archive this project: \(error.localizedDescription). No source files were changed.")
                 self.diagnostics.log(.error, "Project Vault archive failed: \(error)")
             }
         }
@@ -227,13 +361,54 @@ extension ArchiveBrowserViewModel {
             try? openLatestCPR(for: song)
         case .restoreAndOpen:
             restoreAndOpenFromProjectVault(song)
+        case .retry:
+            retryProjectVaultTransfer(song)
         case .review:
-            setStatusMessage(presentation.explanation)
+            if case .makeAvailableOfflineInFinder(let generationURL) = presentation.reviewAction {
+                setProjectVaultStatusMessage(
+                    "Make this exact archive generation available offline in Finder, then choose Retry Get Local."
+                )
+                revealProjectVaultGenerationInFinder(generationURL, for: song)
+            } else {
+                setProjectVaultStatusMessage(presentation.explanation)
+            }
         }
     }
 
-    func refreshProjectVaultSnapshots() async {
-        guard let projectVaultRuntime else { return }
+    private func revealProjectVaultGenerationInFinder(_ generationURL: URL, for song: Song) {
+        do {
+            let settings = try settingsStore.loadSettings()
+            guard let restore = projectVaultSnapshot(for: song)?.restore,
+                  let transferID = restore.archiveTransferID else {
+                throw MusicItemOpenerError.pathOutsideAllowedRoots(
+                    generationURL.standardizedFileURL
+                )
+            }
+            guard let resolver = ProjectVaultGenerationReviewResolver(settings: settings),
+                  let resolved = resolver.resolveGeneration(
+                    generationURL,
+                    projectID: restore.projectID,
+                    transferID: transferID
+                  ) else {
+                throw MusicItemOpenerError.pathOutsideAllowedRoots(
+                    generationURL.standardizedFileURL
+                )
+            }
+            fileActions.revealInFinder(resolved)
+        } catch let error as MusicItemOpenerError {
+            setProjectVaultStatusMessage(musicItemOpenerStatusMessage(error))
+            diagnostics.log(.warning, "Project Vault generation reveal refused: \(error)")
+        } catch {
+            setProjectVaultStatusMessage(
+                "Project Vault generation cannot be revealed: \(error.localizedDescription)"
+            )
+            diagnostics.log(.warning, "Project Vault generation reveal failed: \(error)")
+        }
+    }
+
+    @discardableResult
+    func refreshProjectVaultSnapshots() async -> Bool {
+        guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
             projectVaultSnapshots = snapshots
@@ -243,14 +418,17 @@ extension ArchiveBrowserViewModel {
             rebuildProjectVaultCatalog()
             rebuildProjectVaultPresentationCache()
             enqueueDoneVaultProjectsIfNeeded()
+            return true
         } catch ProjectVaultRuntimeError.unavailable {
             projectVaultSnapshots = []
             projectVaultSnapshotsByPath.removeAll()
             archivedProjectCount = 0
             rebuildProjectVaultCatalog()
             rebuildProjectVaultPresentationCache()
+            return false
         } catch {
             diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
+            return false
         }
     }
 
@@ -260,14 +438,18 @@ extension ArchiveBrowserViewModel {
             // A persisted transfer—terminal, in progress, or failed—is owned by
             // recovery/manual review. Never create another automatic generation
             // merely because the project remains marked Done.
-            if transfer == nil, !projectVaultBusySongIDs.contains(song.id) {
+            if transfer == nil,
+               !projectVaultBusySongIDs.contains(song.id),
+               projectVaultRetryTasks[song.id] == nil {
                 archiveInProjectVault(song, trigger: .workflowDone)
             }
         }
     }
 
     private func scheduleDoneArchiveRetry(for song: Song) {
-        guard projectVaultRetryTasks[song.id] == nil else { return }
+        let attemptCount = projectVaultRetryAttemptCounts[song.id, default: 0]
+        guard projectVaultRetryTasks[song.id] == nil, attemptCount < 3 else { return }
+        projectVaultRetryAttemptCounts[song.id] = attemptCount + 1
         projectVaultRetryTasks[song.id] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(60))
             guard let self, !Task.isCancelled else { return }
@@ -280,12 +462,12 @@ extension ArchiveBrowserViewModel {
 
     private func restoreAndOpenFromProjectVault(_ song: Song) {
         guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song) else {
-            setStatusMessage("Restore is unavailable because no verified Project Vault generation was found.")
+            setProjectVaultStatusMessage("Restore is unavailable because no verified Project Vault generation was found.")
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
         projectVaultBusySongIDs.insert(song.id)
-        setStatusMessage("Restoring the verified project into Active Projects…")
+        setProjectVaultStatusMessage("Restoring the verified project into Active Projects…")
         Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.projectVaultBusySongIDs.remove(song.id) }
@@ -293,10 +475,79 @@ extension ArchiveBrowserViewModel {
                 _ = try await runtime.restoreAndOpen(snapshot: snapshot)
                 await self.refreshProjectVaultSnapshots()
                 await self.scan()
-                self.setStatusMessage("Restored, verified, and opened in Cubase.")
+                self.setProjectVaultStatusMessage("Restored, verified, and opened in Cubase.")
             } catch {
-                self.setStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
+                _ = await self.refreshProjectVaultSnapshots()
+                self.setProjectVaultStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
                 self.diagnostics.log(.error, "Project Vault restore failed: \(error)")
+            }
+        }
+    }
+
+    private func retryProjectVaultTransfer(_ song: Song) {
+        guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song) else {
+            setProjectVaultStatusMessage("Retry is unavailable because no recoverable Project Vault transfer was found.")
+            return
+        }
+        guard !projectVaultBusySongIDs.contains(song.id) else { return }
+        projectVaultBusySongIDs.insert(song.id)
+        setProjectVaultStatusMessage("Retrying the preserved Project Vault transfer…")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.projectVaultBusySongIDs.remove(song.id) }
+            do {
+                let updated = try await runtime.retry(snapshot: snapshot)
+                self.cacheProjectVaultSnapshot(updated)
+                self.rebuildProjectVaultPresentationCache()
+                if await self.refreshProjectVaultSnapshots() {
+                    self.setProjectVaultStatusMessage("Project Vault retry completed and verified.")
+                } else {
+                    self.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
+                }
+            } catch {
+                _ = await self.refreshProjectVaultSnapshots()
+                self.setProjectVaultStatusMessage("Project Vault retry stopped safely: \(error.localizedDescription). Existing copies were kept.")
+                self.diagnostics.log(.error, "Project Vault manual retry failed: \(error)")
+            }
+        }
+    }
+
+    func retryReviewedProjectVaultRestore(for song: Song) {
+        guard let runtime = projectVaultRuntime,
+              let restoreID = projectVaultPresentation(for: song)?.retryRestoreID else {
+            setProjectVaultStatusMessage(
+                "Restore retry is unavailable because no preserved Project Vault restore was found."
+            )
+            return
+        }
+        guard !projectVaultBusySongIDs.contains(song.id) else { return }
+        projectVaultBusySongIDs.insert(song.id)
+        setProjectVaultStatusMessage("Retrying this preserved Project Vault restore…")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.projectVaultBusySongIDs.remove(song.id) }
+            do {
+                let completed = try await runtime.retryRestore(id: restoreID)
+                guard completed.id == restoreID,
+                      completed.completedAt != nil,
+                      completed.failureReason == nil else {
+                    throw ProjectVaultRuntimeError.unavailable
+                }
+                if await self.refreshProjectVaultSnapshots() {
+                    self.setProjectVaultStatusMessage(
+                        "Project Vault restore retry completed and verified."
+                    )
+                } else {
+                    self.setProjectVaultStatusMessage(
+                        "Project Vault restore retry completed, but the current Vault state could not be refreshed. Review before taking another action."
+                    )
+                }
+            } catch {
+                _ = await self.refreshProjectVaultSnapshots()
+                self.setProjectVaultStatusMessage(
+                    "Project Vault restore retry stopped safely: \(error.localizedDescription). Existing copies were kept."
+                )
+                self.diagnostics.log(.error, "Project Vault restore retry failed: \(error)")
             }
         }
     }
@@ -306,16 +557,58 @@ extension ArchiveBrowserViewModel {
     }
 
     private func cacheProjectVaultSnapshot(_ snapshot: ProjectVaultRuntimeSnapshot) {
+        if let restore = snapshot.restore,
+           restore.projectID == snapshot.record.id,
+           restore.failureReason == .activeDestinationIntegrityMismatch,
+           let activeRoot = projectVaultPresentationContext?.activeRoot {
+            let activeRootURL = activeRoot.fallbackURL
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+            let destinationURL = restore.destinationURL
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+            if destinationURL != activeRootURL,
+               Self.vaultContains(activeRootURL, destinationURL) {
+                projectVaultSnapshotsByPath[Self.vaultCanonicalPath(destinationURL)] = snapshot
+            }
+        }
         if let transfer = snapshot.transfer {
             projectVaultSnapshotsByPath[Self.vaultCanonicalPath(transfer.sourceURL)] = snapshot
-            projectVaultSnapshotsByPath[Self.vaultCanonicalPath(transfer.destinationURL)] = snapshot
+            let terminalStates: Set<VaultTransferState> = [
+                .archiveVerified, .archivedLocal, .archivedOnlineOnly,
+            ]
+            if !terminalStates.contains(transfer.state)
+                || projectVaultPresentationContext?.generationReviewResolver?
+                    .isBoundGenerationPath(
+                        transfer.destinationURL,
+                        projectID: transfer.projectID,
+                        transferID: transfer.id
+                    ) == true {
+                projectVaultSnapshotsByPath[Self.vaultCanonicalPath(transfer.destinationURL)] = snapshot
+            }
         }
     }
 
     private func archivedOnlySnapshots(from snapshots: [ProjectVaultRuntimeSnapshot]) -> [ProjectVaultRuntimeSnapshot] {
-        snapshots.filter { snapshot in
-            guard let transfer = snapshot.transfer,
-                  [.archiveVerified, .archivedLocal, .archivedOnlineOnly].contains(transfer.state) else {
+        guard let generationResolver = projectVaultPresentationContext?.generationReviewResolver else {
+            return []
+        }
+        return snapshots.filter { snapshot in
+            guard let transfer = snapshot.transfer else { return false }
+            let isVerifiedTerminal = [
+                VaultTransferState.archiveVerified,
+                .archivedLocal,
+                .archivedOnlineOnly,
+            ].contains(transfer.state)
+            let isDestructiveRecoveryHandle = transfer.state == .recoveryRequired
+                && (transfer.error?.origin == .removingActiveCopy
+                    || transfer.error?.origin == .evictingProviderCache)
+            guard (isVerifiedTerminal || isDestructiveRecoveryHandle),
+                  generationResolver.isBoundGenerationPath(
+                    transfer.destinationURL,
+                    projectID: transfer.projectID,
+                    transferID: transfer.id
+                  ) else {
                 return false
             }
             // The Active copy is the deciding signal. The archive destination may be

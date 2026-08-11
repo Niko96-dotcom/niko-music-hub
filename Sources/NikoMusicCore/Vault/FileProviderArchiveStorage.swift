@@ -8,6 +8,7 @@ public enum FileProviderArchiveStorageError: Error, Equatable, Sendable {
     case domainDisconnected
     case managerUnavailable
     case locationOutsideRoot
+    case expectedItemMismatch
     case durabilityUnavailable
     case materializationUnavailable
     case operationTimedOut
@@ -15,9 +16,165 @@ public enum FileProviderArchiveStorageError: Error, Equatable, Sendable {
 
 protocol FileProviderArchiveServicing: Sendable {
     func inspect(root: URL) async throws
+    func currentLocality(
+        root: URL,
+        expectedItems: [FileProviderExpectedItem]
+    ) async throws -> ArchiveStorageLocality
     func waitForChanges(root: URL) async throws
-    func materialize(root: URL) async throws
+    func materialize(root: URL, expectedItems: [FileProviderExpectedItem]) async throws
     func evict(root: URL) async throws
+}
+
+enum FileProviderPromisedItemType: Equatable, Sendable {
+    case regularFile
+    case directory
+}
+
+enum FileProviderPromisedItemStatus: Equatable, Sendable {
+    case current
+    case downloaded
+    case notDownloaded
+    case unknown
+}
+
+struct FileProviderExpectedItem: Equatable, Sendable {
+    let url: URL
+    let expectedType: FileProviderPromisedItemType
+    let expectedByteCount: Int64
+}
+
+struct FileProviderPromisedItemMetadata: Equatable, Sendable {
+    let type: FileProviderPromisedItemType?
+    let size: Int64?
+    let status: FileProviderPromisedItemStatus
+}
+
+protocol FileProviderPromisedMetadataCoordinating: Sendable {
+    func metadata(
+        at url: URL,
+        options: NSFileCoordinator.ReadingOptions
+    ) throws -> FileProviderPromisedItemMetadata
+}
+
+protocol FileProviderDownloading: Sendable {
+    func startDownloading(at url: URL) throws
+}
+
+struct FoundationFileProviderDownloader: FileProviderDownloading, @unchecked Sendable {
+    private let fileManager: FileManager
+
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+    }
+
+    func startDownloading(at url: URL) throws {
+        try fileManager.startDownloadingUbiquitousItem(at: url)
+    }
+}
+
+struct FoundationFileProviderPromisedItemAccessor: @unchecked Sendable {
+    typealias Reachability = @Sendable (URL) throws -> Void
+    typealias ResourceValue = @Sendable (URL, URLResourceKey) throws -> Any?
+
+    private let checkReachability: Reachability
+    private let resourceValue: ResourceValue
+
+    init(
+        checkPromisedItemIsReachable: @escaping Reachability = { url in
+            guard try url.checkPromisedItemIsReachable() else {
+                throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+        },
+        getPromisedItemResourceValue: @escaping ResourceValue = { url, key in
+            let values = try url.promisedItemResourceValues(forKeys: [key])
+            switch key {
+            case .isDirectoryKey: return values.isDirectory
+            case .isRegularFileKey: return values.isRegularFile
+            case .fileSizeKey: return values.fileSize
+            case .ubiquitousItemDownloadingStatusKey: return values.ubiquitousItemDownloadingStatus
+            case .ubiquitousItemDownloadingErrorKey: return values.ubiquitousItemDownloadingError
+            default: throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+        }
+    ) {
+        self.checkReachability = checkPromisedItemIsReachable
+        self.resourceValue = getPromisedItemResourceValue
+    }
+
+    func metadata(at url: URL) throws -> FileProviderPromisedItemMetadata {
+        try checkReachability(url)
+
+        let isDirectory = try resourceValue(url, .isDirectoryKey) as? Bool
+        let isRegularFile = try resourceValue(url, .isRegularFileKey) as? Bool
+        let rawSize = try resourceValue(url, .fileSizeKey)
+        let downloadingStatus = try resourceValue(url, .ubiquitousItemDownloadingStatusKey)
+        let downloadingError = try resourceValue(url, .ubiquitousItemDownloadingErrorKey)
+
+        if downloadingError != nil {
+            throw FileProviderArchiveStorageError.materializationUnavailable
+        }
+
+        let type: FileProviderPromisedItemType?
+        if isRegularFile == true, isDirectory != true {
+            type = .regularFile
+        } else if isDirectory == true, isRegularFile != true {
+            type = .directory
+        } else {
+            type = nil
+        }
+
+        let size: Int64?
+        if let rawSize = rawSize as? Int {
+            size = Int64(exactly: rawSize)
+        } else if let rawSize = rawSize as? Int64 {
+            size = rawSize
+        } else if let rawSize = rawSize as? NSNumber {
+            size = rawSize.int64Value
+        } else {
+            size = nil
+        }
+
+        let status: FileProviderPromisedItemStatus
+        switch downloadingStatus as? URLUbiquitousItemDownloadingStatus {
+        case .current?: status = .current
+        case .downloaded?: status = .downloaded
+        case .notDownloaded?: status = .notDownloaded
+        default: status = .unknown
+        }
+
+        return FileProviderPromisedItemMetadata(type: type, size: size, status: status)
+    }
+}
+
+struct FoundationFileProviderMetadataCoordinator: FileProviderPromisedMetadataCoordinating, @unchecked Sendable {
+    private let promisedItemAccessor: FoundationFileProviderPromisedItemAccessor
+
+    init(
+        promisedItemAccessor: FoundationFileProviderPromisedItemAccessor = .init()
+    ) {
+        self.promisedItemAccessor = promisedItemAccessor
+    }
+
+    func metadata(
+        at url: URL,
+        options: NSFileCoordinator.ReadingOptions
+    ) throws -> FileProviderPromisedItemMetadata {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var accessorError: Error?
+        var result: FileProviderPromisedItemMetadata?
+        coordinator.coordinate(readingItemAt: url, options: options, error: &coordinationError) { coordinatedURL in
+            do {
+                result = try promisedItemAccessor.metadata(at: coordinatedURL)
+            } catch {
+                accessorError = error
+            }
+        }
+        if coordinationError != nil { throw FileProviderArchiveStorageError.lookupUnavailable }
+        if let accessorError { throw accessorError }
+        guard let result else { throw FileProviderArchiveStorageError.lookupUnavailable }
+        return result
+    }
 }
 
 /// Provider-neutral storage backed by Foundation's public ubiquitous-item APIs.
@@ -48,6 +205,18 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
         )
     }
 
+    public func currentLocality(
+        at location: URL,
+        manifest: VaultManifest
+    ) async throws -> ArchiveStorageLocality {
+        let canonicalLocation = location.standardizedFileURL.resolvingSymlinksInPath()
+        let expectedItems = try expectedItems(at: canonicalLocation, manifest: manifest)
+        return try await service.currentLocality(
+            root: canonicalLocation,
+            expectedItems: expectedItems
+        )
+    }
+
     public func prepareForRead(_ location: URL) async throws {
         try validate(location)
         try await service.inspect(root: location)
@@ -69,9 +238,18 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
     }
 
     public func materialize(_ location: URL) async throws {
+        throw FileProviderArchiveStorageError.materializationUnavailable
+    }
+
+    public func materialize(_ location: URL, manifest: VaultManifest) async throws {
         do {
-            try validate(location)
-            try await service.materialize(root: location)
+            let canonicalLocation = location.standardizedFileURL.resolvingSymlinksInPath()
+            let expectedItems = try expectedItems(at: canonicalLocation, manifest: manifest)
+            try await service.inspect(root: canonicalLocation)
+            try await service.materialize(
+                root: canonicalLocation,
+                expectedItems: expectedItems
+            )
         } catch {
             throw FileProviderArchiveStorageError.materializationUnavailable
         }
@@ -96,6 +274,44 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
         guard candidateComponents.count >= rootComponents.count,
               Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
             throw FileProviderArchiveStorageError.locationOutsideRoot
+        }
+    }
+
+    private func expectedItems(
+        at location: URL,
+        manifest: VaultManifest
+    ) throws -> [FileProviderExpectedItem] {
+        try validate(location)
+        let generationRoot = location.standardizedFileURL.resolvingSymlinksInPath()
+        let safety = PathSafety()
+        var seen: Set<String> = []
+        return try manifest.entries.compactMap { entry in
+            guard entry.type == .regularFile else { return nil }
+            let components = entry.relativePath.split(separator: "/", omittingEmptySubsequences: false)
+            guard !entry.relativePath.isEmpty,
+                  !entry.relativePath.hasPrefix("/"),
+                  components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+                throw FileProviderArchiveStorageError.locationOutsideRoot
+            }
+            var candidate = generationRoot
+            for component in components {
+                candidate.appendPathComponent(String(component), isDirectory: false)
+            }
+            candidate = candidate.standardizedFileURL
+            guard safety.isResolvedContainedWithoutNestedSymlinks(candidate, in: generationRoot),
+                  candidate != generationRoot,
+                  seen.insert(candidate.path).inserted else {
+                throw FileProviderArchiveStorageError.locationOutsideRoot
+            }
+            try validate(candidate)
+            guard entry.byteCount >= 0 else {
+                throw FileProviderArchiveStorageError.expectedItemMismatch
+            }
+            return FileProviderExpectedItem(
+                url: candidate,
+                expectedType: .regularFile,
+                expectedByteCount: entry.byteCount
+            )
         }
     }
 }
@@ -177,13 +393,19 @@ enum FileProviderReadinessPoller {
 struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecked Sendable {
     private let fileManager: FileManager
     private let pollPolicy: FileProviderPollPolicy
+    private let promisedMetadataCoordinator: any FileProviderPromisedMetadataCoordinating
+    private let downloader: any FileProviderDownloading
 
     init(
         fileManager: FileManager = .default,
-        pollPolicy: FileProviderPollPolicy = .production
+        pollPolicy: FileProviderPollPolicy = .production,
+        promisedMetadataCoordinator: any FileProviderPromisedMetadataCoordinating = FoundationFileProviderMetadataCoordinator(),
+        downloader: (any FileProviderDownloading)? = nil
     ) {
         self.fileManager = fileManager
         self.pollPolicy = pollPolicy
+        self.promisedMetadataCoordinator = promisedMetadataCoordinator
+        self.downloader = downloader ?? FoundationFileProviderDownloader(fileManager: fileManager)
     }
 
     func inspect(root: URL) async throws {
@@ -192,36 +414,100 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
         }
     }
 
+    func currentLocality(
+        root: URL,
+        expectedItems: [FileProviderExpectedItem]
+    ) async throws -> ArchiveStorageLocality {
+        let metadata = try validatedMetadata(for: expectedItems)
+        for itemMetadata in metadata {
+            switch itemMetadata.status {
+            case .current:
+                continue
+            case .downloaded, .notDownloaded:
+                return .materializationRequired
+            case .unknown:
+                throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+        }
+        return .fullyLocalCurrent
+    }
+
     func waitForChanges(root: URL) async throws {
         let deadline = FileProviderReadinessPoller.deadline(for: pollPolicy)
         try await pollUntilReady(root: root, mode: .uploaded, deadline: deadline)
     }
 
-    func materialize(root: URL) async throws {
+    func materialize(root: URL, expectedItems: [FileProviderExpectedItem]) async throws {
         let deadline = FileProviderReadinessPoller.deadline(for: pollPolicy)
-        try checkOperationContinues(until: deadline)
-        try fileManager.startDownloadingUbiquitousItem(at: root)
-        try Self.forEachItem(
-            fileManager: fileManager,
-            at: root,
-            keys: [.isRegularFileKey],
-            shouldContinue: { try checkOperationContinues(until: deadline) }
-        ) { url in
-            try checkOperationContinues(until: deadline)
-            let values = try url.resourceValues(forKeys: [.isRegularFileKey])
-            if values.isRegularFile == true {
-                try checkOperationContinues(until: deadline)
-                try fileManager.startDownloadingUbiquitousItem(at: url)
+        let preflight = try validatedMetadata(for: expectedItems)
+        let pendingItems = zip(expectedItems, preflight).compactMap { item, metadata -> FileProviderExpectedItem? in
+            switch metadata.status {
+            case .current:
+                return nil
+            case .downloaded, .notDownloaded:
+                return item
+            case .unknown:
+                return nil
             }
         }
-        try await pollUntilReady(root: root, mode: .downloaded, deadline: deadline)
+        guard !preflight.contains(where: { $0.status == .unknown }) else {
+            throw FileProviderArchiveStorageError.lookupUnavailable
+        }
+        for item in pendingItems {
+            try checkOperationContinues(until: deadline)
+            try downloader.startDownloading(at: item.url)
+        }
+        try await FileProviderReadinessPoller.pollUntilReady(
+            policy: pollPolicy,
+            deadline: deadline,
+            probe: { _ in
+                try await currentLocality(
+                    root: root,
+                    expectedItems: expectedItems
+                ) == .fullyLocalCurrent
+            }
+        )
     }
 
     func evict(root: URL) async throws {
         try fileManager.evictUbiquitousItem(at: root)
     }
 
-    private enum ReadinessMode { case uploaded, downloaded }
+    private func validatedMetadata(
+        for expectedItems: [FileProviderExpectedItem]
+    ) throws -> [FileProviderPromisedItemMetadata] {
+        try expectedItems.map { item in
+            guard item.expectedByteCount >= 0 else {
+                throw FileProviderArchiveStorageError.expectedItemMismatch
+            }
+            let metadata: FileProviderPromisedItemMetadata
+            do {
+                metadata = try promisedMetadataCoordinator.metadata(
+                    at: item.url,
+                    options: .immediatelyAvailableMetadataOnly
+                )
+            } catch let error as FileProviderArchiveStorageError {
+                throw error
+            } catch {
+                throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+            guard let type = metadata.type else {
+                throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+            guard type == item.expectedType else {
+                throw FileProviderArchiveStorageError.expectedItemMismatch
+            }
+            guard let size = metadata.size, size >= 0 else {
+                throw FileProviderArchiveStorageError.lookupUnavailable
+            }
+            guard size == item.expectedByteCount else {
+                throw FileProviderArchiveStorageError.expectedItemMismatch
+            }
+            return metadata
+        }
+    }
+
+    private enum ReadinessMode { case uploaded }
 
     private func pollUntilReady(
         root: URL,
@@ -250,9 +536,7 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
         let keys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .ubiquitousItemIsUploadedKey,
-            .ubiquitousItemUploadingErrorKey,
-            .ubiquitousItemDownloadingStatusKey,
-            .ubiquitousItemDownloadingErrorKey
+            .ubiquitousItemUploadingErrorKey
         ]
         var sawRegularFile = false
         do {
@@ -270,9 +554,6 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
                 case .uploaded:
                     if values.ubiquitousItemUploadingError != nil { throw FileProviderArchiveStorageError.durabilityUnavailable }
                     if values.ubiquitousItemIsUploaded != true { throw ReadinessPending.itemNotReady }
-                case .downloaded:
-                    if values.ubiquitousItemDownloadingError != nil { throw FileProviderArchiveStorageError.materializationUnavailable }
-                    if values.ubiquitousItemDownloadingStatus != .current { throw ReadinessPending.itemNotReady }
                 }
             }
         } catch is ReadinessPending {

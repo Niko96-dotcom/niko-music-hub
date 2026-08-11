@@ -13,6 +13,10 @@ extension ArchiveBrowserViewModel {
         await scanOrchestrator.scan()
     }
 
+    func scanInBackground() async {
+        await scanOrchestrator.scanInBackground()
+    }
+
     func scanSync() {
         scanOrchestrator.scanSync()
     }
@@ -28,6 +32,7 @@ extension ArchiveBrowserViewModel {
         intelligenceRefreshTask?.cancel()
         projectVaultRetryTasks.values.forEach { $0.cancel() }
         projectVaultRetryTasks.removeAll()
+        projectVaultRetryAttemptCounts.removeAll()
         indexPersistTask?.cancel()
         mixdownAnalysis.cancel()
         cprPlugins.cancel()
@@ -94,7 +99,7 @@ extension ArchiveBrowserViewModel {
                     let formatter = RelativeDateTimeFormatter()
                     formatter.unitsStyle = .abbreviated
                     let relative = formatter.localizedString(for: scannedAt, relativeTo: Date())
-                    self.setStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
+                    self.setBackgroundStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
                 }
             }
         }

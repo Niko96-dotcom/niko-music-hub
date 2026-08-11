@@ -28,7 +28,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             scannedSongs = projected.scannedSongs
             songs = projected.visibleSongs
             scanDiagnostics = update.diagnostics
-            setStatusMessage(update.statusMessage)
+            setBackgroundStatusMessage(update.statusMessage)
         }
         // Refresh or clear selection against the new catalog (keep if still present even when
         // filtered out — browse recompute will clear filtered-out selections next).
@@ -76,7 +76,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyScanFailure(_ error: Error) {
         mutateCatalog {
             scanDiagnostics = nil
-            setStatusMessage("Scan failed: \(error.localizedDescription)")
+            setBackgroundStatusMessage("Scan failed: \(error.localizedDescription)")
         }
         diagnostics.log(.error, statusMessage ?? "scan failed")
     }

@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public enum VaultTransferFaultPoint: String, CaseIterable, Sendable {
     case preparingArchive
@@ -23,10 +24,85 @@ public enum LocalVaultTransferError: Error, Equatable, Sendable {
     case sourceMutated
     case missingManifest
     case missingPersistedArchiveEvidence
+    case writeAdmissionRequired
+    case removalAdmissionRequired
+    case transferAlreadyOwned
+    case crossVolumePromotion
+    case writeTargetVolumeMismatch
+}
+
+public enum VaultTransferRetryPolicy {
+    public static func permitsNondestructiveArchiveOrigin(_ state: VaultTransferState) -> Bool {
+        switch state {
+        case .activeLocal, .archiveEligible, .preparingArchive,
+             .copyingToArchiveStaging, .verifyingArchiveStaging,
+             .awaitingProviderDurability, .promotingArchiveGeneration:
+            true
+        default:
+            false
+        }
+    }
+}
+
+public enum VaultTransferOwnershipPolicy {
+    public static func isVerifiedTerminal(_ state: VaultTransferState) -> Bool {
+        [.archiveVerified, .archivedLocal, .archivedOnlineOnly].contains(state)
+    }
+
+    public static func ownsProject(_ state: VaultTransferState) -> Bool {
+        !isVerifiedTerminal(state) && state != .superseded
+    }
+}
+
+public enum VaultWriteTarget: Equatable, Sendable {
+    case archive
+    case active
+}
+
+public enum VaultWriteProjection: Equatable, Sendable {
+    case liveSource(URL)
+    case persistedManifest(VaultManifest, VaultProjectionSupplement?)
+    case minimum
+}
+
+public struct VaultWriteAdmissionRequest: Equatable, Sendable {
+    public let target: VaultWriteTarget
+    public let sourceURL: URL?
+    public let targetRootURL: URL
+    public let minimumProjectedBytes: Int64
+    public let manifest: VaultManifest?
+    public let projection: VaultWriteProjection
+
+    public init(
+        target: VaultWriteTarget,
+        sourceURL: URL?,
+        targetRootURL: URL,
+        minimumProjectedBytes: Int64,
+        manifest: VaultManifest? = nil,
+        projection: VaultWriteProjection? = nil
+    ) {
+        self.target = target
+        self.sourceURL = sourceURL
+        self.targetRootURL = targetRootURL
+        self.minimumProjectedBytes = minimumProjectedBytes
+        self.manifest = manifest
+        self.projection = projection
+            ?? manifest.map { .persistedManifest($0, nil) }
+            ?? sourceURL.map(VaultWriteProjection.liveSource)
+            ?? .minimum
+    }
+}
+
+public enum VaultWriteAdmissionError: Error, Equatable, Sendable {
+    case postponed(VaultAutomationPostponement)
 }
 
 public actor LocalVaultTransferEngine {
     public typealias FaultInjector = @Sendable (VaultTransferFaultPoint, VaultTransferRecord) throws -> Void
+    public typealias WriteOperation = @Sendable () async throws -> Void
+    public typealias WriteAdmission = @Sendable (VaultWriteAdmissionRequest, WriteOperation) async throws -> Void
+    public typealias RemovalAdmission = @Sendable (VaultTransferRecord) async throws -> Void
+    public typealias VolumeIdentifier = @Sendable (URL) throws -> UInt64
 
     private let activeRoot: URL
     private let archiveRoot: URL
@@ -36,6 +112,10 @@ public actor LocalVaultTransferEngine {
     private let manifestBuilder: VaultManifestBuilder
     private let faultInjector: FaultInjector?
     private let now: @Sendable () -> Date
+    private let recoveryPolicy: VaultTransferRecoveryPolicy
+    private let writeAdmission: WriteAdmission
+    private let removalAdmission: RemovalAdmission
+    private let volumeIdentifier: VolumeIdentifier
 
     public init(
         activeRoot: URL,
@@ -44,7 +124,15 @@ public actor LocalVaultTransferEngine {
         provider: (any ArchiveStorageProvider)? = nil,
         fileManager: FileManager = .default,
         faultInjector: FaultInjector? = nil,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        recoveryPolicy: VaultTransferRecoveryPolicy = .production,
+        writeAdmission: @escaping WriteAdmission = { _, _ in
+            throw LocalVaultTransferError.writeAdmissionRequired
+        },
+        removalAdmission: @escaping RemovalAdmission = { _ in
+            throw LocalVaultTransferError.removalAdmissionRequired
+        },
+        volumeIdentifier: VolumeIdentifier? = nil
     ) throws {
         let active = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
         let archive = archiveRoot.standardizedFileURL.resolvingSymlinksInPath()
@@ -59,6 +147,10 @@ public actor LocalVaultTransferEngine {
         self.manifestBuilder = VaultManifestBuilder(fileManager: fileManager)
         self.faultInjector = faultInjector
         self.now = now
+        self.recoveryPolicy = recoveryPolicy
+        self.writeAdmission = writeAdmission
+        self.removalAdmission = removalAdmission
+        self.volumeIdentifier = volumeIdentifier ?? Self.foundationVolumeIdentifier
     }
 
     @discardableResult
@@ -84,7 +176,13 @@ public actor LocalVaultTransferEngine {
             destinationURL: generation,
             createdAt: now()
         )
-        try persist(&record)
+        record.updatedAt = now()
+        switch try store.claimTransfer(record) {
+        case .claimed:
+            break
+        case .existing:
+            throw LocalVaultTransferError.transferAlreadyOwned
+        }
         try advance(&record, to: .archiveEligible)
         return try await execute(record)
     }
@@ -93,42 +191,116 @@ public actor LocalVaultTransferEngine {
     /// callers schedule any new work.
     @discardableResult
     public func recoverAtLaunch() async -> [VaultTransferRecord] {
-        guard let records = try? store.recoverableRecords() else { return [] }
+        guard let allRecords = try? store.allTransferRecords() else { return [] }
+        var records = (try? store.recoverableRecords()) ?? []
+        let verifiedSurvivors = Dictionary(grouping: allRecords.filter {
+            VaultTransferOwnershipPolicy.isVerifiedTerminal($0.state)
+        }, by: \.projectID).compactMapValues { records in
+            records.max(by: Self.isEarlierVerifiedSurvivor)
+        }
+        var usableVerifiedSurvivors: [ProjectID: VaultTransferRecord] = [:]
+        for (projectID, survivor) in verifiedSurvivors {
+            if await hasUsableVerifiedArchiveGeneration(survivor) {
+                usableVerifiedSurvivors[projectID] = survivor
+            }
+        }
+        for var record in records {
+            guard let survivor = usableVerifiedSurvivors[record.projectID],
+                  Self.isCausallyOlder(record, than: survivor) else { continue }
+            record.state = .superseded
+            record.supersededBy = survivor.id
+            record.error = nil
+            record.nextRetryAt = nil
+            do {
+                try persist(&record)
+            } catch {
+                continue
+            }
+        }
+        records.removeAll { record in
+            (try? store.record(id: record.id)?.state) == .superseded
+        }
         // A failed automatic attempt used to create a fresh transfer every minute.
         // Resume only the newest record for each project so launch recovery cannot
         // replay several full-project copies and hashes for the same source.
         let groupedRecords = Dictionary(grouping: records, by: \.projectID)
         let newestRecords = groupedRecords.compactMap { _, projectRecords in
-            projectRecords.max(by: Self.isOlderRecoveryCandidate)
+            projectRecords.max(by: Self.isLowerRecoveryPriority)
         }
             .sorted { $0.updatedAt < $1.updatedAt }
-        let newestRecordsByProject = Dictionary(uniqueKeysWithValues: newestRecords.map { ($0.projectID, $0) })
-        let verifiedRecoveryCopyByProject = Dictionary(uniqueKeysWithValues: newestRecords.map { newestRecord in
-            let needsVerification = groupedRecords[newestRecord.projectID]?.contains { candidate in
-                requiresVerifiedRecoveryCopyBeforeDiscarding(candidate, newestRecordID: newestRecord.id)
-            } == true
-            return (newestRecord.projectID, needsVerification && hasVerifiedRecoveryCopy(newestRecord))
-        })
-        for record in records {
-            guard let newestRecord = newestRecordsByProject[record.projectID], newestRecord.id != record.id else { continue }
-            discardObsoleteStagingIfSafe(
-                for: record,
-                preservedByVerifiedRecoveryCopy: verifiedRecoveryCopyByProject[record.projectID] == true
-            )
-        }
         var results: [VaultTransferRecord] = []
         for var record in newestRecords {
+            if record.state == .failedRecoverable {
+                guard let origin = record.error?.origin,
+                      VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else {
+                    results.append(record)
+                    continue
+                }
+            }
+            if record.state == .removingActiveCopy || record.state == .evictingProviderCache {
+                let persistedDestructivePhase = record
+                let origin = record.state
+                record.state = .recoveryRequired
+                record.error = VaultTransferError(
+                    origin: origin,
+                    reason: .unknown,
+                    message: origin == .removingActiveCopy
+                        ? "Launch recovery stopped before Active-copy removal could be confirmed. Existing copies were preserved for review."
+                        : "Launch recovery stopped before provider-cache eviction could be confirmed. Existing copies were preserved for review."
+                )
+                record.nextRetryAt = nil
+                do {
+                    try persist(&record)
+                    results.append(record)
+                } catch {
+                    results.append(persistedDestructivePhase)
+                }
+                continue
+            }
+            if record.state == .failedRecoverable,
+               !recoveryPolicy.permitsAutomaticAttempt(for: record, at: now()) {
+                results.append(record)
+                continue
+            }
             if record.state == .failedRecoverable, let origin = record.error?.origin {
+                let persistedFailure = record
                 record.state = origin
                 record.error = nil
-                record.retryCount += 1
-                try? persist(&record)
+                record.nextRetryAt = nil
+                do {
+                    try persist(&record)
+                } catch {
+                    results.append(persistedFailure)
+                    continue
+                }
             }
             do { results.append(try await execute(record)) }
             catch is VaultTransferInterruption { results.append((try? store.record(id: record.id)) ?? record) }
             catch { results.append((try? store.record(id: record.id)) ?? record) }
         }
         return results
+    }
+
+    /// Explicit user-authorized retry path for records that reached the automatic
+    /// attempt ceiling. This performs one attempt without weakening write admission
+    /// or deleting the persisted staging copy on failure.
+    @discardableResult
+    public func retryRecoverableTransfer(id: UUID) async -> VaultTransferRecord? {
+        guard var record = try? store.record(id: id),
+              record.state == .failedRecoverable,
+              let origin = record.error?.origin,
+              VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else { return nil }
+        record.state = origin
+        record.error = nil
+        record.nextRetryAt = nil
+        do {
+            try persist(&record)
+            return try await execute(record)
+        } catch is VaultTransferInterruption {
+            return (try? store.record(id: record.id)) ?? record
+        } catch {
+            return (try? store.record(id: record.id)) ?? record
+        }
     }
 
     /// Removes the Active copy only after independently reloading the terminal
@@ -174,11 +346,27 @@ public actor LocalVaultTransferEngine {
                 case .preparingArchive:
                     try inject(.preparingArchive, record)
                     try validatePaths(record)
-                    try await provider.prepareForWrite(at: archiveRoot)
+                    let provider = self.provider
+                    let archiveRoot = self.archiveRoot
+                    let activeRoot = self.activeRoot
+                    let preparingRecord = record
+                    try await writeAdmission(VaultWriteAdmissionRequest(
+                        target: .archive,
+                        sourceURL: preparingRecord.sourceURL,
+                        targetRootURL: archiveRoot,
+                        minimumProjectedBytes: 0
+                    )) {
+                        try Self.validatePaths(
+                            preparingRecord,
+                            activeRoot: activeRoot,
+                            archiveRoot: archiveRoot
+                        )
+                        try await provider.prepareForWrite(at: archiveRoot)
+                    }
                     try advance(&record, to: .copyingToArchiveStaging)
                 case .copyingToArchiveStaging:
                     try inject(.copyingToArchiveStaging, record)
-                    try copyToStaging(&record)
+                    try await copyToStaging(&record)
                     try advance(&record, to: .verifyingArchiveStaging)
                 case .verifyingArchiveStaging:
                     try inject(.verifyingArchiveStaging, record)
@@ -192,21 +380,49 @@ public actor LocalVaultTransferEngine {
                     try advance(&record, to: .promotingArchiveGeneration)
                 case .promotingArchiveGeneration:
                     try inject(.promotingArchiveGeneration, record)
-                    try promote(&record)
+                    try await promote(&record)
                     // The provider barrier before promotion covers the staged
                     // bytes. The final rename is another provider-visible
                     // mutation, so it must also become durable before this
                     // generation can authorize removal of the Active copy.
-                    record.durability = try await provider.waitUntilDurable(record.destinationURL)
+                    let finalDurability = try await provider.waitUntilDurable(record.destinationURL)
+                    // Provider coordination is an await boundary at which a
+                    // synced folder may replace or mutate the promoted tree.
+                    // Revalidate both containment and exact content immediately
+                    // before persisting any terminal durability/success claim.
+                    try validatePaths(record)
+                    guard let manifest = record.manifest else {
+                        throw LocalVaultTransferError.missingManifest
+                    }
+                    try manifestBuilder.verify(manifest, at: record.destinationURL)
+                    record.durability = finalDurability
                     try persist(&record)
                     record.state = .archiveVerified
                     record.error = nil
+                    record.nextRetryAt = nil
                     try persist(&record)
                     return record
                 case .archiveVerified:
                     return record
                 case .removingActiveCopy:
-                    try validateRemovalEvidence(record)
+                    // Keep the verified directory object open across admission so
+                    // its inode cannot be recycled into a same-path replacement.
+                    let sourceBinding = try SourceRootFileSystemBinding(opening: record.sourceURL)
+                    try validateRemovalEvidence(
+                        record,
+                        expectedSourceIdentity: sourceBinding.identity
+                    )
+                    try await removalAdmission(record)
+                    // The first admission can spend time in Cubase/open-file/
+                    // activity probes. Reload policy and probe again, then
+                    // revalidate Archive and Source bytes plus the exact source
+                    // root filesystem object with no further await before the
+                    // destructive filesystem operation.
+                    try await removalAdmission(record)
+                    try validateRemovalEvidence(
+                        record,
+                        expectedSourceIdentity: sourceBinding.identity
+                    )
                     if fileManager.fileExists(atPath: record.sourceURL.path) {
                         try fileManager.removeItem(at: record.sourceURL)
                     }
@@ -229,24 +445,60 @@ public actor LocalVaultTransferEngine {
             let origin = record.state
             let reason = failureReason(for: error)
             record.error = VaultTransferError(origin: origin, reason: reason, message: String(describing: error))
-            record.state = reason == .occupiedDestination ? .recoveryRequired : .failedRecoverable
+            let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
+            record.state = reason == .occupiedDestination || destructiveOrigin
+                ? .recoveryRequired
+                : .failedRecoverable
+            // Dynamic admission re-enumerates the source, so postponements consume
+            // the same bounded automatic-attempt budget as provider failures.
+            // Once the persisted ceiling is reached, only the explicit user path
+            // can request another attempt.
             record.retryCount += 1
+            record.nextRetryAt = record.state == .failedRecoverable
+                ? recoveryPolicy.nextRetryDate(afterFailedAttempt: record.retryCount, at: now())
+                : nil
             try persist(&record)
             throw error
         }
     }
 
-    private func copyToStaging(_ record: inout VaultTransferRecord) throws {
+    private func copyToStaging(_ record: inout VaultTransferRecord) async throws {
         try validatePaths(record)
+        // Building the source manifest is read-only evidence collection. The
+        // admission callback still re-probes capacity immediately around the
+        // first destructive/new-byte staging operation below.
         let sourceBefore = try manifestBuilder.build(at: record.sourceURL)
-        if fileManager.fileExists(atPath: record.stagingURL.path) {
-            guard Self.contains(archiveRoot.appendingPathComponent(".niko-staging", isDirectory: true), record.stagingURL) else {
-                throw LocalVaultTransferError.unsafeStagingPath
+        let sourceURL = record.sourceURL
+        let stagingURL = record.stagingURL
+        let archiveRoot = self.archiveRoot
+        let activeRoot = self.activeRoot
+        let recordForValidation = record
+        let fileManager = VaultSendableFileManager(self.fileManager)
+        let volumeIdentifier = self.volumeIdentifier
+        try await writeAdmission(VaultWriteAdmissionRequest(
+            target: .archive,
+            sourceURL: sourceURL,
+            targetRootURL: archiveRoot,
+            minimumProjectedBytes: sourceBefore.totalBytes
+        )) {
+            try Self.validatePaths(
+                recordForValidation,
+                activeRoot: activeRoot,
+                archiveRoot: archiveRoot
+            )
+            guard try volumeIdentifier(stagingURL.deletingLastPathComponent())
+                    == volumeIdentifier(archiveRoot) else {
+                throw LocalVaultTransferError.writeTargetVolumeMismatch
             }
-            try fileManager.removeItem(at: record.stagingURL)
+            if fileManager.value.fileExists(atPath: stagingURL.path) {
+                guard Self.contains(archiveRoot.appendingPathComponent(".niko-staging", isDirectory: true), stagingURL) else {
+                    throw LocalVaultTransferError.unsafeStagingPath
+                }
+                try fileManager.value.removeItem(at: stagingURL)
+            }
+            try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fileManager.value.copyItem(at: sourceURL, to: stagingURL)
         }
-        try fileManager.createDirectory(at: record.stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fileManager.copyItem(at: record.sourceURL, to: record.stagingURL)
         let sourceAfter = try manifestBuilder.build(at: record.sourceURL, id: sourceBefore.id, createdAt: sourceBefore.createdAt)
         guard sourceBefore.entries == sourceAfter.entries else { throw LocalVaultTransferError.sourceMutated }
         record.manifestID = sourceBefore.id
@@ -256,7 +508,7 @@ public actor LocalVaultTransferEngine {
         try persist(&record)
     }
 
-    private func promote(_ record: inout VaultTransferRecord) throws {
+    private func promote(_ record: inout VaultTransferRecord) async throws {
         try validatePaths(record)
         guard let manifest = record.manifest else { throw LocalVaultTransferError.missingManifest }
         let destinationExists = fileManager.fileExists(atPath: record.destinationURL.path)
@@ -269,26 +521,57 @@ public actor LocalVaultTransferEngine {
             return
         }
         guard stagingExists else { throw VaultManifestError.missingRoot }
-        try fileManager.createDirectory(at: record.destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try fileManager.moveItem(at: record.stagingURL, to: record.destinationURL)
+        let destinationParent = record.destinationURL.deletingLastPathComponent()
+        let stagingVolume = try volumeIdentifier(record.stagingURL)
+        let destinationVolume = try volumeIdentifier(destinationParent)
+        if stagingVolume == destinationVolume {
+            try validatePaths(record)
+            try fileManager.createDirectory(at: destinationParent, withIntermediateDirectories: true)
+            try fileManager.moveItem(at: record.stagingURL, to: record.destinationURL)
+        } else {
+            throw LocalVaultTransferError.crossVolumePromotion
+        }
         try manifestBuilder.verify(manifest, at: record.destinationURL)
     }
 
     private func validatePaths(_ record: VaultTransferRecord) throws {
+        try Self.validatePaths(record, activeRoot: activeRoot, archiveRoot: archiveRoot)
+    }
+
+    private static func validatePaths(
+        _ record: VaultTransferRecord,
+        activeRoot: URL,
+        archiveRoot: URL
+    ) throws {
         let stagingRoot = archiveRoot.appendingPathComponent(".niko-staging", isDirectory: true)
         let generationsRoot = archiveRoot.appendingPathComponent("generations", isDirectory: true)
-        guard Self.contains(activeRoot, record.sourceURL), record.sourceURL != activeRoot else {
-            throw LocalVaultTransferError.sourceOutsideActiveRoot
-        }
-        guard Self.contains(stagingRoot, record.stagingURL), record.stagingURL != stagingRoot else {
+        let safety = PathSafety()
+        guard safety.isResolvedContainedWithoutNestedSymlinks(stagingRoot, in: archiveRoot),
+              stagingRoot != archiveRoot else {
             throw LocalVaultTransferError.unsafeStagingPath
         }
-        guard Self.contains(generationsRoot, record.destinationURL), record.destinationURL != generationsRoot else {
+        guard safety.isResolvedContainedWithoutNestedSymlinks(generationsRoot, in: archiveRoot),
+              generationsRoot != archiveRoot else {
+            throw LocalVaultTransferError.unsafeDestinationPath
+        }
+        guard safety.isResolvedContained(record.sourceURL, in: [activeRoot]),
+              record.sourceURL != activeRoot else {
+            throw LocalVaultTransferError.sourceOutsideActiveRoot
+        }
+        guard safety.isResolvedContainedWithoutNestedSymlinks(record.stagingURL, in: stagingRoot),
+              record.stagingURL != stagingRoot else {
+            throw LocalVaultTransferError.unsafeStagingPath
+        }
+        guard safety.isResolvedContainedWithoutNestedSymlinks(record.destinationURL, in: generationsRoot),
+              record.destinationURL != generationsRoot else {
             throw LocalVaultTransferError.unsafeDestinationPath
         }
     }
 
-    private func validateRemovalEvidence(_ record: VaultTransferRecord) throws {
+    private func validateRemovalEvidence(
+        _ record: VaultTransferRecord,
+        expectedSourceIdentity: SourceFileSystemIdentity
+    ) throws {
         guard
             let persisted = try store.record(id: record.id),
             persisted.state == .removingActiveCopy,
@@ -302,9 +585,22 @@ public actor LocalVaultTransferEngine {
         }
         try validatePaths(persisted)
         try manifestBuilder.verify(manifest, at: persisted.destinationURL)
-        // Detect any source mutation after the archive copy. A changed or
-        // unreadable source is retained for manual review.
-        try manifestBuilder.verify(manifest, at: persisted.sourceURL)
+        // Bind manifest verification to one concrete source-root filesystem
+        // object. Content-identical path replacement must still be retained for
+        // manual review rather than inheriting deletion authorization.
+        do {
+            let identityBeforeVerification = try Self.sourceFileSystemIdentity(at: persisted.sourceURL)
+            guard identityBeforeVerification == expectedSourceIdentity else {
+                throw LocalVaultTransferError.sourceMutated
+            }
+            try manifestBuilder.verify(manifest, at: persisted.sourceURL)
+            let identityAfterVerification = try Self.sourceFileSystemIdentity(at: persisted.sourceURL)
+            guard identityAfterVerification == expectedSourceIdentity else {
+                throw LocalVaultTransferError.sourceMutated
+            }
+        } catch {
+            throw LocalVaultTransferError.sourceMutated
+        }
     }
 
     private func advance(_ record: inout VaultTransferRecord, to state: VaultTransferState) throws {
@@ -325,19 +621,77 @@ public actor LocalVaultTransferEngine {
         switch error {
         case LocalVaultTransferError.sourceMutated: .sourceMutated
         case LocalVaultTransferError.occupiedDestination: .occupiedDestination
+        case VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity),
+             VaultWriteAdmissionError.postponed(.archiveCapacityUnavailable),
+             VaultWriteAdmissionError.postponed(.invalidPolicy): .insufficientSpace
         case VaultManifestError.mismatch: .integrityMismatch
         case LocalFolderStorageError.unreadable, LocalFolderStorageError.unwritable: .permissionLost
+        case FileProviderArchiveStorageError.durabilityUnavailable: .providerUnsynced
+        case FileProviderArchiveStorageError.operationTimedOut: .slowProviderSync
+        case FileProviderArchiveStorageError.lookupUnavailable,
+             FileProviderArchiveStorageError.domainUnavailable,
+             FileProviderArchiveStorageError.domainDisabled,
+             FileProviderArchiveStorageError.domainDisconnected,
+             FileProviderArchiveStorageError.managerUnavailable: .providerOffline
         default: .unknown
         }
     }
 
     private static func contains(_ root: URL, _ candidate: URL) -> Bool {
-        let root = root.standardizedFileURL.resolvingSymlinksInPath().pathComponents
-        let candidate = candidate.standardizedFileURL.resolvingSymlinksInPath().pathComponents
-        return candidate.count >= root.count && Array(candidate.prefix(root.count)) == root
+        PathSafety().isResolvedContained(candidate, in: [root])
     }
 
-    private static func isOlderRecoveryCandidate(
+    static func foundationVolumeIdentifier(at url: URL) throws -> UInt64 {
+        var candidate = url.standardizedFileURL.resolvingSymlinksInPath()
+        while !FileManager.default.fileExists(atPath: candidate.path) {
+            let parent = candidate.deletingLastPathComponent()
+            guard parent.path != candidate.path else {
+                throw LocalVaultTransferError.unsafeDestinationPath
+            }
+            candidate = parent
+        }
+        var information = stat()
+        let result = candidate.path.withCString { Darwin.lstat($0, &information) }
+        guard result == 0 else { throw LocalVaultTransferError.unsafeDestinationPath }
+        return UInt64(information.st_dev)
+    }
+
+    private static func sourceFileSystemIdentity(at url: URL) throws -> SourceFileSystemIdentity {
+        var information = stat()
+        let result = url.path.withCString { Darwin.lstat($0, &information) }
+        guard result == 0,
+              (information.st_mode & mode_t(S_IFMT)) == mode_t(S_IFDIR) else {
+            throw LocalVaultTransferError.sourceMutated
+        }
+        return SourceFileSystemIdentity(
+            device: UInt64(information.st_dev),
+            inode: UInt64(information.st_ino)
+        )
+    }
+
+    /// Terminal supersession is a causal relationship, so mutable retry or
+    /// presentation timestamps must never decide which verified generation is
+    /// the successor. Creation ties are ordered only to select one survivor for
+    /// validation; the strict causal check below still fails closed on a tie.
+    private static func isEarlierVerifiedSurvivor(
+        _ lhs: VaultTransferRecord,
+        _ rhs: VaultTransferRecord
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    private static func isCausallyOlder(
+        _ candidate: VaultTransferRecord,
+        than verifiedSuccessor: VaultTransferRecord
+    ) -> Bool {
+        candidate.createdAt < verifiedSuccessor.createdAt
+    }
+
+    /// Recovery scheduling may prefer the most recently advanced incomplete
+    /// record. This mutable ordering is deliberately separate from causal
+    /// supersession above.
+    private static func isLowerRecoveryPriority(
         _ lhs: VaultTransferRecord,
         _ rhs: VaultTransferRecord
     ) -> Bool {
@@ -350,60 +704,122 @@ public actor LocalVaultTransferEngine {
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
-    /// Duplicate automatic attempts can leave complete project copies in staging.
-    /// Delete only superseded transfers whose persisted path exactly matches the
-    /// engine-owned staging layout. Either the Active source or a manifest-verified
-    /// recovery copy must remain, and no promoted destination may exist.
-    private func discardObsoleteStagingIfSafe(
-        for record: VaultTransferRecord,
-        preservedByVerifiedRecoveryCopy: Bool
-    ) {
-        let canDiscardState = record.state == .failedRecoverable || record.state == .awaitingProviderDurability
-        guard canDiscardState,
-              preservedByVerifiedRecoveryCopy || fileManager.fileExists(atPath: record.sourceURL.path),
-              !fileManager.fileExists(atPath: record.destinationURL.path) else { return }
-        let expectedStagingURL = expectedStagingURL(for: record)
-        guard record.stagingURL.standardizedFileURL.path == expectedStagingURL.path,
-              fileManager.fileExists(atPath: expectedStagingURL.path) else { return }
-        try? fileManager.removeItem(at: expectedStagingURL)
-    }
-
-    private func requiresVerifiedRecoveryCopyBeforeDiscarding(
-        _ record: VaultTransferRecord,
-        newestRecordID: UUID
-    ) -> Bool {
-        let canDiscardState = record.state == .failedRecoverable || record.state == .awaitingProviderDurability
-        let expectedStagingURL = expectedStagingURL(for: record)
-        return record.id != newestRecordID
-            && canDiscardState
-            && !fileManager.fileExists(atPath: record.sourceURL.path)
-            && !fileManager.fileExists(atPath: record.destinationURL.path)
-            && record.stagingURL.standardizedFileURL.path == expectedStagingURL.path
-            && fileManager.fileExists(atPath: expectedStagingURL.path)
-    }
-
-    private func hasVerifiedRecoveryCopy(_ record: VaultTransferRecord) -> Bool {
-        let hasVerifiedStagingState = record.state == .awaitingProviderDurability
-            || (record.state == .failedRecoverable && record.error?.origin == .awaitingProviderDurability)
-        let expectedStagingURL = expectedStagingURL(for: record)
-        guard hasVerifiedStagingState,
-              record.manifestID != nil,
+    private func hasUsableVerifiedArchiveGeneration(_ record: VaultTransferRecord) async -> Bool {
+        guard VaultTransferOwnershipPolicy.isVerifiedTerminal(record.state),
+              let manifestID = record.manifestID,
               let manifest = record.manifest,
-              record.stagingURL.standardizedFileURL.path == expectedStagingURL.path,
-              fileManager.fileExists(atPath: expectedStagingURL.path) else { return false }
+              manifest.id == manifestID,
+              (try? manifest.validatePersistedContentEnvelope()) != nil,
+              hasPersistedGenerationPath(record) else { return false }
+        if record.state == .archivedOnlineOnly {
+            guard record.durability == .syncedToProvider
+                    || record.durability == .independentlyBackedUp else { return false }
+            do {
+                switch try await provider.currentLocality(
+                    at: record.destinationURL,
+                    manifest: manifest
+                ) {
+                case .fullyLocalCurrent, .materializationRequired:
+                    return true
+                case .unknown:
+                    return false
+                }
+            } catch {
+                return false
+            }
+        }
+        guard fileManager.fileExists(atPath: record.destinationURL.path) else { return false }
         do {
-            try manifestBuilder.verify(manifest, at: expectedStagingURL)
+            try manifestBuilder.verify(manifest, at: record.destinationURL)
             return true
         } catch {
             return false
         }
     }
 
-    private func expectedStagingURL(for record: VaultTransferRecord) -> URL {
-        archiveRoot
-            .appendingPathComponent(".niko-staging", isDirectory: true)
+    private func hasPersistedGenerationPath(_ record: VaultTransferRecord) -> Bool {
+        let expectedDestination = archiveRoot
+            .appendingPathComponent("generations", isDirectory: true)
             .appendingPathComponent(record.projectID.description, isDirectory: true)
-            .appendingPathComponent(record.id.uuidString.lowercased(), isDirectory: true)
+            .appendingPathComponent(
+                "generation-\(record.id.uuidString.lowercased())",
+                isDirectory: true
+            )
+        guard record.destinationURL.isFileURL,
+              expectedDestination.isFileURL,
+              Self.normalizedAuthority(of: record.destinationURL)
+                == Self.normalizedAuthority(of: expectedDestination) else {
+            return false
+        }
+        let projectRoot = expectedDestination
+            .deletingLastPathComponent()
             .standardizedFileURL
+            .pathComponents
+        let destination = record.destinationURL.standardizedFileURL.pathComponents
+        return destination.count == projectRoot.count + 1
+            && Array(destination.prefix(projectRoot.count)) == projectRoot
+            && destination.last == "generation-\(record.id.uuidString.lowercased())"
+    }
+
+    private struct URLAuthority: Equatable {
+        let user: String
+        let password: String
+        let host: String
+        let port: Int?
+    }
+
+    private static func normalizedAuthority(of url: URL) -> URLAuthority {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        return URLAuthority(
+            user: components?.user ?? "",
+            password: components?.password ?? "",
+            host: (components?.host ?? "").lowercased(),
+            port: components?.port
+        )
+    }
+
+}
+
+private struct SourceFileSystemIdentity: Equatable {
+    let device: UInt64
+    let inode: UInt64
+}
+
+private final class SourceRootFileSystemBinding {
+    let identity: SourceFileSystemIdentity
+    private let descriptor: Int32
+
+    init(opening url: URL) throws {
+        let descriptor = url.path.withCString {
+            Darwin.open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        }
+        guard descriptor >= 0 else {
+            throw LocalVaultTransferError.sourceMutated
+        }
+
+        var information = stat()
+        guard Darwin.fstat(descriptor, &information) == 0,
+              (information.st_mode & mode_t(S_IFMT)) == mode_t(S_IFDIR) else {
+            Darwin.close(descriptor)
+            throw LocalVaultTransferError.sourceMutated
+        }
+
+        self.descriptor = descriptor
+        self.identity = SourceFileSystemIdentity(
+            device: UInt64(information.st_dev),
+            inode: UInt64(information.st_ino)
+        )
+    }
+
+    deinit {
+        Darwin.close(descriptor)
+    }
+}
+
+private struct VaultSendableFileManager: @unchecked Sendable {
+    let value: FileManager
+
+    init(_ value: FileManager) {
+        self.value = value
     }
 }

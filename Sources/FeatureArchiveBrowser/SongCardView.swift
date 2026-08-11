@@ -85,10 +85,15 @@ struct SongCardView: View {
 
                     Spacer(minLength: 3)
 
-                    if vaultPresentation.primaryAction == .restoreAndOpen,
+                    if [.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction),
                        let onProjectVaultPrimaryAction {
                         Button(action: onProjectVaultPrimaryAction) {
-                            Label("Get", systemImage: "arrow.down.circle")
+                            Label(
+                                vaultPresentation.primaryAction == .retry ? "Retry" : "Get",
+                                systemImage: vaultPresentation.primaryAction == .retry
+                                    ? "arrow.clockwise.circle"
+                                    : "arrow.down.circle"
+                            )
                                 .font(HubDesignSystem.Typography.micro().weight(.semibold))
                                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                                 .padding(.horizontal, 5)
@@ -96,8 +101,12 @@ struct SongCardView: View {
                                 .background(Color.white.opacity(0.07), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help("Get a verified local copy and open it in Cubase")
-                        .accessibilityLabel("Get local copy and open in Cubase")
+                        .help(vaultPresentation.primaryAction == .retry
+                            ? "Retry the preserved Project Vault transfer"
+                            : "Get a verified local copy and open it in Cubase")
+                        .accessibilityLabel(vaultPresentation.primaryAction == .retry
+                            ? "Retry Project Vault transfer"
+                            : "Get local copy and open in Cubase")
                     }
                 }
             }

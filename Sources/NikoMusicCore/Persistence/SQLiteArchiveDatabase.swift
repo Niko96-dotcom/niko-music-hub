@@ -8,6 +8,8 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
     private let accessQueue = DispatchQueue(label: "com.niko.music-hub.sqlite-archive-database")
     private var connection: OpaquePointer?
 
+    public var fileURL: URL { databaseURL }
+
     public init(databaseURL: URL, fileManager: FileManager = .default) throws {
         self.databaseURL = databaseURL
         self.fileManager = fileManager

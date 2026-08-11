@@ -1265,12 +1265,17 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             workflowStatus: .done
         )
         let projectID = ProjectID()
-        let transfer = VaultTransferRecord(
+        var transfer = VaultTransferRecord(
             projectID: projectID,
             sourceURL: folder,
             stagingURL: folder.appendingPathComponent("staging"),
             destinationURL: folder.appendingPathComponent("generation"),
             state: .failedRecoverable
+        )
+        transfer.error = VaultTransferError(
+            origin: .awaitingProviderDurability,
+            reason: .providerUnsynced,
+            message: "provider retry"
         )
         let runtime = RecordingProjectVaultRuntime(snapshots: [
             ProjectVaultRuntimeSnapshot(
@@ -1297,6 +1302,1210 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let archiveCallCount = await runtime.archiveCallCount()
         XCTAssertEqual(archiveCallCount, 0)
+    }
+
+    func testFailedRecoverablePrimaryActionRetriesThroughRuntime() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(snapshots: [fixture.snapshot])
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .retry)
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        for _ in 0..<100 {
+            if await runtime.retryCallCount() > 0,
+               !viewModel.projectVaultBusySongIDs.contains(fixture.song.id) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let retryCallCount = await runtime.retryCallCount()
+        XCTAssertEqual(retryCallCount, 1)
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .openInCubase)
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
+    }
+
+    func testRetryBusyStateClearsOnlyAfterRuntimeCompletes() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let gate = ScanReleaseGate()
+        let runtime = RecordingProjectVaultRuntime(snapshots: [fixture.snapshot], retryGate: gate)
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        for _ in 0..<100 where !gate.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(gate.isWaiting)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.statusMessage, "Retrying the preserved Project Vault transfer…")
+
+        gate.release()
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .openInCubase)
+    }
+
+    func testRetryRefreshFailureDoesNotClaimVerifiedSuccess() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [fixture.snapshot],
+            refreshFailsAfterRetry: true
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .openInCubase)
+        XCTAssertEqual(
+            viewModel.statusMessage,
+            "Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action."
+        )
+    }
+
+    func testFailedRetryRefreshesRecoveryRequiredPresentation() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [fixture.snapshot],
+            retryFailureState: .recoveryRequired
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .review)
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(fixture.song))
+        XCTAssertTrue(viewModel.statusMessage?.contains("retry stopped safely") == true)
+    }
+
+    func testLegacyFinderReviewIsNonmutatingAndRetryUsesSameRestoreIDWithBusyCleared() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let restoreID = UUID()
+        let snapshot = try fixture.legacyReviewSnapshot(restoreID: restoreID)
+        let gate = ScanReleaseGate()
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [snapshot],
+            restoreRetryGate: gate
+        )
+        let revealed = RevealedURLBox()
+        let viewModel = fixture.makeViewModel(
+            runtime: runtime,
+            fileActions: CapturingTestFileActions(revealed: revealed)
+        )
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+
+        XCTAssertEqual(revealed.urls, [try XCTUnwrap(snapshot.restore?.archiveGenerationURL)])
+        let reviewOnlyRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertTrue(reviewOnlyRetryIDs.isEmpty)
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+
+        viewModel.retryReviewedProjectVaultRestore(for: fixture.song)
+        for _ in 0..<100 where !gate.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(gate.isWaiting)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.statusMessage, "Retrying this preserved Project Vault restore…")
+
+        gate.release()
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let completedRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(completedRetryIDs, [restoreID])
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault restore retry completed and verified.")
+    }
+
+    func testLegacyRestoreRetryFailureKeepsReviewAndClearsBusy() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let restoreID = UUID()
+        let snapshot = try fixture.legacyReviewSnapshot(restoreID: restoreID)
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [snapshot],
+            restoreRetryError: .archiveFailed("forced legacy retry failure")
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.retryReviewedProjectVaultRestore(for: fixture.song)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let failedRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(failedRetryIDs, [restoreID])
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .review)
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.retryRestoreID, restoreID)
+        XCTAssertTrue(viewModel.statusMessage?.contains("restore retry stopped safely") == true)
+    }
+
+    func testArchiveTransferBindingFailureSnapshotPresentsNonActionableIntegrityReview() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let restoreID = UUID()
+        let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: restoreID)
+        var restore = try XCTUnwrap(legacySnapshot.restore)
+        restore.failureReason = .archiveTransferBindingUnavailable
+        let snapshot = ProjectVaultRuntimeSnapshot(
+            record: legacySnapshot.record,
+            transfer: legacySnapshot.transfer,
+            restore: restore
+        )
+        let runtime = RecordingProjectVaultRuntime(snapshots: [snapshot])
+        let revealed = RevealedURLBox()
+        let viewModel = fixture.makeViewModel(
+            runtime: runtime,
+            fileActions: CapturingTestFileActions(revealed: revealed)
+        )
+
+        await viewModel.refreshProjectVaultSnapshots()
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: fixture.song))
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertEqual(
+            presentation.explanation,
+            "This restore no longer matches its verified archive transfer binding. Existing copies were kept; review archive integrity before continuing."
+        )
+        XCTAssertFalse(presentation.explanation.contains("Downloading"))
+        XCTAssertNil(presentation.reviewAction, "binding failure must not authorize Finder")
+        XCTAssertNil(presentation.retryRestoreID, "binding failure must not authorize Retry")
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(fixture.song), "owned failed restore must hide Archive")
+
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        viewModel.retryReviewedProjectVaultRestore(for: fixture.song)
+        try await Task.sleep(for: .milliseconds(20))
+
+        let retryIDs = await runtime.restoreRetryIDs()
+        let archiveCalls = await runtime.archiveCallCount()
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertTrue(retryIDs.isEmpty)
+        XCTAssertEqual(archiveCalls, 0)
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+    }
+
+    func testActiveDestinationIntegrityMismatchProjectionRetainsTypedBlockerWhenGenerationIsUnbound() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let baseSnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
+        let transfer = try XCTUnwrap(baseSnapshot.transfer)
+        var restore = VaultRestoreRecord(
+            projectID: baseSnapshot.record.id,
+            archiveGenerationURL: fixture.root.appendingPathComponent(
+                "Archive/generations/unbound/generation",
+                isDirectory: true
+            ),
+            stagingURL: fixture.root.appendingPathComponent("Active/.niko-staging/integrity"),
+            destinationURL: fixture.song.folderPath,
+            manifest: try XCTUnwrap(transfer.manifest),
+            archiveTransferID: nil,
+            archiveTransferState: transfer.state,
+            requiresArchiveMaterialization: false,
+            phase: .openingInCubase
+        )
+        restore.failureReason = .activeDestinationIntegrityMismatch
+        restore.error = "Active integrity mismatch"
+        let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+            record: baseSnapshot.record,
+            transfer: transfer,
+            restore: restore
+        )])
+        let metadataStore = RecordingSongUserMetadataStore()
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = [fixture.song]
+        viewModel.songs = [fixture.song]
+        viewModel.filteredSongs = [fixture.song]
+
+        await viewModel.refreshProjectVaultSnapshots()
+        let sourceSong = try XCTUnwrap(viewModel.songs.first)
+        viewModel.selectSong(sourceSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: sourceSong))
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertEqual(
+            presentation.explanation,
+            "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+        )
+        XCTAssertFalse(presentation.explanation.contains("every known copy"))
+        XCTAssertNil(presentation.reviewAction)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong))
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong))
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong))
+
+        viewModel.revealInFinder(url: sourceSong.folderPath)
+        try? viewModel.openLatestCPR(for: sourceSong)
+        viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
+        viewModel.archiveInProjectVault(sourceSong)
+        viewModel.performProjectVaultPrimaryAction(for: sourceSong)
+        viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
+        try await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertEqual(metadataStore.upsertCallCount, 0)
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertNil(viewModel.lastDryRunLog)
+        let archiveCalls = await runtime.archiveCallCount()
+        let retryCalls = await runtime.retryCallCount()
+        let restoreCalls = await runtime.restoreCallCount()
+        let restoreRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(archiveCalls, 0)
+        XCTAssertEqual(retryCalls, 0)
+        XCTAssertEqual(restoreCalls, 0)
+        XCTAssertTrue(restoreRetryIDs.isEmpty)
+    }
+
+    func testRestoreOnlyIntegrityMismatchSnapshotBlocksEveryActiveSongAction() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let cprURL = fixture.song.folderPath.appendingPathComponent("Integrity Song.cpr")
+        try Data("rejected Active bytes".utf8).write(to: cprURL)
+        let cpr = ProjectVersion(
+            filePath: cprURL,
+            fileName: cprURL.lastPathComponent,
+            modifiedAt: Date()
+        )
+        let activeSong = Song(
+            folderPath: fixture.song.folderPath,
+            originalFolderName: fixture.song.originalFolderName,
+            displayTitle: fixture.song.displayTitle,
+            projectVersions: [cpr],
+            latestCPR: cpr
+        )
+        var restore = VaultRestoreRecord(
+            projectID: fixture.snapshot.record.id,
+            archiveGenerationURL: fixture.root.appendingPathComponent(
+                "Unbound/missing-generation",
+                isDirectory: true
+            ),
+            stagingURL: fixture.root.appendingPathComponent("Active/.niko-staging/integrity"),
+            destinationURL: activeSong.folderPath,
+            manifest: VaultManifest(entries: []),
+            archiveTransferID: nil,
+            requiresArchiveMaterialization: false,
+            phase: .openingInCubase
+        )
+        restore.failureReason = .activeDestinationIntegrityMismatch
+        restore.error = "Active integrity mismatch"
+        let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+            record: fixture.snapshot.record,
+            transfer: nil,
+            restore: restore
+        )])
+        let metadataStore = RecordingSongUserMetadataStore()
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = [activeSong]
+        viewModel.songs = [activeSong]
+        viewModel.filteredSongs = [activeSong]
+
+        await viewModel.refreshProjectVaultSnapshots()
+        let sourceSong = try XCTUnwrap(viewModel.songs.first)
+        viewModel.selectSong(sourceSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: sourceSong))
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertEqual(
+            presentation.explanation,
+            "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+        )
+        XCTAssertFalse(presentation.explanation.contains("every known copy"))
+        XCTAssertNil(presentation.reviewAction)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong))
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong))
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong))
+
+        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
+        viewModel.revealInFinder(url: sourceSong.folderPath)
+        try? viewModel.openLatestCPR(for: sourceSong)
+        if let selectedSong = viewModel.selectedSong {
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
+            try? viewModel.openLatestCPR(for: selectedSong)
+        }
+        viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
+        viewModel.archiveInProjectVault(sourceSong)
+        viewModel.performProjectVaultPrimaryAction(for: sourceSong)
+        viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(sourceSong.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let archiveCalls = await runtime.archiveCallCount()
+        let retryCalls = await runtime.retryCallCount()
+        let restoreCalls = await runtime.restoreCallCount()
+        let restoreRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(metadataStore.upsertCallCount, 0)
+        XCTAssertEqual(metadataStore.upsertAllCallCount, 0)
+        XCTAssertEqual(archiveCalls, 0)
+        XCTAssertEqual(retryCalls, 0)
+        XCTAssertEqual(restoreCalls, 0)
+        XCTAssertTrue(restoreRetryIDs.isEmpty)
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertNil(viewModel.lastDryRunLog)
+    }
+
+    func testIncompletePostPromotionRestoreDeniesGenericActionsWithOrWithoutIntegrityFailure() async throws {
+        let phases: [VaultRestorePhase] = [.persistingActiveLocation, .openingInCubase]
+        let failureReasons: [VaultRestoreFailureReason?] = [
+            .activeDestinationIntegrityMismatch,
+            nil,
+        ]
+        let integrityExplanation = "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+
+        for phase in phases {
+            for failureReason in failureReasons {
+                let label = "\(phase)/\(failureReason?.rawValue ?? "catalogFailure")"
+                let fixture = try ProjectVaultViewModelFixture()
+                defer { fixture.cleanUp() }
+                let baseSnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
+                var transfer = try XCTUnwrap(baseSnapshot.transfer, label)
+                var restore = try XCTUnwrap(baseSnapshot.restore, label)
+                restore.phase = phase
+                restore.failureReason = failureReason
+                restore.error = failureReason == nil ? "Catalog/Open did not complete" : "Active integrity mismatch"
+                transfer.sourceURL = restore.destinationURL
+                XCTAssertEqual(
+                    transfer.sourceURL.standardizedFileURL,
+                    restore.destinationURL.standardizedFileURL,
+                    label
+                )
+
+                let cprURL = restore.destinationURL.appendingPathComponent("Integrity Song.cpr")
+                try Data("rejected promoted Active bytes".utf8).write(to: cprURL)
+                let cpr = ProjectVersion(
+                    filePath: cprURL,
+                    fileName: cprURL.lastPathComponent,
+                    modifiedAt: Date()
+                )
+                let activeSong = Song(
+                    folderPath: restore.destinationURL,
+                    originalFolderName: fixture.song.originalFolderName,
+                    displayTitle: fixture.song.displayTitle,
+                    projectVersions: [cpr],
+                    latestCPR: cpr
+                )
+                let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+                    record: baseSnapshot.record,
+                    transfer: transfer,
+                    restore: restore
+                )])
+                let metadataStore = RecordingSongUserMetadataStore()
+                let revealed = RevealedURLBox()
+                let viewModel = ArchiveBrowserViewModel(
+                    context: TestToolContext.make(
+                        settingsStore: fixture.settingsStore,
+                        fileActions: CapturingTestFileActions(revealed: revealed)
+                    ),
+                    songMetadataStore: metadataStore,
+                    archiveRootWatcher: NoopArchiveRootWatcher(),
+                    projectVaultRuntime: runtime,
+                    runtime: MusicHubRuntimeEnvironment(environment: [
+                        MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                        MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+                    ])
+                )
+                viewModel.scannedSongs = [activeSong]
+                viewModel.songs = [activeSong]
+                viewModel.filteredSongs = [activeSong]
+
+                await viewModel.refreshProjectVaultSnapshots()
+                let sourceSong = try XCTUnwrap(viewModel.songs.first, label)
+                viewModel.selectSong(sourceSong)
+                let presentation = try XCTUnwrap(
+                    viewModel.projectVaultPresentation(for: sourceSong),
+                    label
+                )
+
+                if failureReason == .activeDestinationIntegrityMismatch {
+                    XCTAssertEqual(presentation.state, .needsAttention, label)
+                    XCTAssertEqual(presentation.explanation, integrityExplanation, label)
+                } else {
+                    XCTAssertEqual(presentation.state, .restoring, label)
+                    XCTAssertEqual(
+                        presentation.explanation,
+                        ProjectVaultActivityExplanation.restore(phase),
+                        label
+                    )
+                }
+                XCTAssertEqual(presentation.primaryAction, .review, label)
+                XCTAssertNil(presentation.reviewAction, label)
+                XCTAssertNil(presentation.retryRestoreID, label)
+                XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong), label)
+                XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong), label)
+                XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong), label)
+
+                viewModel.revealInFinder(url: sourceSong.folderPath)
+                try? viewModel.openLatestCPR(for: sourceSong)
+                if let selectedSong = viewModel.selectedSong {
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
+                    try? viewModel.openLatestCPR(for: selectedSong)
+                }
+                viewModel.updateWorkflowStatus(for: sourceSong, status: .waitingFeedback)
+                viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
+                viewModel.archiveInProjectVault(sourceSong)
+                viewModel.performProjectVaultPrimaryAction(for: sourceSong)
+                viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
+                try await Task.sleep(for: .milliseconds(20))
+
+                XCTAssertEqual(metadataStore.upsertCallCount, 0, label)
+                XCTAssertTrue(revealed.urls.isEmpty, label)
+                XCTAssertNil(viewModel.lastDryRunLog, label)
+                let archiveCalls = await runtime.archiveCallCount()
+                let retryCalls = await runtime.retryCallCount()
+                let restoreCalls = await runtime.restoreCallCount()
+                let restoreRetryIDs = await runtime.restoreRetryIDs()
+                XCTAssertEqual(archiveCalls, 0, label)
+                XCTAssertEqual(retryCalls, 0, label)
+                XCTAssertEqual(restoreCalls, 0, label)
+                XCTAssertTrue(restoreRetryIDs.isEmpty, label)
+            }
+        }
+    }
+
+    func testSupersededArchivedOnlyRestoreDeniesReviewRetryAndGenericFileActions() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
+        var restore = try XCTUnwrap(legacySnapshot.restore)
+        restore.phase = .superseded
+        restore.supersededBy = UUID()
+        restore.failureReason = .legacyProjectionEvidenceUnavailable
+        let generationURL = try XCTUnwrap(legacySnapshot.transfer?.destinationURL)
+        try Data("retired restore archive".utf8).write(
+            to: generationURL.appendingPathComponent("Retry Song.cpr")
+        )
+        try FileManager.default.removeItem(at: fixture.song.folderPath)
+        let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+            record: legacySnapshot.record,
+            transfer: legacySnapshot.transfer,
+            restore: restore
+        )])
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = [fixture.song]
+        viewModel.songs = [fixture.song]
+        viewModel.filteredSongs = [fixture.song]
+
+        await viewModel.refreshProjectVaultSnapshots()
+        viewModel.setShowArchivedProjects(true)
+        let archivedSong = try XCTUnwrap(viewModel.songs.first {
+            $0.folderPath.standardizedFileURL == generationURL.standardizedFileURL
+        })
+        viewModel.selectSong(archivedSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: archivedSong))
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertNil(presentation.reviewAction)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertNil(viewModel.preferredRevealURL(for: archivedSong))
+
+        viewModel.performProjectVaultPrimaryAction(for: archivedSong)
+        viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
+        viewModel.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.openLatestCPR(for: archivedSong)
+        if let selectedSong = viewModel.selectedSong {
+            viewModel.revealInFinder(url: selectedSong.folderPath)
+            try? viewModel.openLatestCPR(for: selectedSong)
+        }
+        try await Task.sleep(for: .milliseconds(20))
+
+        let retryIDs = await runtime.restoreRetryIDs()
+        let archiveCalls = await runtime.archiveCallCount()
+        XCTAssertTrue(retryIDs.isEmpty)
+        XCTAssertEqual(archiveCalls, 0)
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertNil(viewModel.lastDryRunLog)
+    }
+
+    func testDestructiveCrashArchiveOnlyProjectStaysVisibleAndDeniesEveryAction() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
+        var transfer = try XCTUnwrap(legacySnapshot.transfer)
+        transfer.state = .recoveryRequired
+        transfer.error = VaultTransferError(
+            origin: .removingActiveCopy,
+            reason: .unknown,
+            message: "Active-copy removal stopped after relaunch"
+        )
+        let generationURL = transfer.destinationURL
+        try Data("verified destructive-crash archive".utf8).write(
+            to: generationURL.appendingPathComponent("Retry Song.cpr")
+        )
+        try FileManager.default.removeItem(at: transfer.sourceURL)
+        let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+            record: legacySnapshot.record,
+            transfer: transfer,
+            restore: nil
+        )])
+        let metadataStore = RecordingSongUserMetadataStore()
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = []
+        viewModel.songs = []
+        viewModel.filteredSongs = []
+
+        await viewModel.refreshProjectVaultSnapshots()
+        viewModel.setShowArchivedProjects(true)
+        try await Task.sleep(for: .milliseconds(20))
+        guard let archivedSong = viewModel.songs.first(where: {
+            $0.folderPath.standardizedFileURL == generationURL.standardizedFileURL
+        }) else {
+            return XCTFail("normalized destructive crash must remain visible from its verified generation")
+        }
+        viewModel.selectSong(archivedSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: archivedSong))
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(archivedSong))
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
+        XCTAssertNil(presentation.reviewAction)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertNil(viewModel.preferredRevealURL(for: archivedSong))
+
+        // Sidebar menu and board drag/drop both converge on this ViewModel entry.
+        viewModel.updateWorkflowStatus(for: archivedSong, status: .waitingFeedback)
+        viewModel.updateWorkflowStatus(for: archivedSong, status: .done)
+        viewModel.performProjectVaultPrimaryAction(for: archivedSong)
+        viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
+        viewModel.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.openLatestCPR(for: archivedSong)
+        if let selectedSong = viewModel.selectedSong {
+            viewModel.revealInFinder(url: selectedSong.folderPath)
+            try? viewModel.openLatestCPR(for: selectedSong)
+        }
+        try await Task.sleep(for: .milliseconds(20))
+
+        let retryIDs = await runtime.restoreRetryIDs()
+        let retryCalls = await runtime.retryCallCount()
+        let restoreCalls = await runtime.restoreCallCount()
+        let archiveCalls = await runtime.archiveCallCount()
+        XCTAssertEqual(metadataStore.upsertCallCount, 0)
+        XCTAssertEqual(metadataStore.upsertAllCallCount, 0)
+        XCTAssertTrue(retryIDs.isEmpty)
+        XCTAssertEqual(retryCalls, 0)
+        XCTAssertEqual(restoreCalls, 0)
+        XCTAssertEqual(archiveCalls, 0)
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertNil(viewModel.lastDryRunLog)
+    }
+
+    func testBindingBlockedArchivedOnlySongDeniesGenericRevealOpenAndGlobalShortcuts() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let restoreID = UUID()
+        let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: restoreID)
+        var restore = try XCTUnwrap(legacySnapshot.restore)
+        restore.failureReason = .archiveTransferBindingUnavailable
+        let generationURL = try XCTUnwrap(legacySnapshot.transfer?.destinationURL)
+        let archivedCPR = generationURL.appendingPathComponent("Retry Song.cpr")
+        try Data("archived-only fixture".utf8).write(to: archivedCPR)
+        try FileManager.default.removeItem(at: fixture.song.folderPath)
+        let snapshot = ProjectVaultRuntimeSnapshot(
+            record: legacySnapshot.record,
+            transfer: legacySnapshot.transfer,
+            restore: restore
+        )
+        let runtime = RecordingProjectVaultRuntime(snapshots: [snapshot])
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = [fixture.song]
+        viewModel.songs = [fixture.song]
+        viewModel.filteredSongs = [fixture.song]
+
+        await viewModel.refreshProjectVaultSnapshots()
+        viewModel.setShowArchivedProjects(true)
+        let archivedSong = try XCTUnwrap(viewModel.songs.first {
+            $0.folderPath.standardizedFileURL == generationURL.standardizedFileURL
+        })
+        viewModel.selectSong(archivedSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: archivedSong))
+
+        // The old Active path can reappear after this catalog snapshot (for
+        // example, a restore or external sync). It must not turn the already
+        // projected archive-destination Song into generic file authority.
+        try FileManager.default.createDirectory(
+            at: fixture.song.folderPath,
+            withIntermediateDirectories: true
+        )
+        try Data("recreated active source".utf8).write(
+            to: fixture.song.folderPath.appendingPathComponent("Recreated.cpr")
+        )
+
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertEqual(presentation.primaryAction, .review)
+        XCTAssertNil(presentation.reviewAction)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertNil(
+            viewModel.preferredRevealURL(for: archivedSong),
+            "archived-only Project Vault cards must route through Restore/Get Local, not generic Reveal"
+        )
+
+        // Song Detail controls.
+        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
+        try? viewModel.openLatestCPR(for: archivedSong)
+        // Global F/O shortcuts use these same selected-song entry points.
+        if let selectedSong = viewModel.selectedSong {
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
+            try? viewModel.openLatestCPR(for: selectedSong)
+        }
+        viewModel.performProjectVaultPrimaryAction(for: archivedSong)
+
+        let restoreRetryIDs = await runtime.restoreRetryIDs()
+        let archiveCalls = await runtime.archiveCallCount()
+        XCTAssertTrue(revealed.urls.isEmpty, "generic Finder actions must stay disabled")
+        XCTAssertNil(viewModel.lastDryRunLog, "generic Open must not reach even the dry-run opener")
+        XCTAssertTrue(restoreRetryIDs.isEmpty)
+        XCTAssertEqual(archiveCalls, 0)
+    }
+
+    func testRecreatedActiveSourceBeforeRefreshKeepsDestructiveAndBindingBlockersNonActionable() async throws {
+        enum Blocker: CaseIterable {
+            case destructiveRecovery
+            case archiveTransferBinding
+        }
+
+        for blocker in Blocker.allCases {
+            let fixture = try ProjectVaultViewModelFixture()
+            defer { fixture.cleanUp() }
+            let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
+            var transfer = try XCTUnwrap(legacySnapshot.transfer)
+            var restore = legacySnapshot.restore
+            switch blocker {
+            case .destructiveRecovery:
+                transfer.state = .recoveryRequired
+                transfer.error = VaultTransferError(
+                    origin: .removingActiveCopy,
+                    reason: .unknown,
+                    message: "Active-copy removal stopped after relaunch"
+                )
+                restore = nil
+            case .archiveTransferBinding:
+                restore?.failureReason = .archiveTransferBindingUnavailable
+            }
+            try Data("verified blocked generation".utf8).write(
+                to: transfer.destinationURL.appendingPathComponent("Retry Song.cpr")
+            )
+            try FileManager.default.removeItem(at: fixture.song.folderPath)
+
+            let runtime = RecordingProjectVaultRuntime(snapshots: [ProjectVaultRuntimeSnapshot(
+                record: legacySnapshot.record,
+                transfer: transfer,
+                restore: restore
+            )])
+            let metadataStore = RecordingSongUserMetadataStore()
+            let revealed = RevealedURLBox()
+            let viewModel = ArchiveBrowserViewModel(
+                context: TestToolContext.make(
+                    settingsStore: fixture.settingsStore,
+                    fileActions: CapturingTestFileActions(revealed: revealed)
+                ),
+                songMetadataStore: metadataStore,
+                archiveRootWatcher: NoopArchiveRootWatcher(),
+                projectVaultRuntime: runtime,
+                runtime: MusicHubRuntimeEnvironment(environment: [
+                    MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                    MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+                ])
+            )
+            viewModel.scannedSongs = [fixture.song]
+            viewModel.songs = [fixture.song]
+            viewModel.filteredSongs = [fixture.song]
+
+            // Simulate an external sync or restore recreating Active before the
+            // next snapshot refresh/catalog rebuild chooses its projection path.
+            try FileManager.default.createDirectory(
+                at: fixture.song.folderPath,
+                withIntermediateDirectories: true
+            )
+            try Data("recreated active source".utf8).write(
+                to: fixture.song.folderPath.appendingPathComponent("Recreated.cpr")
+            )
+            await viewModel.refreshProjectVaultSnapshots()
+
+            let sourceSong = try XCTUnwrap(viewModel.songs.first {
+                $0.folderPath.standardizedFileURL == fixture.song.folderPath.standardizedFileURL
+            })
+            viewModel.selectSong(sourceSong)
+            let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: sourceSong))
+            XCTAssertEqual(presentation.state, .needsAttention, "\(blocker)")
+            XCTAssertEqual(presentation.primaryAction, .review, "\(blocker)")
+            XCTAssertNil(presentation.reviewAction, "\(blocker)")
+            XCTAssertNil(presentation.retryRestoreID, "\(blocker)")
+            XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong), "\(blocker)")
+            XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong), "\(blocker)")
+            XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong), "\(blocker)")
+
+            // Sidebar menu and board drag/drop converge here. Direct calls also
+            // exercise the last authority boundary behind hidden UI controls.
+            viewModel.updateWorkflowStatus(for: sourceSong, status: .waitingFeedback)
+            viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
+            viewModel.archiveInProjectVault(sourceSong)
+            viewModel.performProjectVaultPrimaryAction(for: sourceSong)
+            viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
+            viewModel.revealInFinder(url: sourceSong.folderPath)
+            try? viewModel.openLatestCPR(for: sourceSong)
+            if let selectedSong = viewModel.selectedSong {
+                viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
+                try? viewModel.openLatestCPR(for: selectedSong)
+            }
+            for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(sourceSong.id) {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+
+            XCTAssertEqual(metadataStore.upsertCallCount, 0, "\(blocker)")
+            XCTAssertEqual(metadataStore.upsertAllCallCount, 0, "\(blocker)")
+            let archiveCalls = await runtime.archiveCallCount()
+            let retryCalls = await runtime.retryCallCount()
+            let restoreCalls = await runtime.restoreCallCount()
+            let restoreRetryIDs = await runtime.restoreRetryIDs()
+            XCTAssertEqual(archiveCalls, 0, "\(blocker)")
+            XCTAssertEqual(retryCalls, 0, "\(blocker)")
+            XCTAssertEqual(restoreCalls, 0, "\(blocker)")
+            XCTAssertTrue(restoreRetryIDs.isEmpty, "\(blocker)")
+            XCTAssertTrue(revealed.urls.isEmpty, "\(blocker)")
+            XCTAssertNil(viewModel.lastDryRunLog, "\(blocker)")
+        }
+    }
+
+    func testLocalArchivedOnlyVirtualSongUsesRestoreAuthorityAndNeverGenericOpenAuthority() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        var transfer = try XCTUnwrap(fixture.snapshot.transfer)
+        let exactGeneration = fixture.root
+            .appendingPathComponent("Archive/generations/\(transfer.projectID.description)", isDirectory: true)
+            .appendingPathComponent(
+                "generation-\(transfer.id.uuidString.lowercased())",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(at: exactGeneration, withIntermediateDirectories: true)
+        transfer.destinationURL = exactGeneration
+        transfer.state = .archiveVerified
+        transfer.error = nil
+        transfer.manifest = VaultManifest(entries: [])
+        transfer.manifestID = transfer.manifest?.id
+        transfer.durability = .verifiedLocal
+        try Data("verified local archive".utf8).write(
+            to: transfer.destinationURL.appendingPathComponent("Retry Song.cpr")
+        )
+        try FileManager.default.removeItem(at: fixture.song.folderPath)
+        let archivedRecord = ProjectRecord(
+            id: fixture.snapshot.record.id,
+            canonicalTitle: fixture.snapshot.record.canonicalTitle,
+            locations: [ProjectLocation(
+                rootID: UUID(),
+                relativePath: "generations/\(transfer.projectID.description)/generation-\(transfer.id.uuidString.lowercased())",
+                kind: .archive,
+                availability: .local
+            )],
+            workflowState: fixture.snapshot.record.workflowState,
+            latestManifestID: transfer.manifestID
+        )
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [ProjectVaultRuntimeSnapshot(record: archivedRecord, transfer: transfer)],
+            restoreError: .archiveFailed("expected restore boundary stop")
+        )
+        let metadataStore = RecordingSongUserMetadataStore()
+        let revealed = RevealedURLBox()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(
+                settingsStore: fixture.settingsStore,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            ),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [
+                MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+            ])
+        )
+        viewModel.scannedSongs = []
+        viewModel.songs = []
+        viewModel.filteredSongs = []
+
+        await viewModel.refreshProjectVaultSnapshots()
+        viewModel.setShowArchivedProjects(true)
+        let archivedSong = try XCTUnwrap(viewModel.songs.first {
+            $0.folderPath.standardizedFileURL == transfer.destinationURL.standardizedFileURL
+        })
+        viewModel.selectSong(archivedSong)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: archivedSong))
+
+        XCTAssertEqual(presentation.state, .archived)
+        XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(archivedSong))
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
+        XCTAssertNil(
+            viewModel.preferredRevealURL(for: archivedSong),
+            "archive-only virtual songs must not acquire generic filesystem authority"
+        )
+
+        // Direct detail and selected/global Open/Finder entry points are inert.
+        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
+        viewModel.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.openLatestCPR(for: archivedSong)
+        if let selectedSong = viewModel.selectedSong {
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
+            try? viewModel.openLatestCPR(for: selectedSong)
+        }
+        viewModel.updateWorkflowStatus(for: archivedSong, status: .done)
+        viewModel.archiveInProjectVault(archivedSong)
+        viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let preRestoreArchiveCalls = await runtime.archiveCallCount()
+        let preRestoreRetryCalls = await runtime.retryCallCount()
+        let preRestoreRestoreCalls = await runtime.restoreCallCount()
+        let preRestoreRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(metadataStore.upsertCallCount, 0)
+        XCTAssertEqual(metadataStore.upsertAllCallCount, 0)
+        XCTAssertEqual(preRestoreArchiveCalls, 0)
+        XCTAssertEqual(preRestoreRetryCalls, 0)
+        XCTAssertEqual(preRestoreRestoreCalls, 0)
+        XCTAssertTrue(preRestoreRetryIDs.isEmpty)
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertNil(viewModel.lastDryRunLog)
+
+        // The dedicated Get Local & Open action is the sole mutating authority.
+        viewModel.performProjectVaultPrimaryAction(for: archivedSong)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let restoreCalls = await runtime.restoreCallCount()
+        XCTAssertEqual(restoreCalls, 1)
+    }
+
+    func testLegacyReviewRejectsUntrustedGenerationAuthoritiesWithoutRevealOrMutation() async throws {
+        enum InvalidAuthority: CaseIterable {
+            case disabledArchiveRoot
+            case staleBookmark
+            case outsideArchiveRoot
+            case archiveRootItself
+            case archiveStaging
+        }
+
+        for authority in InvalidAuthority.allCases {
+            let fixture = try ProjectVaultViewModelFixture()
+            defer { fixture.cleanUp() }
+            let archiveRoot = fixture.root.appendingPathComponent("Archive", isDirectory: true)
+            let generationURL: URL
+            switch authority {
+            case .disabledArchiveRoot:
+                generationURL = archiveRoot.appendingPathComponent("generations/project/generation", isDirectory: true)
+                try fixture.settingsStore.updateSettings { settings in
+                    guard let index = settings.musicRoots.firstIndex(where: { $0.role == .archive }) else { return }
+                    settings.musicRoots[index].isEnabled = false
+                }
+            case .staleBookmark:
+                generationURL = archiveRoot.appendingPathComponent("generations/project/generation", isDirectory: true)
+                try fixture.settingsStore.updateSettings { settings in
+                    guard let index = settings.musicRoots.firstIndex(where: { $0.role == .archive }) else { return }
+                    settings.musicRoots[index].securityScopedBookmark = Data([0x00, 0x01, 0x02])
+                }
+            case .outsideArchiveRoot:
+                generationURL = fixture.song.folderPath
+            case .archiveRootItself:
+                generationURL = archiveRoot
+            case .archiveStaging:
+                generationURL = archiveRoot.appendingPathComponent(".niko-staging/unsafe", isDirectory: true)
+            }
+            try FileManager.default.createDirectory(at: generationURL, withIntermediateDirectories: true)
+            let restoreID = UUID()
+            let runtime = RecordingProjectVaultRuntime(snapshots: [
+                try fixture.legacyReviewSnapshot(
+                    restoreID: restoreID,
+                    generationURL: generationURL
+                ),
+            ])
+            let revealed = RevealedURLBox()
+            let viewModel = fixture.makeViewModel(
+                runtime: runtime,
+                fileActions: CapturingTestFileActions(revealed: revealed)
+            )
+            await viewModel.refreshProjectVaultSnapshots()
+
+            let presentation = viewModel.projectVaultPresentation(for: fixture.song)
+            XCTAssertNil(presentation?.reviewAction, "\(authority) must not create Finder authority")
+            XCTAssertNil(presentation?.retryRestoreID, "\(authority) must not create retry authority")
+            if presentation != nil {
+                viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+            }
+
+            XCTAssertTrue(revealed.urls.isEmpty)
+            let retryIDs = await runtime.restoreRetryIDs()
+            XCTAssertTrue(retryIDs.isEmpty)
+            XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        }
+    }
+
+    func testInvalidTerminalTransferNeverCreatesArchivedSongOrGenericRevealOpenAuthority() async throws {
+        enum InvalidDestination: CaseIterable {
+            case outsideArchiveRoot
+            case archiveRootItself
+            case archiveStaging
+        }
+
+        for invalidDestination in InvalidDestination.allCases {
+            let fixture = try ProjectVaultViewModelFixture()
+            defer { fixture.cleanUp() }
+            let archiveRoot = fixture.root.appendingPathComponent("Archive", isDirectory: true)
+            let destinationURL: URL
+            switch invalidDestination {
+            case .outsideArchiveRoot:
+                destinationURL = fixture.root.appendingPathComponent("Outside/generation", isDirectory: true)
+            case .archiveRootItself:
+                destinationURL = archiveRoot
+            case .archiveStaging:
+                destinationURL = archiveRoot.appendingPathComponent(".niko-staging/unsafe", isDirectory: true)
+            }
+            try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+            let projectURL = destinationURL.appendingPathComponent("Unsafe Archived Song.cpr")
+            try Data("unsafe terminal fixture".utf8).write(to: projectURL)
+            try FileManager.default.removeItem(at: fixture.song.folderPath)
+
+            var transfer = try XCTUnwrap(fixture.snapshot.transfer)
+            transfer.sourceURL = fixture.song.folderPath
+            transfer.destinationURL = destinationURL
+            transfer.state = .archiveVerified
+            transfer.error = nil
+            transfer.manifest = VaultManifest(entries: [])
+            transfer.manifestID = transfer.manifest?.id
+            transfer.durability = .verifiedLocal
+            let snapshot = ProjectVaultRuntimeSnapshot(
+                record: fixture.snapshot.record,
+                transfer: transfer
+            )
+            let runtime = RecordingProjectVaultRuntime(snapshots: [snapshot])
+            let revealed = RevealedURLBox()
+            let viewModel = ArchiveBrowserViewModel(
+                context: TestToolContext.make(
+                    settingsStore: fixture.settingsStore,
+                    fileActions: CapturingTestFileActions(revealed: revealed)
+                ),
+                archiveRootWatcher: NoopArchiveRootWatcher(),
+                projectVaultRuntime: runtime,
+                runtime: MusicHubRuntimeEnvironment(environment: [
+                    MusicHubRuntimeEnvironment.dryRunOpenKey: "1",
+                    MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
+                ])
+            )
+            viewModel.scannedSongs = [fixture.song]
+            viewModel.songs = [fixture.song]
+            viewModel.filteredSongs = [fixture.song]
+
+            await viewModel.refreshProjectVaultSnapshots()
+            viewModel.setShowArchivedProjects(true)
+
+            let destinationPath = destinationURL.standardizedFileURL.path
+            let unsafeVirtualSongs = viewModel.songs.filter {
+                $0.folderPath.standardizedFileURL.path == destinationPath
+            }
+            if let unsafeSong = unsafeVirtualSongs.first {
+                viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: unsafeSong))
+                try? viewModel.openLatestCPR(for: unsafeSong)
+            }
+
+            XCTAssertTrue(
+                unsafeVirtualSongs.isEmpty,
+                "\(invalidDestination) must not become a virtual Song with raw folder authority"
+            )
+            XCTAssertTrue(revealed.urls.isEmpty, "\(invalidDestination) must not authorize generic Reveal")
+            XCTAssertNil(viewModel.lastDryRunLog, "\(invalidDestination) must not authorize generic Open")
+        }
+    }
+
+    func testArchiveFailureRefreshesPersistedOwnershipAndHidesArchiveNow() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            archiveError: .archiveFailed("forced provider failure"),
+            archiveFailureSnapshots: [fixture.snapshot]
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        XCTAssertTrue(viewModel.canArchiveInProjectVault(fixture.song))
+
+        viewModel.archiveInProjectVault(fixture.song)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(fixture.song))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .retry)
+        let archiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(archiveCallCount, 1)
+    }
+
+    func testCapacityPostponementDoesNotScheduleDoneRetry() async throws {
+        let fixture = try ProjectVaultViewModelFixture(workflowStatus: .done)
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            archiveError: .activityPostponed(.insufficientArchiveCapacity)
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+
+        viewModel.archiveInProjectVault(fixture.song, trigger: .workflowDone)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(viewModel.projectVaultRetryTasks.isEmpty)
+        XCTAssertTrue(viewModel.projectVaultRetryAttemptCounts.isEmpty)
+        let archiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(archiveCallCount, 1)
+    }
+
+    func testTransientPostponementSchedulesOneBoundedRetryAndRefreshDoesNotDuplicate() async throws {
+        let fixture = try ProjectVaultViewModelFixture(workflowStatus: .done)
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            archiveError: .activityPostponed(.recentWriteActivity)
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+        defer { viewModel.projectVaultRetryTasks.values.forEach { $0.cancel() } }
+
+        viewModel.archiveInProjectVault(fixture.song, trigger: .workflowDone)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(viewModel.projectVaultRetryTasks.count, 1)
+        XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[fixture.song.id], 1)
+
+        await viewModel.refreshProjectVaultSnapshots()
+        try await Task.sleep(for: .milliseconds(25))
+        let archiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(archiveCallCount, 1)
+        XCTAssertEqual(viewModel.projectVaultRetryTasks.count, 1)
+        XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[fixture.song.id], 1)
+    }
+
+    func testIncrementalScanCompletionDoesNotOverwriteNewerProjectVaultStatus() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let watcher = TestArchiveRootWatcher()
+        let runtime = RecordingProjectVaultRuntime(snapshots: [fixture.snapshot])
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: fixture.settingsStore),
+            archiveRootWatcher: watcher,
+            projectVaultRuntime: runtime
+        )
+        viewModel.scannedSongs = [fixture.song]
+        viewModel.songs = [fixture.song]
+        viewModel.filteredSongs = [fixture.song]
+        await viewModel.refreshProjectVaultSnapshots()
+
+        for _ in 0..<100 where viewModel.isScanning {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        setenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS", "250000000", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS") }
+        let changedURL = fixture.song.folderPath.appendingPathComponent("new-preview.wav")
+        FileManager.default.createFile(atPath: changedURL.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [changedURL])
+
+        for _ in 0..<100 where !viewModel.isScanning {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(viewModel.isScanning)
+        viewModel.performProjectVaultPrimaryAction(for: fixture.song)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
+
+        for _ in 0..<100 where viewModel.isScanning {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
     }
 
     func testManualPreviewSurvivesRescan() async throws {
@@ -2091,6 +3300,140 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
 }
 
+private struct ProjectVaultViewModelFixture {
+    let root: URL
+    let suiteName: String
+    let defaults: UserDefaults
+    let settingsStore: UserDefaultsSettingsStore
+    let song: Song
+    let snapshot: ProjectVaultRuntimeSnapshot
+
+    init(workflowStatus: ProjectWorkflowStatus? = nil) throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vault-view-model-\(UUID().uuidString)", isDirectory: true)
+        let active = root.appendingPathComponent("Active", isDirectory: true)
+        let archive = root.appendingPathComponent("Archive", isDirectory: true)
+        let folder = active.appendingPathComponent("Retry Song", isDirectory: true)
+        let projectID = ProjectID()
+        let generation = archive.appendingPathComponent(
+            "generations/\(projectID.description)/retry",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: generation, withIntermediateDirectories: true)
+
+        let activeRoot = StoredMusicRoot(role: .active, url: active)
+        let archiveRoot = StoredMusicRoot(role: .archive, url: archive)
+        suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            throw TestPersistenceError.forced
+        }
+        self.defaults = defaults
+        defaults.removePersistentDomain(forName: suiteName)
+        settingsStore = UserDefaultsSettingsStore(userDefaults: defaults, key: "settings")
+        var settings = AppSettings.default
+        settings.musicRoots = [activeRoot, archiveRoot]
+        settings.vault = VaultSettings(
+            isEnabled: true,
+            activeRootID: activeRoot.id,
+            archiveRootID: archiveRoot.id,
+            rolloutStage: .privateBeta
+        )
+        try settingsStore.saveSettings(settings)
+
+        song = Song(
+            folderPath: folder,
+            originalFolderName: "Retry Song",
+            displayTitle: "Retry Song",
+            workflowStatus: workflowStatus
+        )
+        let record = ProjectRecord(
+            id: projectID,
+            canonicalTitle: "Retry Song",
+            locations: [ProjectLocation(
+                rootID: activeRoot.id,
+                relativePath: "Retry Song",
+                kind: .active
+            )],
+            workflowState: workflowStatus
+        )
+        var transfer = VaultTransferRecord(
+            projectID: projectID,
+            sourceURL: folder,
+            stagingURL: archive.appendingPathComponent(".niko-staging/retry"),
+            destinationURL: generation,
+            state: .failedRecoverable
+        )
+        transfer.error = VaultTransferError(
+            origin: .awaitingProviderDurability,
+            reason: .providerUnsynced,
+            message: "provider retry"
+        )
+        snapshot = ProjectVaultRuntimeSnapshot(record: record, transfer: transfer)
+    }
+
+    func legacyReviewSnapshot(
+        restoreID: UUID,
+        generationURL: URL? = nil
+    ) throws -> ProjectVaultRuntimeSnapshot {
+        var transfer = try XCTUnwrap(snapshot.transfer)
+        let generation = generationURL ?? root
+            .appendingPathComponent(
+                "Archive/generations/\(transfer.projectID.description)",
+                isDirectory: true
+            )
+            .appendingPathComponent(
+                "generation-\(transfer.id.uuidString.lowercased())",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(at: generation, withIntermediateDirectories: true)
+        transfer.destinationURL = generation
+        transfer.state = .archiveVerified
+        transfer.error = nil
+        transfer.manifest = VaultManifest(entries: [])
+        transfer.manifestID = transfer.manifest?.id
+        transfer.durability = .verifiedLocal
+        var restore = VaultRestoreRecord(
+            id: restoreID,
+            projectID: snapshot.record.id,
+            archiveGenerationURL: generation,
+            stagingURL: root.appendingPathComponent("Active/.niko-staging/\(restoreID.uuidString.lowercased())"),
+            destinationURL: song.folderPath,
+            manifest: try XCTUnwrap(transfer.manifest),
+            archiveTransferID: transfer.id,
+            archiveTransferState: transfer.state,
+            requiresArchiveMaterialization: false
+        )
+        restore.failureReason = .legacyProjectionEvidenceUnavailable
+        return ProjectVaultRuntimeSnapshot(
+            record: snapshot.record,
+            transfer: transfer,
+            restore: restore
+        )
+    }
+
+    @MainActor
+    func makeViewModel(
+        runtime: any ProjectVaultOperating,
+        fileActions: (any FileActions)? = nil
+    ) -> ArchiveBrowserViewModel {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore, fileActions: fileActions),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime
+        )
+        viewModel.scannedSongs = [song]
+        viewModel.songs = [song]
+        viewModel.filteredSongs = [song]
+        return viewModel
+    }
+
+    func cleanUp() {
+        defaults.removePersistentDomain(forName: suiteName)
+        try? FileManager.default.removeItem(at: root)
+    }
+}
+
 private final class CancellationAwareScanGate: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<ScanResult, Error>?
@@ -2150,6 +3493,12 @@ private final class ScanReleaseGate: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Void, Never>?
 
+    var isWaiting: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuation != nil
+    }
+
     func waitForRelease() async {
         await withCheckedContinuation { continuation in
             lock.lock()
@@ -2188,16 +3537,60 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     private var archivedSong: Song?
     private var snapshotValues: [ProjectVaultRuntimeSnapshot]
     private var archiveCalls = 0
+    private var retryCalls = 0
+    private var restoreCalls = 0
+    private let retryFailureState: VaultTransferState?
+    private let refreshFailsAfterRetry: Bool
+    private let retryGate: ScanReleaseGate?
+    private let archiveError: ProjectVaultRuntimeError?
+    private let archiveFailureSnapshots: [ProjectVaultRuntimeSnapshot]
+    private let restoreError: ProjectVaultRuntimeError?
+    private let restoreFailureSnapshots: [ProjectVaultRuntimeSnapshot]
+    private let restoreRetryGate: ScanReleaseGate?
+    private let restoreRetryError: ProjectVaultRuntimeError?
+    private var restoreRetryCalls: [UUID] = []
+    private var didRetry = false
 
-    init(snapshots: [ProjectVaultRuntimeSnapshot] = []) {
+    init(
+        snapshots: [ProjectVaultRuntimeSnapshot] = [],
+        retryFailureState: VaultTransferState? = nil,
+        refreshFailsAfterRetry: Bool = false,
+        retryGate: ScanReleaseGate? = nil,
+        archiveError: ProjectVaultRuntimeError? = nil,
+        archiveFailureSnapshots: [ProjectVaultRuntimeSnapshot] = [],
+        restoreError: ProjectVaultRuntimeError? = nil,
+        restoreFailureSnapshots: [ProjectVaultRuntimeSnapshot] = [],
+        restoreRetryGate: ScanReleaseGate? = nil,
+        restoreRetryError: ProjectVaultRuntimeError? = nil
+    ) {
         snapshotValues = snapshots
+        self.retryFailureState = retryFailureState
+        self.refreshFailsAfterRetry = refreshFailsAfterRetry
+        self.retryGate = retryGate
+        self.archiveError = archiveError
+        self.archiveFailureSnapshots = archiveFailureSnapshots
+        self.restoreError = restoreError
+        self.restoreFailureSnapshots = restoreFailureSnapshots
+        self.restoreRetryGate = restoreRetryGate
+        self.restoreRetryError = restoreRetryError
     }
 
-    func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] { snapshotValues }
+    func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] {
+        if didRetry, refreshFailsAfterRetry {
+            throw ProjectVaultRuntimeError.archiveFailed("forced refresh failure")
+        }
+        return snapshotValues
+    }
 
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot {
         archiveCalls += 1
         archivedSong = song
+        if let archiveError {
+            if !archiveFailureSnapshots.isEmpty {
+                snapshotValues = archiveFailureSnapshots
+            }
+            throw archiveError
+        }
         return ProjectVaultRuntimeSnapshot(
             record: ProjectRecord(
                 canonicalTitle: song.effectiveDisplayTitle,
@@ -2209,13 +3602,69 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     }
 
     func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
-        fatalError("restore is not part of this test")
+        restoreCalls += 1
+        if !restoreFailureSnapshots.isEmpty {
+            snapshotValues = restoreFailureSnapshots
+        }
+        if let restoreError {
+            throw restoreError
+        }
+        fatalError("successful restore is not part of this test")
+    }
+
+    func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot {
+        retryCalls += 1
+        await retryGate?.waitForRelease()
+        didRetry = true
+        var transfer = snapshot.transfer
+        if let retryFailureState {
+            if var updatedTransfer = transfer {
+                updatedTransfer.state = retryFailureState
+                if retryFailureState == .recoveryRequired {
+                    updatedTransfer.error = VaultTransferError(
+                        origin: .copyingToArchiveStaging,
+                        reason: .occupiedDestination,
+                        message: "manual review required"
+                    )
+                }
+                transfer = updatedTransfer
+            }
+        } else {
+            transfer?.state = .archiveVerified
+            transfer?.error = nil
+            transfer?.nextRetryAt = nil
+        }
+        let updated = ProjectVaultRuntimeSnapshot(record: snapshot.record, transfer: transfer)
+        snapshotValues = [updated]
+        if retryFailureState != nil {
+            throw ProjectVaultRuntimeError.archiveFailed("forced retry failure")
+        }
+        return updated
+    }
+
+    func retryRestore(id: UUID) async throws -> VaultRestoreRecord {
+        restoreRetryCalls.append(id)
+        await restoreRetryGate?.waitForRelease()
+        if let restoreRetryError { throw restoreRetryError }
+        guard var restore = snapshotValues.compactMap(\.restore).first(where: { $0.id == id }) else {
+            throw ProjectVaultRuntimeError.unavailable
+        }
+        restore.failureReason = nil
+        restore.error = nil
+        restore.completedAt = Date()
+        snapshotValues = snapshotValues.map {
+            ProjectVaultRuntimeSnapshot(record: $0.record, transfer: $0.transfer, restore: nil)
+        }
+        return restore
     }
 
     func recoverAtLaunch() async {}
 
     func lastArchivedSong() -> Song? { archivedSong }
     func archiveCallCount() -> Int { archiveCalls }
+    func retryCallCount() -> Int { retryCalls }
+    func restoreCallCount() -> Int { restoreCalls }
+    func restoreRetryIDs() -> [UUID] { restoreRetryCalls }
 }
 
 private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
@@ -2254,6 +3703,30 @@ private final class ThrowingSongUserMetadataStore: SongUserMetadataStoring, @unc
 
     func upsertAll(_ metadata: [SongUserMetadata]) throws {
         if throwOnSave { throw TestPersistenceError.forced }
+    }
+}
+
+private final class RecordingSongUserMetadataStore: SongUserMetadataStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedUpserts = 0
+    private var recordedBulkUpserts = 0
+
+    var upsertCallCount: Int {
+        lock.withLock { recordedUpserts }
+    }
+
+    var upsertAllCallCount: Int {
+        lock.withLock { recordedBulkUpserts }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] { [:] }
+
+    func upsert(_ metadata: SongUserMetadata) throws {
+        lock.withLock { recordedUpserts += 1 }
+    }
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {
+        lock.withLock { recordedBulkUpserts += 1 }
     }
 }
 

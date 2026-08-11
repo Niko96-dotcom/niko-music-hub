@@ -26,6 +26,7 @@ protocol ArchiveScanHost: AnyObject {
 
     func mutateCatalog(_ updates: () -> Void)
     func setStatusMessage(_ message: String?)
+    func setBackgroundStatusMessage(_ message: String?)
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL])
     func applyScanFailure(_ error: Error)
 }
@@ -83,23 +84,29 @@ final class ArchiveScanOrchestrator {
                 .error,
                 "Archive filesystem watcher could not start; incremental rescans are disabled until the next root change."
             )
-            host.setStatusMessage(
+            host.setBackgroundStatusMessage(
                 "Archive filesystem watcher unavailable — use Rescan to refresh after external edits."
             )
         }
     }
 
     func scan() async {
-        await runFullScan()
+        await runFullScan(isBackground: false)
+    }
+
+    func scanInBackground() async {
+        await runFullScan(isBackground: true)
     }
 
     func scanSync() {
         guard let host else { return }
-        runFullScanSync { roots in try host.catalog.performScanSynchronously(roots: roots) }
+        runFullScanSync(isBackground: false) { roots in
+            try host.catalog.performScanSynchronously(roots: roots)
+        }
     }
 
-    private func runFullScan() async {
-        guard let request = beginScan() else { return }
+    private func runFullScan(isBackground: Bool) async {
+        guard let request = beginScan(isBackground: isBackground) else { return }
         defer { finishScan(request) }
         do {
             let scannedAt = Date()
@@ -123,9 +130,10 @@ final class ArchiveScanOrchestrator {
     }
 
     private func runFullScanSync(
+        isBackground: Bool,
         _ perform: ([URL]) throws -> ScanResult
     ) {
-        guard let request = beginScan() else { return }
+        guard let request = beginScan(isBackground: isBackground) else { return }
         defer { finishScan(request) }
         do {
             let scannedAt = Date()
@@ -153,16 +161,24 @@ final class ArchiveScanOrchestrator {
         host.diagnostics.log(.info, update.diagnostics.summaryLine)
     }
 
-    private func beginScan() -> ScanRequest? {
+    private func beginScan(isBackground: Bool) -> ScanRequest? {
         guard let host else { return nil }
         guard !host.roots.isEmpty else {
-            host.setStatusMessage("Add at least one archive root.")
+            if isBackground {
+                host.setBackgroundStatusMessage("Add at least one archive root.")
+            } else {
+                host.setStatusMessage("Add at least one archive root.")
+            }
             return nil
         }
         guard !host.isScanning else { return nil }
         host.isScanning = true
         activeScanGeneration = host.rootGeneration
-        host.setStatusMessage("Scanning archive...")
+        if isBackground {
+            host.setBackgroundStatusMessage("Scanning archive...")
+        } else {
+            host.setStatusMessage("Scanning archive...")
+        }
         return ScanRequest(roots: host.roots, generation: host.rootGeneration)
     }
 
@@ -232,7 +248,7 @@ final class ArchiveScanOrchestrator {
                 .warning,
                 "Archive filesystem watcher requested a full rescan after incomplete event delivery."
             )
-            await scan()
+            await runFullScan(isBackground: true)
             return
         }
         guard !pendingIncrementalPaths.isEmpty else { return }
@@ -282,7 +298,7 @@ final class ArchiveScanOrchestrator {
         } catch {
             guard host.rootGeneration == generationSnapshot,
                   host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else { return }
-            host.setStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
+            host.setBackgroundStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
             host.diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }
     }

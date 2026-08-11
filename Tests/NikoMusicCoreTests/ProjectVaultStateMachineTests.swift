@@ -55,7 +55,8 @@ final class ProjectVaultStateMachineTests: XCTestCase {
             .readyLocal: [.openingInCubase],
             .openingInCubase: [],
             .failedRecoverable: [],
-            .recoveryRequired: []
+            .recoveryRequired: [],
+            .superseded: []
         ]
         XCTAssertEqual(Set(expected.keys), Set(VaultTransferState.allCases))
         for state in VaultTransferState.allCases {

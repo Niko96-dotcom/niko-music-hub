@@ -529,14 +529,21 @@ private struct ArchiveBoardCardView: View {
                             ? HubDesignSystem.Palette.textSecondary
                             : HubDesignSystem.Palette.accent)
                     Spacer(minLength: 0)
-                    if vaultPresentation.primaryAction == .restoreAndOpen,
+                    if [.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction),
                        let onProjectVaultPrimaryAction {
-                        Button("Get", action: onProjectVaultPrimaryAction)
+                        Button(
+                            vaultPresentation.primaryAction == .retry ? "Retry" : "Get",
+                            action: onProjectVaultPrimaryAction
+                        )
                             .font(HubDesignSystem.Typography.micro().weight(.semibold))
                             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                             .buttonStyle(.plain)
-                            .help("Get a verified local copy and open it in Cubase")
-                            .accessibilityLabel("Get local copy and open in Cubase")
+                            .help(vaultPresentation.primaryAction == .retry
+                                ? "Retry the preserved Project Vault transfer"
+                                : "Get a verified local copy and open it in Cubase")
+                            .accessibilityLabel(vaultPresentation.primaryAction == .retry
+                                ? "Retry Project Vault transfer"
+                                : "Get local copy and open in Cubase")
                     }
                 }
             }

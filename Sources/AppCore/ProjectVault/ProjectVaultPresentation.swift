@@ -13,14 +13,133 @@ public enum ProjectVaultLocationState: String, Codable, CaseIterable, Sendable {
 public enum ProjectVaultPrimaryAction: Equatable, Sendable {
     case openInCubase
     case restoreAndOpen
+    case retry
     case review
 
     public var label: String {
         switch self {
         case .openInCubase: "Open in Cubase"
         case .restoreAndOpen: "Get Local & Open"
+        case .retry: "Retry"
         case .review: "Review"
         }
+    }
+}
+
+public enum ProjectVaultReviewAction: Equatable, Sendable {
+    case makeAvailableOfflineInFinder(generationURL: URL)
+
+    public var label: String {
+        switch self {
+        case .makeAvailableOfflineInFinder: "Make Available Offline in Finder"
+        }
+    }
+}
+
+/// Resolves only the currently configured Project Vault generation namespace.
+/// Persisted transfer paths and Song locations are evidence, never authority.
+public struct ProjectVaultGenerationReviewResolver: Equatable, Sendable {
+    public let archiveRootURL: URL
+
+    public init?(
+        settings: AppSettings,
+        bookmarkResolver: any SecurityScopedBookmarkResolving = FoundationSecurityScopedBookmarks()
+    ) {
+        guard settings.vault.isEnabled,
+              let archiveRootID = settings.vault.archiveRootID,
+              let storedRoot = settings.musicRoots.first(where: {
+                  $0.id == archiveRootID && $0.role == .archive && $0.isEnabled
+              }),
+              let resolved = try? storedRoot.resolvedURL(using: bookmarkResolver) else {
+            return nil
+        }
+        self.init(archiveRootURL: resolved)
+    }
+
+    public init?(archiveRootURL: URL) {
+        let canonical = archiveRootURL.standardizedFileURL.resolvingSymlinksInPath()
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: canonical.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return nil
+        }
+        self.archiveRootURL = canonical
+    }
+
+    public func resolveGeneration(_ generationURL: URL) -> URL? {
+        let generationsRoot = archiveRootURL
+            .appendingPathComponent("generations", isDirectory: true)
+            .standardizedFileURL
+        let candidate = generationURL.standardizedFileURL
+        let safety = PathSafety()
+        guard safety.isResolvedContainedWithoutNestedSymlinks(generationsRoot, in: archiveRootURL),
+              safety.isResolvedContainedWithoutNestedSymlinks(candidate, in: generationsRoot),
+              candidate != generationsRoot else {
+            return nil
+        }
+        let rootComponents = generationsRoot.pathComponents
+        let candidateComponents = candidate.pathComponents
+        guard candidateComponents.count >= rootComponents.count + 2,
+              Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return nil
+        }
+        return candidate.resolvingSymlinksInPath().standardizedFileURL
+    }
+
+    public func isBoundGenerationPath(
+        _ generationURL: URL,
+        projectID: ProjectID,
+        transferID: UUID
+    ) -> Bool {
+        guard generationURL.isFileURL,
+              archiveRootURL.isFileURL,
+              (generationURL.host ?? "").isEmpty,
+              (archiveRootURL.host ?? "").isEmpty else {
+            return false
+        }
+
+        let candidate = generationURL.standardizedFileURL
+        let expected = archiveRootURL
+            .appendingPathComponent("generations", isDirectory: true)
+            .appendingPathComponent(projectID.description, isDirectory: true)
+            .appendingPathComponent(
+                "generation-\(transferID.uuidString.lowercased())",
+                isDirectory: true
+            )
+            .standardizedFileURL
+        guard candidate.path == expected.path else {
+            return false
+        }
+
+        return PathSafety().isResolvedContainedWithoutNestedSymlinks(candidate, in: archiveRootURL)
+    }
+
+    public func resolveGeneration(
+        _ generationURL: URL,
+        projectID: ProjectID,
+        transferID: UUID
+    ) -> URL? {
+        guard isBoundGenerationPath(
+            generationURL,
+            projectID: projectID,
+            transferID: transferID
+        ) else {
+            return nil
+        }
+
+        let candidate = generationURL.standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              PathSafety().isResolvedContainedWithoutNestedSymlinks(candidate, in: archiveRootURL) else {
+            return nil
+        }
+        return candidate
     }
 }
 
@@ -29,20 +148,82 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     public let primaryAction: ProjectVaultPrimaryAction
     public let explanation: String
     public let isKeepLocal: Bool
+    public let reviewAction: ProjectVaultReviewAction?
+    public let retryRestoreID: UUID?
 
-    public init(record: ProjectRecord, transferState: VaultTransferState? = nil, restorePhase: VaultRestorePhase? = nil) {
+    public init(
+        record: ProjectRecord,
+        transferState: VaultTransferState? = nil,
+        transferErrorOrigin: VaultTransferState? = nil,
+        restorePhase: VaultRestorePhase? = nil,
+        restore: VaultRestoreRecord? = nil
+    ) {
         isKeepLocal = record.pinned
+        if restore?.failureReason == .activeDestinationIntegrityMismatch {
+            reviewAction = nil
+            retryRestoreID = nil
+            state = .needsAttention
+            primaryAction = .review
+            explanation = "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+            return
+        }
+        if restore?.phase == .superseded || restore?.supersededBy != nil {
+            reviewAction = nil
+            retryRestoreID = nil
+            state = .needsAttention
+            primaryAction = .review
+            explanation = ProjectVaultActivityExplanation.restore(.superseded)
+            return
+        }
+        if let restore,
+           restore.failureReason == .legacyProjectionEvidenceUnavailable,
+           let generationURL = restore.reviewGenerationURL {
+            reviewAction = .makeAvailableOfflineInFinder(generationURL: generationURL)
+            retryRestoreID = restore.id
+        } else {
+            reviewAction = nil
+            retryRestoreID = nil
+        }
         let hasLocalActiveCopy = record.locations.contains {
             $0.kind == .active && $0.availability == .local
         }
-        if restorePhase != nil {
-            state = .restoring
-            primaryAction = .review
-            explanation = ProjectVaultActivityExplanation.restore(restorePhase!)
-        } else if let transferState, [.failedRecoverable, .recoveryRequired].contains(transferState) {
+        if restore?.failureReason == .archiveTransferBindingUnavailable {
             state = .needsAttention
             primaryAction = .review
-            explanation = ProjectVaultActivityExplanation.transfer(transferState)
+            explanation = "This restore no longer matches its verified archive transfer binding. Existing copies were kept; review archive integrity before continuing."
+        } else if restore?.failureReason == .legacyProjectionIdentityMismatch {
+            state = .needsAttention
+            primaryAction = .review
+            explanation = "This legacy archive no longer matches its verified content identity. Existing copies were kept; reconcile the exact generation before retrying."
+        } else if reviewAction != nil {
+            state = .needsAttention
+            primaryAction = .review
+            explanation = "This legacy archive needs fresh capacity evidence. Make the exact generation available offline in Finder, then retry this restore. No archive bytes were downloaded or copied."
+        } else if let effectiveRestorePhase = restore?.phase ?? restorePhase {
+            state = .restoring
+            primaryAction = .review
+            explanation = ProjectVaultActivityExplanation.restore(effectiveRestorePhase)
+        } else if transferState == .failedRecoverable {
+            state = .needsAttention
+            if let transferErrorOrigin,
+               VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(transferErrorOrigin) {
+                primaryAction = .retry
+                explanation = ProjectVaultActivityExplanation.transfer(.failedRecoverable)
+            } else {
+                primaryAction = .review
+                explanation = "This paused operation cannot be retried automatically because it may remove or evict files. Existing copies were kept for review."
+            }
+        } else if transferState == .recoveryRequired {
+            state = .needsAttention
+            primaryAction = .review
+            switch transferErrorOrigin {
+            case .removingActiveCopy:
+                explanation = "Archive generation remains verified. Active-copy removal was interrupted, so the Active copy may or may not remain; automatic removal will not resume."
+            case .evictingProviderCache:
+                explanation = "Archive generation remains verified. Active-copy removal completed, but provider-cache eviction was interrupted; automatic eviction will not resume."
+            default:
+                explanation = ProjectVaultActivityExplanation.transfer(.recoveryRequired)
+            }
         } else if let transferState, Self.archivingStates.contains(transferState) {
             state = .archiving
             primaryAction = .review
@@ -99,6 +280,7 @@ public enum ProjectVaultActivityExplanation {
         case .promotingActiveCopy: return "Publishing the verified copy into Active Projects."
         case .persistingActiveLocation: return "Saving the restored location before Cubase opens."
         case .openingInCubase: return "Restore is verified. Opening the project in Cubase."
+        case .superseded: return "A newer restore recovery job owns this project."
         }
     }
 }

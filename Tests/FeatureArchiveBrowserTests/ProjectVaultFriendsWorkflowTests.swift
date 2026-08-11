@@ -289,7 +289,8 @@ private final class FriendsWorkflowFixture {
             transferStore: transferStore(),
             catalogStore: catalogStore(),
             projectOpener: SafeVaultProjectOpener(),
-            activityProbe: FriendsClearActivityProbe()
+            activityProbe: FriendsClearActivityProbe(),
+            capacityProbe: FriendsSafeCapacityProbe()
         )
     }
 
@@ -326,6 +327,16 @@ private final class FriendsWorkflowFixture {
     func cleanup() {
         UserDefaults.standard.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+private struct FriendsSafeCapacityProbe: ProjectVaultCapacityProbing {
+    func snapshot(sourceURL: URL, archiveRootURL: URL) throws -> ProjectVaultCapacitySnapshot {
+        ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 500 * 1_073_741_824,
+            archiveAvailableCapacityBytes: 500 * 1_073_741_824,
+            projectedArchiveBytes: 1_073_741_824
+        )
     }
 }
 

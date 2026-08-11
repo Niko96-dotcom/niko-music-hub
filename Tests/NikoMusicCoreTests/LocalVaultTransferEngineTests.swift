@@ -3,12 +3,274 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultTransferEngineTests: XCTestCase {
+    func testArchiveRejectsNestedProjectStagingSymlinkOutsideArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let outside = fixture.root.appendingPathComponent("outside-project-staging", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("sentinel".utf8).write(to: outside.appendingPathComponent("sentinel.txt"))
+        let before = try fixture.snapshot(at: outside)
+        let projectID = ProjectID()
+        let projectStagingRoot = fixture.archive
+            .appendingPathComponent(".niko-staging", isDirectory: true)
+            .appendingPathComponent(projectID.description, isDirectory: true)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, operation in
+                if !FileManager.default.fileExists(atPath: projectStagingRoot.path) {
+                    try FileManager.default.createDirectory(
+                        at: projectStagingRoot.deletingLastPathComponent(),
+                        withIntermediateDirectories: true
+                    )
+                    try FileManager.default.createSymbolicLink(
+                        at: projectStagingRoot,
+                        withDestinationURL: outside
+                    )
+                }
+                try await operation()
+            }
+        )
+
+        do {
+            _ = try await engine.archive(projectID: projectID, sourceURL: fixture.source)
+            XCTFail("expected nested project staging symlink to fail closed")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultTransferError, .unsafeStagingPath)
+        }
+        XCTAssertEqual(try fixture.snapshot(at: outside), before)
+    }
+
+    func testArchiveRejectsNestedProjectGenerationSymlinkOutsideArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let outside = fixture.root.appendingPathComponent("outside-project-generation", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("sentinel".utf8).write(to: outside.appendingPathComponent("sentinel.txt"))
+        let before = try fixture.snapshot(at: outside)
+        let projectID = ProjectID()
+        let injector = NestedGenerationSymlinkInjector(
+            projectRoot: fixture.archive
+                .appendingPathComponent("generations", isDirectory: true)
+                .appendingPathComponent(projectID.description, isDirectory: true),
+            outsideRoot: outside
+        )
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            faultInjector: { point, _ in try injector.inject(point: point) },
+            writeAdmission: allowVaultWrites
+        )
+
+        do {
+            _ = try await engine.archive(projectID: projectID, sourceURL: fixture.source)
+            XCTFail("expected nested project generation symlink to fail closed")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultTransferError, .unsafeDestinationPath)
+        }
+        XCTAssertEqual(try fixture.snapshot(at: outside), before)
+    }
+
+    func testArchiveBulkCopyRequiresStagingVolumeToMatchCapacityTarget() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites,
+            volumeIdentifier: { url in
+                url.path.contains(".niko-staging") ? 2 : 1
+            }
+        )
+
+        do {
+            _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("expected target-volume mismatch before bulk copy")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultTransferError, .writeTargetVolumeMismatch)
+        }
+        let record = try XCTUnwrap(store.allTransferRecords().first)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.stagingURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path))
+    }
+
+    func testArchiveRejectsManagedStagingRootSymlinkOutsideArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let outside = fixture.root.appendingPathComponent("outside-staging", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("sentinel".utf8).write(to: outside.appendingPathComponent("sentinel.txt"))
+        let stagingRoot = fixture.archive.appendingPathComponent(".niko-staging", isDirectory: true)
+        let before = try fixture.snapshot(at: outside)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, operation in
+                if !FileManager.default.fileExists(atPath: stagingRoot.path) {
+                    try FileManager.default.createSymbolicLink(
+                        at: stagingRoot,
+                        withDestinationURL: outside
+                    )
+                }
+                try await operation()
+            }
+        )
+
+        do {
+            _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("expected the managed staging symlink to fail closed")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultTransferError, .unsafeStagingPath)
+        }
+
+        XCTAssertEqual(try fixture.snapshot(at: outside), before)
+    }
+
+    func testArchiveRejectsManagedGenerationsRootSymlinkOutsideArchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let outside = fixture.root.appendingPathComponent("outside-generations", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("sentinel".utf8).write(to: outside.appendingPathComponent("sentinel.txt"))
+        let generationsRoot = fixture.archive.appendingPathComponent("generations", isDirectory: true)
+        let before = try fixture.snapshot(at: outside)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let injector = GenerationSymlinkInjector(
+            generationsRoot: generationsRoot,
+            outsideRoot: outside
+        )
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            faultInjector: { point, record in try injector.inject(point: point, record: record) },
+            writeAdmission: allowVaultWrites
+        )
+
+        do {
+            _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("expected the managed generations symlink to fail closed")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultTransferError, .unsafeDestinationPath)
+        }
+
+        XCTAssertEqual(try fixture.snapshot(at: outside), before)
+    }
+
+    func testDeniedAdmissionDoesNotRunProviderPrepareOrCreateMissingArchiveRoot() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try FileManager.default.removeItem(at: fixture.archive)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let provider = RootCreatingArchiveProvider(root: fixture.archive)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: { _, _ in
+                throw VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity)
+            }
+        )
+
+        do {
+            _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("expected admission denial")
+        } catch {
+            XCTAssertEqual(
+                error as? VaultWriteAdmissionError,
+                .postponed(.insufficientArchiveCapacity)
+            )
+        }
+
+        let prepareCount = await provider.prepareCount
+        XCTAssertEqual(prepareCount, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.archive.path))
+    }
+
+    func testArchiveRechecksWriteAdmissionAfterProviderPrepareBeforeBulkCopy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let events = ArchiveMutationEventLog()
+        let provider = OrderedPrepareArchiveProvider(events: events)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: { _, operation in
+                events.append("admission")
+                try await operation()
+            }
+        )
+
+        _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+
+        XCTAssertEqual(events.values, ["admission", "prepare", "admission"])
+    }
+
+    func testCrossVolumePromotionFailsClosedAndPreservesCompleteStaging() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let admissions = VaultFaultPointRecorder()
+        let volumeLookups = VolumeLookupRecorder()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, operation in
+                admissions.increment()
+                try await operation()
+            },
+            volumeIdentifier: { url in
+                volumeLookups.record(url)
+                if url.standardizedFileURL.path == fixture.archive.standardizedFileURL.path {
+                    return 1
+                }
+                return url.path.contains(".niko-staging") ? 1 : 2
+            }
+        )
+
+        do {
+            _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("expected cross-volume promotion to fail closed")
+        } catch {
+            XCTAssertEqual(
+                error as? LocalVaultTransferError,
+                .crossVolumePromotion
+            )
+        }
+
+        let record = try XCTUnwrap(store.allTransferRecords().first)
+        XCTAssertEqual(admissions.count, 2)
+        XCTAssertTrue(volumeLookups.urls.contains(record.stagingURL.standardizedFileURL.path))
+        XCTAssertTrue(volumeLookups.urls.contains(record.destinationURL.deletingLastPathComponent().standardizedFileURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.destinationURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path))
+    }
+
     func testCompleteCopyPromotesVersionedVerifiedGenerationAndKeepsActiveBytes() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let original = try fixture.snapshotSource()
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
-        let engine = try LocalVaultTransferEngine(activeRoot: fixture.active, archiveRoot: fixture.archive, store: store)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites
+        )
 
         let record = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
 
@@ -42,7 +304,8 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             activeRoot: fixture.active,
             archiveRoot: fixture.archive,
             store: store,
-            provider: provider
+            provider: provider,
+            writeAdmission: allowVaultWrites
         )
 
         let record = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
@@ -53,6 +316,219 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         XCTAssertEqual(record.durability, .syncedToProvider)
         XCTAssertEqual(barrierCount, 2)
         XCTAssertTrue(sawPromotedGeneration)
+    }
+
+    func testFinalDurabilityBarrierMutationNeverPublishesVerifiedGeneration() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let activeBefore = try fixture.snapshotSource()
+        let provider = FinalDurabilityMutatingProvider()
+        let removalAdmissions = VaultFaultPointRecorder()
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in removalAdmissions.increment() }
+        )
+
+        var archiveError: Error?
+        do {
+            let returned = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("final-barrier mutation must not return success: \(returned.state)")
+        } catch {
+            archiveError = error
+        }
+
+        let persisted = try XCTUnwrap(store.allTransferRecords().first)
+        let generationSnapshot = try fixture.snapshot(at: persisted.destinationURL)
+        let barrierCount = await provider.barrierCount()
+        let evictionCount = await provider.evictionCount()
+
+        XCTAssertEqual(archiveError as? VaultManifestError, .mismatch)
+        XCTAssertEqual(persisted.state, .failedRecoverable)
+        XCTAssertNotEqual(persisted.state, .archiveVerified)
+        XCTAssertEqual(persisted.error?.origin, .promotingArchiveGeneration)
+        XCTAssertEqual(persisted.error?.reason, .integrityMismatch)
+        XCTAssertEqual(barrierCount, 2)
+        XCTAssertEqual(removalAdmissions.count, 0)
+        XCTAssertEqual(evictionCount, 0)
+        XCTAssertEqual(try fixture.snapshotSource(), activeBefore)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: persisted.destinationURL.path))
+        let mutatedProject = generationSnapshot.first {
+            $0.key == "Artist Song.cpr" || $0.key.hasSuffix("/Artist Song.cpr")
+        }?.value
+        let retainedAudio = generationSnapshot.first {
+            $0.key == "Audio/take.wav" || $0.key.hasSuffix("/Audio/take.wav")
+        }?.value
+        let originalAudio = activeBefore.first {
+            $0.key == "Audio/take.wav" || $0.key.hasSuffix("/Audio/take.wav")
+        }?.value
+        XCTAssertEqual(mutatedProject, FinalDurabilityMutatingProvider.mutatedProjectBytes)
+        XCTAssertEqual(retainedAudio, originalAudio)
+    }
+
+    func testRemovalRechecksEmergencyStopAndKeepLocalAfterAwaitBeforeDeletingActive() async throws {
+        var safetyFailures: [String] = []
+        for policyChange in RemovalPolicyChange.allCases {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let sourceBefore = try fixture.snapshotSource()
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let archived = try await verifiedArchive(fixture: fixture, store: store)
+            let policy = RemovalPolicyRace()
+            let provider = CountingRemovalProvider()
+            let removalEngine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                writeAdmission: allowVaultWrites,
+                removalAdmission: { _ in
+                    try await policy.checkThenActivate(policyChange)
+                }
+            )
+
+            let returned = try? await removalEngine.removeActiveCopy(after: archived)
+            let persisted = try XCTUnwrap(store.record(id: archived.id))
+            let evictionCount = await provider.evictionCount()
+            let admissionCount = await policy.checkCount()
+            let activePreserved = (try? fixture.snapshotSource()) == sourceBefore
+            let archiveExists = FileManager.default.fileExists(atPath: archived.destinationURL.path)
+            let archiveVerified: Bool
+            do {
+                try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+                archiveVerified = true
+            } catch {
+                archiveVerified = false
+            }
+            let terminalSuccess = [.archivedLocal, .archivedOnlineOnly].contains(persisted.state)
+            let safetyInvariant = returned == nil
+                && admissionCount >= 2
+                && activePreserved
+                && archiveExists
+                && archiveVerified
+                && !terminalSuccess
+                && persisted.error?.origin == .removingActiveCopy
+                && evictionCount == 0
+
+            if !safetyInvariant {
+                safetyFailures.append(
+                    "\(policyChange): returnedNil=\(returned == nil), admissionCount=\(admissionCount), "
+                    + "activePreserved=\(activePreserved), archiveExists=\(archiveExists), "
+                    + "archiveVerified=\(archiveVerified), terminalSuccess=\(terminalSuccess), "
+                    + "errorOrigin=\(String(describing: persisted.error?.origin)), evictions=\(evictionCount)"
+                )
+            }
+        }
+        XCTAssertTrue(safetyFailures.isEmpty, safetyFailures.joined(separator: " | "))
+    }
+
+    func testSourceReplacedDuringRemovalAdmissionIsPreservedAsSourceMutatedRecoveryRequired() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let replacementFiles: [String: Data] = [
+            "Replacement Song.cpr": Data("replacement-cubase-project".utf8),
+            "Audio/replacement.wav": Data((0..<2048).map { UInt8(($0 * 3) % 251) }),
+        ]
+        let swapper = SamePathSourceSwapper(
+            sourceURL: fixture.source,
+            replacementFiles: replacementFiles
+        )
+        let provider = CountingRemovalProvider()
+        let removalEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in
+                try swapper.replaceOnce()
+                await Task.yield()
+            }
+        )
+
+        let returned = try? await removalEngine.removeActiveCopy(after: archived)
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        let evictionCount = await provider.evictionCount()
+
+        XCTAssertNil(returned, "a replacement tree must never become terminal removal success")
+        XCTAssertEqual(persisted.state, .recoveryRequired)
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
+        XCTAssertEqual(persisted.error?.reason, .sourceMutated)
+        let retainedReplacement = try fixture.snapshotSource()
+        XCTAssertEqual(retainedReplacement.count, replacementFiles.count)
+        for (relativePath, expectedBytes) in replacementFiles {
+            let actualBytes = retainedReplacement.first {
+                $0.key == relativePath || $0.key.hasSuffix("/\(relativePath)")
+            }?.value
+            XCTAssertEqual(actualBytes, expectedBytes, relativePath)
+        }
+        XCTAssertEqual(evictionCount, 0)
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+    }
+
+    func testByteIdenticalSourceReplacementDuringRemovalAdmissionIsPreservedAsSourceMutatedRecoveryRequired() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let sourceBefore = try fixture.snapshotSource()
+        let originalIdentity = try TestFileSystemIdentity(at: fixture.source)
+        let replacementURL = fixture.root.appendingPathComponent("byte-identical-replacement", isDirectory: true)
+        try FileManager.default.copyItem(at: fixture.source, to: replacementURL)
+        let replacementIdentity = try TestFileSystemIdentity(at: replacementURL)
+        XCTAssertNotEqual(replacementIdentity, originalIdentity, "the test requires an inode-distinct replacement")
+
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        try VaultManifestBuilder().verify(
+            XCTUnwrap(archived.manifest),
+            at: replacementURL
+        )
+        let swapper = PrebuiltSamePathSourceSwapper(
+            sourceURL: fixture.source,
+            replacementURL: replacementURL
+        )
+        let provider = CountingRemovalProvider()
+        let removalEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in
+                try swapper.replaceOnce()
+                await Task.yield()
+            }
+        )
+
+        var returned: VaultTransferRecord?
+        var removalError: Error?
+        do {
+            returned = try await removalEngine.removeActiveCopy(after: archived)
+        } catch {
+            removalError = error
+        }
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        let evictionCount = await provider.evictionCount()
+
+        XCTAssertNil(returned, "an inode-distinct replacement tree must never become removal success")
+        XCTAssertEqual(removalError as? LocalVaultTransferError, .sourceMutated)
+        XCTAssertEqual(persisted.state, .recoveryRequired)
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
+        XCTAssertEqual(persisted.error?.reason, .sourceMutated)
+        let sourceWasPreserved = FileManager.default.fileExists(atPath: fixture.source.path)
+        XCTAssertTrue(sourceWasPreserved)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        if sourceWasPreserved {
+            XCTAssertEqual(try TestFileSystemIdentity(at: fixture.source), replacementIdentity)
+            XCTAssertNotEqual(try TestFileSystemIdentity(at: fixture.source), originalIdentity)
+        }
+        XCTAssertEqual(evictionCount, 0)
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
     }
 
     func testOccupiedGenerationIsNeverOverwrittenAndRequiresRecovery() async throws {
@@ -69,7 +545,8 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 guard point == .promotingArchiveGeneration else { return }
                 capture.record = record
                 throw VaultTransferInterruption()
-            }
+            },
+            writeAdmission: allowVaultWrites
         )
         do {
             _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
@@ -80,7 +557,12 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         let sentinel = interrupted.destinationURL.appendingPathComponent("do-not-overwrite.txt")
         try Data("occupied".utf8).write(to: sentinel)
 
-        let recovery = try LocalVaultTransferEngine(activeRoot: fixture.active, archiveRoot: fixture.archive, store: store)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites
+        )
         let results = await recovery.recoverAtLaunch()
 
         XCTAssertEqual(results.first?.state, .recoveryRequired)
@@ -105,7 +587,8 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                     capture.record = record
                     capture.persisted = try store.record(id: record.id)
                     throw VaultTransferInterruption()
-                }
+                },
+                writeAdmission: allowVaultWrites
             )
             do {
                 _ = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
@@ -122,7 +605,12 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 XCTAssertFalse(FileManager.default.fileExists(atPath: interrupted.destinationURL.path))
             }
 
-            let recovery = try LocalVaultTransferEngine(activeRoot: fixture.active, archiveRoot: fixture.archive, store: store)
+            let recovery = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                writeAdmission: allowVaultWrites
+            )
             let firstRecovery = await recovery.recoverAtLaunch()
             XCTAssertEqual(firstRecovery.first?.state, .archiveVerified, "recovery from \(point)")
             XCTAssertEqual(try fixture.snapshotSource(), original, "Active changed recovering \(point)")
@@ -189,17 +677,1207 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         let recovery = try LocalVaultTransferEngine(
             activeRoot: fixture.active,
             archiveRoot: fixture.archive,
-            store: store
+            store: store,
+            writeAdmission: allowVaultWrites
         )
         let results = await recovery.recoverAtLaunch()
 
         XCTAssertEqual(results.map(\.id), [newerID])
         XCTAssertEqual(results.first?.state, .archiveVerified)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: olderStaging.path))
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: olderStaging.path),
+            "older staging remains until a later pass proves managed containment and equivalent surviving content"
+        )
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
         XCTAssertEqual(try store.record(id: olderID), older)
         XCTAssertEqual(try store.record(id: newerID)?.state, .archiveVerified)
     }
+
+    func testLaunchRecoveryPersistsCooldownAcrossRepeatedCalls() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 10_000)
+        let record = try failedDurabilityRecord(fixture: fixture, retryCount: 1, updatedAt: now)
+        try store.save(record)
+        let provider = FailingDurabilityProvider()
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        _ = await recovery.recoverAtLaunch()
+        let afterFirst = try XCTUnwrap(store.record(id: record.id))
+        _ = await recovery.recoverAtLaunch()
+        let afterSecond = try XCTUnwrap(store.record(id: record.id))
+        let barrierCount = await provider.barrierCount()
+
+        XCTAssertEqual(barrierCount, 1)
+        XCTAssertEqual(afterSecond.retryCount, afterFirst.retryCount)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+    }
+
+    func testLaunchRecoveryPersistsCooldownAcrossFreshEngineAndStore() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 15_000)
+        let record = try failedDurabilityRecord(fixture: fixture, retryCount: 1, updatedAt: now)
+        try store.save(record)
+        let firstProvider = FailingDurabilityProvider()
+        let firstEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: firstProvider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+        _ = await firstEngine.recoverAtLaunch()
+        let afterFirst = try XCTUnwrap(store.record(id: record.id))
+
+        let relaunchedStore = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let relaunchedProvider = FailingDurabilityProvider()
+        let relaunchedEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: relaunchedStore,
+            provider: relaunchedProvider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+        _ = await relaunchedEngine.recoverAtLaunch()
+        let afterRelaunch = try XCTUnwrap(relaunchedStore.record(id: record.id))
+        let firstBarriers = await firstProvider.barrierCount()
+        let relaunchedBarriers = await relaunchedProvider.barrierCount()
+
+        XCTAssertEqual(firstBarriers, 1)
+        XCTAssertEqual(relaunchedBarriers, 0)
+        XCTAssertEqual(afterRelaunch, afterFirst)
+        XCTAssertGreaterThan(try XCTUnwrap(afterRelaunch.nextRetryAt), now)
+    }
+
+    func testLaunchRecoveryStopsAfterFiveFailedAttempts() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 20_000)
+        let record = try failedDurabilityRecord(fixture: fixture, retryCount: 5, updatedAt: now)
+        try store.save(record)
+        let provider = FailingDurabilityProvider()
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        _ = await recovery.recoverAtLaunch()
+        let barrierCount = await provider.barrierCount()
+
+        XCTAssertEqual(barrierCount, 0)
+        XCTAssertEqual(try store.record(id: record.id), record)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+    }
+
+    func testExhaustedAutomaticRecoveryRemainsExplicitlyRetryable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 25_000)
+        let record = try failedDurabilityRecord(fixture: fixture, retryCount: 5, updatedAt: now)
+        try store.save(record)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        let retried = await recovery.retryRecoverableTransfer(id: record.id)
+
+        XCTAssertEqual(retried?.state, .archiveVerified)
+        XCTAssertEqual(retried?.retryCount, 5)
+        XCTAssertNil(retried?.nextRetryAt)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.stagingURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.destinationURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.sourceURL.path))
+    }
+
+    func testDestructiveFailureOriginsNeverAutoRecoverOrExposeManualRetry() async throws {
+        for origin in [VaultTransferState.removingActiveCopy, .evictingProviderCache] {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let now = Date(timeIntervalSince1970: 27_000)
+            var record = try failedDurabilityRecord(fixture: fixture, retryCount: 1, updatedAt: now)
+            record.error = VaultTransferError(
+                origin: origin,
+                reason: .unknown,
+                message: "destructive phase requires review"
+            )
+            try store.save(record)
+            let provider = FailingDurabilityProvider()
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                now: { now },
+                writeAdmission: allowVaultWrites,
+                removalAdmission: { _ in XCTFail("destructive recovery must not reach removal admission") }
+            )
+
+            let automatic = await engine.recoverAtLaunch()
+            let manual = await engine.retryRecoverableTransfer(id: record.id)
+
+            XCTAssertEqual(automatic, [record], "automatic recovery from \(origin)")
+            XCTAssertNil(manual, "manual Retry from \(origin)")
+            XCTAssertEqual(try store.record(id: record.id), record)
+            let barriers = await provider.barrierCount()
+            XCTAssertEqual(barriers, 0)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: record.sourceURL.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+        }
+    }
+
+    func testLaunchNormalizesInterruptedDestructivePhasesToRecoveryRequiredWithoutSideEffects() async throws {
+        for origin in [VaultTransferState.removingActiveCopy, .evictingProviderCache] {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let now = Date(timeIntervalSince1970: 28_000)
+            var record = try failedDurabilityRecord(
+                fixture: fixture,
+                retryCount: 0,
+                updatedAt: now
+            )
+            try FileManager.default.createDirectory(
+                at: record.destinationURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: fixture.source, to: record.destinationURL)
+            let manifest = try VaultManifestBuilder().build(at: record.destinationURL)
+            record.state = origin
+            record.error = nil
+            record.manifestID = manifest.id
+            record.manifest = manifest
+            record.durability = .verifiedLocal
+            try store.save(record)
+            let sourceBefore = try fixture.snapshot(at: record.sourceURL)
+            let stagingBefore = try fixture.snapshot(at: record.stagingURL)
+            let generationBefore = try fixture.snapshot(at: record.destinationURL)
+            let provider = OnlineSurvivorMetadataProvider(mode: .failure)
+            let removalCalls = VaultFaultPointRecorder()
+            let writeCalls = VaultFaultPointRecorder()
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                now: { now },
+                writeAdmission: { _, _ in writeCalls.increment() },
+                removalAdmission: { _ in removalCalls.increment() }
+            )
+
+            let first = await engine.recoverAtLaunch()
+            let persisted = try XCTUnwrap(store.record(id: record.id))
+            let second = await engine.recoverAtLaunch()
+            let localityCalls = await provider.localityCallCount()
+            let providerSideEffects = await provider.sideEffectCallCount()
+
+            XCTAssertEqual(first.map(\.id), [record.id], "\(origin)")
+            XCTAssertEqual(first.first?.state, .recoveryRequired, "\(origin)")
+            XCTAssertEqual(persisted.state, .recoveryRequired, "\(origin)")
+            XCTAssertEqual(persisted.error?.origin, origin, "\(origin)")
+            XCTAssertTrue(second.isEmpty, "\(origin)")
+            XCTAssertEqual(removalCalls.count, 0, "\(origin)")
+            XCTAssertEqual(writeCalls.count, 0, "\(origin)")
+            XCTAssertEqual(localityCalls, 0, "\(origin)")
+            XCTAssertEqual(providerSideEffects, 0, "\(origin)")
+            XCTAssertEqual(try fixture.snapshot(at: record.sourceURL), sourceBefore, "\(origin)")
+            XCTAssertEqual(try fixture.snapshot(at: record.stagingURL), stagingBefore, "\(origin)")
+            XCTAssertEqual(
+                try fixture.snapshot(at: record.destinationURL),
+                generationBefore,
+                "\(origin)"
+            )
+        }
+    }
+
+    func testCopyingOriginRecoveryRequiresWriteAdmissionAndPreservesPartialStaging() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 30_000)
+        var record = try failedDurabilityRecord(fixture: fixture, retryCount: 1, updatedAt: now)
+        record.manifestID = nil
+        record.manifest = nil
+        record.completedBytes = 0
+        record.totalBytes = 0
+        record.error = VaultTransferError(
+            origin: .copyingToArchiveStaging,
+            reason: .insufficientSpace,
+            message: "copy requires new bytes"
+        )
+        try store.save(record)
+        let stagingBefore = try fixture.snapshot(at: record.stagingURL)
+        let admission = RecoveryAdmissionRecorder(result: false)
+        let provider = FailingDurabilityProvider()
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: { request, _ in
+                admission.evaluate(request)
+                throw VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity)
+            }
+        )
+
+        _ = await recovery.recoverAtLaunch()
+        let barriers = await provider.barrierCount()
+
+        XCTAssertEqual(admission.callCount, 1)
+        XCTAssertEqual(barriers, 0)
+        let persisted = try XCTUnwrap(store.record(id: record.id))
+        XCTAssertEqual(persisted.state, .failedRecoverable)
+        XCTAssertEqual(persisted.retryCount, record.retryCount + 1)
+        XCTAssertEqual(persisted.error?.reason, .insufficientSpace)
+        XCTAssertGreaterThan(try XCTUnwrap(persisted.nextRetryAt), now)
+        XCTAssertEqual(try fixture.snapshot(at: record.stagingURL), stagingBefore)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.sourceURL.path))
+    }
+
+    func testCapacityPostponementStopsAfterFiveAutomaticSourceScans() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let start = Date(timeIntervalSince1970: 35_000)
+        var record = try failedDurabilityRecord(fixture: fixture, retryCount: 0, updatedAt: start)
+        record.manifestID = nil
+        record.manifest = nil
+        record.completedBytes = 0
+        record.totalBytes = 0
+        record.error = VaultTransferError(
+            origin: .copyingToArchiveStaging,
+            reason: .insufficientSpace,
+            message: "capacity probe required"
+        )
+        try store.save(record)
+        let stagingBefore = try fixture.snapshot(at: record.stagingURL)
+        let clock = MutableVaultTestClock(start)
+        let admission = RecoveryAdmissionRecorder(result: false)
+        let copyingEntries = VaultFaultPointRecorder()
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            faultInjector: { point, _ in
+                if point == .copyingToArchiveStaging { copyingEntries.increment() }
+            },
+            now: { clock.value },
+            writeAdmission: { request, _ in
+                admission.evaluate(request)
+                throw VaultWriteAdmissionError.postponed(.invalidPolicy)
+            }
+        )
+
+        for expectedAttempt in 1...5 {
+            _ = await recovery.recoverAtLaunch()
+            let persisted = try XCTUnwrap(store.record(id: record.id))
+            XCTAssertEqual(persisted.retryCount, expectedAttempt)
+            XCTAssertEqual(persisted.error?.reason, .insufficientSpace)
+            clock.value = try XCTUnwrap(persisted.nextRetryAt).addingTimeInterval(1)
+        }
+        _ = await recovery.recoverAtLaunch()
+
+        XCTAssertEqual(admission.callCount, 5)
+        XCTAssertEqual(copyingEntries.count, 5)
+        XCTAssertEqual(try store.record(id: record.id)?.retryCount, 5)
+        XCTAssertEqual(try fixture.snapshot(at: record.stagingURL), stagingBefore)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.sourceURL.path))
+    }
+
+    func testRelaunchSupersedesOlderFailedTransferWhenNewerVerifiedGenerationExists() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let oldDate = Date(timeIntervalSince1970: 40_000)
+        let oldFailed = try failedDurabilityRecord(
+            fixture: fixture,
+            retryCount: 1,
+            updatedAt: oldDate
+        )
+        try store.save(oldFailed)
+
+        let survivorID = UUID()
+        let survivorURL = fixture.archive
+            .appendingPathComponent("generations", isDirectory: true)
+            .appendingPathComponent(oldFailed.projectID.description, isDirectory: true)
+            .appendingPathComponent("generation-\(survivorID.uuidString.lowercased())", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: survivorURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: fixture.source, to: survivorURL)
+        let survivorManifest = try VaultManifestBuilder().build(at: survivorURL)
+        var survivor = VaultTransferRecord(
+            id: survivorID,
+            projectID: oldFailed.projectID,
+            sourceURL: fixture.source,
+            stagingURL: fixture.archive.appendingPathComponent(".niko-staging/survivor"),
+            destinationURL: survivorURL,
+            state: .archiveVerified,
+            createdAt: oldDate.addingTimeInterval(10)
+        )
+        survivor.updatedAt = oldDate.addingTimeInterval(10)
+        survivor.manifestID = survivorManifest.id
+        survivor.manifest = survivorManifest
+        survivor.durability = .verifiedLocal
+        try store.save(survivor)
+        let provider = FailingDurabilityProvider()
+        let relaunched = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { oldDate.addingTimeInterval(20) },
+            writeAdmission: allowVaultWrites
+        )
+
+        _ = await relaunched.recoverAtLaunch()
+
+        let providerCalls = await provider.barrierCount()
+        let retired = try XCTUnwrap(store.record(id: oldFailed.id))
+        let retiredJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(retired)) as? [String: Any]
+        )
+        XCTAssertEqual(providerCalls, 0)
+        XCTAssertEqual(retired.state.rawValue, "superseded")
+        XCTAssertEqual(retiredJSON["supersededBy"] as? String, survivor.id.uuidString)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: oldFailed.stagingURL.path),
+            "supersession alone must not delete staging before containment/content proof exists"
+        )
+        XCTAssertEqual(try store.verifiedArchiveGeneration(projectID: oldFailed.projectID)?.id, survivor.id)
+    }
+
+    func testLaterRetryTimestampCannotMakeOlderFailedTransferOutrankVerifiedSuccessor() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let projectID = ProjectID()
+        let createdOld = Date(timeIntervalSince1970: 41_000)
+        let createdNew = createdOld.addingTimeInterval(10)
+        let verifiedNew = createdNew.addingTimeInterval(10)
+        let retriedOld = verifiedNew.addingTimeInterval(10)
+
+        let failedID = UUID()
+        let failedStaging = fixture.archive
+            .appendingPathComponent(".niko-staging", isDirectory: true)
+            .appendingPathComponent(projectID.description, isDirectory: true)
+            .appendingPathComponent(failedID.uuidString.lowercased(), isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: failedStaging.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: fixture.source, to: failedStaging)
+        let failedManifest = try VaultManifestBuilder().build(at: failedStaging)
+        var failed = VaultTransferRecord(
+            id: failedID,
+            projectID: projectID,
+            sourceURL: fixture.source,
+            stagingURL: failedStaging,
+            destinationURL: fixture.archive
+                .appendingPathComponent("generations", isDirectory: true)
+                .appendingPathComponent(projectID.description, isDirectory: true)
+                .appendingPathComponent("generation-\(failedID.uuidString.lowercased())", isDirectory: true),
+            state: .failedRecoverable,
+            createdAt: createdOld
+        )
+        failed.updatedAt = retriedOld
+        failed.retryCount = 1
+        failed.manifestID = failedManifest.id
+        failed.manifest = failedManifest
+        failed.completedBytes = failedManifest.totalBytes
+        failed.totalBytes = failedManifest.totalBytes
+        failed.error = VaultTransferError(
+            origin: .awaitingProviderDurability,
+            reason: .providerUnsynced,
+            message: "old retry happened after the successor was already verified"
+        )
+        try store.save(failed)
+
+        let survivorID = UUID()
+        let survivorURL = fixture.archive
+            .appendingPathComponent("generations", isDirectory: true)
+            .appendingPathComponent(projectID.description, isDirectory: true)
+            .appendingPathComponent("generation-\(survivorID.uuidString.lowercased())", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: survivorURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: fixture.source, to: survivorURL)
+        let survivorManifest = try VaultManifestBuilder().build(at: survivorURL)
+        var survivor = VaultTransferRecord(
+            id: survivorID,
+            projectID: projectID,
+            sourceURL: fixture.source,
+            stagingURL: fixture.archive.appendingPathComponent(".niko-staging/survivor", isDirectory: true),
+            destinationURL: survivorURL,
+            state: .archiveVerified,
+            createdAt: createdNew
+        )
+        survivor.updatedAt = verifiedNew
+        survivor.manifestID = survivorManifest.id
+        survivor.manifest = survivorManifest
+        survivor.durability = .verifiedLocal
+        try store.save(survivor)
+
+        let provider = FailingDurabilityProvider()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { retriedOld.addingTimeInterval(10) },
+            writeAdmission: allowVaultWrites
+        )
+
+        _ = await engine.recoverAtLaunch()
+
+        let persistedFailed = try XCTUnwrap(store.record(id: failedID))
+        let providerCalls = await provider.barrierCount()
+        XCTAssertEqual(persistedFailed.state, .superseded)
+        XCTAssertEqual(persistedFailed.supersededBy, survivorID)
+        XCTAssertEqual(providerCalls, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: failedStaging.path))
+        XCTAssertEqual(try store.verifiedArchiveGeneration(projectID: projectID)?.id, survivorID)
+    }
+
+    func testManyObsoleteRowsValidateEachSurvivorOnceAndNeverReadOnlineOnlyBytes() async throws {
+        enum SurvivorLocality: CaseIterable { case onlineOnly, local }
+
+        for locality in SurvivorLocality.allCases {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let projectID = ProjectID()
+            let baseDate = Date(timeIntervalSince1970: 50_000)
+            var obsoleteIDs: [UUID] = []
+            for index in 0..<12 {
+                let id = UUID()
+                obsoleteIDs.append(id)
+                let staging = fixture.archive
+                    .appendingPathComponent(".niko-staging", isDirectory: true)
+                    .appendingPathComponent(projectID.description, isDirectory: true)
+                    .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
+                try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+                try Data("preserved obsolete staging \(index)".utf8)
+                    .write(to: staging.appendingPathComponent("partial.cpr"))
+                var obsolete = VaultTransferRecord(
+                    id: id,
+                    projectID: projectID,
+                    sourceURL: fixture.source,
+                    stagingURL: staging,
+                    destinationURL: fixture.archive
+                        .appendingPathComponent("generations/obsolete-\(index)", isDirectory: true),
+                    state: .failedRecoverable,
+                    createdAt: baseDate.addingTimeInterval(Double(index))
+                )
+                obsolete.updatedAt = baseDate.addingTimeInterval(Double(index))
+                obsolete.error = VaultTransferError(
+                    origin: .removingActiveCopy,
+                    reason: .unknown,
+                    message: "obsolete failure must be retired without replay"
+                )
+                try store.save(obsolete)
+            }
+
+            let survivorID = UUID()
+            let survivorURL = fixture.archive
+                .appendingPathComponent("generations", isDirectory: true)
+                .appendingPathComponent(projectID.description, isDirectory: true)
+                .appendingPathComponent("generation-\(survivorID.uuidString.lowercased())", isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: survivorURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: fixture.source, to: survivorURL)
+            let manifest = try VaultManifestBuilder().build(at: survivorURL)
+            if locality == .onlineOnly {
+                let cpr = survivorURL.appendingPathComponent("Artist Song.cpr")
+                try Data("provider-drift".utf8).write(to: cpr)
+            }
+            var survivor = VaultTransferRecord(
+                id: survivorID,
+                projectID: projectID,
+                sourceURL: fixture.source,
+                stagingURL: fixture.archive.appendingPathComponent(".niko-staging/survivor"),
+                destinationURL: survivorURL,
+                state: locality == .onlineOnly ? .archivedOnlineOnly : .archivedLocal,
+                createdAt: baseDate.addingTimeInterval(100)
+            )
+            survivor.updatedAt = baseDate.addingTimeInterval(100)
+            survivor.manifestID = manifest.id
+            survivor.manifest = manifest
+            survivor.durability = locality == .onlineOnly ? .syncedToProvider : .verifiedLocal
+            try store.save(survivor)
+
+            let validationProbe = SurvivorValidationProbe()
+            let provider = OnlineSurvivorMetadataProvider(mode: .materializationRequired)
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                fileManager: SurvivorValidationFileManager(
+                    monitoredRoot: survivorURL,
+                    probe: validationProbe
+                ),
+                writeAdmission: allowVaultWrites
+            )
+
+            _ = await engine.recoverAtLaunch()
+
+            let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
+            XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
+            XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
+            if locality == .onlineOnly {
+                XCTAssertEqual(validationProbe.totalProbeCount, 0, "online-only evidence must remain byte-neutral")
+            } else {
+                XCTAssertEqual(validationProbe.verificationRootCount, 1, "one local survivor verify per project")
+            }
+            let localityCallCount = await provider.localityCallCount()
+            let sideEffectCallCount = await provider.sideEffectCallCount()
+            XCTAssertEqual(localityCallCount, locality == .onlineOnly ? 1 : 0)
+            XCTAssertEqual(sideEffectCallCount, 0)
+            XCTAssertTrue(obsoleteIDs.allSatisfy { id in
+                FileManager.default.fileExists(
+                    atPath: fixture.archive
+                        .appendingPathComponent(".niko-staging/\(projectID.description)/\(id.uuidString.lowercased())")
+                        .path
+                )
+            })
+        }
+    }
+
+    func testOnlineOnlySurvivorRequiresBoundManifestEnvelopeAndLiveMetadataBeforeSupersession() async throws {
+        enum EvidenceCase: CaseIterable {
+            case valid
+            case providerUnknown
+            case providerError
+            case wrongGenerationLeaf
+            case httpsScheme
+            case foreignFileHost
+            case duplicatePath
+            case unsafePath
+            case missingRegularHash
+            case invalidRegularHash
+            case invalidDirectorySize
+            case invalidDirectoryHash
+            case missingParentDirectory
+        }
+
+        for evidenceCase in EvidenceCase.allCases {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let projectID = ProjectID()
+            let obsoleteID = UUID()
+            let survivorID = UUID()
+            let baseDate = Date(timeIntervalSince1970: 90_000)
+            let obsoleteStaging = fixture.archive
+                .appendingPathComponent(".niko-staging", isDirectory: true)
+                .appendingPathComponent(projectID.description, isDirectory: true)
+                .appendingPathComponent(obsoleteID.uuidString.lowercased(), isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: obsoleteStaging,
+                withIntermediateDirectories: true
+            )
+            try Data("preserve obsolete staging".utf8)
+                .write(to: obsoleteStaging.appendingPathComponent("partial.cpr"))
+            var obsolete = VaultTransferRecord(
+                id: obsoleteID,
+                projectID: projectID,
+                sourceURL: fixture.source,
+                stagingURL: obsoleteStaging,
+                destinationURL: fixture.archive.appendingPathComponent("generations/obsolete"),
+                state: .failedRecoverable,
+                createdAt: baseDate
+            )
+            obsolete.updatedAt = baseDate
+            obsolete.error = VaultTransferError(
+                origin: .removingActiveCopy,
+                reason: .unknown,
+                message: "must never replay while survivor evidence is reviewed"
+            )
+            try store.save(obsolete)
+
+            let builtManifest = try VaultManifestBuilder().build(at: fixture.source)
+            let regular = try XCTUnwrap(
+                builtManifest.entries.first(where: { $0.type == .regularFile })
+            )
+            func entry(
+                path: String,
+                type: VaultManifest.EntryType,
+                byteCount: Int64,
+                sha256: String?
+            ) -> VaultManifest.Entry {
+                .init(
+                    relativePath: path,
+                    type: type,
+                    byteCount: byteCount,
+                    modifiedAt: regular.modifiedAt,
+                    sha256: sha256,
+                    allocatedByteCount: regular.allocatedByteCount,
+                    extendedAttributeBytes: regular.extendedAttributeBytes
+                )
+            }
+            let manifest: VaultManifest
+            switch evidenceCase {
+            case .valid, .providerUnknown, .providerError, .wrongGenerationLeaf,
+                 .httpsScheme, .foreignFileHost:
+                manifest = builtManifest
+            case .duplicatePath:
+                manifest = VaultManifest(entries: [regular, regular])
+            case .unsafePath:
+                manifest = VaultManifest(entries: [entry(
+                    path: "../escape.cpr",
+                    type: .regularFile,
+                    byteCount: regular.byteCount,
+                    sha256: regular.sha256
+                )])
+            case .missingRegularHash:
+                manifest = VaultManifest(entries: [entry(
+                    path: regular.relativePath,
+                    type: .regularFile,
+                    byteCount: regular.byteCount,
+                    sha256: nil
+                )])
+            case .invalidRegularHash:
+                manifest = VaultManifest(entries: [entry(
+                    path: regular.relativePath,
+                    type: .regularFile,
+                    byteCount: regular.byteCount,
+                    sha256: "not-a-sha256"
+                )])
+            case .invalidDirectorySize:
+                manifest = VaultManifest(entries: [entry(
+                    path: "Folder",
+                    type: .directory,
+                    byteCount: 1,
+                    sha256: nil
+                )])
+            case .invalidDirectoryHash:
+                manifest = VaultManifest(entries: [entry(
+                    path: "Folder",
+                    type: .directory,
+                    byteCount: 0,
+                    sha256: String(repeating: "a", count: 64)
+                )])
+            case .missingParentDirectory:
+                manifest = VaultManifest(entries: [entry(
+                    path: "Missing Parent/\(regular.relativePath)",
+                    type: .regularFile,
+                    byteCount: regular.byteCount,
+                    sha256: regular.sha256
+                )])
+            }
+
+            let generationLeaf = evidenceCase == .wrongGenerationLeaf
+                ? "unbound-generation"
+                : "generation-\(survivorID.uuidString.lowercased())"
+            let localSurvivorURL = fixture.archive
+                .appendingPathComponent("generations", isDirectory: true)
+                .appendingPathComponent(projectID.description, isDirectory: true)
+                .appendingPathComponent(generationLeaf, isDirectory: true)
+            let survivorURL: URL
+            switch evidenceCase {
+            case .httpsScheme:
+                var components = URLComponents()
+                components.scheme = "https"
+                components.host = "archive.invalid"
+                components.path = localSurvivorURL.path
+                survivorURL = try XCTUnwrap(components.url)
+            case .foreignFileHost:
+                var components = URLComponents()
+                components.scheme = "file"
+                components.host = "foreignhost"
+                components.path = localSurvivorURL.path
+                survivorURL = try XCTUnwrap(components.url)
+            default:
+                survivorURL = localSurvivorURL
+            }
+            var survivor = VaultTransferRecord(
+                id: survivorID,
+                projectID: projectID,
+                sourceURL: fixture.source,
+                stagingURL: fixture.archive.appendingPathComponent(".niko-staging/survivor"),
+                destinationURL: survivorURL,
+                state: .archivedOnlineOnly,
+                createdAt: baseDate.addingTimeInterval(10)
+            )
+            survivor.updatedAt = baseDate.addingTimeInterval(10)
+            survivor.manifestID = manifest.id
+            survivor.manifest = manifest
+            survivor.durability = .syncedToProvider
+            try store.save(survivor)
+
+            let providerMode: OnlineSurvivorMetadataProvider.Mode
+            switch evidenceCase {
+            case .providerUnknown:
+                providerMode = .unknown
+            case .providerError:
+                providerMode = .failure
+            default:
+                providerMode = .materializationRequired
+            }
+            let provider = OnlineSurvivorMetadataProvider(mode: providerMode)
+            let fileProbe = SurvivorValidationProbe()
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                fileManager: SurvivorValidationFileManager(
+                    monitoredRoot: survivorURL,
+                    probe: fileProbe
+                ),
+                writeAdmission: allowVaultWrites
+            )
+
+            _ = await engine.recoverAtLaunch()
+
+            let persistedObsolete = try XCTUnwrap(store.record(id: obsoleteID))
+            let shouldSupersede = evidenceCase == .valid
+            XCTAssertEqual(
+                persistedObsolete.state == .superseded,
+                shouldSupersede,
+                "\(evidenceCase)"
+            )
+            XCTAssertEqual(
+                persistedObsolete.supersededBy,
+                shouldSupersede ? survivorID : nil,
+                "\(evidenceCase)"
+            )
+            let shouldQueryProvider = [
+                EvidenceCase.valid,
+                .providerUnknown,
+                .providerError,
+            ].contains(evidenceCase)
+            let localityCallCount = await provider.localityCallCount()
+            let sideEffectCallCount = await provider.sideEffectCallCount()
+            XCTAssertEqual(
+                localityCallCount,
+                shouldQueryProvider ? 1 : 0,
+                "\(evidenceCase)"
+            )
+            XCTAssertEqual(sideEffectCallCount, 0, "\(evidenceCase)")
+            XCTAssertEqual(fileProbe.totalProbeCount, 0, "\(evidenceCase)")
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: obsoleteStaging.path),
+                "\(evidenceCase)"
+            )
+        }
+    }
+
+    private func failedDurabilityRecord(
+        fixture: Fixture,
+        retryCount: Int,
+        updatedAt: Date
+    ) throws -> VaultTransferRecord {
+        let projectID = ProjectID()
+        let transferID = UUID()
+        let staging = fixture.archive
+            .appendingPathComponent(".niko-staging")
+            .appendingPathComponent(projectID.description)
+            .appendingPathComponent(transferID.uuidString.lowercased())
+        try FileManager.default.createDirectory(
+            at: staging.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: fixture.source, to: staging)
+        let manifest = try VaultManifestBuilder().build(at: staging)
+        var record = VaultTransferRecord(
+            id: transferID,
+            projectID: projectID,
+            sourceURL: fixture.source,
+            stagingURL: staging,
+            destinationURL: fixture.archive
+                .appendingPathComponent("generations")
+                .appendingPathComponent(projectID.description)
+                .appendingPathComponent("generation-\(transferID.uuidString.lowercased())"),
+            state: .failedRecoverable,
+            createdAt: updatedAt
+        )
+        record.updatedAt = updatedAt
+        record.retryCount = retryCount
+        record.manifestID = manifest.id
+        record.manifest = manifest
+        record.completedBytes = manifest.totalBytes
+        record.totalBytes = manifest.totalBytes
+        record.error = VaultTransferError(
+            origin: .awaitingProviderDurability,
+            reason: .providerUnsynced,
+            message: "durabilityUnavailable"
+        )
+        return record
+    }
+
+    private func verifiedArchive(
+        fixture: Fixture,
+        store: SQLiteVaultTransferStore
+    ) async throws -> VaultTransferRecord {
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites
+        )
+        return try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+    }
+}
+
+private let allowVaultWrites: LocalVaultTransferEngine.WriteAdmission = { _, operation in
+    try await operation()
+}
+
+private enum RemovalPolicyChange: String, CaseIterable, Sendable {
+    case emergencyStop
+    case keepLocal
+}
+
+private enum RemovalPolicyTestError: Error {
+    case blocked(RemovalPolicyChange)
+}
+
+private actor RemovalPolicyRace {
+    private var isBlocked = false
+    private var checks = 0
+
+    func checkThenActivate(_ change: RemovalPolicyChange) async throws {
+        checks += 1
+        if isBlocked {
+            throw RemovalPolicyTestError.blocked(change)
+        }
+        await Task.yield()
+        isBlocked = true
+    }
+
+    func checkCount() -> Int { checks }
+}
+
+private actor CountingRemovalProvider: ArchiveStorageProvider {
+    private var evictions = 0
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func materialize(_ location: URL) async throws {}
+
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult {
+        evictions += 1
+        return .unsupported
+    }
+
+    func evictionCount() -> Int { evictions }
+}
+
+private final class SamePathSourceSwapper: @unchecked Sendable {
+    private let lock = NSLock()
+    private let sourceURL: URL
+    private let replacementFiles: [String: Data]
+    private var didReplace = false
+
+    init(sourceURL: URL, replacementFiles: [String: Data]) {
+        self.sourceURL = sourceURL
+        self.replacementFiles = replacementFiles
+    }
+
+    func replaceOnce() throws {
+        try lock.withLock {
+            guard !didReplace else { return }
+            didReplace = true
+            try FileManager.default.removeItem(at: sourceURL)
+            try FileManager.default.createDirectory(at: sourceURL, withIntermediateDirectories: true)
+            for (relativePath, data) in replacementFiles {
+                let destination = sourceURL.appendingPathComponent(relativePath)
+                try FileManager.default.createDirectory(
+                    at: destination.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try data.write(to: destination)
+            }
+        }
+    }
+}
+
+private final class PrebuiltSamePathSourceSwapper: @unchecked Sendable {
+    private let lock = NSLock()
+    private let sourceURL: URL
+    private let replacementURL: URL
+    private var didReplace = false
+
+    init(sourceURL: URL, replacementURL: URL) {
+        self.sourceURL = sourceURL
+        self.replacementURL = replacementURL
+    }
+
+    func replaceOnce() throws {
+        try lock.withLock {
+            guard !didReplace else { return }
+            didReplace = true
+            try FileManager.default.removeItem(at: sourceURL)
+            try FileManager.default.moveItem(at: replacementURL, to: sourceURL)
+        }
+    }
+}
+
+private struct TestFileSystemIdentity: Equatable {
+    let device: UInt64
+    let inode: UInt64
+
+    init(at url: URL) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let device = attributes[.systemNumber] as? NSNumber,
+              let inode = attributes[.systemFileNumber] as? NSNumber else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        self.device = device.uint64Value
+        self.inode = inode.uint64Value
+    }
+}
+
+private actor RootCreatingArchiveProvider: ArchiveStorageProvider {
+    private let root: URL
+    private(set) var prepareCount = 0
+
+    init(root: URL) { self.root = root }
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {
+        prepareCount += 1
+        try FileManager.default.createDirectory(at: self.root, withIntermediateDirectories: true)
+    }
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func materialize(_ location: URL) async throws {}
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+}
+
+private final class ArchiveMutationEventLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues: [String] = []
+
+    var values: [String] { lock.withLock { storedValues } }
+    func append(_ value: String) { lock.withLock { storedValues.append(value) } }
+}
+
+private struct OrderedPrepareArchiveProvider: ArchiveStorageProvider {
+    let events: ArchiveMutationEventLog
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws { events.append("prepare") }
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func materialize(_ location: URL) async throws {}
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+}
+
+private final class GenerationSymlinkInjector: @unchecked Sendable {
+    private let generationsRoot: URL
+    private let outsideRoot: URL
+
+    init(generationsRoot: URL, outsideRoot: URL) {
+        self.generationsRoot = generationsRoot
+        self.outsideRoot = outsideRoot
+    }
+
+    func inject(point: VaultTransferFaultPoint, record: VaultTransferRecord) throws {
+        guard point == .promotingArchiveGeneration else { return }
+        if FileManager.default.fileExists(atPath: generationsRoot.path) {
+            try FileManager.default.removeItem(at: generationsRoot)
+        }
+        try FileManager.default.createDirectory(
+            at: outsideRoot.appendingPathComponent(record.projectID.description, isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(
+            at: generationsRoot,
+            withDestinationURL: outsideRoot
+        )
+    }
+}
+
+private final class NestedGenerationSymlinkInjector: @unchecked Sendable {
+    private let projectRoot: URL
+    private let outsideRoot: URL
+
+    init(projectRoot: URL, outsideRoot: URL) {
+        self.projectRoot = projectRoot
+        self.outsideRoot = outsideRoot
+    }
+
+    func inject(point: VaultTransferFaultPoint) throws {
+        guard point == .promotingArchiveGeneration else { return }
+        try FileManager.default.createDirectory(
+            at: projectRoot.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(
+            at: projectRoot,
+            withDestinationURL: outsideRoot
+        )
+    }
+}
+
+private actor FailingDurabilityProvider: ArchiveStorageProvider {
+    private var barriers = 0
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: true, supportsMaterialization: true, supportsEviction: true)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        barriers += 1
+        throw FileProviderArchiveStorageError.durabilityUnavailable
+    }
+
+    func materialize(_ location: URL) async throws {}
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+    func barrierCount() -> Int { barriers }
+}
+
+private actor OnlineSurvivorMetadataProvider: ArchiveStorageProvider {
+    enum Mode: Sendable {
+        case materializationRequired
+        case unknown
+        case failure
+    }
+
+    private let mode: Mode
+    private var localityCalls = 0
+    private var sideEffectCalls = 0
+
+    init(mode: Mode) {
+        self.mode = mode
+    }
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(
+            waitsForDurability: true,
+            supportsMaterialization: true,
+            supportsEviction: true
+        )
+    }
+
+    func currentLocality(
+        at location: URL,
+        manifest: VaultManifest
+    ) async throws -> ArchiveStorageLocality {
+        localityCalls += 1
+        switch mode {
+        case .materializationRequired:
+            return .materializationRequired
+        case .unknown:
+            return .unknown
+        case .failure:
+            throw VaultManifestError.mismatch
+        }
+    }
+
+    func prepareForRead(_ location: URL) async throws {
+        sideEffectCalls += 1
+    }
+
+    func prepareForWrite(at root: URL) async throws {
+        sideEffectCalls += 1
+    }
+
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        sideEffectCalls += 1
+        return .syncedToProvider
+    }
+
+    func materialize(_ location: URL) async throws {
+        sideEffectCalls += 1
+    }
+
+    func materialize(_ location: URL, manifest: VaultManifest) async throws {
+        sideEffectCalls += 1
+    }
+
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult {
+        sideEffectCalls += 1
+        return .unsupported
+    }
+
+    func localityCallCount() -> Int { localityCalls }
+    func sideEffectCallCount() -> Int { sideEffectCalls }
+}
+
+private final class RecoveryAdmissionRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+
+    init(result _: Bool) {}
+
+    var callCount: Int { lock.withLock { calls } }
+
+    func evaluate(_ request: VaultWriteAdmissionRequest) {
+        lock.withLock { calls += 1 }
+    }
+}
+
+private final class MutableVaultTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: Date
+
+    init(_ value: Date) { storedValue = value }
+
+    var value: Date {
+        get { lock.withLock { storedValue } }
+        set { lock.withLock { storedValue = newValue } }
+    }
+}
+
+private final class VaultFaultPointRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int { lock.withLock { storedCount } }
+    func increment() { lock.withLock { storedCount += 1 } }
+}
+
+private final class VolumeLookupRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedURLs: [String] = []
+
+    var urls: [String] { lock.withLock { storedURLs } }
+    func record(_ url: URL) { lock.withLock { storedURLs.append(url.standardizedFileURL.path) } }
 }
 
 private actor PromotionDurabilityProvider: ArchiveStorageProvider {
@@ -232,6 +1910,41 @@ private actor PromotionDurabilityProvider: ArchiveStorageProvider {
     func sawPromotedGenerationAtFinalBarrier() -> Bool { sawPromotedGeneration }
 }
 
+private actor FinalDurabilityMutatingProvider: ArchiveStorageProvider {
+    static let mutatedProjectBytes = Data("mutated-during-final-durability".utf8)
+
+    private var barriers = 0
+    private var evictions = 0
+
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: true, supportsMaterialization: true, supportsEviction: true)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        barriers += 1
+        if barriers == 2 {
+            try Self.mutatedProjectBytes.write(
+                to: location.appendingPathComponent("Artist Song.cpr"),
+                options: .atomic
+            )
+        }
+        return .syncedToProvider
+    }
+
+    func materialize(_ location: URL) async throws {}
+
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult {
+        evictions += 1
+        return .evicted
+    }
+
+    func barrierCount() -> Int { barriers }
+    func evictionCount() -> Int { evictions }
+}
+
 private final class RecordCapture: @unchecked Sendable {
     private let lock = NSLock()
     private var storedRecord: VaultTransferRecord?
@@ -245,6 +1958,54 @@ private final class RecordCapture: @unchecked Sendable {
     var persisted: VaultTransferRecord? {
         get { lock.withLock { storedPersisted } }
         set { lock.withLock { storedPersisted = newValue } }
+    }
+}
+
+private final class SurvivorValidationFileManager: FileManager {
+    private let monitoredRoot: String
+    private let probe: SurvivorValidationProbe
+
+    init(monitoredRoot: URL, probe: SurvivorValidationProbe) {
+        self.monitoredRoot = monitoredRoot.standardizedFileURL.path
+        self.probe = probe
+        super.init()
+    }
+
+    override func fileExists(atPath path: String) -> Bool {
+        if path == monitoredRoot {
+            probe.recordProbe()
+        }
+        return super.fileExists(atPath: path)
+    }
+
+    override func fileExists(
+        atPath path: String,
+        isDirectory: UnsafeMutablePointer<ObjCBool>?
+    ) -> Bool {
+        if path == monitoredRoot {
+            probe.recordVerificationRoot()
+        }
+        return super.fileExists(atPath: path, isDirectory: isDirectory)
+    }
+}
+
+private final class SurvivorValidationProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedTotalProbeCount = 0
+    private var storedVerificationRootCount = 0
+
+    var totalProbeCount: Int { lock.withLock { storedTotalProbeCount } }
+    var verificationRootCount: Int { lock.withLock { storedVerificationRootCount } }
+
+    func recordProbe() {
+        lock.withLock { storedTotalProbeCount += 1 }
+    }
+
+    func recordVerificationRoot() {
+        lock.withLock {
+            storedTotalProbeCount += 1
+            storedVerificationRootCount += 1
+        }
     }
 }
 
@@ -268,12 +2029,16 @@ private struct Fixture {
     }
 
     func snapshotSource() throws -> [String: Data] {
+        try snapshot(at: source)
+    }
+
+    func snapshot(at root: URL) throws -> [String: Data] {
         let keys: Set<URLResourceKey> = [.isRegularFileKey]
-        let enumerator = FileManager.default.enumerator(at: source, includingPropertiesForKeys: Array(keys))
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: Array(keys))
         var result: [String: Data] = [:]
         while let url = enumerator?.nextObject() as? URL {
             if try url.resourceValues(forKeys: keys).isRegularFile == true {
-                result[String(url.path.dropFirst(source.path.count + 1))] = try Data(contentsOf: url)
+                result[String(url.path.dropFirst(root.path.count + 1))] = try Data(contentsOf: url)
             }
         }
         return result

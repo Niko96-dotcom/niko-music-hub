@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum PathSafetyError: Error, Equatable, Sendable {
@@ -55,6 +56,39 @@ public struct PathSafety: @unchecked Sendable {
             }
         }
         return false
+    }
+
+    /// Validates a prospective mutation path below an already-canonical root.
+    /// Existing child components must be real filesystem nodes rather than
+    /// symlinks; a missing tail is allowed only below the verified ancestor.
+    public func isResolvedContainedWithoutNestedSymlinks(_ path: URL, in root: URL) -> Bool {
+        let canonicalRoot = root.standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = path.standardizedFileURL
+        guard isContained(candidate, in: [canonicalRoot]),
+              isResolvedContained(candidate, in: [canonicalRoot]) else { return false }
+
+        let rootComponents = canonicalRoot.pathComponents
+        let candidateComponents = candidate.pathComponents
+        guard candidateComponents.count >= rootComponents.count,
+              Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
+            return false
+        }
+
+        var current = canonicalRoot
+        for component in candidateComponents.dropFirst(rootComponents.count) {
+            current.appendPathComponent(component)
+            var information = stat()
+            let result = current.path.withCString { Darwin.lstat($0, &information) }
+            if result == 0 {
+                if (information.st_mode & mode_t(S_IFMT)) == mode_t(S_IFLNK) {
+                    return false
+                }
+                continue
+            }
+            if errno == ENOENT { break }
+            return false
+        }
+        return true
     }
 
     private func resolvedURLAllowingMissingTail(_ url: URL) -> URL {

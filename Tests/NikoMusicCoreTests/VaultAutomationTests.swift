@@ -33,6 +33,37 @@ final class VaultAutomationTests: XCTestCase {
         )
     }
 
+    func testWorkflowDonePostponesWhenProjectedCopyWouldBreachFreeSpaceFloor() {
+        let evaluator = VaultAutomationEligibilityEvaluator()
+        let bytesPerGiB: Int64 = 1_073_741_824
+        let availableCapacityBytes = 80 * bytesPerGiB
+        let projectedProjectBytes = 21 * bytesPerGiB
+        let projectedRemainingBytes = availableCapacityBytes - projectedProjectBytes
+        XCTAssertEqual(projectedRemainingBytes, 59 * bytesPerGiB)
+        let policy = VaultAutomationPolicy(
+            isVaultEnabled: true,
+            isAutomaticArchivingEnabled: true,
+            inactivityDays: 30,
+            minimumFreeSpaceGiB: 60
+        )
+        let candidate = VaultAutomationCandidate(
+            projectID: candidateID,
+            sourceURL: URL(fileURLWithPath: "/tmp/projected-headroom-fixture"),
+            isKeepLocal: false,
+            lastActivityAt: now,
+            availableCapacityBytes: availableCapacityBytes,
+            archiveAvailableCapacityBytes: availableCapacityBytes,
+            projectedArchiveBytes: projectedProjectBytes,
+            trigger: .workflowDone
+        )
+
+        let result = evaluator.evaluate(candidate, policy: policy, now: now)
+
+        if case .eligible = result {
+            XCTFail("80 GiB available minus 21 GiB projected must not cross a 60 GiB floor")
+        }
+    }
+
     func testEveryBusyOrUncertainActivityProbePostponesWithoutArchiving() async {
         let cases: [(VaultActivityStatus, VaultActivityStatus, VaultActivityStatus, VaultAutomationPostponement)] = [
             (.busy, .clear, .clear, .cubaseRunning),
@@ -87,7 +118,13 @@ final class VaultAutomationTests: XCTestCase {
         let fixture = try AutomationFixture()
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
-        let engine = try LocalVaultTransferEngine(activeRoot: fixture.active, archiveRoot: fixture.archive, store: store)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, operation in try await operation() },
+            removalAdmission: { _ in }
+        )
         let fixedNow = now
         let scheduler = VaultAutomationScheduler(
             policy: enabledPolicy,
@@ -102,7 +139,9 @@ final class VaultAutomationTests: XCTestCase {
                 sourceURL: fixture.source,
                 isKeepLocal: false,
                 lastActivityAt: now.addingTimeInterval(-31 * 86_400),
-                availableCapacityBytes: 500 * 1_073_741_824
+                availableCapacityBytes: 500 * 1_073_741_824,
+                archiveAvailableCapacityBytes: 500 * 1_073_741_824,
+                projectedArchiveBytes: 1_073_741_824
             )
         ])
 
@@ -120,7 +159,13 @@ final class VaultAutomationTests: XCTestCase {
         let fixture = try AutomationFixture()
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
-        let engine = try LocalVaultTransferEngine(activeRoot: fixture.active, archiveRoot: fixture.archive, store: store)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, operation in try await operation() },
+            removalAdmission: { _ in }
+        )
         var forged = VaultTransferRecord(
             projectID: candidateID,
             sourceURL: fixture.source,
@@ -238,7 +283,9 @@ final class VaultAutomationTests: XCTestCase {
             sourceURL: URL(fileURLWithPath: "/tmp/fixture-project"),
             isKeepLocal: keepLocal,
             lastActivityAt: lastActivityDaysAgo.map { now.addingTimeInterval(-Double($0) * 86_400) },
-            availableCapacityBytes: freeSpaceGiB.map { Int64($0) * 1_073_741_824 }
+            availableCapacityBytes: freeSpaceGiB.map { Int64($0) * 1_073_741_824 },
+            archiveAvailableCapacityBytes: 500 * 1_073_741_824,
+            projectedArchiveBytes: 1_073_741_824
         )
     }
 }

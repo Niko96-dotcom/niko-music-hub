@@ -77,6 +77,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// without another scan or Dropbox round trip.
     var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
     var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
+    var projectVaultRetryAttemptCounts: [String: Int] = [:]
     /// Archive page layout: the board is home, opening a card goes to
     /// fullscreen detail, and the classic sidebar+detail list stays reachable.
     enum ArchiveViewMode {
@@ -112,6 +113,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     public var requestConverterHandoff: ((URL) -> Void)?
     var statusBaseMessage: String?
     var persistenceWarningMessage: String?
+    /// Background archive scans must not replace a newer, user-facing Project Vault
+    /// operation status. Any non-Vault status update releases this ownership.
+    var projectVaultOwnsStatus = false
     private var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
 
     public convenience init(
@@ -205,7 +209,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         if archiveRootWatcher != nil, !roots.isEmpty, !runtime.usesFixtureRoot {
             setStatusMessage("Scanning archive...")
-            Task { await scan() }
+            Task { await scanInBackground() }
         }
     }
 
@@ -282,20 +286,22 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Archive roots plus the configured output folder (new-song drafts live there).
     func allowedOpenRoots(for song: Song? = nil, includingURL url: URL? = nil) -> [URL] {
         var allowed = roots.map(\.standardizedFileURL)
-        let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
+        let settings = try? settingsStore.loadSettings()
+        let outputFolder = settings?.outputFolder.url
             ?? StoredFolderLocation.defaultOutputFolder
         let standardizedOutput = outputFolder.standardizedFileURL
         if !allowed.contains(where: { $0.path == standardizedOutput.path }) {
             allowed.append(standardizedOutput)
         }
-        if let song {
+        if let song, !blocksGenericProjectVaultFileActions(for: song) {
             appendSongFolderRoot(song.folderPath, to: &allowed)
         } else if let url,
                   let song = songs.first(where: { catalogSong in
                       let folderPath = catalogSong.folderPath.standardizedFileURL.path
                       let candidatePath = url.standardizedFileURL.path
                       return candidatePath == folderPath || candidatePath.hasPrefix(folderPath + "/")
-                  }) {
+                  }),
+                  !blocksGenericProjectVaultFileActions(for: song) {
             appendSongFolderRoot(song.folderPath, to: &allowed)
         }
         return allowed
@@ -346,7 +352,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             restartArchiveRootWatching()
             refreshFirstRunState()
             setStatusMessage("Scanning archive...")
-            Task { await scan() }
+            Task { await scanInBackground() }
         }
     }
 
@@ -526,8 +532,20 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func setStatusMessage(_ message: String?) {
+        projectVaultOwnsStatus = false
         statusBaseMessage = message
         statusMessage = combinedStatusMessage(base: message)
+    }
+
+    func setProjectVaultStatusMessage(_ message: String?) {
+        projectVaultOwnsStatus = true
+        statusBaseMessage = message
+        statusMessage = combinedStatusMessage(base: message)
+    }
+
+    func setBackgroundStatusMessage(_ message: String?) {
+        guard !projectVaultOwnsStatus else { return }
+        setStatusMessage(message)
     }
 
     func recordPersistenceWarning(_ warning: String) {

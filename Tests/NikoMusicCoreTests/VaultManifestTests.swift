@@ -73,7 +73,35 @@ final class VaultManifestTests: XCTestCase {
         }
     }
 
+    func testVerifyRejectsUnexpectedEntryBeforeOpeningAnyFileContent() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("expected".utf8).write(to: root.appendingPathComponent("Expected.cpr"))
+        let manifest = try VaultManifestBuilder().build(at: root)
+        try Data("online-placeholder".utf8).write(to: root.appendingPathComponent("Unexpected.wav"))
+        let hashSpy = VaultManifestHashSpy()
+        let verifier = VaultManifestBuilder(contentHasher: hashSpy.hash)
+
+        XCTAssertThrowsError(try verifier.verify(manifest, at: root)) {
+            XCTAssertEqual($0 as? VaultManifestError, .mismatch)
+        }
+        XCTAssertTrue(hashSpy.openedURLs.isEmpty)
+    }
+
     private func temporaryRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vault-manifest-\(UUID().uuidString)", isDirectory: true)
+    }
+}
+
+private final class VaultManifestHashSpy: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedOpenedURLs: [URL] = []
+
+    var openedURLs: [URL] { lock.withLock { storedOpenedURLs } }
+
+    func hash(_ url: URL) throws -> (byteCount: Int64, sha256: String) {
+        lock.withLock { storedOpenedURLs.append(url) }
+        return (0, "unexpected")
     }
 }

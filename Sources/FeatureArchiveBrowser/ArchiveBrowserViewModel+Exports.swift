@@ -85,6 +85,9 @@ extension ArchiveBrowserViewModel {
 
     func openLatestCPR(for song: Song) throws {
         do {
+            guard !blocksGenericProjectVaultFileActions(for: song) else {
+                throw MusicItemOpenerError.pathOutsideAllowedRoots(song.folderPath.standardizedFileURL)
+            }
             if let result = try opener.openLatestCPR(
                 for: song,
                 dryRun: runtime.dryRunOpen,
@@ -116,6 +119,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func preferredRevealURL(for song: Song) -> URL? {
+        guard !blocksGenericProjectVaultFileActions(for: song) else { return nil }
         if let latest = song.effectiveLatestCPR?.filePath ?? song.visibleProjectVersions.first?.filePath {
             return latest
         }
@@ -136,6 +140,14 @@ extension ArchiveBrowserViewModel {
     }
 
     func resolveRevealURL(_ url: URL, for song: Song? = nil) throws -> URL {
+        let actionSong = song ?? songs.first(where: { catalogSong in
+            let folderPath = catalogSong.folderPath.standardizedFileURL.path
+            let candidatePath = url.standardizedFileURL.path
+            return candidatePath == folderPath || candidatePath.hasPrefix(folderPath + "/")
+        })
+        if let actionSong, blocksGenericProjectVaultFileActions(for: actionSong) {
+            throw MusicItemOpenerError.pathOutsideAllowedRoots(url.standardizedFileURL)
+        }
         let allowed = song.map { allowedOpenRoots(for: $0) } ?? allowedOpenRoots(includingURL: url)
         guard !allowed.isEmpty else {
             throw MusicItemOpenerError.pathOutsideAllowedRoots(url.standardizedFileURL)

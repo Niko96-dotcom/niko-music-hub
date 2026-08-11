@@ -60,7 +60,9 @@ final class FileProviderArchiveStorageLiveTests: XCTestCase {
             activeRoot: activeRoot,
             archiveRoot: fixtureRoot,
             store: store,
-            provider: provider
+            provider: provider,
+            writeAdmission: { _, operation in try await operation() },
+            removalAdmission: { _ in }
         )
         let verified = try await archiveEngine.archive(projectID: projectID, sourceURL: source)
         XCTAssertEqual(verified.state, .archiveVerified)
@@ -77,12 +79,14 @@ final class FileProviderArchiveStorageLiveTests: XCTestCase {
         let workspace = LiveWorkspace()
         let restoreEngine = LocalVaultRestoreEngine(
             activeRoot: activeRoot,
+            archiveRoot: fixtureRoot,
             activeRootID: UUID(),
             resolver: store,
             store: store,
             provider: provider,
             catalog: catalog,
-            projectOpener: SafeVaultProjectOpener(workspace: workspace)
+            projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: { _, operation in try await operation() }
         )
         let restored = try await restoreEngine.restoreAndOpen(
             projectID: projectID,

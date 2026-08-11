@@ -192,8 +192,10 @@ struct SongDetailView: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 HubLabeledButton(
-                    icon: "pianokeys",
-                    label: vaultPresentation?.primaryAction.label ?? "Open in Cubase",
+                    icon: vaultPresentation?.reviewAction == nil ? "pianokeys" : "folder",
+                    label: vaultPresentation?.reviewAction?.label
+                        ?? vaultPresentation?.primaryAction.label
+                        ?? "Open in Cubase",
                     style: .primary,
                     help: vaultPresentation?.explanation ?? "Open latest CPR (O)"
                 ) {
@@ -207,6 +209,20 @@ struct SongDetailView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .help("Pinned projects are never automatically archived")
+
+                    if vaultPresentation.retryRestoreID != nil {
+                        HubLabeledButton(
+                            icon: "arrow.clockwise.circle",
+                            label: viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                                ? "Retrying…"
+                                : "Retry Get Local",
+                            style: .secondary,
+                            help: "Retry this same preserved restore after making the exact archive generation available offline",
+                            isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                        ) {
+                            viewModel.retryReviewedProjectVaultRestore(for: liveSong)
+                        }
+                    }
 
                     if viewModel.canArchiveInProjectVault(liveSong) {
                         HubLabeledButton(

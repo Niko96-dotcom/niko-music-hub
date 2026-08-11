@@ -15,6 +15,14 @@ public struct LocalFolderArchiveStorage: ArchiveStorageProvider, @unchecked Send
         StorageCapabilities(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
     }
 
+    public func currentLocality(
+        at location: URL,
+        manifest: VaultManifest
+    ) async throws -> ArchiveStorageLocality {
+        guard fileManager.isReadableFile(atPath: location.path) else { throw LocalFolderStorageError.unreadable }
+        return .fullyLocalCurrent
+    }
+
     public func prepareForRead(_ location: URL) async throws {
         guard fileManager.isReadableFile(atPath: location.path) else { throw LocalFolderStorageError.unreadable }
     }

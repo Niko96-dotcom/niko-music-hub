@@ -32,7 +32,12 @@ public struct VaultAutomationCandidate: Equatable, Sendable {
     public let sourceURL: URL
     public let isKeepLocal: Bool
     public let lastActivityAt: Date?
+    /// Free bytes on the Active volume, used only to trigger early disk-pressure eligibility.
     public let availableCapacityBytes: Int64?
+    /// Free bytes on the Archive destination volume before a new automatic write.
+    public let archiveAvailableCapacityBytes: Int64?
+    /// Logical bytes the automatic Archive write is projected to add.
+    public let projectedArchiveBytes: Int64?
     public let trigger: Trigger
 
     public init(
@@ -41,6 +46,8 @@ public struct VaultAutomationCandidate: Equatable, Sendable {
         isKeepLocal: Bool,
         lastActivityAt: Date?,
         availableCapacityBytes: Int64?,
+        archiveAvailableCapacityBytes: Int64? = nil,
+        projectedArchiveBytes: Int64? = nil,
         trigger: Trigger = .policy
     ) {
         self.projectID = projectID
@@ -48,6 +55,8 @@ public struct VaultAutomationCandidate: Equatable, Sendable {
         self.isKeepLocal = isKeepLocal
         self.lastActivityAt = lastActivityAt
         self.availableCapacityBytes = availableCapacityBytes
+        self.archiveAvailableCapacityBytes = archiveAvailableCapacityBytes
+        self.projectedArchiveBytes = projectedArchiveBytes
         self.trigger = trigger
     }
 }
@@ -62,17 +71,57 @@ public enum VaultAutomationPostponement: Equatable, Sendable {
     case automaticArchivingDisabled
     case keepLocal
     case invalidPolicy
+    case archiveCapacityUnavailable
+    case insufficientArchiveCapacity
     case unknownLastActivity
     case notOldEnoughAndNoDiskPressure
     case cubaseRunning
     case openFiles
     case recentWriteActivity
     case uncertainActivity(String)
+
+    public var permitsBoundedAutomaticRetry: Bool {
+        switch self {
+        case .cubaseRunning, .openFiles, .recentWriteActivity, .uncertainActivity:
+            true
+        default:
+            false
+        }
+    }
 }
 
 public enum VaultAutomationEligibility: Equatable, Sendable {
     case eligible(VaultAutomationEligibilityReason)
     case postponed(VaultAutomationPostponement)
+}
+
+public struct VaultArchiveWriteAdmissionEvaluator: Sendable {
+    private static let bytesPerGiB: Int64 = 1_073_741_824
+
+    public init() {}
+
+    public func postponement(
+        availableCapacityBytes: Int64?,
+        projectedCopyBytes: Int64?,
+        minimumFreeSpaceGiB: Int
+    ) -> VaultAutomationPostponement? {
+        guard minimumFreeSpaceGiB >= 0,
+              Int64(minimumFreeSpaceGiB) <= Int64.max / Self.bytesPerGiB else {
+            return .invalidPolicy
+        }
+        guard let availableCapacityBytes,
+              let projectedCopyBytes,
+              availableCapacityBytes >= 0,
+              projectedCopyBytes >= 0 else {
+            return .archiveCapacityUnavailable
+        }
+        let minimumFreeBytes = Int64(minimumFreeSpaceGiB) * Self.bytesPerGiB
+        let (requiredBytes, overflow) = projectedCopyBytes.addingReportingOverflow(minimumFreeBytes)
+        guard !overflow, availableCapacityBytes >= requiredBytes else {
+            return .insufficientArchiveCapacity
+        }
+        return nil
+    }
 }
 
 public struct VaultAutomationEligibilityEvaluator: Sendable {
@@ -88,6 +137,13 @@ public struct VaultAutomationEligibilityEvaluator: Sendable {
         guard !candidate.isKeepLocal else { return .postponed(.keepLocal) }
         guard policy.inactivityDays > 0, policy.minimumFreeSpaceGiB >= 0, policy.writeQuietPeriod >= 0 else {
             return .postponed(.invalidPolicy)
+        }
+        if let postponement = VaultArchiveWriteAdmissionEvaluator().postponement(
+            availableCapacityBytes: candidate.archiveAvailableCapacityBytes,
+            projectedCopyBytes: candidate.projectedArchiveBytes,
+            minimumFreeSpaceGiB: policy.minimumFreeSpaceGiB
+        ) {
+            return .postponed(postponement)
         }
         if candidate.trigger == .workflowDone { return .eligible(.inactivity) }
         guard let lastActivity = candidate.lastActivityAt, lastActivity <= now else {
@@ -458,6 +514,11 @@ public actor VaultAutomationScheduler {
                 }
                 let completed = try await archiver.removeActiveCopy(after: archived)
                 results.append(.archived(candidate.projectID, completed))
+            } catch let admission as VaultWriteAdmissionError {
+                switch admission {
+                case .postponed(let reason):
+                    results.append(.postponed(candidate.projectID, reason))
+                }
             } catch {
                 let failure = VaultAutomationFailureNotification(
                     projectID: candidate.projectID,

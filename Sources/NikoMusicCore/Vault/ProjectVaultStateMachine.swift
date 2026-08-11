@@ -26,6 +26,7 @@ public enum VaultTransferState: String, CaseIterable, Codable, Hashable, Sendabl
     case openingInCubase
     case failedRecoverable
     case recoveryRequired
+    case superseded
 }
 public enum VaultDurability: String, Codable, Hashable, Sendable {
     case verifiedLocal
@@ -193,6 +194,7 @@ public struct ProjectVaultStateMachine: Sendable {
         .readyLocal: [.openingInCubase],
         .openingInCubase: [],
         .failedRecoverable: [],
-        .recoveryRequired: []
+        .recoveryRequired: [],
+        .superseded: []
     ]
 }
