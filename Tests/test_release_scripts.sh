@@ -5,7 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=../script/release-env.sh
 source "$ROOT/script/release-env.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/nmh-release-tests.XXXXXX")"
-trap 'rm -rf "$TMP"' EXIT
+DIRTY_PROBE="$ROOT/release-script-dirty-probe-$$.txt"
+trap 'rm -rf "$TMP"; rm -f "$DIRTY_PROBE"' EXIT
 
 # These tests intentionally exercise the missing-credential fail-closed path.
 # Keep them deterministic when the surrounding public release command has
@@ -218,8 +219,10 @@ assert_fail local-publish "$ROOT/script/release-all.sh" --local-only --publish -
 assert_contains "$TMP/local-publish.err" "local-only release cannot publish"
 assert_fail release-output-outside-repo env NMH_RELEASE_DIR="$TMP" "$ROOT/script/release-all.sh" --local-only --skip-tests
 assert_contains "$TMP/release-output-outside-repo.err" "release output must be a child"
+printf 'intentional dirty-worktree probe\n' >"$DIRTY_PROBE"
 assert_fail local-dirty-worktree env NMH_RELEASE_DIR="$ROOT/dist/release-script-test-dirty-$$" "$ROOT/script/release-all.sh" --local-only --skip-tests
 assert_contains "$TMP/local-dirty-worktree.err" "release artifacts require a completely clean working tree"
+rm -f "$DIRTY_PROBE"
 
 echo "== clean tagged checkout preflight =="
 PREFLIGHT_REPO="$TMP/preflight-repo"
