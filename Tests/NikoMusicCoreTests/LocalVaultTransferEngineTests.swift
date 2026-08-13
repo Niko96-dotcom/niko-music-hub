@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import XCTest
 @testable import NikoMusicCore
@@ -280,6 +281,43 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: record.stagingURL.path))
         try VaultManifestBuilder().verify(XCTUnwrap(record.manifest), at: record.destinationURL)
         XCTAssertEqual(try fixture.snapshotSource(), original)
+    }
+
+    func testFreshArchiveSanitizesOnlyExactDSStoreFromStagingAndKeepsActiveBytes() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try Data("root metadata".utf8).write(to: fixture.source.appendingPathComponent(".DS_Store"))
+        try Data("nested metadata".utf8).write(
+            to: fixture.source.appendingPathComponent("Audio/.DS_Store")
+        )
+        try Data("keep exact-prefix".utf8).write(
+            to: fixture.source.appendingPathComponent(".DS_Store.keep")
+        )
+        try Data("keep exact-suffix".utf8).write(
+            to: fixture.source.appendingPathComponent("Audio/take.DS_Store")
+        )
+        let sourceBefore = try fixture.snapshotSource()
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites
+        )
+
+        let record = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+
+        let archived = try fixture.snapshot(at: record.destinationURL)
+        let manifestPaths = Set(try XCTUnwrap(record.manifest).entries.map(\.relativePath))
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        XCTAssertFalse(archived.keys.contains(".DS_Store"))
+        XCTAssertFalse(archived.keys.contains("Audio/.DS_Store"))
+        XCTAssertEqual(archived[".DS_Store.keep"], sourceBefore[".DS_Store.keep"])
+        XCTAssertEqual(archived["Audio/take.DS_Store"], sourceBefore["Audio/take.DS_Store"])
+        XCTAssertFalse(manifestPaths.contains(".DS_Store"))
+        XCTAssertFalse(manifestPaths.contains("Audio/.DS_Store"))
+        XCTAssertTrue(manifestPaths.contains(".DS_Store.keep"))
+        XCTAssertTrue(manifestPaths.contains("Audio/take.DS_Store"))
     }
 
     func testLocalFolderProviderReportsOnlyVerifiedLocalDurability() async throws {
@@ -784,6 +822,176 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         XCTAssertEqual(barrierCount, 0)
         XCTAssertEqual(try store.record(id: record.id), record)
         XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+    }
+
+    func testLaunchRecoveryMigratesLegacyDSStoreManifestBeforeRetryingExhaustedDurability() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try Data("root metadata".utf8).write(to: fixture.source.appendingPathComponent(".DS_Store"))
+        try Data("nested metadata".utf8).write(
+            to: fixture.source.appendingPathComponent("Audio/.DS_Store")
+        )
+        try Data("keep exact-prefix".utf8).write(
+            to: fixture.source.appendingPathComponent(".DS_Store.keep")
+        )
+        try Data("keep exact-suffix".utf8).write(
+            to: fixture.source.appendingPathComponent("Audio/take.DS_Store")
+        )
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 22_000)
+        var record = try failedDurabilityRecord(
+            fixture: fixture,
+            retryCount: 7,
+            updatedAt: now.addingTimeInterval(-3 * 24 * 60 * 60)
+        )
+        let legacyManifest = try legacyManifestIncludingExactDSStore(at: record.stagingURL)
+        record.manifestID = legacyManifest.id
+        record.manifest = legacyManifest
+        record.projectionSupplement = VaultProjectionSupplement(
+            rootAllocatedByteCount: legacyManifest.rootAllocatedByteCount ?? 0,
+            rootExtendedAttributeBytes: legacyManifest.rootExtendedAttributeBytes ?? 0,
+            entries: legacyManifest.entries.map {
+                .init(
+                    relativePath: $0.relativePath,
+                    allocatedByteCount: $0.allocatedByteCount ?? 0,
+                    extendedAttributeBytes: $0.extendedAttributeBytes ?? 0
+                )
+            }
+        )
+        record.nextRetryAt = nil
+        try store.save(record)
+        let sourceBefore = try fixture.snapshot(at: record.sourceURL)
+        let provider = PromotionDurabilityProvider(archiveRoot: fixture.archive)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        let results = await recovery.recoverAtLaunch()
+
+        let recovered = try XCTUnwrap(results.first)
+        let barrierCount = await provider.barrierCount()
+        let generation = try fixture.snapshot(at: record.destinationURL)
+        let migratedManifest = try XCTUnwrap(recovered.manifest)
+        let migratedPaths = Set(migratedManifest.entries.map(\.relativePath))
+        XCTAssertEqual(recovered.id, record.id)
+        XCTAssertEqual(recovered.state, .archiveVerified)
+        XCTAssertEqual(recovered.durability, .syncedToProvider)
+        XCTAssertNotEqual(recovered.manifestID, legacyManifest.id)
+        XCTAssertNil(recovered.projectionSupplement)
+        XCTAssertEqual(recovered.retryCount, 0)
+        XCTAssertEqual(barrierCount, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.stagingURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.destinationURL.path))
+        XCTAssertEqual(try fixture.snapshot(at: record.sourceURL), sourceBefore)
+        XCTAssertFalse(generation.keys.contains(".DS_Store"))
+        XCTAssertFalse(generation.keys.contains("Audio/.DS_Store"))
+        XCTAssertEqual(generation[".DS_Store.keep"], sourceBefore[".DS_Store.keep"])
+        XCTAssertEqual(generation["Audio/take.DS_Store"], sourceBefore["Audio/take.DS_Store"])
+        XCTAssertFalse(migratedPaths.contains(".DS_Store"))
+        XCTAssertFalse(migratedPaths.contains("Audio/.DS_Store"))
+        XCTAssertTrue(migratedManifest.entries.allSatisfy {
+            $0.allocatedByteCount != nil && $0.extendedAttributeBytes != nil
+        })
+        try VaultManifestBuilder().verify(migratedManifest, at: recovered.destinationURL)
+    }
+
+    func testLaunchRecoveryMigratesLegacyDSStoreManifestFromCurrentDurabilityState() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try Data("metadata".utf8).write(to: fixture.source.appendingPathComponent(".DS_Store"))
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 22_500)
+        var record = try failedDurabilityRecord(
+            fixture: fixture,
+            retryCount: 7,
+            updatedAt: now
+        )
+        let legacyManifest = try legacyManifestIncludingExactDSStore(at: record.stagingURL)
+        record.state = .awaitingProviderDurability
+        record.error = nil
+        record.manifestID = legacyManifest.id
+        record.manifest = legacyManifest
+        try store.save(record)
+        let sourceBefore = try fixture.snapshot(at: record.sourceURL)
+        let provider = PromotionDurabilityProvider(archiveRoot: fixture.archive)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        let results = await recovery.recoverAtLaunch()
+
+        let recovered = try XCTUnwrap(results.first)
+        let barrierCount = await provider.barrierCount()
+        let generation = try fixture.snapshot(at: record.destinationURL)
+        XCTAssertEqual(recovered.state, .archiveVerified)
+        XCTAssertEqual(recovered.durability, .syncedToProvider)
+        XCTAssertNotEqual(recovered.manifestID, legacyManifest.id)
+        XCTAssertEqual(recovered.retryCount, 0)
+        XCTAssertEqual(barrierCount, 2)
+        XCTAssertEqual(try fixture.snapshot(at: record.sourceURL), sourceBefore)
+        XCTAssertFalse(generation.keys.contains(".DS_Store"))
+        try VaultManifestBuilder().verify(
+            try XCTUnwrap(recovered.manifest),
+            at: recovered.destinationURL
+        )
+    }
+
+    func testLegacyDSStoreMigrationKeepsAllFilesWhenSubstantiveVerificationFails() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try Data("root metadata".utf8).write(to: fixture.source.appendingPathComponent(".DS_Store"))
+        try Data("nested metadata".utf8).write(
+            to: fixture.source.appendingPathComponent("Audio/.DS_Store")
+        )
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 23_000)
+        var record = try failedDurabilityRecord(
+            fixture: fixture,
+            retryCount: 7,
+            updatedAt: now.addingTimeInterval(-3 * 24 * 60 * 60)
+        )
+        let legacyManifest = try legacyManifestIncludingExactDSStore(at: record.stagingURL)
+        record.manifestID = legacyManifest.id
+        record.manifest = legacyManifest
+        record.nextRetryAt = nil
+        try store.save(record)
+        let sourceBefore = try fixture.snapshot(at: record.sourceURL)
+        try Data("substantive mutation".utf8).write(
+            to: record.stagingURL.appendingPathComponent("Artist Song.cpr"),
+            options: .atomic
+        )
+        let stagingBefore = try fixture.snapshot(at: record.stagingURL)
+        let provider = PromotionDurabilityProvider(archiveRoot: fixture.archive)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            now: { now },
+            writeAdmission: allowVaultWrites
+        )
+
+        let results = await recovery.recoverAtLaunch()
+
+        let barrierCount = await provider.barrierCount()
+        XCTAssertEqual(results, [record])
+        XCTAssertEqual(try store.record(id: record.id), record)
+        XCTAssertEqual(try fixture.snapshot(at: record.stagingURL), stagingBefore)
+        XCTAssertEqual(try fixture.snapshot(at: record.sourceURL), sourceBefore)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.appendingPathComponent(".DS_Store").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.appendingPathComponent("Audio/.DS_Store").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.destinationURL.path))
+        XCTAssertEqual(barrierCount, 0)
     }
 
     func testExhaustedAutomaticRecoveryRemainsExplicitlyRetryable() async throws {
@@ -1489,6 +1697,42 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 "\(evidenceCase)"
             )
         }
+    }
+
+    private func legacyManifestIncludingExactDSStore(at root: URL) throws -> VaultManifest {
+        let observed = try VaultManifestBuilder().build(at: root)
+        var entries = observed.entries.filter {
+            $0.relativePath.split(separator: "/").last != ".DS_Store"
+        }
+        let keys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .contentModificationDateKey,
+        ]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: Array(keys)
+        ) else {
+            throw VaultManifestError.missingRoot
+        }
+        while let url = enumerator.nextObject() as? URL {
+            guard url.lastPathComponent == ".DS_Store" else { continue }
+            let values = try url.resourceValues(forKeys: keys)
+            guard values.isRegularFile == true else { continue }
+            let data = try Data(contentsOf: url)
+            let relativePath = String(url.path.dropFirst(root.path.count + 1))
+            entries.append(.init(
+                relativePath: relativePath,
+                type: .regularFile,
+                byteCount: Int64(data.count),
+                modifiedAt: values.contentModificationDate ?? .distantPast,
+                sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            ))
+        }
+        return VaultManifest(
+            entries: entries,
+            rootAllocatedByteCount: observed.rootAllocatedByteCount,
+            rootExtendedAttributeBytes: observed.rootExtendedAttributeBytes
+        )
     }
 
     private func failedDurabilityRecord(

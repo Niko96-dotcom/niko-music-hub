@@ -5,6 +5,48 @@ import XCTest
 @testable import NikoMusicCore
 
 final class VaultManifestTests: XCTestCase {
+    func testManifestBuildAndVerificationIgnoreOnlyExactDSStoreMetadataFiles() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nested = root.appendingPathComponent("Audio", isDirectory: true)
+        let more = nested.appendingPathComponent("More", isDirectory: true)
+        try FileManager.default.createDirectory(at: more, withIntermediateDirectories: true)
+        try Data("project".utf8).write(to: root.appendingPathComponent("Song.cpr"))
+        try Data("root metadata".utf8).write(to: root.appendingPathComponent(".DS_Store"))
+        try Data("nested metadata".utf8).write(to: nested.appendingPathComponent(".DS_Store"))
+        try Data("substantive exact-prefix".utf8).write(
+            to: root.appendingPathComponent(".DS_Store.keep")
+        )
+        try Data("substantive exact-suffix".utf8).write(
+            to: nested.appendingPathComponent("take.DS_Store")
+        )
+        let builder = VaultManifestBuilder()
+
+        let manifest = try builder.build(at: root)
+        let paths = Set(manifest.entries.map(\.relativePath))
+
+        XCTAssertFalse(paths.contains(".DS_Store"))
+        XCTAssertFalse(paths.contains("Audio/.DS_Store"))
+        XCTAssertTrue(paths.contains(".DS_Store.keep"))
+        XCTAssertTrue(paths.contains("Audio/take.DS_Store"))
+
+        try Data("changed root metadata".utf8).write(to: root.appendingPathComponent(".DS_Store"))
+        try FileManager.default.removeItem(at: nested.appendingPathComponent(".DS_Store"))
+        try Data("new nested metadata".utf8).write(
+            to: more.appendingPathComponent(".DS_Store"),
+            options: .atomic
+        )
+        try builder.verify(manifest, at: root)
+
+        try Data("mutated substantive file".utf8).write(
+            to: root.appendingPathComponent(".DS_Store.keep"),
+            options: .atomic
+        )
+        XCTAssertThrowsError(try builder.verify(manifest, at: root)) {
+            XCTAssertEqual($0 as? VaultManifestError, .mismatch)
+        }
+    }
+
     func testSHA256ManifestDetectsSameSizeContentMutation() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }

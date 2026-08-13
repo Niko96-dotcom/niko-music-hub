@@ -230,6 +230,14 @@ public actor LocalVaultTransferEngine {
             .sorted { $0.updatedAt < $1.updatedAt }
         var results: [VaultTransferRecord] = []
         for var record in newestRecords {
+            if needsLegacyMetadataMigration(record) {
+                do {
+                    try migrateLegacyMetadataFiles(&record)
+                } catch {
+                    results.append(record)
+                    continue
+                }
+            }
             if record.state == .failedRecoverable {
                 guard let origin = record.error?.origin,
                       VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else {
@@ -498,6 +506,10 @@ public actor LocalVaultTransferEngine {
             }
             try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fileManager.value.copyItem(at: sourceURL, to: stagingURL)
+            try Self.removeIgnoredMetadataFiles(
+                below: stagingURL,
+                fileManager: fileManager.value
+            )
         }
         let sourceAfter = try manifestBuilder.build(at: record.sourceURL, id: sourceBefore.id, createdAt: sourceBefore.createdAt)
         guard sourceBefore.entries == sourceAfter.entries else { throw LocalVaultTransferError.sourceMutated }
@@ -506,6 +518,103 @@ public actor LocalVaultTransferEngine {
         record.totalBytes = sourceBefore.totalBytes
         record.completedBytes = sourceBefore.totalBytes
         try persist(&record)
+    }
+
+    private func needsLegacyMetadataMigration(_ record: VaultTransferRecord) -> Bool {
+        let resumesAtDurability = record.state == .awaitingProviderDurability
+            || (record.state == .failedRecoverable
+                && record.error?.origin == .awaitingProviderDurability)
+        guard resumesAtDurability, let manifest = record.manifest else { return false }
+        return manifest.entries.contains { entry in
+            entry.type == .regularFile
+                && VaultArchiveContentPolicy.ignoresRegularFile(
+                    relativePath: entry.relativePath
+                )
+        }
+    }
+
+    /// Transfers created before exact `.DS_Store` exclusion persisted those
+    /// Finder metadata files as archive content. Verify every substantive byte
+    /// against that legacy manifest before removing only the metadata files,
+    /// then persist a fresh manifest before any provider or promotion step.
+    private func migrateLegacyMetadataFiles(_ record: inout VaultTransferRecord) throws {
+        try validatePaths(record)
+        guard let legacyManifest = record.manifest,
+              fileManager.fileExists(atPath: record.stagingURL.path) else {
+            throw VaultManifestError.missingRoot
+        }
+        let substantiveManifest = VaultManifest(
+            id: legacyManifest.id,
+            createdAt: legacyManifest.createdAt,
+            entries: legacyManifest.entries.filter { entry in
+                entry.type != .regularFile
+                    || !VaultArchiveContentPolicy.ignoresRegularFile(
+                        relativePath: entry.relativePath
+                    )
+            },
+            rootAllocatedByteCount: legacyManifest.rootAllocatedByteCount,
+            rootExtendedAttributeBytes: legacyManifest.rootExtendedAttributeBytes
+        )
+        try substantiveManifest.validatePersistedContentEnvelope()
+        try manifestBuilder.verify(substantiveManifest, at: record.stagingURL)
+        try Self.removeIgnoredMetadataFiles(
+            below: record.stagingURL,
+            fileManager: fileManager
+        )
+        let migratedManifest = try manifestBuilder.build(
+            at: record.stagingURL,
+            createdAt: now()
+        )
+        guard substantiveManifest.hasSameImmutableContent(as: migratedManifest) else {
+            throw VaultManifestError.mismatch
+        }
+        try manifestBuilder.verify(migratedManifest, at: record.stagingURL)
+        record.manifestID = migratedManifest.id
+        record.manifest = migratedManifest
+        record.projectionSupplement = nil
+        record.totalBytes = migratedManifest.totalBytes
+        record.completedBytes = migratedManifest.totalBytes
+        record.durability = nil
+        record.retryCount = 0
+        record.nextRetryAt = nil
+        try persist(&record)
+    }
+
+    private static func removeIgnoredMetadataFiles(
+        below root: URL,
+        fileManager: FileManager
+    ) throws {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey]
+        var enumerationFailure: Error?
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: Array(keys),
+            options: [],
+            errorHandler: { _, error in
+                enumerationFailure = error
+                return false
+            }
+        ) else {
+            throw VaultManifestError.missingRoot
+        }
+        var metadataFiles: [URL] = []
+        while let url = enumerator.nextObject() as? URL {
+            let values = try url.resourceValues(forKeys: keys)
+            guard values.isRegularFile == true,
+                  values.isSymbolicLink != true,
+                  VaultArchiveContentPolicy.ignoresRegularFile(at: url) else {
+                continue
+            }
+            guard PathSafety().isResolvedContainedWithoutNestedSymlinks(url, in: root),
+                  url.standardizedFileURL != root.standardizedFileURL else {
+                throw LocalVaultTransferError.unsafeStagingPath
+            }
+            metadataFiles.append(url)
+        }
+        if let enumerationFailure { throw enumerationFailure }
+        for url in metadataFiles {
+            try fileManager.removeItem(at: url)
+        }
     }
 
     private func promote(_ record: inout VaultTransferRecord) async throws {

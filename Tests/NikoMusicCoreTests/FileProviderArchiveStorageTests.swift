@@ -739,6 +739,37 @@ final class FileProviderArchiveStorageTests: XCTestCase {
         XCTAssertLessThan(visits, 3)
     }
 
+    func testProviderDurabilityEnumerationIgnoresOnlyExactDSStoreMetadataFiles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString,
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nested = root.appendingPathComponent("Nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try Data("root metadata".utf8).write(to: root.appendingPathComponent(".DS_Store"))
+        try Data("nested metadata".utf8).write(to: nested.appendingPathComponent(".DS_Store"))
+        try Data("keep exact-prefix".utf8).write(to: root.appendingPathComponent(".DS_Store.keep"))
+        try Data("keep exact-suffix".utf8).write(to: nested.appendingPathComponent("song.DS_Store"))
+        try Data("project".utf8).write(to: nested.appendingPathComponent("Song.cpr"))
+        var regularFileNames: [String] = []
+
+        try SystemFileProviderArchiveService.forEachItem(
+            fileManager: .default,
+            at: root,
+            keys: [.isRegularFileKey]
+        ) { url in
+            if try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true {
+                regularFileNames.append(url.lastPathComponent)
+            }
+        }
+
+        XCTAssertFalse(regularFileNames.contains(".DS_Store"))
+        XCTAssertTrue(regularFileNames.contains(".DS_Store.keep"))
+        XCTAssertTrue(regularFileNames.contains("song.DS_Store"))
+        XCTAssertTrue(regularFileNames.contains("Song.cpr"))
+    }
+
     func testSystemProviderEnumerationFailsClosedOnUnreadableSubtree() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let blocked = root.appendingPathComponent("blocked", isDirectory: true)

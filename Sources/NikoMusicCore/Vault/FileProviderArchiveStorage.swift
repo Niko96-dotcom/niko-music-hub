@@ -592,6 +592,7 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
             try shouldContinue()
             guard let url = enumerator.nextObject() as? URL else { break }
             try shouldContinue()
+            if VaultArchiveContentPolicy.ignoresRegularFile(at: url) { continue }
             try visit(url)
         }
         if let enumerationError { throw enumerationError }

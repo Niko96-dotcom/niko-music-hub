@@ -2,6 +2,19 @@ import CryptoKit
 import Darwin
 import Foundation
 
+enum VaultArchiveContentPolicy {
+    static let ignoredMetadataFileName = ".DS_Store"
+
+    static func ignoresRegularFile(at url: URL) -> Bool {
+        url.lastPathComponent == ignoredMetadataFileName
+    }
+
+    static func ignoresRegularFile(relativePath: String) -> Bool {
+        relativePath.split(separator: "/", omittingEmptySubsequences: false).last
+            == Substring(ignoredMetadataFileName)
+    }
+}
+
 public struct VaultManifest: Codable, Equatable, Sendable, Identifiable {
     public enum EntryType: String, Codable, Sendable {
         case directory
@@ -323,6 +336,10 @@ public struct VaultManifestBuilder: @unchecked Sendable {
             if values.isSymbolicLink == true {
                 throw VaultManifestError.unsupportedSymbolicLink(relativePath)
             }
+            if values.isRegularFile == true,
+               VaultArchiveContentPolicy.ignoresRegularFile(at: url) {
+                continue
+            }
             let modifiedAt = values.contentModificationDate ?? .distantPast
             let allocatedByteCount = metadata.allocatedByteCount
             let extendedAttributeBytes = metadata.extendedAttributeBytes
@@ -436,6 +453,10 @@ public struct VaultManifestBuilder: @unchecked Sendable {
             let relativePath = try Self.relativePath(of: url, below: root)
             if values.isSymbolicLink == true {
                 throw VaultManifestError.unsupportedSymbolicLink(relativePath)
+            }
+            if values.isRegularFile == true,
+               VaultArchiveContentPolicy.ignoresRegularFile(at: url) {
+                continue
             }
             let modifiedAt = values.contentModificationDate ?? .distantPast
             let entry: VaultManifest.Entry
