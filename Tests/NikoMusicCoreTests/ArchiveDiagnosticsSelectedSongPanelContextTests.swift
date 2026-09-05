@@ -4,9 +4,9 @@ import XCTest
 final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
     func testPanelCprLineIncludesSummary() {
         let line = ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(
-            cprSummary: "no CPR versions"
+            cprSummary: "no project versions"
         )
-        XCTAssertTrue(line.contains("no CPR versions"))
+        XCTAssertTrue(line.contains("no project versions"))
     }
 
     func testPanelNotesLineIncludesNotes() {
@@ -28,21 +28,21 @@ final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
     }
 
     func testCprLineMatchesExport() {
-        let export = "selected_song_cpr=no CPR versions"
+        let export = "selected_song_cpr=no project versions"
         XCTAssertTrue(
             ArchiveDiagnosticsSelectedSongPanelContext.cprLineMatchesExport(
                 in: export,
-                cprSummary: "no CPR versions"
+                cprSummary: "no project versions"
             )
         )
     }
 
     func testWarningLinesMatchExport() {
-        let export = "selected_song_warning=No CPR project files found"
+        let export = "selected_song_warning=No project files (.cpr or .als) found"
         XCTAssertTrue(
             ArchiveDiagnosticsSelectedSongPanelContext.warningLinesMatchExport(
                 in: export,
-                warningLines: ["No CPR project files found"]
+                warningLines: ["No project files (.cpr or .als) found"]
             )
         )
     }

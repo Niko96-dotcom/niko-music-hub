@@ -44,6 +44,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .keepLocal: "Keep Local prevents automatic archiving."
         case .mutationInProgress: "Another Project Vault operation is already in progress."
         case .transferOwned: "This project already has a Project Vault transfer that must finish or be reviewed."
+        case .activityPostponed(.cubaseRunning): "Archiving is paused while Cubase or Ableton Live is running. Close the DAW and retry."
         case .activityPostponed(let reason): "Archiving was postponed safely: \(reason)."
         case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
         case .noVerifiedArchive: "No verified archive generation is available."
@@ -607,7 +608,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
 
         if let persistedSourceTransfer,
            VaultTransferOwnershipPolicy.isVerifiedTerminal(persistedSourceTransfer.state),
-           let entry = try catalogStore.loadEntries().first(where: {
+           try catalogStore.loadEntries().contains(where: {
                $0.record.id == persistedSourceTransfer.projectID
            }),
            try matchesCurrentSource(persistedSourceTransfer) {
@@ -623,6 +624,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 terminalUsability[persistedSourceTransfer.id] = isUsable
             }
             if isUsable {
+                let entry = try ensureCatalogEntry(for: song, configuration: configuration)
                 return try await reuseTerminal(persistedSourceTransfer, entry: entry)
             }
         }
@@ -920,6 +922,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         }),
            let index = existing.firstIndex(where: { $0.record.id == transfer.projectID }) {
             var entries = existing
+            entries[index].record.canonicalTitle = song.effectiveDisplayTitle
             entries[index].record.workflowState = song.workflowStatus
             entries[index].record.lastActivityAt = song.effectiveLatestCPR?.modifiedAt
             try catalogStore.apply(ProjectCatalogReconciliation(

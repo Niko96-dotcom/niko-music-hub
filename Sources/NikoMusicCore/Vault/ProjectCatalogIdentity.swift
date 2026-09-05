@@ -259,6 +259,13 @@ public struct ProjectCatalogReconciler: Sendable {
     }
 
     private func merge(_ observation: ProjectCatalogObservation, into entry: inout ProjectCatalogEntry, observedAt: Date) {
+        // Display identity may evolve with the current full-song delivery.
+        // File evidence owns the ProjectID; older archive labels cannot undo
+        // the title learned from the active project.
+        if observation.location.kind == .active,
+           !observation.canonicalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            entry.record.canonicalTitle = observation.canonicalTitle
+        }
         let sameLocation = entry.record.locations.firstIndex {
             $0.rootID == observation.location.rootID && $0.relativePath == observation.location.relativePath
         }

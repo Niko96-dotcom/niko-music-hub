@@ -9,36 +9,59 @@ public enum VaultRestoreFaultPoint: String, CaseIterable, Sendable {
     case openingInCubase
 }
 
-public enum LocalVaultRestoreError: Error, Equatable, Sendable {
+public enum LocalVaultRestoreError: LocalizedError, Equatable, Sendable {
     case archiveGenerationNotFound
     case archiveGenerationNotVerified
     case missingManifest
     case invalidDestination
     case unsafeStagingPath
     case occupiedDestination
-    case noCubaseProject
+    case noSupportedProject
     case restoreAlreadyInProgress
     case crossVolumePromotion
     case writeTargetVolumeMismatch
     case unsafeArchiveGenerationPath
     case archiveLocalityUnavailable
+    case archiveContentsChanged(String)
     case legacyProjectionIdentityMismatch
     case archiveTransferBindingUnavailable
     case activeDestinationIntegrityMismatch
+
+    public var errorDescription: String? {
+        switch self {
+        case .archiveContentsChanged(let detail):
+            "Archive verification failed: \(detail) The archive was kept. Review the changed file before restoring."
+        case .archiveLocalityUnavailable:
+            "The archive provider could not confirm that the verified files are available locally. Check the provider's download status before retrying."
+        default:
+            "Restore stopped safely: \(String(describing: self))."
+        }
+    }
+
+    static func fromLocalityFailure(_ error: Error) -> LocalVaultRestoreError {
+        switch error {
+        case FileProviderArchiveStorageError.expectedFileSizeMismatch(let url, let expected, let actual):
+            .archiveContentsChanged("\(url.lastPathComponent) changed from \(expected) to \(actual) bytes since verification.")
+        case FileProviderArchiveStorageError.expectedItemMismatch:
+            .archiveContentsChanged("An archive item no longer matches the recorded file type or size.")
+        default:
+            .archiveLocalityUnavailable
+        }
+    }
 }
 
 public struct SafeVaultProjectOpener: VaultProjectOpening, @unchecked Sendable {
     private let opener: MusicItemOpener
-    private let detector: CPRVersionDetector
+    private let detector: ProjectVersionDetector
 
     public init(workspace: (any WorkspaceOpening)? = nil, fileManager: FileManager = .default) {
         opener = MusicItemOpener(workspace: workspace)
-        detector = CPRVersionDetector(fileManager: fileManager)
+        detector = ProjectVersionDetector(fileManager: fileManager)
     }
 
     public func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
         let versions = try detector.detectVersions(in: projectURL)
-        guard let latest = detector.latestCPR(from: versions) else { throw LocalVaultRestoreError.noCubaseProject }
+        guard let latest = detector.latestProject(from: versions) else { throw LocalVaultRestoreError.noSupportedProject }
         let song = Song(
             folderPath: projectURL,
             originalFolderName: projectURL.lastPathComponent,
@@ -207,7 +230,7 @@ public actor LocalVaultRestoreEngine {
                         if needsLegacySupplement {
                             try markLegacyProjectionReview(&record)
                         }
-                        throw LocalVaultRestoreError.archiveLocalityUnavailable
+                        throw LocalVaultRestoreError.fromLocalityFailure(error)
                     }
                     if needsLegacySupplement, locality != .fullyLocalCurrent {
                         try markLegacyProjectionReview(&record)
@@ -265,7 +288,7 @@ public actor LocalVaultRestoreEngine {
                         if needsLegacySupplement {
                             try markLegacyProjectionReview(&record)
                         }
-                        throw LocalVaultRestoreError.archiveLocalityUnavailable
+                        throw LocalVaultRestoreError.fromLocalityFailure(error)
                     }
                     guard postPrepareLocality == .fullyLocalCurrent else {
                         if needsLegacySupplement {
@@ -323,7 +346,7 @@ public actor LocalVaultRestoreEngine {
                                 manifest: record.manifest
                             )
                         } catch {
-                            throw LocalVaultRestoreError.archiveLocalityUnavailable
+                            throw LocalVaultRestoreError.fromLocalityFailure(error)
                         }
                         guard locality == .fullyLocalCurrent else {
                             if Self.requiresProjectionSupplement(record.manifest),
@@ -377,9 +400,22 @@ public actor LocalVaultRestoreEngine {
         } catch is VaultTransferInterruption {
             throw VaultTransferInterruption()
         } catch {
-            record.error = String(describing: error)
+            let reportedError: Error
+            switch error {
+            case FileProviderArchiveStorageError.expectedFileSizeMismatch,
+                 FileProviderArchiveStorageError.expectedItemMismatch:
+                reportedError = LocalVaultRestoreError.fromLocalityFailure(error)
+            default:
+                reportedError = error
+            }
+            if case LocalVaultRestoreError.archiveContentsChanged = reportedError {
+                record.failureReason = .archiveGenerationIntegrityMismatch
+                record.error = reportedError.localizedDescription
+            } else {
+                record.error = String(describing: reportedError)
+            }
             try persist(&record)
-            throw error
+            throw reportedError
         }
     }
 
@@ -446,7 +482,7 @@ public actor LocalVaultRestoreEngine {
             do {
                 locality = try await provider.currentLocality(at: sourceURL, manifest: manifest)
             } catch {
-                throw LocalVaultRestoreError.archiveLocalityUnavailable
+                throw LocalVaultRestoreError.fromLocalityFailure(error)
             }
             guard locality == .fullyLocalCurrent else {
                 throw LocalVaultRestoreError.archiveLocalityUnavailable

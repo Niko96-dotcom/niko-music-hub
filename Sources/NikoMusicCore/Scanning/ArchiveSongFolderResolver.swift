@@ -58,7 +58,7 @@ public enum ArchiveSongFolderResolver {
                 if fileManager.fileExists(atPath: immediateChild.path, isDirectory: &isDirectory),
                    isDirectory.boolValue {
                     songFolders.insert(immediateChild)
-                } else if first.lowercased().hasSuffix(".cpr") {
+                } else if ProjectFileFormat(url: path) != nil {
                     rootsForRootLevelScan.insert(root)
                 }
             } else {

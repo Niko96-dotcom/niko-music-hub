@@ -7,6 +7,10 @@ public struct ProjectVersion: Identifiable, Hashable, Sendable, Codable {
     public let modifiedAt: Date
     public let detectedVersionNumber: Int?
 
+    public var format: ProjectFileFormat? { ProjectFileFormat(url: filePath) }
+    public var applicationName: String { format?.displayName ?? "default app" }
+    public var fileTypeLabel: String { format?.fileLabel ?? "Project" }
+
     public init(
         filePath: URL,
         fileName: String,

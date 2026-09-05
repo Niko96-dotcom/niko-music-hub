@@ -2,6 +2,8 @@
 
 Last verified: 2026-05-25
 
+Current Cubase/Ableton folder behavior and restore UI are documented in [Cubase, Ableton Live, and Project Vault restore](ableton-and-project-restore.md). The v0.1 scope below is historical.
+
 ## Product definition
 
 **Niko Music Hub** is one native macOS SwiftUI app that combines:

@@ -284,7 +284,7 @@ final class FileProviderArchiveStorageTests: XCTestCase {
             _ = try await service.currentLocality(root: root, expectedItems: [item])
             XCTFail("same-path size growth must fail before locality is trusted")
         } catch {
-            XCTAssertEqual(error as? FileProviderArchiveStorageError, .expectedItemMismatch)
+            XCTAssertEqual(error as? FileProviderArchiveStorageError, .expectedFileSizeMismatch(item.url, expected: 42, actual: 43))
         }
         XCTAssertTrue(downloader.requestedURLs.isEmpty)
     }
@@ -336,7 +336,7 @@ final class FileProviderArchiveStorageTests: XCTestCase {
 
         await XCTAssertThrowsErrorAsync(
             try await preflightService.materialize(root: root, expectedItems: [first, later]),
-            equals: FileProviderArchiveStorageError.expectedItemMismatch
+            equals: FileProviderArchiveStorageError.expectedFileSizeMismatch(later.url, expected: 84, actual: 85)
         )
         XCTAssertTrue(preflightDownloader.requestedURLs.isEmpty)
 
@@ -359,7 +359,7 @@ final class FileProviderArchiveStorageTests: XCTestCase {
         )
         await XCTAssertThrowsErrorAsync(
             try await pollingService.materialize(root: root, expectedItems: [first]),
-            equals: FileProviderArchiveStorageError.expectedItemMismatch
+            equals: FileProviderArchiveStorageError.expectedFileSizeMismatch(first.url, expected: 42, actual: 43)
         )
         XCTAssertEqual(pollingDownloader.requestedURLs, [first.url])
     }

@@ -50,6 +50,13 @@ public struct PreviewConfidenceRanker: Sendable {
 
     /// Returns which comparison step would rank `winner` above `runnerUp`.
     public func decidingFactor(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> PreviewRankingDecidingFactor {
+        if PreviewFilenameSemantics.isSongPreview(winner) != PreviewFilenameSemantics.isSongPreview(runnerUp) {
+            return .songSuitability
+        }
+        if PreviewFilenameSemantics.isSongPreview(winner),
+           Self.isDeliveryLocation(winner) != Self.isDeliveryLocation(runnerUp) {
+            return .deliveryLocation
+        }
         if winner.confidenceScore != runnerUp.confidenceScore {
             return .score
         }
@@ -75,9 +82,14 @@ public struct PreviewConfidenceRanker: Sendable {
         return PreviewSongIdentity.parse(fileName) != nil && maturity != .sketch ? .demo : maturity
     }
 
+    private static func isDeliveryLocation(_ candidate: PreviewCandidate) -> Bool {
+        candidate.folderRole == .root || candidate.folderRole == .mixdown
+    }
+
     /// Facts used by scoring and tie-breaks live only for this ranking operation.
     private struct RankedCandidate {
         var candidate: PreviewCandidate
+        let isSongPreview: Bool
         let maturity: PreviewProductionMaturity
         let version: Int?
         let titleMatches: Int
@@ -91,6 +103,12 @@ public struct PreviewConfidenceRanker: Sendable {
     ) -> Bool {
         let lhs = left.candidate
         let rhs = right.candidate
+        if left.isSongPreview != right.isSongPreview {
+            return left.isSongPreview
+        }
+        if left.isSongPreview, Self.isDeliveryLocation(lhs) != Self.isDeliveryLocation(rhs) {
+            return Self.isDeliveryLocation(lhs)
+        }
         if lhs.confidenceScore != rhs.confidenceScore {
             return lhs.confidenceScore > rhs.confidenceScore
         }
@@ -143,7 +161,8 @@ public struct PreviewConfidenceRanker: Sendable {
         let parsedVersion = PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName)
         let previewVersion = parsedVersion ?? candidate.detectedVersionNumber
         let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)
-        let identity = PreviewSongIdentity.parse(candidate.fileName)
+        let identity = candidate.folderRole != .samples && candidate.folderRole != .stems
+            ? PreviewSongIdentity.parse(candidate.fileName) : nil
         if identity != nil, !PreviewFilenameSemantics.isPartialExport(in: candidate.fileName) {
             score += 55
             reasons.append("filename:artist-title")
@@ -189,6 +208,9 @@ public struct PreviewConfidenceRanker: Sendable {
         case .stems:
             score -= 15
             reasons.append("folder:stems")
+        case .samples:
+            score -= 120
+            reasons.append("folder:source-samples")
         case .other:
             score += 3
             reasons.append("folder:other")
@@ -273,9 +295,10 @@ public struct PreviewConfidenceRanker: Sendable {
         updated.confidenceReasons = reasons
         let isDelivery = identity != nil && !PreviewFilenameSemantics.isPartialExport(in: candidate.fileName)
             && !PreviewSongIdentity.isTechnicalExport(candidate.fileName)
-            && candidate.folderRole != .stems && (candidate.durationSeconds ?? 30) >= 30
+            && candidate.folderRole != .stems && candidate.folderRole != .samples && (candidate.durationSeconds ?? 30) >= 30
         return RankedCandidate(
-            candidate: updated, maturity: identity != nil && maturity != .sketch ? .demo : maturity,
+            candidate: updated, isSongPreview: PreviewFilenameSemantics.isSongPreview(updated),
+            maturity: identity != nil && maturity != .sketch ? .demo : maturity,
             version: previewVersion, titleMatches: tokenHits,
             deliveryFamily: isDelivery ? identity?.displayTitle.lowercased() : nil
         )

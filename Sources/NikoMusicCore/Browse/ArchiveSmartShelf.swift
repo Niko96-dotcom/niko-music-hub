@@ -12,7 +12,7 @@ public enum ArchiveSmartShelf: String, CaseIterable, Sendable, Codable {
         switch self {
         case .allSongs: "All songs"
         case .recentlyBounced: "Recently Bounced"
-        case .recentCPRActivity: "Recent CPR Activity"
+        case .recentCPRActivity: "Recent Project Activity"
         case .hasStems: "Has Stems"
         case .byCollaborator: "By Collaborator"
         case .quietSongs: "Quiet Songs"

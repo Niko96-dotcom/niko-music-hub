@@ -28,8 +28,8 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertTrue(titles.contains("Neon Hook"))
         XCTAssertTrue(titles.contains("Second Song"))
         XCTAssertTrue(titles.contains("Broken Folder Example"))
-        XCTAssertTrue(titles.contains("Preview Ranking Lab"))
-        XCTAssertTrue(titles.contains("90s Rave"))
+        XCTAssertTrue(titles.contains("Lab Song"))
+        XCTAssertTrue(titles.contains("Graffiti"))
         XCTAssertEqual(result.songs.count, 9)
     }
 
@@ -39,7 +39,7 @@ final class CubaseArchiveScannerTests: XCTestCase {
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
         let broken = try XCTUnwrap(result.songs.first { $0.displayTitle == "Broken Folder Example" })
         XCTAssertTrue(broken.projectVersions.isEmpty)
-        XCTAssertTrue(broken.scanWarnings.contains(where: { $0.contains("CPR") }))
+        XCTAssertTrue(broken.scanWarnings.contains(where: { $0.contains("No project files (.cpr or .als)") }))
     }
 
     func testBrokenFolderLoadsSidecarNotesText() throws {

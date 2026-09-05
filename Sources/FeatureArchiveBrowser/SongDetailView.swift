@@ -209,10 +209,10 @@ struct SongDetailView: View {
         HubLabeledButton(
             icon: vaultPresentation?.reviewAction == nil ? "pianokeys" : "folder",
             label: vaultPresentation?.reviewAction?.label
-                ?? vaultPresentation?.primaryAction.label
-                ?? "Open in Cubase",
+                ?? (vaultPresentation?.primaryAction == .openInCubase ? liveSong.openProjectLabel : vaultPresentation?.primaryAction.label)
+                ?? liveSong.openProjectLabel,
             style: .primary,
-            help: vaultPresentation?.explanation ?? "Open latest CPR (O)",
+            help: vaultPresentation?.explanation ?? "Open the main project in its DAW (O)",
             isEnabled: (vaultPresentation?.primaryAction ?? .openInCubase) != .openInCubase
                 || liveSong.effectiveLatestCPR != nil
         ) {
@@ -223,7 +223,7 @@ struct SongDetailView: View {
             icon: "folder",
             label: "Reveal in Finder",
             style: .secondary,
-            help: "Reveal CPR or folder (F)",
+            help: "Reveal project or folder (F)",
             isEnabled: viewModel.preferredRevealURL(for: liveSong) != nil
         ) {
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
@@ -256,6 +256,12 @@ struct SongDetailView: View {
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if liveSong.projectFormats.contains(.abletonLive) {
+                    Text("Before archiving, use File → Collect All and Save in Ableton Live to include external samples. Plug-ins must remain installed separately.")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { vaultControls }
                     VStack(alignment: .leading, spacing: 12) { vaultControls }
@@ -309,9 +315,9 @@ struct SongDetailView: View {
     private var essentialInfo: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let cpr = liveSong.effectiveLatestCPR {
-                infoLine(label: "Latest CPR", value: cpr.fileName)
+                infoLine(label: "Main project", value: cpr.fileName)
             } else {
-                infoLine(label: "Latest CPR", value: "None found", warning: true)
+                infoLine(label: "Main project", value: "None found", warning: true)
             }
 
             if let estimate = viewModel.bpmEstimate(for: liveSong) {
@@ -438,7 +444,7 @@ struct SongDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             disclosureHeader(
                 title: "Project files",
-                subtitle: "\(liveSong.projectVersions.count) Cubase versions",
+                subtitle: "\(liveSong.projectVersions.count) project versions",
                 expanded: viewModel.songDetailsExpanded
             ) {
                 viewModel.songDetailsExpanded.toggle()
@@ -557,7 +563,7 @@ struct SongDetailView: View {
                             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     }
                 } else {
-                    Text("No plugin list available for this CPR.")
+                    Text("No plugin list available for this project.")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
@@ -568,7 +574,7 @@ struct SongDetailView: View {
     private var cprListSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HStack(alignment: .firstTextBaseline) {
-                HubSectionHeader("CPR versions")
+                HubSectionHeader("Project versions")
                 Spacer()
                 Text(liveSong.cprSelectionMode == .manual ? "Manual main" : "Auto main")
                     .font(HubDesignSystem.Typography.caption())
@@ -576,7 +582,7 @@ struct SongDetailView: View {
             }
 
             if liveSong.projectVersions.isEmpty {
-                Text("No CPR project files found")
+                Text("No project files (.cpr or .als) found")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.warning)
             } else {
@@ -590,9 +596,9 @@ struct SongDetailView: View {
                 if liveSong.cprSelectionMode == .manual {
                     HubLabeledButton(
                         icon: "arrow.uturn.backward",
-                        label: "Auto CPR",
+                        label: "Auto project",
                         style: .secondary,
-                        help: "Revert to automatic CPR selection"
+                        help: "Revert to automatic project selection"
                     ) {
                         viewModel.revertCPRToAuto(for: liveSong)
                     }
@@ -624,6 +630,9 @@ struct SongDetailView: View {
                 Spacer(minLength: 0)
                 if !isIgnored {
                     Menu {
+                        Button("Open in \(version.applicationName)") {
+                            try? viewModel.openProjectVersion(version, for: liveSong)
+                        }
                         Button("Set Main") {
                             viewModel.setManualMainCPR(for: liveSong, versionID: version.id)
                         }
@@ -641,7 +650,7 @@ struct SongDetailView: View {
                 }
             }
 
-            Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+            Text("\(version.applicationName) · \(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
 

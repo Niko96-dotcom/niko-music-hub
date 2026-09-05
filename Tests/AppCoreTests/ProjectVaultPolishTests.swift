@@ -4,6 +4,22 @@ import NikoMusicCore
 import XCTest
 
 final class ProjectVaultPolishTests: XCTestCase {
+    func testArchiveIntegrityFailureNamesChangedFileInsteadOfOfferingBlindRetry() {
+        let record = ProjectRecord(canonicalTitle: "Changed Song", locations: [])
+        let root = URL(fileURLWithPath: "/tmp/vault-fixture")
+        var restore = VaultRestoreRecord(
+            projectID: record.id, archiveGenerationURL: root.appendingPathComponent("generation"),
+            stagingURL: root.appendingPathComponent("staging"), destinationURL: root.appendingPathComponent("active"),
+            manifest: VaultManifest(entries: [])
+        )
+        restore.failureReason = .archiveGenerationIntegrityMismatch
+        restore.error = "Archive verification failed: Song.cpr changed from 42 to 43 bytes since verification."
+        let presentation = ProjectVaultCardPresentation(record: record, restore: restore)
+        XCTAssertEqual(presentation.state, .needsAttention)
+        XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertEqual(presentation.explanation, restore.error)
+    }
+
     func testRestoreDrillUsesOnlyItsSyntheticTemporaryFixtureAndPreservesArchive() throws {
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)

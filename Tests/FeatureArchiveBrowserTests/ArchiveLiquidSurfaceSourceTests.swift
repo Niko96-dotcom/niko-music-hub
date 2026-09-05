@@ -36,7 +36,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
             "state: .selected",
             "state: .warning",
             "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge",
-            "Welcome to your Cubase archive",
+            "Welcome to your music archive",
         ].forEach { required in
             XCTAssertTrue(combined.contains(required), "Missing archive Liquid surface source: \(required)")
         }
@@ -50,7 +50,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(detail.contains("hubSurface(.raised"), "Song detail preview should use a quiet raised surface")
         XCTAssertTrue(detail.contains("hubSurface(.panel"), "Collapsed detail groups should use Settings-like panels")
         XCTAssertTrue(detail.contains("metadataExpanded"), "Metadata must start collapsed (ARCH-07)")
-        XCTAssertTrue(detail.contains("Open in Cubase"), "Primary Cubase action must remain labeled")
+        XCTAssertTrue(detail.contains("liveSong.openProjectLabel"), "Primary project action must identify the selected DAW")
         XCTAssertTrue(detail.contains("Mixdown BPM"), "BPM fidelity must remain visible in essential info")
         XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
         XCTAssertTrue(detail.contains("liveSong"), "Detail must resolve live catalog snapshots")

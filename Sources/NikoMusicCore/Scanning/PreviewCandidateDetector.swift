@@ -73,9 +73,17 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let components = relative.split(separator: "/").map(String.init)
         let lowerComponents = components.map { $0.lowercased() }
-        if lowerComponents.contains("stems")
-            || lowerComponents.contains("processed") && lowerComponents.contains("samples") {
+        if lowerComponents.contains("stems") {
             return .stems
+        }
+        // Cubase's Audio folder can also contain the finished delivery. Classify
+        // its filenames individually; only explicit source/reference folders
+        // imply source media on their own.
+        if lowerComponents.contains(where: { ["samples", "edits", "references", "reference", "refs"].contains($0) }) {
+            return .samples
+        }
+        if lowerComponents.contains(where: { ["mixdown", "export", "exports"].contains($0) }) {
+            return .mixdown
         }
         guard let first = components.first?.lowercased() else { return .root }
         switch first {

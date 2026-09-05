@@ -8,6 +8,7 @@ public protocol WorkspaceOpening: Sendable {
 public enum MusicItemOpenerError: Error, Equatable, Sendable {
     case pathOutsideAllowedRoots(URL)
     case pathDoesNotExist(URL)
+    case applicationOpenFailed(URL)
 }
 
 public struct MusicItemOpener: Sendable {
@@ -31,25 +32,25 @@ public struct MusicItemOpener: Sendable {
     }
 
     public func openLatestCPR(for song: Song, dryRun: Bool, allowedRoots: [URL]) throws -> OpenResult? {
-        guard let latest = song.effectiveLatestCPR ?? song.latestCPR else { return nil }
+        guard let latest = song.effectiveLatestProject else { return nil }
         let resolved = try resolveCPRPath(latest.filePath, allowedRoots: allowedRoots)
         let path = resolved.path
         if dryRun {
-            log("[dry-run] open CPR: \(path)")
+            log("[dry-run] open \(latest.fileTypeLabel): \(path)")
             return OpenResult(path: path, dryRun: true)
         }
         if let workspace {
-            _ = workspace.open(resolved)
+            guard workspace.open(resolved) else { throw MusicItemOpenerError.applicationOpenFailed(resolved) }
         }
         return OpenResult(path: path, dryRun: false)
     }
 
     public func revealLatestCPR(for song: Song, dryRun: Bool, allowedRoots: [URL]) throws -> OpenResult? {
-        guard let latest = song.effectiveLatestCPR ?? song.latestCPR else { return nil }
+        guard let latest = song.effectiveLatestProject else { return nil }
         let resolved = try resolveCPRPath(latest.filePath, allowedRoots: allowedRoots)
         let path = resolved.path
         if dryRun {
-            log("[dry-run] reveal CPR: \(path)")
+            log("[dry-run] reveal \(latest.fileTypeLabel): \(path)")
             return OpenResult(path: path, dryRun: true)
         }
         workspace?.revealInFinder(resolved)

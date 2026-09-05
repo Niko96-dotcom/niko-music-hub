@@ -171,7 +171,7 @@ struct ArchiveBoardView: View {
             HubIconButton(
                 systemImage: "folder.badge.plus",
                 accessibilityLabel: "Add archive root",
-                help: "Add a folder of Cubase song folders"
+                help: "Add a folder of Cubase or Ableton song folders"
             ) {
                 onChooseRoot()
             }
@@ -199,7 +199,7 @@ struct ArchiveBoardView: View {
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(viewModel.isScanning
                 ? "Songs will appear on the board as the scan finds them."
-                : "Add a folder of Cubase song folders to fill the board.")
+                : "Add a folder of Cubase or Ableton song folders to fill the board.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -535,10 +535,10 @@ struct ArchiveBoardCardView: View {
                             .buttonStyle(.plain)
                             .help(vaultPresentation.primaryAction == .retry
                                 ? "Retry the preserved Project Vault transfer"
-                                : "Get a verified local copy and open it in Cubase")
+                                : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
                             .accessibilityLabel(vaultPresentation.primaryAction == .retry
                                 ? "Retry Project Vault transfer"
-                                : "Get local copy and open in Cubase")
+                                : "Restore local copy and open project")
                     }
                 }
             }

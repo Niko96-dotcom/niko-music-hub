@@ -41,7 +41,7 @@ enum ArchiveUserFlowSmokeScenarios {
         skippedPanelSubstrings: ["LOOSE_FILE.txt", "README.md"],
         expectedSongWarningExportLines: [
             "song=Broken Folder Example",
-            "  warning=No CPR project files found",
+            "  warning=No project files (.cpr or .als) found",
         ],
         supportSummarySubstrings: [
             "roots:",
@@ -55,15 +55,15 @@ enum ArchiveUserFlowSmokeScenarios {
     static let brokenFolder = BrokenFolderScenario(
         displayTitle: "Broken Folder Example",
         sidecarNotes: "notes only",
-        displayWarningContains: "CPR",
+        displayWarningContains: "project",
         exportMustContain: [
             "selected_song_title=Broken Folder Example",
-            "selected_song_cpr=no CPR versions",
-            "selected_song_warning=No CPR project files found",
+            "selected_song_cpr=no project versions",
+            "selected_song_warning=No project files (.cpr or .als) found",
             "selected_song_notes=notes only",
         ],
-        cprLineSubstring: "no CPR versions",
-        warningLineSubstring: "No CPR project files found",
+        cprLineSubstring: "no project versions",
+        warningLineSubstring: "No project files (.cpr or .als) found",
         notesLineSubstring: "notes only"
     )
 
@@ -96,18 +96,18 @@ enum ArchiveUserFlowSmokeScenarios {
     static let rankingLab = RankingLabScenario(
         folderName: "Preview Ranking Lab",
         exportMustContain: [
-            "selected_song_title=Preview Ranking Lab",
+            "selected_song_title=Lab Song",
             "main_preview_summary=",
             "preview_rank_line=",
             "v3",
             "preview_ranking_tiebreak_legend=",
             "too_short_non_main=",
             "songs_with_too_short=",
-            "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav",
+            "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav",
             "preview_ranking_scan_callout=",
             "preview_ranking_selected_header=",
         ],
-        tooShortSongTitle: "Preview Ranking Lab",
+        tooShortSongTitle: "Lab Song",
         tooShortClipSubstring: "Lab Song short clip.wav",
         scanCalloutSubstring: "too short",
         selectedHeaderSubstring: "Lab Song v3 mix.wav",
@@ -172,10 +172,10 @@ enum ArchiveUserFlowSmokeScenarios {
             diagnosticsPanelStem: "cpr",
             query: "neohkv2",
             expectedDisplayTitle: "Neon Hook",
-            summarySubstrings: ["fuzzy CPR file", "neohkv2"],
+            summarySubstrings: ["fuzzy project file", "neohkv2"],
             exportMustContain: [
                 "search_match title=Neon Hook",
-                "fuzzy CPR file",
+                "fuzzy project file",
             ],
             minimumMatchCount: 1
         ),
@@ -184,10 +184,10 @@ enum ArchiveUserFlowSmokeScenarios {
             diagnosticsExportStem: "preview",
             diagnosticsPanelStem: "preview",
             query: "lab song v3 mx",
-            expectedDisplayTitle: "Preview Ranking Lab",
+            expectedDisplayTitle: "Lab Song",
             summarySubstrings: ["preview file", "v3", "mx"],
             exportMustContain: [
-                "search_match title=Preview Ranking Lab",
+                "search_match title=Lab Song",
                 "preview file",
             ],
             minimumMatchCount: 1
@@ -224,7 +224,7 @@ enum ArchiveUserFlowSmokeScenarios {
             panelHeaderStem: nil,
             folderName: "Equal Score Version Tiebreak",
             exportMustContain: [
-                "selected_song_title=Equal Score Version Tiebreak",
+                "selected_song_title=Tie Song",
                 "preview_rank_tiebreak=Equal score — version v3 beat v2",
                 "Tie Song v3 mix.wav",
             ],
@@ -238,7 +238,7 @@ enum ArchiveUserFlowSmokeScenarios {
             panelHeaderStem: nil,
             folderName: "Equal Score Extension Tiebreak",
             exportMustContain: [
-                "selected_song_title=Equal Score Extension Tiebreak",
+                "selected_song_title=Tie Song",
                 "preview_rank_tiebreak=Equal score — preferred flac over mp3",
                 "Tie Song mix.flac",
             ],

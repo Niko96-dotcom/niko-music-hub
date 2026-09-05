@@ -6,7 +6,7 @@ extension ArchiveSmartShelf {
         switch self {
         case .allSongs: "All"
         case .recentlyBounced: "Recent"
-        case .recentCPRActivity: "CPR"
+        case .recentCPRActivity: "Projects"
         case .hasStems: "Stems"
         case .byCollaborator: "Collabs"
         case .quietSongs: "Quiet"

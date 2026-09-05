@@ -3,6 +3,7 @@ import Foundation
 public enum PreviewFolderRole: String, Codable, Sendable, Hashable {
     case mixdown
     case stems
+    case samples
     case root
     case other
 }

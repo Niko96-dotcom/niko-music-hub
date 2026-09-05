@@ -156,7 +156,7 @@ extension ArchiveBrowserViewModel {
             try openLatestCPR(for: created)
         } else {
             setStatusMessage(
-                "Created draft \(created.originalFolderName). No CPR project file yet; folder is ready at \(created.folderPath.path)."
+                "Created draft \(created.originalFolderName). No project file (.cpr or .als) yet; folder is ready at \(created.folderPath.path)."
             )
         }
         return created

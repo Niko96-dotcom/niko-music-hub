@@ -55,7 +55,7 @@ struct NewSongSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Cubase template folder (optional)")
+                    Text("Cubase or Ableton template folder (optional)")
                         .font(HubDesignSystem.Typography.caption().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     HStack {

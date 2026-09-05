@@ -42,7 +42,7 @@ final class MusicSearchIndexTests: XCTestCase {
         let index = MusicSearchIndex(songs: result.songs)
 
         XCTAssertEqual(index.search("hook neon").count, 1)
-        XCTAssertEqual(index.search("ranking preview").first?.displayTitle, "Preview Ranking Lab")
+        XCTAssertEqual(index.search("ranking preview").first?.displayTitle, "Lab Song")
     }
 
     func testPunctuationInsensitiveQuery() throws {
@@ -175,7 +175,7 @@ final class MusicSearchIndexTests: XCTestCase {
 
         let matches = index.searchResults("neohkv2")
         XCTAssertEqual(matches.first?.song.displayTitle, "Neon Hook")
-        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy CPR file") == true)
+        XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy project file") == true)
         XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)
     }
 
@@ -187,7 +187,7 @@ final class MusicSearchIndexTests: XCTestCase {
 
         let matches = index.searchResults("ranking lab v3 mx")
         XCTAssertGreaterThanOrEqual(matches.count, 1)
-        XCTAssertEqual(matches.first?.song.displayTitle, "Preview Ranking Lab")
+        XCTAssertEqual(matches.first?.song.displayTitle, "Lab Song")
         XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy preview file") == true)
         XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)
     }

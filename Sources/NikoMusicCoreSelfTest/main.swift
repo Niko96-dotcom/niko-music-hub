@@ -57,7 +57,7 @@ struct NikoMusicCoreSelfTest {
             roots = [options.fixtureRoot ?? defaultFixtureRoot()]
         }
 
-        let scanner = CubaseArchiveScanner()
+        let scanner = MusicArchiveScanner()
         let result = try scanner.scan(roots: roots)
         let index = MusicSearchIndex(songs: result.songs)
         let neonMatches = index.search("Neon Hook")

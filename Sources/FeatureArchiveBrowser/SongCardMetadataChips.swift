@@ -15,8 +15,11 @@ enum SongCardMetadataChipBuilder {
             chips.append(SongCardMetadataChip(id: "match", label: matchSummary))
         }
 
+        if song.projectFormats.count > 1 {
+            chips.append(SongCardMetadataChip(id: "daws", label: "Cubase + Ableton"))
+        }
         if let cpr = song.effectiveLatestCPR {
-            chips.append(SongCardMetadataChip(id: "cpr", label: "CPR \(relativeShort(cpr.modifiedAt))"))
+            chips.append(SongCardMetadataChip(id: "cpr", label: "\(cpr.fileTypeLabel) \(relativeShort(cpr.modifiedAt))"))
             if let versionLabel = cprVersionLabel(cpr) {
                 chips.append(SongCardMetadataChip(id: "cpr-version", label: versionLabel))
             }
@@ -51,6 +54,8 @@ enum SongCardMetadataChipBuilder {
             return "Mixdown"
         case .stems:
             return "Stems folder"
+        case .samples:
+            return "Source sample"
         case .other:
             switch candidate.detectedRole {
             case .mainMix, .master, .preview:

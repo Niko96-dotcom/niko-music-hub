@@ -8,7 +8,7 @@ public enum ArchiveBrowseSortMode: String, CaseIterable, Sendable, Codable {
     public var title: String {
         switch self {
         case .recentBounce: "Recent bounce"
-        case .recentCPR: "Recent CPR"
+        case .recentCPR: "Recent project"
         case .titleAZ: "Title A–Z"
         }
     }

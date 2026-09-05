@@ -6,7 +6,7 @@ public enum OutputWriteGuardError: Error, Equatable, Sendable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .outputInsideArchiveRoot(let url):
-            return "The output folder cannot be inside a Cubase archive root. Choose a folder outside your archive: \(url.path)"
+            return "The output folder cannot be inside a music archive root. Choose a folder outside your archive: \(url.path)"
         }
     }
 }

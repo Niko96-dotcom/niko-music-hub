@@ -18,7 +18,7 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
 
     public var label: String {
         switch self {
-        case .openInCubase: "Open in Cubase"
+        case .openInCubase: "Open project"
         case .restoreAndOpen: "Get Local & Open"
         case .retry: "Retry"
         case .review: "Review"
@@ -175,6 +175,14 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             explanation = ProjectVaultActivityExplanation.restore(.superseded)
             return
         }
+        if restore?.failureReason == .archiveGenerationIntegrityMismatch {
+            reviewAction = nil
+            retryRestoreID = nil
+            state = .needsAttention
+            primaryAction = .review
+            explanation = restore?.error ?? "The archive no longer matches its verified manifest. Review the changed files before restoring. Existing copies were kept."
+            return
+        }
         if let restore, restore.completedAt == nil, restore.error != nil,
            restore.failureReason == nil,
            [.materializingArchive, .copyingToActiveStaging, .verifyingActiveStaging].contains(restore.phase) {
@@ -249,7 +257,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         } else if record.locations.contains(where: { $0.kind == .archive && $0.availability != .missing }) {
             state = .archived
             primaryAction = .restoreAndOpen
-            explanation = "A verified archive generation is available. Restore keeps that archive copy."
+            explanation = "Restore & Open copies this song into Active Projects, verifies the copy, then opens its newest project in the matching DAW. The archive stays intact."
         } else {
             state = .needsAttention
             primaryAction = .review
@@ -288,8 +296,8 @@ public enum ProjectVaultActivityExplanation {
         case .copyingToActiveStaging: return "Copying into Active Projects staging. The archive remains untouched."
         case .verifyingActiveStaging: return "Verifying the restored copy before it becomes active."
         case .promotingActiveCopy: return "Publishing the verified copy into Active Projects."
-        case .persistingActiveLocation: return "Saving the restored location before Cubase opens."
-        case .openingInCubase: return "Restore is verified. Opening the project in Cubase."
+        case .persistingActiveLocation: return "Saving the restored location before opening the project."
+        case .openingInCubase: return "Restore is verified. Opening the project in its DAW."
         case .superseded: return "A newer restore recovery job owns this project."
         }
     }

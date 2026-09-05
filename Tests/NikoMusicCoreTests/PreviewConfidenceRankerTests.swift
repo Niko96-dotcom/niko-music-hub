@@ -385,7 +385,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
         XCTAssertTrue(vocals?.confidenceReasons.contains("filename:negative-vocals") == true)
         XCTAssertEqual(
             ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
-            .score,
+            .songSuitability,
             "The longer vocal artifact must not win on the duration tiebreak."
         )
     }
@@ -425,7 +425,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
                     XCTAssertEqual(ranked.first?.fileName, fullName, "\(fullFolder) versus \(artifactFolder): \(fullName)")
                     XCTAssertEqual(
                         ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
-                        .score,
+                        .songSuitability,
                         "The artifact must not reach version, duration, or recency tie-breaks."
                     )
                 }
@@ -477,7 +477,7 @@ final class PreviewConfidenceRankerTests: XCTestCase {
             XCTAssertTrue(scoredComponent?.confidenceReasons.contains("filename:negative-cover") == true, label)
             XCTAssertEqual(
                 ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1]),
-                .score,
+                .songSuitability,
                 "\(label) must not reach a recency or duration tiebreak."
             )
         }

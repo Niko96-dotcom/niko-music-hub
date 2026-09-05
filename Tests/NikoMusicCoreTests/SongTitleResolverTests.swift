@@ -25,7 +25,7 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
-    func testDisplayTitlePrefersMeaningfulFolderOverMainPreview() {
+    func testDisplayTitleUsesFullDeliveryOverWorkingFolder() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/Graffiti master.wav"),
             fileName: "Graffiti master.wav",
@@ -36,11 +36,11 @@ final class SongTitleResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             resolver.displayTitle(fromFolderName: "90s Rave", mainPreview: preview),
-            "90s Rave"
+            "Graffiti"
         )
     }
 
-    func testDisplayTitlePrefersMeaningfulRenamedFolderOverOlderPreviewAndCPRNames() {
+    func testDisplayTitleUsesDeliveryOverFolderAndProjectWorkingNames() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/GARDEN OF EDEN SESHY BOUNCE.wav"),
             fileName: "GARDEN OF EDEN SESHY BOUNCE.wav",
@@ -63,7 +63,7 @@ final class SongTitleResolverTests: XCTestCase {
                 mainPreview: preview,
                 projectVersions: versions
             ),
-            "Garden Of Eden New Title"
+            "GARDEN OF EDEN"
         )
     }
 
@@ -158,7 +158,7 @@ final class SongTitleResolverTests: XCTestCase {
                 mainPreview: preview,
                 projectVersions: versions
             ),
-            "Turn Up The Bass"
+            "TURN UP THE BASS"
         )
     }
 

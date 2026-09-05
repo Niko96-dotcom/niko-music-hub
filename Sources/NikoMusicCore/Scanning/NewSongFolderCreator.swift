@@ -145,7 +145,7 @@ public enum NewSongFolderCreator {
             }
         }
 
-        let cprDetector = CPRVersionDetector(fileManager: fileManager)
+        let cprDetector = ProjectVersionDetector(fileManager: fileManager)
         let stagingVersions: [ProjectVersion]
         do {
             stagingVersions = try cprDetector.detectVersions(in: stagingFolder)

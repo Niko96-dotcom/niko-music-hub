@@ -30,7 +30,7 @@ enum ArchiveSongMetadataEditor {
             scanned.previewCandidates = ranked
             scanned.mainPreviewCandidateID = ranker.mainPreviewID(from: ranked)
         case .cprAuto:
-            let detector = CPRVersionDetector()
+            let detector = ProjectVersionDetector()
             scanned.latestCPR = detector.latestCPR(from: scanned.projectVersions)
         }
 

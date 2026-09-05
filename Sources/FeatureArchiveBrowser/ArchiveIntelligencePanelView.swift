@@ -58,7 +58,7 @@ struct ArchiveIntelligencePanelView: View {
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
                 if !missing.noCPR.isEmpty {
-                    Text("No CPR: \(missing.noCPR.count) song(s)")
+                    Text("No project: \(missing.noCPR.count) song(s)")
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }

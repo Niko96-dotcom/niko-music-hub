@@ -209,7 +209,7 @@ struct ArchiveBrowserView: View {
                         .fixedSize(horizontal: true, vertical: false)
                     Text(viewModel.roots.isEmpty
                         ? "Scan a root to browse your songs here."
-                        : "Preview mixdowns and open the latest Cubase project — without touching your archive.")
+                        : "Preview mixdowns and open the latest Cubase or Ableton project — without touching your archive.")
                         .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .multilineTextAlignment(.center)
@@ -235,7 +235,7 @@ struct ArchiveBrowserView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.prompt = "Choose Archive Roots"
-        panel.message = "Select one or more folders that contain Cubase song folders."
+        panel.message = "Select one or more folders that contain Cubase or Ableton song folders."
         if panel.runModal() == .OK {
             viewModel.addRoots(panel.urls)
             viewModel.completeArchiveOnboarding()

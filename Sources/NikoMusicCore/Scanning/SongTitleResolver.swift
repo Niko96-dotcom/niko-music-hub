@@ -53,15 +53,23 @@ public struct SongTitleResolver: Sendable {
         // folder label. App-owned virtual titles still override this base title.
         if let preview = mainPreview,
            let identity = PreviewSongIdentity.parse(preview.fileName),
-           !PreviewFilenameSemantics.isPartialExport(in: preview.fileName),
-           preview.folderRole != .stems,
+           PreviewFilenameSemantics.isSongPreview(preview),
            isTrustworthyPreviewForTitle(preview) {
             return identity.displayTitle
         }
 
-        // The folder name is the user's filesystem-level title. Keep it authoritative
-        // when it is meaningful so a Finder rename is reflected on the next scan even
-        // when older CPR or mixdown filenames still contain the previous working title.
+        if let preview = mainPreview,
+           preview.folderRole == .root || preview.folderRole == .mixdown,
+           PreviewFilenameSemantics.isSongPreview(preview),
+           isTrustworthyPreviewForTitle(preview),
+           let deliveryTitle = PreviewSongIdentity.unstructuredDeliveryTitle(preview.fileName),
+           normalizedTitleWords(deliveryTitle).contains(where: { !Self.stripTokenSet.contains($0) }),
+           !isLikelyStemExportTitle(deliveryTitle) {
+            return deliveryTitle
+        }
+
+        // A folder remains the fallback for projects without a usable delivery.
+        // An app-owned virtual title remains the explicit user override.
         if isStrongProjectTitle(folderTitle) {
             return folderTitle
         }
@@ -207,9 +215,6 @@ public struct SongTitleResolver: Sendable {
         if preview.confidenceReasons.contains("duration:too-short") {
             return false
         }
-        if preview.confidenceScore < 25 {
-            return false
-        }
         return true
     }
 
@@ -251,7 +256,7 @@ public struct SongTitleResolver: Sendable {
     }
 
     private func isStemExportPreview(_ preview: PreviewCandidate) -> Bool {
-        preview.detectedRole == .stems || preview.folderRole == .stems
+        preview.detectedRole == .stems || preview.folderRole == .stems || preview.folderRole == .samples
     }
 
     private func normalizedTitleWords(_ title: String) -> [String] {

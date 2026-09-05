@@ -82,6 +82,7 @@ public enum ArchiveUserFlowSmoke {
         ]
         runs.append(contentsOf: tiebreakRuns)
         runs.append(contentsOf: songSearchRuns)
+        runs.append(try runAbletonFlow(context: context))
 
         return ArchiveUserFlowSmokeResult(runs: runs)
     }

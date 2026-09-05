@@ -45,7 +45,10 @@ public enum CPRPluginSummaryService {
         guard !Task.isCancelled else { return .empty }
 
         let summary: CPRPluginSummary
-        if !Task.isCancelled,
+        if ProjectFileFormat(url: standard) == .abletonLive {
+            let names = AbletonPluginSummaryReader.pluginNames(at: standard) ?? []
+            summary = names.isEmpty ? .empty : CPRPluginSummary(pluginNames: names, source: "ableton-xml")
+        } else if !Task.isCancelled,
            let names = await subprocessRunner(standard),
            !names.isEmpty {
             summary = CPRPluginSummary(pluginNames: names.sorted(), source: "subprocess")

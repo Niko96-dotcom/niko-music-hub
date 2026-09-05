@@ -84,6 +84,14 @@ extension ArchiveBrowserViewModel {
         diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
     }
 
+    func openProjectVersion(_ version: ProjectVersion, for song: Song) throws {
+        guard song.visibleProjectVersions.contains(where: { $0.id == version.id }) else { return }
+        var selection = song
+        selection.cprSelectionMode = .manual
+        selection.manualMainCPRID = version.id
+        try openLatestCPR(for: selection)
+    }
+
     func openLatestCPR(for song: Song) throws {
         do {
             guard !blocksGenericProjectVaultFileActions(for: song) else {
@@ -100,7 +108,7 @@ extension ArchiveBrowserViewModel {
                     print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
                 }
             } else {
-                setStatusMessage("No Cubase project (.cpr) was found in this song folder.")
+                setStatusMessage("No Cubase (.cpr) or Ableton Live (.als) project was found in this song folder.")
             }
         } catch let error as MusicItemOpenerError {
             setStatusMessage(musicItemOpenerStatusMessage(error))
@@ -168,6 +176,8 @@ extension ArchiveBrowserViewModel {
         switch error {
         case .pathDoesNotExist(let url):
             return "Path does not exist: \(url.path)"
+        case .applicationOpenFailed(let url):
+            return "Could not open \(url.lastPathComponent). Check that \(ProjectFileFormat(url: url)?.displayName ?? "its DAW") is installed and set as the default app for this file type."
         case .pathOutsideAllowedRoots(let url):
             return "Path is outside allowed archive roots: \(url.path)"
         }

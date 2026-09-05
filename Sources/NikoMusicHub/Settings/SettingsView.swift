@@ -81,7 +81,7 @@ struct SettingsView: View {
             }
 
             SettingsSection(
-                title: "Cubase archive",
+                title: "Music archive",
                 importance: .high,
                 footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
             ) {
@@ -211,7 +211,7 @@ struct SettingsView: View {
                             .textSelection(.enabled)
                     }
                 }
-                Text("Local-first recall for Cubase archives plus outside-Cubase utilities. Archive browsing stays read-only toward your music folders.")
+                Text("Local-first recall for Cubase and Ableton archives plus production utilities. Archive browsing stays read-only toward your music folders.")
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -226,7 +226,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var archiveRootsSection: some View {
         if archiveViewModel.roots.isEmpty {
-            Text("No archive roots yet. Add the folder that contains your Cubase song folders.")
+            Text("No archive roots yet. Add the folder that contains your Cubase or Ableton song folders.")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -239,7 +239,7 @@ struct SettingsView: View {
             icon: "folder.badge.plus",
             label: "Add Root",
             style: .secondary,
-            help: "Choose a Cubase projects folder to scan",
+            help: "Choose a Cubase or Ableton projects folder to scan",
             action: addArchiveRoot
         )
     }

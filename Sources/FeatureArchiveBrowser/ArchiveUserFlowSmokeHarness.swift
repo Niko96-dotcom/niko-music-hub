@@ -5,6 +5,7 @@ import Foundation
 
 enum SmokeRunID: Hashable, Sendable {
     case coreFlow
+    case abletonFlow
     case primarySearch
     case fixtureDiagnostics
     case rankingLab
@@ -31,6 +32,7 @@ struct SmokeRun: Sendable, Equatable {
 
 enum SmokeEvidence: Sendable, Equatable {
     case coreFlow(CoreFlowEvidence)
+    case abletonFlow(AbletonFlowEvidence)
     case primarySearch(PrimarySearchEvidence)
     case fixtureDiagnostics(FixtureDiagnosticsEvidence)
     case rankingLab(RankingLabEvidence)

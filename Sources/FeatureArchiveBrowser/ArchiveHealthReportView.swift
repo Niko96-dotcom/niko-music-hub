@@ -18,7 +18,7 @@ struct ArchiveHealthReportView: View {
                 healthRow("Missing preview", value: "\(report.missingPreview)", icon: "speaker.slash")
             }
             if report.missingCPR > 0 {
-                healthRow("Missing CPR", value: "\(report.missingCPR)", icon: "doc.badge.plus")
+                healthRow("Missing project", value: "\(report.missingCPR)", icon: "doc.badge.plus")
             }
             if report.withWarnings > 0 {
                 healthRow("Warnings", value: "\(report.withWarnings)", icon: "exclamationmark.triangle")

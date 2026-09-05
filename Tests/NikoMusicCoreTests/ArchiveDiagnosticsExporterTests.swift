@@ -30,7 +30,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         let text = try String(contentsOf: destination, encoding: .utf8)
         XCTAssertTrue(text.contains("songs=9"))
         XCTAssertTrue(text.contains("songs_with_warnings=1"))
-        XCTAssertTrue(text.contains("song=Broken Folder Example\n  warning=No CPR project files found\n"))
+        XCTAssertTrue(text.contains("song=Broken Folder Example\n  warning=No project files (.cpr or .als) found\n"))
         XCTAssertTrue(text.contains("skipped_entries=2"))
         XCTAssertTrue(text.contains("summary_line=roots: "))
         XCTAssertTrue(text.contains("CubaseArchive"))
@@ -171,7 +171,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("songs_with_too_short="))
         XCTAssertTrue(
             text.contains(
-                "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav"
+                "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav"
             )
         )
         XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
@@ -198,7 +198,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             selectedSongContext: selectedContext
         )
 
-        XCTAssertTrue(text.contains("selected_song_title=Equal Score Version Tiebreak"))
+        XCTAssertTrue(text.contains("selected_song_title=Tie Song"))
         XCTAssertTrue(text.contains("preview_rank_tiebreak=Equal score — version v3 beat v2"))
         XCTAssertTrue(text.contains("Tie Song v3 mix.wav"))
     }
@@ -220,7 +220,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             selectedSongContext: selectedContext
         )
 
-        XCTAssertTrue(text.contains("selected_song_title=Equal Score Extension Tiebreak"))
+        XCTAssertTrue(text.contains("selected_song_title=Tie Song"))
         XCTAssertTrue(text.contains("preview_rank_tiebreak=Equal score — preferred flac over mp3"))
         XCTAssertTrue(text.contains("Tie Song mix.flac"))
     }
@@ -265,7 +265,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             selectedSongContext: selectedContext
         )
 
-        XCTAssertTrue(text.contains("selected_song_title=Preview Ranking Lab"))
+        XCTAssertTrue(text.contains("selected_song_title=Lab Song"))
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
         XCTAssertTrue(text.contains("preview_rank_line="))
@@ -301,8 +301,8 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
             homeDirectory: "/Users/test",
             selectedSongContext: brokenContext
         )
-        XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
-        XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
+        XCTAssertTrue(brokenText.contains("selected_song_cpr=no project versions"))
+        XCTAssertTrue(brokenText.contains("selected_song_warning=No project files (.cpr or .als) found"))
         XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
         XCTAssertFalse(neonText.contains("selected_song_notes="))
     }

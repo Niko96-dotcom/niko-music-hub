@@ -33,7 +33,7 @@ struct ArchiveCatalogCoordinator {
     }
 
     func performScanSynchronously(roots: [URL]) throws -> ScanResult {
-        let scanner = CubaseArchiveScanner(
+        let scanner = MusicArchiveScanner(
             exclusionTerms: Self.loadExclusionTerms(settingsStore: settingsStore)
         )
         return try scanner.scan(roots: roots)
@@ -43,7 +43,7 @@ struct ArchiveCatalogCoordinator {
         try Task.checkCancellation()
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         let scanTask = Task.detached(priority: .userInitiated) {
-            try CubaseArchiveScanner(exclusionTerms: exclusionTerms).scan(roots: roots)
+            try MusicArchiveScanner(exclusionTerms: exclusionTerms).scan(roots: roots)
         }
         return try await withTaskCancellationHandler(operation: {
             let result = try await scanTask.value
@@ -165,7 +165,7 @@ struct ArchiveCatalogCoordinator {
         }
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         let scanTask = Task.detached(priority: .userInitiated) {
-            try CubaseArchiveScanner(exclusionTerms: exclusionTerms)
+            try MusicArchiveScanner(exclusionTerms: exclusionTerms)
                 .scanIncremental(resolution: resolution, roots: roots)
         }
         let result = try await withTaskCancellationHandler(operation: {
@@ -242,7 +242,7 @@ struct ArchiveCatalogCoordinator {
     private static func isRootLevelCPRPath(_ path: String, ofRoot rootPath: String) -> Bool {
         guard path.hasPrefix(rootPath + "/") else { return false }
         let relative = String(path.dropFirst(rootPath.count + 1))
-        return !relative.contains("/") && relative.lowercased().hasSuffix(".cpr")
+        return !relative.contains("/") && ProjectFileFormat(url: URL(fileURLWithPath: path)) != nil
     }
 
     func buildDiagnostics(

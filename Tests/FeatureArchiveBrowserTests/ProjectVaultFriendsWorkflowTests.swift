@@ -298,7 +298,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try await waitUntil {
             FileManager.default.fileExists(atPath: fixture.project.path)
                 && viewModel.projectVaultBusySongIDs.isEmpty
-                && viewModel.statusMessage == "Restored, verified, and opened in Cubase."
+                && viewModel.statusMessage == "Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there."
         }
 
         let restoredSong = try XCTUnwrap(viewModel.songs.first { $0.folderPath.standardizedFileURL == fixture.project.standardizedFileURL })

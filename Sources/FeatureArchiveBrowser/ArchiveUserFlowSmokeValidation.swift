@@ -19,6 +19,8 @@ extension SmokeEvidence: SmokeValidatedEvidence {
 
     private var validatedEvidence: any SmokeValidatedEvidence {
         switch self {
+        case .abletonFlow(let evidence):
+            return evidence
         case .coreFlow(let evidence):
             return evidence
         case .primarySearch(let evidence):

@@ -69,7 +69,7 @@ final class PreviewDeliverySelectionTests: XCTestCase {
     }
 
     func testSampleAndDAWTrackNamesDoNotBecomeArtistTitles() {
-        for file in ["FX 2 - VocalSynth.wav", "Kit 2 - 130 Bpm Aminor 10-Wavetable.wav", "Bounce CHORUS - Audio [2026-09-04 175705].wav", "Clark Audio - Lost Drum Loop - 96BPM Snare.wav"] {
+        for file in ["FX 2 - VocalSynth.wav", "Kit 2 - 130 Bpm Aminor 10-Wavetable.wav", "Bounce CHORUS - Audio [2026-09-04 175705].wav", "Clark Audio - Lost Drum Loop - 96BPM Snare.wav", "Vocals - 01-01%20Good%20Old%20Days.wav", "ADLIP 1 - 01_Voice-Normalize-F6FB024E16BF450FA007C0C784D9F03E.wav", "Render - Voice-F6FB024E16BF450FA007C0C784D9F03E.wav"] {
             XCTAssertNil(PreviewSongIdentity.parse(file), file)
         }
         for name in ["REAL ARTIST - TITLE instrumental.wav", "REAL ARTIST - TITLE (Vocals).wav", "REAL ARTIST - TITLE (Bass).wav"] {
@@ -79,6 +79,123 @@ final class PreviewDeliverySelectionTests: XCTestCase {
         XCTAssertEqual(PreviewCandidateDetector.detectedRole(from: file), .mainMix)
         XCTAssertEqual(PreviewCandidateDetector.detectedRole(from: "REAL ARTIST - Drums In My Heart DEMO V2 (Vocals).wav"), .acapella)
         XCTAssertEqual(PreviewCandidateDetector.detectedRole(from: "REAL ARTIST - Drums In My Heart DEMO V2 (Keyboard).wav"), .stems)
+    }
+
+    func testRestoredProjectUsesDeliveryIdentityAndChoosesMixdownOverSourceMedia() throws {
+        let root = try fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeWAV(root, "Audio/Vocals - 01-01%20Good%20Old%20Days.wav", seconds: 180)
+        try writeWAV(root, "Audio/IMPORTED ARTIST - OTHER SONG master V99.wav", seconds: 180)
+        try writeWAV(root, "Edits/ADLIP 1 - 01_Voice-Normalize-F6FB024E16BF450FA007C0C784D9F03E.wav", seconds: 180)
+        try writeWAV(root, "Samples/Imported/OTHER ARTIST - DIFFERENT SONG master V99.wav", seconds: 180)
+        try writeWAV(root, "References/OTHER ARTIST - DIFFERENT SONG (Official Video).wav", seconds: 180)
+        try writeWAV(root, "Mixdown/Radio demo V1.wav", seconds: 180)
+        try writeWAV(root, "Mixdown/Radio demo V2.wav", seconds: 180)
+        let versions = [ProjectVersion(filePath: root.appendingPathComponent("Radio-04.cpr"), fileName: "Radio-04.cpr", modifiedAt: .now, detectedVersionNumber: 4)]
+        let detected = try PreviewCandidateDetector().detectCandidates(in: root)
+        let ranked = ranker.rank(detected, projectContext: .from(projectVersions: versions))
+        XCTAssertEqual(ranked.first?.fileName, "Radio demo V2.wav")
+        XCTAssertEqual(detected.filter { $0.folderRole == .samples }.count, 3)
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Artist - Radio ", mainPreview: ranked.first, projectVersions: versions), "Radio")
+
+        // The installed app has already cached the wrong role, title and choice.
+        // Refresh derived values at startup without requiring a destructive rescan.
+        var cached = detected.map { candidate in
+            PreviewCandidate(filePath: candidate.filePath, fileName: candidate.fileName,
+                             folderRole: .other, modifiedAt: candidate.modifiedAt,
+                             detectedRole: .mainMix, detectedVersionNumber: candidate.detectedVersionNumber,
+                             durationSeconds: candidate.durationSeconds)
+        }
+        cached = ranker.rank(cached)
+        let wrong = try XCTUnwrap(cached.first { $0.fileName.hasPrefix("Vocals") })
+        let song = Song(folderPath: root, originalFolderName: "Artist - Radio ", displayTitle: "Vocals - Wrong Name", projectVersions: versions, previewCandidates: cached, mainPreviewCandidateID: wrong.id)
+        let refreshed = PreviewAutoSelectionNormalizer.normalized(song)
+        XCTAssertEqual(refreshed.displayTitle, "Radio")
+        XCTAssertEqual(refreshed.mainPreviewURL?.lastPathComponent, "Radio demo V2.wav")
+    }
+
+    func testNamedReferenceCannotReplaceSongTitleEvenWhenItIsTheOnlyAudio() {
+        let reference = PreviewCandidate(filePath: URL(fileURLWithPath: "/tmp/Song/References/OTHER ARTIST - DIFFERENT SONG.wav"),
+                                         fileName: "OTHER ARTIST - DIFFERENT SONG.wav", folderRole: .samples,
+                                         modifiedAt: .now, detectedRole: .mainMix, durationSeconds: 180)
+        let ranked = ranker.rank([reference])
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Seoul", mainPreview: ranked.first), "Seoul")
+        XCTAssertFalse(ranked[0].confidenceReasons.contains("filename:artist-title"))
+    }
+
+    func testDeliveryTitleParsingPreservesNumbersAndWordsInsideTitles() {
+        for (file, expected) in [
+            ("404 DEMO V1 (Writer One, Writer Two) new prod.mp3", "404"),
+            ("Old Friends DEMO V2.wav", "Old Friends"),
+            ("The Master Plan DEMO V2.wav", "The Master Plan"),
+            ("The Master Plan.wav", nil),
+            ("New Song session bounce V3.wav", "New Song"),
+        ] {
+            XCTAssertEqual(PreviewSongIdentity.unstructuredDeliveryTitle(file), expected, file)
+        }
+        XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - The Master Plan DEMO V2.wav")?.displayTitle, "ARTIST - The Master Plan")
+        XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - 404 DEMO V2.wav")?.displayTitle, "ARTIST - 404")
+    }
+
+    func testNumberedDAWTakesAreNotArtistTitleDeliveriesRegardlessOfTrackLabel() {
+        for file in ["Pro-other - 01-01%20Good%20Old%20Days.wav", "Piano - 01-01%20Other%20Song.wav",
+                     "MAIN LEAD - 00-01.wav", "HARM 2 L - 00_Voice.wav", "DLX FX - 05.wav",
+                     "Arbitrary Track Name - 12_Processed.wav"] {
+            XCTAssertNil(PreviewSongIdentity.parse(file), file)
+        }
+        XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - 404.wav")?.displayTitle, "ARTIST - 404")
+        XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - 99 Red Stars.wav")?.displayTitle, "ARTIST - 99 Red Stars")
+    }
+
+    func testFullSongEligibilityPrecedesScoresAndVersionNumbers() {
+        let demo = candidate("404 DEMO V1.mp3")
+        let handoff = candidate("404 for ableton master.wav", date: 999)
+        let stem = candidate("ARTIST - 404 V99 (Vocals).wav", date: 999)
+        let reference = candidate("OTHER ARTIST - Other Song (Official Video).wav", date: 999)
+        let ranked = ranker.rank([handoff, reference, stem, demo], projectContext: .init(anchorCPRVersion: 5, titleTokens: []))
+        XCTAssertEqual(ranked.first?.id, demo.id)
+        let scoredHandoff = ranked.first { $0.id == handoff.id }!
+        XCTAssertGreaterThan(scoredHandoff.confidenceScore, ranked[0].confidenceScore)
+        XCTAssertEqual(ranker.decidingFactor(winner: ranked[0], runnerUp: scoredHandoff), .songSuitability)
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: ranked.first), "404")
+        let differentProjectSave = ranker.rank([demo], projectContext: .init(anchorCPRVersion: 99, titleTokens: []))
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: differentProjectSave.first), "404")
+    }
+
+    func testFreshAndPersistedScansResolveDeliveryIdentityWithoutChangingFolderIdentity() throws {
+        let library = try fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: library) }
+        let folder = library.appendingPathComponent("Working Session ", isDirectory: true)
+        try writeWAV(folder, "Audio/Vocals - 01-Something.wav", seconds: 180)
+        try writeWAV(folder, "Mixdown/NEW SONG DEMO V2.wav", seconds: 180)
+        try Data().write(to: folder.appendingPathComponent("Working Session-04.cpr"))
+        let scanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [library]).songs.first)
+        XCTAssertEqual(scanned.displayTitle, "NEW SONG")
+        XCTAssertEqual(try scanned.folderPath.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject,
+                       try folder.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject)
+        XCTAssertEqual(scanned.originalFolderName, "Working Session ")
+        var stale = scanned
+        stale.displayTitle = "Working Session"
+        stale.mainPreviewCandidateID = scanned.previewCandidates.first { $0.fileName.hasPrefix("Vocals") }?.id
+        let decoded = try JSONDecoder().decode(Song.self, from: JSONEncoder().encode(stale))
+        let refreshed = PreviewAutoSelectionNormalizer.normalized(decoded)
+        XCTAssertEqual(refreshed.id, scanned.id)
+        XCTAssertEqual(refreshed.folderPath, scanned.folderPath)
+        XCTAssertEqual(refreshed.displayTitle, scanned.displayTitle)
+        XCTAssertEqual(refreshed.mainPreviewURL, scanned.mainPreviewURL)
+    }
+
+    func testRealDeliveryInsideCubaseAudioRemainsEligible() throws {
+        let root = try fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeWAV(root, "Audio/ARTIST - NEW SONG.wav", seconds: 180)
+        try writeWAV(root, "Audio/new song idea.wav", seconds: 180)
+        try writeWAV(root, "Audio/NEW SONG vox stem.wav", seconds: 180)
+        try writeWAV(root, "Audio/ARBITRARY TRACK - 01-01%20Other%20Song.wav", seconds: 180)
+        try writeWAV(root, "Audio/DLX FX - 05.wav", seconds: 180)
+        let ranked = ranker.rank(try PreviewCandidateDetector().detectCandidates(in: root))
+        XCTAssertEqual(ranked.first?.fileName, "ARTIST - NEW SONG.wav")
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: ranked.first), "ARTIST - NEW SONG")
     }
 
     func testVersionParserIgnoresTakeCountersDatesAndWriterNumbers() {

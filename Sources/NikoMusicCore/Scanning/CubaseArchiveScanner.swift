@@ -1,9 +1,9 @@
 import Foundation
 
-public struct CubaseArchiveScanner: @unchecked Sendable {
+public struct MusicArchiveScanner: @unchecked Sendable {
     private let fileManager: FileManager
     private let titleResolver: SongTitleResolver
-    private let cprDetector: CPRVersionDetector
+    private let projectDetector: ProjectVersionDetector
     private let previewDetector: PreviewCandidateDetector
     private let previewRanker: PreviewConfidenceRanker
     private let sidecarNotesReader: SidecarNotesReader
@@ -13,7 +13,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         self.fileManager = fileManager
         self.exclusionTerms = exclusionTerms.map { $0.lowercased() }
         self.titleResolver = SongTitleResolver()
-        self.cprDetector = CPRVersionDetector(fileManager: fileManager)
+        self.projectDetector = ProjectVersionDetector(fileManager: fileManager)
         self.previewDetector = PreviewCandidateDetector(fileManager: fileManager)
         self.previewRanker = PreviewConfidenceRanker()
         self.sidecarNotesReader = SidecarNotesReader(fileManager: fileManager)
@@ -65,16 +65,16 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             let rootLevelVersions: [ProjectVersion]
             do {
                 try Task.checkCancellation()
-                rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+                rootLevelVersions = try projectDetector.detectImmediateVersions(in: standardizedRoot)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                globalWarnings.append("Could not read root-level CPR files: \(standardizedRoot.path)")
+                globalWarnings.append("Could not read root-level project files: \(standardizedRoot.path)")
                 skippedEntries.append(
                     SkippedScanEntry(
                         kind: .unreadableChild,
                         label: standardizedRoot.lastPathComponent,
-                        reason: "Could not read root-level CPR files: \(error.localizedDescription)"
+                        reason: "Could not read root-level project files: \(error.localizedDescription)"
                     )
                 )
                 rootLevelVersions = []
@@ -207,7 +207,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                 continue
             }
             do {
-                let rootLevelVersions = try cprDetector.detectImmediateVersions(in: standardizedRoot)
+                let rootLevelVersions = try projectDetector.detectImmediateVersions(in: standardizedRoot)
                 songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
             } catch is CancellationError {
                 throw CancellationError()
@@ -216,7 +216,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
                     SkippedScanEntry(
                         kind: .unreadableChild,
                         label: standardizedRoot.lastPathComponent,
-                        reason: "Could not read root-level CPR files: \(error.localizedDescription)"
+                        reason: "Could not read root-level project files: \(error.localizedDescription)"
                     )
                 )
             }
@@ -236,9 +236,9 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         let grouped = Dictionary(grouping: versions, by: rootLevelSongKey)
         return grouped.values.compactMap { versions in
             let sorted = versions.sorted { $0.modifiedAt > $1.modifiedAt }
-            guard let latest = cprDetector.latestCPR(from: sorted) else { return nil }
+            guard let latest = projectDetector.latestProject(from: sorted) else { return nil }
             let title = titleResolver.bestTitle(from: sorted)
-                ?? latest.fileName.replacingOccurrences(of: ".cpr", with: "", options: [.caseInsensitive])
+                ?? (latest.fileName as NSString).deletingPathExtension
             return Song(
                 folderPath: latest.filePath,
                 originalFolderName: latest.fileName,
@@ -252,7 +252,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
 
     private func rootLevelSongKey(for version: ProjectVersion) -> String {
         let title = titleResolver.bestTitle(from: [version])
-            ?? version.fileName.replacingOccurrences(of: ".cpr", with: "", options: [.caseInsensitive])
+            ?? (version.fileName as NSString).deletingPathExtension
         return title
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
@@ -267,10 +267,10 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
             throw ScanError.unreadableFolder(folder.path)
         }
 
-        let versions = try cprDetector.detectVersions(in: folder)
+        let versions = try projectDetector.detectVersions(in: folder)
         try Task.checkCancellation()
         if versions.isEmpty {
-            warnings.append("No CPR project files found")
+            warnings.append("No project files (.cpr or .als) found")
         }
 
         var previews = try previewDetector.detectCandidates(in: folder)
@@ -281,7 +281,7 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         let mainPreviewID = previewRanker.mainPreviewID(from: ranked)
         let mainPreview = ranked.first
 
-        let latest = cprDetector.latestCPR(from: versions)
+        let latest = projectDetector.latestProject(from: versions)
 
         return Song(
             folderPath: folder,
@@ -311,3 +311,6 @@ public struct CubaseArchiveScanner: @unchecked Sendable {
         }
     }
 }
+
+/// Source compatibility for clients of the original Cubase archive browser.
+public typealias CubaseArchiveScanner = MusicArchiveScanner

@@ -70,7 +70,9 @@ enum MusicSearchMatcher {
         if folder.contains(token) { return (.folderName, 60) }
         if isSubsequence(token, in: folder) { return (.fuzzyFolderName, 18) }
 
-        if song.projectVersions.contains(where: { normalize($0.fileName).contains(token) }) {
+        if song.projectVersions.contains(where: {
+            normalize($0.fileName).contains(token) || normalize($0.applicationName).contains(token)
+        }) {
             return (.projectVersionFileName, 40)
         }
         if song.projectVersions.contains(where: { isSubsequence(token, in: normalize($0.fileName)) }) {

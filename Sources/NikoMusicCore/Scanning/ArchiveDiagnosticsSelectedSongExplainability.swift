@@ -5,7 +5,7 @@ public enum ArchiveDiagnosticsSelectedSongExplainability: Sendable {
     public static func cprSummary(for song: Song) -> String {
         let count = song.projectVersions.count
         guard count > 0 else {
-            return "no CPR versions"
+            return "no project versions"
         }
         let latest = song.latestCPR?.fileName ?? "unknown"
         if count == 1 {

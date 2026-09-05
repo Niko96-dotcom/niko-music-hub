@@ -8,6 +8,10 @@ public enum PreviewRankingExplainability: Sendable {
     public static func tiebreakCallout(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> String? {
         let factor = ranker.decidingFactor(winner: winner, runnerUp: runnerUp)
         switch factor {
+        case .songSuitability:
+            return "Full song preferred over source media or a technical export"
+        case .deliveryLocation:
+            return "Song export preferred over audio inside project subfolders"
         case .score, .recency, .filename:
             return nil
         case .productionMaturity:
@@ -82,7 +86,7 @@ public enum PreviewRankingExplainability: Sendable {
         }
         if reason == "filename:artist-title" { return "named artist and song" }
         if reason == "filename:named-delivery" { return "song delivery" }
-        if reason == "filename:negative-technical-export" { return "mastering handoff" }
+        if reason == "filename:negative-technical-export" { return "technical handoff" }
         if reason == "filename:positive" { return "mix filename" }
         if reason.hasPrefix("filename:negative-") {
             let token = String(reason.dropFirst("filename:negative-".count))

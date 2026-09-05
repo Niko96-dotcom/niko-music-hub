@@ -283,7 +283,7 @@ struct ArchiveSidebarView: View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
                 title: "Start with an archive root",
-                body: "Choose the folder that contains your Cubase song folders.",
+                body: "Choose the folder that contains your Cubase or Ableton song folders.",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {

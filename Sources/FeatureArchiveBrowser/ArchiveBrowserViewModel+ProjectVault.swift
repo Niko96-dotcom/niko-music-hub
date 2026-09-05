@@ -510,7 +510,7 @@ extension ArchiveBrowserViewModel {
                 _ = try await runtime.restoreAndOpen(snapshot: snapshot)
                 await self.refreshProjectVaultSnapshots()
                 await self.scan()
-                self.setProjectVaultStatusMessage("Restored, verified, and opened in Cubase.")
+                self.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
             } catch {
                 _ = await self.refreshProjectVaultSnapshots()
                 self.setProjectVaultStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
@@ -701,7 +701,7 @@ extension ArchiveBrowserViewModel {
     private func makeArchivedSong(from snapshot: ProjectVaultRuntimeSnapshot, metadata: SongUserMetadata?) -> Song? {
         guard let transfer = snapshot.transfer else { return nil }
         let destination = transfer.destinationURL.standardizedFileURL
-        let detector = CPRVersionDetector()
+        let detector = ProjectVersionDetector()
         let hasMaterializedDestination = FileManager.default.fileExists(atPath: destination.path)
         let versions = hasMaterializedDestination
             ? ((try? detector.detectVersions(in: destination)) ?? [])

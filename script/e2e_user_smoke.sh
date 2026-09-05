@@ -60,6 +60,8 @@ for required_marker in \
   "[niko-music-hub-smoke] ok" \
   "write_probe_denied=true" \
   "archive_unchanged=true" \
+  "ableton_mixed_song_flow=true" \
+  "ableton_archive_unchanged=true" \
   "[dry-run] open CPR:" \
   "recorder_user_flow=record_stop_inbox" \
   "recorder_output_inbox_items=1" \
@@ -106,7 +108,7 @@ while (( SECONDS < PUBLIC_UI_DEADLINE )); do
       --binary-path "$APP_BINARY" \
       --ax-dump >"$PUBLIC_UI_TEXT_TMP" 2>/dev/null; then
     mv "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_TEXT"
-    if grep -Fq "Welcome to your Cubase archive" "$PUBLIC_UI_TEXT"; then
+    if grep -Fq "Welcome to your music archive" "$PUBLIC_UI_TEXT"; then
       PUBLIC_UI_READY=true
       break
     fi
@@ -138,7 +140,7 @@ fi
 for required_text in \
   "Niko Music Hub" \
   "Archive Browser" \
-  "Welcome to your Cubase archive" \
+  "Welcome to your music archive" \
   "Add archive root" \
   "Show output inbox" \
   "Choose the folder that contains your song projects."; do

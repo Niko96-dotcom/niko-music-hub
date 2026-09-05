@@ -29,6 +29,16 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public var manualMainCPRID: String?
     public var ignoredCPRVersionIDs: [String]
 
+    // Legacy CPR property/coding names are retained for saved metadata compatibility.
+    public var effectiveLatestProject: ProjectVersion? { effectiveLatestCPR }
+    public var openProjectLabel: String {
+        effectiveLatestProject.map { "Open in \($0.applicationName)" } ?? "Open project"
+    }
+
+    public var projectFormats: [ProjectFileFormat] {
+        ProjectFileFormat.allCases.filter { format in projectVersions.contains { $0.format == format } }
+    }
+
     public var effectiveDisplayTitle: String {
         if let virtualTitle {
             let trimmed = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -50,12 +60,12 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         }
     }
 
-    /// Visible CPR versions after user ignores.
+    /// Visible Cubase and Ableton versions after user ignores.
     public var visibleProjectVersions: [ProjectVersion] {
         projectVersions.filter { !ignoredCPRVersionIDs.contains($0.id) }
     }
 
-    /// Effective main CPR after manual/auto selection and ignores.
+    /// Effective main project after manual/auto selection and ignores (legacy persisted names).
     public var effectiveLatestCPR: ProjectVersion? {
         let visible = visibleProjectVersions
         switch cprSelectionMode {

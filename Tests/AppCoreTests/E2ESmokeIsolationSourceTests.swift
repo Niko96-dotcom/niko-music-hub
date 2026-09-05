@@ -71,7 +71,7 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
     func testPublicUIAccessibilityReadinessIsBoundedAndFailClosed() throws {
         let script = try smokeScriptSource()
         XCTAssertTrue(script.contains("PUBLIC_UI_DEADLINE=$((SECONDS + 20))"))
-        XCTAssertTrue(script.contains(#"grep -Fq "Welcome to your Cubase archive""#))
+        XCTAssertTrue(script.contains(#"grep -Fq "Welcome to your music archive""#))
         XCTAssertTrue(script.contains("strict UI mode requires AX-visible first-run content"))
     }
 

@@ -15,6 +15,7 @@ public enum VaultRestoreFailureReason: String, Codable, Equatable, Sendable {
     case legacyProjectionIdentityMismatch
     case archiveTransferBindingUnavailable
     case activeDestinationIntegrityMismatch
+    case archiveGenerationIntegrityMismatch
 }
 
 public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {

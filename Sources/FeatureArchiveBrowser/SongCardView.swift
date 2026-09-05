@@ -101,10 +101,10 @@ struct SongCardView: View {
                         .buttonStyle(.plain)
                         .help(vaultPresentation.primaryAction == .retry
                             ? "Retry the preserved Project Vault transfer"
-                            : "Get a verified local copy and open it in Cubase")
+                            : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
                         .accessibilityLabel(vaultPresentation.primaryAction == .retry
                             ? "Retry Project Vault transfer"
-                            : "Get local copy and open in Cubase")
+                            : "Restore local copy and open project")
                     }
                 }
             }

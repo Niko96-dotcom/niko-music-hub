@@ -82,7 +82,7 @@ final class MusicSearchExplainabilityTests: XCTestCase {
             folderPath: URL(fileURLWithPath: "/tmp/Broken"),
             originalFolderName: "Broken",
             displayTitle: "Broken",
-            scanWarnings: ["No CPR project files found"]
+            scanWarnings: ["No project files (.cpr or .als) found"]
         )
         let index = MusicSearchIndex(songs: [song])
 
@@ -95,7 +95,7 @@ final class MusicSearchExplainabilityTests: XCTestCase {
             folderPath: URL(fileURLWithPath: "/tmp/Broken"),
             originalFolderName: "Broken",
             displayTitle: "Broken",
-            scanWarnings: ["No CPR project files found"]
+            scanWarnings: ["No project files (.cpr or .als) found"]
         )
         let index = MusicSearchIndex(songs: [song])
 
@@ -119,7 +119,7 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         let index = MusicSearchIndex(songs: [song])
 
         let result = try XCTUnwrap(index.searchResults("scrt prj").first)
-        XCTAssertTrue(result.matchSummary.contains("fuzzy CPR file"))
+        XCTAssertTrue(result.matchSummary.contains("fuzzy project file"))
         XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
     }
 

@@ -9,7 +9,7 @@ final class WaveAPreviewAndTitleTests: XCTestCase {
         let song = try XCTUnwrap(result.songs.first { $0.originalFolderName == "90s Rave" })
         let main = try XCTUnwrap(song.previewCandidates.first)
 
-        XCTAssertEqual(song.displayTitle, "90s Rave")
+        XCTAssertEqual(song.displayTitle, "Graffiti")
         XCTAssertEqual(main.fileName, "Graffiti master.wav")
         XCTAssertTrue(main.confidenceReasons.contains("maturity:master"))
     }
@@ -25,10 +25,10 @@ final class WaveAPreviewAndTitleTests: XCTestCase {
         XCTAssertFalse(main.fileName.lowercased().contains("drum"))
     }
 
-    func testPreviewRankingLabKeepsFolderDisplayTitle() throws {
+    func testPreviewRankingLabUsesDeliveryTitle() throws {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
         let song = try XCTUnwrap(result.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
-        XCTAssertEqual(song.displayTitle, "Preview Ranking Lab")
+        XCTAssertEqual(song.displayTitle, "Lab Song")
     }
 }

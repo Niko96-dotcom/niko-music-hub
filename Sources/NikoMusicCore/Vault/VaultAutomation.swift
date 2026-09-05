@@ -174,6 +174,7 @@ public enum VaultActivityStatus: Equatable, Sendable {
 }
 
 public protocol VaultAutomationActivityProbing: Sendable {
+    /// Legacy API name; probes both Cubase and Ableton Live before any Vault mutation.
     func cubaseStatus() async -> VaultActivityStatus
     func openFileStatus(in projectURL: URL) async -> VaultActivityStatus
     func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus
@@ -351,7 +352,8 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
                   let text = String(data: data, encoding: .utf8) else {
                 return .uncertain("probe-failed-\(process.terminationStatus)")
             }
-            return CubaseProcessDetector.containsCubase(inProcessList: text) ? .busy : .clear
+            return (CubaseProcessDetector.containsCubase(inProcessList: text)
+                || AbletonProcessDetector.containsAbleton(inProcessList: text)) ? .busy : .clear
         } catch {
             return .uncertain("probe-failed")
         }
@@ -413,6 +415,20 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
 
 private enum VaultActivityProbeError: Error {
     case timedOut
+}
+
+struct AbletonProcessDetector: Sendable {
+    static func containsAbleton(inProcessList text: String) -> Bool {
+        text.split(whereSeparator: \.isNewline).contains { line in
+            let path = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            let url = URL(fileURLWithPath: path)
+            // The macOS executable is Live inside an Ableton Live <version> app bundle.
+            return url.lastPathComponent == "Live"
+                && url.deletingLastPathComponent().lastPathComponent == "MacOS"
+                && url.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "Contents"
+                && url.pathComponents.contains { $0.hasPrefix("Ableton Live ") && $0.hasSuffix(".app") }
+        }
+    }
 }
 
 struct CubaseProcessDetector: Sendable {

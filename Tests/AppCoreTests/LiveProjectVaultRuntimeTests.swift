@@ -948,6 +948,27 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: archived.transfer!.destinationURL.path))
     }
 
+    func testDeliveryTitleRefreshSurvivesExistingTransferAndRestore() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let runtime = try fixture.runtime()
+        let original = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let delivery = Song(folderPath: fixture.project, originalFolderName: fixture.song.originalFolderName,
+                            displayTitle: "NEW SONG", projectVersions: fixture.song.projectVersions,
+                            latestCPR: fixture.song.latestCPR)
+        let refreshed = try await runtime.archive(song: delivery, trigger: .manual)
+        XCTAssertEqual(refreshed.record.id, original.record.id)
+        XCTAssertEqual(refreshed.record.canonicalTitle, "NEW SONG")
+        // Fixture-only removal exercises the real archive-only restore path.
+        try FileManager.default.removeItem(at: fixture.project)
+        let restored = try await runtime.restoreAndOpen(snapshot: refreshed)
+        XCTAssertNotNil(restored.completedAt)
+        let snapshots = try await runtime.snapshots()
+        XCTAssertEqual(snapshots.first { $0.record.id == original.record.id }?.record.canonicalTitle, "NEW SONG")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
     func testRetryRestoreResumesExactPersistedLegacyRowAndClearsBlockerOnlyAfterUpgrade() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

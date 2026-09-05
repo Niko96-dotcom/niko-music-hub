@@ -75,6 +75,21 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         XCTAssertTrue(result.reviews.allSatisfy { $0.existingProjectID != $0.candidateProjectID })
     }
 
+    func testDeliveryTitleRefreshPreservesProjectIDAndSurvivesOlderArchiveLabels() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let first = reconciler.reconcile(existing: [], observations: [observation(rootID: activeRootID, path: "Working Session", kind: .active)])
+        let originalID = try XCTUnwrap(first.entries.first?.record.id)
+        var active = observation(rootID: activeRootID, path: "Working Session", kind: .active)
+        active.canonicalTitle = "NEW SONG"
+        let refreshed = reconciler.reconcile(existing: first.entries, observations: [active,
+            observation(rootID: archiveRootID, path: "Working Session", kind: .archive)], markUnobservedMissing: false)
+        let record = try XCTUnwrap(refreshed.entries.first?.record)
+        XCTAssertEqual(refreshed.entries.count, 1)
+        XCTAssertEqual(record.id, originalID)
+        XCTAssertEqual(record.canonicalTitle, "NEW SONG")
+        XCTAssertEqual(Set(record.locations.map(\.relativePath)), ["Working Session"])
+    }
+
     func testIncrementalObservationPreservesOtherLocationsAndExistingReviewDecisions() throws {
         let reconciler = ProjectCatalogReconciler()
         let first = reconciler.reconcile(

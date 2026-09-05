@@ -9,6 +9,7 @@ public enum FileProviderArchiveStorageError: Error, Equatable, Sendable {
     case managerUnavailable
     case locationOutsideRoot
     case expectedItemMismatch
+    case expectedFileSizeMismatch(URL, expected: Int64, actual: Int64)
     case durabilityUnavailable
     case materializationUnavailable
     case operationTimedOut
@@ -501,7 +502,9 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
                 throw FileProviderArchiveStorageError.lookupUnavailable
             }
             guard size == item.expectedByteCount else {
-                throw FileProviderArchiveStorageError.expectedItemMismatch
+                throw FileProviderArchiveStorageError.expectedFileSizeMismatch(
+                    item.url, expected: item.expectedByteCount, actual: size
+                )
             }
             return metadata
         }

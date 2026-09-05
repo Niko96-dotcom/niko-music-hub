@@ -18,7 +18,7 @@ final class ArchiveDiagnosticsSelectedSongExplainabilityTests: XCTestCase {
         let broken = try XCTUnwrap(result.songs.first { $0.displayTitle == "Broken Folder Example" })
         XCTAssertEqual(
             ArchiveDiagnosticsSelectedSongExplainability.cprSummary(for: broken),
-            "no CPR versions"
+            "no project versions"
         )
     }
 }

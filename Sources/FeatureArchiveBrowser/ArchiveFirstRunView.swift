@@ -17,7 +17,7 @@ struct ArchiveFirstRunView: View {
                     )
                 )
 
-            Text("Welcome to your Cubase archive")
+            Text("Welcome to your music archive")
                 .font(HubDesignSystem.Typography.screenTitle())
                 .multilineTextAlignment(.center)
 
@@ -33,7 +33,7 @@ struct ArchiveFirstRunView: View {
                 icon: "folder.badge.plus",
                 label: "Choose Folder",
                 style: .primary,
-                help: "Choose your Cubase projects folder"
+                help: "Choose your Cubase or Ableton projects folder"
             ) {
                 onChooseRoot()
             }

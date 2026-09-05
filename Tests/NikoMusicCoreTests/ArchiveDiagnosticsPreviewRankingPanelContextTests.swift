@@ -73,7 +73,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         let context = ArchiveDiagnosticsPreviewRankingPanelContext.from(songs: result.songs)
 
         let labBreakdown = try XCTUnwrap(
-            context.tooShortSongBreakdowns.first { $0.displayTitle == "Preview Ranking Lab" }
+            context.tooShortSongBreakdowns.first { $0.displayTitle == "Lab Song" }
         )
         XCTAssertEqual(labBreakdown.clipCount, 1)
         XCTAssertEqual(labBreakdown.clipNames, ["Lab Song short clip.wav"])
@@ -159,7 +159,7 @@ final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
         )
         let breakdown = try XCTUnwrap(
             diagnostics.previewRankingPanel.tooShortSongBreakdowns.first {
-                $0.displayTitle == "Preview Ranking Lab"
+                $0.displayTitle == "Lab Song"
             }
         )
         let exportText = ArchiveDiagnosticsExporter.formattedText(

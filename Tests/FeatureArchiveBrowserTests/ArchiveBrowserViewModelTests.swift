@@ -880,7 +880,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         try viewModel.exportDiagnostics()
         let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
-        XCTAssertTrue(text.contains("selected_song_title=Preview Ranking Lab"))
+        XCTAssertTrue(text.contains("selected_song_title=Lab Song"))
         XCTAssertTrue(text.contains("selected_song_cpr=1 version"))
         XCTAssertTrue(text.contains("main_preview_summary="))
         XCTAssertTrue(text.contains("v3"))
@@ -890,7 +890,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(text.contains("songs_with_too_short="))
         XCTAssertTrue(
             text.contains(
-                "too_short_song=Preview Ranking Lab count=1 clips=Lab Song short clip.wav"
+                "too_short_song=Lab Song count=1 clips=Lab Song short clip.wav"
             )
         )
         XCTAssertTrue(text.contains("preview_ranking_scan_callout="))
@@ -920,8 +920,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let brokenPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
         let brokenText = try String(contentsOf: URL(fileURLWithPath: brokenPath), encoding: .utf8)
         XCTAssertTrue(brokenText.contains("selected_song_title=Broken Folder Example"))
-        XCTAssertTrue(brokenText.contains("selected_song_cpr=no CPR versions"))
-        XCTAssertTrue(brokenText.contains("selected_song_warning=No CPR project files found"))
+        XCTAssertTrue(brokenText.contains("selected_song_cpr=no project versions"))
+        XCTAssertTrue(brokenText.contains("selected_song_warning=No project files (.cpr or .als) found"))
         XCTAssertTrue(brokenText.contains("selected_song_notes=notes only"))
     }
 
@@ -2681,7 +2681,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(created.effectiveLatestCPR)
         XCTAssertNil(viewModel.lastDryRunLog)
         XCTAssertTrue(viewModel.statusMessage?.contains("Created draft No CPR Yet") == true)
-        XCTAssertTrue(viewModel.statusMessage?.contains("No CPR project file yet") == true)
+        XCTAssertTrue(viewModel.statusMessage?.contains("No project file (.cpr or .als) yet") == true)
     }
 
     func testCreateNewSongRejectsArchiveRootDestination() throws {

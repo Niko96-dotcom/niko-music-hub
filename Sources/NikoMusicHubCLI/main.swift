@@ -38,7 +38,7 @@ struct NikoMusicHubCLI {
     private static func runExportIndex(args: [String]) throws {
         let roots = try parseRoots(args)
         let output = parseOutput(args) ?? URL(fileURLWithPath: "archive-index-export.json")
-        let result = try CubaseArchiveScanner().scan(roots: roots)
+        let result = try MusicArchiveScanner().scan(roots: roots)
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: result.songs)
         try data.write(to: output)
         print(output.path)
@@ -47,7 +47,7 @@ struct NikoMusicHubCLI {
     private static func runExportDiagnostics(args: [String]) throws {
         let roots = try parseRoots(args)
         let output = parseOutput(args) ?? URL(fileURLWithPath: "archive-diagnostics-export.txt")
-        let result = try CubaseArchiveScanner().scan(roots: roots)
+        let result = try MusicArchiveScanner().scan(roots: roots)
         let diagnostics = ArchiveScanDiagnosticsBuilder.build(result: result, roots: roots)
         let report = ArchiveIntelligence.missingAudioReport(songs: result.songs)
         try ArchiveDiagnosticsExporter.exportText(

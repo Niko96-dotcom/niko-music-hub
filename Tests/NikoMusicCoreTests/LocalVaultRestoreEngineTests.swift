@@ -4,6 +4,67 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultRestoreEngineTests: XCTestCase {
+    func testChangedArchiveFilePersistsActionableIntegrityFailureBeforeCopying() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let provider = VaultRestoreProviderSpy(events: events, localityError: .expectedFileSizeMismatch(
+            fixture.generation.appendingPathComponent("Synthetic Song.cpr"), expected: 42, actual: 43
+        ))
+        let engine = LocalVaultRestoreEngine(
+            activeRoot: fixture.active, archiveRoot: fixture.archive, activeRootID: fixture.activeRootID,
+            resolver: VaultRestoreResolver(record: fixture.archiveRecord), store: store,
+            provider: provider, catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: workspace), writeAdmission: allowRestoreWrites
+        )
+        do {
+            _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("Changed archive must not restore")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Synthetic Song.cpr changed from 42 to 43 bytes"))
+        }
+        let failed = try XCTUnwrap(try store.recoverableRestoreRecords().first)
+        XCTAssertEqual(failed.failureReason, .archiveGenerationIntegrityMismatch)
+        XCTAssertTrue(failed.error?.contains("Synthetic Song.cpr") == true)
+        XCTAssertNil(failed.completedAt)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.stagingURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.destinationURL.path))
+        XCTAssertEqual(provider.materializeCount, 0)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        try VaultManifestBuilder().verify(fixture.manifest, at: fixture.generation)
+    }
+
+    func testAbletonAndMixedRestoreCopiesWholeFolderVerifiesAndOpensLiveSet() async throws {
+        for files in [["Synthetic Song.als"], ["Synthetic Song.cpr", "Live/Synthetic Song.als", "Live/Backup/Old.als"]] {
+            let fixture = try VaultRestoreFixture(projectFiles: files)
+            defer { fixture.remove() }
+            let before = try fixture.snapshot(at: fixture.generation)
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let events = VaultRestoreEventLog()
+            let workspace = VaultRestoreWorkspaceSpy(events: events)
+            let engine = LocalVaultRestoreEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                activeRootID: fixture.activeRootID,
+                resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+                store: store,
+                provider: LocalFolderArchiveStorage(root: fixture.archive),
+                catalog: VaultRestoreCatalogSpy(events: events),
+                projectOpener: SafeVaultProjectOpener(workspace: workspace),
+                writeAdmission: allowRestoreWrites
+            )
+            let result = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored Song")
+            XCTAssertNotNil(result.completedAt)
+            XCTAssertEqual(workspace.opened.map(\.lastPathComponent), ["Synthetic Song.als"])
+            XCTAssertTrue(workspace.opened.allSatisfy { $0.path.hasPrefix(result.destinationURL.path + "/") })
+            XCTAssertEqual(try fixture.snapshot(at: result.destinationURL), before)
+            XCTAssertEqual(try fixture.snapshot(at: fixture.generation), before)
+            try VaultManifestBuilder().verify(fixture.manifest, at: result.destinationURL)
+        }
+    }
+
     func testArchiveVerifiedRestoreWithMaterializingProviderSkipsArchiveAdmissionAndMaterialize() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
@@ -1753,15 +1814,18 @@ private final class VaultRestoreProviderSpy: ArchiveStorageProvider, @unchecked 
     private var storedLocalityCheckCount = 0
     private let supportsMaterialization: Bool
     private var liveLocalities: [ArchiveStorageLocality]
+    private let localityError: FileProviderArchiveStorageError?
 
     init(
         events: VaultRestoreEventLog,
         supportsMaterialization: Bool = true,
         liveRequiresMaterialization: Bool? = nil,
-        liveLocalities: [ArchiveStorageLocality]? = nil
+        liveLocalities: [ArchiveStorageLocality]? = nil,
+        localityError: FileProviderArchiveStorageError? = nil
     ) {
         self.events = events
         self.supportsMaterialization = supportsMaterialization
+        self.localityError = localityError
         let requiresMaterialization = liveRequiresMaterialization ?? supportsMaterialization
         self.liveLocalities = liveLocalities ?? (requiresMaterialization
             ? [.materializationRequired, .fullyLocalCurrent]
@@ -1776,7 +1840,8 @@ private final class VaultRestoreProviderSpy: ArchiveStorageProvider, @unchecked 
         at location: URL,
         manifest: VaultManifest
     ) async throws -> ArchiveStorageLocality {
-        lock.withLock {
+        if let localityError { throw localityError }
+        return lock.withLock {
             storedLocalityCheckCount += 1
             if liveLocalities.count > 1 { return liveLocalities.removeFirst() }
             return liveLocalities.first ?? .unknown
@@ -2021,13 +2086,18 @@ private struct VaultRestoreFixture {
         generation.deletingLastPathComponent().deletingLastPathComponent()
     }
 
-    init() throws {
+    init(projectFiles: [String] = ["Synthetic Song.cpr"]) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vault-restore-\(UUID().uuidString)", isDirectory: true)
         let active = root.appendingPathComponent("Active", isDirectory: true)
         let generation = root.appendingPathComponent("Archive/generations/verified", isDirectory: true)
         try FileManager.default.createDirectory(at: generation.appendingPathComponent("Audio", isDirectory: true), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: active, withIntermediateDirectories: true)
-        try Data("cubase-project".utf8).write(to: generation.appendingPathComponent("Synthetic Song.cpr"))
+        for (index, name) in projectFiles.enumerated() {
+            let url = generation.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("synthetic-project".utf8).write(to: url)
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: Double(index + 100))], ofItemAtPath: url.path)
+        }
         try Data((0..<4096).map { UInt8($0 % 251) }).write(to: generation.appendingPathComponent("Audio/take.wav"))
         let manifest = try VaultManifestBuilder().build(at: generation)
         var archiveRecord = VaultTransferRecord(

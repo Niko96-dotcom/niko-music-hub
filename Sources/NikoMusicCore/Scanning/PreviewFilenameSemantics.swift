@@ -6,6 +6,21 @@ import Foundation
 /// title such as "Vocaloid" as a vocal stem while still recognizing metadata tags like
 /// `(Cover) (Vocals)`.
 enum PreviewFilenameSemantics {
+    /// Eligibility precedes scoring: export age/version/format cannot turn a
+    /// stem, reference or DAW handoff into the main song when a full mix exists.
+    static func isSongPreview(_ candidate: PreviewCandidate) -> Bool {
+        guard candidate.folderRole != .samples, candidate.folderRole != .stems,
+              (candidate.durationSeconds ?? 30) >= 30,
+              !isPartialExport(in: candidate.fileName),
+              !PreviewSongIdentity.isTechnicalExport(candidate.fileName),
+              roleTokens(in: candidate.fileName).isDisjoint(with: ["ref", "reference"]),
+              candidate.fileName.range(of: #"(?i)\b(?:official(?:\s+music)?|lyrics?)\s+video\b"#, options: .regularExpression) == nil else {
+            return false
+        }
+        return candidate.folderRole == .root || candidate.folderRole == .mixdown
+            || candidate.detectedRole == .mainMix || candidate.detectedRole == .master
+    }
+
     static let drumStemTokens: Set<String> = [
         "drum", "drums", "perc", "percussion",
     ]
