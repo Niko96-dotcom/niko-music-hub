@@ -20,12 +20,14 @@ enum ArchiveBoardProjection {
         return statuses.map { status in
             let members = songs
                 .filter { $0.workflowStatus == status }
+                // CPR selection walks version/ignore lists. Derive the date once
+                // per member instead of repeating that walk in every comparison.
+                .map { (song: $0, date: ArchiveShelfRanker.latestCPRActivity(for: $0) ?? .distantPast) }
                 .sorted { lhs, rhs in
-                    let lhsDate = ArchiveShelfRanker.latestCPRActivity(for: lhs) ?? .distantPast
-                    let rhsDate = ArchiveShelfRanker.latestCPRActivity(for: rhs) ?? .distantPast
-                    if lhsDate != rhsDate { return lhsDate > rhsDate }
-                    return lhs.effectiveDisplayTitle.localizedCaseInsensitiveCompare(rhs.effectiveDisplayTitle) == .orderedAscending
+                    if lhs.date != rhs.date { return lhs.date > rhs.date }
+                    return lhs.song.effectiveDisplayTitle.localizedCaseInsensitiveCompare(rhs.song.effectiveDisplayTitle) == .orderedAscending
                 }
+                .map(\.song)
             return ArchiveBoardColumn(status: status, songs: members)
         }
     }

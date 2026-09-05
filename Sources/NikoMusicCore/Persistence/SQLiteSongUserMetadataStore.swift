@@ -38,6 +38,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 throw StoreError.prepare(message(db))
             }
             var result: [String: SongUserMetadata] = [:]
+            let formatter = ISO8601DateFormatter()
             while true {
                 let stepResult = sqlite3_step(statement)
                 switch stepResult {
@@ -70,7 +71,6 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 let previewMode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
                 let cprMode = CPRSelectionMode(rawValue: cprModeRaw) ?? .auto
                 let workflowStatus = workflowStatusRaw.flatMap(ProjectWorkflowStatus.init(rawValue:))
-                let formatter = ISO8601DateFormatter()
                 let updatedAt = formatter.date(from: updatedText) ?? Date()
                 result[songID] = SongUserMetadata(
                     songID: songID,

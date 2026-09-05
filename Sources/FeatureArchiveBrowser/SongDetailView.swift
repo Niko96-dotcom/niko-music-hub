@@ -527,8 +527,12 @@ struct SongDetailView: View {
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.warning)
             } else {
-                ForEach(liveSong.projectVersions, id: \.id) { version in
-                    cprVersionRow(version)
+                // Version archives can contain hundreds of CPRs. Build rows (and
+                // read their file metadata) as they enter the detail viewport.
+                LazyVStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+                    ForEach(liveSong.projectVersions, id: \.id) { version in
+                        cprVersionRow(version)
+                    }
                 }
                 if liveSong.cprSelectionMode == .manual {
                     HubLabeledButton(

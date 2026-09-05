@@ -20,15 +20,26 @@ enum MusicSearchMatcher {
 
     static func matchDetails(song: Song, queryTokens: [String]) -> [MusicSearchMatchDetail] {
         guard !queryTokens.isEmpty else { return [] }
-        let details = queryTokens.compactMap { token -> MusicSearchMatchDetail? in
-            guard let match = bestTokenMatch(token, for: song) else { return nil }
-            return MusicSearchMatchDetail(queryToken: token, kind: match.kind, score: match.score)
+        // Exact and fuzzy checks revisit the same fields. Reuse normalization
+        // only while matching this song; nothing survives a query or metadata edit.
+        var normalizedFields: [String: String] = [:]
+        func cachedNormalize(_ value: String) -> String {
+            if let cached = normalizedFields[value] { return cached }
+            let normalized = normalize(value)
+            normalizedFields[value] = normalized
+            return normalized
         }
-        guard details.count == queryTokens.count else { return [] }
+        var details: [MusicSearchMatchDetail] = []
+        for token in queryTokens {
+            // Search requires every token. Once one misses, later field normalization
+            // and fuzzy matching cannot make this song eligible again.
+            guard let match = bestTokenMatch(token, for: song, normalize: cachedNormalize) else { return [] }
+            details.append(MusicSearchMatchDetail(queryToken: token, kind: match.kind, score: match.score))
+        }
         return details
     }
 
-    private static func bestTokenMatch(_ token: String, for song: Song) -> (kind: MusicSearchMatchKind, score: Int)? {
+    private static func bestTokenMatch(_ token: String, for song: Song, normalize: (String) -> String) -> (kind: MusicSearchMatchKind, score: Int)? {
         guard !token.isEmpty else { return nil }
 
         let title = normalize(song.effectiveDisplayTitle)
@@ -108,13 +119,13 @@ enum MusicSearchMatcher {
             }
         }
 
-        let haystack = searchableHaystack(for: song)
+        let haystack = searchableHaystack(for: song, normalize: normalize)
         if isSubsequence(token, in: haystack) { return (.fuzzyHaystack, 5) }
 
         return nil
     }
 
-    private static func searchableHaystack(for song: Song) -> String {
+    private static func searchableHaystack(for song: Song, normalize: (String) -> String) -> String {
         var parts = [
             song.effectiveDisplayTitle,
             song.originalFolderName,
@@ -137,13 +148,38 @@ enum MusicSearchMatcher {
     }
 
     static func normalize(_ value: String) -> String {
-        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        let folded = value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
-            .filter { $0.isLetter || $0.isNumber }
+        // Keep Foundation's locale-sensitive folding. Once its output is ASCII,
+        // byte classification is equivalent to Character's Unicode properties.
+        if folded.utf8.allSatisfy({ $0 < 0x80 }) {
+            let alphanumeric = folded.utf8.filter {
+                (0x61...0x7A).contains($0) || (0x30...0x39).contains($0)
+            }
+            return String(decoding: alphanumeric, as: UTF8.self)
+        }
+        return folded.filter { $0.isLetter || $0.isNumber }
     }
 
     static func isSubsequence(_ needle: String, in haystack: String) -> Bool {
         guard !needle.isEmpty else { return true }
+        // Normalized ASCII tokens have one byte per Character. Restrict the needle
+        // to alphanumerics so raw CRLF grapheme clusters still use the Unicode path.
+        if needle.utf8.allSatisfy({ (0x61...0x7A).contains($0) || (0x30...0x39).contains($0) }),
+           haystack.utf8.allSatisfy({ $0 < 0x80 }) {
+            var remaining = haystack.utf8.makeIterator()
+            for byte in needle.utf8 {
+                var found = false
+                while let candidate = remaining.next() {
+                    if candidate == byte {
+                        found = true
+                        break
+                    }
+                }
+                if !found { return false }
+            }
+            return true
+        }
         var hayIndex = haystack.startIndex
         for character in needle {
             guard hayIndex < haystack.endIndex else { return false }

@@ -1,0 +1,2336 @@
+{
+  "date": "2026-09-05",
+  "baseline_head": "87860fb810fadd571a7408ecae020dda160c90b2",
+  "hardware": "Apple M5 Pro",
+  "os": "macOS 26.5.2 (25F84)",
+  "swift": "Apple Swift 6.3.3",
+  "build": "release core; swiftc -O drivers; production board/analytics sources compiled alongside workflow driver",
+  "order": "search before/after/after/before, then 200 before/after, then workflows before/after/after/before",
+  "final_source_sha256": {
+    "Sources/NikoMusicCore/Search/MusicSearchMatcher.swift": "3c61c80205172e078b256f6ca2fa7153e483cf621f5f8b11fda98a0cfb92968c",
+    "Sources/NikoMusicCore/Scanning/PreviewProductionMaturity.swift": "5dcd276591b4fd1ebb5695b323f80b5f94ecec27ec18b1c6d4dc2dcf41f04aef",
+    "Sources/NikoMusicCore/Scanning/PreviewConfidenceRanker.swift": "6027940aa8adbb379edb2f5d256750a8a982ca8fae5df53c974872adc3541b23",
+    "Sources/FeatureArchiveBrowser/ArchiveBoardProjection.swift": "c8181241f649bb0e7c38f9c693bac964415822ca47a47b6f3ee4dd7bc58be0aa",
+    "Sources/NikoMusicCore/Persistence/SQLiteSongUserMetadataStore.swift": "682a84f128fa39916428c4e1ebe89a270fed8822164ba5db10dabf1e32e68ab9"
+  },
+  "measurements": {
+    "search": {
+      "before": [
+        {
+          "index_rebuild_ms": 0.004625,
+          "measured_rounds": 7,
+          "peak_rss_bytes": 23117824,
+          "queries": [
+            {
+              "digest": "cb6e5350a5c1aaa3",
+              "first_ms": 62.578833,
+              "max_ms": 62.132916,
+              "median_ms": 60.378542,
+              "min_ms": 58.889917,
+              "query": "neon",
+              "result_count": 1000,
+              "samples_ms": [
+                58.889917,
+                62.132916,
+                59.444667,
+                60.529666,
+                61.176917,
+                59.690416,
+                60.378542
+              ]
+            },
+            {
+              "digest": "cbfa532614e4ea49",
+              "first_ms": 144.287291,
+              "max_ms": 154.756375,
+              "median_ms": 149.277292,
+              "min_ms": 146.866125,
+              "query": "neon hook",
+              "result_count": 400,
+              "samples_ms": [
+                154.756375,
+                152.43525,
+                146.866125,
+                149.277292,
+                149.086334,
+                149.13725,
+                150.318042
+              ]
+            },
+            {
+              "digest": "12df026ce0ef22ec",
+              "first_ms": 164.562709,
+              "max_ms": 172.906916,
+              "median_ms": 170.528667,
+              "min_ms": 168.174958,
+              "query": "maria final",
+              "result_count": 572,
+              "samples_ms": [
+                170.528667,
+                171.999667,
+                169.77175,
+                168.174958,
+                172.906916,
+                172.731875,
+                169.69975
+              ]
+            },
+            {
+              "digest": "4577bbe80928dc6c",
+              "first_ms": 151.753375,
+              "max_ms": 158.3695,
+              "median_ms": 152.9355,
+              "min_ms": 148.8035,
+              "query": "gravity v3 mix",
+              "result_count": 1000,
+              "samples_ms": [
+                152.9355,
+                158.3695,
+                148.8035,
+                152.794583,
+                153.234,
+                150.628458,
+                155.114125
+              ]
+            },
+            {
+              "digest": "44add55ab44322ad",
+              "first_ms": 193.528709,
+              "max_ms": 181.220583,
+              "median_ms": 151.603542,
+              "min_ms": 147.956917,
+              "query": "noen hook",
+              "result_count": 400,
+              "samples_ms": [
+                147.956917,
+                181.220583,
+                149.888375,
+                151.475834,
+                151.603542,
+                151.801708,
+                155.139667
+              ]
+            },
+            {
+              "digest": "d86b4b2c0398ea71",
+              "first_ms": 96.505291,
+              "max_ms": 102.943542,
+              "median_ms": 94.505084,
+              "min_ms": 90.563334,
+              "query": "blumchen",
+              "result_count": 100,
+              "samples_ms": [
+                92.204416,
+                102.943542,
+                95.267292,
+                90.563334,
+                96.173708,
+                93.416,
+                94.505084
+              ]
+            },
+            {
+              "digest": "cbf29ce484222325",
+              "first_ms": 215.386083,
+              "max_ms": 213.730917,
+              "median_ms": 207.348375,
+              "min_ms": 201.367334,
+              "query": "zzzz absent",
+              "result_count": 0,
+              "samples_ms": [
+                203.348084,
+                206.414083,
+                213.730917,
+                201.367334,
+                207.348375,
+                210.401166,
+                210.306333
+              ]
+            },
+            {
+              "digest": "5b5f379b92c61b49",
+              "first_ms": 150.300291,
+              "max_ms": 152.185375,
+              "median_ms": 147.740708,
+              "min_ms": 143.443709,
+              "query": "hook neon",
+              "result_count": 400,
+              "samples_ms": [
+                143.443709,
+                147.849125,
+                144.260167,
+                143.9525,
+                147.908166,
+                152.185375,
+                147.740708
+              ]
+            },
+            {
+              "digest": "7b989651fe284df1",
+              "first_ms": 171.240083,
+              "max_ms": 178.087,
+              "median_ms": 171.868667,
+              "min_ms": 165.816042,
+              "query": "blumchen maria",
+              "result_count": 100,
+              "samples_ms": [
+                165.816042,
+                174.93,
+                168.1385,
+                168.445708,
+                173.242792,
+                171.868667,
+                178.087
+              ]
+            },
+            {
+              "digest": "d840a551424ece0f",
+              "first_ms": 179.3275,
+              "max_ms": 186.871917,
+              "median_ms": 179.719292,
+              "min_ms": 175.27275,
+              "query": "silver lining",
+              "result_count": 1000,
+              "samples_ms": [
+                181.834916,
+                182.45375,
+                175.27275,
+                176.77,
+                186.871917,
+                177.91975,
+                179.719292
+              ]
+            },
+            {
+              "digest": "20402bef71a05553",
+              "first_ms": 158.268542,
+              "max_ms": 165.559,
+              "median_ms": 159.155958,
+              "min_ms": 155.8015,
+              "query": "summer rain",
+              "result_count": 650,
+              "samples_ms": [
+                158.942958,
+                164.263667,
+                155.8015,
+                158.043209,
+                165.559,
+                159.564875,
+                159.155958
+              ]
+            }
+          ],
+          "songs": 1000,
+          "warmup_rounds": 2
+        },
+        {
+          "index_rebuild_ms": 0.001042,
+          "measured_rounds": 7,
+          "peak_rss_bytes": 22904832,
+          "queries": [
+            {
+              "digest": "cb6e5350a5c1aaa3",
+              "first_ms": 72.282541,
+              "max_ms": 60.718833,
+              "median_ms": 58.792583,
+              "min_ms": 58.098084,
+              "query": "neon",
+              "result_count": 1000,
+              "samples_ms": [
+                58.792583,
+                58.318417,
+                58.098084,
+                59.768125,
+                60.061167,
+                58.712375,
+                60.718833
+              ]
+            },
+            {
+              "digest": "cbfa532614e4ea49",
+              "first_ms": 165.591583,
+              "max_ms": 148.647708,
+              "median_ms": 147.157125,
+              "min_ms": 145.623375,
+              "query": "neon hook",
+              "result_count": 400,
+              "samples_ms": [
+                145.835042,
+                148.647708,
+                145.623375,
+                146.740625,
+                147.2175,
+                147.157125,
+                147.3885
+              ]
+            },
+            {
+              "digest": "12df026ce0ef22ec",
+              "first_ms": 191.594833,
+              "max_ms": 170.695875,
+              "median_ms": 166.468334,
+              "min_ms": 165.770625,
+              "query": "maria final",
+              "result_count": 572,
+              "samples_ms": [
+                165.848625,
+                168.541083,
+                165.770625,
+                166.002375,
+                170.695875,
+                166.468334,
+                166.788875
+              ]
+            },
+            {
+              "digest": "4577bbe80928dc6c",
+              "first_ms": 171.819959,
+              "max_ms": 154.221416,
+              "median_ms": 150.027125,
+              "min_ms": 148.960667,
+              "query": "gravity v3 mix",
+              "result_count": 1000,
+              "samples_ms": [
+                149.2395,
+                148.960667,
+                151.930042,
+                150.027125,
+                152.87325,
+                149.625875,
+                154.221416
+              ]
+            },
+            {
+              "digest": "44add55ab44322ad",
+              "first_ms": 174.865584,
+              "max_ms": 149.420959,
+              "median_ms": 148.525708,
+              "min_ms": 146.315375,
+              "query": "noen hook",
+              "result_count": 400,
+              "samples_ms": [
+                148.525708,
+                146.315375,
+                149.386792,
+                148.178417,
+                147.496,
+                149.08975,
+                149.420959
+              ]
+            },
+            {
+              "digest": "d86b4b2c0398ea71",
+              "first_ms": 108.661083,
+              "max_ms": 93.32875,
+              "median_ms": 90.904209,
+              "min_ms": 90.354625,
+              "query": "blumchen",
+              "result_count": 100,
+              "samples_ms": [
+                93.32875,
+                90.613875,
+                91.727875,
+                90.904209,
+                90.354625,
+                90.659416,
+                92.240084
+              ]
+            },
+            {
+              "digest": "cbf29ce484222325",
+              "first_ms": 238.330333,
+              "max_ms": 207.742542,
+              "median_ms": 203.345167,
+              "min_ms": 200.245916,
+              "query": "zzzz absent",
+              "result_count": 0,
+              "samples_ms": [
+                205.763625,
+                200.245916,
+                201.603584,
+                206.733209,
+                203.345167,
+                207.742542,
+                201.456
+              ]
+            },
+            {
+              "digest": "5b5f379b92c61b49",
+              "first_ms": 170.880125,
+              "max_ms": 147.49,
+              "median_ms": 145.398583,
+              "min_ms": 144.411583,
+              "query": "hook neon",
+              "result_count": 400,
+              "samples_ms": [
+                146.179541,
+                147.49,
+                145.398583,
+                147.166209,
+                144.757167,
+                144.935958,
+                144.411583
+              ]
+            },
+            {
+              "digest": "7b989651fe284df1",
+              "first_ms": 189.468208,
+              "max_ms": 173.252167,
+              "median_ms": 168.941833,
+              "min_ms": 168.012708,
+              "query": "blumchen maria",
+              "result_count": 100,
+              "samples_ms": [
+                168.941833,
+                168.012708,
+                169.246291,
+                171.949042,
+                168.783333,
+                168.022708,
+                173.252167
+              ]
+            },
+            {
+              "digest": "d840a551424ece0f",
+              "first_ms": 185.539792,
+              "max_ms": 182.483583,
+              "median_ms": 177.54225,
+              "min_ms": 174.235958,
+              "query": "silver lining",
+              "result_count": 1000,
+              "samples_ms": [
+                176.937417,
+                177.396375,
+                174.235958,
+                182.483583,
+                178.870167,
+                177.54225,
+                180.142958
+              ]
+            },
+            {
+              "digest": "20402bef71a05553",
+              "first_ms": 164.956708,
+              "max_ms": 161.398166,
+              "median_ms": 158.255834,
+              "min_ms": 154.402625,
+              "query": "summer rain",
+              "result_count": 650,
+              "samples_ms": [
+                156.0195,
+                158.255834,
+                154.402625,
+                159.621666,
+                161.398166,
+                159.132166,
+                158.150292
+              ]
+            }
+          ],
+          "songs": 1000,
+          "warmup_rounds": 2
+        }
+      ],
+      "after": [
+        {
+          "index_rebuild_ms": 0.001375,
+          "measured_rounds": 7,
+          "peak_rss_bytes": 23298048,
+          "queries": [
+            {
+              "digest": "cb6e5350a5c1aaa3",
+              "first_ms": 35.355125,
+              "max_ms": 34.710334,
+              "median_ms": 32.980083,
+              "min_ms": 32.492667,
+              "query": "neon",
+              "result_count": 1000,
+              "samples_ms": [
+                33.305583,
+                32.960083,
+                34.078209,
+                32.980083,
+                32.696958,
+                34.710334,
+                32.492667
+              ]
+            },
+            {
+              "digest": "cbfa532614e4ea49",
+              "first_ms": 49.45275,
+              "max_ms": 54.897958,
+              "median_ms": 51.966125,
+              "min_ms": 50.192125,
+              "query": "neon hook",
+              "result_count": 400,
+              "samples_ms": [
+                50.192125,
+                51.119792,
+                51.966125,
+                51.558916,
+                52.656,
+                54.897958,
+                53.456334
+              ]
+            },
+            {
+              "digest": "12df026ce0ef22ec",
+              "first_ms": 54.7275,
+              "max_ms": 62.426834,
+              "median_ms": 59.744667,
+              "min_ms": 58.949916,
+              "query": "maria final",
+              "result_count": 572,
+              "samples_ms": [
+                62.189708,
+                58.949916,
+                59.744667,
+                58.964625,
+                59.498625,
+                59.795333,
+                62.426834
+              ]
+            },
+            {
+              "digest": "4577bbe80928dc6c",
+              "first_ms": 53.633459,
+              "max_ms": 61.046,
+              "median_ms": 58.21125,
+              "min_ms": 54.819417,
+              "query": "gravity v3 mix",
+              "result_count": 1000,
+              "samples_ms": [
+                59.688958,
+                54.819417,
+                56.905709,
+                58.21125,
+                57.313166,
+                61.046,
+                58.320625
+              ]
+            },
+            {
+              "digest": "44add55ab44322ad",
+              "first_ms": 49.409708,
+              "max_ms": 55.286708,
+              "median_ms": 53.803666,
+              "min_ms": 52.327042,
+              "query": "noen hook",
+              "result_count": 400,
+              "samples_ms": [
+                55.286708,
+                52.327042,
+                53.656084,
+                53.119459,
+                54.422958,
+                55.149125,
+                53.803666
+              ]
+            },
+            {
+              "digest": "d86b4b2c0398ea71",
+              "first_ms": 37.909125,
+              "max_ms": 41.962875,
+              "median_ms": 40.522583,
+              "min_ms": 40.153166,
+              "query": "blumchen",
+              "result_count": 100,
+              "samples_ms": [
+                40.506541,
+                41.962875,
+                41.697458,
+                41.454875,
+                40.522583,
+                40.153166,
+                40.357167
+              ]
+            },
+            {
+              "digest": "cbf29ce484222325",
+              "first_ms": 40.929417,
+              "max_ms": 48.443084,
+              "median_ms": 46.192958,
+              "min_ms": 44.5665,
+              "query": "zzzz absent",
+              "result_count": 0,
+              "samples_ms": [
+                48.443084,
+                45.653875,
+                44.607583,
+                44.5665,
+                46.192958,
+                46.72675,
+                48.285792
+              ]
+            },
+            {
+              "digest": "5b5f379b92c61b49",
+              "first_ms": 42.585833,
+              "max_ms": 50.16175,
+              "median_ms": 47.031083,
+              "min_ms": 45.728541,
+              "query": "hook neon",
+              "result_count": 400,
+              "samples_ms": [
+                47.649792,
+                46.13825,
+                45.728541,
+                46.901292,
+                47.757917,
+                47.031083,
+                50.16175
+              ]
+            },
+            {
+              "digest": "7b989651fe284df1",
+              "first_ms": 40.386583,
+              "max_ms": 44.587,
+              "median_ms": 44.187584,
+              "min_ms": 42.905958,
+              "query": "blumchen maria",
+              "result_count": 100,
+              "samples_ms": [
+                44.336666,
+                44.005708,
+                44.187584,
+                44.042666,
+                42.905958,
+                44.291167,
+                44.587
+              ]
+            },
+            {
+              "digest": "d840a551424ece0f",
+              "first_ms": 57.870709,
+              "max_ms": 66.114917,
+              "median_ms": 64.363,
+              "min_ms": 63.819833,
+              "query": "silver lining",
+              "result_count": 1000,
+              "samples_ms": [
+                64.181042,
+                63.819833,
+                66.114917,
+                64.62425,
+                64.288416,
+                65.71175,
+                64.363
+              ]
+            },
+            {
+              "digest": "20402bef71a05553",
+              "first_ms": 49.063,
+              "max_ms": 56.389125,
+              "median_ms": 54.050792,
+              "min_ms": 51.506542,
+              "query": "summer rain",
+              "result_count": 650,
+              "samples_ms": [
+                54.050792,
+                51.506542,
+                54.720875,
+                53.906917,
+                52.743084,
+                56.389125,
+                55.044875
+              ]
+            }
+          ],
+          "songs": 1000,
+          "warmup_rounds": 2
+        },
+        {
+          "index_rebuild_ms": 0.001208,
+          "measured_rounds": 7,
+          "peak_rss_bytes": 23085056,
+          "queries": [
+            {
+              "digest": "cb6e5350a5c1aaa3",
+              "first_ms": 37.846125,
+              "max_ms": 35.985417,
+              "median_ms": 34.312625,
+              "min_ms": 32.537958,
+              "query": "neon",
+              "result_count": 1000,
+              "samples_ms": [
+                32.537958,
+                35.296,
+                34.386416,
+                33.065834,
+                33.504791,
+                35.985417,
+                34.312625
+              ]
+            },
+            {
+              "digest": "cbfa532614e4ea49",
+              "first_ms": 52.30975,
+              "max_ms": 57.636083,
+              "median_ms": 52.968166,
+              "min_ms": 51.821125,
+              "query": "neon hook",
+              "result_count": 400,
+              "samples_ms": [
+                51.888917,
+                53.746875,
+                51.88875,
+                53.181166,
+                51.821125,
+                52.968166,
+                57.636083
+              ]
+            },
+            {
+              "digest": "12df026ce0ef22ec",
+              "first_ms": 60.53575,
+              "max_ms": 64.154166,
+              "median_ms": 60.713625,
+              "min_ms": 59.728416,
+              "query": "maria final",
+              "result_count": 572,
+              "samples_ms": [
+                59.822291,
+                62.4315,
+                59.728416,
+                64.154166,
+                60.713625,
+                60.208833,
+                61.25775
+              ]
+            },
+            {
+              "digest": "4577bbe80928dc6c",
+              "first_ms": 60.622292,
+              "max_ms": 63.802875,
+              "median_ms": 59.942458,
+              "min_ms": 56.646458,
+              "query": "gravity v3 mix",
+              "result_count": 1000,
+              "samples_ms": [
+                56.646458,
+                61.692875,
+                59.893791,
+                63.802875,
+                61.597625,
+                58.693917,
+                59.942458
+              ]
+            },
+            {
+              "digest": "44add55ab44322ad",
+              "first_ms": 55.164417,
+              "max_ms": 56.920333,
+              "median_ms": 55.227834,
+              "min_ms": 54.049416,
+              "query": "noen hook",
+              "result_count": 400,
+              "samples_ms": [
+                54.098917,
+                56.357083,
+                54.495083,
+                55.227834,
+                56.920333,
+                54.049416,
+                55.462916
+              ]
+            },
+            {
+              "digest": "d86b4b2c0398ea71",
+              "first_ms": 41.915917,
+              "max_ms": 46.368416,
+              "median_ms": 42.404458,
+              "min_ms": 41.499541,
+              "query": "blumchen",
+              "result_count": 100,
+              "samples_ms": [
+                41.962541,
+                42.466875,
+                42.404458,
+                46.368416,
+                41.804584,
+                41.499541,
+                43.038708
+              ]
+            },
+            {
+              "digest": "cbf29ce484222325",
+              "first_ms": 47.731542,
+              "max_ms": 48.934875,
+              "median_ms": 45.980958,
+              "min_ms": 44.7195,
+              "query": "zzzz absent",
+              "result_count": 0,
+              "samples_ms": [
+                44.7195,
+                48.701958,
+                45.979041,
+                48.934875,
+                45.980958,
+                45.2195,
+                46.111583
+              ]
+            },
+            {
+              "digest": "5b5f379b92c61b49",
+              "first_ms": 45.893083,
+              "max_ms": 48.839209,
+              "median_ms": 47.347584,
+              "min_ms": 44.304458,
+              "query": "hook neon",
+              "result_count": 400,
+              "samples_ms": [
+                46.813375,
+                47.347584,
+                45.871708,
+                48.616708,
+                48.839209,
+                47.927375,
+                44.304458
+              ]
+            },
+            {
+              "digest": "7b989651fe284df1",
+              "first_ms": 43.575792,
+              "max_ms": 48.080625,
+              "median_ms": 45.474333,
+              "min_ms": 43.390625,
+              "query": "blumchen maria",
+              "result_count": 100,
+              "samples_ms": [
+                43.390625,
+                44.842083,
+                45.879667,
+                48.080625,
+                44.845584,
+                46.226416,
+                45.474333
+              ]
+            },
+            {
+              "digest": "d840a551424ece0f",
+              "first_ms": 68.100666,
+              "max_ms": 72.044083,
+              "median_ms": 66.013,
+              "min_ms": 64.147833,
+              "query": "silver lining",
+              "result_count": 1000,
+              "samples_ms": [
+                64.147833,
+                67.155125,
+                64.444666,
+                72.044083,
+                66.014542,
+                65.6315,
+                66.013
+              ]
+            },
+            {
+              "digest": "20402bef71a05553",
+              "first_ms": 53.73375,
+              "max_ms": 59.647583,
+              "median_ms": 55.563292,
+              "min_ms": 53.609167,
+              "query": "summer rain",
+              "result_count": 650,
+              "samples_ms": [
+                53.609167,
+                56.332083,
+                55.563292,
+                59.647583,
+                55.946625,
+                54.779584,
+                53.67775
+              ]
+            }
+          ],
+          "songs": 1000,
+          "warmup_rounds": 2
+        }
+      ]
+    },
+    "workflows": {
+      "before": [
+        {
+          "measured_rounds": 7,
+          "metrics": [
+            {
+              "digest": "c02b2edbd3458c5",
+              "first_ms": 5.164,
+              "max_ms": 4.39925,
+              "median_ms": 3.979375,
+              "min_ms": 3.790125,
+              "samples_ms": [
+                3.95,
+                3.790125,
+                3.979375,
+                4.39925,
+                4.075583,
+                4.074125,
+                3.946917
+              ],
+              "workflow": "rank_36_previews"
+            },
+            {
+              "digest": "576a2b7d14c51afb",
+              "first_ms": 917.129084,
+              "max_ms": 914.951625,
+              "median_ms": 888.750083,
+              "min_ms": 874.230125,
+              "samples_ms": [
+                881.645166,
+                914.951625,
+                892.159292,
+                892.860416,
+                884.233625,
+                888.750083,
+                874.230125
+              ],
+              "workflow": "rank_1200_previews"
+            },
+            {
+              "digest": "edd694e5f9b3e4ff",
+              "first_ms": 6.8165,
+              "max_ms": 7.304375,
+              "median_ms": 6.752416,
+              "min_ms": 6.612334,
+              "samples_ms": [
+                7.029666,
+                6.80175,
+                6.612334,
+                7.304375,
+                6.65025,
+                6.752416,
+                6.633
+              ],
+              "workflow": "sort_1000_recentBounce"
+            },
+            {
+              "digest": "1893109aba510985",
+              "first_ms": 5.737167,
+              "max_ms": 6.538625,
+              "median_ms": 5.774625,
+              "min_ms": 5.426959,
+              "samples_ms": [
+                5.426959,
+                6.138833,
+                5.774625,
+                5.962625,
+                6.538625,
+                5.667833,
+                5.752625
+              ],
+              "workflow": "sort_1000_recentCPR"
+            },
+            {
+              "digest": "f25255f7f05b025f",
+              "first_ms": 9.566625,
+              "max_ms": 6.529667,
+              "median_ms": 6.025375,
+              "min_ms": 5.701,
+              "samples_ms": [
+                6.3895,
+                6.529667,
+                6.025375,
+                6.018583,
+                6.079375,
+                5.728,
+                5.701
+              ],
+              "workflow": "sort_1000_titleAZ"
+            },
+            {
+              "digest": "1a4e65843e013dc9",
+              "first_ms": 36.922375,
+              "max_ms": 37.115042,
+              "median_ms": 35.481208,
+              "min_ms": 35.234209,
+              "samples_ms": [
+                36.524667,
+                37.115042,
+                35.876458,
+                35.424625,
+                35.234209,
+                35.481208,
+                35.287208
+              ],
+              "workflow": "board_1000"
+            },
+            {
+              "digest": "fa0a4331d597f3fc",
+              "first_ms": 18.793041,
+              "max_ms": 18.940334,
+              "median_ms": 18.521709,
+              "min_ms": 18.111167,
+              "samples_ms": [
+                18.498,
+                18.795791,
+                18.521709,
+                18.111167,
+                18.273875,
+                18.918209,
+                18.940334
+              ],
+              "workflow": "analytics_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 281.619625,
+              "max_ms": 291.663875,
+              "median_ms": 286.179959,
+              "min_ms": 281.174667,
+              "samples_ms": [
+                286.963917,
+                288.666625,
+                285.911875,
+                283.175667,
+                281.174667,
+                286.179959,
+                291.663875
+              ],
+              "workflow": "sqlite_load_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 206.703625,
+              "max_ms": 204.985416,
+              "median_ms": 201.028334,
+              "min_ms": 196.398084,
+              "samples_ms": [
+                200.322375,
+                204.985416,
+                202.616875,
+                203.432375,
+                199.545042,
+                201.028334,
+                196.398084
+              ],
+              "workflow": "sqlite_save_unchanged_1000"
+            },
+            {
+              "digest": "4ed1da35c637aa85",
+              "first_ms": 67.956458,
+              "max_ms": 71.274709,
+              "median_ms": 67.681084,
+              "min_ms": 67.274542,
+              "samples_ms": [
+                68.197375,
+                67.681084,
+                67.274542,
+                67.614875,
+                68.286708,
+                71.274709,
+                67.431
+              ],
+              "workflow": "metadata_load_1000"
+            },
+            {
+              "digest": "24584819f372356f",
+              "first_ms": 188.922375,
+              "max_ms": 204.196083,
+              "median_ms": 188.759791,
+              "min_ms": 185.684583,
+              "samples_ms": [
+                186.643625,
+                188.759791,
+                186.169333,
+                185.684583,
+                199.057875,
+                204.196083,
+                202.688083
+              ],
+              "workflow": "scan_50_songs_600_previews"
+            }
+          ],
+          "peak_rss_bytes": 365199360,
+          "songs": 1000,
+          "warmup_rounds": 2
+        },
+        {
+          "measured_rounds": 7,
+          "metrics": [
+            {
+              "digest": "c02b2edbd3458c5",
+              "first_ms": 6.927208,
+              "max_ms": 5.063667,
+              "median_ms": 4.8595,
+              "min_ms": 4.325042,
+              "samples_ms": [
+                4.697208,
+                4.8595,
+                4.325042,
+                4.489208,
+                5.063667,
+                5.054917,
+                4.987625
+              ],
+              "workflow": "rank_36_previews"
+            },
+            {
+              "digest": "576a2b7d14c51afb",
+              "first_ms": 1045.003458,
+              "max_ms": 910.008291,
+              "median_ms": 899.248125,
+              "min_ms": 885.222,
+              "samples_ms": [
+                894.270167,
+                885.222,
+                892.836291,
+                899.248125,
+                906.072084,
+                910.008291,
+                907.886833
+              ],
+              "workflow": "rank_1200_previews"
+            },
+            {
+              "digest": "edd694e5f9b3e4ff",
+              "first_ms": 7.2125,
+              "max_ms": 7.363958,
+              "median_ms": 6.684667,
+              "min_ms": 6.146542,
+              "samples_ms": [
+                7.363958,
+                6.146542,
+                6.739041,
+                6.684667,
+                6.302458,
+                6.670292,
+                6.754291
+              ],
+              "workflow": "sort_1000_recentBounce"
+            },
+            {
+              "digest": "1893109aba510985",
+              "first_ms": 5.899875,
+              "max_ms": 6.108042,
+              "median_ms": 5.771083,
+              "min_ms": 5.647333,
+              "samples_ms": [
+                5.735916,
+                5.771083,
+                6.108042,
+                5.647333,
+                5.72475,
+                6.081334,
+                5.852959
+              ],
+              "workflow": "sort_1000_recentCPR"
+            },
+            {
+              "digest": "f25255f7f05b025f",
+              "first_ms": 9.37775,
+              "max_ms": 6.186208,
+              "median_ms": 5.936041,
+              "min_ms": 5.6095,
+              "samples_ms": [
+                6.064291,
+                5.646,
+                5.971834,
+                5.6095,
+                6.186208,
+                5.936041,
+                5.921708
+              ],
+              "workflow": "sort_1000_titleAZ"
+            },
+            {
+              "digest": "1a4e65843e013dc9",
+              "first_ms": 36.262125,
+              "max_ms": 39.319166,
+              "median_ms": 37.350625,
+              "min_ms": 36.6215,
+              "samples_ms": [
+                37.350625,
+                37.407667,
+                37.069583,
+                38.140833,
+                36.6215,
+                39.319166,
+                37.028542
+              ],
+              "workflow": "board_1000"
+            },
+            {
+              "digest": "fa0a4331d597f3fc",
+              "first_ms": 18.945459,
+              "max_ms": 18.650666,
+              "median_ms": 18.152,
+              "min_ms": 17.939084,
+              "samples_ms": [
+                17.970959,
+                18.650666,
+                18.152,
+                18.119917,
+                17.939084,
+                18.247834,
+                18.352125
+              ],
+              "workflow": "analytics_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 296.381667,
+              "max_ms": 291.108333,
+              "median_ms": 279.729917,
+              "min_ms": 273.000875,
+              "samples_ms": [
+                289.982166,
+                291.108333,
+                279.729917,
+                289.605042,
+                276.393291,
+                273.000875,
+                273.237416
+              ],
+              "workflow": "sqlite_load_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 201.396375,
+              "max_ms": 199.482666,
+              "median_ms": 198.327584,
+              "min_ms": 191.569375,
+              "samples_ms": [
+                198.327584,
+                197.011625,
+                199.482666,
+                191.742292,
+                191.569375,
+                198.526458,
+                198.46425
+              ],
+              "workflow": "sqlite_save_unchanged_1000"
+            },
+            {
+              "digest": "4ed1da35c637aa85",
+              "first_ms": 66.824166,
+              "max_ms": 68.168042,
+              "median_ms": 66.022417,
+              "min_ms": 65.573375,
+              "samples_ms": [
+                68.168042,
+                67.131541,
+                66.022417,
+                66.201875,
+                65.876583,
+                65.934208,
+                65.573375
+              ],
+              "workflow": "metadata_load_1000"
+            },
+            {
+              "digest": "24584819f372356f",
+              "first_ms": 188.986792,
+              "max_ms": 176.745167,
+              "median_ms": 175.039875,
+              "min_ms": 171.009125,
+              "samples_ms": [
+                173.763916,
+                176.745167,
+                176.288292,
+                174.695042,
+                171.009125,
+                175.039875,
+                176.618416
+              ],
+              "workflow": "scan_50_songs_600_previews"
+            }
+          ],
+          "peak_rss_bytes": 366608384,
+          "songs": 1000,
+          "warmup_rounds": 2
+        }
+      ],
+      "after": [
+        {
+          "measured_rounds": 7,
+          "metrics": [
+            {
+              "digest": "c02b2edbd3458c5",
+              "first_ms": 1.638791,
+              "max_ms": 0.742541,
+              "median_ms": 0.623584,
+              "min_ms": 0.5545,
+              "samples_ms": [
+                0.742541,
+                0.623584,
+                0.596875,
+                0.637459,
+                0.628125,
+                0.5545,
+                0.554708
+              ],
+              "workflow": "rank_36_previews"
+            },
+            {
+              "digest": "576a2b7d14c51afb",
+              "first_ms": 20.709459,
+              "max_ms": 27.603375,
+              "median_ms": 24.182125,
+              "min_ms": 19.999334,
+              "samples_ms": [
+                27.603375,
+                25.073584,
+                24.318625,
+                24.182125,
+                20.379542,
+                20.241,
+                19.999334
+              ],
+              "workflow": "rank_1200_previews"
+            },
+            {
+              "digest": "edd694e5f9b3e4ff",
+              "first_ms": 8.191917,
+              "max_ms": 7.835042,
+              "median_ms": 7.36025,
+              "min_ms": 6.930667,
+              "samples_ms": [
+                7.564667,
+                7.396709,
+                7.36025,
+                6.930667,
+                7.285167,
+                7.033625,
+                7.835042
+              ],
+              "workflow": "sort_1000_recentBounce"
+            },
+            {
+              "digest": "1893109aba510985",
+              "first_ms": 6.071167,
+              "max_ms": 6.484125,
+              "median_ms": 5.697333,
+              "min_ms": 5.421333,
+              "samples_ms": [
+                6.484125,
+                6.338917,
+                5.421333,
+                5.697333,
+                6.131958,
+                5.682292,
+                5.617084
+              ],
+              "workflow": "sort_1000_recentCPR"
+            },
+            {
+              "digest": "f25255f7f05b025f",
+              "first_ms": 9.177167,
+              "max_ms": 6.476458,
+              "median_ms": 6.123209,
+              "min_ms": 5.815875,
+              "samples_ms": [
+                6.070333,
+                6.202958,
+                6.123209,
+                6.138042,
+                6.476458,
+                5.815875,
+                6.116667
+              ],
+              "workflow": "sort_1000_titleAZ"
+            },
+            {
+              "digest": "1a4e65843e013dc9",
+              "first_ms": 6.211708,
+              "max_ms": 6.660459,
+              "median_ms": 5.746459,
+              "min_ms": 5.490041,
+              "samples_ms": [
+                5.658291,
+                5.746459,
+                6.293584,
+                5.798792,
+                5.490041,
+                6.660459,
+                5.716792
+              ],
+              "workflow": "board_1000"
+            },
+            {
+              "digest": "fa0a4331d597f3fc",
+              "first_ms": 20.406958,
+              "max_ms": 19.98975,
+              "median_ms": 19.637208,
+              "min_ms": 18.998791,
+              "samples_ms": [
+                19.98975,
+                19.708,
+                18.998791,
+                19.66875,
+                19.637208,
+                19.204458,
+                19.373541
+              ],
+              "workflow": "analytics_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 294.7045,
+              "max_ms": 347.504166,
+              "median_ms": 297.197167,
+              "min_ms": 289.792833,
+              "samples_ms": [
+                289.792833,
+                291.967667,
+                297.197167,
+                306.925375,
+                294.502166,
+                301.475333,
+                347.504166
+              ],
+              "workflow": "sqlite_load_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 200.068708,
+              "max_ms": 205.842375,
+              "median_ms": 203.019125,
+              "min_ms": 195.585,
+              "samples_ms": [
+                205.842375,
+                197.96875,
+                204.336625,
+                203.019125,
+                204.489917,
+                196.067625,
+                195.585
+              ],
+              "workflow": "sqlite_save_unchanged_1000"
+            },
+            {
+              "digest": "4ed1da35c637aa85",
+              "first_ms": 28.536208,
+              "max_ms": 31.014209,
+              "median_ms": 28.313541,
+              "min_ms": 27.369209,
+              "samples_ms": [
+                28.136292,
+                28.896292,
+                27.369209,
+                31.014209,
+                28.8035,
+                27.729333,
+                28.313541
+              ],
+              "workflow": "metadata_load_1000"
+            },
+            {
+              "digest": "24584819f372356f",
+              "first_ms": 107.634958,
+              "max_ms": 112.63775,
+              "median_ms": 111.129458,
+              "min_ms": 105.099666,
+              "samples_ms": [
+                105.099666,
+                109.796583,
+                108.762458,
+                112.098083,
+                112.63775,
+                112.036792,
+                111.129458
+              ],
+              "workflow": "scan_50_songs_600_previews"
+            }
+          ],
+          "peak_rss_bytes": 282247168,
+          "songs": 1000,
+          "warmup_rounds": 2
+        },
+        {
+          "measured_rounds": 7,
+          "metrics": [
+            {
+              "digest": "c02b2edbd3458c5",
+              "first_ms": 1.77025,
+              "max_ms": 0.789292,
+              "median_ms": 0.644833,
+              "min_ms": 0.562208,
+              "samples_ms": [
+                0.591125,
+                0.644833,
+                0.789292,
+                0.678208,
+                0.569959,
+                0.676083,
+                0.562208
+              ],
+              "workflow": "rank_36_previews"
+            },
+            {
+              "digest": "576a2b7d14c51afb",
+              "first_ms": 21.782708,
+              "max_ms": 22.242709,
+              "median_ms": 18.859209,
+              "min_ms": 18.386791,
+              "samples_ms": [
+                19.41775,
+                19.205917,
+                18.386791,
+                22.242709,
+                18.571166,
+                18.859209,
+                18.580208
+              ],
+              "workflow": "rank_1200_previews"
+            },
+            {
+              "digest": "edd694e5f9b3e4ff",
+              "first_ms": 8.270959,
+              "max_ms": 7.517792,
+              "median_ms": 7.04825,
+              "min_ms": 6.437666,
+              "samples_ms": [
+                6.988291,
+                7.517792,
+                7.04825,
+                6.437666,
+                7.492375,
+                7.18625,
+                6.840375
+              ],
+              "workflow": "sort_1000_recentBounce"
+            },
+            {
+              "digest": "1893109aba510985",
+              "first_ms": 5.508292,
+              "max_ms": 7.087875,
+              "median_ms": 5.780167,
+              "min_ms": 5.517291,
+              "samples_ms": [
+                5.650041,
+                5.695042,
+                7.087875,
+                5.930958,
+                5.82525,
+                5.517291,
+                5.780167
+              ],
+              "workflow": "sort_1000_recentCPR"
+            },
+            {
+              "digest": "f25255f7f05b025f",
+              "first_ms": 10.021833,
+              "max_ms": 6.302,
+              "median_ms": 6.058334,
+              "min_ms": 5.699541,
+              "samples_ms": [
+                6.163875,
+                5.699541,
+                6.163875,
+                6.058334,
+                6.302,
+                6.02925,
+                5.8725
+              ],
+              "workflow": "sort_1000_titleAZ"
+            },
+            {
+              "digest": "1a4e65843e013dc9",
+              "first_ms": 6.234,
+              "max_ms": 6.215084,
+              "median_ms": 5.515083,
+              "min_ms": 5.464666,
+              "samples_ms": [
+                5.595833,
+                5.479375,
+                5.82275,
+                6.215084,
+                5.515083,
+                5.468834,
+                5.464666
+              ],
+              "workflow": "board_1000"
+            },
+            {
+              "digest": "fa0a4331d597f3fc",
+              "first_ms": 19.073083,
+              "max_ms": 19.646459,
+              "median_ms": 19.223125,
+              "min_ms": 18.955041,
+              "samples_ms": [
+                19.601667,
+                19.575583,
+                19.223125,
+                18.955041,
+                19.151292,
+                18.960583,
+                19.646459
+              ],
+              "workflow": "analytics_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 296.413458,
+              "max_ms": 344.032666,
+              "median_ms": 327.505875,
+              "min_ms": 310.328333,
+              "samples_ms": [
+                310.328333,
+                323.811833,
+                320.025292,
+                331.255,
+                328.744708,
+                327.505875,
+                344.032666
+              ],
+              "workflow": "sqlite_load_1000"
+            },
+            {
+              "digest": "62cc7f139b3a14d2",
+              "first_ms": 232.176041,
+              "max_ms": 233.785583,
+              "median_ms": 226.004625,
+              "min_ms": 218.932458,
+              "samples_ms": [
+                222.8045,
+                220.904875,
+                226.304625,
+                226.004625,
+                233.785583,
+                233.4555,
+                218.932458
+              ],
+              "workflow": "sqlite_save_unchanged_1000"
+            },
+            {
+              "digest": "4ed1da35c637aa85",
+              "first_ms": 32.451083,
+              "max_ms": 31.723333,
+              "median_ms": 30.7895,
+              "min_ms": 29.806167,
+              "samples_ms": [
+                31.723333,
+                30.8775,
+                30.452375,
+                30.7895,
+                30.960875,
+                29.806167,
+                30.049209
+              ],
+              "workflow": "metadata_load_1000"
+            },
+            {
+              "digest": "24584819f372356f",
+              "first_ms": 116.559125,
+              "max_ms": 120.111959,
+              "median_ms": 118.688333,
+              "min_ms": 109.524792,
+              "samples_ms": [
+                120.111959,
+                119.542291,
+                119.36725,
+                117.091666,
+                113.865542,
+                109.524792,
+                118.688333
+              ],
+              "workflow": "scan_50_songs_600_previews"
+            }
+          ],
+          "peak_rss_bytes": 285884416,
+          "songs": 1000,
+          "warmup_rounds": 2
+        }
+      ]
+    }
+  },
+  "search_200": {
+    "before": {
+      "index_rebuild_ms": 0.000541,
+      "measured_rounds": 7,
+      "peak_rss_bytes": 13221888,
+      "queries": [
+        {
+          "digest": "267d7d1e5868c47b",
+          "first_ms": 15.387958,
+          "max_ms": 12.151084,
+          "median_ms": 11.641167,
+          "min_ms": 11.209875,
+          "query": "neon",
+          "result_count": 200,
+          "samples_ms": [
+            11.230209,
+            11.209875,
+            12.151084,
+            11.87025,
+            11.641167,
+            11.687875,
+            11.326625
+          ]
+        },
+        {
+          "digest": "3bce0b10abac6e11",
+          "first_ms": 28.191792,
+          "max_ms": 29.9485,
+          "median_ms": 28.83475,
+          "min_ms": 28.440209,
+          "query": "neon hook",
+          "result_count": 80,
+          "samples_ms": [
+            29.088125,
+            28.445125,
+            29.9485,
+            28.83475,
+            29.26125,
+            28.786542,
+            28.440209
+          ]
+        },
+        {
+          "digest": "70faa7a608e02bde",
+          "first_ms": 33.050417,
+          "max_ms": 35.517625,
+          "median_ms": 32.820625,
+          "min_ms": 32.372375,
+          "query": "maria final",
+          "result_count": 114,
+          "samples_ms": [
+            32.877625,
+            32.372375,
+            35.517625,
+            32.549458,
+            34.319333,
+            32.796958,
+            32.820625
+          ]
+        },
+        {
+          "digest": "84fe1035d2ac73ff",
+          "first_ms": 29.870916,
+          "max_ms": 31.185583,
+          "median_ms": 29.654333,
+          "min_ms": 29.067958,
+          "query": "gravity v3 mix",
+          "result_count": 200,
+          "samples_ms": [
+            29.610541,
+            31.044917,
+            29.848542,
+            29.27075,
+            31.185583,
+            29.654333,
+            29.067958
+          ]
+        },
+        {
+          "digest": "fbd65d3f66c92c3d",
+          "first_ms": 29.754334,
+          "max_ms": 32.388125,
+          "median_ms": 29.33125,
+          "min_ms": 28.403584,
+          "query": "noen hook",
+          "result_count": 80,
+          "samples_ms": [
+            28.921166,
+            28.403584,
+            29.372458,
+            29.053709,
+            32.388125,
+            29.577792,
+            29.33125
+          ]
+        },
+        {
+          "digest": "6f00e11a76fb3ab1",
+          "first_ms": 18.522208,
+          "max_ms": 19.82075,
+          "median_ms": 18.221334,
+          "min_ms": 17.665459,
+          "query": "blumchen",
+          "result_count": 20,
+          "samples_ms": [
+            19.82075,
+            17.665459,
+            18.221334,
+            18.171708,
+            18.108125,
+            18.532791,
+            18.478542
+          ]
+        },
+        {
+          "digest": "cbf29ce484222325",
+          "first_ms": 40.326208,
+          "max_ms": 40.634666,
+          "median_ms": 39.860166,
+          "min_ms": 39.576,
+          "query": "zzzz absent",
+          "result_count": 0,
+          "samples_ms": [
+            39.886708,
+            39.690417,
+            40.634666,
+            39.648084,
+            39.576,
+            40.376375,
+            39.860166
+          ]
+        },
+        {
+          "digest": "690f9652dff7d801",
+          "first_ms": 29.580541,
+          "max_ms": 29.936625,
+          "median_ms": 28.948625,
+          "min_ms": 27.963333,
+          "query": "hook neon",
+          "result_count": 80,
+          "samples_ms": [
+            28.7325,
+            28.948625,
+            27.963333,
+            29.048458,
+            29.936625,
+            29.084,
+            28.41475
+          ]
+        },
+        {
+          "digest": "b924d92a4c8d1c91",
+          "first_ms": 36.007875,
+          "max_ms": 34.944042,
+          "median_ms": 33.341667,
+          "min_ms": 33.111917,
+          "query": "blumchen maria",
+          "result_count": 20,
+          "samples_ms": [
+            33.341667,
+            33.111917,
+            33.328375,
+            33.177959,
+            34.944042,
+            34.234458,
+            34.459417
+          ]
+        },
+        {
+          "digest": "d280ff73101389af",
+          "first_ms": 35.635458,
+          "max_ms": 36.423333,
+          "median_ms": 34.901292,
+          "min_ms": 34.139667,
+          "query": "silver lining",
+          "result_count": 200,
+          "samples_ms": [
+            34.901292,
+            34.381666,
+            34.57125,
+            35.102792,
+            36.423333,
+            35.580125,
+            34.139667
+          ]
+        },
+        {
+          "digest": "e8240ee24524b13",
+          "first_ms": 32.100333,
+          "max_ms": 31.905084,
+          "median_ms": 31.081791,
+          "min_ms": 30.627959,
+          "query": "summer rain",
+          "result_count": 130,
+          "samples_ms": [
+            30.695333,
+            30.627959,
+            31.905084,
+            30.768709,
+            31.202667,
+            31.8235,
+            31.081791
+          ]
+        }
+      ],
+      "songs": 200,
+      "warmup_rounds": 2
+    },
+    "after": {
+      "index_rebuild_ms": 0.000792,
+      "measured_rounds": 7,
+      "peak_rss_bytes": 13221888,
+      "queries": [
+        {
+          "digest": "267d7d1e5868c47b",
+          "first_ms": 10.716291,
+          "max_ms": 5.925375,
+          "median_ms": 5.602416,
+          "min_ms": 5.45475,
+          "query": "neon",
+          "result_count": 200,
+          "samples_ms": [
+            5.602416,
+            5.661708,
+            5.504708,
+            5.558584,
+            5.45475,
+            5.925375,
+            5.602417
+          ]
+        },
+        {
+          "digest": "3bce0b10abac6e11",
+          "first_ms": 9.890958,
+          "max_ms": 9.425417,
+          "median_ms": 9.106666,
+          "min_ms": 8.903625,
+          "query": "neon hook",
+          "result_count": 80,
+          "samples_ms": [
+            8.903625,
+            9.36025,
+            9.106666,
+            8.996375,
+            9.355958,
+            9.032916,
+            9.425417
+          ]
+        },
+        {
+          "digest": "70faa7a608e02bde",
+          "first_ms": 11.100375,
+          "max_ms": 11.01325,
+          "median_ms": 10.861667,
+          "min_ms": 10.557458,
+          "query": "maria final",
+          "result_count": 114,
+          "samples_ms": [
+            10.861667,
+            10.557458,
+            10.737542,
+            11.01325,
+            10.649,
+            10.998083,
+            10.872667
+          ]
+        },
+        {
+          "digest": "84fe1035d2ac73ff",
+          "first_ms": 10.227958,
+          "max_ms": 10.60125,
+          "median_ms": 10.037167,
+          "min_ms": 9.922291,
+          "query": "gravity v3 mix",
+          "result_count": 200,
+          "samples_ms": [
+            10.514583,
+            9.933,
+            9.922291,
+            10.319041,
+            10.037167,
+            10.60125,
+            9.958375
+          ]
+        },
+        {
+          "digest": "fbd65d3f66c92c3d",
+          "first_ms": 9.595959,
+          "max_ms": 9.889792,
+          "median_ms": 9.649459,
+          "min_ms": 9.59225,
+          "query": "noen hook",
+          "result_count": 80,
+          "samples_ms": [
+            9.629041,
+            9.624875,
+            9.694584,
+            9.649459,
+            9.889792,
+            9.59225,
+            9.795334
+          ]
+        },
+        {
+          "digest": "6f00e11a76fb3ab1",
+          "first_ms": 7.745958,
+          "max_ms": 7.828334,
+          "median_ms": 7.3415,
+          "min_ms": 7.246875,
+          "query": "blumchen",
+          "result_count": 20,
+          "samples_ms": [
+            7.828334,
+            7.246875,
+            7.306,
+            7.275083,
+            7.3415,
+            7.697875,
+            7.490625
+          ]
+        },
+        {
+          "digest": "cbf29ce484222325",
+          "first_ms": 8.150416,
+          "max_ms": 8.673208,
+          "median_ms": 8.399083,
+          "min_ms": 8.162625,
+          "query": "zzzz absent",
+          "result_count": 0,
+          "samples_ms": [
+            8.399083,
+            8.426167,
+            8.388375,
+            8.162625,
+            8.571208,
+            8.186333,
+            8.673208
+          ]
+        },
+        {
+          "digest": "690f9652dff7d801",
+          "first_ms": 8.397833,
+          "max_ms": 8.52875,
+          "median_ms": 8.337667,
+          "min_ms": 8.091083,
+          "query": "hook neon",
+          "result_count": 80,
+          "samples_ms": [
+            8.214458,
+            8.387958,
+            8.091083,
+            8.337667,
+            8.096459,
+            8.486542,
+            8.52875
+          ]
+        },
+        {
+          "digest": "b924d92a4c8d1c91",
+          "first_ms": 7.952917,
+          "max_ms": 8.471459,
+          "median_ms": 7.85825,
+          "min_ms": 7.717875,
+          "query": "blumchen maria",
+          "result_count": 20,
+          "samples_ms": [
+            7.717875,
+            8.309375,
+            7.87425,
+            7.800583,
+            8.471459,
+            7.800708,
+            7.85825
+          ]
+        },
+        {
+          "digest": "d280ff73101389af",
+          "first_ms": 11.408625,
+          "max_ms": 11.50175,
+          "median_ms": 11.231042,
+          "min_ms": 10.921959,
+          "query": "silver lining",
+          "result_count": 200,
+          "samples_ms": [
+            11.154958,
+            11.308625,
+            11.231042,
+            11.50175,
+            10.921959,
+            11.331834,
+            11.080583
+          ]
+        },
+        {
+          "digest": "e8240ee24524b13",
+          "first_ms": 9.722167,
+          "max_ms": 10.416167,
+          "median_ms": 9.834917,
+          "min_ms": 9.436667,
+          "query": "summer rain",
+          "result_count": 130,
+          "samples_ms": [
+            9.939333,
+            10.416167,
+            9.436667,
+            9.46925,
+            9.834917,
+            9.564,
+            9.995083
+          ]
+        }
+      ],
+      "songs": 200,
+      "warmup_rounds": 2
+    }
+  },
+  "extended_reconnaissance": {
+    "measured_rounds": 7,
+    "metrics": [
+      {
+        "digest": "c02b2edbd3458c5",
+        "first_ms": 1.714833,
+        "max_ms": 0.611667,
+        "median_ms": 0.510375,
+        "min_ms": 0.496333,
+        "samples_ms": [
+          0.49825,
+          0.496333,
+          0.611667,
+          0.511791,
+          0.510375,
+          0.506208,
+          0.582125
+        ],
+        "workflow": "rank_36_previews"
+      },
+      {
+        "digest": "576a2b7d14c51afb",
+        "first_ms": 19.391959,
+        "max_ms": 22.882125,
+        "median_ms": 19.148,
+        "min_ms": 18.527875,
+        "samples_ms": [
+          19.073334,
+          19.148,
+          18.841834,
+          19.418125,
+          19.4655,
+          22.882125,
+          18.527875
+        ],
+        "workflow": "rank_1200_previews"
+      },
+      {
+        "digest": "edd694e5f9b3e4ff",
+        "first_ms": 7.666375,
+        "max_ms": 6.94875,
+        "median_ms": 6.566583,
+        "min_ms": 6.11925,
+        "samples_ms": [
+          6.258209,
+          6.566583,
+          6.11925,
+          6.686041,
+          6.886584,
+          6.341916,
+          6.94875
+        ],
+        "workflow": "sort_1000_recentBounce"
+      },
+      {
+        "digest": "1893109aba510985",
+        "first_ms": 5.39875,
+        "max_ms": 6.046333,
+        "median_ms": 5.614666,
+        "min_ms": 5.21225,
+        "samples_ms": [
+          5.581208,
+          5.6475,
+          5.903667,
+          5.614666,
+          5.426959,
+          6.046333,
+          5.21225
+        ],
+        "workflow": "sort_1000_recentCPR"
+      },
+      {
+        "digest": "f25255f7f05b025f",
+        "first_ms": 9.471791,
+        "max_ms": 6.386875,
+        "median_ms": 5.840083,
+        "min_ms": 5.479917,
+        "samples_ms": [
+          6.386875,
+          5.601208,
+          6.029417,
+          5.62725,
+          5.840083,
+          6.010541,
+          5.479917
+        ],
+        "workflow": "sort_1000_titleAZ"
+      },
+      {
+        "digest": "1a4e65843e013dc9",
+        "first_ms": 5.245125,
+        "max_ms": 8.964167,
+        "median_ms": 5.543875,
+        "min_ms": 4.771583,
+        "samples_ms": [
+          8.964167,
+          5.107625,
+          5.611417,
+          5.639458,
+          5.536083,
+          4.771583,
+          5.543875
+        ],
+        "workflow": "board_1000"
+      },
+      {
+        "digest": "fa0a4331d597f3fc",
+        "first_ms": 19.062459,
+        "max_ms": 19.602875,
+        "median_ms": 19.161167,
+        "min_ms": 18.612083,
+        "samples_ms": [
+          19.308167,
+          18.989292,
+          19.602875,
+          19.161167,
+          19.274208,
+          18.978583,
+          18.612083
+        ],
+        "workflow": "analytics_1000"
+      },
+      {
+        "digest": "62cc7f139b3a14d2",
+        "first_ms": 303.343541,
+        "max_ms": 324.664458,
+        "median_ms": 303.229334,
+        "min_ms": 286.600709,
+        "samples_ms": [
+          286.600709,
+          299.33625,
+          306.869125,
+          303.229334,
+          324.664458,
+          299.320583,
+          304.649792
+        ],
+        "workflow": "sqlite_load_1000"
+      },
+      {
+        "digest": "62cc7f139b3a14d2",
+        "first_ms": 209.673083,
+        "max_ms": 224.438875,
+        "median_ms": 217.826792,
+        "min_ms": 206.607917,
+        "samples_ms": [
+          206.607917,
+          224.438875,
+          217.435833,
+          216.229458,
+          217.826792,
+          223.64075,
+          222.895458
+        ],
+        "workflow": "sqlite_save_unchanged_1000"
+      },
+      {
+        "digest": "4ed1da35c637aa85",
+        "first_ms": 30.72075,
+        "max_ms": 31.251458,
+        "median_ms": 29.337666,
+        "min_ms": 27.985667,
+        "samples_ms": [
+          29.337666,
+          28.398083,
+          28.898375,
+          29.398583,
+          29.809625,
+          27.985667,
+          31.251458
+        ],
+        "workflow": "metadata_load_1000"
+      },
+      {
+        "digest": "24584819f372356f",
+        "first_ms": 122.121541,
+        "max_ms": 118.054375,
+        "median_ms": 115.290542,
+        "min_ms": 108.006459,
+        "samples_ms": [
+          111.702083,
+          115.290542,
+          108.006459,
+          118.054375,
+          111.798667,
+          116.545458,
+          116.816208
+        ],
+        "workflow": "scan_50_songs_600_previews"
+      },
+      {
+        "digest": "987baf6e7cd0aca5",
+        "first_ms": 81.796167,
+        "max_ms": 86.072708,
+        "median_ms": 80.659458,
+        "min_ms": 79.712959,
+        "samples_ms": [
+          80.3295,
+          80.324625,
+          80.659458,
+          81.649834,
+          82.310625,
+          79.712959,
+          86.072708
+        ],
+        "workflow": "vault_manifest_800_files"
+      },
+      {
+        "digest": "b64c8390aa317e05",
+        "first_ms": 65.263667,
+        "max_ms": 67.859292,
+        "median_ms": 64.706583,
+        "min_ms": 61.53425,
+        "samples_ms": [
+          65.941542,
+          65.12825,
+          67.859292,
+          63.121584,
+          62.025416,
+          61.53425,
+          64.706583
+        ],
+        "workflow": "vault_verify_800_files"
+      },
+      {
+        "digest": "2146ba19257dc6ac",
+        "first_ms": 0.452292,
+        "max_ms": 0.067458,
+        "median_ms": 0.054416,
+        "min_ms": 0.04775,
+        "samples_ms": [
+          0.067458,
+          0.055709,
+          0.054416,
+          0.05425,
+          0.056667,
+          0.049417,
+          0.04775
+        ],
+        "workflow": "bpm_estimate_12s"
+      },
+      {
+        "digest": "fbb37f73be613d86",
+        "first_ms": 47.4395,
+        "max_ms": 50.963166,
+        "median_ms": 49.271167,
+        "min_ms": 45.591209,
+        "samples_ms": [
+          47.9605,
+          50.963166,
+          49.271167,
+          47.817083,
+          45.591209,
+          49.699167,
+          49.456834
+        ],
+        "workflow": "key_estimate_12s"
+      },
+      {
+        "digest": "66ad0e96d1064baf",
+        "first_ms": 0.306541,
+        "max_ms": 0.287084,
+        "median_ms": 0.18375,
+        "min_ms": 0.15575,
+        "samples_ms": [
+          0.1685,
+          0.15575,
+          0.15775,
+          0.18375,
+          0.255958,
+          0.287084,
+          0.256958
+        ],
+        "workflow": "hook_locate_12s"
+      }
+    ],
+    "peak_rss_bytes": 293584896,
+    "songs": 1000,
+    "warmup_rounds": 2
+  },
+  "locale": "de_DE",
+  "timezone": "Europe/Berlin"
+}

@@ -32,7 +32,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
     @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
-    @Published var searchQuery: String = ""
+    let searchInput = ArchiveSearchInput()
+    var searchQuery: String {
+        get { searchInput.query }
+        set { searchInput.query = newValue }
+    }
     @Published var selectedShelf: ArchiveSmartShelf = .allSongs
     @Published var selectedCollaboratorID: String?
     @Published var selectedSong: Song?

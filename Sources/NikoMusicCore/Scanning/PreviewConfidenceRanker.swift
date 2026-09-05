@@ -8,6 +8,10 @@ public struct PreviewConfidenceRanker: Sendable {
         "ref", "reference", "test", "temp", "old", "backup",
     ]
 
+    private static let negativeLabels = negativeTokens.map {
+        (label: $0, tokens: PreviewFilenameSemantics.tokens(in: $0))
+    }
+
     private static let extensionPreference: [String: Double] = [
         "wav": 8,
         "flac": 6,
@@ -29,6 +33,7 @@ public struct PreviewConfidenceRanker: Sendable {
         candidates
             .map { scored($0, projectContext: projectContext) }
             .sorted { compareCandidates($0, $1, projectContext: projectContext) }
+            .map(\.candidate)
     }
 
     public func mainPreviewID(from ranked: [PreviewCandidate]) -> String? {
@@ -56,23 +61,33 @@ public struct PreviewConfidenceRanker: Sendable {
         return .filename
     }
 
+    /// Facts used by scoring and tie-breaks live only for this ranking operation.
+    private struct RankedCandidate {
+        let candidate: PreviewCandidate
+        let maturity: PreviewProductionMaturity
+        let version: Int?
+        let titleMatches: Int
+    }
+
     private func compareCandidates(
-        _ lhs: PreviewCandidate,
-        _ rhs: PreviewCandidate,
+        _ left: RankedCandidate,
+        _ right: RankedCandidate,
         projectContext: PreviewRankingProjectContext?
     ) -> Bool {
+        let lhs = left.candidate
+        let rhs = right.candidate
         if lhs.confidenceScore != rhs.confidenceScore {
             return lhs.confidenceScore > rhs.confidenceScore
         }
-        let lm = PreviewProductionMaturity.detect(from: lhs.fileName)
-        let rm = PreviewProductionMaturity.detect(from: rhs.fileName)
+        let lm = left.maturity
+        let rm = right.maturity
         if lm != rm { return lm > rm }
-        let lv = effectiveRankVersion(lhs) ?? 0
-        let rv = effectiveRankVersion(rhs) ?? 0
+        let lv = left.version ?? 0
+        let rv = right.version ?? 0
         if lv != rv { return lv > rv }
         if let anchor = projectContext?.anchorCPRVersion {
-            let ld = titleTokenMatchCount(lhs.fileName, context: projectContext)
-            let rd = titleTokenMatchCount(rhs.fileName, context: projectContext)
+            let ld = left.titleMatches
+            let rd = right.titleMatches
             if ld != rd { return ld > rd }
             let lGap = abs(lv - anchor)
             let rGap = abs(rv - anchor)
@@ -88,11 +103,6 @@ public struct PreviewConfidenceRanker: Sendable {
         return lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
     }
 
-    private func effectiveRankVersion(_ candidate: PreviewCandidate) -> Int? {
-        PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName)
-            ?? candidate.detectedVersionNumber
-    }
-
     private func titleTokenMatchCount(
         _ fileName: String,
         context: PreviewRankingProjectContext?
@@ -105,11 +115,14 @@ public struct PreviewConfidenceRanker: Sendable {
     private func scored(
         _ candidate: PreviewCandidate,
         projectContext: PreviewRankingProjectContext?
-    ) -> PreviewCandidate {
+    ) -> RankedCandidate {
         var score = 0.0
         var reasons: [String] = []
 
         let maturity = PreviewProductionMaturity.detect(from: candidate.fileName)
+        let parsedVersion = PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName)
+        let previewVersion = parsedVersion ?? candidate.detectedVersionNumber
+        let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)
         if maturity != .none {
             score += Double(maturity.rawValue)
             reasons.append("maturity:\(maturity.reasonToken)")
@@ -153,9 +166,10 @@ public struct PreviewConfidenceRanker: Sendable {
                 reasons.append("filename:positive")
             }
         }
-        for token in Self.negativeTokens where PreviewFilenameSemantics.containsLabel(token, in: filenameTokens) {
+        for negative in Self.negativeLabels
+            where !negative.tokens.isEmpty && negative.tokens.isSubset(of: filenameTokens) {
             score -= 35
-            reasons.append("filename:negative-\(token)")
+            reasons.append("filename:negative-\(negative.label)")
         }
         for token in PreviewFilenameSemantics.taggedPartialExportTokens(in: candidate.fileName).sorted() {
             score -= 35
@@ -187,8 +201,7 @@ public struct PreviewConfidenceRanker: Sendable {
         }
 
         if let projectContext, let anchor = projectContext.anchorCPRVersion, anchor >= 1 {
-            let previewVersion = effectiveRankVersion(candidate)
-            let isExplicitPreV1Preview = PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName) == 0
+            let isExplicitPreV1Preview = parsedVersion == 0
             if maturity <= .demo, isExplicitPreV1Preview {
                 score -= 40
                 reasons.append("cpr-anchor:demo-below-project")
@@ -204,11 +217,10 @@ public struct PreviewConfidenceRanker: Sendable {
                     score -= Double(anchor - previewVersion) * 12
                     reasons.append("cpr-anchor:version-behind-v\(anchor)")
                 }
-            } else if PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName) == 0 {
+            } else if parsedVersion == 0 {
                 score -= 30
                 reasons.append("cpr-anchor:pre-v1-behind-project")
             }
-            let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)
             if tokenHits > 0 {
                 score += Double(tokenHits) * 14
                 reasons.append("cpr-anchor:title-match-\(tokenHits)")
@@ -220,6 +232,6 @@ public struct PreviewConfidenceRanker: Sendable {
         var updated = candidate
         updated.confidenceScore = score
         updated.confidenceReasons = reasons
-        return updated
+        return RankedCandidate(candidate: updated, maturity: maturity, version: previewVersion, titleMatches: tokenHits)
     }
 }

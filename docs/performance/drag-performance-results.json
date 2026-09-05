@@ -1,0 +1,1048 @@
+{
+  "aggregate": {
+    "1000": {
+      "after": {
+        "max_ms": 45.44766667095246,
+        "median_ms": 43.72597916153609,
+        "min_ms": 35.70575000048848,
+        "sample_count": 30
+      },
+      "before": {
+        "max_ms": 58.83904166694265,
+        "median_ms": 54.84345833247062,
+        "min_ms": 45.42337499879068,
+        "sample_count": 30
+      }
+    },
+    "20": {
+      "after": {
+        "max_ms": 17.89575000293553,
+        "median_ms": 16.26525000028778,
+        "min_ms": 7.303749996935949,
+        "sample_count": 30
+      },
+      "before": {
+        "max_ms": 19.730791667825542,
+        "median_ms": 18.26031249947846,
+        "min_ms": 8.233000000473112,
+        "sample_count": 30
+      }
+    }
+  },
+  "comparison_order": [
+    "before-1",
+    "after-1",
+    "after-2",
+    "before-2"
+  ],
+  "conditions": {
+    "CPR_versions_per_song": 24,
+    "after": "Current retained UI performance changes and shared keyboard focus",
+    "baseline": "Frozen UI modules from before the UI optimization pass, including prior core performance improvements",
+    "configuration": "Release",
+    "during_comparison": "No task-owned profiling or builds concurrently; normal user background software left running",
+    "samples_per_process": 15,
+    "songs": [
+      20,
+      1000
+    ],
+    "warmups_per_process": 3,
+    "window_points": [
+      1440,
+      900
+    ]
+  },
+  "configuration_control": {
+    "debug": {
+      "max_ms": 19.475791668810416,
+      "median_ms": 17.457666664995486,
+      "min_ms": 7.604958336742129,
+      "runs": [
+        {
+          "heartbeat_interval_ms": 2,
+          "hosting_sizing_options": "none; fixture window owns its size",
+          "measured_iterations": 15,
+          "metrics": [
+            {
+              "first_ms": 9.579083336575422,
+              "main_thread_cpu_median_ms": 17.416291999999945,
+              "main_thread_cpu_samples_ms": [
+                7.756874999999996,
+                10.72937500000004,
+                13.17262500000005,
+                18.685749999999945,
+                15.76929199999999,
+                18.513708000000072,
+                17.11433299999998,
+                17.929375000000025,
+                17.66224999999999,
+                18.025332999999975,
+                14.589458,
+                17.416291999999945,
+                17.517958999999863,
+                17.11945800000003,
+                17.90308400000007
+              ],
+              "max_ms": 18.719916661211755,
+              "median_ms": 17.45433333417168,
+              "min_ms": 7.75762499688426,
+              "samples_ms": [
+                7.75762499688426,
+                10.730375004641246,
+                13.173666666261852,
+                18.719916661211755,
+                15.845291665755212,
+                18.54800000000978,
+                17.134124995209277,
+                17.97479166998528,
+                17.7010000043083,
+                18.066583332256414,
+                14.590416663850192,
+                17.45433333417168,
+                17.7262500001234,
+                17.15041666466277,
+                17.935124997165985
+              ],
+              "workflow": "board_stage_change_SQLite_and_layout"
+            }
+          ],
+          "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+          "search_measured_iterations": 7,
+          "search_warmups": 3,
+          "song_count": 20,
+          "versions_per_song": 24,
+          "warmup_iterations": 3,
+          "window_points": [
+            1440,
+            900
+          ]
+        },
+        {
+          "heartbeat_interval_ms": 2,
+          "hosting_sizing_options": "none; fixture window owns its size",
+          "measured_iterations": 15,
+          "metrics": [
+            {
+              "first_ms": 9.97470833681291,
+              "main_thread_cpu_median_ms": 17.45129099999998,
+              "main_thread_cpu_samples_ms": [
+                7.597125000000093,
+                9.675333000000009,
+                12.761249999999947,
+                15.513708999999931,
+                17.965416999999984,
+                17.34883399999998,
+                18.299416999999927,
+                17.79524999999993,
+                19.381333999999974,
+                18.59191699999996,
+                17.45129099999998,
+                17.712583000000002,
+                17.210959000000024,
+                17.720457999999994,
+                17.15341700000006
+              ],
+              "max_ms": 19.475791668810416,
+              "median_ms": 17.460999995819293,
+              "min_ms": 7.604958336742129,
+              "samples_ms": [
+                7.604958336742129,
+                9.774166668648832,
+                12.769375003699679,
+                15.704958328569774,
+                17.991500004427508,
+                17.389541666489094,
+                18.430625001201406,
+                17.82916666707024,
+                19.475791668810416,
+                18.61708333308343,
+                17.460999995819293,
+                17.80983333446784,
+                17.25333333160961,
+                17.797874999814667,
+                17.31366667081602
+              ],
+              "workflow": "board_stage_change_SQLite_and_layout"
+            }
+          ],
+          "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+          "search_measured_iterations": 7,
+          "search_warmups": 3,
+          "song_count": 20,
+          "versions_per_song": 24,
+          "warmup_iterations": 3,
+          "window_points": [
+            1440,
+            900
+          ]
+        }
+      ]
+    },
+    "release": {
+      "max_ms": 18.926791664853226,
+      "median_ms": 16.494208335643634,
+      "min_ms": 7.477041661331896,
+      "runs": [
+        {
+          "heartbeat_interval_ms": 2,
+          "hosting_sizing_options": "none; fixture window owns its size",
+          "measured_iterations": 15,
+          "metrics": [
+            {
+              "first_ms": 9.38858333393,
+              "main_thread_cpu_median_ms": 16.696166999999985,
+              "main_thread_cpu_samples_ms": [
+                7.538790999999989,
+                7.605957999999968,
+                9.798749999999966,
+                12.757667000000028,
+                17.116917000000065,
+                16.388332999999978,
+                16.696166999999985,
+                17.014957999999968,
+                16.71183300000001,
+                16.516332999999996,
+                17.048916999999996,
+                17.525750000000006,
+                17.345125000000074,
+                15.975249999999885,
+                16.75479099999988
+              ],
+              "max_ms": 17.589291666809004,
+              "median_ms": 16.72945832979167,
+              "min_ms": 7.539583333709743,
+              "samples_ms": [
+                7.539583333709743,
+                7.62054166989401,
+                9.800208332308102,
+                12.758416662109084,
+                17.143333338026423,
+                16.420166670286562,
+                16.72945832979167,
+                17.04733333463082,
+                16.749291666201316,
+                16.55804166512098,
+                17.098416661610827,
+                17.589291666809004,
+                17.393250003806315,
+                16.011083338526078,
+                16.79441666783532
+              ],
+              "workflow": "board_stage_change_SQLite_and_layout"
+            }
+          ],
+          "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+          "search_measured_iterations": 7,
+          "search_warmups": 3,
+          "song_count": 20,
+          "versions_per_song": 24,
+          "warmup_iterations": 3,
+          "window_points": [
+            1440,
+            900
+          ]
+        },
+        {
+          "heartbeat_interval_ms": 2,
+          "hosting_sizing_options": "none; fixture window owns its size",
+          "measured_iterations": 15,
+          "metrics": [
+            {
+              "first_ms": 9.193291669362225,
+              "main_thread_cpu_median_ms": 15.930333999999991,
+              "main_thread_cpu_samples_ms": [
+                7.469166000000027,
+                8.604374999999997,
+                11.510915999999982,
+                14.959041999999979,
+                17.354375000000033,
+                16.97120799999996,
+                16.491167000000083,
+                15.700082999999921,
+                15.754665999999972,
+                15.930333999999991,
+                18.730542000000018,
+                17.56100000000005,
+                16.451166999999934,
+                17.441000000000038,
+                12.521000000000004
+              ],
+              "max_ms": 18.926791664853226,
+              "median_ms": 15.962541663611773,
+              "min_ms": 7.477041661331896,
+              "samples_ms": [
+                7.477041661331896,
+                8.695916665601544,
+                11.512333330756519,
+                14.988291666668374,
+                17.387500003678724,
+                17.029499998898245,
+                16.522750003787223,
+                15.734583335870411,
+                15.785541669174563,
+                15.962541663611773,
+                18.926791664853226,
+                17.669541666691657,
+                16.465666667500045,
+                17.466208337282296,
+                12.681541666097473
+              ],
+              "workflow": "board_stage_change_SQLite_and_layout"
+            }
+          ],
+          "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+          "search_measured_iterations": 7,
+          "search_warmups": 3,
+          "song_count": 20,
+          "versions_per_song": 24,
+          "warmup_iterations": 3,
+          "window_points": [
+            1440,
+            900
+          ]
+        }
+      ]
+    }
+  },
+  "driver_sha256": "16ec1b10c3b0be5c8db19b55b16b15f5ef640f60336f5af67832d87a9b6c1edc",
+  "fixture_restart": {
+    "cache_error_cleared": true,
+    "new_PID": 40955,
+    "production_code_changed": false,
+    "reason": "Clear stale cache-write error from prior disk exhaustion.",
+    "restored_stage_counts": {
+      "no_status": 4,
+      "song": 2,
+      "songstarter_beat": 3
+    },
+    "same_isolated_settings_suite": true
+  },
+  "frame_trace_attempt": {
+    "automated_retry": {
+      "confirmed_drop_UTC": "2026-09-05T13:53:46Z",
+      "cpu_sample_rows": 123,
+      "cpu_sample_rows_containing_CoreDrag": 72,
+      "limitations": "Confirmed successful drop occurred outside the timed recording. Hitches rows span the entire interval with empty Potential Issue descriptions; do not report the row count as verified user-visible stutters or infer a causal app bottleneck. This is not a comparable successful-drop baseline.",
+      "outcome": "Recording, save, and XML export succeeded; native drag attempts captured. Automation remains inconsistent.",
+      "table_rows": {
+        "hitches": 1863,
+        "hitches-frame-lifetimes": 1873,
+        "hitches-renders": 1875,
+        "hitches-updates": 20
+      },
+      "trace": ".build/performance-ui/drag-automated-before.trace",
+      "trace_end_local": "2026-09-05T15:53:12.160+02:00",
+      "trace_size_GiB": 1.9,
+      "trace_start_local": "2026-09-05T15:52:41.234+02:00"
+    },
+    "capability_test": "5-second recording and table-of-contents export succeeded",
+    "confirmed_physical_capture": {
+      "conclusion": "Valid capture includes successful physical drag/drop and landing. One 16.7 ms hitch near onset, none recorded during landing. CPU stacks emphasize framework hover/hit testing. No specific low-risk application optimization is justified from this single run. This does not establish that perceived drag roughness is fixed.",
+      "confirmed_stage_change_UTC": "2026-09-05T14:35:31Z",
+      "cpu_sample_rows_containing_CoreDrag": 48,
+      "duration_seconds": 28.059746,
+      "end_local": "2026-09-05T16:35:35.030+02:00",
+      "excluded_later_stage_changes_UTC": [
+        "2026-09-05T14:35:38Z",
+        "2026-09-05T14:35:43Z"
+      ],
+      "hitch_records": [
+        {
+          "context": "before gesture",
+          "duration_ms": 16.666666,
+          "seconds_since_start": 10.447475166
+        },
+        {
+          "context": "near hover/gesture onset",
+          "duration_ms": 16.666666,
+          "seconds_since_start": 23.597248458
+        }
+      ],
+      "initial_free_GiB": 60.96457290649414,
+      "landing_hitch_records": 0,
+      "limitations": [
+        "One warm-process physical gesture, not a repeated A/B comparison.",
+        "Profiling and normal background activity may affect timings; no other task-owned profiler or build was running.",
+        "Sample weights are statistical CPU observations, not per-drop latency.",
+        "No claim about all displays, cards, or native drag animation quality.",
+        "Latest user assessment of perceived smoothness is pending."
+      ],
+      "main_thread_sample_weight_ms": 129.0,
+      "observed_app_update_intervals": [
+        {
+          "duration_ms": 17.765833,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.564092291
+        },
+        {
+          "duration_ms": 17.663416,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.580764375
+        },
+        {
+          "duration_ms": 17.715708,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.597422208
+        },
+        {
+          "duration_ms": 17.620583,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.614085416
+        },
+        {
+          "duration_ms": 17.623333,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.630765291
+        },
+        {
+          "duration_ms": 17.728166,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.64742475
+        },
+        {
+          "duration_ms": 17.280041,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.664089916
+        },
+        {
+          "duration_ms": 17.249541,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.68075675
+        },
+        {
+          "duration_ms": 0.393666,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 23.697424291
+        },
+        {
+          "duration_ms": 7.623083,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.047428791
+        },
+        {
+          "duration_ms": 4.694625,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.197417791
+        },
+        {
+          "duration_ms": 4.986666,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.230744833
+        },
+        {
+          "duration_ms": 3.671958,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.280751208
+        },
+        {
+          "duration_ms": 5.246916,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.897405875
+        },
+        {
+          "duration_ms": 3.754583,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.914094125
+        },
+        {
+          "duration_ms": 0.480666,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.93073025
+        },
+        {
+          "duration_ms": 0.613583,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.94743375
+        },
+        {
+          "duration_ms": 0.4635,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.964066291
+        },
+        {
+          "duration_ms": 0.574166,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.98074
+        },
+        {
+          "duration_ms": 0.469166,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 24.997402291
+        },
+        {
+          "duration_ms": 0.533458,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.01406425
+        },
+        {
+          "duration_ms": 0.508291,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.0307285
+        },
+        {
+          "duration_ms": 0.49225,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.047394458
+        },
+        {
+          "duration_ms": 0.314291,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.064062666
+        },
+        {
+          "duration_ms": 0.565708,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.204884583
+        },
+        {
+          "duration_ms": 1.960875,
+          "process": "NikoMusicHub (40955)",
+          "seconds": 25.272801583
+        }
+      ],
+      "save_exit_code": 0,
+      "stage_change": "No Status to Songstarter/Beat",
+      "start_local": "2026-09-05T16:35:06.970+02:00",
+      "stop_method": "Read-only polling of isolated status history; SIGINT three seconds after first new persisted change",
+      "table_rows": {
+        "hitches": 2,
+        "hitches-frame-lifetimes": 1644,
+        "hitches-renders": 1649,
+        "hitches-updates": 26,
+        "time-profile": 153
+      },
+      "trace": ".build/performance-ui/drag-physical-confirmed-before.trace"
+    },
+    "disposable_cleanup": "Removed task-owned capability trace, scratch-checkout .build, and exact 5.1 GiB failed recorder temporary ktrace identified through its open files; gate logs and source patch preserved.",
+    "free_space_after_cleanup_GiB": 6.1,
+    "interpretation": "No native drag smoothness improvement claimed",
+    "live_recording": "60-second recording exhausted disk space; stop did not finalize, task-owned recorder and its child terminated. No validated frame evidence.",
+    "short_retry": {
+      "cleanup": "Only exact failed recorder ktrace and temporary path-manager directory identified from process open files; no unrelated files deleted.",
+      "duration_seconds": 20,
+      "fixture_status_changes_during_user_retry": 4,
+      "free_space_after_cleanup_GiB": 4.1,
+      "latest_fixture_change_UTC": "2026-09-05T12:07:06Z",
+      "measurement_limitation": "Disk exhaustion and recording overhead invalidate any perceived performance during the retry.",
+      "outcome": "Unusable: disk exhausted again despite 6.1 GiB initially free. Instruments logged CoreData SQLite error 14 (unable to open database file). Stop did not finalize; recorder and its child terminated."
+    },
+    "space_retry": {
+      "duration_seconds": 40,
+      "initial_free_space_GiB": 114,
+      "limitations": "Idle frame capture is not a drag baseline. Compositor frame rows include activity that requires process/surface attribution.",
+      "recording_cue_UTC": "2026-09-05T13:39:32Z",
+      "state": "Recording, save, and XML export succeeded. Idle: no fixture stage changes and no CoreDrag CPU frames.",
+      "table_rows": {
+        "hitches": 0,
+        "hitches-frame-lifetimes": 1307,
+        "hitches-renders": 1312,
+        "hitches-updates": 0,
+        "time-profile": 2
+      },
+      "trace": ".build/performance-ui/drag-hitches-space-before.trace",
+      "trace_end_local": "2026-09-05T15:40:07.322+02:00",
+      "trace_size_GiB": 3.7,
+      "trace_start_local": "2026-09-05T15:39:25.765+02:00"
+    },
+    "template": "Animation Hitches"
+  },
+  "manual_result": {
+    "animation_quality": "User reports rough motion both during pointer tracking and after release; unresolved",
+    "commit_status": "on hold pending drag smoothness investigation",
+    "drop_functionality": "Confirmed by user drag and AX: Neon Hook moved to Songstarter/Beat, No Status count 8 and Songstarter/Beat count 1",
+    "latest_smoothness_assessment": "pending user reply after confirmed physical capture",
+    "profile_coverage": "A synchronized valid frame capture now includes one confirmed physical drop and three seconds for landing. Detailed metrics and limitations are in frame_trace_attempt.confirmed_physical_capture."
+  },
+  "profile_coverage": {
+    "capture_start": "2026-09-05T13:47:55+02:00",
+    "confirmed_fixture_status_changes": 21,
+    "drop_updated_inclusive_samples": 53,
+    "duration_seconds": 60,
+    "interpretation": "Actual drags captured. Most main-thread samples are waits; native drop animation includes nested run-loop waits. Counts are sampled observations, not CPU time, per-drop latency, FPS, or proof of an OS defect. No new production change is supported by this capture alone.",
+    "live_capture": ".build/performance-ui/drag-live-confirmed-sample.txt",
+    "main_thread_mach_msg2_trap_self_samples": 46364,
+    "main_thread_samples": 50491,
+    "native_drag_image_update_inclusive_samples": 86,
+    "native_drop_animation_transaction_inclusive_samples": 7376,
+    "peak_physical_footprint_MiB_reported": 51.1,
+    "physical_footprint_MiB_reported": 47.2,
+    "previous_idle_captures": "45-second and extended captures were idle and are not stutter evidence.",
+    "status_change_window_UTC": "11:48:03 through 11:48:40",
+    "workflow_update_inclusive_samples": 20
+  },
+  "runs": {
+    "stage-1000-after-1": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 37.24145833257353,
+          "main_thread_cpu_median_ms": 43.659083000000095,
+          "main_thread_cpu_samples_ms": [
+            35.68083300000002,
+            42.41120800000009,
+            42.91295799999983,
+            43.994083000000074,
+            44.213291000000154,
+            44.407540999999995,
+            43.337750000000064,
+            45.35433300000014,
+            43.95450000000012,
+            43.659083000000095,
+            43.87233400000001,
+            43.299540999999884,
+            43.59962499999992,
+            44.71479200000017,
+            43.6016250000002
+          ],
+          "max_ms": 45.44766667095246,
+          "median_ms": 43.66562500217697,
+          "min_ms": 35.70575000048848,
+          "samples_ms": [
+            35.70575000048848,
+            42.48974999791244,
+            42.92179166804999,
+            43.99491666117683,
+            44.21433332754532,
+            44.40837500442285,
+            43.339166666555684,
+            45.44766667095246,
+            43.96404166618595,
+            43.66562500217697,
+            44.063125002139714,
+            43.301124998833984,
+            43.60816667031031,
+            44.805958328652196,
+            43.61008333216887
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 1000,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-1000-after-2": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 36.54566666955361,
+          "main_thread_cpu_median_ms": 43.724292000000055,
+          "main_thread_cpu_samples_ms": [
+            41.02158399999989,
+            43.517999999999944,
+            43.724292000000055,
+            44.02395799999992,
+            43.88050000000021,
+            43.29899999999998,
+            43.582583000000064,
+            43.372458000000115,
+            43.994291999999824,
+            44.222958000000204,
+            44.82212499999982,
+            43.59841700000011,
+            43.60041600000009,
+            43.741958000000025,
+            43.725624999999994
+          ],
+          "max_ms": 44.916625003679655,
+          "median_ms": 43.72662499372382,
+          "min_ms": 41.02245833928464,
+          "samples_ms": [
+            41.02245833928464,
+            43.66533333086409,
+            43.72533332934836,
+            44.024791663105134,
+            43.95866666891379,
+            43.29979167232523,
+            43.73945833503967,
+            43.373583335778676,
+            44.004041665175464,
+            44.2239166732179,
+            44.916625003679655,
+            43.599708333204035,
+            43.610333326796535,
+            43.74304167140508,
+            43.72662499372382
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 1000,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-1000-before-1": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 49.42445833876263,
+          "main_thread_cpu_median_ms": 54.71216700000014,
+          "main_thread_cpu_samples_ms": [
+            56.880625000000016,
+            57.810833999999865,
+            58.82962499999999,
+            47.76849999999988,
+            45.28416700000015,
+            56.68983300000008,
+            55.243749999999814,
+            54.71216700000014,
+            54.64687499999998,
+            54.0001670000001,
+            53.86187500000017,
+            54.37449999999999,
+            54.88745799999983,
+            55.58200000000002,
+            54.24845900000008
+          ],
+          "max_ms": 58.83904166694265,
+          "median_ms": 54.79083333193557,
+          "min_ms": 45.42337499879068,
+          "samples_ms": [
+            56.88187500345521,
+            57.81175000447547,
+            58.83904166694265,
+            47.93745833740104,
+            45.42337499879068,
+            56.71699999948032,
+            55.34041666396661,
+            54.72662499960279,
+            54.79083333193557,
+            54.001041666197125,
+            53.87220832926687,
+            54.52920833340613,
+            54.89608333300566,
+            55.583208333700895,
+            54.40212499524932
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 1000,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-1000-before-2": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 49.378791663912125,
+          "main_thread_cpu_median_ms": 54.58879200000011,
+          "main_thread_cpu_samples_ms": [
+            55.79545799999997,
+            57.84366600000013,
+            58.55483300000009,
+            49.71620799999998,
+            45.694708000000084,
+            54.47520799999994,
+            54.36079199999999,
+            54.13529200000022,
+            55.08262499999983,
+            53.828084000000054,
+            55.225832999999945,
+            55.56108300000018,
+            56.251374999999996,
+            53.90354200000003,
+            54.58879200000011
+          ],
+          "max_ms": 58.562791666190606,
+          "median_ms": 54.947208329394925,
+          "min_ms": 45.84975000034319,
+          "samples_ms": [
+            55.80312500387663,
+            57.927875001041684,
+            58.562791666190606,
+            50.03937499714084,
+            45.84975000034319,
+            54.47650000132853,
+            54.36191666376544,
+            54.13620833132882,
+            55.19366666703718,
+            53.829083328309935,
+            55.54029166523833,
+            55.7144166668877,
+            56.34358333190903,
+            53.91495832736837,
+            54.947208329394925
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 1000,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-20-after-1": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 9.56804167071823,
+          "main_thread_cpu_median_ms": 17.079999999999984,
+          "main_thread_cpu_samples_ms": [
+            7.6065000000000715,
+            7.303124999999966,
+            8.643249999999991,
+            11.233792000000076,
+            14.840791999999992,
+            17.112875000000027,
+            15.91791599999992,
+            17.148041000000003,
+            17.430625000000035,
+            17.374749999999995,
+            17.079999999999984,
+            17.218625000000042,
+            17.101250000000068,
+            16.18237499999986,
+            17.184791000000033
+          ],
+          "max_ms": 17.46770833415212,
+          "median_ms": 17.122583332820795,
+          "min_ms": 7.303749996935949,
+          "samples_ms": [
+            7.614499998453539,
+            7.303749996935949,
+            8.645166672067717,
+            11.234999998123385,
+            14.87545833515469,
+            17.15154166595312,
+            15.952708337863442,
+            17.180166665639263,
+            17.46770833415212,
+            17.39962499414105,
+            17.122583332820795,
+            17.250708333449438,
+            17.183833333547227,
+            16.213958333537448,
+            17.203249997692183
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 20,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-20-after-2": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 8.841166665661149,
+          "main_thread_cpu_median_ms": 14.117415999999938,
+          "main_thread_cpu_samples_ms": [
+            7.325374999999967,
+            7.315249999999995,
+            9.623625000000025,
+            13.325582999999973,
+            16.27674999999995,
+            17.207000000000082,
+            17.132000000000037,
+            17.411833000000044,
+            16.41833300000006,
+            11.559374999999928,
+            12.135625000000093,
+            16.584916000000007,
+            17.854625000000013,
+            14.117415999999938,
+            12.811167000000179
+          ],
+          "max_ms": 17.89575000293553,
+          "median_ms": 14.128499999060296,
+          "min_ms": 7.32445833273232,
+          "samples_ms": [
+            7.331083332246635,
+            7.32445833273232,
+            9.62545833317563,
+            13.339541663299315,
+            16.31654166703811,
+            17.239875000086613,
+            17.16012499673525,
+            17.462000003433786,
+            16.451458330266178,
+            11.568791662284639,
+            12.291749997530133,
+            16.60337500652531,
+            17.89575000293553,
+            14.128499999060296,
+            12.943958332471084
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 20,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-20-before-1": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 10.525416670134291,
+          "main_thread_cpu_median_ms": 18.117999999999856,
+          "main_thread_cpu_samples_ms": [
+            8.231167000000038,
+            11.843541999999928,
+            14.963375000000001,
+            19.391540999999958,
+            15.158582999999947,
+            19.057207999999992,
+            19.53108299999995,
+            12.095375000000018,
+            13.445209000000013,
+            14.283917000000091,
+            19.06041700000005,
+            19.25854199999999,
+            19.005792000000078,
+            18.117999999999856,
+            19.27570799999989
+          ],
+          "max_ms": 19.56241666630376,
+          "median_ms": 18.139541665732395,
+          "min_ms": 8.233000000473112,
+          "samples_ms": [
+            8.233000000473112,
+            11.844458334962837,
+            14.964250003686175,
+            19.438374998571817,
+            15.189791665761732,
+            19.35054166824557,
+            19.56241666630376,
+            12.123499996960163,
+            13.579916667367797,
+            14.463749997958075,
+            19.28487500117626,
+            19.466166668280493,
+            19.0341666675522,
+            18.139541665732395,
+            19.308333328808658
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 20,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "stage-20-before-2": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "first_ms": 10.070791671751067,
+          "main_thread_cpu_median_ms": 18.348415999999922,
+          "main_thread_cpu_samples_ms": [
+            8.561207999999931,
+            8.834667000000017,
+            11.863083999999912,
+            14.581208000000068,
+            18.704208000000055,
+            18.348415999999922,
+            18.627125000000078,
+            18.785625000000028,
+            19.021999999999984,
+            17.924916999999986,
+            19.68495800000003,
+            18.495708,
+            17.776499999999864,
+            18.007000000000104,
+            18.539875000000094
+          ],
+          "max_ms": 19.730791667825542,
+          "median_ms": 18.381083333224524,
+          "min_ms": 8.570333331590518,
+          "samples_ms": [
+            8.570333331590518,
+            8.836333334329538,
+            11.86408333160216,
+            14.582499999960419,
+            18.73620833066525,
+            18.381083333224524,
+            18.66058332961984,
+            18.81662500090897,
+            19.05304166575661,
+            17.951833331608213,
+            19.730791667825542,
+            18.528041669924278,
+            17.809083336032927,
+            18.03199999994831,
+            18.571416665508877
+          ],
+          "workflow": "board_stage_change_SQLite_and_layout"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 20,
+      "versions_per_song": 24,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    }
+  },
+  "scope": "Real updateWorkflowStatus, SQLite metadata persistence and forced board layout/display; excludes native pointer tracking and GPU presentation."
+}

@@ -6,7 +6,7 @@ import SwiftUI
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @State private var showNewSongSheet = false
-    @FocusState private var archiveFocused: Bool
+    @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
 
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
@@ -20,7 +20,11 @@ struct ArchiveBrowserView: View {
             ZStack {
                 switch viewModel.viewMode {
                 case .board:
-                    ArchiveBoardView(viewModel: viewModel, onChooseRoot: chooseRoot)
+                    ArchiveBoardView(
+                        viewModel: viewModel,
+                        onChooseRoot: chooseRoot,
+                        keyboardFocus: $keyboardFocus
+                    )
                         .padding(.horizontal, HubToolLayout.horizontalPadding)
                         .padding(.top, HubToolLayout.topPadding)
                         .padding(.bottom, HubToolLayout.bottomPadding)
@@ -61,27 +65,27 @@ struct ArchiveBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .focusable()
-        .focused($archiveFocused)
+        .focusable(interactions: .edit)
+        .focused($keyboardFocus, equals: .archive)
         .focusEffectDisabled()
-        .onAppear { archiveFocused = true }
+        .onAppear { keyboardFocus = .archive }
         .onKeyPress("p") {
-            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
             try? viewModel.openMainPreview(for: song)
             return .handled
         }
         .onKeyPress("o") {
-            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
             try? viewModel.openLatestCPR(for: song)
             return .handled
         }
         .onKeyPress("f") {
-            guard archiveFocused, let song = viewModel.selectedSong else { return .ignored }
+            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
             return .handled
         }
         .onKeyPress("d") {
-            guard archiveFocused, viewModel.selectedSong != nil else { return .ignored }
+            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             viewModel.songDetailsExpanded.toggle()
             return .handled
         }
@@ -97,7 +101,7 @@ struct ArchiveBrowserView: View {
         .onKeyPress(.space) {
             // Board only: exactly one player view (the bottom bar) is mounted
             // per URL there, so the toggle broadcast has a single receiver.
-            guard archiveFocused, viewModel.viewMode == .board,
+            guard allowsSongShortcuts, viewModel.viewMode == .board,
                   let url = viewModel.selectedSong?.mainPreviewURL else { return .ignored }
             ArchivePlaybackCoordinator.shared.requestTogglePlayPause(for: url)
             return .handled
@@ -146,7 +150,11 @@ struct ArchiveBrowserView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
             // Selection vanished (rescan/filter) — fall back to the board.
-            ArchiveBoardView(viewModel: viewModel, onChooseRoot: chooseRoot)
+            ArchiveBoardView(
+                viewModel: viewModel,
+                onChooseRoot: chooseRoot,
+                keyboardFocus: $keyboardFocus
+            )
                 .padding(.horizontal, HubToolLayout.horizontalPadding)
                 .padding(.top, HubToolLayout.topPadding)
                 .padding(.bottom, HubToolLayout.bottomPadding)
@@ -157,7 +165,7 @@ struct ArchiveBrowserView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let song = viewModel.selectedSong {
-            // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
+            // NOTE: no `.focusable(interactions: .edit)` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
                 .padding(.horizontal, HubToolLayout.horizontalPadding)
@@ -200,6 +208,13 @@ struct ArchiveBrowserView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(24)
         }
+    }
+
+    private var allowsSongShortcuts: Bool {
+        ArchiveShortcutFocusPolicy.allowsSongShortcuts(
+            archiveFocused: keyboardFocus == .archive,
+            firstResponder: NSApp.keyWindow?.firstResponder
+        )
     }
 
     private func chooseRoot() {

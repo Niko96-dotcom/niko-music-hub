@@ -37,9 +37,10 @@ extension ArchiveBrowserViewModel {
             browseRefreshDriver.cancelPendingDebounce()
             recomputeBrowseResults()
         } else {
-            browseRefreshDriver.scheduleDebouncedBrowseRecompute { [weak self] in
-                self?.recomputeBrowseResults()
-            }
+            browseRefreshDriver.scheduleDebouncedBrowseRecompute(
+                snapshot: { [weak self] in self?.browseState() },
+                apply: { [weak self] result in self?.applyBrowseResult(result) }
+            )
         }
     }
 
@@ -66,13 +67,17 @@ extension ArchiveBrowserViewModel {
     }
 
     func recomputeBrowseResults() {
+        browseRefreshDriver.cancelPendingDebounce()
         let state = browseState()
         let onShelf = ArchiveBrowseProjection.shelfSongs(from: state)
         // Always refresh songs in the index so title/alias edits are searchable immediately.
         // Rebuild is an array assign; the expensive work is `searchResults` when a query is active.
         cachedSearchIndex.rebuild(from: onShelf)
 
-        let result = ArchiveBrowseProjection.project(state, searchIndex: cachedSearchIndex)
+        applyBrowseResult(ArchiveBrowseProjection.project(state, searchIndex: cachedSearchIndex))
+    }
+
+    private func applyBrowseResult(_ result: ArchiveBrowseResult) {
         filteredSongs = result.filteredSongs
         searchMatchSummaries = result.searchMatchSummaries
         skippedSearchMatches = result.skippedSearchMatches

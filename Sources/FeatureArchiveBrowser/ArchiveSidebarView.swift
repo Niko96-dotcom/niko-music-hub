@@ -8,7 +8,7 @@ struct ArchiveSidebarView: View {
     let compactList: Bool
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
-    @FocusState private var searchFocused: Bool
+    @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,7 +44,7 @@ struct ArchiveSidebarView: View {
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
-            searchFocused = true
+            keyboardFocus = .search
         }
     }
 
@@ -266,14 +266,11 @@ struct ArchiveSidebarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-            TextField("", text: Binding(
-                get: { viewModel.searchQuery },
-                set: { viewModel.setSearchQuery($0) }
-            ), prompt: Text("Search songs").foregroundColor(HubDesignSystem.Palette.textTertiary))
-            .textFieldStyle(.plain)
-            .font(HubDesignSystem.Typography.body())
-            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            .focused($searchFocused)
+            ArchiveSearchTextField(
+                input: viewModel.searchInput,
+                onEdit: { viewModel.setSearchQuery($0) },
+                keyboardFocus: $keyboardFocus
+            )
         }
         .padding(.horizontal, 10)
         .frame(height: 32)

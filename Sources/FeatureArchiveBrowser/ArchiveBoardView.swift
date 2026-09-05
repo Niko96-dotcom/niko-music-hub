@@ -15,11 +15,16 @@ struct ArchiveBoardView: View {
     @State private var columnOrigins: [String: CGFloat] = [:]
     @State private var boardViewportWidth: CGFloat = 0
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
-    @FocusState private var searchFocused: Bool
+    @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
 
-    init(viewModel: ArchiveBrowserViewModel, onChooseRoot: @escaping () -> Void) {
+    init(
+        viewModel: ArchiveBrowserViewModel,
+        onChooseRoot: @escaping () -> Void,
+        keyboardFocus: FocusState<ArchiveKeyboardFocus?>.Binding
+    ) {
         self.viewModel = viewModel
         self.onChooseRoot = onChooseRoot
+        self._keyboardFocus = keyboardFocus
         _projectionCache = StateObject(
             wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs)
         )
@@ -55,7 +60,9 @@ struct ArchiveBoardView: View {
                                     },
                                     onDragEnded: {
                                         edgeAutoScroller.stop()
-                                    }
+                                    },
+                                    onInteract: { keyboardFocus = .archive }
+
                                 )
                                 .id(column.id)
                                 .background {
@@ -87,6 +94,11 @@ struct ArchiveBoardView: View {
                     }
                 }
                 .padding(.top, 14)
+                .simultaneousGesture(TapGesture().onEnded {
+                    // Clicking a card returns keyboard control to the board;
+                    // otherwise the AppKit search editor can keep Space as text.
+                    keyboardFocus = .archive
+                })
 
                 if let song = viewModel.selectedSong {
                     ArchiveBoardPlayerBar(song: song, viewModel: viewModel)
@@ -96,7 +108,7 @@ struct ArchiveBoardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
-            searchFocused = true
+            keyboardFocus = .search
         }
         // Selection publishes on the same view model but never emits on this
         // property publisher, so it cannot trigger a full board re-projection.
@@ -222,14 +234,11 @@ struct ArchiveBoardView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-            TextField("", text: Binding(
-                get: { viewModel.searchQuery },
-                set: { viewModel.setSearchQuery($0) }
-            ), prompt: Text("Search songs").foregroundColor(HubDesignSystem.Palette.textTertiary))
-            .textFieldStyle(.plain)
-            .font(HubDesignSystem.Typography.body())
-            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            .focused($searchFocused)
+            ArchiveSearchTextField(
+                input: viewModel.searchInput,
+                onEdit: { viewModel.setSearchQuery($0) },
+                keyboardFocus: $keyboardFocus
+            )
         }
         .padding(.horizontal, 10)
         .frame(height: 32)
@@ -283,29 +292,63 @@ private struct ArchiveBoardColumnView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     let onDragLocationChanged: (String, CGFloat) -> Void
     let onDragEnded: () -> Void
+    let onInteract: () -> Void
 
     @State private var isDropTargeted = false
+    @State private var dropLayout = ArchiveBoardDropLayout()
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            columnHeader
-
-            ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(column.songs, id: \.id) { song in
-                        ArchiveBoardCardView(
-                            song: song,
-                            isSelected: viewModel.selectedSong?.id == song.id,
-                            vaultPresentation: viewModel.projectVaultPresentation(for: song),
-                            onSelect: { viewModel.selectSongOnBoard(song) },
-                            onOpenDetail: { viewModel.selectSong(song) },
-                            onProjectVaultPrimaryAction: {
-                                viewModel.performProjectVaultPrimaryAction(for: song)
-                            }
-                        )
-                    }
+        ArchiveBoardDropHost(
+            content: columnContent(column),
+            renderKey: ArchiveBoardColumnRenderKey(
+                column: column,
+                selectedSongID: viewModel.selectedSong?.id,
+                vaultPresentations: viewModel.projectVaultPresentationsBySongID,
+                isTargeted: isDropTargeted,
+                reduceMotion: reduceMotion,
+                colorScheme: colorScheme
+            ),
+            accepts: { id in
+                guard let song = viewModel.songs.first(where: { $0.id == id }) else { return false }
+                return viewModel.canMutateWorkflowStatus(for: song)
+            },
+            perform: { id in
+                guard let song = viewModel.songs.first(where: { $0.id == id }),
+                      song.workflowStatus != column.status else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                    viewModel.updateWorkflowStatus(for: song, status: column.status)
                 }
-            }
+            },
+            locationChanged: { onDragLocationChanged(column.id, $0) },
+            ended: onDragEnded,
+            targeted: { if isDropTargeted != $0 { isDropTargeted = $0 } },
+            landingFrame: { dropLayout.frames[$0] },
+            refreshedContent: {
+                let current = ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
+                    .first(where: { $0.id == column.id }) ?? column
+                return columnContent(current)
+            },
+            reduceMotion: reduceMotion
+        )
+        .frame(width: 200)
+        .frame(maxHeight: .infinity)
+    }
+
+    private func columnContent(_ column: ArchiveBoardColumn) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            columnHeader(column)
+
+            ArchiveBoardSongsView(
+                songs: column.songs,
+                selectedSongID: viewModel.selectedSong.flatMap {
+                    $0.workflowStatus == column.status ? $0.id : nil
+                },
+                vaultPresentations: viewModel.projectVaultPresentationsBySongID,
+                viewModel: viewModel
+            )
+            .equatable()
 
             if column.songs.isEmpty {
                 Spacer(minLength: 0)
@@ -318,21 +361,15 @@ private struct ArchiveBoardColumnView: View {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(isDropTargeted ? HubDesignSystem.Palette.accentFill : Color.white.opacity(0.03))
         }
-        .onDrop(
-            of: [.plainText],
-            delegate: ArchiveBoardColumnDropDelegate(
-                column: column,
-                viewModel: viewModel,
-                onDragLocationChanged: onDragLocationChanged,
-                onDragEnded: onDragEnded,
-                setDropTargeted: { isDropTargeted = $0 }
-            )
-        )
+        .environment(\.colorScheme, colorScheme)
+        .simultaneousGesture(TapGesture().onEnded(onInteract))
+        .coordinateSpace(name: "archive-board-drop-column")
+        .onPreferenceChange(ArchiveBoardCardFramesKey.self) { dropLayout.frames = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(column.title) column, \(column.songs.count) songs")
     }
 
-    private var columnHeader: some View {
+    private func columnHeader(_ column: ArchiveBoardColumn) -> some View {
         HStack(spacing: 6) {
             Image(systemName: column.status?.archiveSymbolName ?? "tray")
                 .font(.system(size: 10, weight: .semibold))
@@ -347,49 +384,6 @@ private struct ArchiveBoardColumnView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
         .padding(.horizontal, 2)
-    }
-}
-
-private struct ArchiveBoardColumnDropDelegate: DropDelegate {
-    let column: ArchiveBoardColumn
-    let viewModel: ArchiveBrowserViewModel
-    let onDragLocationChanged: (String, CGFloat) -> Void
-    let onDragEnded: () -> Void
-    let setDropTargeted: (Bool) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.plainText])
-    }
-
-    func dropEntered(info: DropInfo) {
-        setDropTargeted(true)
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        onDragLocationChanged(column.id, info.location.x)
-        return DropProposal(operation: .move)
-    }
-
-    func dropExited(info: DropInfo) {
-        setDropTargeted(false)
-        onDragEnded()
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        setDropTargeted(false)
-        onDragEnded()
-
-        guard let provider = info.itemProviders(for: [.plainText]).first else { return false }
-        provider.loadObject(ofClass: NSString.self) { item, _ in
-            guard let songID = item as? String else { return }
-            Task { @MainActor in
-                guard let song = viewModel.songs.first(where: { $0.id == songID }),
-                      viewModel.canMutateWorkflowStatus(for: song),
-                      song.workflowStatus != column.status else { return }
-                viewModel.updateWorkflowStatus(for: song, status: column.status)
-            }
-        }
-        return true
     }
 }
 
@@ -479,7 +473,7 @@ private final class ArchiveBoardEdgeAutoScroller {
     }
 }
 
-private struct ArchiveBoardCardView: View {
+struct ArchiveBoardCardView: View {
     let song: Song
     let isSelected: Bool
     let vaultPresentation: ProjectVaultCardPresentation?
@@ -558,6 +552,7 @@ private struct ArchiveBoardCardView: View {
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(cardFill)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
         }
         .opacity(vaultPresentation?.state == .archived ? 0.68 : 1)
         .contentShape(Rectangle())
@@ -576,11 +571,14 @@ private struct ArchiveBoardCardView: View {
             including: .gesture
         )
         .onHover { hovering in
-            withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
-        .modifier(ArchiveBoardCardDragModifier(songID: song.id, isEnabled: allowsWorkflowMutation))
+        .modifier(ArchiveBoardCardDragModifier(
+            songID: song.id,
+            title: song.effectiveDisplayTitle,
+            status: song.workflowStatus,
+            isEnabled: allowsWorkflowMutation
+        ))
         .help(allowsWorkflowMutation
             ? "Click to preview \(song.effectiveDisplayTitle) — double-click to open, drag to change stage"
             : "Click to preview \(song.effectiveDisplayTitle) — restore it locally before changing its stage")
@@ -655,12 +653,16 @@ enum ArchiveBoardCardInteractionPolicy {
 
 private struct ArchiveBoardCardDragModifier: ViewModifier {
     let songID: String
+    let title: String
+    let status: ProjectWorkflowStatus?
     let isEnabled: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.draggable(songID)
+            content.draggable(songID) {
+                ArchiveBoardDragPreview(title: title, status: status)
+            }
         } else {
             content
         }

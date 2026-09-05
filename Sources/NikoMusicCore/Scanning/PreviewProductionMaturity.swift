@@ -29,12 +29,17 @@ public enum PreviewProductionMaturity: Int, Sendable, Comparable, CaseIterable {
     /// Highest production tier matched in `fileName` (fuzzy / slang tolerant).
     public static func detect(from fileName: String) -> PreviewProductionMaturity {
         let normalized = normalize(fileName)
-        var best = PreviewProductionMaturity.none
-        for (tier, patterns) in tierPatterns {
-            guard patterns.contains(where: { containsPattern(normalized, $0) }) else { continue }
-            best = max(best, tier)
+        let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+        for (tier, patterns) in compiledTierPatterns {
+            guard patterns.contains(where: { pattern in
+                if let expression = pattern.expression {
+                    return expression.firstMatch(in: normalized, range: range) != nil
+                }
+                return normalized.contains(pattern.literal)
+            }) else { continue }
+            return tier
         }
-        return best
+        return .none
     }
 
     private static func normalize(_ fileName: String) -> String {
@@ -44,16 +49,18 @@ public enum PreviewProductionMaturity: Int, Sendable, Comparable, CaseIterable {
             .replacingOccurrences(of: "-", with: " ")
     }
 
-    private static func containsPattern(_ normalized: String, _ pattern: String) -> Bool {
-        if pattern.contains(" ") {
-            return normalized.contains(pattern)
-        }
-        let escaped = NSRegularExpression.escapedPattern(for: pattern)
-        guard let regex = try? NSRegularExpression(pattern: "\\b\(escaped)\\b", options: []) else {
-            return normalized.contains(pattern)
-        }
-        let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
-        return regex.firstMatch(in: normalized, range: range) != nil
+    // Immutable expressions are safe to share across concurrent archive scans.
+    // Highest tiers come first, so a match can return immediately. Phrase
+    // matching and the literal fallback retain the original semantics.
+    private static let compiledTierPatterns: [
+        (PreviewProductionMaturity, [(literal: String, expression: NSRegularExpression?)])
+    ] = tierPatterns.sorted { $0.0 > $1.0 }.map { tier, patterns in
+        (tier, patterns.map { pattern in
+            let escaped = NSRegularExpression.escapedPattern(for: pattern)
+            let expression = pattern.contains(" ") ? nil
+                : try? NSRegularExpression(pattern: "\\b\(escaped)\\b", options: [])
+            return (pattern, expression)
+        })
     }
 
     private static let tierPatterns: [(PreviewProductionMaturity, [String])] = [
