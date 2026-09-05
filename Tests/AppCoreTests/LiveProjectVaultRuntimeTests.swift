@@ -5,6 +5,49 @@ import NikoMusicCore
 import XCTest
 
 final class LiveProjectVaultRuntimeTests: XCTestCase {
+    func testOlderRetryCannotWakeRecoveryWhenSelectedTransferIsExhaustedOrDeferred() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: false)
+        let store = try fixture.transferStore()
+        let older = try fixture.failedDurabilityRecord(retryCount: 3)
+        try store.save(older)
+        var selected = VaultTransferRecord(
+            projectID: older.projectID,
+            sourceURL: older.sourceURL,
+            stagingURL: older.stagingURL,
+            destinationURL: older.destinationURL,
+            state: .failedRecoverable,
+            createdAt: older.updatedAt.addingTimeInterval(1)
+        )
+        selected.error = older.error
+        selected.retryCount = 7
+        try store.save(selected)
+        let runtime = try fixture.runtime()
+
+        for _ in 0..<2 {
+            let deadline = try await runtime.nextAutomaticRecoveryDate()
+            XCTAssertNil(deadline, "an older eligible retry cannot wake a skipped recovery")
+            await runtime.recoverAtLaunch()
+            XCTAssertEqual(try store.record(id: older.id), older)
+            XCTAssertEqual(try store.record(id: selected.id), selected)
+        }
+
+        let future = Date().addingTimeInterval(3600)
+        selected.retryCount = 2
+        selected.nextRetryAt = future
+        try store.save(selected)
+        let deferredDeadline = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertEqual(deferredDeadline, future, "only the selected transfer sets the deadline")
+
+        // Another song's eligible retry must remain schedulable.
+        var otherSong = try fixture.failedDurabilityRecord()
+        otherSong.nextRetryAt = future.addingTimeInterval(-100)
+        try store.save(otherSong)
+        let otherDeadline = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertEqual(otherDeadline, otherSong.nextRetryAt)
+    }
+
     func testAutomaticRecoveryDeadlineHonorsBackoffBudgetAndSafetyGates() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

@@ -147,6 +147,27 @@ public struct VaultTransferRecoveryPolicy: Equatable, Sendable {
         return nextRetryAt <= date
     }
 
+    /// Choose the same incomplete transfer for both execution and timer scheduling.
+    /// Filter eligibility only after selection: an older retry must not bypass a
+    /// newer transfer's backoff, exhausted budget, or manual-review requirement.
+    public static func candidates(from incompleteRecords: [VaultTransferRecord]) -> [VaultTransferRecord] {
+        Dictionary(grouping: incompleteRecords, by: \.projectID).compactMap { _, records in
+            records.max(by: isLowerRecoveryPriority)
+        }.sorted { $0.updatedAt < $1.updatedAt }
+    }
+
+    private static func isLowerRecoveryPriority(
+        _ lhs: VaultTransferRecord,
+        _ rhs: VaultTransferRecord
+    ) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+        // An in-progress phase retains a more precise resume point than a failure.
+        if lhs.state == .failedRecoverable, rhs.state != .failedRecoverable { return true }
+        if lhs.state != .failedRecoverable, rhs.state == .failedRecoverable { return false }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
     public func nextRetryDate(afterFailedAttempt attemptCount: Int, at date: Date) -> Date {
         var delay = initialBackoff
         for _ in 1..<max(1, min(attemptCount, maximumAutomaticAttempts)) {

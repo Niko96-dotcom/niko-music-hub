@@ -4,6 +4,53 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultTransferEngineTests: XCTestCase {
+    func testRecoveryDoesNotReadVerifiedArchivesWithoutOlderTransfersToRetire() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let verified = try await verifiedArchive(fixture: fixture, store: store)
+        let probe = SurvivorValidationProbe()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            fileManager: SurvivorValidationFileManager(monitoredRoot: verified.destinationURL, probe: probe),
+            writeAdmission: { _, _ in XCTFail("no recovery write is eligible") }
+        )
+
+        let empty = await engine.recoverAtLaunch()
+        XCTAssertTrue(empty.isEmpty)
+        XCTAssertEqual(probe.totalProbeCount, 0, "a healthy library requires no archive verification")
+
+        // This matches the legacy Chanin history: failures created after the
+        // surviving archive cannot be retired by that older generation.
+        var exhausted = VaultTransferRecord(
+            projectID: verified.projectID,
+            sourceURL: verified.sourceURL,
+            stagingURL: verified.stagingURL,
+            destinationURL: verified.destinationURL,
+            state: .failedRecoverable,
+            createdAt: verified.createdAt.addingTimeInterval(1)
+        )
+        exhausted.retryCount = 7
+        exhausted.error = VaultTransferError(
+            origin: .awaitingProviderDurability, reason: .providerUnsynced, message: "legacy failure"
+        )
+        try store.save(exhausted)
+        let otherSong = try failedDurabilityRecord(fixture: fixture, retryCount: 7, updatedAt: Date())
+        try store.save(otherSong)
+
+        for _ in 0..<2 {
+            let result = await engine.recoverAtLaunch()
+            XCTAssertEqual(Set(result.map(\.id)), [exhausted.id, otherSong.id])
+            XCTAssertEqual(probe.totalProbeCount, 0, "unrelated or causally older archives must not be read")
+            XCTAssertEqual(try store.record(id: exhausted.id), exhausted)
+            XCTAssertEqual(try store.record(id: verified.id), verified)
+        }
+        try VaultManifestBuilder().verify(try XCTUnwrap(verified.manifest), at: verified.destinationURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path))
+    }
+
     func testArchiveRejectsNestedProjectStagingSymlinkOutsideArchive() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

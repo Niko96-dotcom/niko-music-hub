@@ -200,6 +200,11 @@ public actor LocalVaultTransferEngine {
         }
         var usableVerifiedSurvivors: [ProjectID: VaultTransferRecord] = [:]
         for (projectID, survivor) in verifiedSurvivors {
+            // Verification can read gigabytes. It is needed here only if this
+            // generation could retire an older incomplete transfer for its song.
+            guard records.contains(where: {
+                $0.projectID == projectID && Self.isCausallyOlder($0, than: survivor)
+            }) else { continue }
             if await hasUsableVerifiedArchiveGeneration(survivor) {
                 usableVerifiedSurvivors[projectID] = survivor
             }
@@ -223,11 +228,7 @@ public actor LocalVaultTransferEngine {
         // A failed automatic attempt used to create a fresh transfer every minute.
         // Resume only the newest record for each project so launch recovery cannot
         // replay several full-project copies and hashes for the same source.
-        let groupedRecords = Dictionary(grouping: records, by: \.projectID)
-        let newestRecords = groupedRecords.compactMap { _, projectRecords in
-            projectRecords.max(by: Self.isLowerRecoveryPriority)
-        }
-            .sorted { $0.updatedAt < $1.updatedAt }
+        let newestRecords = VaultTransferRecoveryPolicy.candidates(from: records)
         var results: [VaultTransferRecord] = []
         for var record in newestRecords {
             if needsLegacyMetadataMigration(record) {
@@ -795,22 +796,6 @@ public actor LocalVaultTransferEngine {
         than verifiedSuccessor: VaultTransferRecord
     ) -> Bool {
         candidate.createdAt < verifiedSuccessor.createdAt
-    }
-
-    /// Recovery scheduling may prefer the most recently advanced incomplete
-    /// record. This mutable ordering is deliberately separate from causal
-    /// supersession above.
-    private static func isLowerRecoveryPriority(
-        _ lhs: VaultTransferRecord,
-        _ rhs: VaultTransferRecord
-    ) -> Bool {
-        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
-        if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
-        // Prefer an in-progress state over a failed wrapper when timestamps tie;
-        // it retains the most precise idempotent resume point.
-        if lhs.state == .failedRecoverable, rhs.state != .failedRecoverable { return true }
-        if lhs.state != .failedRecoverable, rhs.state == .failedRecoverable { return false }
-        return lhs.id.uuidString < rhs.id.uuidString
     }
 
     private func hasUsableVerifiedArchiveGeneration(_ record: VaultTransferRecord) async -> Bool {

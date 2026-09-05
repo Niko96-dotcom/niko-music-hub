@@ -807,7 +807,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     public func nextAutomaticRecoveryDate() async throws -> Date? {
         _ = try configuration()
         guard !(try settingsStore.loadSettings()).vault.automationEmergencyStop else { return nil }
-        return try transferStore.recoverableRecords().compactMap { record -> Date? in
+        let candidates = VaultTransferRecoveryPolicy.candidates(from: try transferStore.recoverableRecords())
+        return candidates.compactMap { record -> Date? in
             guard record.state == .failedRecoverable,
                   record.retryCount < recoveryPolicy.maximumAutomaticAttempts,
                   let origin = record.error?.origin,
