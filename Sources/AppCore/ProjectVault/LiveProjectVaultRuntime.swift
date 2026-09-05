@@ -4,6 +4,7 @@ import NikoMusicCore
 
 public enum ProjectVaultArchiveTrigger: Sendable {
     case manual
+    case backupCopy
     case workflowDone
 }
 
@@ -27,6 +28,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case unavailable
     case disabled
     case automaticArchivingDisabled
+    case independentBackupRequired
     case emergencyStop
     case keepLocal
     case mutationInProgress
@@ -40,8 +42,9 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .unavailable: "Project Vault needs valid Active Projects and Archive roots."
         case .disabled: "Project Vault is disabled."
         case .automaticArchivingDisabled: "Automatic archiving is disabled."
+        case .independentBackupRequired: "Protect the Archive with an independent backup and confirm it in Project Vault settings before removing the Active copy. Use Create Backup Copy to keep the project local."
         case .emergencyStop: "Project Vault Emergency Stop is on."
-        case .keepLocal: "Keep Local prevents automatic archiving."
+        case .keepLocal: "Turn off Keep Local before archiving this project."
         case .mutationInProgress: "Another Project Vault operation is already in progress."
         case .transferOwned: "This project already has a Project Vault transfer that must finish or be reviewed."
         case .activityPostponed(.cubaseRunning): "Archiving is paused while Cubase or Ableton Live is running. Close the DAW and retry."
@@ -576,18 +579,17 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             _ transfer: VaultTransferRecord,
             entry: ProjectCatalogEntry
         ) async throws -> ProjectVaultRuntimeSnapshot {
-            guard trigger == .workflowDone,
-                  transfer.state == .archiveVerified,
-                  ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings.vault),
+            guard trigger == .manual || (trigger == .workflowDone && ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings.vault)),
+                  VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state),
                   FileManager.default.fileExists(atPath: transfer.sourceURL.path) else {
                 return snapshot(entry: entry, transfer: transfer, configuration: configuration)
             }
 
-            let removalAdmission = makeRemovalAdmission(song: song)
+            let removalAdmission = makeRemovalAdmission(song: song, trigger: trigger)
             do {
                 try await removalAdmission(transfer)
             } catch let error as ProjectVaultRuntimeError {
-                if case .activityPostponed = error {
+                if case .activityPostponed = error, trigger == .workflowDone {
                     return snapshot(entry: entry, transfer: transfer, configuration: configuration)
                 }
                 throw error
@@ -661,7 +663,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             now: now,
             recoveryPolicy: recoveryPolicy,
             writeAdmission: writeAdmission,
-            removalAdmission: makeRemovalAdmission(song: song)
+            removalAdmission: makeRemovalAdmission(song: song, trigger: trigger)
         )
         let transfer: VaultTransferRecord
         if trigger == .workflowDone {
@@ -717,6 +719,9 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         }
         try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
         let updatedEntry = try catalogStore.loadEntries().first { $0.record.id == entry.record.id } ?? entry
+        if trigger == .manual {
+            return try await reuseTerminal(transfer, entry: updatedEntry)
+        }
         return snapshot(entry: updatedEntry, transfer: transfer, configuration: configuration)
     }
 
@@ -1154,7 +1159,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         }
     }
 
-    private func makeRemovalAdmission(song: Song) -> LocalVaultTransferEngine.RemovalAdmission {
+    private func makeRemovalAdmission(song: Song, trigger: ProjectVaultArchiveTrigger) -> LocalVaultTransferEngine.RemovalAdmission {
         let settingsStore = self.settingsStore
         let activityProbe = self.activityProbe
         let now = self.now
@@ -1164,8 +1169,15 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             guard !settings.vault.automationEmergencyStop else {
                 throw ProjectVaultRuntimeError.emergencyStop
             }
-            guard ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings.vault) else {
-                throw ProjectVaultRuntimeError.automaticArchivingDisabled
+            guard settings.vault.isEnabled else { throw ProjectVaultRuntimeError.disabled }
+            if trigger == .manual {
+                guard settings.vault.independentBackupConfirmed else {
+                    throw ProjectVaultRuntimeError.independentBackupRequired
+                }
+            } else {
+                guard ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings.vault) else {
+                    throw ProjectVaultRuntimeError.automaticArchivingDisabled
+                }
             }
             let keepLocalKeys = Set([
                 songID,
@@ -1186,6 +1198,9 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             case .busy: throw ProjectVaultRuntimeError.activityPostponed(.openFiles)
             case .uncertain(let reason): throw ProjectVaultRuntimeError.activityPostponed(.uncertainActivity(reason))
             }
+            // Explicit archiving may follow a save immediately. The engine still
+            // re-verifies Source and Archive bytes after the final open-file probe.
+            if trigger == .manual { return }
             switch await activityProbe.writeActivityStatus(
                 in: record.sourceURL,
                 since: now().addingTimeInterval(-10 * 60)

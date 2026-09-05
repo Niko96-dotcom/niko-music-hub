@@ -302,9 +302,18 @@ struct SongDetailView: View {
                     icon: "archivebox",
                     label: viewModel.projectVaultBusySongIDs.contains(liveSong.id) ? "Archiving…" : "Archive Now",
                     style: .secondary,
-                    help: "Copy and verify this project in Project Vault now"
+                    help: "Verify the archive, remove the Active copy, and keep this song available through Show archived projects"
                 ) {
                     viewModel.archiveInProjectVault(liveSong)
+                }
+                HubLabeledButton(
+                    icon: "doc.on.doc",
+                    label: "Create Backup Copy",
+                    style: .secondary,
+                    help: "Copy and verify this project in the Vault while keeping it in Active Projects",
+                    isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                ) {
+                    viewModel.archiveInProjectVault(liveSong, trigger: .backupCopy)
                 }
             }
         }

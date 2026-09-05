@@ -318,9 +318,9 @@ public actor LocalVaultTransferEngine {
     @discardableResult
     public func removeActiveCopy(after archivedRecord: VaultTransferRecord) async throws -> VaultTransferRecord {
         guard
-            archivedRecord.state == .archiveVerified,
+            VaultTransferOwnershipPolicy.isVerifiedTerminal(archivedRecord.state),
             let persisted = try store.record(id: archivedRecord.id),
-            persisted.state == .archiveVerified,
+            persisted.state == archivedRecord.state,
             persisted.projectID == archivedRecord.projectID,
             persisted.destinationURL == archivedRecord.destinationURL,
             persisted.manifestID == archivedRecord.manifestID,
@@ -331,6 +331,9 @@ public actor LocalVaultTransferEngine {
         }
         try manifestBuilder.verify(manifest, at: persisted.destinationURL)
         var record = persisted
+        // A restored project can reuse an earlier archived generation. Fresh
+        // manifest verification above re-establishes its removal evidence.
+        record.state = .archiveVerified
         record.state = try ProjectVaultStateMachine().applying(
             .beginRemovingActiveCopy(VaultRemovalEvidence(
                 manifestVerified: true,

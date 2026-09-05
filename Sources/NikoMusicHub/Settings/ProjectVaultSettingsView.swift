@@ -133,7 +133,7 @@ struct ProjectVaultSettingsView: View {
         }) else { return }
         reconcileLaunchAtLogin(settings.vault)
         showSetup = false
-        message = "Project Vault enabled in Private beta (copies only). Automatic removal remains unavailable."
+        message = "Project Vault enabled. Private beta automation creates copies only. Archive Now verifies the archive and removes the Active copy after its safety checks."
     }
 
     @ViewBuilder

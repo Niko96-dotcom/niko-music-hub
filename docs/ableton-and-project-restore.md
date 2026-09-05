@@ -33,6 +33,14 @@ The folder groups the project's files and remains its filesystem identity. The d
 
 Automatic preview selection checks full-song suitability before scores, versions or modification dates. Stems, references, short clips and technical exports such as `for ableton` or `for mastering` cannot outrank a usable full-song mix. Among usable full songs, exports in the song root or Mixdown folder take precedence over imported audio in project subfolders. A finished song inside Cubase's Audio folder remains eligible when no such export exists. The same core rules run on fresh scans and cached automatic selections; manual preview choices stay intact. Vault refreshes the canonical title when archiving the active song, including when reusing an existing verified generation, without changing the ProjectID, folder or music files.
 
+## Archive in the UI
+
+**Archive Now** verifies the Vault generation and current project, checks that the DAW and project files are closed, then removes the Active copy. The song leaves the normal board and becomes a **Get Local & Open** target under **Show archived projects**. A restored, unchanged song can reuse its verified generation when archived again.
+
+**Create Backup Copy** verifies a Vault copy and keeps the song in Active Projects. Use this when you want another copy without removing the local project.
+
+Manual archiving requires Project Vault enabled, independent backup confirmation, Keep Local off, and Emergency Stop off. It can run after a save without waiting for the automatic inactivity window. Private beta limits automatic archiving to copies; it does not convert an explicit Archive Now request into a copy-only success. If removal is blocked, the app reports the reason and keeps the Active project.
+
 ## Restore in the UI
 
 1. In **Settings → Project Vault**, configure **Active Projects** (your working folder) and **Archive / Vault**, and enable Project Vault.

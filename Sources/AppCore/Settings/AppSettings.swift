@@ -37,7 +37,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         public var label: String {
             switch self {
             case .disabled: "Off"
-            case .privateBeta: "Private beta (copies only)"
+            case .privateBeta: "Private beta (automatic copies only)"
             case .friends: "Friends"
             }
         }

@@ -6,6 +6,36 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testManualArchiveLeavesNormalBoardAndReturnsAfterRestore() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings {
+            $0.vault.rolloutStage = .privateBeta
+            $0.vault.automaticArchiving = false
+        }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first)
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertTrue(viewModel.songs.contains { $0.id == original.id })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        viewModel.archiveInProjectVault(original)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertFalse(viewModel.songs.contains { $0.id == original.id })
+        viewModel.setShowArchivedProjects(true)
+        let archived = try XCTUnwrap(viewModel.songs.first)
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: archived)?.primaryAction, .restoreAndOpen)
+        viewModel.performProjectVaultPrimaryAction(for: archived)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        viewModel.setShowArchivedProjects(false)
+        XCTAssertTrue(viewModel.songs.contains { $0.id == original.id })
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+    }
+
     func testMountedBrowserResumesTimedOutCopyAtPersistedDeadlineWithoutAnotherTransfer() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -81,8 +111,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         viewModel.updateAppNote(for: original, note: "Retain this note across the Vault lifecycle")
         let active = try XCTUnwrap(viewModel.songs.first)
 
-        // Manual Archive Now creates the generation before the later Done transition.
-        _ = try await runtime.archive(song: active, trigger: .manual)
+        // Create Backup Copy creates the generation before the later Done transition.
+        _ = try await runtime.archive(song: active, trigger: .backupCopy)
         await viewModel.refreshProjectVaultSnapshots()
         viewModel.updateWorkflowStatus(for: active, status: .done)
         viewModel.setShowArchivedProjects(true)

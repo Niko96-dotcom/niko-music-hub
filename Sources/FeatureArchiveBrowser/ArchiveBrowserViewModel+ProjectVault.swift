@@ -333,8 +333,8 @@ extension ArchiveBrowserViewModel {
                 await self.refreshProjectVaultSnapshots()
                 let activeRetained = FileManager.default.fileExists(atPath: song.folderPath.path)
                 self.setProjectVaultStatusMessage(activeRetained
-                    ? "Archived and verified. The Active copy was kept."
-                    : "Done and archived. The verified project is ready to restore when needed.")
+                    ? "Backup copy verified. The project remains in Active Projects."
+                    : "Archived and verified. Find this song in Show archived projects to restore it.")
             } catch let error as ProjectVaultRuntimeError where trigger == .workflowDone {
                 _ = await self.refreshProjectVaultSnapshots()
                 self.setProjectVaultStatusMessage("Marked Done. \(error.localizedDescription)")
@@ -345,7 +345,7 @@ extension ArchiveBrowserViewModel {
                 }
             } catch {
                 _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage("Project Vault could not archive this project: \(error.localizedDescription). No source files were changed.")
+                self.setProjectVaultStatusMessage("Archive did not complete: \(error.localizedDescription)")
                 self.diagnostics.log(.error, "Project Vault archive failed: \(error)")
             }
         }
@@ -535,7 +535,7 @@ extension ArchiveBrowserViewModel {
                 self.cacheProjectVaultSnapshot(updated)
                 self.rebuildProjectVaultPresentationCache()
                 if await self.refreshProjectVaultSnapshots() {
-                    self.setProjectVaultStatusMessage("Project Vault retry completed and verified.")
+                    self.setProjectVaultStatusMessage("Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
                 } else {
                     self.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
                 }

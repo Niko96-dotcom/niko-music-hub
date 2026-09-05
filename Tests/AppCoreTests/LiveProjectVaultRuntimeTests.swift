@@ -5,6 +5,63 @@ import NikoMusicCore
 import XCTest
 
 final class LiveProjectVaultRuntimeTests: XCTestCase {
+    func testManualArchiveRemovesActiveAndCanRearchiveRestoredGeneration() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        let archived = try await runtime.archive(song: fixture.song, trigger: .manual)
+        XCTAssertEqual(archived.transfer?.id, copy.transfer?.id)
+        XCTAssertEqual(archived.transfer?.state, .archivedLocal)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(ProjectVaultCardPresentation(record: archived.record, transferState: archived.transfer?.state).state, .archived)
+
+        let restored = try await runtime.restoreAndOpen(snapshot: archived)
+        XCTAssertNotNil(restored.completedAt)
+        try VaultManifestBuilder().verify(before, at: fixture.project)
+        let again = try await runtime.archive(song: fixture.song, trigger: .manual)
+        XCTAssertEqual(again.transfer?.id, copy.transfer?.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        try VaultManifestBuilder().verify(before, at: try XCTUnwrap(again.transfer?.destinationURL))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
+
+    func testManualArchiveCreatesNewGenerationAndRequiresRemovalSafety() async throws {
+        for blocker in ["none", "backup", "keepLocal", "emergency", "daw", "openFiles"] {
+            let fixture = try Fixture()
+            defer { fixture.cleanup() }
+            try fixture.saveSettings(stage: .privateBeta, backupConfirmed: blocker != "backup", emergencyStop: blocker == "emergency")
+            if blocker == "keepLocal" {
+                let projectPath = fixture.project.path
+                try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs.insert(projectPath) }
+            }
+            let runtime = try fixture.runtime(activityProbe: ManualArchiveProbe(blocker: blocker))
+            do {
+                let archived = try await runtime.archive(song: fixture.song, trigger: .manual)
+                XCTAssertEqual(blocker, "none")
+                XCTAssertEqual(archived.transfer?.state, .archivedLocal)
+                XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+            } catch let error as ProjectVaultRuntimeError {
+                let expected: ProjectVaultRuntimeError = switch blocker {
+                case "backup": .independentBackupRequired
+                case "keepLocal": .keepLocal
+                case "emergency": .emergencyStop
+                case "daw": .activityPostponed(.cubaseRunning)
+                case "openFiles": .activityPostponed(.openFiles)
+                default: .unavailable
+                }
+                XCTAssertEqual(error, expected, blocker)
+                XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+                XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
+            }
+        }
+    }
+
     func testOlderRetryCannotWakeRecoveryWhenSelectedTransferIsExhaustedOrDeferred() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -382,12 +439,12 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let song = fixture.song
 
         let first = Task {
-            try await runtime.archive(song: song, trigger: .manual)
+            try await runtime.archive(song: song, trigger: .backupCopy)
         }
         await provider.waitUntilFirstBarrier()
         let second = Task { () -> Bool in
             do {
-                _ = try await runtime.archive(song: song, trigger: .manual)
+                _ = try await runtime.archive(song: song, trigger: .backupCopy)
                 return false
             } catch {
                 return true
@@ -689,7 +746,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         )
 
         do {
-            _ = try await runtime.archive(song: fixture.song, trigger: .manual)
+            _ = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             XCTFail("expected the freshly raised floor to deny the bulk copy")
         } catch {
             XCTAssertEqual(
@@ -718,7 +775,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let runtime = try fixture.runtime(capacityProbe: probe)
         let song = fixture.song
         let operation = Task {
-            try await runtime.archive(song: song, trigger: .manual)
+            try await runtime.archive(song: song, trigger: .backupCopy)
         }
         await probe.waitUntilBlocked()
         try fixture.settingsStore.updateSettings {
@@ -755,7 +812,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             capacity: .safe,
             archiveProviderFactory: { _ in provider }
         )
-        let archived = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let archived = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         let transfer = try XCTUnwrap(archived.transfer)
         let manifest = try XCTUnwrap(transfer.manifest)
         let restore = Task {
@@ -996,11 +1053,11 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
         let runtime = try fixture.runtime()
-        let original = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let original = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         let delivery = Song(folderPath: fixture.project, originalFolderName: fixture.song.originalFolderName,
                             displayTitle: "NEW SONG", projectVersions: fixture.song.projectVersions,
                             latestCPR: fixture.song.latestCPR)
-        let refreshed = try await runtime.archive(song: delivery, trigger: .manual)
+        let refreshed = try await runtime.archive(song: delivery, trigger: .backupCopy)
         XCTAssertEqual(refreshed.record.id, original.record.id)
         XCTAssertEqual(refreshed.record.canonicalTitle, "NEW SONG")
         // Fixture-only removal exercises the real archive-only restore path.
@@ -1490,7 +1547,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
-        let archived = try await fixture.runtime().archive(song: fixture.song, trigger: .manual)
+        let archived = try await fixture.runtime().archive(song: fixture.song, trigger: .backupCopy)
         let transfer = try XCTUnwrap(archived.transfer)
         let manifest = try XCTUnwrap(transfer.manifest)
         var restore = VaultRestoreRecord(
@@ -1551,7 +1608,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let stagingRoot = fixture.archive.appendingPathComponent(".niko-staging", isDirectory: true)
         let stagingBefore = try FileManager.default.subpathsOfDirectory(atPath: stagingRoot.path)
         let done = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
-        let manual = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let manual = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
 
         XCTAssertEqual(done.transfer?.id, survivor.id)
         XCTAssertEqual(manual.transfer?.id, survivor.id)
@@ -1585,7 +1642,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             let clock = RuntimeTestClock(firstTime)
             let runtime = try fixture.runtime(now: { clock.value })
 
-            let first = try await runtime.archive(song: fixture.song, trigger: .manual)
+            let first = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             let firstTransfer = try XCTUnwrap(first.transfer)
             let firstGlobalVerification = try fixture.settingsStore
                 .loadSettings().vault.lastSuccessfulVerificationAt
@@ -1611,7 +1668,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             }
             clock.value = secondTime
 
-            let second = try await runtime.archive(song: fixture.song, trigger: .manual)
+            let second = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             let secondTransfer = try XCTUnwrap(second.transfer)
             let projectTransfers = try fixture.transferStore().allTransferRecords()
                 .filter { $0.projectID == firstTransfer.projectID }
@@ -1672,7 +1729,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             let clock = RuntimeTestClock(firstTime)
             let initialRuntime = try fixture.runtime(now: { clock.value })
 
-            let first = try await initialRuntime.archive(song: fixture.song, trigger: .manual)
+            let first = try await initialRuntime.archive(song: fixture.song, trigger: .backupCopy)
             var terminal = try XCTUnwrap(first.transfer)
             terminal.state = unusable.isOnline ? .archivedOnlineOnly : .archivedLocal
             terminal.durability = unusable.isOnline ? .syncedToProvider : .verifiedLocal
@@ -1713,7 +1770,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             do {
                 returnedTransfer = try await runtime.archive(
                     song: fixture.song,
-                    trigger: .manual
+                    trigger: .backupCopy
                 ).transfer
             } catch {
                 // With deliberately unsafe write capacity, rejecting the stale
@@ -1797,7 +1854,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             let clock = RuntimeTestClock(firstTime)
             let runtime = try fixture.runtime(now: { clock.value })
 
-            let first = try await runtime.archive(song: fixture.song, trigger: .manual)
+            let first = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             let firstTransfer = try XCTUnwrap(first.transfer)
             let firstManifest = try XCTUnwrap(firstTransfer.manifest)
             var corrupted = firstTransfer
@@ -1902,7 +1959,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             try fixture.transferStore().save(corrupted)
             clock.value = secondTime
 
-            let second = try await runtime.archive(song: fixture.song, trigger: .manual)
+            let second = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             let secondTransfer = try XCTUnwrap(second.transfer)
             let projectTransfers = try fixture.transferStore().allTransferRecords()
                 .filter { $0.projectID == firstTransfer.projectID }
@@ -1936,7 +1993,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let clock = RuntimeTestClock(firstTime)
         let initialRuntime = try fixture.runtime(now: { clock.value })
 
-        let first = try await initialRuntime.archive(song: fixture.song, trigger: .manual)
+        let first = try await initialRuntime.archive(song: fixture.song, trigger: .backupCopy)
         let firstTransfer = try XCTUnwrap(first.transfer)
         clock.value = secondTime
         let runtime = try fixture.runtime(
@@ -1947,7 +2004,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         )
 
         do {
-            _ = try await runtime.archive(song: fixture.song, trigger: .manual)
+            _ = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
             XCTFail("a source tree that cannot be manifested must fail closed")
         } catch let error as VaultManifestError {
             XCTAssertEqual(
@@ -1980,13 +2037,13 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             return try VaultManifestBuilder().build(at: sourceURL)
         })
 
-        let first = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let first = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         let firstTransfer = try XCTUnwrap(first.transfer)
         try Data("changed-cpr!!".utf8).write(
             to: fixture.project.appendingPathComponent("Synthetic Song.cpr")
         )
 
-        let second = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let second = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
 
         XCTAssertNotEqual(second.transfer?.id, firstTransfer.id)
         XCTAssertEqual(counter.value, 1)
@@ -1994,6 +2051,15 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
 }
 
 private extension LiveProjectVaultRuntimeTests {
+    struct ManualArchiveProbe: VaultAutomationActivityProbing {
+        let blocker: String
+        func cubaseStatus() async -> VaultActivityStatus { blocker == "daw" ? .busy : .clear }
+        func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { blocker == "openFiles" ? .busy : .clear }
+        func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus {
+            // A just-saved but closed project is a valid explicit archive request.
+            .busy
+        }
+    }
     struct ClearProbe: VaultAutomationActivityProbing {
         func cubaseStatus() async -> VaultActivityStatus { .clear }
         func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
