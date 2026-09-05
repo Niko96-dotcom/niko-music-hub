@@ -119,10 +119,15 @@ struct ArchiveBoardView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
-            Text("Board")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Board")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                Text("Drag songs between stages")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
+            .layoutPriority(1)
 
             if viewModel.isScanning {
                 HStack(spacing: 5) {
@@ -133,11 +138,6 @@ struct ArchiveBoardView: View {
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
                 .help("New songs appear as the scan finds them")
-            } else {
-                Text("Drag between stages · hold at an edge to scroll · click + Space to play · double-click to open")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .lineLimit(1)
             }
 
             Spacer(minLength: 8)
@@ -332,7 +332,7 @@ private struct ArchiveBoardColumnView: View {
             },
             reduceMotion: reduceMotion
         )
-        .frame(width: 200)
+        .frame(width: 220)
         .frame(maxHeight: .infinity)
     }
 
@@ -355,11 +355,11 @@ private struct ArchiveBoardColumnView: View {
             }
         }
         .padding(8)
-        .frame(width: 200)
+        .frame(width: 220)
         .frame(maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(isDropTargeted ? HubDesignSystem.Palette.accentFill : Color.white.opacity(0.03))
+                .fill(isDropTargeted ? HubDesignSystem.Palette.accentFill : HubDesignSystem.Palette.surface)
         }
         .environment(\.colorScheme, colorScheme)
         .simultaneousGesture(TapGesture().onEnded(onInteract))
@@ -383,7 +383,8 @@ private struct ArchiveBoardColumnView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
     }
 }
 
@@ -495,8 +496,8 @@ struct ArchiveBoardCardView: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(song.effectiveDisplayTitle)
                     .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
@@ -515,7 +516,7 @@ struct ArchiveBoardCardView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .lineLimit(1)
 
-            if let vaultPresentation {
+            if let vaultPresentation, vaultPresentation.state != .active {
                 HStack(spacing: 4) {
                     Text(vaultPresentation.state.rawValue)
                         .font(HubDesignSystem.Typography.micro().weight(.semibold))
@@ -542,19 +543,24 @@ struct ArchiveBoardCardView: View {
                 }
             }
 
-            if let status = song.workflowStatus {
-                SongCardStageProgressBar(status: status)
-            }
+            Label(song.mainPreviewURL == nil ? "No preview" : "Preview available",
+                  systemImage: song.mainPreviewURL == nil ? "speaker.slash" : "waveform")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 8)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(cardFill)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
         }
-        .opacity(vaultPresentation?.state == .archived ? 0.68 : 1)
+        .overlay {
+            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                .strokeBorder(isSelected ? HubDesignSystem.Palette.accent.opacity(0.55)
+                              : HubDesignSystem.Palette.separator.opacity(0.7), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
         .contentShape(Rectangle())
         // A separate double-tap recognizer must not make the one-click
         // selection wait for macOS's double-click disambiguation interval.
@@ -612,7 +618,7 @@ struct ArchiveBoardCardView: View {
 
     private var cardFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
-        return isHovered ? Color.white.opacity(0.08) : Color.white.opacity(0.05)
+        return isHovered ? HubDesignSystem.Palette.selection : HubDesignSystem.Palette.surfaceRaised
     }
 
     private func performInteraction(_ activation: ArchiveBoardCardInteractionPolicy.Activation) {

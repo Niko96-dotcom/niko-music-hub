@@ -13,7 +13,9 @@ struct SongDetailView: View {
     @State private var syncedVirtualTitle = ""
     @State private var syncedAppNote = ""
     @State private var syncedAliases = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var metadataExpanded = false
+    @State private var previewsExpanded = false
     @State private var previewCandidatePage = 0
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
@@ -32,18 +34,23 @@ struct SongDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
                 header
-                previewPanel
-                    .padding(.top, HubToolLayout.secondaryRowGap)
                 primaryActions
-                    .padding(.top, HubToolLayout.sectionSpacing)
+                previewPanel
                 essentialInfo
-                    .padding(.top, HubToolLayout.sectionSpacing)
-                metadataDisclosure
-                    .padding(.top, HubToolLayout.sectionSpacing)
-                moreDetailsDisclosure
-                    .padding(.top, HubToolLayout.sectionSpacing)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    metadataDisclosure
+                    Divider()
+                    moreDetailsDisclosure
+                    Divider()
+                    previewsDisclosure
+                    Divider()
+                    pluginsSection
+                }
+
+                vaultSection
             }
             .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -54,6 +61,7 @@ struct SongDetailView: View {
         .onChange(of: liveSong.id) { _, _ in
             syncDrafts(from: liveSong)
             metadataExpanded = false
+            previewsExpanded = false
             previewCandidatePage = 0
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
@@ -98,9 +106,10 @@ struct SongDetailView: View {
                         .help("This song is hidden from browse")
                 }
 
-                if let status = liveSong.workflowStatus {
-                    ArchiveWorkflowStatusPill(status: status)
+                ArchiveWorkflowStatusMenu(status: liveSong.workflowStatus, compact: false) {
+                    viewModel.updateWorkflowStatus(for: liveSong, status: $0)
                 }
+                .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
 
                 overflowMenu
             }
@@ -189,74 +198,108 @@ struct SongDetailView: View {
     // MARK: - Primary actions (IA-07: one primary)
 
     private var primaryActions: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                HubLabeledButton(
-                    icon: vaultPresentation?.reviewAction == nil ? "pianokeys" : "folder",
-                    label: vaultPresentation?.reviewAction?.label
-                        ?? vaultPresentation?.primaryAction.label
-                        ?? "Open in Cubase",
-                    style: .primary,
-                    help: vaultPresentation?.explanation ?? "Open latest CPR (O)"
-                ) {
-                    viewModel.performProjectVaultPrimaryAction(for: liveSong)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) { primaryActionButtons }
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) { primaryActionButtons }
+        }
+    }
+
+    @ViewBuilder
+    private var primaryActionButtons: some View {
+        HubLabeledButton(
+            icon: vaultPresentation?.reviewAction == nil ? "pianokeys" : "folder",
+            label: vaultPresentation?.reviewAction?.label
+                ?? vaultPresentation?.primaryAction.label
+                ?? "Open in Cubase",
+            style: .primary,
+            help: vaultPresentation?.explanation ?? "Open latest CPR (O)",
+            isEnabled: (vaultPresentation?.primaryAction ?? .openInCubase) != .openInCubase
+                || liveSong.effectiveLatestCPR != nil
+        ) {
+            viewModel.performProjectVaultPrimaryAction(for: liveSong)
+        }
+
+        HubLabeledButton(
+            icon: "folder",
+            label: "Reveal in Finder",
+            style: .secondary,
+            help: "Reveal CPR or folder (F)",
+            isEnabled: viewModel.preferredRevealURL(for: liveSong) != nil
+        ) {
+            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
+        }
+
+        HubLabeledButton(
+            icon: "waveform.badge.plus",
+            label: "Convert",
+            style: .ghost,
+            help: "Open WAV converter with the main preview pre-filled",
+            isEnabled: mainPreviewURL != nil
+        ) {
+            viewModel.convertMainPreview(for: liveSong)
+        }
+    }
+
+    @ViewBuilder
+    private var vaultSection: some View {
+        if let presentation = vaultPresentation {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Project Vault", systemImage: "archivebox")
+                        .font(HubDesignSystem.Typography.body().weight(.semibold))
+                    Spacer()
+                    Text(presentation.state.rawValue)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
-
-                if let vaultPresentation {
-                    Toggle("Keep Local", isOn: Binding(
-                        get: { vaultPresentation.isKeepLocal },
-                        set: { viewModel.setProjectKeepLocal($0, for: liveSong) }
-                    ))
-                    .toggleStyle(.checkbox)
-                    .help("Pinned projects are never automatically archived")
-
-                    if vaultPresentation.retryRestoreID != nil {
-                        HubLabeledButton(
-                            icon: "arrow.clockwise.circle",
-                            label: viewModel.projectVaultBusySongIDs.contains(liveSong.id)
-                                ? "Retrying…"
-                                : "Retry Get Local",
-                            style: .secondary,
-                            help: "Retry this same preserved restore after making the exact archive generation available offline",
-                            isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
-                        ) {
-                            viewModel.retryReviewedProjectVaultRestore(for: liveSong)
-                        }
-                    }
-
-                    if viewModel.canArchiveInProjectVault(liveSong) {
-                        HubLabeledButton(
-                            icon: "archivebox",
-                            label: viewModel.projectVaultBusySongIDs.contains(liveSong.id) ? "Archiving…" : "Archive Now",
-                            style: .secondary,
-                            help: "Copy and verify this project in Project Vault now"
-                        ) {
-                            viewModel.archiveInProjectVault(liveSong)
-                        }
-                    }
+                Text(presentation.explanation)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { vaultControls }
+                    VStack(alignment: .leading, spacing: 12) { vaultControls }
                 }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
+        }
+    }
 
+    @ViewBuilder
+    private var vaultControls: some View {
+        if let vaultPresentation {
+            Toggle("Keep Local", isOn: Binding(
+                get: { vaultPresentation.isKeepLocal },
+                set: { viewModel.setProjectKeepLocal($0, for: liveSong) }
+            ))
+            .toggleStyle(.checkbox)
+            .help("Pinned projects are never automatically archived")
+
+            if vaultPresentation.retryRestoreID != nil {
                 HubLabeledButton(
-                    icon: "folder",
-                    label: "Reveal in Finder",
+                    icon: "arrow.clockwise.circle",
+                    label: viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                        ? "Retrying…"
+                        : "Retry Get Local",
                     style: .secondary,
-                    help: "Reveal CPR or folder (F)",
-                    isEnabled: viewModel.preferredRevealURL(for: liveSong) != nil
+                    help: "Recheck and retry this preserved restore after resolving the reported problem",
+                    isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
                 ) {
-                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
+                    viewModel.retryReviewedProjectVaultRestore(for: liveSong)
                 }
+            }
 
+            if viewModel.canArchiveInProjectVault(liveSong) {
                 HubLabeledButton(
-                    icon: "waveform.badge.plus",
-                    label: "Convert",
-                    style: .ghost,
-                    help: "Open WAV converter with the main preview pre-filled",
-                    isEnabled: mainPreviewURL != nil
+                    icon: "archivebox",
+                    label: viewModel.projectVaultBusySongIDs.contains(liveSong.id) ? "Archiving…" : "Archive Now",
+                    style: .secondary,
+                    help: "Copy and verify this project in Project Vault now"
                 ) {
-                    viewModel.convertMainPreview(for: liveSong)
+                    viewModel.archiveInProjectVault(liveSong)
                 }
-
-                Spacer(minLength: 0)
             }
         }
     }
@@ -313,12 +356,13 @@ struct SongDetailView: View {
         }
     }
 
-    // MARK: - Metadata (collapsed by default — ARCH-07)
+    // MARK: - Song information
 
     private var metadataDisclosure: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             disclosureHeader(
                 title: "Song info",
+                subtitle: "Title, notes & collaborators",
                 expanded: metadataExpanded
             ) {
                 metadataExpanded.toggle()
@@ -376,66 +420,88 @@ struct SongDetailView: View {
                         Spacer(minLength: 0)
                     }
                 }
-                .padding(HubDesignSystem.Spacing.cardPadding)
+                .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
+                .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
+                collaboratorsSection
+                    .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
+                    .padding(.bottom, 16)
+                sidecarNotesSection
+                    .padding(.bottom, 16)
             }
         }
     }
 
-    // MARK: - More details (CPR / collaborators / alternates)
+    // MARK: - Project files and preview library
 
     private var moreDetailsDisclosure: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+        VStack(alignment: .leading, spacing: 12) {
             disclosureHeader(
-                title: "Details",
+                title: "Project files",
+                subtitle: "\(liveSong.projectVersions.count) Cubase versions",
                 expanded: viewModel.songDetailsExpanded
             ) {
                 viewModel.songDetailsExpanded.toggle()
             }
-            .accessibilityLabel("Details")
-            .accessibilityValue(viewModel.songDetailsExpanded ? "Expanded" : "Collapsed")
-
             if viewModel.songDetailsExpanded {
-                VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.panel) {
-                    collaboratorsSection
-                    pluginsSection
-                    cprListSection
-                    alternatePreviewsSection
-                    sidecarNotesSection
+                cprListSection.padding(.bottom, 16)
+            }
+        }
+    }
+
+    private var previewsDisclosure: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            disclosureHeader(
+                title: "Alternate previews",
+                subtitle: "Compare mixdowns & choose the main preview",
+                expanded: previewsExpanded
+            ) { previewsExpanded.toggle() }
+            if previewsExpanded {
+                if rankedPreviews.contains(where: { $0.id != liveSong.mainPreviewCandidateID }) {
+                    alternatePreviewsSection.padding(.bottom, 16)
+                } else {
+                    Text("No alternate previews found.")
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .padding(.bottom, 16)
                 }
-                .padding(HubDesignSystem.Spacing.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
             }
         }
     }
 
     private func disclosureHeader(
         title: String,
+        subtitle: String,
         expanded: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: HubDesignSystem.Motion.short)) {
                 action()
             }
         } label: {
-            HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .rotationEffect(.degrees(expanded ? 90 : 0))
-                Text(title.uppercased())
-                    .font(HubDesignSystem.Typography.caption())
-                    .tracking(0.7)
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(HubDesignSystem.Typography.body().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                    Text(subtitle)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
             }
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
-            .padding(.vertical, 2)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
     }
 
     private func metadataField<Content: View>(
@@ -477,24 +543,11 @@ struct SongDetailView: View {
     @ViewBuilder
     private var pluginsSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
-            Button {
-                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
-                    viewModel.pluginsSectionExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    Text("PLUGINS (READ-ONLY)")
-                        .font(HubDesignSystem.Typography.caption())
-                        .tracking(0.7)
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .rotationEffect(.degrees(viewModel.pluginsSectionExpanded ? 90 : 0))
-                }
-            }
-            .buttonStyle(.plain)
+            disclosureHeader(
+                title: "Plugins",
+                subtitle: "Instruments & effects used in the main project",
+                expanded: viewModel.pluginsSectionExpanded
+            ) { viewModel.pluginsSectionExpanded.toggle() }
 
             if viewModel.pluginsSectionExpanded {
                 if let summary = viewModel.cprPluginSummary(for: liveSong), !summary.pluginNames.isEmpty {
@@ -569,6 +622,23 @@ struct SongDetailView: View {
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
                 Spacer(minLength: 0)
+                if !isIgnored {
+                    Menu {
+                        Button("Set Main") {
+                            viewModel.setManualMainCPR(for: liveSong, versionID: version.id)
+                        }
+                        .disabled(isMain)
+                        Button("Hide from browse") {
+                            viewModel.ignoreCPRVersion(for: liveSong, versionID: version.id)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .frame(width: 28, height: 28)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .accessibilityLabel("Actions for \(version.fileName)")
+                }
             }
 
             Text(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))
@@ -581,26 +651,6 @@ struct SongDetailView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
 
-            if !isIgnored {
-                HStack(spacing: 6) {
-                    HubLabeledButton(
-                        icon: "star",
-                        label: "Set Main",
-                        style: .ghost,
-                        help: "Use this CPR version as main"
-                    ) {
-                        viewModel.setManualMainCPR(for: liveSong, versionID: version.id)
-                    }
-                    HubLabeledButton(
-                        icon: "eye.slash",
-                        label: "Hide",
-                        style: .ghost,
-                        help: "Hide this CPR from browse"
-                    ) {
-                        viewModel.ignoreCPRVersion(for: liveSong, versionID: version.id)
-                    }
-                }
-            }
         }
         .padding(.vertical, 8)
         .overlay(alignment: .bottom) {
@@ -630,38 +680,38 @@ struct SongDetailView: View {
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
 
-                Text("The current preview is shown above. Browse alternates in small pages to keep this detail view responsive.")
+                Text("Listen to another mixdown, then choose Set Main to use it as the song’s preview.")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 LazyVStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                     ForEach(page.elements, id: \.id) { candidate in
-                        VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .center, spacing: 8) {
                             ArchiveMiniPlayerView(
                                 url: candidate.filePath,
                                 style: .full,
-                                label: candidate.fileName
+                                label: candidate.fileName,
+                                showsSlider: false,
+                                showsSurface: false
                             )
-                            HStack(spacing: 6) {
-                                HubLabeledButton(
-                                    icon: "star",
-                                    label: "Set Main",
-                                    style: .ghost,
-                                    help: "Use this file as the main preview"
-                                ) {
+                            Menu {
+                                Button("Set Main") {
                                     viewModel.setManualMainPreview(for: liveSong, candidateID: candidate.id)
                                 }
-                                HubLabeledButton(
-                                    icon: "eye.slash",
-                                    label: "Ignore",
-                                    style: .ghost,
-                                    help: "Hide this preview candidate"
-                                ) {
+                                Button("Ignore preview") {
                                     viewModel.ignorePreviewCandidate(for: liveSong, candidateID: candidate.id)
                                 }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .frame(width: 28, height: 28)
                             }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .accessibilityLabel("Actions for \(candidate.fileName)")
                         }
+                        .padding(.vertical, 4)
+                        Divider()
                     }
                 }
 

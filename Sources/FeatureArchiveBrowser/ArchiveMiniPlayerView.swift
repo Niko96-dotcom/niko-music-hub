@@ -14,6 +14,7 @@ struct ArchiveMiniPlayerView: View {
     var label: String?
     /// Reference rule: the scrub slider is hidden at rest — only the actively playing row shows it.
     var showsSlider: Bool = true
+    var showsSurface: Bool = true
     /// When false, the model stays idle until the user hits play (list rows). Detail/hero sets true.
     var preparesOnAppear: Bool = false
 
@@ -31,7 +32,7 @@ struct ArchiveMiniPlayerView: View {
             isEnabled: url != nil,
             markerProgress: hookProgress,
             volumeLevel: style == .full ? 1 : nil,
-            showsSurface: style == .full,
+            showsSurface: style == .full && showsSurface,
             showsSlider: showsSlider,
             onPlayPause: {
                 playback.toggle(at: url)

@@ -24,15 +24,26 @@ struct ToolSidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             appMark
 
-            HubSectionHeader("Tools")
+            HubSectionHeader("Library")
+            ForEach(registry.metadata.filter { $0.id.rawValue == "archive-browser" }, id: \.id) { metadata in
+                toolRow(metadata)
+            }
 
+            HubSectionHeader("Production")
+                .padding(.top, 16)
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(registry.metadata, id: \.id) { metadata in
+                ForEach(registry.metadata.filter {
+                    $0.id.rawValue != "archive-browser" && $0.id.rawValue != "settings"
+                }, id: \.id) { metadata in
                     toolRow(metadata)
                 }
             }
 
             Spacer(minLength: 8)
+
+            ForEach(registry.metadata.filter { $0.id.rawValue == "settings" }, id: \.id) { metadata in
+                toolRow(metadata)
+            }
 
             if context != nil {
                 helperHealthRow
@@ -96,7 +107,7 @@ struct ToolSidebarView: View {
         .background {
             if isHovered(metadata), !isSelected(metadata) {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(HubDesignSystem.Palette.selection.opacity(0.5))
             }
         }
         .onHover { hovering in
@@ -135,7 +146,7 @@ struct ToolSidebarView: View {
         .background {
             if helperHealthHovered {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(HubDesignSystem.Palette.selection.opacity(0.5))
             }
         }
         .onHover { helperHealthHovered = $0 }

@@ -105,20 +105,11 @@ struct SongCardMetadataChipRow: View {
 
     var body: some View {
         if !chips.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(chips) { chip in
-                    Text(chip.label)
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(HubDesignSystem.Palette.textPrimary.opacity(0.06))
-                        }
-                        .lineLimit(1)
-                }
-            }
+            Text(chips.map(\.label).joined(separator: " · "))
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

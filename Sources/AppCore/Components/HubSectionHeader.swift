@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// Muted section header for navigation columns and content groups (reference pattern:
-/// "AI AGENT" / "Favourites" / "Today"). Uppercase, letterspaced, tertiary — quiet
-/// hierarchy that never competes with rows. Optional right-aligned action (the
-/// references' inline "+" on a section) or count.
+/// Shared section heading with optional count or trailing action.
 public struct HubSectionHeader: View {
     private let title: String
     private let count: Int?
@@ -29,10 +26,9 @@ public struct HubSectionHeader: View {
 
     public var body: some View {
         HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text(title.uppercased())
-                .font(HubDesignSystem.Typography.caption())
-                .tracking(0.7)
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            Text(title)
+                .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -57,7 +53,7 @@ public struct HubSectionHeader: View {
                         .background {
                             if actionHovered {
                                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(Color.white.opacity(0.06))
+                                    .fill(HubDesignSystem.Palette.selection)
                             }
                         }
                         .contentShape(Rectangle())

@@ -70,7 +70,9 @@ public struct HubSurface: ViewModifier {
             content.hubChromeMaterial()
         } else {
             let shape = RoundedRectangle(cornerRadius: radiusOverride ?? level.cornerRadius, style: .continuous)
-            if #available(macOS 26.0, *), !reduceTransparency {
+            // Form fields and grouped content need a stable fill, especially when
+            // nested. Reserve glass for raised surfaces; chrome retains vibrancy.
+            if #available(macOS 26.0, *), level == .raised, !reduceTransparency {
                 content
                     .opacity(state == .disabled ? 0.62 : 1)
                     .background { nativeGlassBackground(shape: shape) }

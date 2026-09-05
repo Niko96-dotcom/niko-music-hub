@@ -2,7 +2,7 @@ import AppCore
 import NikoMusicCore
 import SwiftUI
 
-/// Archive sidebar row — option D: title, metadata chips, minimal inline transport.
+/// A song row keeps identity, context, and preview controls in a consistent order.
 struct SongCardView: View {
     let song: Song
     let isSelected: Bool
@@ -38,18 +38,16 @@ struct SongCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                rowSelectable {
-                    HStack(spacing: 6) {
-                        Text(song.effectiveDisplayTitle)
-                            .font(HubDesignSystem.Typography.body().weight(.semibold))
-                            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 6) {
+                    Text(song.effectiveDisplayTitle)
+                        .font(HubDesignSystem.Typography.body().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if allowsWorkflowMutation, let onWorkflowStatusChange {
                     ArchiveWorkflowStatusMenu(
@@ -73,7 +71,7 @@ struct SongCardView: View {
                 }
             }
 
-            if let vaultPresentation {
+            if let vaultPresentation, vaultPresentation.state != .active {
                 HStack(spacing: 5) {
                     Text(vaultPresentation.state.rawValue)
                         .font(HubDesignSystem.Typography.micro().weight(.semibold))
@@ -98,7 +96,7 @@ struct SongCardView: View {
                                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.07), in: Capsule())
+                                .background(HubDesignSystem.Palette.selection, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .help(vaultPresentation.primaryAction == .retry
@@ -111,14 +109,7 @@ struct SongCardView: View {
                 }
             }
 
-            rowSelectable {
-                SongCardMetadataChipRow(chips: metadataChips)
-            }
-
-            if let status = song.workflowStatus {
-                SongCardStageProgressBar(status: status)
-                    .padding(.top, 1)
-            }
+            SongCardMetadataChipRow(chips: metadataChips)
 
             ArchiveMiniPlayerView(
                 url: song.mainPreviewURL,
@@ -132,8 +123,19 @@ struct SongCardView: View {
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(rowFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                        .strokeBorder(isSelected ? HubDesignSystem.Palette.selectionStroke : .clear, lineWidth: 1)
+                }
         }
-        .opacity(isArchivedProject ? 0.68 : 1)
+        // Select from the entire row, including padding and the space beside
+        // transport. Child buttons retain their own actions.
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect?() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(song.effectiveDisplayTitle)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: "Select song") { onSelect?() }
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering
@@ -142,17 +144,8 @@ struct SongCardView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
     }
 
-    @ViewBuilder
-    private func rowSelectable<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect?()
-            }
-    }
-
     private var rowFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
-        return isHovered ? Color.white.opacity(0.05) : Color.clear
+        return isHovered ? HubDesignSystem.Palette.surface : Color.clear
     }
 }
