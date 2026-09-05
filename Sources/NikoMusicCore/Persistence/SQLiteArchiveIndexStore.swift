@@ -36,7 +36,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     }
 
     public func loadLatest() throws -> ArchiveIndexSnapshot? {
-        try withConnection { db in
+        try database.withConnection { db in
             if let snapshot = try loadPerSongSnapshot(db) {
                 return snapshot
             }
@@ -59,7 +59,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
             songRows.append((song.id, songJSON))
         }
         let scannedText = ISO8601DateFormatter().string(from: snapshot.scannedAt)
-        try withConnection { db in
+        try database.withConnection { db in
             guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
                 throw StoreError.exec(message(db))
             }
@@ -82,7 +82,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     }
 
     public func clear() throws {
-        try withConnection { db in
+        try database.withConnection { db in
             let sql = """
             DELETE FROM archive_snapshot_meta;
             DELETE FROM archive_snapshot_song;
@@ -296,10 +296,6 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
                 throw StoreError.exec(message(db))
             }
         }
-    }
-
-    private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {

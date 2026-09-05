@@ -136,13 +136,13 @@ enum MusicSearchMatcher {
         return normalize(parts.joined(separator: " "))
     }
 
-    private static func normalize(_ value: String) -> String {
+    static func normalize(_ value: String) -> String {
         value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
             .filter { $0.isLetter || $0.isNumber }
     }
 
-    private static func isSubsequence(_ needle: String, in haystack: String) -> Bool {
+    static func isSubsequence(_ needle: String, in haystack: String) -> Bool {
         guard !needle.isEmpty else { return true }
         var hayIndex = haystack.startIndex
         for character in needle {

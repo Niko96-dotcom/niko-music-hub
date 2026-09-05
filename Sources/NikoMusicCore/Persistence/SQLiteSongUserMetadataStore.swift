@@ -24,7 +24,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
     }
 
     public func loadAll() throws -> [String: SongUserMetadata] {
-        try withConnection { db in
+        try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             let sql = """
@@ -99,7 +99,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
     public func upsertAll(_ metadata: [SongUserMetadata]) throws {
         guard !metadata.isEmpty else { return }
         let formatter = ISO8601DateFormatter()
-        try withConnection { db in
+        try database.withConnection { db in
             // Scan-time persists write the whole catalog; without an explicit transaction
             // SQLite commits (and fsyncs) once per row.
             guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
@@ -202,7 +202,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
     }
 
     private func loadStatusHistory(songID: String?) throws -> [WorkflowStatusChange] {
-        try withConnection { db in
+        try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             var sql = "SELECT song_id, from_status, to_status, changed_at FROM song_status_history"
@@ -358,10 +358,6 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
             guard let cString = sqlite3_column_text(statement, 1) else { continue }
             if String(cString: cString) == name { return true }
         }
-    }
-
-    private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {

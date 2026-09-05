@@ -2,6 +2,24 @@ import XCTest
 @testable import NikoMusicCore
 
 final class SkippedEntrySearchMatcherTests: XCTestCase {
+    func testAccentedLabelKeepsExactAndFuzzyRanking() throws {
+        let entry = SkippedScanEntry(
+            kind: .nonFolderAtRoot,
+            label: "Café Déjà-vu.wav",
+            reason: SkippedScanEntry.standardNonFolderAtRootReason
+        )
+
+        let exact = try XCTUnwrap(SkippedEntrySearchMatcher.search("CAFE", in: [entry]).first)
+        XCTAssertEqual(exact.details.map(\.kind), [.labelPrefix])
+        XCTAssertEqual(exact.score, 90)
+
+        let fuzzy = try XCTUnwrap(SkippedEntrySearchMatcher.search("cfdjv", in: [entry]).first)
+        XCTAssertEqual(fuzzy.details.map(\.kind), [.fuzzyLabel])
+        XCTAssertEqual(fuzzy.score, 12)
+        XCTAssertTrue(SkippedEntrySearchMatcher.search("vjd fc", in: [entry]).isEmpty)
+        XCTAssertTrue(SkippedEntrySearchMatcher.search("cafe missing", in: [entry]).isEmpty)
+    }
+
     func testFindsLooseFileByLabelToken() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

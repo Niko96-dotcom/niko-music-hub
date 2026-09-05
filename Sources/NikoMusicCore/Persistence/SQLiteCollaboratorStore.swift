@@ -16,7 +16,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
     }
 
     public func loadAll() throws -> [Collaborator] {
-        try withConnection { db in
+        try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             let sql = "SELECT id, display_name, updated_at FROM collaborators ORDER BY display_name COLLATE NOCASE;"
@@ -49,7 +49,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
     public func upsert(_ collaborator: Collaborator) throws {
         let formatter = ISO8601DateFormatter()
         let updatedText = formatter.string(from: collaborator.updatedAt)
-        try withConnection { db in
+        try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             let sql = """
@@ -72,7 +72,7 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
     }
 
     public func delete(id: String) throws {
-        try withConnection { db in
+        try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             let sql = "DELETE FROM collaborators WHERE id = ?;"
@@ -99,10 +99,6 @@ public struct SQLiteCollaboratorStore: CollaboratorStoring, @unchecked Sendable 
                 throw StoreError.exec(message(db))
             }
         }
-    }
-
-    private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
-        try database.withConnection(body)
     }
 
     private func message(_ db: OpaquePointer?) -> String {

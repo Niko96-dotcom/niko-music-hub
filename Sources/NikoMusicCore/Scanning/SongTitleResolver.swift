@@ -234,10 +234,6 @@ public struct SongTitleResolver: Sendable {
         return false
     }
 
-    func isStemOnlyTitle(_ title: String) -> Bool {
-        isLikelyStemExportTitle(title)
-    }
-
     private func usablePreviewTitle(from title: String?, preview: PreviewCandidate?) -> String? {
         guard let title else { return nil }
         guard !isLikelyStemExportTitle(title, preview: preview) else { return nil }

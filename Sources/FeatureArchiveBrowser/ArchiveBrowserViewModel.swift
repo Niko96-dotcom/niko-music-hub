@@ -597,10 +597,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    func refreshBPMEstimate(for song: Song) {
-        refreshMixdownAnalysis(for: song)
-    }
-
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {
         mixdownAnalysis.bpmEstimate(for: song, in: mixdownBPMBySongID)
     }
@@ -611,10 +607,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func cprPluginSummary(for song: Song) -> CPRPluginSummary? {
         cprPlugins.summary(for: song, in: cprPluginSummaryByCPRPath)
-    }
-
-    func refreshKeyEstimate(for song: Song) {
-        refreshMixdownAnalysis(for: song)
     }
 
     func refreshMixdownAnalysis(for song: Song) {

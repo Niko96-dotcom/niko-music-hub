@@ -85,43 +85,24 @@ public enum SkippedEntrySearchMatcher {
     ) -> (kind: SkippedEntrySearchMatchKind, score: Int)? {
         guard !token.isEmpty else { return nil }
 
-        let label = normalize(entry.label)
+        let label = MusicSearchMatcher.normalize(entry.label)
         if label.hasPrefix(token) { return (.labelPrefix, 90) }
         if label.contains(token) { return (.labelContains, 80) }
 
-        if isSubsequence(token, in: label) { return (.fuzzyLabel, 12) }
+        if MusicSearchMatcher.isSubsequence(token, in: label) { return (.fuzzyLabel, 12) }
 
         guard !usesStandardNonFolderAtRootReason(entry) else { return nil }
 
-        let reason = normalize(entry.reason)
+        let reason = MusicSearchMatcher.normalize(entry.reason)
         if reason.contains(token) { return (.reasonContains, 55) }
-        if isSubsequence(token, in: reason) { return (.fuzzyReason, 8) }
+        if MusicSearchMatcher.isSubsequence(token, in: reason) { return (.fuzzyReason, 8) }
 
         return nil
     }
 
     private static func usesStandardNonFolderAtRootReason(_ entry: SkippedScanEntry) -> Bool {
         entry.kind == .nonFolderAtRoot
-            && normalize(entry.reason) == normalize(SkippedScanEntry.standardNonFolderAtRootReason)
-    }
-
-    private static func normalize(_ value: String) -> String {
-        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-            .lowercased()
-            .filter { $0.isLetter || $0.isNumber }
-    }
-
-    private static func isSubsequence(_ needle: String, in haystack: String) -> Bool {
-        guard !needle.isEmpty else { return true }
-        var hayIndex = haystack.startIndex
-        for character in needle {
-            guard hayIndex < haystack.endIndex else { return false }
-            while hayIndex < haystack.endIndex, haystack[hayIndex] != character {
-                hayIndex = haystack.index(after: hayIndex)
-            }
-            guard hayIndex < haystack.endIndex else { return false }
-            hayIndex = haystack.index(after: hayIndex)
-        }
-        return true
+            && MusicSearchMatcher.normalize(entry.reason)
+                == MusicSearchMatcher.normalize(SkippedScanEntry.standardNonFolderAtRootReason)
     }
 }
