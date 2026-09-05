@@ -6,6 +6,69 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testMountedBrowserResumesTimedOutCopyAtPersistedDeadlineWithoutAnotherTransfer() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        let provider = FriendsDelayedUploadProvider()
+        let runtime = try fixture.runtime(
+            provider: provider,
+            recoveryPolicy: .init(maximumAutomaticAttempts: 3, initialBackoff: 1, maximumBackoff: 2)
+        )
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first)
+        viewModel.updateWorkflowStatus(for: song, status: .done)
+        let store = try fixture.transferStore()
+        try await waitUntil {
+            (try? store.allTransferRecords().first?.state) == .failedRecoverable
+                && viewModel.projectVaultBusySongIDs.isEmpty
+        }
+        let failed = try XCTUnwrap(try store.allTransferRecords().first)
+        let due = try XCTUnwrap(failed.nextRetryAt)
+        XCTAssertEqual(failed.retryCount, 1)
+        XCTAssertGreaterThan(due, Date())
+        // Snapshot refreshes must not postpone or multiply the pending timer.
+        for _ in 0..<3 { await viewModel.refreshProjectVaultSnapshots() }
+        try await waitUntil {
+            (try? store.record(id: failed.id)?.state) == .archiveVerified
+                && viewModel.projectVaultRecoveryDeadline == nil
+        }
+        let completed = try XCTUnwrap(try store.record(id: failed.id))
+        XCTAssertGreaterThanOrEqual(Date(), due)
+        XCTAssertEqual(try store.allTransferRecords().count, 1)
+        XCTAssertEqual(completed.durability, .syncedToProvider)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.stagingURL.path))
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: completed.destinationURL)
+        let barriers = await provider.barrierCount()
+        XCTAssertEqual(barriers, 3, "One timeout, then staging and final-generation confirmation")
+    }
+
+    func testEmergencyStopCancelsPendingMountedBrowserRecovery() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let provider = FriendsDelayedUploadProvider()
+        let runtime = try fixture.runtime(
+            provider: provider,
+            recoveryPolicy: .init(maximumAutomaticAttempts: 3, initialBackoff: 1, maximumBackoff: 2)
+        )
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        viewModel.updateWorkflowStatus(for: try XCTUnwrap(viewModel.songs.first), status: .done)
+        try await waitUntil { viewModel.projectVaultRecoveryDeadline != nil }
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertNil(viewModel.projectVaultRecoveryDeadline)
+        try await Task.sleep(for: .milliseconds(1200))
+        let records = try fixture.transferStore().allTransferRecords()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.state, .failedRecoverable)
+        let barriers = await provider.barrierCount()
+        XCTAssertEqual(barriers, 1)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+    }
+
     func testArchiveOnlyProjectionRejectsWorkflowMutationAndFSEventDoesNotPromoteIt() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -283,14 +346,19 @@ private final class FriendsWorkflowFixture {
         try settingsStore.saveSettings(settings)
     }
 
-    func runtime() throws -> LiveProjectVaultRuntime {
+    func runtime(
+        provider: (any ArchiveStorageProvider)? = nil,
+        recoveryPolicy: VaultTransferRecoveryPolicy = .production
+    ) throws -> LiveProjectVaultRuntime {
         try LiveProjectVaultRuntime(
             settingsStore: settingsStore,
             transferStore: transferStore(),
             catalogStore: catalogStore(),
             projectOpener: SafeVaultProjectOpener(),
             activityProbe: FriendsClearActivityProbe(),
-            capacityProbe: FriendsSafeCapacityProbe()
+            capacityProbe: FriendsSafeCapacityProbe(),
+            archiveProviderFactory: { root in provider ?? LocalFolderArchiveStorage(root: root) },
+            recoveryPolicy: recoveryPolicy
         )
     }
 
@@ -328,6 +396,23 @@ private final class FriendsWorkflowFixture {
         UserDefaults.standard.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
     }
+}
+
+private actor FriendsDelayedUploadProvider: ArchiveStorageProvider {
+    private var barriers = 0
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: true, supportsMaterialization: false, supportsEviction: false)
+    }
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        barriers += 1
+        if barriers == 1 { throw FileProviderArchiveStorageError.durabilityUnavailable }
+        return .syncedToProvider
+    }
+    func materialize(_ location: URL) async throws {}
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+    func barrierCount() -> Int { barriers }
 }
 
 private struct FriendsSafeCapacityProbe: ProjectVaultCapacityProbing {

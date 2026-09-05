@@ -30,7 +30,7 @@ enum PreviewFilenameSemantics {
     static let taggedStemTokens: Set<String> = [
         "bass", "sub", "subbass",
         "guitar", "guitars",
-        "key", "keys", "piano",
+        "key", "keys", "keyboard", "keyboards", "piano",
         "synth", "synths", "synthesizer",
         "fx", "sfx", "effect", "effects",
         "pad", "pads",
@@ -46,7 +46,7 @@ enum PreviewFilenameSemantics {
     }
 
     static func isPartialExport(in fileName: String) -> Bool {
-        let allTokens = tokens(in: fileName)
+        let allTokens = roleTokens(in: fileName)
         return isPartialExport(allTokens)
             || !taggedPartialExportTokens(in: fileName).isEmpty
     }
@@ -55,7 +55,7 @@ enum PreviewFilenameSemantics {
     /// The order deliberately preserves the more descriptive historic roles for
     /// vocals and instrumentals before falling back to the generic stem role.
     static func partialExportRole(in fileName: String) -> PreviewDetectedRole? {
-        let allTokens = tokens(in: fileName)
+        let allTokens = roleTokens(in: fileName)
         if containsAny(vocalStemTokens, in: allTokens) {
             return .acapella
         }
@@ -88,6 +88,13 @@ enum PreviewFilenameSemantics {
         }
 
         return tagTokens.intersection(taggedStemTokens)
+    }
+
+    static func roleTokens(in fileName: String) -> Set<String> {
+        // Song words such as "Drums" or "Vocal" are not export labels when
+        // they belong to a structured artist/title. Only inspect its suffix.
+        guard let identity = PreviewSongIdentity.parse(fileName) else { return tokens(in: fileName) }
+        return tokens(in: identity.annotations + ".wav")
     }
 
     static func tokens(in fileName: String) -> Set<String> {

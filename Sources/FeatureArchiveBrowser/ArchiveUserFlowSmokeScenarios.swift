@@ -108,7 +108,7 @@ enum ArchiveUserFlowSmokeScenarios {
         tooShortClipSubstring: "Lab Song short clip.wav",
         scanCalloutSubstring: "too short",
         selectedHeaderSubstring: "Lab Song v3 mix.wav",
-        tiebreakLegendSubstring: "CPR version anchor",
+        tiebreakLegendSubstring: "delivery family",
         mainPreviewSummarySubstrings: ["v3", "wav", "Lab Song v3 mix.wav"],
         rankedPreviewLineSubstring: "v3"
     )

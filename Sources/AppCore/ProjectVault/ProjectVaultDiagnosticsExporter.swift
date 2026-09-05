@@ -25,6 +25,7 @@ public enum ProjectVaultDiagnosticsExporter {
             "last_restore_drill=\(vault.lastRestoreDrillAt.map(iso.string(from:)) ?? "never")",
             "inactivity_days=\(vault.inactivityDays)",
             "minimum_free_space_gib=\(vault.minimumFreeSpaceGiB)",
+            "transfer_free_space_reserve_gib=\(vault.transferFreeSpaceReserveGiB)",
             "keep_previous_generation_days=\(vault.keepPreviousGenerationDays)",
             "keep_local_projects=\(vault.keepLocalProjectIDs.count)",
             "note=No absolute music paths or bookmark data are included."

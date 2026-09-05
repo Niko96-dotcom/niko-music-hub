@@ -30,8 +30,16 @@ public struct PreviewConfidenceRanker: Sendable {
         _ candidates: [PreviewCandidate],
         projectContext: PreviewRankingProjectContext? = nil
     ) -> [PreviewCandidate] {
-        candidates
-            .map { scored($0, projectContext: projectContext) }
+        var scoredCandidates = candidates.map { scored($0, projectContext: projectContext) }
+        var familyDates: [String: Date] = [:]
+        for item in scoredCandidates {
+            guard let family = item.deliveryFamily else { continue }
+            familyDates[family] = max(familyDates[family] ?? .distantPast, item.candidate.modifiedAt)
+        }
+        for index in scoredCandidates.indices {
+            scoredCandidates[index].candidate.namedDeliveryModifiedAt = scoredCandidates[index].deliveryFamily.flatMap { familyDates[$0] }
+        }
+        return scoredCandidates
             .sorted { compareCandidates($0, $1, projectContext: projectContext) }
             .map(\.candidate)
     }
@@ -45,28 +53,35 @@ public struct PreviewConfidenceRanker: Sendable {
         if winner.confidenceScore != runnerUp.confidenceScore {
             return .score
         }
-        let wm = PreviewProductionMaturity.detect(from: winner.fileName)
-        let rm = PreviewProductionMaturity.detect(from: runnerUp.fileName)
+        let wm = Self.rankingMaturity(for: winner.fileName)
+        let rm = Self.rankingMaturity(for: runnerUp.fileName)
         if wm != rm { return .productionMaturity }
+        if winner.namedDeliveryModifiedAt != runnerUp.namedDeliveryModifiedAt { return .recency }
         let lv = winner.detectedVersionNumber ?? 0
         let rv = runnerUp.detectedVersionNumber ?? 0
         if lv != rv { return .version }
+        if winner.modifiedAt != runnerUp.modifiedAt { return .recency }
         let le = Self.extensionPreference[winner.fileExtension] ?? 0
         let re = Self.extensionPreference[runnerUp.fileExtension] ?? 0
         if le != re { return .extensionFormat }
         let ld = winner.durationSeconds ?? 0
         let rd = runnerUp.durationSeconds ?? 0
         if ld != rd { return .duration }
-        if winner.modifiedAt != runnerUp.modifiedAt { return .recency }
         return .filename
+    }
+
+    private static func rankingMaturity(for fileName: String) -> PreviewProductionMaturity {
+        let maturity = PreviewProductionMaturity.detect(from: fileName)
+        return PreviewSongIdentity.parse(fileName) != nil && maturity != .sketch ? .demo : maturity
     }
 
     /// Facts used by scoring and tie-breaks live only for this ranking operation.
     private struct RankedCandidate {
-        let candidate: PreviewCandidate
+        var candidate: PreviewCandidate
         let maturity: PreviewProductionMaturity
         let version: Int?
         let titleMatches: Int
+        let deliveryFamily: String?
     }
 
     private func compareCandidates(
@@ -82,6 +97,9 @@ public struct PreviewConfidenceRanker: Sendable {
         let lm = left.maturity
         let rm = right.maturity
         if lm != rm { return lm > rm }
+        let leftFamilyDate = lhs.namedDeliveryModifiedAt ?? .distantPast
+        let rightFamilyDate = rhs.namedDeliveryModifiedAt ?? .distantPast
+        if leftFamilyDate != rightFamilyDate { return leftFamilyDate > rightFamilyDate }
         let lv = left.version ?? 0
         let rv = right.version ?? 0
         if lv != rv { return lv > rv }
@@ -93,14 +111,16 @@ public struct PreviewConfidenceRanker: Sendable {
             let rGap = abs(rv - anchor)
             if lGap != rGap { return lGap < rGap }
         }
+        if lhs.modifiedAt != rhs.modifiedAt { return lhs.modifiedAt > rhs.modifiedAt }
         let le = Self.extensionPreference[lhs.fileExtension] ?? 0
         let re = Self.extensionPreference[rhs.fileExtension] ?? 0
         if le != re { return le > re }
         let ld = lhs.durationSeconds ?? 0
         let rd = rhs.durationSeconds ?? 0
         if ld != rd { return ld > rd }
-        if lhs.modifiedAt != rhs.modifiedAt { return lhs.modifiedAt > rhs.modifiedAt }
-        return lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
+        let nameOrder = lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName)
+        if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+        return lhs.id < rhs.id
     }
 
     private func titleTokenMatchCount(
@@ -108,8 +128,8 @@ public struct PreviewConfidenceRanker: Sendable {
         context: PreviewRankingProjectContext?
     ) -> Int {
         guard let context else { return 0 }
-        let lower = fileName.lowercased()
-        return context.titleTokens.filter { lower.contains($0) }.count
+        let tokens = PreviewFilenameSemantics.tokens(in: fileName)
+        return min(3, context.titleTokens.filter { tokens.contains($0) }.count)
     }
 
     private func scored(
@@ -123,8 +143,24 @@ public struct PreviewConfidenceRanker: Sendable {
         let parsedVersion = PreviewFilenameParser.effectiveRankVersion(from: candidate.fileName)
         let previewVersion = parsedVersion ?? candidate.detectedVersionNumber
         let tokenHits = titleTokenMatchCount(candidate.fileName, context: projectContext)
-        if maturity != .none {
+        let identity = PreviewSongIdentity.parse(candidate.fileName)
+        if identity != nil, !PreviewFilenameSemantics.isPartialExport(in: candidate.fileName) {
+            score += 55
+            reasons.append("filename:artist-title")
+        }
+        if PreviewSongIdentity.isTechnicalExport(candidate.fileName) {
+            score -= 65
+            reasons.append("filename:negative-technical-export")
+        }
+        if identity != nil, maturity != .sketch {
+            // Delivery labels are not a universal chronology: a newer named demo
+            // can supersede a prod/mix, and a delivery may have no label at all.
+            score += Double(PreviewProductionMaturity.demo.rawValue)
+            reasons.append("filename:named-delivery")
+        } else if maturity != .none {
             score += Double(maturity.rawValue)
+        }
+        if maturity != .none {
             reasons.append("maturity:\(maturity.reasonToken)")
         }
 
@@ -148,7 +184,7 @@ public struct PreviewConfidenceRanker: Sendable {
             score += 25
             reasons.append("folder:mixdown")
         case .root:
-            score += 10
+            score += identity == nil ? 10 : 25
             reasons.append("folder:root")
         case .stems:
             score -= 15
@@ -159,7 +195,7 @@ public struct PreviewConfidenceRanker: Sendable {
         }
 
         let lower = candidate.fileName.lowercased()
-        let filenameTokens = PreviewFilenameSemantics.tokens(in: candidate.fileName)
+        let filenameTokens = PreviewFilenameSemantics.roleTokens(in: candidate.fileName)
         if maturity == .none {
             if lower.contains("mixdown") || lower.contains("mix") || lower.contains("master") || lower.contains("bounce") {
                 score += 15
@@ -188,9 +224,12 @@ public struct PreviewConfidenceRanker: Sendable {
             reasons.append("extension:\(candidate.fileExtension)")
         }
 
+        if candidate.durationSeconds == nil {
+            score += 5 // Unknown duration is neutral relative to a plausible song.
+        }
         if let duration = candidate.durationSeconds {
             if duration < Self.minimumPlausibleDuration {
-                score -= 20
+                score -= 120
                 reasons.append("duration:too-short")
             } else if duration <= Self.maximumPlausibleDuration {
                 score += 5
@@ -202,14 +241,14 @@ public struct PreviewConfidenceRanker: Sendable {
 
         if let projectContext, let anchor = projectContext.anchorCPRVersion, anchor >= 1 {
             let isExplicitPreV1Preview = parsedVersion == 0
-            if maturity <= .demo, isExplicitPreV1Preview {
+            if identity == nil, maturity <= .demo, isExplicitPreV1Preview {
                 score -= 40
                 reasons.append("cpr-anchor:demo-below-project")
-            } else if maturity <= .sessionBounce {
+            } else if identity == nil, maturity <= .sessionBounce {
                 score -= 14
                 reasons.append("cpr-anchor:early-bounce-below-project")
             }
-            if let previewVersion {
+            if identity == nil, let previewVersion {
                 if previewVersion == anchor {
                     score += 32
                     reasons.append("cpr-anchor:version-match")
@@ -217,7 +256,7 @@ public struct PreviewConfidenceRanker: Sendable {
                     score -= Double(anchor - previewVersion) * 12
                     reasons.append("cpr-anchor:version-behind-v\(anchor)")
                 }
-            } else if parsedVersion == 0 {
+            } else if identity == nil, parsedVersion == 0 {
                 score -= 30
                 reasons.append("cpr-anchor:pre-v1-behind-project")
             }
@@ -232,6 +271,13 @@ public struct PreviewConfidenceRanker: Sendable {
         var updated = candidate
         updated.confidenceScore = score
         updated.confidenceReasons = reasons
-        return RankedCandidate(candidate: updated, maturity: maturity, version: previewVersion, titleMatches: tokenHits)
+        let isDelivery = identity != nil && !PreviewFilenameSemantics.isPartialExport(in: candidate.fileName)
+            && !PreviewSongIdentity.isTechnicalExport(candidate.fileName)
+            && candidate.folderRole != .stems && (candidate.durationSeconds ?? 30) >= 30
+        return RankedCandidate(
+            candidate: updated, maturity: identity != nil && maturity != .sketch ? .demo : maturity,
+            version: previewVersion, titleMatches: tokenHits,
+            deliveryFamily: isDelivery ? identity?.displayTitle.lowercased() : nil
+        )
     }
 }

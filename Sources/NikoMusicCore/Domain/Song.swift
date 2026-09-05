@@ -4,7 +4,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public let id: String
     public let folderPath: URL
     public let originalFolderName: String
-    public let displayTitle: String
+    public internal(set) var displayTitle: String
     public var projectVersions: [ProjectVersion]
     public var previewCandidates: [PreviewCandidate]
     public var scanWarnings: [String]

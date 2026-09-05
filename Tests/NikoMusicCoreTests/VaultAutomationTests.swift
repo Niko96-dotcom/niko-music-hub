@@ -33,6 +33,29 @@ final class VaultAutomationTests: XCTestCase {
         )
     }
 
+    func testPressureTriggerAndCopyReserveAreIndependentOnSameVolume() {
+        let evaluator = VaultAutomationEligibilityEvaluator()
+        let policy = VaultAutomationPolicy(isVaultEnabled: true, isAutomaticArchivingEnabled: true)
+        let gib: Int64 = 1_073_741_824
+        for trigger in [VaultAutomationCandidate.Trigger.policy, .workflowDone] {
+            let roomy = VaultAutomationCandidate(
+                projectID: candidateID, sourceURL: URL(fileURLWithPath: "/tmp/project"),
+                isKeepLocal: false, lastActivityAt: now,
+                availableCapacityBytes: 117 * gib, archiveAvailableCapacityBytes: 117 * gib,
+                projectedArchiveBytes: 4 * gib, trigger: trigger
+            )
+            XCTAssertEqual(evaluator.evaluate(roomy, policy: policy, now: now),
+                           .eligible(trigger == .workflowDone ? .inactivity : .diskPressure))
+            let tight = VaultAutomationCandidate(
+                projectID: candidateID, sourceURL: roomy.sourceURL,
+                isKeepLocal: false, lastActivityAt: now,
+                availableCapacityBytes: 8 * gib, archiveAvailableCapacityBytes: 8 * gib,
+                projectedArchiveBytes: 4 * gib, trigger: trigger
+            )
+            XCTAssertEqual(evaluator.evaluate(tight, policy: policy, now: now), .postponed(.insufficientArchiveCapacity))
+        }
+    }
+
     func testWorkflowDonePostponesWhenProjectedCopyWouldBreachFreeSpaceFloor() {
         let evaluator = VaultAutomationEligibilityEvaluator()
         let bytesPerGiB: Int64 = 1_073_741_824
@@ -44,7 +67,8 @@ final class VaultAutomationTests: XCTestCase {
             isVaultEnabled: true,
             isAutomaticArchivingEnabled: true,
             inactivityDays: 30,
-            minimumFreeSpaceGiB: 60
+            minimumFreeSpaceGiB: 120,
+            transferFreeSpaceReserveGiB: 60
         )
         let candidate = VaultAutomationCandidate(
             projectID: candidateID,

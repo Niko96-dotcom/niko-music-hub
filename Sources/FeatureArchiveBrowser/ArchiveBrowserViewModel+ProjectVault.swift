@@ -418,8 +418,10 @@ extension ArchiveBrowserViewModel {
             rebuildProjectVaultCatalog()
             rebuildProjectVaultPresentationCache()
             enqueueDoneVaultProjectsIfNeeded()
+            await scheduleProjectVaultRecovery()
             return true
         } catch ProjectVaultRuntimeError.unavailable {
+            cancelProjectVaultRecovery()
             projectVaultSnapshots = []
             projectVaultSnapshotsByPath.removeAll()
             archivedProjectCount = 0
@@ -427,8 +429,41 @@ extension ArchiveBrowserViewModel {
             rebuildProjectVaultPresentationCache()
             return false
         } catch {
+            cancelProjectVaultRecovery()
             diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
             return false
+        }
+    }
+
+    private func cancelProjectVaultRecovery() {
+        projectVaultRecoveryTask?.cancel()
+        projectVaultRecoveryTask = nil
+        projectVaultRecoveryDeadline = nil
+    }
+
+    private func scheduleProjectVaultRecovery() async {
+        guard let projectVaultRuntime,
+              let due = try? await projectVaultRuntime.nextAutomaticRecoveryDate() else {
+            cancelProjectVaultRecovery()
+            return
+        }
+        // A busy mutation lease or unavailable provider can leave the due date
+        // unchanged. Back off locally instead of spinning on an overdue record.
+        let deadline = max(due, projectVaultLastRecoveryAttemptAt?.addingTimeInterval(30) ?? due)
+        guard projectVaultRecoveryDeadline != deadline else { return }
+        cancelProjectVaultRecovery()
+        projectVaultRecoveryDeadline = deadline
+        projectVaultRecoveryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+            } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.projectVaultLastRecoveryAttemptAt = Date()
+            await projectVaultRuntime.recoverAtLaunch()
+            guard !Task.isCancelled else { return }
+            self.projectVaultRecoveryTask = nil
+            self.projectVaultRecoveryDeadline = nil
+            await self.refreshProjectVaultSnapshots()
         }
     }
 

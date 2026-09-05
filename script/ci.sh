@@ -7,6 +7,10 @@ if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]
   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
 
+# Git does not preserve the equal modification times used by ranking fixtures.
+echo "== generate deterministic fixtures =="
+./script/fixtures/generate_cubase_archive_fixtures.sh
+
 echo "== swift build =="
 swift build
 

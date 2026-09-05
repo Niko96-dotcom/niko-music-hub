@@ -5,6 +5,41 @@ import NikoMusicCore
 import XCTest
 
 final class LiveProjectVaultRuntimeTests: XCTestCase {
+    func testAutomaticRecoveryDeadlineHonorsBackoffBudgetAndSafetyGates() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: false)
+        let store = try fixture.transferStore()
+        var record = try fixture.failedDurabilityRecord()
+        let due = Date().addingTimeInterval(3600)
+        record.nextRetryAt = due
+        try store.save(record)
+        let runtime = try fixture.runtime()
+        var next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertEqual(next, due)
+        await runtime.recoverAtLaunch()
+        XCTAssertEqual(try store.record(id: record.id)?.state, .failedRecoverable)
+
+        record.retryCount = VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts
+        try store.save(record)
+        next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next)
+
+        record.retryCount = 1
+        record.error = VaultTransferError(origin: .removingActiveCopy, reason: .unknown, message: "review")
+        try store.save(record)
+        next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next)
+
+        record.error = VaultTransferError(origin: .awaitingProviderDurability, reason: .providerUnsynced, message: "pending")
+        try store.save(record)
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+    }
+
     func testMutationFileLeaseIsNonblockingAcrossProcessesAndAutoReleasesOnExit() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("project-vault-cross-process-\(UUID().uuidString)", isDirectory: true)
@@ -502,13 +537,67 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertEqual(availability, .local, "snapshots must be read-only or fail busy while restore owns the mutation lease")
     }
 
+    func testDoneCopiesAndVerifiesBelowPressureThresholdWithRoomForTransferReserve() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let settings = try fixture.settingsStore.loadSettings()
+        XCTAssertEqual(settings.vault.minimumFreeSpaceGiB, 120)
+        XCTAssertEqual(settings.vault.transferFreeSpaceReserveGiB, 5)
+        let gib: Int64 = 1_073_741_824
+        let runtime = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 117 * gib,
+            archiveAvailableCapacityBytes: 117 * gib,
+            projectedArchiveBytes: 4 * gib
+        ))
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let result = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        let transfer = try XCTUnwrap(result.transfer)
+        XCTAssertEqual(transfer.state, .archiveVerified)
+        let manifest = try XCTUnwrap(transfer.manifest)
+        try VaultManifestBuilder().verify(manifest, at: transfer.destinationURL)
+        try VaultManifestBuilder().verify(before, at: fixture.project)
+    }
+
+    func testDoneCanRetryExistingCatalogEntryAfterCapacityPostponement() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let gib: Int64 = 1_073_741_824
+        let blocked = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 7 * gib,
+            archiveAvailableCapacityBytes: 7 * gib,
+            projectedArchiveBytes: 4 * gib
+        ))
+        do {
+            _ = try await blocked.archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("expected capacity postponement")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .activityPostponed(.insufficientArchiveCapacity))
+        }
+        let prior = try XCTUnwrap(fixture.catalogStore().loadEntries().first)
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        let ready = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 117 * gib,
+            archiveAvailableCapacityBytes: 117 * gib,
+            projectedArchiveBytes: 4 * gib
+        ))
+        let result = try await ready.archive(song: fixture.song, trigger: .workflowDone)
+        let transfer = try XCTUnwrap(result.transfer)
+        XCTAssertEqual(transfer.state, .archiveVerified)
+        XCTAssertEqual(transfer.projectID, prior.record.id)
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().count, 1)
+        try VaultManifestBuilder().verify(try XCTUnwrap(transfer.manifest), at: transfer.destinationURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
     func testDoneUsesProjectedHeadroomBeforeCreatingTransfer() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(
             stage: .privateBeta,
             backupConfirmed: false,
-            minimumFreeSpaceGiB: 60
+            transferFreeSpaceReserveGiB: 60
         )
         let bytesPerGiB: Int64 = 1_073_741_824
         let runtime = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
@@ -538,12 +627,12 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(
             stage: .privateBeta,
             backupConfirmed: false,
-            minimumFreeSpaceGiB: 1
+            transferFreeSpaceReserveGiB: 1
         )
         let settingsStore = fixture.settingsStore
         let provider = SettingsFloorRaisingProvider {
             try settingsStore.updateSettings {
-                $0.vault.minimumFreeSpaceGiB = 80
+                $0.vault.transferFreeSpaceReserveGiB = 80
             }
         }
         let bytesPerGiB: Int64 = 1_073_741_824
@@ -566,7 +655,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.minimumFreeSpaceGiB, 80)
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.transferFreeSpaceReserveGiB, 80)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         let records = try fixture.transferStore().allTransferRecords()
         XCTAssertEqual(records.count, 1)
@@ -580,7 +669,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(
             stage: .privateBeta,
             backupConfirmed: false,
-            minimumFreeSpaceGiB: 1
+            transferFreeSpaceReserveGiB: 1
         )
         let probe = BlockingProjectionCapacityProbe(snapshot: .safe, blockOnProjectionCall: 2)
         let runtime = try fixture.runtime(capacityProbe: probe)
@@ -590,7 +679,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         }
         await probe.waitUntilBlocked()
         try fixture.settingsStore.updateSettings {
-            $0.vault.minimumFreeSpaceGiB = 500
+            $0.vault.transferFreeSpaceReserveGiB = 500
         }
         probe.release()
 
@@ -616,7 +705,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(
             stage: .privateBeta,
             backupConfirmed: false,
-            minimumFreeSpaceGiB: 1
+            transferFreeSpaceReserveGiB: 1
         )
         let provider = BlockingRestorePrepareProvider()
         let runtime = try fixture.runtime(
@@ -631,7 +720,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         }
         await provider.waitUntilPrepareEntered()
         try fixture.settingsStore.updateSettings {
-            $0.vault.minimumFreeSpaceGiB = 500
+            $0.vault.transferFreeSpaceReserveGiB = 500
         }
         await provider.releasePrepare()
 
@@ -1076,7 +1165,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(
             stage: .friends,
             backupConfirmed: true,
-            minimumFreeSpaceGiB: 1
+            transferFreeSpaceReserveGiB: 1
         )
         let archived = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
         let transfer = try XCTUnwrap(archived.transfer)
@@ -1919,7 +2008,7 @@ private extension LiveProjectVaultRuntimeTests {
         func saveSettings(
             stage: VaultSettings.RolloutStage,
             backupConfirmed: Bool,
-            minimumFreeSpaceGiB: Int = 120,
+            transferFreeSpaceReserveGiB: Int = 5,
             emergencyStop: Bool = false
         ) throws {
             var settings = AppSettings.default
@@ -1932,7 +2021,7 @@ private extension LiveProjectVaultRuntimeTests {
                 activeRootID: activeID,
                 archiveRootID: archiveID,
                 automaticArchiving: true,
-                minimumFreeSpaceGiB: minimumFreeSpaceGiB,
+                transferFreeSpaceReserveGiB: transferFreeSpaceReserveGiB,
                 rolloutStage: stage,
                 automationEmergencyStop: emergencyStop,
                 independentBackupConfirmed: backupConfirmed

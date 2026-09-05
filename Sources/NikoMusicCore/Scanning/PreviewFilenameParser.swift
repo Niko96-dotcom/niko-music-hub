@@ -3,12 +3,14 @@ import Foundation
 enum PreviewFilenameParser {
     static func parseVersionNumber(from fileName: String) -> Int? {
         let stem = (fileName as NSString).deletingPathExtension
-        let parts = stem.split { $0 == " " || $0 == "_" || $0 == "-" }.map(String.init)
-        for part in parts.reversed() {
-            let digits = part.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-            if let value = Int(digits), value > 0 {
-                return value
-            }
+        // Explicit versions win over take counters, dates and numbers in credits.
+        let uncredited = stem.components(separatedBy: "(").first ?? stem
+        let pattern = #"(?i)(?:^|[\s_-])v(?:ersion)?\s*(\d+)(?:\.\d+)*(?=$|[\s_()\[\]-])"#
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.matches(in: uncredited, range: NSRange(uncredited.startIndex..., in: uncredited)).last,
+           let range = Range(match.range(at: 1), in: uncredited),
+           let value = Int(uncredited[range]) {
+            return value > 0 ? value : nil
         }
         return nil
     }

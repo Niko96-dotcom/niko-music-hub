@@ -12,8 +12,20 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertTrue(vault.automaticArchiving)
         XCTAssertEqual(vault.inactivityDays, 30)
         XCTAssertEqual(vault.minimumFreeSpaceGiB, 120)
+        XCTAssertEqual(vault.transferFreeSpaceReserveGiB, 5)
         XCTAssertEqual(vault.keepPreviousGenerationDays, 30)
         XCTAssertTrue(vault.launchAtLogin)
+    }
+
+    func testLegacyPressureThresholdDecodesIndependentlyOfTransferReserve() throws {
+        let legacy = Data(#"{"isEnabled":true,"minimumFreeSpaceGiB":120}"#.utf8)
+        var settings = try JSONDecoder().decode(VaultSettings.self, from: legacy)
+        XCTAssertEqual(settings.minimumFreeSpaceGiB, 120)
+        XCTAssertEqual(settings.transferFreeSpaceReserveGiB, 5)
+        settings.transferFreeSpaceReserveGiB = 12
+        let restored = try JSONDecoder().decode(VaultSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(restored.minimumFreeSpaceGiB, 120)
+        XCTAssertEqual(restored.transferFreeSpaceReserveGiB, 12)
     }
 
     func testLegacyRootsMigrateToScanOnlyAndPersistTypedIdentity() throws {

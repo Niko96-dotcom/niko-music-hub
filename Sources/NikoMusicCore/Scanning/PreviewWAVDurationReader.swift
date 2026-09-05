@@ -1,37 +1,60 @@
+import AVFoundation
 import Foundation
 
+/// Reads metadata only; never decodes samples during an archive scan.
 enum PreviewWAVDurationReader {
     static func shouldReadDuration(for fileURL: URL) -> Bool {
-        guard fileURL.pathExtension.lowercased() == "wav" else { return false }
-        let path = fileURL.standardizedFileURL.path
+        let path = fileURL.resolvingSymlinksInPath().standardizedFileURL.path
         return !path.contains("/Library/CloudStorage/")
     }
 
     static func durationSeconds(for fileURL: URL) -> Double? {
-        guard fileURL.pathExtension.lowercased() == "wav" else { return nil }
+        if fileURL.pathExtension.lowercased() == "wav" {
+            return wavDuration(for: fileURL)
+        }
+        guard let file = try? AVAudioFile(forReading: fileURL),
+              file.length > 0, file.fileFormat.sampleRate > 0 else { return nil }
+        return Double(file.length) / file.fileFormat.sampleRate
+    }
+
+    private static func wavDuration(for fileURL: URL) -> Double? {
         guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
         defer { try? handle.close() }
-
-        guard let header = try? handle.read(upToCount: 44), header.count >= 44 else { return nil }
-        guard String(data: header[0..<4], encoding: .ascii) == "RIFF",
-              String(data: header[8..<12], encoding: .ascii) == "WAVE" else {
-            return nil
+        guard let header = try? handle.read(upToCount: 12), header.count == 12,
+              String(data: header[0..<4], encoding: .ascii) == "RIFF",
+              String(data: header[8..<12], encoding: .ascii) == "WAVE" else { return nil }
+        let riffEnd = UInt64(uint32(header, at: 4)) + 8
+        var offset: UInt64 = 12
+        var bytesPerSecond: UInt32?
+        var dataSize: UInt32?
+        // DAW WAVs can contain JUNK, bext, LIST and extended fmt chunks. Seek
+        // past their payloads, including RIFF's odd-byte padding, with a bound
+        // on work for malformed files. Never assume audio starts at byte 44.
+        for _ in 0..<256 {
+            guard offset + 8 <= riffEnd,
+                  (try? handle.seek(toOffset: offset)) != nil,
+                  let chunk = try? handle.read(upToCount: 8), chunk.count == 8 else { return nil }
+            let size = uint32(chunk, at: 4)
+            guard offset + 8 + UInt64(size) <= riffEnd else { return nil }
+            let tag = String(data: chunk[0..<4], encoding: .ascii)
+            if tag == "fmt " {
+                guard size >= 16, let format = try? handle.read(upToCount: 16), format.count == 16 else { return nil }
+                let encoding = UInt16(format[0]) | UInt16(format[1]) << 8
+                guard [1, 3, 0xfffe].contains(encoding) else { return nil }
+                bytesPerSecond = uint32(format, at: 8)
+            } else if tag == "data" {
+                dataSize = size
+            }
+            if let rate = bytesPerSecond, rate > 0, let size = dataSize {
+                return Double(size) / Double(rate)
+            }
+            offset += 8 + UInt64(size) + UInt64(size % 2)
         }
+        return nil
+    }
 
-        let channels = Int(header[22]) | (Int(header[23]) << 8)
-        let sampleRate = UInt32(header[24])
-            | (UInt32(header[25]) << 8)
-            | (UInt32(header[26]) << 16)
-            | (UInt32(header[27]) << 24)
-        let bitsPerSample = Int(header[34]) | (Int(header[35]) << 8)
-        let dataSize = UInt32(header[40])
-            | (UInt32(header[41]) << 8)
-            | (UInt32(header[42]) << 16)
-            | (UInt32(header[43]) << 24)
-
-        guard channels > 0, sampleRate > 0, bitsPerSample > 0 else { return nil }
-        let bytesPerSecond = Double(sampleRate) * Double(channels) * Double(bitsPerSample) / 8
-        guard bytesPerSecond > 0 else { return nil }
-        return Double(dataSize) / bytesPerSecond
+    private static func uint32(_ data: Data, at offset: Int) -> UInt32 {
+        UInt32(data[offset]) | UInt32(data[offset + 1]) << 8
+            | UInt32(data[offset + 2]) << 16 | UInt32(data[offset + 3]) << 24
     }
 }

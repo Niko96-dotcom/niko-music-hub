@@ -419,9 +419,12 @@ public protocol ProjectVaultOperating: Sendable {
     func retryRestore(id: UUID) async throws -> VaultRestoreRecord
     func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot
     func recoverAtLaunch() async
+    func nextAutomaticRecoveryDate() async throws -> Date?
 }
 
 public extension ProjectVaultOperating {
+    func nextAutomaticRecoveryDate() async throws -> Date? { nil }
+
     func retryRestore(id: UUID) async throws -> VaultRestoreRecord {
         throw ProjectVaultRuntimeError.unavailable
     }
@@ -666,7 +669,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 isVaultEnabled: settings.vault.isEnabled,
                 isAutomaticArchivingEnabled: settings.vault.automaticArchiving,
                 inactivityDays: settings.vault.inactivityDays,
-                minimumFreeSpaceGiB: settings.vault.minimumFreeSpaceGiB
+                minimumFreeSpaceGiB: settings.vault.minimumFreeSpaceGiB,
+                transferFreeSpaceReserveGiB: settings.vault.transferFreeSpaceReserveGiB
             )
             let capacity = try? capacityProbe.snapshot(
                 sourceURL: song.folderPath,
@@ -794,6 +798,20 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         }
         try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
         return ProjectVaultRuntimeSnapshot(record: snapshot.record, transfer: retried)
+    }
+
+    /// The persisted backoff is also used by the mounted browser to wake recovery.
+    /// Keep eligibility here so UI timers cannot bypass the engine's retry budget.
+    public func nextAutomaticRecoveryDate() async throws -> Date? {
+        _ = try configuration()
+        guard !(try settingsStore.loadSettings()).vault.automationEmergencyStop else { return nil }
+        return try transferStore.recoverableRecords().compactMap { record -> Date? in
+            guard record.state == .failedRecoverable,
+                  record.retryCount < recoveryPolicy.maximumAutomaticAttempts,
+                  let origin = record.error?.origin,
+                  VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else { return nil }
+            return record.nextRetryAt ?? now()
+        }.min()
     }
 
     public func recoverAtLaunch() async {
@@ -928,7 +946,12 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             markUnobservedMissing: false
         )
         var updated = reconciliation
-        guard let index = updated.entries.firstIndex(where: { $0.record.locations.contains(location) }) else {
+        // Reconciliation refreshes lastSeenAt on an existing location. Resolve
+        // the observation's returned identity instead of comparing the entire
+        // location value (including its now-stale timestamp).
+        let observationKey = "root://\(location.rootID.uuidString.lowercased())/\(location.relativePath)"
+        guard let projectID = updated.metadataMigrations[observationKey],
+              let index = updated.entries.firstIndex(where: { $0.record.id == projectID }) else {
             throw ProjectVaultRuntimeError.unavailable
         }
         updated.entries[index].record.workflowState = song.workflowStatus
@@ -1119,7 +1142,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             if let reason = VaultArchiveWriteAdmissionEvaluator().postponement(
                 availableCapacityBytes: availableCapacityBytes,
                 projectedCopyBytes: projectedCopyBytes,
-                minimumFreeSpaceGiB: currentSettings.vault.minimumFreeSpaceGiB
+                minimumFreeSpaceGiB: currentSettings.vault.transferFreeSpaceReserveGiB
             ) {
                 throw VaultWriteAdmissionError.postponed(reason)
             }

@@ -5,6 +5,7 @@ public struct VaultAutomationPolicy: Equatable, Sendable {
     public var isAutomaticArchivingEnabled: Bool
     public var inactivityDays: Int
     public var minimumFreeSpaceGiB: Int
+    public var transferFreeSpaceReserveGiB: Int
     public var writeQuietPeriod: TimeInterval
 
     public init(
@@ -12,12 +13,14 @@ public struct VaultAutomationPolicy: Equatable, Sendable {
         isAutomaticArchivingEnabled: Bool,
         inactivityDays: Int = 30,
         minimumFreeSpaceGiB: Int = 120,
+        transferFreeSpaceReserveGiB: Int = 5,
         writeQuietPeriod: TimeInterval = 10 * 60
     ) {
         self.isVaultEnabled = isVaultEnabled
         self.isAutomaticArchivingEnabled = isAutomaticArchivingEnabled
         self.inactivityDays = inactivityDays
         self.minimumFreeSpaceGiB = minimumFreeSpaceGiB
+        self.transferFreeSpaceReserveGiB = transferFreeSpaceReserveGiB
         self.writeQuietPeriod = writeQuietPeriod
     }
 }
@@ -135,13 +138,15 @@ public struct VaultAutomationEligibilityEvaluator: Sendable {
         guard policy.isVaultEnabled else { return .postponed(.vaultDisabled) }
         guard policy.isAutomaticArchivingEnabled else { return .postponed(.automaticArchivingDisabled) }
         guard !candidate.isKeepLocal else { return .postponed(.keepLocal) }
-        guard policy.inactivityDays > 0, policy.minimumFreeSpaceGiB >= 0, policy.writeQuietPeriod >= 0 else {
+        guard policy.inactivityDays > 0, policy.minimumFreeSpaceGiB >= 0,
+              Int64(policy.minimumFreeSpaceGiB) <= Int64.max / 1_073_741_824,
+              policy.writeQuietPeriod >= 0 else {
             return .postponed(.invalidPolicy)
         }
         if let postponement = VaultArchiveWriteAdmissionEvaluator().postponement(
             availableCapacityBytes: candidate.archiveAvailableCapacityBytes,
             projectedCopyBytes: candidate.projectedArchiveBytes,
-            minimumFreeSpaceGiB: policy.minimumFreeSpaceGiB
+            minimumFreeSpaceGiB: policy.transferFreeSpaceReserveGiB
         ) {
             return .postponed(postponement)
         }

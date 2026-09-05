@@ -32,7 +32,11 @@ struct ProjectVaultSettingsView: View {
                     Toggle("Automatic archiving", isOn: vaultBinding(\.automaticArchiving))
                         .toggleStyle(.switch)
                     Stepper("Eligible after \(settings.vault.inactivityDays) inactive days", value: intBinding(\.inactivityDays, range: 7...365))
-                    Stepper("Keep at least \(settings.vault.minimumFreeSpaceGiB) GB free", value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000, step: 10))
+                    Stepper("Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free", value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000), step: 10)
+                    Stepper("Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB", value: intBinding(\.transferFreeSpaceReserveGiB, range: 1...1000))
+                    Text("Before copying, allow room for the project plus this reserve. Marking Done skips the inactivity wait.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Stepper("Keep previous generation \(settings.vault.keepPreviousGenerationDays) days", value: intBinding(\.keepPreviousGenerationDays, range: 7...365))
                     Toggle("Launch at login for automation", isOn: launchAtLoginBinding)
                         .toggleStyle(.switch)
@@ -103,6 +107,7 @@ struct ProjectVaultSettingsView: View {
                     settings.vault.automaticArchiving = true
                     settings.vault.inactivityDays = 30
                     settings.vault.minimumFreeSpaceGiB = 120
+                    settings.vault.transferFreeSpaceReserveGiB = 5
                     settings.vault.keepPreviousGenerationDays = 30
                     settings.vault.launchAtLogin = true
                     settings.vault.rolloutStage = .privateBeta

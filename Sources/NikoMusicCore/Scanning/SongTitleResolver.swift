@@ -49,6 +49,16 @@ public struct SongTitleResolver: Sendable {
         let bounceLikePreview = mainPreview.map(isBounceLikePreview) == true
         let usablePreviewTitle = usablePreviewTitle(from: previewTitle, preview: mainPreview)
 
+        // An explicitly named song delivery is stronger evidence than a working
+        // folder label. App-owned virtual titles still override this base title.
+        if let preview = mainPreview,
+           let identity = PreviewSongIdentity.parse(preview.fileName),
+           !PreviewFilenameSemantics.isPartialExport(in: preview.fileName),
+           preview.folderRole != .stems,
+           isTrustworthyPreviewForTitle(preview) {
+            return identity.displayTitle
+        }
+
         // The folder name is the user's filesystem-level title. Keep it authoritative
         // when it is meaningful so a Finder rename is reflected on the next scan even
         // when older CPR or mixdown filenames still contain the previous working title.

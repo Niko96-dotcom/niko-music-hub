@@ -27,6 +27,8 @@ public struct PreviewCandidate: Identifiable, Hashable, Sendable, Codable {
     public let fileExtension: String
     public let detectedVersionNumber: Int?
     public let durationSeconds: Double?
+    /// Derived on every rank: revisions are comparable only within a named delivery family.
+    public var namedDeliveryModifiedAt: Date?
     public var confidenceScore: Double
     public var confidenceReasons: [String]
 

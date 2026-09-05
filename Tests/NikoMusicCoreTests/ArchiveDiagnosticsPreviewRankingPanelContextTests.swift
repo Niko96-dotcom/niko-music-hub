@@ -4,7 +4,7 @@ import XCTest
 final class ArchiveDiagnosticsPreviewRankingPanelContextTests: XCTestCase {
     func testTiebreakLegendDocumentsRankingOrder() {
         let legend = ArchiveDiagnosticsPreviewRankingPanelContext.tiebreakLegend
-        XCTAssertTrue(legend.contains("CPR version anchor"))
+        XCTAssertTrue(legend.contains("delivery family"))
         XCTAssertTrue(legend.contains("role"))
         XCTAssertTrue(legend.contains("version"))
         XCTAssertTrue(legend.contains("duration"))

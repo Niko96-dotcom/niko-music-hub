@@ -36,7 +36,7 @@ public struct TooShortNonMainSongBreakdown: Sendable, Equatable, Codable {
 /// Operator-facing preview ranking hints for the archive diagnostics panel header.
 public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable, Codable {
     public static let tiebreakLegend =
-        "Preview pick: CPR version anchor, then role → folder → version → format → duration"
+        "Preview pick: song identity, role and length → delivery family → version → recency → format → duration"
 
     /// True when export text carries the same operator-facing tiebreak legend shown in the panel.
     public static func tiebreakLegendMatchesExport(in exportText: String) -> Bool {

@@ -48,7 +48,10 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     public var archiveRootID: UUID?
     public var automaticArchiving: Bool
     public var inactivityDays: Int
+    /// Active-volume pressure threshold that makes projects eligible for archiving.
     public var minimumFreeSpaceGiB: Int
+    /// Free space to retain on the destination after a projected archive/restore write.
+    public var transferFreeSpaceReserveGiB: Int
     public var keepPreviousGenerationDays: Int
     public var launchAtLogin: Bool
     /// Rollout stays explicit so a locally enabled development build cannot silently
@@ -71,6 +74,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         automaticArchiving: Bool = true,
         inactivityDays: Int = 30,
         minimumFreeSpaceGiB: Int = 120,
+        transferFreeSpaceReserveGiB: Int = 5,
         keepPreviousGenerationDays: Int = 30,
         launchAtLogin: Bool = true,
         rolloutStage: RolloutStage = .disabled,
@@ -86,6 +90,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.automaticArchiving = automaticArchiving
         self.inactivityDays = inactivityDays
         self.minimumFreeSpaceGiB = minimumFreeSpaceGiB
+        self.transferFreeSpaceReserveGiB = transferFreeSpaceReserveGiB
         self.keepPreviousGenerationDays = keepPreviousGenerationDays
         self.launchAtLogin = launchAtLogin
         self.rolloutStage = rolloutStage
@@ -98,7 +103,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case isEnabled, activeRootID, archiveRootID, automaticArchiving
-        case inactivityDays, minimumFreeSpaceGiB, keepPreviousGenerationDays, launchAtLogin
+        case inactivityDays, minimumFreeSpaceGiB, transferFreeSpaceReserveGiB, keepPreviousGenerationDays, launchAtLogin
         case rolloutStage, automationEmergencyStop, independentBackupConfirmed
         case lastSuccessfulVerificationAt, lastRestoreDrillAt
         case keepLocalProjectIDs
@@ -112,6 +117,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         automaticArchiving = try values.decodeIfPresent(Bool.self, forKey: .automaticArchiving) ?? true
         inactivityDays = try values.decodeIfPresent(Int.self, forKey: .inactivityDays) ?? 30
         minimumFreeSpaceGiB = try values.decodeIfPresent(Int.self, forKey: .minimumFreeSpaceGiB) ?? 120
+        transferFreeSpaceReserveGiB = try values.decodeIfPresent(Int.self, forKey: .transferFreeSpaceReserveGiB) ?? 5
         keepPreviousGenerationDays = try values.decodeIfPresent(Int.self, forKey: .keepPreviousGenerationDays) ?? 30
         launchAtLogin = try values.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
         rolloutStage = try values.decodeIfPresent(RolloutStage.self, forKey: .rolloutStage) ?? .disabled

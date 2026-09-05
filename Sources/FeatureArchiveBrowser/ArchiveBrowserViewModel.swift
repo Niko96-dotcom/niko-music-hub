@@ -82,6 +82,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
     var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
     var projectVaultRetryAttemptCounts: [String: Int] = [:]
+    var projectVaultRecoveryTask: Task<Void, Never>?
+    var projectVaultRecoveryDeadline: Date?
+    var projectVaultLastRecoveryAttemptAt: Date?
     /// Archive page layout: the board is home, opening a card goes to
     /// fullscreen detail, and the classic sidebar+detail list stays reachable.
     enum ArchiveViewMode {
@@ -113,6 +116,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let archiveRootWatcher: (any ArchiveRootWatching)?
     let runtime: MusicHubRuntimeEnvironment
     let scanOverride: (([URL]) async throws -> ScanResult)?
+
+    deinit {
+        projectVaultRecoveryTask?.cancel()
+    }
     let projectVaultRuntime: (any ProjectVaultOperating)?
     public var requestConverterHandoff: ((URL) -> Void)?
     var statusBaseMessage: String?

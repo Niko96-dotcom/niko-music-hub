@@ -72,6 +72,11 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             .replacingOccurrences(of: songFolder.standardizedFileURL.path, with: "")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let components = relative.split(separator: "/").map(String.init)
+        let lowerComponents = components.map { $0.lowercased() }
+        if lowerComponents.contains("stems")
+            || lowerComponents.contains("processed") && lowerComponents.contains("samples") {
+            return .stems
+        }
         guard let first = components.first?.lowercased() else { return .root }
         switch first {
         case "mixdown": return .mixdown
@@ -85,6 +90,8 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
         if let partialExportRole = PreviewFilenameSemantics.partialExportRole(in: fileName) {
             return partialExportRole
         }
+
+        if PreviewSongIdentity.parse(fileName) != nil { return .mainMix }
 
         let lower = fileName.lowercased()
         if lower.contains("master") { return .master }

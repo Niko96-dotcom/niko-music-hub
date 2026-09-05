@@ -80,6 +80,9 @@ public enum PreviewRankingExplainability: Sendable {
         if reason == "duration:long" {
             return durationLabel(base: "long take", durationSeconds: durationSeconds)
         }
+        if reason == "filename:artist-title" { return "named artist and song" }
+        if reason == "filename:named-delivery" { return "song delivery" }
+        if reason == "filename:negative-technical-export" { return "mastering handoff" }
         if reason == "filename:positive" { return "mix filename" }
         if reason.hasPrefix("filename:negative-") {
             let token = String(reason.dropFirst("filename:negative-".count))
