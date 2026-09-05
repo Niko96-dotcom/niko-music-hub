@@ -3,16 +3,6 @@ import AppCore
 import XCTest
 
 final class YtDlpDownloaderTests: XCTestCase {
-    func testNoShellInvocationAppearsInSource() throws {
-        let source = try String(
-            contentsOfFile: "Sources/FeatureDownloader/YtDlpDownloader.swift",
-            encoding: .utf8
-        )
-        XCTAssertFalse(source.contains("/bin/sh"))
-        XCTAssertFalse(source.contains("sh\", \"-c"))
-        XCTAssertFalse(source.contains("shell"))
-    }
-
     func testDownloadReturnsNonZeroExitCode() async throws {
         let downloader = YtDlpDownloader(runner: NonZeroExitRunner())
         let request = DownloadRequest(
@@ -24,12 +14,21 @@ final class YtDlpDownloaderTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 1)
     }
 
-    func testUsesExecutableURL() throws {
-        let source = try String(
-            contentsOfFile: "Sources/FeatureDownloader/YtDlpDownloader.swift",
-            encoding: .utf8
+    func testInvokesConfiguredExecutableWithURLAsSingleArgument() async throws {
+        let runner = CapturingRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/tmp/helper tools/yt-dlp"),
+            sourceURL: URL(string: "https://example.com/watch?v=abc&list=xyz")!,
+            outputDirectory: FileManager.default.temporaryDirectory
         )
-        XCTAssertTrue(source.contains("executableURL"))
+
+        _ = try await downloader.download(request) { _ in }
+
+        let invocation = try XCTUnwrap(runner.lastRequest)
+        XCTAssertEqual(invocation.executableURL, request.ytDlpURL)
+        XCTAssertEqual(invocation.arguments.last, request.sourceURL.absoluteString)
+        XCTAssertFalse(invocation.arguments.contains("-c"))
     }
 
     func testDownloadAppliesBoundedNetworkRetries() async throws {
@@ -280,13 +279,5 @@ private final class StreamingDestinationRunner: StreamingExternalProcessRunning,
         onStandardOutput("NIKO_MUSIC_HUB_FILE:\(outputURL.path)\n")
         FileManager.default.createFile(atPath: outputURL.path, contents: Data("download".utf8))
         return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
-    }
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
     }
 }

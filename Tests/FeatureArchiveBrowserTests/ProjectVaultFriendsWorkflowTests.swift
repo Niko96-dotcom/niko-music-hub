@@ -69,6 +69,65 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
     }
 
+    func testCopyOnlyThenDonePreservesMetadataAndCorruptRestoreCanBeRetried() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let metadataStore = try SQLiteSongUserMetadataStore(database: fixture.database)
+        let viewModel = fixture.viewModel(runtime: runtime, songMetadataStore: metadataStore)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first)
+        viewModel.updateAliases(for: original, aliasesText: "safety alias")
+        viewModel.updateAppNote(for: original, note: "Retain this note across the Vault lifecycle")
+        let active = try XCTUnwrap(viewModel.songs.first)
+
+        // Manual Archive Now creates the generation before the later Done transition.
+        _ = try await runtime.archive(song: active, trigger: .manual)
+        await viewModel.refreshProjectVaultSnapshots()
+        viewModel.updateWorkflowStatus(for: active, status: .done)
+        viewModel.setShowArchivedProjects(true)
+        try await waitUntil {
+            !FileManager.default.fileExists(atPath: fixture.project.path)
+                && viewModel.projectVaultBusySongIDs.isEmpty
+        }
+        let archived = try XCTUnwrap(viewModel.songs.first)
+        XCTAssertEqual(archived.aliases, ["safety alias"])
+        XCTAssertEqual(archived.appNote, active.appNote)
+        XCTAssertEqual(archived.workflowStatus, .done)
+        viewModel.updateAppNote(for: archived, note: "Do not create orphaned archive metadata")
+        XCTAssertEqual(try metadataStore.loadAll()[original.id]?.appNote, active.appNote)
+        XCTAssertNil(try metadataStore.loadAll()[archived.id])
+
+        let transfer = try XCTUnwrap(try fixture.transferStore().verifiedArchiveGeneration(projectID: fixture.projectID()))
+        let archiveAudio = transfer.destinationURL.appendingPathComponent("Audio/take.wav")
+        let goodBytes = try Data(contentsOf: archiveAudio)
+        var corrupted = goodBytes
+        corrupted[0] ^= 0xff
+        try corrupted.write(to: archiveAudio)
+        viewModel.performProjectVaultPrimaryAction(for: archived)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        let failed = try XCTUnwrap(viewModel.projectVaultPresentation(for: archived))
+        XCTAssertEqual(failed.state, .needsAttention)
+        let restoreID = try XCTUnwrap(failed.retryRestoreID)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        viewModel.retryReviewedProjectVaultRestore(for: archived)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertNil(try fixture.transferStore().restoreRecord(id: restoreID)?.completedAt)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        try goodBytes.write(to: archiveAudio)
+        viewModel.retryReviewedProjectVaultRestore(for: archived)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertNotNil(try fixture.transferStore().restoreRecord(id: restoreID)?.completedAt)
+        let restored = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        XCTAssertEqual(restored.aliases, ["safety alias"])
+        XCTAssertEqual(restored.appNote, active.appNote)
+        XCTAssertEqual(restored.workflowStatus, .done)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: transfer.destinationURL)
+    }
+
     func testArchiveOnlyProjectionRejectsWorkflowMutationAndFSEventDoesNotPromoteIt() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -366,11 +425,13 @@ private final class FriendsWorkflowFixture {
     func viewModel(
         runtime: any ProjectVaultOperating,
         archiveIndexStore: (any ArchiveIndexStoring)? = nil,
+        songMetadataStore: (any SongUserMetadataStoring)? = nil,
         archiveRootWatcher: (any ArchiveRootWatching)? = NoopArchiveRootWatcher()
     ) -> ArchiveBrowserViewModel {
         ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: settingsStore),
             archiveIndexStore: archiveIndexStore,
+            songMetadataStore: songMetadataStore,
             archiveRootWatcher: archiveRootWatcher,
             projectVaultRuntime: runtime,
             runtime: MusicHubRuntimeEnvironment(environment: [

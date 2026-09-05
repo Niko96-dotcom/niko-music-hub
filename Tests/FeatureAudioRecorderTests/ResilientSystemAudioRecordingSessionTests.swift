@@ -489,11 +489,3 @@ private final class RecordingInboxStore: OutputInboxStore, @unchecked Sendable {
     }
     func refreshAvailability() throws {}
 }
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}

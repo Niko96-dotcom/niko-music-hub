@@ -364,11 +364,3 @@ private final class JobStartGate: @unchecked Sendable {
         storedWaiters.forEach { $0.resume() }
     }
 }
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}

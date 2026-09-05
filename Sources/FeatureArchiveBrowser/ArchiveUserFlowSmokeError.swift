@@ -29,7 +29,6 @@ public enum ArchiveUserFlowSmokeError: Error, Equatable, Sendable {
     case fixtureScanHealthBadgeMissing
     case fixtureScanHealthBadgeMismatch
     case fixtureScanSkippedPanelMismatch
-    case fixtureScanSongWarningsPanelMismatch
     case fixtureScanCountsPanelMismatch
     case invalidRootDiagnosticsExportFailed
     case invalidRootExportMissingRootHealthBadge

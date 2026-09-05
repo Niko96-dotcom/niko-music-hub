@@ -10,6 +10,7 @@ enum YtDlpDownloadCommandBuilder {
 
         var args: [String] = [
             "--newline",
+            "--force-ipv4",
             "--no-overwrites",
             "--socket-timeout", "30",
             "--retries", "1",
@@ -45,6 +46,7 @@ enum YtDlpDownloadCommandBuilder {
         let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: formatSelection)
         var args: [String] = [
             "--simulate",
+            "--force-ipv4",
             "-f", formatArgs.formatSelector,
         ]
         if playlistMode == .single {

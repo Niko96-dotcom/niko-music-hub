@@ -100,11 +100,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 Text("Selected song")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                Text(
-                    ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
-                        displayTitle: selectedContext.displayTitle
-                    )
-                )
+                Text(selectedContext.displayTitle)
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
@@ -118,9 +114,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 .lineLimit(3)
                 .textSelection(.enabled)
                 ForEach(selectedContext.warningLines, id: \.self) { warning in
-                    Text(
-                        "• \(ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: warning))"
-                    )
+                    Text("• \(warning)")
                     .font(HubDesignSystem.Typography.micro())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(3)
@@ -226,9 +220,7 @@ struct ArchiveDiagnosticsPanelView: View {
             let displayWarnings = diagnostics.displayGlobalWarnings()
             if !displayWarnings.isEmpty {
                 ForEach(displayWarnings, id: \.self) { warning in
-                    Text(
-                        "Warning: \(ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: warning))"
-                    )
+                    Text("Warning: \(warning)")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
                     .lineLimit(3)

@@ -2,6 +2,7 @@ import Foundation
 
 enum YtDlpVersionPolicy {
     static let stalenessDays = 90
+    static let youtubeCompatibilityFloor = "2026.08.19"
 
     static func parseVersionDate(_ version: String) -> Date? {
         let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,22 +30,12 @@ enum YtDlpVersionPolicy {
 
     static func isStale(version: String, referenceDate: Date = Date()) -> Bool {
         guard let versionDate = parseVersionDate(version) else { return false }
-        guard let threshold = Calendar(identifier: .gregorian).date(
-            byAdding: .day,
-            value: -stalenessDays,
-            to: referenceDate
-        ) else {
-            return false
-        }
+        guard let threshold = effectiveMinimumDate(referenceDate: referenceDate) else { return false }
         return versionDate < threshold
     }
 
     static func minimumExpectedVersion(referenceDate: Date = Date()) -> String {
-        guard let threshold = Calendar(identifier: .gregorian).date(
-            byAdding: .day,
-            value: -stalenessDays,
-            to: referenceDate
-        ) else {
+        guard let threshold = effectiveMinimumDate(referenceDate: referenceDate) else {
             return "recent release"
         }
         let components = Calendar(identifier: .gregorian).dateComponents(
@@ -55,5 +46,19 @@ enum YtDlpVersionPolicy {
             return "recent release"
         }
         return String(format: "%04d.%02d.%02d", year, month, day)
+    }
+
+    private static func effectiveMinimumDate(referenceDate: Date) -> Date? {
+        guard let ageThreshold = Calendar(identifier: .gregorian).date(
+            byAdding: .day,
+            value: -stalenessDays,
+            to: referenceDate
+        ) else {
+            return nil
+        }
+        guard let compatibilityFloor = parseVersionDate(youtubeCompatibilityFloor) else {
+            return ageThreshold
+        }
+        return max(ageThreshold, compatibilityFloor)
     }
 }

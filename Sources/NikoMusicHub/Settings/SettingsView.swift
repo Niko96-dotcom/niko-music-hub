@@ -524,11 +524,8 @@ struct SettingsView: View {
         archiveViewModel.addRoot(folder)
     }
 
-    private func saveProjectVaultSettings(_ candidate: AppSettings) -> Bool {
-        let saved = persistSettings { stored in
-            stored.musicRoots = candidate.musicRoots
-            stored.vault = candidate.vault
-        }
+    private func saveProjectVaultSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
+        let saved = persistSettings(update)
         if saved {
             archiveViewModel.applyProjectVaultSettingsChange()
         }

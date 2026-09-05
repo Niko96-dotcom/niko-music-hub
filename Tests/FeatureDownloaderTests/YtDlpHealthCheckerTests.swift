@@ -55,6 +55,30 @@ final class YtDlpHealthCheckerTests: XCTestCase {
         XCTAssertFalse(minimumExpected.isEmpty)
     }
 
+    func testOutdatedWhenVersionPredatesCurrentYouTubeCompatibilityRelease() async {
+        let reference = Calendar(identifier: .gregorian).date(
+            from: DateComponents(
+                timeZone: TimeZone(secondsFromGMT: 0),
+                year: 2026,
+                month: 8,
+                day: 24
+            )
+        )!
+        let settings = HelperToolSettings(ytDlp: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"))
+        let checker = YtDlpHealthChecker(
+            runner: AlwaysSucceedingRunner(output: "2026.07.04\n"),
+            fileExists: { _ in true },
+            referenceDate: reference
+        )
+
+        let result = await checker.availability(settings: settings)
+
+        XCTAssertEqual(
+            result,
+            .outdated(current: "2026.07.04", minimumExpected: "2026.08.19")
+        )
+    }
+
     func testUnusableWhenProcessThrows() async {
         let settings = HelperToolSettings(ytDlp: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"))
         let checker = YtDlpHealthChecker(runner: ThrowingRunner(), fileExists: { _ in true })

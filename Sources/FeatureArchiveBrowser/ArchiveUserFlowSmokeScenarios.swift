@@ -39,7 +39,10 @@ enum ArchiveUserFlowSmokeScenarios {
         expectedCountsSongWarningsValue: "1 (1 total)",
         healthBadgeSubstrings: ["song warning", "skipped at roots"],
         skippedPanelSubstrings: ["LOOSE_FILE.txt", "README.md"],
-        songWarningsPanelSubstrings: ["Broken Folder Example", "No CPR project files found"],
+        expectedSongWarningExportLines: [
+            "song=Broken Folder Example",
+            "  warning=No CPR project files found",
+        ],
         supportSummarySubstrings: [
             "roots:",
             "Scanned 9 songs",
@@ -273,7 +276,7 @@ struct FixtureDiagnosticsScenario: Sendable, Equatable {
     let expectedCountsSongWarningsValue: String
     let healthBadgeSubstrings: [String]
     let skippedPanelSubstrings: [String]
-    let songWarningsPanelSubstrings: [String]
+    let expectedSongWarningExportLines: [String]
     let supportSummarySubstrings: [String]
 }
 

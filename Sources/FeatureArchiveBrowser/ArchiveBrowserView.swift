@@ -65,6 +65,18 @@ struct ArchiveBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let message = viewModel.statusMessage, !message.isEmpty {
+                Text(message)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, HubToolLayout.horizontalPadding)
+                    .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
+                    .background(.bar)
+            }
+        }
         .focusable(interactions: .edit)
         .focused($keyboardFocus, equals: .archive)
         .focusEffectDisabled()
@@ -165,7 +177,7 @@ struct ArchiveBrowserView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let song = viewModel.selectedSong {
-            // NOTE: no `.focusable(interactions: .edit)` wrapper here — a focusable container swallows every
+            // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
                 .padding(.horizontal, HubToolLayout.horizontalPadding)

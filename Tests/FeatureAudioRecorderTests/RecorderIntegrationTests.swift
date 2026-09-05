@@ -44,17 +44,6 @@ final class RecorderIntegrationTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
-    func testPermissionPromptAppearsOnFirstUse() async throws {
-        let adapter = CoreAudioTapAdapter()
-        let state = await adapter.checkPermission()
-        switch state {
-        case .authorized, .denied, .restricted:
-            break
-        case .notDetermined:
-            break
-        }
-    }
-
     func testIncompatibleMacOSShowsMessage() async throws {
         let adapter = CoreAudioTapAdapter()
         let compatible = adapter.isCompatibleMacOS()

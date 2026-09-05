@@ -89,6 +89,57 @@ assert_pass lifecycle-missing-target bash -c "source '$ROOT/script/lib/app_lifec
 assert_fail lifecycle-relative-target bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_stop_app_binary 'relative/NikoMusicHub' true"
 assert_contains "$TMP/lifecycle-relative-target.err" "app binary path must be absolute"
 
+echo "== isolated startup control flow =="
+# Exercise the real entrypoint with lifecycle doubles; no GUI or real settings.
+STARTUP_REPO="$TMP/startup-repo"
+mkdir -p "$STARTUP_REPO/script/lib"
+cp "$ROOT/script/build_and_run.sh" "$STARTUP_REPO/script/build_and_run.sh"
+cat >"$STARTUP_REPO/script/lib/app_lifecycle.sh" <<'SH'
+NMH_ROOT_DIR="$ROOT_DIR"
+NMH_APP_BINARY="$NMH_DIST_DIR/NikoMusicHub.app/Contents/MacOS/NikoMusicHub"
+nmh_stop_app() { echo stop >>"$NMH_STARTUP_TEST_EVENTS"; }
+nmh_build_bundle() { echo build >>"$NMH_STARTUP_TEST_EVENTS"; }
+nmh_open_app() {
+  [[ "$NIKO_MUSIC_HUB_SETTINGS_SUITE" == NikoMusicHubStartup.* ]]
+  [[ "$NIKO_MUSIC_HUB_DRY_RUN_OPEN" == 1 ]]
+  [[ -z "${NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT+x}" ]]
+  [[ -z "${NIKO_MUSIC_HUB_BOOKMARK_PROOF_MODE+x}" ]]
+  [[ "$NMH_DIST_DIR" == "$ROOT_DIR/dist/verification" ]]
+  [[ "$*" == *--stdout* && "$*" == *--stderr* ]]
+  echo open >>"$NMH_STARTUP_TEST_EVENTS"
+  return "${NMH_STARTUP_TEST_OPEN_STATUS:-0}"
+}
+nmh_running_dist_app_pids() { echo 12345; }
+nmh_ui_probe() {
+  [[ "$*" == *'--pid 12345 --binary-path '* ]]
+  return "${NMH_STARTUP_TEST_PROBE_STATUS:-0}"
+}
+SH
+STARTUP_EVENTS="$TMP/startup-events"
+assert_pass isolated-startup env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
+  NIKO_MUSIC_HUB_SETTINGS_SUITE=must-not-reuse \
+  NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT=/must-not-scan \
+  NIKO_MUSIC_HUB_BOOKMARK_PROOF_MODE=must-not-run \
+  bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
+[[ "$(cat "$STARTUP_EVENTS")" == $'stop\nbuild\nopen\nstop' ]]
+assert_contains "$TMP/isolated-startup.out" 'verify ok: isolated visible main window'
+
+: >"$STARTUP_EVENTS"
+assert_fail isolated-no-window-api env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
+  NMH_STARTUP_TEST_PROBE_STATUS=2 bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
+assert_contains "$TMP/isolated-no-window-api.err" 'no verified visible window'
+[[ "$(tail -n 1 "$STARTUP_EVENTS")" == stop ]]
+
+: >"$STARTUP_EVENTS"
+assert_fail isolated-open-fails env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
+  NMH_STARTUP_TEST_OPEN_STATUS=8 bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
+[[ "$(tail -n 1 "$STARTUP_EVENTS")" == stop ]]
+
+: >"$STARTUP_EVENTS"
+assert_fail startup-invalid-mode env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
+  bash "$STARTUP_REPO/script/build_and_run.sh" --not-a-mode
+[[ ! -s "$STARTUP_EVENTS" ]] # Invalid commands must not stop or rebuild an app.
+
 BUNDLE="$TMP/Test.app"
 mkdir -p "$BUNDLE/Contents"
 cat >"$BUNDLE/Contents/Info.plist" <<PLIST

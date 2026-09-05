@@ -223,7 +223,6 @@ extension ArchiveUserFlowSmoke {
 
         let displayWarnings = invalidDiagnostics.displayGlobalWarnings(homeDirectory: homeDirectory)
         let panelGlobalWarningLines = displayWarnings
-            .map { ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(warning: $0) }
             .joined(separator: " | ")
         let panelGlobalWarningLinesMatchExport =
             ArchiveDiagnosticsGlobalWarningsPanelContext.linesMatchExport(

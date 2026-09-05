@@ -569,6 +569,7 @@ extension ArchiveBrowserViewModel {
                     throw ProjectVaultRuntimeError.unavailable
                 }
                 if await self.refreshProjectVaultSnapshots() {
+                    await self.scan()
                     self.setProjectVaultStatusMessage(
                         "Project Vault restore retry completed and verified."
                     )
@@ -678,14 +679,26 @@ extension ArchiveBrowserViewModel {
             let path = Self.vaultCanonicalPath(song.folderPath)
             return !archivedDestinationPaths.contains(path) && !archivedSourcePaths.contains(path)
         }
-        let archivedSongs = showArchivedProjects
-            ? archivedSnapshots.compactMap(makeArchivedSong)
-            : []
+        var archivedSongs: [Song] = []
+        if showArchivedProjects, !archivedSnapshots.isEmpty {
+            var metadata = Dictionary(uniqueKeysWithValues: baselineSongs.map {
+                ($0.id, SongUserMetadata.from(song: $0))
+            })
+            do {
+                metadata.merge(try catalog.songMetadataStore?.loadAll() ?? [:]) { _, persisted in persisted }
+            } catch {
+                recordPersistenceWarning("Archived project metadata could not be loaded: \(error.localizedDescription)")
+            }
+            archivedSongs = archivedSnapshots.compactMap { snapshot in
+                let sourceID = snapshot.transfer?.sourceURL.standardizedFileURL.path
+                return makeArchivedSong(from: snapshot, metadata: sourceID.flatMap { metadata[$0] })
+            }
+        }
         let visibleSongs = SongCatalogDeduplicator.uniqueByID(cleanScannedSongs + archivedSongs)
         return (cleanScannedSongs, visibleSongs)
     }
 
-    private func makeArchivedSong(from snapshot: ProjectVaultRuntimeSnapshot) -> Song? {
+    private func makeArchivedSong(from snapshot: ProjectVaultRuntimeSnapshot, metadata: SongUserMetadata?) -> Song? {
         guard let transfer = snapshot.transfer else { return nil }
         let destination = transfer.destinationURL.standardizedFileURL
         let detector = CPRVersionDetector()
@@ -700,7 +713,13 @@ extension ArchiveBrowserViewModel {
             displayTitle: title.isEmpty ? transfer.sourceURL.lastPathComponent : title,
             projectVersions: versions,
             latestCPR: detector.latestCPR(from: versions),
-            workflowStatus: snapshot.record.workflowState
+            virtualTitle: metadata?.virtualTitle,
+            aliases: metadata?.aliases ?? [],
+            appNote: metadata?.appNote,
+            collaboratorIDs: metadata?.collaboratorIDs ?? [],
+            collaboratorNames: collaborators.filter { metadata?.collaboratorIDs.contains($0.id) == true }.map(\.displayName),
+            workflowStatus: metadata.map(\.workflowStatus) ?? snapshot.record.workflowState,
+            isIgnored: metadata?.isIgnored ?? false
         )
     }
 

@@ -15,7 +15,7 @@ behavior into Swift modules instead.
 - Local-first and read-only toward real music archives by default.
 - Never rename, move, delete, or rewrite real Cubase/music files outside an explicit,
   user-confirmed Project Vault transfer.
-- Fixture-first tests are mandatory.
+- Tests that touch archives must use fixtures; never exercise destructive cases on real music data.
 - User-style E2E (`./script/e2e_user_smoke.sh`) is mandatory before any release.
 - GitHub Actions are intentionally not configured; local gates are the source of truth.
 
@@ -38,18 +38,13 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 - Architecture decisions: `docs/decisions/`
 - Superseded design history (do **not** implement from it): `docs/UI-REDESIGN-PLAN.md`
 
-## Planning system
+## Working approach
 
-This repo uses GSD. Live state lives in `.planning/`:
-
-- `.planning/STATE.md` — current position and milestone status (authoritative)
-- `.planning/ROADMAP.md` — milestone/phase plan
-- `.planning/milestones/` — completed milestone archives (history; do not rewrite)
-- `.planning/phases/` — phases belonging to the milestone currently in flight
-
-Read `.planning/STATE.md` before assuming what is or is not done.
+Work directly from the user request, current source, Git state and validation evidence. Treat `.planning/` as historical reference only; do not require or recreate GSD workflows. Preserve unrelated work and complete the relevant checks.
 
 ## Local gates
+
+For scoped implementation changes, run the checks relevant to the affected behavior. Run the full local gates for integration or release work. Documentation-only changes need structural and link checks. Once sufficient checks pass, repeat them only for new changes, failures or unresolved concerns. Release requirements below still apply.
 
 ```bash
 ./script/ci.sh
@@ -75,8 +70,9 @@ Vendored from [Niko96-dotcom/ultimate-de-slop](https://github.com/Niko96-dotcom/
 - Slash command: `.cursor/commands/ultimate-de-slop.md`
 - Runtime state (gitignored): `.deslop/`
 
-Kickoff phrases: **Ultimate De Slop**, **de-slop**, `/ultimate-de-slop`, or a bounded repo-wide
-cleanup/improvement loop.
+Use the vendored workflow when the user explicitly requests **Ultimate De Slop**, **de-slop**,
+`/ultimate-de-slop`, or that bounded iterative workflow. Ordinary reviews, audits and scoped
+cleanup do not automatically activate the harness. Follow explicit review-only or direct-work requests.
 
 ```bash
 SKILL_DIR=".cursor/skills/ultimate-de-slop"

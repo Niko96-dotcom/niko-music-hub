@@ -561,11 +561,3 @@ private final class BoundedProcessData: @unchecked Sendable {
         }
     }
 }
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}

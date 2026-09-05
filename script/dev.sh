@@ -144,6 +144,7 @@ Most useful:
 Helpful when something is weird:
   ./script/dev.sh logs      Build, open, then stream app logs.
   ./script/dev.sh proof     Save visible-window screenshots into dist/.
+  ./script/dev.sh startup   Verify disposable startup and save runtime logs.
   ./script/dev.sh stop      Stop any running Niko Music Hub instance.
   ./script/dev.sh clean     Delete generated build output.
   ./script/dev.sh helpers   Install/update ffmpeg and yt-dlp with Homebrew.
@@ -274,7 +275,7 @@ full_check() {
   mkdir -p "$DEV_FLOW_LOG_DIR"
   run_logged_step "1/3 Compile and unit tests" "$DEV_FLOW_LOG_DIR/ci.log" ./script/ci.sh
   run_logged_step "2/3 User E2E smoke" "$DEV_FLOW_LOG_DIR/e2e_user_smoke.log" env NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh
-  run_logged_step "3/3 Visible launch verification" "$DEV_FLOW_LOG_DIR/build_and_run_verify.log" ./script/build_and_run.sh --verify
+  run_logged_step "3/3 Isolated visible launch verification" "$DEV_FLOW_LOG_DIR/build_and_run_verify.log" ./script/build_and_run.sh --verify-isolated
   section "Done"
   ok "Local dev flow is green"
   printf 'Logs: %s\n' "$DEV_FLOW_LOG_DIR"
@@ -302,6 +303,9 @@ case "${1:-help}" in
     ;;
   smoke)
     ./script/e2e_user_smoke.sh
+    ;;
+  startup)
+    ./script/build_and_run.sh --verify-isolated
     ;;
   live-downloader)
     NIKO_MUSIC_HUB_LIVE_DOWNLOADER="${NIKO_MUSIC_HUB_LIVE_DOWNLOADER:-1}" ./script/downloader_live_smoke.sh

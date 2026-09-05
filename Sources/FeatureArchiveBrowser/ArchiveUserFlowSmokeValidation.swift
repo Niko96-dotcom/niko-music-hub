@@ -181,10 +181,6 @@ extension FixtureDiagnosticsEvidence: SmokeValidatedEvidence {
             line: skippedPanelLines,
             isValid: skippedPanelLinesMatchExport
         )
-        let warningsParity = SmokeLineValidation(
-            line: songWarningsPanelLines,
-            isValid: songWarningsPanelLinesMatchExport
-        )
         let supportParity = SmokeLineValidation(
             line: panelSupportSummary,
             isValid: panelMatchesExportSummary
@@ -193,7 +189,7 @@ extension FixtureDiagnosticsEvidence: SmokeValidatedEvidence {
             && skippedCount >= scenario.minimumSkippedCount
             && healthBadgeParity.satisfies(contains: scenario.healthBadgeSubstrings)
             && skippedParity.satisfies(contains: scenario.skippedPanelSubstrings)
-            && warningsParity.satisfies(contains: scenario.songWarningsPanelSubstrings)
+            && songWarningExportLines == scenario.expectedSongWarningExportLines
             && countsPanelSongsValue == scenario.expectedCountsSongsValue
             && countsPanelSongWarningsValue == scenario.expectedCountsSongWarningsValue
             && countsPanelMatchExport
@@ -207,8 +203,7 @@ extension FixtureDiagnosticsEvidence: SmokeValidatedEvidence {
         log["fixture_scan_health_badge_matches_export"] = String(healthBadgeMatchesExport)
         log["diagnostics_panel_skipped_entries_lines"] = skippedPanelLines
         log["diagnostics_panel_skipped_entries_lines_match"] = String(skippedPanelLinesMatchExport)
-        log["diagnostics_panel_song_warnings_lines"] = songWarningsPanelLines
-        log["diagnostics_panel_song_warnings_lines_match"] = String(songWarningsPanelLinesMatchExport)
+        log["diagnostics_export_song_warning_lines"] = songWarningExportLines.joined(separator: " | ")
         log["diagnostics_panel_scan_counts_songs"] = countsPanelSongsValue
         log["diagnostics_panel_scan_counts_song_warnings"] = countsPanelSongWarningsValue
         log["diagnostics_panel_scan_counts_match"] = String(countsPanelMatchExport)

@@ -2,13 +2,6 @@ import XCTest
 @testable import NikoMusicCore
 
 final class ArchiveDiagnosticsGlobalWarningsPanelContextTests: XCTestCase {
-    func testPanelLineUsesWarningTextOnly() {
-        let line = ArchiveDiagnosticsGlobalWarningsPanelContext.panelLine(
-            warning: "Root is not a directory: ~/Music/missing"
-        )
-        XCTAssertEqual(line, "Root is not a directory: ~/Music/missing")
-    }
-
     func testLineMatchesExportForGlobalWarning() {
         let export = """
         global_warning=Root is not a directory: ~/Music/missing

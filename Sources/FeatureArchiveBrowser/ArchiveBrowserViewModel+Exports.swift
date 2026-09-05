@@ -80,6 +80,7 @@ extension ArchiveBrowserViewModel {
             selectedSongContext: selectedSongExportContext()
         )
         lastDiagnosticsExportPath = destination.path
+        setStatusMessage("Diagnostics exported to \(destination.path)")
         diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
     }
 
@@ -98,6 +99,8 @@ extension ArchiveBrowserViewModel {
                     let displayPath = Song.displayDryRunPath(result.path)
                     print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
                 }
+            } else {
+                setStatusMessage("No Cubase project (.cpr) was found in this song folder.")
             }
         } catch let error as MusicItemOpenerError {
             setStatusMessage(musicItemOpenerStatusMessage(error))

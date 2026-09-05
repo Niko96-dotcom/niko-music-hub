@@ -175,6 +175,16 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             explanation = ProjectVaultActivityExplanation.restore(.superseded)
             return
         }
+        if let restore, restore.completedAt == nil, restore.error != nil,
+           restore.failureReason == nil,
+           [.materializingArchive, .copyingToActiveStaging, .verifyingActiveStaging].contains(restore.phase) {
+            reviewAction = nil
+            retryRestoreID = restore.id
+            state = .needsAttention
+            primaryAction = .review
+            explanation = "Restore stopped before completion. Existing copies were kept. Check archive availability and integrity, then choose Retry Get Local to verify and resume this restore."
+            return
+        }
         if let restore,
            restore.failureReason == .legacyProjectionEvidenceUnavailable,
            let generationURL = restore.reviewGenerationURL {

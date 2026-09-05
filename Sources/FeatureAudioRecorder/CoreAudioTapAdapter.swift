@@ -328,11 +328,3 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         return RecorderError.apiError(error.localizedDescription)
     }
 }
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}

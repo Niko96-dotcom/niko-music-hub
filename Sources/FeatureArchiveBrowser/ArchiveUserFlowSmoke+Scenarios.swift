@@ -123,25 +123,8 @@ extension ArchiveUserFlowSmoke {
                 homeDirectory: homeDirectory
             )
 
-        let displaySongWarningSummaries = diagnostics.displaySongWarningSummaries(
-            homeDirectory: homeDirectory
-        )
-        let fixtureScanSongWarningsPanelLines = displaySongWarningSummaries
-            .map {
-                ArchiveDiagnosticsSongWarningsPanelContext.panelLine(
-                    displayTitle: $0.displayTitle,
-                    warnings: $0.warnings
-                )
-            }
-            .joined(separator: " | ")
-        let fixtureScanSongWarningsPanelLinesMatchExport =
-            !displaySongWarningSummaries.isEmpty
-            && displaySongWarningSummaries.count == diagnostics.songsWithWarningsCount
-            && ArchiveDiagnosticsSongWarningsPanelContext.linesMatchExport(
-                in: exportText,
-                summaries: displaySongWarningSummaries,
-                homeDirectory: homeDirectory
-            )
+        let songWarningExportLines = exportText.components(separatedBy: .newlines)
+            .filter { $0.hasPrefix("song=") || $0.hasPrefix("  warning=") }
 
         let fixtureScanCountsPanelSongsValue =
             ArchiveDiagnosticsScanCountsPanelContext.panelSongsValue(songCount: diagnostics.songCount)
@@ -177,8 +160,7 @@ extension ArchiveUserFlowSmoke {
             healthBadgeMatchesExport: healthBadgeMatchesExport,
             skippedPanelLines: fixtureScanSkippedPanelLines,
             skippedPanelLinesMatchExport: fixtureScanSkippedPanelLinesMatchExport,
-            songWarningsPanelLines: fixtureScanSongWarningsPanelLines,
-            songWarningsPanelLinesMatchExport: fixtureScanSongWarningsPanelLinesMatchExport,
+            songWarningExportLines: songWarningExportLines,
             countsPanelSongsValue: fixtureScanCountsPanelSongsValue,
             countsPanelSongWarningsValue: fixtureScanCountsPanelSongWarningsValue,
             countsPanelMatchExport: fixtureScanCountsPanelMatchExport,
@@ -351,17 +333,11 @@ extension ArchiveUserFlowSmoke {
             scenario.exportMustContain.allSatisfy { exportText.contains($0) }
 
         let panelContext = viewModel.selectedSongExportContext()
-        let panelTitleLine = panelContext.map {
-            ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(displayTitle: $0.displayTitle)
-        } ?? ""
+        let panelTitleLine = panelContext?.displayTitle ?? ""
         let panelCprLine = panelContext.map {
             ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(cprSummary: $0.cprSummary)
         } ?? ""
-        let panelWarningLinesJoined = panelContext.map { context in
-            context.warningLines.map {
-                ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(warning: $0)
-            }.joined(separator: " | ")
-        } ?? ""
+        let panelWarningLinesJoined = panelContext?.warningLines.joined(separator: " | ") ?? ""
         let panelNotesLine = panelContext?.sidecarNotesLine.map {
             ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: $0)
         } ?? ""

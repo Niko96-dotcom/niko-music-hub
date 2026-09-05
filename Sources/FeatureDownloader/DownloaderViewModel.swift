@@ -45,7 +45,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     private let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
-    private let jobFactory: DownloaderJobFactory
     private let healthChecker: YtDlpHealthChecker
     private let debounceDuration: Duration
     private var observeTask: Task<Void, Never>?
@@ -60,14 +59,12 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         context: ToolContext,
         useCase: any DownloaderUseCaseRunning,
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
-        jobFactory: DownloaderJobFactory = DownloaderJobFactory(),
         formatSelection: DownloadFormatSelection? = nil,
         debounceDuration: Duration = .milliseconds(500)
     ) {
         self.context = context
         self.useCase = useCase
         self.healthChecker = healthChecker
-        self.jobFactory = jobFactory
         self.debounceDuration = debounceDuration
         self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection(preferences: context.preferences)
     }
@@ -192,7 +189,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
         let capturedFormatSelection = formatSelection
         let capturedPlaylistMode = playlistMode
-        let options = jobFactory.makeJobOptions(
+        let options = DownloadJobOptions(
             sourceURL: sourceURL,
             outputDirectory: settings.outputFolder.url,
             formatSelection: capturedFormatSelection,

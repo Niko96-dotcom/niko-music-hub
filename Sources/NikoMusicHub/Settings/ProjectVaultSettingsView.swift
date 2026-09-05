@@ -6,7 +6,7 @@ struct ProjectVaultSettingsView: View {
     let context: ToolContext
     @Binding var settings: AppSettings
     let settingsAvailable: Bool
-    let onSave: (AppSettings) -> Bool
+    let onSave: (@escaping @Sendable (inout AppSettings) -> Void) -> Bool
 
     @State private var showSetup = false
     @State private var message: String?
@@ -104,19 +104,12 @@ struct ProjectVaultSettingsView: View {
             get: { settings.vault.isEnabled },
             set: { enabled in
                 if enabled {
-                    settings.vault.automaticArchiving = true
-                    settings.vault.inactivityDays = 30
-                    settings.vault.minimumFreeSpaceGiB = 120
-                    settings.vault.transferFreeSpaceReserveGiB = 5
-                    settings.vault.keepPreviousGenerationDays = 30
-                    settings.vault.launchAtLogin = true
-                    settings.vault.rolloutStage = .privateBeta
                     showSetup = true
                 } else {
-                    var candidate = settings
-                    candidate.vault.isEnabled = false
-                    candidate.vault.automationEmergencyStop = true
-                    if onSave(candidate) { settings = candidate }
+                    if onSave({
+                        $0.vault.isEnabled = false
+                        $0.vault.automationEmergencyStop = true
+                    }) { message = nil }
                 }
             }
         )
@@ -127,12 +120,18 @@ struct ProjectVaultSettingsView: View {
             message = "Choose both folders before enabling Project Vault."
             return
         }
-        var candidate = settings
-        candidate.vault.isEnabled = true
-        candidate.vault.automationEmergencyStop = false
-        guard onSave(candidate) else { return }
-        settings = candidate
-        reconcileLaunchAtLogin(candidate.vault)
+        guard onSave({
+            $0.vault.isEnabled = true
+            $0.vault.automationEmergencyStop = false
+            $0.vault.automaticArchiving = true
+            $0.vault.inactivityDays = 30
+            $0.vault.minimumFreeSpaceGiB = 120
+            $0.vault.transferFreeSpaceReserveGiB = 5
+            $0.vault.keepPreviousGenerationDays = 30
+            $0.vault.launchAtLogin = true
+            $0.vault.rolloutStage = .privateBeta
+        }) else { return }
+        reconcileLaunchAtLogin(settings.vault)
         showSetup = false
         message = "Project Vault enabled in Private beta (copies only). Automatic removal remains unavailable."
     }
@@ -172,13 +171,14 @@ struct ProjectVaultSettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(HubDesignSystem.Colors.warning)
-                Toggle("I protect the Archive with an independent backup", isOn: vaultBinding(\.independentBackupConfirmed))
-                    .toggleStyle(.checkbox)
             }
             .font(HubDesignSystem.Typography.caption())
             .padding(8)
             .hubSurface(.card, state: .warning, cornerRadius: HubDesignSystem.Radius.row)
         }
+        Toggle("I protect the Archive with an independent backup", isOn: vaultBinding(\.independentBackupConfirmed))
+            .toggleStyle(.checkbox)
+            .font(HubDesignSystem.Typography.caption())
     }
 
     private var rolloutBinding: Binding<VaultSettings.RolloutStage> {
@@ -187,11 +187,11 @@ struct ProjectVaultSettingsView: View {
         })
     }
 
-    private func vaultBinding(_ keyPath: WritableKeyPath<VaultSettings, Bool>) -> Binding<Bool> {
+    private func vaultBinding(_ keyPath: WritableKeyPath<VaultSettings, Bool> & Sendable) -> Binding<Bool> {
         Binding(get: { settings.vault[keyPath: keyPath] }, set: { value in updateVault { $0[keyPath: keyPath] = value } })
     }
 
-    private func intBinding(_ keyPath: WritableKeyPath<VaultSettings, Int>, range: ClosedRange<Int>, step: Int = 1) -> Binding<Int> {
+    private func intBinding(_ keyPath: WritableKeyPath<VaultSettings, Int> & Sendable, range: ClosedRange<Int>) -> Binding<Int> {
         Binding(get: { settings.vault[keyPath: keyPath] }, set: { value in updateVault { $0[keyPath: keyPath] = min(max(value, range.lowerBound), range.upperBound) } })
     }
 
@@ -202,10 +202,8 @@ struct ProjectVaultSettingsView: View {
         })
     }
 
-    private func updateVault(_ mutation: (inout VaultSettings) -> Void) {
-        var candidate = settings
-        mutation(&candidate.vault)
-        if onSave(candidate) { settings = candidate }
+    private func updateVault(_ mutation: @escaping @Sendable (inout VaultSettings) -> Void) {
+        _ = onSave { mutation(&$0.vault) }
     }
 
     private func selectedRoot(_ role: MusicRootRole) -> StoredMusicRoot? {
@@ -216,8 +214,18 @@ struct ProjectVaultSettingsView: View {
     private func chooseRoot(_ role: MusicRootRole) {
         guard let folder = context.fileActions.chooseDirectory(prompt: role == .active ? "Choose Active Projects" : "Choose Archive / Vault") else { return }
         do {
-            let candidate = try VaultRootManager().replacingRoot(role: role, with: folder, in: settings)
-            if onSave(candidate) { settings = candidate; message = nil }
+            let current = try context.settingsStore.loadSettings()
+            let candidate = try VaultRootManager().replacingRoot(role: role, with: folder, in: current)
+            guard let replacement = candidate.musicRoots.first(where: { $0.role == role }) else { return }
+            if onSave({ stored in
+                stored.musicRoots.removeAll { $0.role == role }
+                stored.musicRoots.append(replacement)
+                switch role {
+                case .active: stored.vault.activeRootID = replacement.id
+                case .archive: stored.vault.archiveRootID = replacement.id
+                case .scanOnly: break
+                }
+            }) { message = nil }
         } catch {
             message = "That folder cannot be used: \(error.localizedDescription)"
         }

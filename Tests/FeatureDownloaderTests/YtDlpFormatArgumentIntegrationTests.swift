@@ -20,6 +20,7 @@ final class YtDlpFormatArgumentIntegrationTests: XCTestCase {
         XCTAssertTrue(arguments.contains("--audio-format"))
         XCTAssertTrue(arguments.contains("mp3"))
         XCTAssertTrue(arguments.contains("bestaudio/best"))
+        XCTAssertTrue(arguments.contains("--force-ipv4"))
     }
 
     func testDownloadPassesExplicitFFmpegLocationAndHelperPathForAudioPostProcessing() async throws {
@@ -60,13 +61,5 @@ private final class CapturingRunner: ExternalProcessRunning, @unchecked Sendable
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
         lock.withLock { self.request = request }
         return .init(exitCode: 0, standardOutput: "", standardError: "")
-    }
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
     }
 }

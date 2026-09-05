@@ -167,6 +167,7 @@ extension ArchiveBrowserViewModel {
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) {
+        guard !blocksGenericProjectVaultFileActions(for: song) else { return }
         guard let merged = ArchiveSongMetadataEditor.mergedSongAfterEdit(
             for: song,
             in: songs,

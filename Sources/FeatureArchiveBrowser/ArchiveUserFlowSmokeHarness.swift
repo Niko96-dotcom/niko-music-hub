@@ -88,8 +88,7 @@ public struct FixtureDiagnosticsEvidence: Sendable, Equatable {
     let healthBadgeMatchesExport: Bool
     let skippedPanelLines: String
     let skippedPanelLinesMatchExport: Bool
-    let songWarningsPanelLines: String
-    let songWarningsPanelLinesMatchExport: Bool
+    let songWarningExportLines: [String]
     let countsPanelSongsValue: String
     let countsPanelSongWarningsValue: String
     let countsPanelMatchExport: Bool

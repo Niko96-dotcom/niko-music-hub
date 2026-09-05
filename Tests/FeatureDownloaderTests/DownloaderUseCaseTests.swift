@@ -144,6 +144,41 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertTrue(DownloaderUseCase.isRetryableForTesting(error: error))
     }
 
+    func testIsRetryableIncludesHTTP403() {
+        let error = DownloadUseCaseError.downloadFailed(
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        )
+        XCTAssertTrue(DownloaderUseCase.isRetryableForTesting(error: error))
+    }
+
+    func testHTTP403RetriesWithAFreshDownloadAttempt() async throws {
+        let outputURL = URL(fileURLWithPath: "/tmp/out/recovered.wav")
+        let downloader = FirstAttempt403Downloader(outputURL: outputURL)
+        let useCase = DownloaderUseCase(
+            downloader: downloader,
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                fileExists: { _ in true }
+            ),
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore()
+        )
+        let sourceURL = URL(string: "https://www.youtube.com/watch?v=retry")!
+
+        let outputs = try await useCase.download(
+            url: sourceURL,
+            options: DownloadJobOptions(
+                sourceURL: sourceURL,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                retries: 2
+            ),
+            progress: JobProgress(updateHandler: { _, _ in }, logHandler: { _ in })
+        )
+
+        XCTAssertEqual(outputs, [outputURL])
+        XCTAssertEqual(downloader.attemptCount, 2)
+    }
+
     func testSimulateUsesFormatSelectionAndNoPlaylist() async throws {
         let simulateRunner = CapturingSimulateRunner()
         let useCase = DownloaderUseCase(
@@ -172,6 +207,7 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertTrue(wavArgs.contains("--no-playlist"))
         XCTAssertTrue(wavArgs.contains("--extract-audio"))
         XCTAssertTrue(wavArgs.contains("wav"))
+        XCTAssertTrue(wavArgs.contains("--force-ipv4"))
         XCTAssertEqual(simulateRunner.lastRequest?.timeoutSeconds, 30)
 
         simulateRunner.reset()
@@ -304,7 +340,7 @@ private struct AvailableVersionRunner: ExternalProcessRunning {
         if request.arguments.contains("--simulate") {
             return ExternalProcessResult(exitCode: 0, standardOutput: "Sample Title", standardError: "")
         }
-        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.06.09", standardError: "")
+        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.08.19", standardError: "")
     }
 }
 
@@ -362,6 +398,44 @@ private final class CapturingDownloader: DownloadRunning, @unchecked Sendable {
     }
 }
 
+private final class FirstAttempt403Downloader: DownloadRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let outputURL: URL
+    private var storedAttemptCount = 0
+
+    var attemptCount: Int {
+        lock.withLock { storedAttemptCount }
+    }
+
+    init(outputURL: URL) {
+        self.outputURL = outputURL
+    }
+
+    func download(
+        _ request: DownloadRequest,
+        progressHandler: @escaping @Sendable (String) -> Void
+    ) async throws -> DownloadResult {
+        let attempt = lock.withLock { () -> Int in
+            storedAttemptCount += 1
+            return storedAttemptCount
+        }
+        if attempt == 1 {
+            return DownloadResult(
+                outputURLs: [],
+                sourceURL: request.sourceURL,
+                exitCode: 1,
+                standardError: "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+            )
+        }
+        return DownloadResult(
+            outputURLs: [outputURL],
+            sourceURL: request.sourceURL,
+            exitCode: 0,
+            standardError: ""
+        )
+    }
+}
+
 private struct TitleSimulateRunner: ExternalProcessRunning {
     let title: String
 
@@ -369,7 +443,7 @@ private struct TitleSimulateRunner: ExternalProcessRunning {
         if request.arguments.contains("--simulate") {
             return ExternalProcessResult(exitCode: 0, standardOutput: title, standardError: "")
         }
-        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.06.09", standardError: "")
+        return ExternalProcessResult(exitCode: 0, standardOutput: "2026.08.19", standardError: "")
     }
 }
 
@@ -394,14 +468,6 @@ private final class SpyJobRunner: JobRunning, @unchecked Sendable {
     }
 
     func cancelJob(id: Job.ID) {}
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
 }
 
 private struct FixtureSettingsStore: SettingsStore {

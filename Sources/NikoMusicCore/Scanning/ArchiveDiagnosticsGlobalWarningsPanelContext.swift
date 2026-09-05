@@ -2,10 +2,6 @@ import Foundation
 
 /// Operator-facing global warning lines for the archive diagnostics panel (parity with export `global_warning=`).
 public enum ArchiveDiagnosticsGlobalWarningsPanelContext: Sendable {
-    public static func panelLine(warning: String) -> String {
-        warning
-    }
-
     public static func exportLine(warning: String) -> String {
         "global_warning=\(warning)"
     }

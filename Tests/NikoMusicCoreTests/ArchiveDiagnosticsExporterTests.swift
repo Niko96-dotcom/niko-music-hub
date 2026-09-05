@@ -30,6 +30,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         let text = try String(contentsOf: destination, encoding: .utf8)
         XCTAssertTrue(text.contains("songs=9"))
         XCTAssertTrue(text.contains("songs_with_warnings=1"))
+        XCTAssertTrue(text.contains("song=Broken Folder Example\n  warning=No CPR project files found\n"))
         XCTAssertTrue(text.contains("skipped_entries=2"))
         XCTAssertTrue(text.contains("summary_line=roots: "))
         XCTAssertTrue(text.contains("CubaseArchive"))

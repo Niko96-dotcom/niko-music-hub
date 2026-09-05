@@ -50,7 +50,7 @@ When truncation applies, exports also include:
 
 After the fixture scan, the diagnostics panel lists **Skipped at roots** entries (`LOOSE_FILE.txt`, `README.md` on the generated fixture). Smoke asserts each panel line matches an export `skipped=kind label=… reason=…` row via `diagnostics_panel_skipped_entries_lines_match=` and `skipped_entries=2`.
 
-The **Songs with warnings** section lists each warning song (`Broken Folder Example: No CPR project files found` on the generated fixture). Smoke asserts each panel line matches export `song=` / `warning=` rows via `diagnostics_panel_song_warnings_lines_match=` and `songs_with_warnings=1`.
+Smoke compares the exported `song=` / `warning=` rows with the fixture's expected warning lines (`Broken Folder Example: No CPR project files found`). The observed rows are logged as `diagnostics_export_song_warning_lines=`; this checks exported content, not rendered panel text.
 
 The **Songs** and **Song warnings** count rows match export `songs=`, `songs_with_warnings=`, and `total_song_warnings=` via `diagnostics_panel_scan_counts_match=` (panel values `diagnostics_panel_scan_counts_songs=` / `diagnostics_panel_scan_counts_song_warnings=`).
 

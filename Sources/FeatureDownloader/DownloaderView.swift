@@ -353,7 +353,7 @@ public struct DownloaderView: View {
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
-    private static func errorCard(for message: String) -> AppErrorCard {
+    static func errorCard(for message: String) -> AppErrorCard {
         let lower = message.lowercased()
         if lower.contains("yt-dlp is required") || lower.contains("yt-dlp path") || lower.contains("outdated") {
             return AppErrorCard(
@@ -367,7 +367,18 @@ public struct DownloaderView: View {
                 ]
             )
         }
-        if lower.contains("error:") || lower.contains("unsupported") || lower.contains("video unavailable") {
+        if lower.contains("http error 403") || lower.contains("forbidden") {
+            return AppErrorCard(
+                category: .conversionFile,
+                label: "Download Temporarily Blocked",
+                icon: "arrow.trianglehead.2.clockwise.rotate.90.circle",
+                body: message,
+                recoveryActions: [
+                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                ]
+            )
+        }
+        if lower.contains("unsupported") || lower.contains("video unavailable") {
             return AppErrorCard(
                 category: .inputURL,
                 label: "URL Not Supported",

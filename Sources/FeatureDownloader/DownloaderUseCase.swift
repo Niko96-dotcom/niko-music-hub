@@ -219,6 +219,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
     private static func isRetryable(error: Error) -> Bool {
         let message = error.localizedDescription.lowercased()
         let retryablePatterns = [
+            "http error 403",
             "http error 5",
             "connection reset",
             "connection timed out",

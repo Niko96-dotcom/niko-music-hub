@@ -153,7 +153,7 @@ public struct VaultManifest: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-public enum VaultManifestError: Error, Equatable, Sendable {
+public enum VaultManifestError: LocalizedError, Equatable, Sendable {
     case missingRoot
     case enumerationFailed(String)
     case unsupportedSymbolicLink(String)
@@ -161,6 +161,25 @@ public enum VaultManifestError: Error, Equatable, Sendable {
     case invalidRelativePath(String)
     case invalidSize
     case mismatch
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingRoot:
+            return "The project or archive folder is unavailable"
+        case .enumerationFailed(let path):
+            return "Could not read all files in \(path). Check folder availability and permissions"
+        case .unsupportedSymbolicLink(let path):
+            return "Vault cannot verify a symbolic link: \(path). The actual files must be included in the project"
+        case .unsupportedFileType(let path):
+            return "Vault cannot safely copy this file type: \(path)"
+        case .invalidRelativePath:
+            return "The saved file list contains an unsafe path"
+        case .invalidSize:
+            return "The saved file list contains invalid sizes"
+        case .mismatch:
+            return "File verification failed: contents differ from the recorded copy. Check project and archive integrity before retrying"
+        }
+    }
 }
 
 /// Allocation-only evidence for legacy manifests whose immutable content

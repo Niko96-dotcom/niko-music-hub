@@ -483,14 +483,6 @@ private final class RecordingViewModelConverter: AudioConverting, @unchecked Sen
     }
 }
 
-private extension NSLock {
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}
-
 private func waitUntil(
     timeoutAttempts: Int = 50,
     _ predicate: @escaping @MainActor () -> Bool

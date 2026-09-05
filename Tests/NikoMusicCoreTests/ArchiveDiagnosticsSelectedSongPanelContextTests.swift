@@ -2,25 +2,11 @@ import XCTest
 @testable import NikoMusicCore
 
 final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
-    func testPanelTitleLineIncludesDisplayTitle() {
-        let line = ArchiveDiagnosticsSelectedSongPanelContext.panelTitleLine(
-            displayTitle: "Broken Folder Example"
-        )
-        XCTAssertEqual(line, "Broken Folder Example")
-    }
-
     func testPanelCprLineIncludesSummary() {
         let line = ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(
             cprSummary: "no CPR versions"
         )
         XCTAssertTrue(line.contains("no CPR versions"))
-    }
-
-    func testPanelWarningLineIncludesWarning() {
-        let line = ArchiveDiagnosticsSelectedSongPanelContext.panelWarningLine(
-            warning: "No CPR project files found"
-        )
-        XCTAssertTrue(line.contains("No CPR project files found"))
     }
 
     func testPanelNotesLineIncludesNotes() {

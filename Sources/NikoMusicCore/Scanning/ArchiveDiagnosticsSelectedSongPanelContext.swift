@@ -2,16 +2,8 @@ import Foundation
 
 /// Operator-facing selected song lines for the archive diagnostics panel (parity with export `selected_song`).
 public enum ArchiveDiagnosticsSelectedSongPanelContext: Sendable {
-    public static func panelTitleLine(displayTitle: String) -> String {
-        displayTitle
-    }
-
     public static func panelCprLine(cprSummary: String) -> String {
         "CPR · \(cprSummary)"
-    }
-
-    public static func panelWarningLine(warning: String) -> String {
-        warning
     }
 
     public static func panelNotesLine(notes: String) -> String {
