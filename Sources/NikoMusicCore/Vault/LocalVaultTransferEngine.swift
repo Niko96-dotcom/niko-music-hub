@@ -15,7 +15,7 @@ public struct VaultTransferInterruption: Error, Equatable, Sendable {
     public init() {}
 }
 
-public enum LocalVaultTransferError: Error, Equatable, Sendable {
+public enum LocalVaultTransferError: Error, LocalizedError, Equatable, Sendable {
     case sourceOutsideActiveRoot
     case overlappingRoots
     case unsafeStagingPath
@@ -29,6 +29,15 @@ public enum LocalVaultTransferError: Error, Equatable, Sendable {
     case transferAlreadyOwned
     case crossVolumePromotion
     case writeTargetVolumeMismatch
+
+    public var errorDescription: String? {
+        switch self {
+        case .sourceMutated:
+            "Project files changed while archiving. Finish saving and retry. The Active copy was kept."
+        default:
+            nil
+        }
+    }
 }
 
 public enum VaultTransferRetryPolicy {
@@ -348,6 +357,7 @@ public actor LocalVaultTransferEngine {
 
     private func execute(_ initial: VaultTransferRecord) async throws -> VaultTransferRecord {
         var record = initial
+        var removalAdmissionDenied = false
         do {
             while true {
                 switch record.state {
@@ -424,13 +434,17 @@ public actor LocalVaultTransferEngine {
                         record,
                         expectedSourceIdentity: sourceBinding.identity
                     )
-                    try await removalAdmission(record)
-                    // The first admission can spend time in Cubase/open-file/
-                    // activity probes. Reload policy and probe again, then
-                    // revalidate Archive and Source bytes plus the exact source
-                    // root filesystem object with no further await before the
-                    // destructive filesystem operation.
-                    try await removalAdmission(record)
+                    do {
+                        try await removalAdmission(record)
+                        // Recheck after the first probe's await boundaries.
+                        try await removalAdmission(record)
+                    } catch {
+                        // Neither admission can remove data. Keep a verified
+                        // backup retryable instead of claiming partial removal.
+                        removalAdmissionDenied = true
+                        throw error
+                    }
+                    // No further await before the destructive operation.
                     try validateRemovalEvidence(
                         record,
                         expectedSourceIdentity: sourceBinding.identity
@@ -458,9 +472,13 @@ public actor LocalVaultTransferEngine {
             let reason = failureReason(for: error)
             record.error = VaultTransferError(origin: origin, reason: reason, message: String(describing: error))
             let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
-            record.state = reason == .occupiedDestination || destructiveOrigin
-                ? .recoveryRequired
-                : .failedRecoverable
+            if removalAdmissionDenied {
+                record.state = .archiveVerified
+            } else {
+                record.state = reason == .occupiedDestination || destructiveOrigin
+                    ? .recoveryRequired
+                    : .failedRecoverable
+            }
             // Dynamic admission re-enumerates the source, so postponements consume
             // the same bounded automatic-attempt budget as provider failures.
             // Once the persisted ceiling is reached, only the explicit user path

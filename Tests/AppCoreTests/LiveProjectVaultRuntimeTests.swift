@@ -1024,7 +1024,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         }
 
         let persisted = try XCTUnwrap(fixture.transferStore().allTransferRecords().first)
-        XCTAssertEqual(persisted.state, .recoveryRequired)
+        XCTAssertEqual(persisted.state, .archiveVerified)
         XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
         XCTAssertNil(persisted.nextRetryAt)
         XCTAssertTrue(try fixture.settingsStore.loadSettings().vault.automationEmergencyStop)

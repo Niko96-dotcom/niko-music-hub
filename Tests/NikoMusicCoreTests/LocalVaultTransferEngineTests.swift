@@ -496,6 +496,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 && archiveExists
                 && archiveVerified
                 && !terminalSuccess
+                && persisted.state == .archiveVerified
                 && persisted.error?.origin == .removingActiveCopy
                 && evictionCount == 0
 
@@ -507,6 +508,18 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                     + "errorOrigin=\(String(describing: persisted.error?.origin)), evictions=\(evictionCount)"
                 )
             }
+            let retryEngine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active,
+                archiveRoot: fixture.archive,
+                store: store,
+                provider: provider,
+                writeAdmission: allowVaultWrites,
+                removalAdmission: { _ in }
+            )
+            let retried = try await retryEngine.removeActiveCopy(after: persisted)
+            XCTAssertEqual(retried.id, archived.id)
+            XCTAssertTrue([.archivedLocal, .archivedOnlineOnly].contains(retried.state))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: archived.sourceURL.path))
         }
         XCTAssertTrue(safetyFailures.isEmpty, safetyFailures.joined(separator: " | "))
     }

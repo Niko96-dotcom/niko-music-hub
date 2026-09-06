@@ -181,7 +181,7 @@ public protocol VaultAutomationActivityProbing: Sendable {
 }
 
 enum VaultActivityCommandStatus: Equatable, Sendable {
-    case exited(Int32, hasOutput: Bool = false, hasDiagnostics: Bool = false)
+    case exited(Int32, output: String = "", hasDiagnostics: Bool = false)
     case timedOut
     case cancelled
     case unavailable
@@ -207,7 +207,7 @@ struct FoundationVaultActivityCommandRunner: VaultActivityCommandRunning {
         guard !Task.isCancelled else { return .cancelled }
 
         // A warning can make lsof exit 1 even when it found open files. Keep
-        // output presence without retaining paths or risking a full pipe.
+        // bounded field output without retaining paths or risking a full pipe.
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("vault-activity-\(UUID().uuidString)", isDirectory: true)
         let outputURL = directory.appendingPathComponent("stdout")
@@ -301,8 +301,13 @@ private final class VaultActivityProcessExecution: @unchecked Sendable {
                     self.finish(.failed, terminateRunningProcess: false)
                     return
                 }
+                guard outputSize <= 1_048_576,
+                      let output = String(data: try Data(contentsOf: self.outputURL), encoding: .utf8) else {
+                    self.finish(.failed, terminateRunningProcess: false)
+                    return
+                }
                 self.finish(.exited(completedProcess.terminationStatus,
-                                    hasOutput: outputSize > 0,
+                                    output: output,
                                     hasDiagnostics: diagnosticsSize > 0), terminateRunningProcess: false)
             } catch {
                 self.finish(.failed, terminateRunningProcess: false)
@@ -408,19 +413,35 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
     public func openFileStatus(in projectURL: URL) async -> VaultActivityStatus {
         let status = await commandRunner.status(
             executable: "/usr/sbin/lsof",
-            arguments: ["-nP", "-t", "+D", projectURL.path],
+            arguments: ["-nP", "-w", "-F", "pft", "+D", projectURL.path],
             timeout: activeUseProbeTimeout
         )
         switch status {
-        case .exited(_, hasOutput: true, hasDiagnostics: _): return .busy
-        case .exited(0, _, _): return .busy
-        case .exited(1, hasOutput: false, hasDiagnostics: false): return .clear
-        case .exited(let code, _, _): return .uncertain("probe-failed-\(code)")
+        case .exited(let code, let output, let hasDiagnostics):
+            if !output.isEmpty && !Self.containsOnlyOwnDirectoryHandles(output) { return .busy }
+            guard !hasDiagnostics, code == 0 || code == 1 else {
+                return .uncertain("probe-failed-\(code)")
+            }
+            return output.isEmpty && code == 0 ? .uncertain("probe-empty-success") : .clear
         case .timedOut: return .uncertain("probe-timed-out")
         case .cancelled: return .uncertain("probe-cancelled")
         case .unavailable: return .uncertain("probe-unavailable")
         case .failed: return .uncertain("probe-failed")
         }
+    }
+
+    /// Removal pins the source inode with our own directory descriptor. Ignore
+    /// only those descriptors; our regular files and every other process count.
+    private static func containsOnlyOwnDirectoryHandles(_ output: String) -> Bool {
+        let fields = output.split(separator: "\n")
+        guard fields.first == "p\(ProcessInfo.processInfo.processIdentifier)",
+              fields.count >= 3, fields.count % 2 == 1 else { return false }
+        for index in stride(from: 1, to: fields.count, by: 2) {
+            let descriptor = fields[index]
+            guard descriptor.first == "f", Int(descriptor.dropFirst()) != nil,
+                  fields[index + 1] == "tDIR" else { return false }
+        }
+        return true
     }
 
     public func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus {

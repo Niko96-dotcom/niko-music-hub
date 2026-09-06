@@ -48,6 +48,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .mutationInProgress: "Another Project Vault operation is already in progress."
         case .transferOwned: "This project already has a Project Vault transfer that must finish or be reviewed."
         case .activityPostponed(.cubaseRunning): "Archiving is paused while Cubase or Ableton Live is running. Close the DAW and retry."
+        case .activityPostponed(.openFiles): "A program still has files open in this project. Close those files and retry. The Active copy was kept."
         case .activityPostponed(let reason): "Archiving was postponed safely: \(reason)."
         case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
         case .noVerifiedArchive: "No verified archive generation is available."

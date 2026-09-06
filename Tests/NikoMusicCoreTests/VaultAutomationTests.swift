@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import NikoMusicCore
 
@@ -240,13 +241,13 @@ final class VaultAutomationTests: XCTestCase {
         let calls = await runner.calls
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.executable, "/usr/sbin/lsof")
-        XCTAssertEqual(calls.first?.arguments, ["-nP", "-t", "+D", projectURL.path])
+        XCTAssertEqual(calls.first?.arguments, ["-nP", "-w", "-F", "pft", "+D", projectURL.path])
     }
 
     func testLsofOutputOverridesNonzeroExitAndDiagnosticsFailClosed() async {
         let cases: [(VaultActivityCommandStatus, VaultActivityStatus)] = [
-            (.exited(1, hasOutput: true, hasDiagnostics: true), .busy),
-            (.exited(1, hasOutput: true), .busy),
+            (.exited(1, output: "123\n", hasDiagnostics: true), .busy),
+            (.exited(1, output: "123\n"), .busy),
             (.exited(1, hasDiagnostics: true), .uncertain("probe-failed-1")),
             (.exited(1), .clear),
         ]
@@ -266,7 +267,7 @@ final class VaultAutomationTests: XCTestCase {
             arguments: ["-c", "printf '123\\n'; printf 'warning\\n' >&2; exit 1"],
             timeout: 2
         )
-        XCTAssertEqual(result, .exited(1, hasOutput: true, hasDiagnostics: true))
+        XCTAssertEqual(result, .exited(1, output: "123\n", hasDiagnostics: true))
     }
 
     func testRealOpenFileIsBusyAndBecomesClearAfterClosing() async throws {
@@ -281,8 +282,15 @@ final class VaultAutomationTests: XCTestCase {
         let busy = await probe.openFileStatus(in: root)
         XCTAssertEqual(busy, .busy)
         try handle.close()
+        let directoryDescriptor = root.path.withCString { Darwin.open($0, O_RDONLY | O_DIRECTORY) }
+        XCTAssertGreaterThanOrEqual(directoryDescriptor, 0)
+        defer { if directoryDescriptor >= 0 { Darwin.close(directoryDescriptor) } }
         let clear = await probe.openFileStatus(in: root)
-        XCTAssertEqual(clear, .clear)
+        XCTAssertEqual(clear, .clear, "Our source-binding directory descriptor must not block removal")
+        let reopened = try FileHandle(forReadingFrom: file)
+        defer { try? reopened.close() }
+        let busyWithDirectory = await probe.openFileStatus(in: root)
+        XCTAssertEqual(busyWithDirectory, .busy, "A regular file must still block while our directory is open")
     }
 
     func testBoundedActivityCommandRunnerReturnsAtDeadline() async throws {
