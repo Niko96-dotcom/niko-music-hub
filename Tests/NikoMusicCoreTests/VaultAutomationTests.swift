@@ -240,7 +240,49 @@ final class VaultAutomationTests: XCTestCase {
         let calls = await runner.calls
         XCTAssertEqual(calls.count, 1)
         XCTAssertEqual(calls.first?.executable, "/usr/sbin/lsof")
-        XCTAssertEqual(calls.first?.arguments, ["-nP", "+D", projectURL.path])
+        XCTAssertEqual(calls.first?.arguments, ["-nP", "-t", "+D", projectURL.path])
+    }
+
+    func testLsofOutputOverridesNonzeroExitAndDiagnosticsFailClosed() async {
+        let cases: [(VaultActivityCommandStatus, VaultActivityStatus)] = [
+            (.exited(1, hasOutput: true, hasDiagnostics: true), .busy),
+            (.exited(1, hasOutput: true), .busy),
+            (.exited(1, hasDiagnostics: true), .uncertain("probe-failed-1")),
+            (.exited(1), .clear),
+        ]
+        for (status, expected) in cases {
+            let probe = SystemVaultAutomationActivityProbe(
+                commandRunner: FixedVaultActivityCommandRunner(status: status),
+                activeUseProbeTimeout: 1
+            )
+            let result = await probe.openFileStatus(in: URL(fileURLWithPath: "/fixture"))
+            XCTAssertEqual(result, expected)
+        }
+    }
+
+    func testActivityCommandPreservesOutputPresenceWithExitOne() async {
+        let result = await FoundationVaultActivityCommandRunner().status(
+            executable: "/bin/sh",
+            arguments: ["-c", "printf '123\\n'; printf 'warning\\n' >&2; exit 1"],
+            timeout: 2
+        )
+        XCTAssertEqual(result, .exited(1, hasOutput: true, hasDiagnostics: true))
+    }
+
+    func testRealOpenFileIsBusyAndBecomesClearAfterClosing() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("fixture.cpr")
+        try Data("fixture".utf8).write(to: file)
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        let probe = SystemVaultAutomationActivityProbe()
+        let busy = await probe.openFileStatus(in: root)
+        XCTAssertEqual(busy, .busy)
+        try handle.close()
+        let clear = await probe.openFileStatus(in: root)
+        XCTAssertEqual(clear, .clear)
     }
 
     func testBoundedActivityCommandRunnerReturnsAtDeadline() async throws {

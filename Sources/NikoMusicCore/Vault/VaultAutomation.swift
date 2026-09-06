@@ -181,7 +181,7 @@ public protocol VaultAutomationActivityProbing: Sendable {
 }
 
 enum VaultActivityCommandStatus: Equatable, Sendable {
-    case exited(Int32)
+    case exited(Int32, hasOutput: Bool = false, hasDiagnostics: Bool = false)
     case timedOut
     case cancelled
     case unavailable
@@ -206,10 +206,34 @@ struct FoundationVaultActivityCommandRunner: VaultActivityCommandRunning {
         guard timeout > 0 else { return .timedOut }
         guard !Task.isCancelled else { return .cancelled }
 
+        // A warning can make lsof exit 1 even when it found open files. Keep
+        // output presence without retaining paths or risking a full pipe.
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vault-activity-\(UUID().uuidString)", isDirectory: true)
+        let outputURL = directory.appendingPathComponent("stdout")
+        let diagnosticsURL = directory.appendingPathComponent("stderr")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output: FileHandle
+        let diagnostics: FileHandle
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            try Data().write(to: outputURL)
+            try Data().write(to: diagnosticsURL)
+            output = try FileHandle(forWritingTo: outputURL)
+            diagnostics = try FileHandle(forWritingTo: diagnosticsURL)
+        } catch { return .failed }
+        defer {
+            try? output.close()
+            try? diagnostics.close()
+        }
         let execution = VaultActivityProcessExecution(
             executable: executable,
             arguments: arguments,
-            timeout: timeout
+            timeout: timeout,
+            output: output,
+            diagnostics: diagnostics,
+            outputURL: outputURL,
+            diagnosticsURL: diagnosticsURL
         )
         return await withTaskCancellationHandler {
             await execution.start()
@@ -223,16 +247,25 @@ private final class VaultActivityProcessExecution: @unchecked Sendable {
     private let executable: String
     private let arguments: [String]
     private let timeout: TimeInterval
+    private let output: FileHandle
+    private let diagnostics: FileHandle
+    private let outputURL: URL
+    private let diagnosticsURL: URL
     private let lock = NSLock()
     private var process: Process?
     private var continuation: CheckedContinuation<VaultActivityCommandStatus, Never>?
     private var result: VaultActivityCommandStatus?
     private var timeoutWorkItem: DispatchWorkItem?
 
-    init(executable: String, arguments: [String], timeout: TimeInterval) {
+    init(executable: String, arguments: [String], timeout: TimeInterval,
+         output: FileHandle, diagnostics: FileHandle, outputURL: URL, diagnosticsURL: URL) {
         self.executable = executable
         self.arguments = arguments
         self.timeout = timeout
+        self.output = output
+        self.diagnostics = diagnostics
+        self.outputURL = outputURL
+        self.diagnosticsURL = diagnosticsURL
     }
 
     func start() async -> VaultActivityCommandStatus {
@@ -257,10 +290,23 @@ private final class VaultActivityProcessExecution: @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardOutput = output
+        process.standardError = diagnostics
         process.terminationHandler = { [weak self] completedProcess in
-            self?.finish(.exited(completedProcess.terminationStatus), terminateRunningProcess: false)
+            guard let self else { return }
+            do {
+                let outputSize = try self.outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                let diagnosticsSize = try self.diagnosticsURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                guard let outputSize, let diagnosticsSize else {
+                    self.finish(.failed, terminateRunningProcess: false)
+                    return
+                }
+                self.finish(.exited(completedProcess.terminationStatus,
+                                    hasOutput: outputSize > 0,
+                                    hasDiagnostics: diagnosticsSize > 0), terminateRunningProcess: false)
+            } catch {
+                self.finish(.failed, terminateRunningProcess: false)
+            }
         }
 
         let shouldLaunch = lock.withLock { () -> Bool in
@@ -362,13 +408,14 @@ public struct SystemVaultAutomationActivityProbe: VaultAutomationActivityProbing
     public func openFileStatus(in projectURL: URL) async -> VaultActivityStatus {
         let status = await commandRunner.status(
             executable: "/usr/sbin/lsof",
-            arguments: ["-nP", "+D", projectURL.path],
+            arguments: ["-nP", "-t", "+D", projectURL.path],
             timeout: activeUseProbeTimeout
         )
         switch status {
-        case .exited(0): return .busy
-        case .exited(1): return .clear
-        case .exited(let code): return .uncertain("probe-failed-\(code)")
+        case .exited(_, hasOutput: true, hasDiagnostics: _): return .busy
+        case .exited(0, _, _): return .busy
+        case .exited(1, hasOutput: false, hasDiagnostics: false): return .clear
+        case .exited(let code, _, _): return .uncertain("probe-failed-\(code)")
         case .timedOut: return .uncertain("probe-timed-out")
         case .cancelled: return .uncertain("probe-cancelled")
         case .unavailable: return .uncertain("probe-unavailable")

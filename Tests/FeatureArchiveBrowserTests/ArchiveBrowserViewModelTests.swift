@@ -1323,7 +1323,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(retryCallCount, 1)
         XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
         XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .openInCubase)
-        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
+        XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
     }
 
     func testRetryBusyStateClearsOnlyAfterRuntimeCompletes() async throws {
@@ -2499,13 +2499,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
+        XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
 
         for _ in 0..<100 where viewModel.isScanning {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertFalse(viewModel.isScanning)
-        XCTAssertEqual(viewModel.statusMessage, "Project Vault retry completed and verified.")
+        XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
     }
 
     func testManualPreviewSurvivesRescan() async throws {
