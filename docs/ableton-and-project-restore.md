@@ -2,7 +2,7 @@
 
 ## Song folders
 
-Choose an archive root containing your song folders. Each immediate child folder is one song. The scanner finds Cubase `.cpr` and Ableton Live `.als` files recursively inside it, including DAW-specific subfolders. Separate folders remain separate songs even if their project filenames match.
+Choose an archive root containing your song folders. Each immediate child folder is one song. The scanner finds Cubase `.cpr` and Ableton Live `.als` files recursively inside it, including DAW-specific subfolders. Separate folders remain separate songs even if their project files are identical. Vault cannot reuse a transfer to remove a different Active folder, or reuse a generation from a previously configured Vault root.
 
 ```text
 Music/                         ← choose this as the archive root
@@ -45,7 +45,7 @@ Manual archiving requires Project Vault enabled, independent backup confirmation
 
 Archive, backup, restore, and retry requests for different songs share one queue and run in the order requested. Repeated clicks for a song already running or waiting are ignored. Song details show the running action or queue position and let you cancel a waiting request. Safety settings and configured folders are checked again before execution. A failed request is marked for attention, and the next song continues.
 
-Waiting requests remain queued while Niko Music Hub is open; they are not saved across quitting the app. Transfers that already started retain the existing durable recovery records.
+Waiting requests remain queued while Niko Music Hub is open; they are not saved across quitting the app. If requests are running or waiting, Quit asks you to keep Music Hub open or explicitly cancel waiting requests and quit. Transfers that already started retain durable recovery records.
 
 ## Restore in the UI
 
@@ -56,6 +56,16 @@ Waiting requests remain queued while Niko Music Hub is open; they are not saved 
 5. After restore, the song is active again. Use **Keep Local** if you want automatic archiving to leave that active copy on the Mac.
 
 Restore opens the newest working project in the restored folder. For mixed songs, use **Project versions** after restoration to open or select a different version. **Keep Local** alone does not download an archived song. **Test Restore** in Settings runs a disposable rehearsal; it does not restore one of your songs. If an online-only generation requires manual download, the UI directs you to its exact Finder location and **Retry Get Local**.
+
+## Recover an interrupted archive
+
+If the app stops while removing an Active copy or evicting a provider cache, launch recovery pauses that transfer for review. Song details offer **Recover Verified Project**. This downloads the archive if needed, verifies its complete manifest, preserves any surviving Active folder under `.niko-recovery` inside Active Projects, and restores a complete verified copy. **Reveal Preserved Files** opens the preserved folder so you can compare any newer work. Recovery never merges or deletes those surviving files. It requires available configured folders, sufficient free space, closed DAWs/project files, and Emergency Stop off. A corrupt archive or unsafe path stops recovery and retains existing copies.
+
+## Independent backup and catalog recovery
+
+The independent-backup checkbox records your confirmation; Music Hub does not create or verify that backup for you. Back up the complete song folders and Vault generations, plus the Hub catalog and settings. Archive manifests, transfer history and song metadata are stored in `~/Library/Application Support/Niko Music Hub/archive-index.sqlite`. With Music Hub quit, back up its application-support folder and settings together; a live SQLite copy requires a consistent SQLite backup, including committed WAL changes, rather than copying just the database file.
+
+For catalog loss, quit Music Hub, preserve the damaged application-support folder, and restore a known-good backup. Reconnect or reselect the original Active and Vault folders, then verify a disposable restore before normal use. Do not delete a damaged catalog to dismiss an error: without the catalog, existing generation folders alone do not reconstruct verified Vault history. A replacement Mac also needs DAWs, plug-ins and their licenses, external sample libraries, and newly granted folder access. A same-Mac recovery rehearsal does not prove replacement-Mac compatibility.
 
 ## Ableton portability
 

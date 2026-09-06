@@ -5,6 +5,80 @@ import NikoMusicCore
 import XCTest
 
 final class LiveProjectVaultRuntimeTests: XCTestCase {
+    func testIdenticalSiblingProjectsArchiveIndependently() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        // Exercise a root alias with a different path length from the canonical
+        // song URL, as /tmp and /private/tmp do in the actual macOS UI.
+        let alias = fixture.root.appendingPathComponent("Active Folder Alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.active)
+        let activeID = fixture.activeID
+        try fixture.settingsStore.updateSettings {
+            $0.musicRoots.removeAll { $0.role == .active }
+            $0.musicRoots.append(StoredMusicRoot(id: activeID, role: .active, url: alias))
+        }
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let first = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        XCTAssertEqual(first.record.locations.first?.relativePath, "Synthetic Song")
+        let sibling = fixture.active.appendingPathComponent("Separate Song", isDirectory: true)
+        try FileManager.default.copyItem(at: fixture.project, to: sibling)
+        let file = sibling.appendingPathComponent("Synthetic Song.cpr")
+        let version = ProjectVersion(filePath: file, fileName: file.lastPathComponent, modifiedAt: Date(timeIntervalSince1970: 1))
+        let song = Song(folderPath: sibling, originalFolderName: "Separate Song", displayTitle: "Separate Song", projectVersions: [version], latestCPR: version)
+        let archived = try await runtime.archive(song: song, trigger: .manual)
+        XCTAssertNotEqual(archived.record.id, first.record.id)
+        XCTAssertEqual(archived.transfer?.sourceURL.resolvingSymlinksInPath().path, sibling.resolvingSymlinksInPath().path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sibling.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().record(id: XCTUnwrap(first.transfer?.id))?.state, .archiveVerified)
+        let restored = try await runtime.restoreAndOpen(snapshot: archived)
+        XCTAssertEqual(restored.destinationURL.resolvingSymlinksInPath().path, sibling.resolvingSymlinksInPath().path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testChangingVaultRootCreatesGenerationInNewRootWithoutReusingOldTransfer() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let first = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let nextRoot = fixture.root.appendingPathComponent("Replacement Vault", isDirectory: true)
+        try FileManager.default.createDirectory(at: nextRoot, withIntermediateDirectories: true)
+        let stored = StoredMusicRoot(role: .archive, url: nextRoot)
+        try fixture.settingsStore.updateSettings {
+            $0.musicRoots.removeAll { $0.role == .archive }
+            $0.musicRoots.append(stored)
+            $0.vault.archiveRootID = stored.id
+        }
+        let next = try await runtime.archive(song: fixture.song, trigger: .manual)
+        XCTAssertNotEqual(next.transfer?.id, first.transfer?.id)
+        XCTAssertEqual(next.transfer?.state, .archivedLocal)
+        XCTAssertTrue(try XCTUnwrap(next.transfer?.destinationURL).path.hasPrefix(nextRoot.path))
+        XCTAssertEqual(try fixture.transferStore().record(id: XCTUnwrap(first.transfer?.id))?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(first.transfer?.destinationURL).path))
+    }
+
+    func testReviewedInterruptedRemovalRestoresWithoutOverwritingPartialActive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        var record = try XCTUnwrap(snapshot.transfer)
+        record.state = .recoveryRequired
+        record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try fixture.transferStore().save(record)
+        let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
+        try Data("surviving partial contents".utf8).write(to: fixture.project.appendingPathComponent(projectFile.relativePath))
+        let restored = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
+        XCTAssertNotNil(restored.completedAt)
+        try VaultManifestBuilder().verify(before, at: restored.destinationURL)
+        let preserved = try XCTUnwrap(try fixture.transferStore().record(id: record.id)?.preservedActiveCopies?.last)
+        XCTAssertEqual(try Data(contentsOf: preserved.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
+    }
+
     func testManualArchiveRemovesActiveAndCanRearchiveRestoredGeneration() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -138,6 +212,26 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertNil(next)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
+    }
+
+    func testMutationFileLeaseReportsAccessFailuresWithoutClaimingContention() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("vault-lock-errors-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lock = root.appendingPathComponent("lease")
+        XCTAssertThrowsError(try ProjectVaultMutationFileLease(url: lock)) { error in
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .mutationLockUnavailable(ENOENT))
+        }
+        try FileManager.default.createDirectory(at: lock, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try ProjectVaultMutationFileLease(url: lock)) { error in
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .mutationLockUnavailable(EISDIR))
+        }
+        try FileManager.default.removeItem(at: lock)
+        try Data().write(to: lock)
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: lock.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: lock.path) }
+        XCTAssertThrowsError(try ProjectVaultMutationFileLease(url: lock)) { error in
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .mutationLockUnavailable(EACCES))
+        }
     }
 
     func testMutationFileLeaseIsNonblockingAcrossProcessesAndAutoReleasesOnExit() throws {

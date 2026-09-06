@@ -83,6 +83,23 @@ public enum VaultAutomationPostponement: Equatable, Sendable {
     case recentWriteActivity
     case uncertainActivity(String)
 
+    public var message: String {
+        switch self {
+        case .vaultDisabled: "Project Vault is disabled."
+        case .automaticArchivingDisabled: "Automatic archiving is disabled."
+        case .keepLocal: "Keep Local is enabled for this song."
+        case .invalidPolicy: "Check the Project Vault free-space and inactivity settings."
+        case .archiveCapacityUnavailable: "Available space could not be checked. Reconnect the destination drive and check folder access, then retry."
+        case .insufficientArchiveCapacity: "There is not enough free space on the destination for this project plus the configured copying reserve. Free space and retry. Existing copies were kept."
+        case .unknownLastActivity: "The project's last activity could not be determined."
+        case .notOldEnoughAndNoDiskPressure: "This project is not yet eligible for automatic archiving."
+        case .cubaseRunning: "Close Cubase and Ableton Live before removing the Active copy."
+        case .openFiles: "Close programs using files in this project and retry."
+        case .recentWriteActivity: "Files in this project are still changing. Wait for saving to finish and retry."
+        case .uncertainActivity(let reason): "Project activity could not be checked: \(reason). Existing copies were kept."
+        }
+    }
+
     public var permitsBoundedAutomaticRetry: Bool {
         switch self {
         case .cubaseRunning, .openFiles, .recentWriteActivity, .uncertainActivity:

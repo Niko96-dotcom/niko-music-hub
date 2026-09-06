@@ -4,6 +4,74 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultTransferEngineTests: XCTestCase {
+    func testExplicitRemovalRecoveryPreservesCompleteAndPartialActiveCopies() async throws {
+        for sourceState in ["complete", "partial", "missing"] {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            var record = try await verifiedArchive(fixture: fixture, store: store)
+            record.state = .recoveryRequired
+            record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+            try store.save(record)
+            if sourceState == "partial" {
+                try FileManager.default.removeItem(at: fixture.source.appendingPathComponent("Audio/take.wav"))
+            } else if sourceState == "missing" {
+                try FileManager.default.removeItem(at: fixture.source)
+            }
+            let before = try fixture.snapshotSource()
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive, store: store,
+                writeAdmission: allowVaultWrites, removalAdmission: { _ in }
+            )
+            let recovered = try await engine.recoverInterruptedRemoval(id: record.id)
+            XCTAssertEqual(recovered.state, .archiveVerified)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+            if sourceState != "missing" {
+                let preserved = try XCTUnwrap(recovered.preservedActiveCopies?.last)
+                XCTAssertEqual(try fixture.snapshot(at: preserved), before)
+            } else { XCTAssertNil(recovered.preservedActiveCopies) }
+            XCTAssertEqual(try store.record(id: record.id), recovered)
+            try VaultManifestBuilder().verify(try XCTUnwrap(record.manifest), at: record.destinationURL)
+            do {
+                _ = try await engine.recoverInterruptedRemoval(id: record.id)
+                XCTFail("A completed review must not run twice")
+            } catch {}
+        }
+    }
+
+    func testExplicitRecoveryRejectsCorruptArchiveAndUnsafePreservationPath() async throws {
+        for failure in ["corrupt", "symlink", "admission"] {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            var record = try await verifiedArchive(fixture: fixture, store: store)
+            record.state = .recoveryRequired
+            record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+            try store.save(record)
+            if failure == "corrupt" {
+                try Data("corrupt".utf8).write(to: record.destinationURL.appendingPathComponent("Artist Song.cpr"))
+            } else if failure == "symlink" {
+                try FileManager.default.createSymbolicLink(
+                    at: fixture.active.appendingPathComponent(".niko-recovery"), withDestinationURL: fixture.archive
+                )
+            }
+            let before = try fixture.snapshotSource()
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive, store: store,
+                writeAdmission: allowVaultWrites,
+                removalAdmission: { _ in
+                    if failure == "admission" { throw VaultWriteAdmissionError.postponed(.openFiles) }
+                }
+            )
+            do {
+                _ = try await engine.recoverInterruptedRemoval(id: record.id)
+                XCTFail("Unsafe recovery must fail")
+            } catch {}
+            XCTAssertEqual(try fixture.snapshotSource(), before)
+            XCTAssertEqual(try store.record(id: record.id)?.state, .recoveryRequired)
+        }
+    }
+
     func testRecoveryDoesNotReadVerifiedArchivesWithoutOlderTransfersToRetire() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

@@ -66,6 +66,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
+    public var pendingProjectVaultOperationCount: Int { projectVaultBusySongIDs.count }
     @Published var projectVaultBusySongIDs: Set<String> = []
     @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
     @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation?

@@ -26,12 +26,14 @@ public struct ProjectVaultRuntimeSnapshot: Sendable, Equatable {
 
 public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case unavailable
+    case rootUnavailable(MusicRootRole)
     case disabled
     case automaticArchivingDisabled
     case independentBackupRequired
     case emergencyStop
     case keepLocal
     case mutationInProgress
+    case mutationLockUnavailable(Int32)
     case transferOwned
     case activityPostponed(VaultAutomationPostponement)
     case archiveFailed(String)
@@ -40,16 +42,18 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .unavailable: "Project Vault needs valid Active Projects and Archive roots."
+        case .rootUnavailable(let role): "The \(role == .active ? "Active Projects" : "Archive / Vault") folder is unavailable. Reconnect its drive or choose the folder again in Project Vault settings, then retry."
         case .disabled: "Project Vault is disabled."
         case .automaticArchivingDisabled: "Automatic archiving is disabled."
         case .independentBackupRequired: "Protect the Archive with an independent backup and confirm it in Project Vault settings before removing the Active copy. Use Create Backup Copy to keep the project local."
         case .emergencyStop: "Project Vault Emergency Stop is on."
         case .keepLocal: "Turn off Keep Local before archiving this project."
         case .mutationInProgress: "Another Project Vault operation is already in progress."
+        case .mutationLockUnavailable(let code): "Project Vault cannot access its operation lock: \(String(cString: strerror(code))). Check access to the app data folder and retry."
         case .transferOwned: "This project already has a Project Vault transfer that must finish or be reviewed."
         case .activityPostponed(.cubaseRunning): "Archiving is paused while Cubase or Ableton Live is running. Close the DAW and retry."
         case .activityPostponed(.openFiles): "A program still has files open in this project. Close those files and retry. The Active copy was kept."
-        case .activityPostponed(let reason): "Archiving was postponed safely: \(reason)."
+        case .activityPostponed(let reason): reason.message
         case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
         case .noVerifiedArchive: "No verified archive generation is available."
         }
@@ -422,12 +426,17 @@ public protocol ProjectVaultOperating: Sendable {
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot
     func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord
     func retryRestore(id: UUID) async throws -> VaultRestoreRecord
+    func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord
     func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot
     func recoverAtLaunch() async
     func nextAutomaticRecoveryDate() async throws -> Date?
 }
 
 public extension ProjectVaultOperating {
+    func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
+        throw ProjectVaultRuntimeError.unavailable
+    }
+
     func nextAutomaticRecoveryDate() async throws -> Date? { nil }
 
     func retryRestore(id: UUID) async throws -> VaultRestoreRecord {
@@ -553,7 +562,14 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         var terminalUsability: [UUID: Bool] = [:]
         func matchesCurrentSource(_ transfer: VaultTransferRecord) throws -> Bool {
             if let cached = terminalIdentityMatches[transfer.id] { return cached }
-            guard let expected = transfer.manifest,
+            let canonicalSource = song.folderPath.standardizedFileURL.resolvingSymlinksInPath()
+            let expectedGeneration = configuration.archive.url
+                .appendingPathComponent("generations", isDirectory: true)
+                .appendingPathComponent(transfer.projectID.description, isDirectory: true)
+                .appendingPathComponent("generation-\(transfer.id.uuidString.lowercased())", isDirectory: true)
+            guard transfer.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path == canonicalSource.path,
+                  transfer.destinationURL.standardizedFileURL.resolvingSymlinksInPath().path == expectedGeneration.standardizedFileURL.resolvingSymlinksInPath().path,
+                  let expected = transfer.manifest,
                   transfer.manifestID == expected.id else {
                 terminalIdentityMatches[transfer.id] = false
                 return false
@@ -751,6 +767,51 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         return try await engine.restoreAndOpen(projectID: snapshot.record.id, destinationRelativePath: relativePath)
     }
 
+    public func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
+        let lease = try acquireMutationLease()
+        defer { releaseMutationLease(lease) }
+        let configuration = try configuration()
+        let settings = try settingsStore.loadSettings()
+        guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
+        guard let requested = snapshot.transfer,
+              let transfer = try latestTransfer(projectID: snapshot.record.id),
+              transfer.id == requested.id, transfer.state == .recoveryRequired else {
+            throw ProjectVaultRuntimeError.unavailable
+        }
+        let activity = activityProbe
+        let store = settingsStore
+        let provider = archiveProvider(root: configuration.archive.url)
+        let recovery = try LocalVaultTransferEngine(
+            activeRoot: configuration.active.url, archiveRoot: configuration.archive.url,
+            store: transferStore, provider: provider,
+            writeAdmission: makeWriteAdmission(settings: settings),
+            removalAdmission: { record in
+                let current = try store.loadSettings()
+                guard current.vault.isEnabled else { throw ProjectVaultRuntimeError.disabled }
+                guard !current.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
+                guard current.vault.activeRootID == configuration.active.id,
+                      current.vault.archiveRootID == configuration.archive.id else { throw ProjectVaultRuntimeError.unavailable }
+                guard await activity.cubaseStatus() == .clear else {
+                    throw ProjectVaultRuntimeError.activityPostponed(.cubaseRunning)
+                }
+                guard await activity.openFileStatus(in: record.sourceURL) == .clear else {
+                    throw ProjectVaultRuntimeError.activityPostponed(.openFiles)
+                }
+            }
+        )
+        let verified = try await recovery.recoverInterruptedRemoval(id: transfer.id)
+        let restore = LocalVaultRestoreEngine(
+            activeRoot: configuration.active.url, archiveRoot: configuration.archive.url,
+            activeRootID: configuration.active.id, resolver: transferStore,
+            store: transferStore, projectionStore: transferStore, provider: provider,
+            catalog: catalogStore, projectOpener: projectOpener,
+            writeAdmission: makeWriteAdmission(settings: settings)
+        )
+        return try await restore.restoreAndOpen(
+            projectID: verified.projectID, destinationRelativePath: verified.sourceURL.lastPathComponent
+        )
+    }
+
     public func retryRestore(id: UUID) async throws -> VaultRestoreRecord {
         let lease = try acquireMutationLease()
         defer { releaseMutationLease(lease) }
@@ -915,17 +976,22 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             throw ProjectVaultRuntimeError.unavailable
         }
         let resolver = FoundationSecurityScopedBookmarks()
+        func resolve(_ root: StoredMusicRoot) throws -> URL {
+            do { return try root.resolvedURL(using: resolver) }
+            catch { throw ProjectVaultRuntimeError.rootUnavailable(root.role) }
+        }
         return Configuration(
-            active: (activeID, try active.resolvedURL(using: resolver)),
-            archive: (archiveID, try archive.resolvedURL(using: resolver))
+            active: (activeID, try resolve(active)),
+            archive: (archiveID, try resolve(archive))
         )
     }
 
     private func ensureCatalogEntry(for song: Song, configuration: Configuration) throws -> ProjectCatalogEntry {
         let existing = try catalogStore.loadEntries()
+        let canonicalSource = song.folderPath.standardizedFileURL.resolvingSymlinksInPath()
         if let transfer = try transferStore.allTransferRecords().first(where: {
             $0.state != .superseded
-                && $0.sourceURL.standardizedFileURL == song.folderPath.standardizedFileURL
+                && $0.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path == canonicalSource.path
         }),
            let index = existing.firstIndex(where: { $0.record.id == transfer.projectID }) {
             var entries = existing
@@ -944,18 +1010,35 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             return ProjectFileIdentity(name: version.fileName, byteCount: Int64(values?.fileSize ?? 0), modifiedAt: version.modifiedAt)
         })
         let evidence = ProjectIdentityEvidence(folderName: song.originalFolderName, cubaseFiles: files)
+        let canonicalActive = configuration.active.url.standardizedFileURL.resolvingSymlinksInPath()
+        guard PathSafety().isResolvedContainedWithoutNestedSymlinks(canonicalSource, in: canonicalActive),
+              canonicalSource.path != canonicalActive.path else {
+            throw LocalVaultTransferError.sourceOutsideActiveRoot
+        }
         let location = ProjectLocation(
             rootID: configuration.active.id,
-            relativePath: String(song.folderPath.path.dropFirst(configuration.active.url.path.count + 1)),
+            relativePath: String(canonicalSource.path.dropFirst(canonicalActive.path.count + 1)),
             kind: .active
         )
+        // Identical files can be separate songs. Do not adopt another folder's
+        // identity while that Active folder still exists beside this one.
+        let separateActiveEntries = existing.filter { entry in
+            entry.record.locations.contains { location in
+                guard location.kind == .active, location.rootID == configuration.active.id else { return false }
+                let other = configuration.active.url.appendingPathComponent(location.relativePath)
+                    .standardizedFileURL.resolvingSymlinksInPath()
+                return other.path != canonicalSource.path && FileManager.default.fileExists(atPath: other.path)
+            }
+        }
+        let separateIDs = Set(separateActiveEntries.map { $0.record.id })
         let reconciliation = ProjectCatalogReconciler().reconcile(
-            existing: existing,
+            existing: existing.filter { !separateIDs.contains($0.record.id) },
             existingReviews: try catalogStore.loadReviews(),
             observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)],
             markUnobservedMissing: false
         )
         var updated = reconciliation
+        updated.entries.append(contentsOf: separateActiveEntries)
         // Reconciliation refreshes lastSeenAt on an existing location. Resolve
         // the observation's returned identity instead of comparing the entire
         // location value (including its now-stale timestamp).
@@ -1220,12 +1303,16 @@ final class ProjectVaultMutationFileLease: @unchecked Sendable {
     init(url: URL) throws {
         descriptor = Darwin.open(url.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else {
-            throw ProjectVaultRuntimeError.mutationInProgress
+            throw ProjectVaultRuntimeError.mutationLockUnavailable(errno)
         }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            let code = errno
             Darwin.close(descriptor)
             descriptor = -1
-            throw ProjectVaultRuntimeError.mutationInProgress
+            if code == EWOULDBLOCK || code == EAGAIN {
+                throw ProjectVaultRuntimeError.mutationInProgress
+            }
+            throw ProjectVaultRuntimeError.mutationLockUnavailable(code)
         }
     }
 

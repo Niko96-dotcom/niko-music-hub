@@ -31,6 +31,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
     public var error: VaultTransferError?
     public var durability: VaultDurability?
     public var supersededBy: UUID?
+    public var preservedActiveCopies: [URL]?
 
     public init(
         id: UUID = UUID(),
@@ -59,12 +60,13 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         self.error = nil
         self.durability = nil
         self.supersededBy = nil
+        self.preservedActiveCopies = nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, projectID, sourceURL, stagingURL, destinationURL
         case manifestID, manifest, projectionSupplement, state, completedBytes, totalBytes, retryCount
-        case nextRetryAt, createdAt, updatedAt, error, durability, supersededBy
+        case nextRetryAt, createdAt, updatedAt, error, durability, supersededBy, preservedActiveCopies
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,6 +92,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         error = try values.decodeIfPresent(VaultTransferError.self, forKey: .error)
         durability = try values.decodeIfPresent(VaultDurability.self, forKey: .durability)
         supersededBy = try values.decodeIfPresent(UUID.self, forKey: .supersededBy)
+        preservedActiveCopies = try values.decodeIfPresent([URL].self, forKey: .preservedActiveCopies)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -112,6 +115,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         try values.encodeIfPresent(error, forKey: .error)
         try values.encodeIfPresent(durability, forKey: .durability)
         try values.encodeIfPresent(supersededBy, forKey: .supersededBy)
+        try values.encodeIfPresent(preservedActiveCopies, forKey: .preservedActiveCopies)
     }
 }
 

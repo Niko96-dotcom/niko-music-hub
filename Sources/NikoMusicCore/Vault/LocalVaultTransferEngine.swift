@@ -34,8 +34,22 @@ public enum LocalVaultTransferError: Error, LocalizedError, Equatable, Sendable 
         switch self {
         case .sourceMutated:
             "Project files changed while archiving. Finish saving and retry. The Active copy was kept."
-        default:
-            nil
+        case .sourceOutsideActiveRoot:
+            "The project is outside the configured Active Projects folder. Check the selected folders."
+        case .overlappingRoots:
+            "Active Projects and Archive / Vault must be separate folders."
+        case .unsafeStagingPath, .unsafeDestinationPath:
+            "The saved transfer paths do not match the configured folders, or contain an unsafe link. Reconnect the original folders before retrying."
+        case .occupiedDestination:
+            "The destination already contains files. Existing copies were kept."
+        case .missingManifest, .missingPersistedArchiveEvidence:
+            "The archive has no valid verification record. Existing copies were kept."
+        case .writeAdmissionRequired, .removalAdmissionRequired:
+            "The required Project Vault safety check is unavailable. Existing copies were kept."
+        case .transferAlreadyOwned:
+            "This project already has an unfinished transfer. Review or retry that transfer first."
+        case .crossVolumePromotion, .writeTargetVolumeMismatch:
+            "The destination volume changed during the transfer. Reconnect the original volume and retry."
         }
     }
 }
@@ -102,8 +116,14 @@ public struct VaultWriteAdmissionRequest: Equatable, Sendable {
     }
 }
 
-public enum VaultWriteAdmissionError: Error, Equatable, Sendable {
+public enum VaultWriteAdmissionError: Error, LocalizedError, Equatable, Sendable {
     case postponed(VaultAutomationPostponement)
+
+    public var errorDescription: String? {
+        switch self {
+        case .postponed(let reason): reason.message
+        }
+    }
 }
 
 public actor LocalVaultTransferEngine {
@@ -321,6 +341,89 @@ public actor LocalVaultTransferEngine {
         }
     }
 
+    /// Explicit user recovery only. Never resumes removal: preserve any surviving
+    /// Active directory, then make the freshly verified archive restorable again.
+    public func recoverInterruptedRemoval(id: UUID) async throws -> VaultTransferRecord {
+        guard var record = try store.record(id: id), record.state == .recoveryRequired,
+              let origin = record.error?.origin,
+              [.removingActiveCopy, .evictingProviderCache].contains(origin),
+              record.supersededBy == nil, let manifest = record.manifest,
+              record.manifestID == manifest.id, record.durability != nil else {
+            throw LocalVaultTransferError.missingPersistedArchiveEvidence
+        }
+        try validatePaths(record)
+        let destination = record.destinationURL
+        let expectedGeneration = archiveRoot.appendingPathComponent("generations", isDirectory: true)
+            .appendingPathComponent(record.projectID.description, isDirectory: true)
+            .appendingPathComponent("generation-\(record.id.uuidString.lowercased())", isDirectory: true)
+        guard destination.standardizedFileURL.resolvingSymlinksInPath() == expectedGeneration.standardizedFileURL.resolvingSymlinksInPath() else {
+            throw LocalVaultTransferError.unsafeDestinationPath
+        }
+        if try await provider.currentLocality(at: destination, manifest: manifest) != .fullyLocalCurrent {
+            let provider = self.provider
+            try await writeAdmission(VaultWriteAdmissionRequest(
+                target: .archive, sourceURL: nil, targetRootURL: archiveRoot,
+                minimumProjectedBytes: manifest.totalBytes, manifest: manifest
+            )) { try await provider.materialize(destination, manifest: manifest) }
+        }
+        try await provider.prepareForRead(destination)
+        try validatePaths(record)
+        try manifestBuilder.verify(manifest, at: destination)
+        if fileManager.fileExists(atPath: record.sourceURL.path) {
+            let binding = try SourceRootFileSystemBinding(opening: record.sourceURL)
+            let preserved = activeRoot.appendingPathComponent(".niko-recovery", isDirectory: true)
+                .appendingPathComponent(record.id.uuidString.lowercased(), isDirectory: true)
+                .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+                .appendingPathComponent(record.sourceURL.lastPathComponent, isDirectory: true)
+            record.preservedActiveCopies = (record.preservedActiveCopies ?? []) + [preserved]
+            // Persist the preservation destination before moving anything. A crash
+            // on either side of the move leaves both paths available for review.
+            try persist(&record)
+            let recoveryRecord = record
+            let expectedIdentity = binding.identity
+            try await removalAdmission(record)
+            try await writeAdmission(VaultWriteAdmissionRequest(
+                target: .active, sourceURL: nil, targetRootURL: activeRoot,
+                minimumProjectedBytes: manifest.totalBytes, manifest: manifest
+            )) {
+                try await self.preserveActiveForRecovery(
+                    recoveryRecord, at: preserved, expectedIdentity: expectedIdentity
+                )
+            }
+            withExtendedLifetime(binding) {}
+        }
+        try validatePaths(record)
+        guard !fileManager.fileExists(atPath: record.sourceURL.path) else {
+            throw LocalVaultTransferError.occupiedDestination
+        }
+        try manifestBuilder.verify(manifest, at: destination)
+        record.state = .archiveVerified
+        record.error = nil
+        record.nextRetryAt = nil
+        try persist(&record)
+        return record
+    }
+
+    private func preserveActiveForRecovery(
+        _ record: VaultTransferRecord, at preserved: URL, expectedIdentity: SourceFileSystemIdentity
+    ) throws {
+        try validatePaths(record)
+        let safety = PathSafety()
+        guard safety.isResolvedContainedWithoutNestedSymlinks(preserved, in: activeRoot),
+              safety.isResolvedContainedWithoutNestedSymlinks(record.sourceURL, in: activeRoot),
+              try Self.sourceFileSystemIdentity(at: record.sourceURL) == expectedIdentity,
+              !fileManager.fileExists(atPath: preserved.path), let manifest = record.manifest else {
+            throw LocalVaultTransferError.unsafeDestinationPath
+        }
+        try manifestBuilder.verify(manifest, at: record.destinationURL)
+        try fileManager.createDirectory(at: preserved.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard safety.isResolvedContainedWithoutNestedSymlinks(preserved, in: activeRoot),
+              try Self.sourceFileSystemIdentity(at: record.sourceURL) == expectedIdentity else {
+            throw LocalVaultTransferError.sourceMutated
+        }
+        try fileManager.moveItem(at: record.sourceURL, to: preserved)
+    }
+
     /// Removes the Active copy only after independently reloading the terminal
     /// archive record and re-verifying its manifest. Automatic callers should
     /// perform their final activity/open-file probe immediately before calling.
@@ -470,7 +573,7 @@ public actor LocalVaultTransferEngine {
         } catch {
             let origin = record.state
             let reason = failureReason(for: error)
-            record.error = VaultTransferError(origin: origin, reason: reason, message: String(describing: error))
+            record.error = VaultTransferError(origin: origin, reason: reason, message: (error as? LocalizedError)?.errorDescription ?? String(describing: error))
             let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
             if removalAdmissionDenied {
                 record.state = .archiveVerified

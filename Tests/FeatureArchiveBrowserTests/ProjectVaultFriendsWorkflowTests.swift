@@ -124,6 +124,37 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
     }
 
+    func testLockAccessFailureEndsRequestAndAllowsNextQueuedBackup() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let second = try fixture.addSong(named: "After Lock Failure", extension: "cpr")
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        var attempts = 0
+        model.enqueueProjectVaultOperation(for: firstSong, label: "Test", startMessage: "Test") { model in
+            do {
+                try await model.waitForProjectVaultSlot {
+                    attempts += 1
+                    throw ProjectVaultRuntimeError.mutationLockUnavailable(EACCES)
+                }
+                return true
+            } catch {
+                model.setProjectVaultStatusMessage(error.localizedDescription)
+                return false
+            }
+        }
+        model.archiveInProjectVault(secondSong, trigger: .backupCopy)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(model.projectVaultQueueFailures, [firstSong.effectiveDisplayTitle])
+        XCTAssertTrue(model.projectVaultOperationMessages[firstSong.id]?.contains("operation lock") == true)
+        XCTAssertTrue(model.projectVaultOperationMessages[secondSong.id]?.contains("Backup copy verified") == true)
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
+
     func testQueueWaitsForBusyRuntimeAdmissionWithoutDroppingRequest() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }

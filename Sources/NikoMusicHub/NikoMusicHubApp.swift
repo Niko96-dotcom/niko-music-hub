@@ -12,6 +12,7 @@ struct NikoMusicHubApp: App {
     init() {
         let composition = AppComposition.make()
         self.composition = composition
+        AppDelegate.pendingVaultOperationCount = composition.pendingVaultOperationCount
         _appearanceController = StateObject(wrappedValue: composition.appearanceController)
     }
 
@@ -47,7 +48,22 @@ struct NikoMusicHubApp: App {
     }
 }
 
+@MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var pendingVaultOperationCount: @MainActor () -> Int = { 0 }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let count = Self.pendingVaultOperationCount()
+        guard count > 0 else { return .terminateNow }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Project Vault still has \(count) request(s) to finish"
+        alert.informativeText = "Keep Music Hub open to finish the queue. Quitting cancels waiting requests and interrupts the running transfer, which may need recovery when you reopen the app. Existing recovery records are kept."
+        alert.addButton(withTitle: "Keep Music Hub Open")
+        alert.addButton(withTitle: "Quit and Cancel Waiting Requests")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         UILaunchTool.applyFromLaunchArguments()
         #if DEBUG

@@ -296,6 +296,22 @@ struct SongDetailView: View {
             .toggleStyle(.checkbox)
             .help("Pinned projects are never automatically archived")
 
+            if viewModel.canRecoverInterruptedProject(liveSong) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Recovery verifies the archive, preserves any remaining Active folder separately, then restores the verified project. No existing files are overwritten.")
+                        .font(HubDesignSystem.Typography.caption())
+                    Button("Recover Verified Project") {
+                        viewModel.recoverInterruptedProject(liveSong)
+                    }
+                    .disabled(viewModel.projectVaultBusySongIDs.contains(liveSong.id))
+                }
+            }
+            if viewModel.preservedProjectVaultCopy(for: liveSong) != nil {
+                Button("Reveal Preserved Files") {
+                    viewModel.revealPreservedProjectVaultCopy(for: liveSong)
+                }
+            }
+
             if vaultPresentation.retryRestoreID != nil {
                 HubLabeledButton(
                     icon: "arrow.clockwise.circle",

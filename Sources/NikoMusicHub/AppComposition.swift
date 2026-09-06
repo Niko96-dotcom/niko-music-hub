@@ -15,6 +15,7 @@ struct AppComposition {
     let context: ToolContext
     let router: QuickAccessRouter
     let appearanceController: AppAppearanceController
+    let pendingVaultOperationCount: @MainActor () -> Int
 
     @MainActor
     static func make() -> AppComposition {
@@ -201,7 +202,8 @@ struct AppComposition {
             registry: registry,
             context: finalContext,
             router: quickAccessRouter,
-            appearanceController: appearanceController
+            appearanceController: appearanceController,
+            pendingVaultOperationCount: { archiveViewModel.pendingProjectVaultOperationCount }
         )
     }
 
