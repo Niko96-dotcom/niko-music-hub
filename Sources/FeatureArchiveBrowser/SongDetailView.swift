@@ -256,6 +256,19 @@ struct SongDetailView: View {
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
+                    Text(message)
+                        .font(HubDesignSystem.Typography.caption())
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if viewModel.projectVaultPendingOperations.contains(where: { $0.songID == liveSong.id }) {
+                    Text("Waiting requests run while Niko Music Hub is open.")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    Button("Cancel queued request") {
+                        viewModel.cancelQueuedProjectVaultOperation(for: liveSong)
+                    }
+                }
                 if liveSong.projectFormats.contains(.abletonLive) {
                     Text("Before archiving, use File → Collect All and Save in Ableton Live to include external samples. Plug-ins must remain installed separately.")
                         .font(HubDesignSystem.Typography.caption())

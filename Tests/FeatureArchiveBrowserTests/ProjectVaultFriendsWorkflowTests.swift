@@ -6,6 +6,145 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testRapidArchiveAndRestoreRequestsQueueAndDeduplicate() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let second = try fixture.addSong(named: "Second Ableton", extension: "als")
+        let secondManifest = try VaultManifestBuilder().build(at: second)
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        model.archiveInProjectVault(firstSong)
+        model.archiveInProjectVault(secondSong)
+        model.archiveInProjectVault(secondSong)
+        model.archiveInProjectVault(firstSong)
+        XCTAssertEqual(model.projectVaultActiveOperation?.songID, firstSong.id)
+        XCTAssertEqual(model.projectVaultPendingOperations.map(\.songID), [secondSong.id])
+        XCTAssertEqual(model.projectVaultQueueMessage(for: secondSong), "Queued: Archive — 1 ahead.")
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: second.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 2)
+        XCTAssertTrue(model.projectVaultQueueFailures.isEmpty)
+
+        model.setShowArchivedProjects(true)
+        let archived = model.songs
+        XCTAssertEqual(archived.count, 2)
+        for song in archived {
+            model.performProjectVaultPrimaryAction(for: song)
+            model.performProjectVaultPrimaryAction(for: song)
+        }
+        XCTAssertEqual(model.projectVaultPendingOperations.count, 1)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        try VaultManifestBuilder().verify(secondManifest, at: second)
+        XCTAssertTrue(model.projectVaultQueueFailures.isEmpty)
+    }
+
+    func testFailedArchiveContinuesWithNextSongAndKeepsFailureVisible() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let second = try fixture.addSong(named: "Second Cubase", extension: "cpr")
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        model.archiveInProjectVault(firstSong)
+        model.archiveInProjectVault(secondSong, trigger: .backupCopy)
+        // Only a disposable fixture disappears before the first queued task starts.
+        try FileManager.default.removeItem(at: fixture.project)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertEqual(model.projectVaultQueueFailures, [firstSong.effectiveDisplayTitle])
+        XCTAssertTrue(model.statusBaseMessage?.contains("Needs attention:") == true)
+        XCTAssertTrue(model.projectVaultOperationMessages[firstSong.id]?.contains("did not complete") == true)
+        XCTAssertTrue(model.projectVaultOperationMessages[secondSong.id]?.contains("Backup copy verified") == true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+    }
+
+    func testCancelWaitingArchiveDoesNotCancelRunningBackup() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let second = try fixture.addSong(named: "Cancelled Cubase", extension: "cpr")
+        let secondManifest = try VaultManifestBuilder().build(at: second)
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        model.archiveInProjectVault(firstSong, trigger: .backupCopy)
+        model.archiveInProjectVault(secondSong)
+        model.cancelQueuedProjectVaultOperation(for: secondSong)
+        XCTAssertTrue(model.projectVaultPendingOperations.isEmpty)
+        XCTAssertEqual(model.projectVaultActiveOperation?.songID, firstSong.id)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        try VaultManifestBuilder().verify(secondManifest, at: second)
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
+
+    func testQueuedArchiveRechecksEmergencyStopAtDispatch() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let second = try fixture.addSong(named: "Waiting Cubase", extension: "cpr")
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        model.enqueueProjectVaultOperation(for: firstSong, label: "Test", startMessage: "Test") { _ in
+            do {
+                try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+                return true
+            } catch {
+                XCTFail("Could not update Emergency Stop: \(error)")
+                return false
+            }
+        }
+        model.archiveInProjectVault(secondSong)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+        XCTAssertTrue(model.projectVaultOperationMessages[secondSong.id]?.contains("Emergency Stop") == true)
+        XCTAssertFalse(try fixture.transferStore().allTransferRecords().contains { $0.state == .archivedOnlineOnly })
+    }
+
+    func testQueuedArchiveCancelsWhenConfiguredFoldersChange() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let song = try XCTUnwrap(model.songs.first)
+        model.archiveInProjectVault(song)
+        try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        XCTAssertTrue(model.projectVaultOperationMessages[song.id]?.contains("folders changed") == true)
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testQueueWaitsForBusyRuntimeAdmissionWithoutDroppingRequest() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let model = fixture.viewModel(runtime: try fixture.runtime())
+        await model.scan()
+        let song = try XCTUnwrap(model.songs.first)
+        var attempts = 0
+        model.enqueueProjectVaultOperation(for: song, label: "Test", startMessage: "Test") { model in
+            do {
+                try await model.waitForProjectVaultSlot {
+                    attempts += 1
+                    if attempts == 1 { throw ProjectVaultRuntimeError.mutationInProgress }
+                }
+                return true
+            } catch { return false }
+        }
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertEqual(attempts, 2)
+        XCTAssertTrue(model.projectVaultQueueFailures.isEmpty)
+    }
+
     func testManualArchiveLeavesNormalBoardAndReturnsAfterRestore() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -433,6 +572,13 @@ private final class FriendsWorkflowFixture {
             independentBackupConfirmed: true
         )
         try settingsStore.saveSettings(settings)
+    }
+
+    func addSong(named name: String, extension fileExtension: String) throws -> URL {
+        let folder = active.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("fixture-project".utf8).write(to: folder.appendingPathComponent("\(name).\(fileExtension)"))
+        return folder
     }
 
     func runtime(

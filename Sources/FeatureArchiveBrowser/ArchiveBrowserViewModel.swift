@@ -67,6 +67,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
     @Published var projectVaultBusySongIDs: Set<String> = []
+    @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
+    @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation?
+    @Published var projectVaultOperationMessages: [String: String] = [:]
+    var projectVaultQueueTask: Task<Void, Never>?
+    var projectVaultQueueFailures: [String] = []
+    var projectVaultQueueBatchCount = 0
     /// Per-song Project Vault card state prepared when catalog, snapshot, or
     /// settings inputs change. `projectVaultPresentation(for:)` is deliberately
     /// a dictionary lookup so list and board re-renders stay main-thread cheap.
@@ -119,6 +125,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     deinit {
         projectVaultRecoveryTask?.cancel()
+        projectVaultQueueTask?.cancel()
     }
     let projectVaultRuntime: (any ProjectVaultOperating)?
     public var requestConverterHandoff: ((URL) -> Void)?

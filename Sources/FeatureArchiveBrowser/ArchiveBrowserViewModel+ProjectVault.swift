@@ -319,34 +319,39 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime,
               canArchiveInProjectVault(song),
               !projectVaultBusySongIDs.contains(song.id) else { return }
-        projectVaultBusySongIDs.insert(song.id)
-        setProjectVaultStatusMessage(trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.projectVaultBusySongIDs.remove(song.id) }
+        enqueueProjectVaultOperation(
+            for: song, label: trigger == .backupCopy ? "Backup" : "Archive",
+            startMessage: trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…"
+        ) { model in
             do {
-                let snapshot = try await projectVaultRuntime.archive(song: song, trigger: trigger)
-                self.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-                self.projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
-                self.cacheProjectVaultSnapshot(snapshot)
-                self.rebuildProjectVaultPresentationCache()
-                await self.refreshProjectVaultSnapshots()
+                let currentSong = model.songs.first { $0.id == song.id } ?? song
+                let snapshot = try await model.waitForProjectVaultSlot {
+                    try await projectVaultRuntime.archive(song: currentSong, trigger: trigger)
+                }
+                model.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+                model.projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+                model.cacheProjectVaultSnapshot(snapshot)
+                model.rebuildProjectVaultPresentationCache()
+                await model.refreshProjectVaultSnapshots()
                 let activeRetained = FileManager.default.fileExists(atPath: song.folderPath.path)
-                self.setProjectVaultStatusMessage(activeRetained
+                model.setProjectVaultStatusMessage(activeRetained
                     ? "Backup copy verified. The project remains in Active Projects."
                     : "Archived and verified. Find this song in Show archived projects to restore it.")
+                return true
             } catch let error as ProjectVaultRuntimeError where trigger == .workflowDone {
-                _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage("Marked Done. \(error.localizedDescription)")
-                self.diagnostics.log(.warning, "Done auto-archive postponed: \(error)")
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage("Marked Done. \(error.localizedDescription)")
+                model.diagnostics.log(.warning, "Done auto-archive postponed: \(error)")
                 if case .activityPostponed(let reason) = error,
                    reason.permitsBoundedAutomaticRetry {
-                    self.scheduleDoneArchiveRetry(for: song)
+                    model.scheduleDoneArchiveRetry(for: song)
                 }
+                return false
             } catch {
-                _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage("Archive did not complete: \(error.localizedDescription)")
-                self.diagnostics.log(.error, "Project Vault archive failed: \(error)")
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage("Archive did not complete: \(error.localizedDescription)")
+                model.diagnostics.log(.error, "Project Vault archive failed: \(error)")
+                return false
             }
         }
     }
@@ -441,7 +446,8 @@ extension ArchiveBrowserViewModel {
         projectVaultRecoveryDeadline = nil
     }
 
-    private func scheduleProjectVaultRecovery() async {
+    func scheduleProjectVaultRecovery() async {
+        guard projectVaultBusySongIDs.isEmpty else { return }
         guard let projectVaultRuntime,
               let due = try? await projectVaultRuntime.nextAutomaticRecoveryDate() else {
             cancelProjectVaultRecovery()
@@ -458,6 +464,11 @@ extension ArchiveBrowserViewModel {
                 try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
             } catch { return }
             guard let self, !Task.isCancelled else { return }
+            guard self.projectVaultBusySongIDs.isEmpty else {
+                self.projectVaultRecoveryTask = nil
+                self.projectVaultRecoveryDeadline = nil
+                return
+            }
             self.projectVaultLastRecoveryAttemptAt = Date()
             await projectVaultRuntime.recoverAtLaunch()
             guard !Task.isCancelled else { return }
@@ -501,20 +512,20 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
-        projectVaultBusySongIDs.insert(song.id)
-        setProjectVaultStatusMessage("Restoring the verified project into Active Projects…")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.projectVaultBusySongIDs.remove(song.id) }
+        enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: "Restoring the verified project into Active Projects…") { model in
             do {
-                _ = try await runtime.restoreAndOpen(snapshot: snapshot)
-                await self.refreshProjectVaultSnapshots()
-                await self.scan()
-                self.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
+                _ = try await model.waitForProjectVaultSlot {
+                    try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot)
+                }
+                await model.refreshProjectVaultSnapshots()
+                await model.scan()
+                model.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
+                return true
             } catch {
-                _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
-                self.diagnostics.log(.error, "Project Vault restore failed: \(error)")
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
+                model.diagnostics.log(.error, "Project Vault restore failed: \(error)")
+                return false
             }
         }
     }
@@ -525,24 +536,24 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
-        projectVaultBusySongIDs.insert(song.id)
-        setProjectVaultStatusMessage("Retrying the preserved Project Vault transfer…")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.projectVaultBusySongIDs.remove(song.id) }
+        enqueueProjectVaultOperation(for: song, label: "Retry backup", startMessage: "Retrying the preserved Project Vault transfer…") { model in
             do {
-                let updated = try await runtime.retry(snapshot: snapshot)
-                self.cacheProjectVaultSnapshot(updated)
-                self.rebuildProjectVaultPresentationCache()
-                if await self.refreshProjectVaultSnapshots() {
-                    self.setProjectVaultStatusMessage("Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
-                } else {
-                    self.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
+                let updated = try await model.waitForProjectVaultSlot {
+                    try await runtime.retry(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot)
                 }
+                model.cacheProjectVaultSnapshot(updated)
+                model.rebuildProjectVaultPresentationCache()
+                if await model.refreshProjectVaultSnapshots() {
+                    model.setProjectVaultStatusMessage("Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
+                } else {
+                    model.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
+                }
+                return true
             } catch {
-                _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage("Project Vault retry stopped safely: \(error.localizedDescription). Existing copies were kept.")
-                self.diagnostics.log(.error, "Project Vault manual retry failed: \(error)")
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage("Project Vault retry stopped safely: \(error.localizedDescription). Existing copies were kept.")
+                model.diagnostics.log(.error, "Project Vault manual retry failed: \(error)")
+                return false
             }
         }
     }
@@ -556,39 +567,39 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
-        projectVaultBusySongIDs.insert(song.id)
-        setProjectVaultStatusMessage("Retrying this preserved Project Vault restore…")
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer { self.projectVaultBusySongIDs.remove(song.id) }
+        enqueueProjectVaultOperation(for: song, label: "Retry restore", startMessage: "Retrying this preserved Project Vault restore…") { model in
             do {
-                let completed = try await runtime.retryRestore(id: restoreID)
+                let completed = try await model.waitForProjectVaultSlot {
+                    try await runtime.retryRestore(id: restoreID)
+                }
                 guard completed.id == restoreID,
                       completed.completedAt != nil,
                       completed.failureReason == nil else {
                     throw ProjectVaultRuntimeError.unavailable
                 }
-                if await self.refreshProjectVaultSnapshots() {
-                    await self.scan()
-                    self.setProjectVaultStatusMessage(
+                if await model.refreshProjectVaultSnapshots() {
+                    await model.scan()
+                    model.setProjectVaultStatusMessage(
                         "Project Vault restore retry completed and verified."
                     )
                 } else {
-                    self.setProjectVaultStatusMessage(
+                    model.setProjectVaultStatusMessage(
                         "Project Vault restore retry completed, but the current Vault state could not be refreshed. Review before taking another action."
                     )
                 }
+                return true
             } catch {
-                _ = await self.refreshProjectVaultSnapshots()
-                self.setProjectVaultStatusMessage(
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(
                     "Project Vault restore retry stopped safely: \(error.localizedDescription). Existing copies were kept."
                 )
-                self.diagnostics.log(.error, "Project Vault restore retry failed: \(error)")
+                model.diagnostics.log(.error, "Project Vault restore retry failed: \(error)")
+                return false
             }
         }
     }
 
-    private func projectVaultSnapshot(for song: Song) -> ProjectVaultRuntimeSnapshot? {
+    func projectVaultSnapshot(for song: Song) -> ProjectVaultRuntimeSnapshot? {
         projectVaultSnapshotsByPath[Self.vaultCanonicalPath(song.folderPath)]
     }
 

@@ -41,6 +41,12 @@ Automatic preview selection checks full-song suitability before scores, versions
 
 Manual archiving requires Project Vault enabled, independent backup confirmation, Keep Local off, and Emergency Stop off. It can run after a save without waiting for the automatic inactivity window. Private beta limits automatic archiving to copies; it does not convert an explicit Archive Now request into a copy-only success. If removal is blocked, the app reports the reason and keeps the Active project.
 
+## Multiple requests
+
+Archive, backup, restore, and retry requests for different songs share one queue and run in the order requested. Repeated clicks for a song already running or waiting are ignored. Song details show the running action or queue position and let you cancel a waiting request. Safety settings and configured folders are checked again before execution. A failed request is marked for attention, and the next song continues.
+
+Waiting requests remain queued while Niko Music Hub is open; they are not saved across quitting the app. Transfers that already started retain the existing durable recovery records.
+
 ## Restore in the UI
 
 1. In **Settings → Project Vault**, configure **Active Projects** (your working folder) and **Archive / Vault**, and enable Project Vault.
