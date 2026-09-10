@@ -392,7 +392,39 @@ assert_contains "$TMP/approval-tampered.err" "artifact_sha256 mismatch"
 echo "== release notes are current-section only =="
 NOTES="$TMP/release-notes.md"
 assert_pass release-notes "$ROOT/script/extract-release-notes.sh" "$NOTES"
-assert_contains "$NOTES" "fail-closed local release engineering"
+
+# Both markers are derived from CHANGELOG.md rather than hard-coded, so this
+# keeps proving the boundary behavior after every version bump instead of
+# pinning one release's wording and silently going stale at the next bump.
+NOTES_VERSION="$(nmh_release_version)"
+CURRENT_SECTION="$(awk -v version="$NOTES_VERSION" '
+  $0 ~ "^## " version " - " { active = 1; next }
+  active && /^## / { exit }
+  active { print }
+' "$ROOT/CHANGELOG.md")"
+CURRENT_BULLET="$(printf '%s\n' "$CURRENT_SECTION" | grep -E '^- ' | head -n 1)"
+# The last bullet in the file belongs to the oldest section, so it is the entry
+# furthest from the current release that extraction must never reach.
+OLDER_BULLET="$(grep -E '^- ' "$ROOT/CHANGELOG.md" | tail -n 1)"
+
+if [[ -z "$CURRENT_BULLET" ]]; then
+  echo "CHANGELOG.md has no bullet for $NOTES_VERSION; release-note extraction cannot be verified" >&2
+  exit 1
+fi
+if [[ -z "$OLDER_BULLET" ]] || printf '%s\n' "$CURRENT_SECTION" | grep -Fq -- "$OLDER_BULLET"; then
+  echo "CHANGELOG.md needs an older release section whose wording differs from $NOTES_VERSION" >&2
+  exit 1
+fi
+
+# Present: the current section was extracted, and the notes are not empty.
+assert_contains "$NOTES" "$CURRENT_BULLET"
+# Absent: extraction stopped at the section boundary. An extractor that stripped
+# headings but kept reading past them would still leak this older bullet.
+assert_not_contains "$NOTES" "$OLDER_BULLET"
+if grep -Eq '^## ' "$NOTES"; then
+  echo "release notes unexpectedly contain a version heading" >&2
+  exit 1
+fi
 if grep -Fq '# Changelog' "$NOTES"; then
   echo "release notes unexpectedly contain the whole changelog" >&2
   exit 1
