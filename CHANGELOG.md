@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.3 - 2026-09-10
+
+- Add Ableton project support alongside Cubase.
+- Preserve Project Vault Keep Local choices when changing settings and retain metadata for archived projects.
+- Queue Project Vault operations so archiving and restoring several songs runs in order instead of competing.
+- Make Archive Now remove verified Active copies, keep backups separate, and bind archive actions to each song's own folder.
+- Explain failed restores, allow safe retries after repairing a backup, and keep backup acknowledgements visible and revocable.
+- Guard Vault source removal more carefully by honoring open-file checks before deleting and keeping safe refusals retryable.
+- Fix Vault recovery scheduling that could block manual archiving, and wake persisted recovery at its due date.
+- Improve Dropbox archive verification and prevent opening projects that contain no project file.
+- Improve YouTube download compatibility and recovery from temporary HTTP 403 errors.
+- Name demo cards from the delivered artist and title, and rank complete, current bounces ahead of older ones while preserving manual picks.
+- Improve archive browsing with clearer board hierarchy, better song row selection, and faster loading.
+- Remove unused interface code and redundant wrappers, and strengthen behavioral coverage of backup and restore workflows.
+
 ## 1.4.2 - 2026-08-01
 
 - Clean stale project metadata and close the release-preparation debt carried forward from 1.4.1.
