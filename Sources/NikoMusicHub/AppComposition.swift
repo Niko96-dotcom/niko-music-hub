@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import AppUpdates
 import FeatureArchiveBrowser
 import UniformTypeIdentifiers
 import NikoMusicCore
@@ -15,6 +16,7 @@ struct AppComposition {
     let context: ToolContext
     let router: QuickAccessRouter
     let appearanceController: AppAppearanceController
+    let updateController: AppUpdateController
     let pendingVaultOperationCount: @MainActor () -> Int
 
     @MainActor
@@ -37,6 +39,16 @@ struct AppComposition {
                 diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
             }
         }
+        // Automated end-to-end runs must never contact the feed or stage an
+        // install over the bundle they are testing. Release bundles built
+        // without update keys are already inert; this closes the case where an
+        // E2E run is pointed at a signed build.
+        let updateController = AppUpdateController(
+            configuration: AppUpdateConfiguration.resolve(),
+            suppressedReason: runtime.e2eSmoke
+                ? "Updates are disabled during automated end-to-end runs."
+                : nil
+        )
         let showsDevTool = runtime.showsDevTool
         // Must equal the final `features.count` below. The base list always registers 7
         // tools; `showsDevTool` appends DevToolFeature, and DEBUG builds additionally append
@@ -156,7 +168,8 @@ struct AppComposition {
             StemSeparationFeature(),
             SettingsFeature(
                 archiveViewModel: archiveViewModel,
-                appearanceController: appearanceController
+                appearanceController: appearanceController,
+                updateController: updateController
             )
         ]
         if showsDevTool {
@@ -203,6 +216,7 @@ struct AppComposition {
             context: finalContext,
             router: quickAccessRouter,
             appearanceController: appearanceController,
+            updateController: updateController,
             pendingVaultOperationCount: { archiveViewModel.pendingProjectVaultOperationCount }
         )
     }

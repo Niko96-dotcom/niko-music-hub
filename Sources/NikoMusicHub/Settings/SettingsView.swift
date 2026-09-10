@@ -1,4 +1,5 @@
 import AppCore
+import AppUpdates
 import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
@@ -7,6 +8,7 @@ struct SettingsView: View {
     let context: ToolContext
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var appearanceController: AppAppearanceController
+    @ObservedObject var updateController: AppUpdateController
 
     @State private var settings: AppSettings = .default
     @State private var launchAtLogin = false
@@ -188,6 +190,14 @@ struct SettingsView: View {
                 }
             }
 
+            SettingsSection(
+                title: "Updates",
+                importance: .medium,
+                footer: updatesFooter
+            ) {
+                AppUpdateSettingsContent(controller: updateController)
+            }
+
             SettingsSection(title: "About", importance: .low) {
                 let buildIdentity = AppBuildIdentity()
                 LabeledContent("App") {
@@ -242,6 +252,12 @@ struct SettingsView: View {
             help: "Choose a Cubase or Ableton projects folder to scan",
             action: addArchiveRoot
         )
+    }
+
+    private var updatesFooter: String {
+        updateController.status.isUnavailable
+            ? "Update checks are switched off for this build."
+            : "Updates are downloaded from the signed release feed and verified before they are installed."
     }
 
     private var header: some View {

@@ -1,10 +1,12 @@
 import AppCore
+import AppUpdates
 import FeatureArchiveBrowser
 import SwiftUI
 
 struct SettingsFeature: ToolFeature {
     let archiveViewModel: ArchiveBrowserViewModel
     let appearanceController: AppAppearanceController
+    let updateController: AppUpdateController
 
     let metadata = ToolMetadata(
         id: "settings",
@@ -20,7 +22,8 @@ struct SettingsFeature: ToolFeature {
             SettingsView(
                 context: context,
                 archiveViewModel: archiveViewModel,
-                appearanceController: appearanceController
+                appearanceController: appearanceController,
+                updateController: updateController
             )
         )
     }

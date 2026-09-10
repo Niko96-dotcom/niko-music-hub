@@ -15,6 +15,7 @@ The supported release platform is Apple silicon (`arm64`) on macOS 14.2 or newer
 - Manifest provenance: exact commit/build ID, artifact size/hash, supported architecture list, minimum macOS version, and signing/notarization attestation.
 - Approval record: `NikoMusicHub-<version>-release-approval.json`.
 - Release notes: only the dated current-version section extracted from `CHANGELOG.md`.
+- Update feed: `appcast.xml`, the Sparkle feed served to installed builds from `releases/latest/download/appcast.xml`. The basename is fixed by that URL. See `docs/update-feed.md`.
 - Install smoke: mount the candidate DMG, copy its app to an isolated release-directory location, then verify the exact build ID, release configuration, source commit, and executable SHA-256. It never trusts an unrelated `/Applications` copy.
 
 ## Prerequisites
@@ -24,6 +25,7 @@ The supported release platform is Apple silicon (`arm64`) on macOS 14.2 or newer
 - A completely clean Git working tree, including untracked files, for every `release-all.sh` artifact. Use `./script/dev.sh run` for dirty local development builds.
 - Developer ID Application certificate in the keychain for public releases.
 - Notary profile created with `xcrun notarytool store-credentials`.
+- EdDSA update signing key in the login keychain, with its public half committed to `SPARKLE_PUBLIC_ED_KEY`. Public mode fails without it, because a release that cannot be described in the feed strands every installed build.
 - GitHub CLI authenticated for `--publish`.
 
 Required environment for public mode:
@@ -56,7 +58,9 @@ git push origin "v$(cat VERSION)"
 ./script/release-all.sh --public --publish --install-smoke
 ```
 
-`release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin`, an identity differs from `BUNDLE_ID`, or any gate fails. Publishing creates one new Release with its complete five-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
+Public mode generates and validates `appcast.xml` after the DMG is signed, notarized and stapled, so the enclosure signature covers the exact published bytes. Both the enclosure signature and the feed signature are re-verified against the `SUPublicEDKey` embedded in the candidate bundle: a feed signed by a key the app does not trust fails the release instead of silently disabling updates for every user. Publishing uploads a complete six-asset set and re-validates the hosted feed after download.
+
+`release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin`, an identity differs from `BUNDLE_ID`, or any gate fails. Publishing creates one new Release with its complete six-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
 
 Copy `docs/release-uat-evidence.template.json` outside the repository and fill it only after testing the exact commit. The validator requires clean install, upgrade/settings retention, uninstall, launch-at-login, privacy permissions, real recorder audio, live downloader, archive read-only behavior, output handoffs, and user-style E2E to be passed and approved. Historical UAT does not satisfy a new commit.
 
@@ -82,3 +86,5 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 - `--install-smoke` mounts and installs an isolated copy from the candidate DMG, then proves its exact build ID, release configuration, source commit, and executable hash; the consolidated UAT record remains the authoritative clean-install/upgrade/uninstall proof.
 - The local post-publish checks cannot prevent a later privileged tag force-move; protect release tags on the GitHub repository before enabling public publishing.
 - App Store review is not part of this release path.
+- The update feed URL is permanent. Every installed build polls the URL it shipped with, so `nmh_update_feed_url` cannot be changed without stranding the field.
+- Local-only mode skips feed generation when no `SPARKLE_PUBLIC_ED_KEY` is configured; it does not skip it when a key is present and generation fails.

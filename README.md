@@ -91,6 +91,10 @@ GitHub Actions are intentionally not required for this project.
 
 See `docs/release.md` and `docs/release-validation.md`.
 
+## Updates
+
+Released builds update themselves through Sparkle, using the signed `appcast.xml` published alongside each GitHub Release. Enclosures are EdDSA-signed and verified before extraction. Builds without a signing key — and debug builds generally — ship with updates disabled rather than unverified. See `docs/update-feed.md`.
+
 ## Fixtures
 
 ```bash

@@ -46,10 +46,11 @@ This validates:
 - exact `com.niko96.NikoMusicHub` identity in source, bundle, artifact, manifest, and installed app
 - exact-commit approved Mac UAT
 - immutable approval data tying every gate to the artifact and evidence hashes
+- update feed generation, and both the enclosure and feed EdDSA signatures verified against the public key embedded in the candidate bundle
 
 ## Hosted Artifact Truth
 
-Publishing mode requires the exact release tag to already exist on `origin`, creates one new Release with its complete asset set, downloads the hosted assets into `dist/release/hosted-download`, byte-compares every hosted asset against its candidate, and re-runs artifact validation there:
+Publishing mode requires the exact release tag to already exist on `origin`, creates one new Release with its complete asset set, downloads the hosted assets into `dist/release/hosted-download`, byte-compares every hosted asset against its candidate, and re-runs artifact and update-feed validation there:
 
 ```bash
 ./script/release-all.sh --public --publish

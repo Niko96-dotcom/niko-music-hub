@@ -115,6 +115,65 @@ nmh_validate_release_host_architecture() {
   fi
 }
 
+# Canonical update-feed contract.
+#
+# This URL is compiled into every shipped bundle and old installs poll it
+# forever, so it is a one-way door: changing it strands every build already in
+# the field. NMH_UPDATE_FEED_URL exists only to point a deliberately labeled
+# test build at a test feed; it must never be used for a public release.
+nmh_release_repository_url() {
+  printf 'https://github.com/Niko96-dotcom/niko-music-hub\n'
+}
+
+# Where a published release's assets are downloaded from. Sparkle enclosure URLs
+# are built from this, so it must agree with the channel docs/release.md declares.
+nmh_release_download_url_prefix() {
+  local tag="${1:?missing release tag}"
+  printf '%s/releases/download/%s/\n' "$(nmh_release_repository_url)" "$tag"
+}
+
+nmh_update_feed_url() {
+  local url="${NMH_UPDATE_FEED_URL:-$(nmh_release_repository_url)/releases/latest/download/appcast.xml}"
+  if [[ "$url" != https://* ]]; then
+    echo "update feed URL must be HTTPS: $url" >&2
+    return 1
+  fi
+  printf '%s\n' "$url"
+}
+
+# Public half of the EdDSA key pair that signs update enclosures.
+#
+# The private half lives only in the release owner's Keychain. Prints nothing
+# and succeeds when the file is absent: a build without a key ships without
+# update keys at all rather than with an unverifiable update path.
+nmh_sparkle_public_ed_key() {
+  local key_file="${NMH_SPARKLE_PUBLIC_ED_KEY_FILE:-$NMH_RELEASE_ROOT/SPARKLE_PUBLIC_ED_KEY}"
+  local key="${NMH_SPARKLE_PUBLIC_ED_KEY:-}"
+  if [[ -z "$key" ]]; then
+    [[ -f "$key_file" ]] || return 0
+    key="$(tr -d '[:space:]' <"$key_file")"
+  fi
+  [[ -n "$key" ]] || return 0
+
+  # An ed25519 public key is 32 raw bytes; anything else would be embedded as a
+  # key that can never validate a real signature.
+  if ! /usr/bin/python3 - "$key" <<'PY_KEY'
+import base64
+import sys
+
+try:
+    decoded = base64.b64decode(sys.argv[1], validate=True)
+except Exception:
+    raise SystemExit("SUPublicEDKey is not valid base64")
+if len(decoded) != 32:
+    raise SystemExit(f"SUPublicEDKey must decode to 32 bytes, got {len(decoded)}")
+PY_KEY
+  then
+    return 1
+  fi
+  printf '%s\n' "$key"
+}
+
 nmh_bundle_id() {
   local bundle_id_file="${NMH_BUNDLE_ID_FILE:-$NMH_RELEASE_ROOT/BUNDLE_ID}"
   if [[ ! -f "$bundle_id_file" ]]; then

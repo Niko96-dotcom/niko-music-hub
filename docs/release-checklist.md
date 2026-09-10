@@ -6,6 +6,7 @@
 - [ ] `RELEASE_ARCHITECTURES` and the package minimum macOS contract match the intended release machine and artifact.
 - [ ] `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh` passed.
 - [ ] `CHANGELOG.md` matches `VERSION`.
+- [ ] `SPARKLE_PUBLIC_ED_KEY` holds the public key whose private half is in the release keychain.
 - [ ] `./script/public-tree-hygiene.sh` passed.
 - [ ] `./script/ci.sh` passed.
 - [ ] `./script/e2e_user_smoke.sh` passed.
@@ -17,8 +18,9 @@
 - [ ] `./script/release-all.sh --public --dry-run-publish` passed.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
-- [ ] `./script/release-all.sh --public --publish` uploaded exactly the expected GitHub assets.
-- [ ] Hosted assets were downloaded and revalidated.
+- [ ] `appcast.xml` was generated after stapling and validated against the key embedded in the candidate app.
+- [ ] `./script/release-all.sh --public --publish` uploaded exactly the expected GitHub assets, including `appcast.xml`.
+- [ ] Hosted assets were downloaded and revalidated, including the hosted update feed.
 - [ ] Installed `/Applications/NikoMusicHub.app` matches `VERSION`, `BUNDLE_ID`, and `NMHBuildID`.
 - [ ] Approval JSON records every gate, command, result, timestamp, machine, commit, bundle ID, UAT hash, and artifact hash.
 - [ ] No release-critical check is pending or `human_needed`; any emergency override is explicit and justified.

@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import AppUpdates
 import SwiftUI
 
 @main
@@ -31,7 +32,7 @@ struct NikoMusicHubApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1_280, height: 820)
         .commands {
-            AboutCommand()
+            AboutCommand(updateController: composition.updateController)
         }
 
         MenuBarExtra {

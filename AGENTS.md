@@ -62,6 +62,12 @@ Friendly wrappers: `./script/dev.sh run`, `./script/dev.sh doctor`, `./script/de
 fail-closed and local: `script/release-all.sh`. Every public build requires a newly approved
 exact-commit UAT record. See `docs/release.md` and `docs/release-validation.md`.
 
+In-app updates use Sparkle, pinned exactly, isolated in the `AppUpdates` module. `SPARKLE_PUBLIC_ED_KEY`
+holds the public signing key; the private half stays in the release owner's Keychain. The feed URL in
+`nmh_update_feed_url` is permanent — installed builds poll the URL they shipped with. Builds without a
+key, and debug builds without an explicit `NMH_UPDATE_FEED_URL`, ship with updates disabled rather than
+unverified. See `docs/update-feed.md`.
+
 ## Ultimate De-Slop
 
 Vendored from [Niko96-dotcom/ultimate-de-slop](https://github.com/Niko96-dotcom/ultimate-de-slop):

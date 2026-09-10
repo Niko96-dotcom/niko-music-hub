@@ -188,6 +188,78 @@ print(f"hosted GitHub Release contract verified for {tag}: {len(actual_names)} e
 PY
 }
 
+# Locate Sparkle's appcast generator inside the resolved SPM artifacts.
+find_generate_appcast() {
+  local candidate
+  candidate="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+  if [[ -x "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  # Fall back to a search: the artifact path is an SPM implementation detail.
+  candidate="$(find "$ROOT/.build/artifacts" -type f -name generate_appcast -perm +111 2>/dev/null | head -n 1)"
+  if [[ -n "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  echo "Sparkle generate_appcast not found under $ROOT/.build/artifacts; run swift package resolve" >&2
+  return 1
+}
+
+# Build and validate the signed update feed for this release.
+#
+# Runs against the finalized DMG only: the enclosure signature covers the exact
+# published bytes, so this must happen after signing, notarization and stapling.
+generate_update_feed() {
+  local dmg="${1:?missing dmg}"
+  local notes="${2:?missing release notes}"
+  local app="${3:?missing candidate app}"
+  local workspace="$RELEASE_DIR/appcast-workspace"
+  local tool download_prefix
+  local -a key_options=()
+
+  tool="$(find_generate_appcast)" || return 1
+  download_prefix="$(nmh_release_download_url_prefix "$TAG")" || return 1
+
+  if [[ -n "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+    [[ -f "$NMH_SPARKLE_PRIVATE_KEY_FILE" ]] || {
+      echo "NMH_SPARKLE_PRIVATE_KEY_FILE does not exist: $NMH_SPARKLE_PRIVATE_KEY_FILE" >&2
+      return 1
+    }
+    key_options=(--ed-key-file "$NMH_SPARKLE_PRIVATE_KEY_FILE")
+  else
+    key_options=(--account "${NMH_SPARKLE_KEY_ACCOUNT:-ed25519}")
+  fi
+
+  # An isolated workspace: generate_appcast rewrites its input directory and
+  # relocates anything it considers an old update.
+  rm -rf "$workspace"
+  mkdir -p "$workspace"
+  cp "$dmg" "$workspace/$ARTIFACT_NAME"
+  # Release notes are matched to an archive by basename.
+  cp "$notes" "$workspace/${ARTIFACT_NAME%.dmg}.md"
+
+  "$tool" \
+    "${key_options[@]}" \
+    --download-url-prefix "$download_prefix" \
+    --link "$(nmh_release_repository_url)" \
+    --embed-release-notes \
+    -o "$workspace/appcast.xml" \
+    "$workspace"
+
+  cp "$workspace/appcast.xml" "$APPCAST"
+
+  "$ROOT/script/validate-update-feed.py" \
+    --appcast "$APPCAST" \
+    --artifact "$dmg" \
+    --app "$app" \
+    --version "$VERSION" \
+    --build-number "$BUILD_NUMBER" \
+    --minimum-macos "$MIN_MACOS_VERSION" \
+    --architectures "$RELEASE_ARCHITECTURES" \
+    --expected-enclosure-url "$download_prefix$ARTIFACT_NAME"
+}
+
 verify_hosted_release_asset_bytes() {
   local hosted_dir="$1"
   shift
@@ -337,10 +409,18 @@ fi
 ARTIFACT_NAME="NikoMusicHub-$ARTIFACT_LABEL.dmg"
 SIGNING_IDENTITY_RECORD="ad-hoc"
 
+# Assigned before any mode-specific work so a malformed key fails the run under
+# `set -e` instead of collapsing to an empty string inside a later test.
+SPARKLE_PUBLIC_KEY="$(nmh_sparkle_public_ed_key)"
+
 if [[ "$MODE" == "public" ]]; then
   : "${NMH_DEVELOPER_ID_APPLICATION:?public release requires NMH_DEVELOPER_ID_APPLICATION}"
   : "${NMH_NOTARY_PROFILE:?public release requires NMH_NOTARY_PROFILE}"
   : "${NMH_RELEASE_UAT_EVIDENCE:?public release requires NMH_RELEASE_UAT_EVIDENCE}"
+  if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
+    echo "public release requires SPARKLE_PUBLIC_ED_KEY so the published feed matches the shipped app" >&2
+    exit 1
+  fi
   "$ROOT/script/release-preflight.sh"
   "$ROOT/script/validate-release-uat.sh" --evidence "$NMH_RELEASE_UAT_EVIDENCE" --commit "$COMMIT"
   if [[ "$PUBLISH" == true ]]; then
@@ -504,6 +584,19 @@ fi
 RELEASE_NOTES="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-release-notes.md"
 run release-notes "$ROOT/script/extract-release-notes.sh" "$RELEASE_NOTES"
 
+# The asset name is fixed: SUFeedURL points at
+# releases/latest/download/appcast.xml, so it must be published under exactly
+# that basename or every installed app stops seeing updates.
+APPCAST="$RELEASE_DIR/appcast.xml"
+log "update feed"
+if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
+  # Public mode already refused above; only local-only reaches this.
+  APPCAST=""
+  echo "LOCAL-ONLY: update feed skipped because no SPARKLE_PUBLIC_ED_KEY is configured" | tee -a "$LOG_FILE"
+else
+  run update-feed generate_update_feed "$DMG" "$RELEASE_NOTES" "$APP"
+fi
+
 APPROVAL=""
 if [[ "$MODE" == "public" ]]; then
   MANIFEST_SHA="$(shasum -a 256 "$MANIFEST" | awk '{print $1}')"
@@ -542,6 +635,7 @@ if [[ "$MODE" == "public" ]]; then
     --gate "public-tree-hygiene|./script/public-tree-hygiene.sh --public-release|passed|$GATE_TIME"
     --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|$GATE_TIME"
     --gate "artifact-validation|./script/validate-release-artifact.sh|passed|$GATE_TIME"
+    --gate "update-feed|./script/validate-update-feed.py|passed|$GATE_TIME"
   )
   if [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then
     APPROVAL_ARGS+=(--emergency-reason "$EMERGENCY_REASON")
@@ -558,14 +652,24 @@ fi
 log "publication"
 if [[ "$PUBLISH" == true ]]; then
   run remote-tag-before-create verify_remote_release_tag
-  run gh-release-create gh release create "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" --verify-tag --title "Niko Music Hub $VERSION" --notes-file "$RELEASE_NOTES"
+  run gh-release-create gh release create "$TAG" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" "$APPCAST" --verify-tag --title "Niko Music Hub $VERSION" --notes-file "$RELEASE_NOTES"
   run remote-tag-after-create verify_remote_release_tag
   HOSTED_RELEASE_RECORD="$RELEASE_DIR/NikoMusicHub-$ARTIFACT_LABEL-hosted-release.json"
-  run hosted-release-contract verify_hosted_release_contract "$HOSTED_RELEASE_RECORD" "$(basename "$DMG")" "$(basename "$DMG.sha256")" "$(basename "$MANIFEST")" "$(basename "$APPROVAL")" "$(basename "$RELEASE_NOTES")"
+  run hosted-release-contract verify_hosted_release_contract "$HOSTED_RELEASE_RECORD" "$(basename "$DMG")" "$(basename "$DMG.sha256")" "$(basename "$MANIFEST")" "$(basename "$APPROVAL")" "$(basename "$RELEASE_NOTES")" "$(basename "$APPCAST")"
   HOSTED_DIR="$RELEASE_DIR/hosted-download"
   mkdir -p "$HOSTED_DIR"
-  gh release download "$TAG" --dir "$HOSTED_DIR" --pattern "$(basename "$DMG")" --pattern "$(basename "$DMG.sha256")" --pattern "$(basename "$MANIFEST")" --pattern "$(basename "$APPROVAL")" --pattern "$(basename "$RELEASE_NOTES")"
-  run hosted-asset-byte-equality verify_hosted_release_asset_bytes "$HOSTED_DIR" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES"
+  gh release download "$TAG" --dir "$HOSTED_DIR" --pattern "$(basename "$DMG")" --pattern "$(basename "$DMG.sha256")" --pattern "$(basename "$MANIFEST")" --pattern "$(basename "$APPROVAL")" --pattern "$(basename "$RELEASE_NOTES")" --pattern "$(basename "$APPCAST")"
+  run hosted-asset-byte-equality verify_hosted_release_asset_bytes "$HOSTED_DIR" "$DMG" "$DMG.sha256" "$MANIFEST" "$APPROVAL" "$RELEASE_NOTES" "$APPCAST"
+  # The hosted feed is what users actually poll, so re-verify it where it landed.
+  run validate-hosted-update-feed "$ROOT/script/validate-update-feed.py" \
+    --appcast "$HOSTED_DIR/$(basename "$APPCAST")" \
+    --artifact "$HOSTED_DIR/$(basename "$DMG")" \
+    --app "$APP" \
+    --version "$VERSION" \
+    --build-number "$BUILD_NUMBER" \
+    --minimum-macos "$MIN_MACOS_VERSION" \
+    --architectures "$RELEASE_ARCHITECTURES" \
+    --expected-enclosure-url "$(nmh_release_download_url_prefix "$TAG")$ARTIFACT_NAME"
   run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE"
   run validate-hosted-approval "$ROOT/script/validate-release-approval.sh" --approval "$HOSTED_DIR/$(basename "$APPROVAL")" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --uat "$NMH_RELEASE_UAT_EVIDENCE"
   if [[ "$INSTALL_SMOKE" == true ]]; then
@@ -592,6 +696,7 @@ cat >"$REPORT" <<REPORT
 - Artifact size: $ARTIFACT_SIZE bytes
 - SHA-256: $ARTIFACT_SHA
 - Manifest: $(basename "$MANIFEST")
+- Update feed: $([[ -n "$APPCAST" ]] && basename "$APPCAST" || echo "not generated (no SPARKLE_PUBLIC_ED_KEY)")
 - Approval: $([[ -n "$APPROVAL" ]] && basename "$APPROVAL" || echo "not generated for local-only mode")
 - Publish: $([[ "$PUBLISH" == true ]] && echo "GitHub release uploaded and downloaded for validation" || ([[ "$DRY_RUN_PUBLISH" == true ]] && echo "dry-run publication" || echo "skipped local-only"))
 - Install smoke: $([[ "$INSTALL_SMOKE" == true ]] && echo "ran" || echo "skipped")

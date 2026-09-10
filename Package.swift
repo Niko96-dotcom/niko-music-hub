@@ -17,6 +17,10 @@ let package = Package(
             targets: ["NikoMusicCore"]
         ),
         .library(
+            name: "AppUpdates",
+            targets: ["AppUpdates"]
+        ),
+        .library(
             name: "FeatureBPMTapper",
             targets: ["FeatureBPMTapper"]
         ),
@@ -53,10 +57,22 @@ let package = Package(
             targets: ["NikoMusicHubCLI"]
         )
     ],
+    dependencies: [
+        // Pinned exactly: the appcast enclosure signature contract depends on the
+        // signing tools shipped alongside this exact framework build.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6")
+    ],
     targets: [
         .target(
             name: "AppCore",
             dependencies: ["NikoMusicCore"]
+        ),
+        .target(
+            name: "AppUpdates",
+            dependencies: [
+                "AppCore",
+                .product(name: "Sparkle", package: "Sparkle")
+            ]
         ),
         .target(
             name: "NikoMusicCore",
@@ -100,6 +116,7 @@ let package = Package(
             name: "NikoMusicHub",
             dependencies: [
                 "AppCore",
+                "AppUpdates",
                 "NikoMusicCore",
                 "FeatureArchiveBrowser",
                 "FeatureBPMTapper",
@@ -112,6 +129,10 @@ let package = Package(
         .testTarget(
             name: "AppCoreTests",
             dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser"]
+        ),
+        .testTarget(
+            name: "AppUpdatesTests",
+            dependencies: ["AppUpdates", "AppCore"]
         ),
         .testTarget(
             name: "NikoMusicCoreTests",

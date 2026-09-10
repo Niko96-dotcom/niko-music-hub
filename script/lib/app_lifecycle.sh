@@ -59,7 +59,7 @@ PY
 )" || exit 1
 
 _nmh_expected_app_bundle="$NMH_DIST_DIR/$NMH_APP_NAME.app"
-for _nmh_output_override in NMH_APP_BUNDLE NMH_APP_CONTENTS NMH_APP_MACOS NMH_APP_BINARY NMH_INFO_PLIST NMH_ENTITLEMENTS_PLIST; do
+for _nmh_output_override in NMH_APP_BUNDLE NMH_APP_CONTENTS NMH_APP_MACOS NMH_APP_BINARY NMH_INFO_PLIST NMH_ENTITLEMENTS_PLIST NMH_APP_FRAMEWORKS NMH_SPARKLE_FRAMEWORK; do
   if [[ -n "${!_nmh_output_override:-}" ]]; then
     echo "$_nmh_output_override is derived from NMH_DIST_DIR and cannot be overridden" >&2
     exit 1
@@ -71,7 +71,11 @@ NMH_APP_CONTENTS="$NMH_APP_BUNDLE/Contents"
 NMH_APP_MACOS="$NMH_APP_CONTENTS/MacOS"
 NMH_APP_BINARY="$NMH_APP_MACOS/$NMH_APP_NAME"
 NMH_INFO_PLIST="$NMH_APP_CONTENTS/Info.plist"
-NMH_ENTITLEMENTS_PLIST="$NMH_APP_CONTENTS/NikoMusicHub.entitlements"
+# A build input, not a shipped resource: codesign treats a stray file directly
+# under Contents/ as unsigned nested code and refuses to seal the bundle.
+NMH_ENTITLEMENTS_PLIST="$NMH_DIST_DIR/NikoMusicHub.entitlements"
+NMH_APP_FRAMEWORKS="$NMH_APP_CONTENTS/Frameworks"
+NMH_SPARKLE_FRAMEWORK="$NMH_APP_FRAMEWORKS/Sparkle.framework"
 NMH_UI_PROBE="${NMH_UI_PROBE:-$NMH_SCRIPT_DIR/ui_probe.swift}"
 
 nmh_running_app_binary_pids() {
@@ -148,6 +152,120 @@ nmh_swift() {
   fi
 }
 
+# Embed Sparkle.framework and teach the executable where to find it.
+#
+# The app links @rpath/Sparkle.framework/..., and SPM only leaves @loader_path
+# on the binary, which resolves to Contents/MacOS. Without the added rpath the
+# bundle launches straight into a dyld failure.
+nmh_embed_sparkle_framework() {
+  local build_dir="${1:?missing build directory}"
+  local source_framework="$build_dir/Sparkle.framework"
+
+  if [[ ! -d "$source_framework" ]]; then
+    echo "Sparkle.framework missing from build output: $source_framework" >&2
+    return 1
+  fi
+
+  mkdir -p "$NMH_APP_FRAMEWORKS"
+  rm -rf "$NMH_SPARKLE_FRAMEWORK"
+  # ditto keeps the versioned-bundle symlinks and executable bits that codesign
+  # and the installer both depend on.
+  /usr/bin/ditto "$source_framework" "$NMH_SPARKLE_FRAMEWORK"
+
+  if ! /usr/bin/otool -l "$NMH_APP_BINARY" \
+    | /usr/bin/grep -q '@executable_path/../Frameworks'; then
+    /usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$NMH_APP_BINARY"
+  fi
+}
+
+# Decide whether this bundle ships a live update configuration.
+#
+# Fail-closed on both axes: debug bundles stay inert unless a test feed is named
+# explicitly, and no bundle gets a feed URL without a matching public key. Sets
+# NMH_SPARKLE_PLIST_FRAGMENT (possibly empty) and NMH_UPDATE_STATE for logging.
+nmh_resolve_update_configuration() {
+  local key url
+  NMH_SPARKLE_PLIST_FRAGMENT=""
+
+  if ! key="$(nmh_sparkle_public_ed_key)"; then
+    return 1
+  fi
+
+  if [[ -z "$key" ]]; then
+    NMH_UPDATE_STATE="disabled: no SPARKLE_PUBLIC_ED_KEY"
+    return 0
+  fi
+
+  if [[ "$NMH_BUILD_CONFIGURATION" != "release" && -z "${NMH_UPDATE_FEED_URL:-}" ]]; then
+    NMH_UPDATE_STATE="disabled: $NMH_BUILD_CONFIGURATION build without an explicit NMH_UPDATE_FEED_URL"
+    return 0
+  fi
+
+  url="$(nmh_update_feed_url)" || return 1
+
+  # SUVerifyUpdateBeforeExtraction is SURequireSignedFeed's prerequisite: the
+  # enclosure signature must be checked before anything is unpacked.
+  NMH_SPARKLE_PLIST_FRAGMENT="$(cat <<SPARKLE_KEYS
+  <key>SUFeedURL</key>
+  <string>$url</string>
+  <key>SUPublicEDKey</key>
+  <string>$key</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUScheduledCheckInterval</key>
+  <integer>86400</integer>
+  <key>SUVerifyUpdateBeforeExtraction</key>
+  <true/>
+  <key>SURequireSignedFeed</key>
+  <true/>
+SPARKLE_KEYS
+)"
+  if [[ -n "${NMH_UPDATE_FEED_URL:-}" ]]; then
+    NMH_UPDATE_STATE="enabled against OVERRIDDEN TEST FEED $url"
+  else
+    NMH_UPDATE_STATE="enabled against $url"
+  fi
+}
+
+# Sign the bundle inside-out.
+#
+# Deliberately not `codesign --deep`: it is deprecated for signing, and it would
+# stamp the app's own entitlements onto Sparkle's updater and installer helpers.
+# Nested code is signed first, then the app wrapper.
+nmh_sign_bundle() {
+  local identity="${1:?missing signing identity}"
+  local -a sign_options=()
+  local nested
+
+  # Ad-hoc signatures cannot carry a hardened runtime. Bash 3.2 treats an empty
+  # array expansion as unbound under `set -u`, so always keep at least one
+  # element rather than relying on "${array[@]}" of an empty array.
+  sign_options=(--force)
+  if [[ "$identity" != "-" ]]; then
+    sign_options+=(--options runtime)
+  fi
+
+  if [[ -d "$NMH_SPARKLE_FRAMEWORK" ]]; then
+    for nested in "$NMH_SPARKLE_FRAMEWORK/Versions/B/XPCServices/"*.xpc; do
+      [[ -e "$nested" ]] || continue
+      /usr/bin/codesign "${sign_options[@]}" --timestamp=none \
+        --sign "$identity" "$nested" >/dev/null
+    done
+    for nested in \
+      "$NMH_SPARKLE_FRAMEWORK/Versions/B/Updater.app" \
+      "$NMH_SPARKLE_FRAMEWORK/Versions/B/Autoupdate" \
+      "$NMH_SPARKLE_FRAMEWORK/Versions/B"; do
+      [[ -e "$nested" ]] || continue
+      /usr/bin/codesign "${sign_options[@]}" --timestamp=none \
+        --sign "$identity" "$nested" >/dev/null
+    done
+  fi
+
+  /usr/bin/codesign "${sign_options[@]}" \
+    --entitlements "$NMH_ENTITLEMENTS_PLIST" \
+    --sign "$identity" "$NMH_APP_BUNDLE" >/dev/null
+}
+
 nmh_build_bundle() {
   cd "$NMH_ROOT_DIR"
 
@@ -169,6 +287,8 @@ nmh_build_bundle() {
   cp "$build_binary" "$NMH_APP_BINARY"
   chmod +x "$NMH_APP_BINARY"
 
+  nmh_embed_sparkle_framework "$build_dir"
+
   local brand_dir="$NMH_ROOT_DIR/Resources/Brand"
   local app_resources="$NMH_APP_CONTENTS/Resources"
   if [[ -d "$brand_dir" ]]; then
@@ -181,6 +301,9 @@ nmh_build_bundle() {
   fi
 
   printf 'APPL????' >"$NMH_APP_CONTENTS/PkgInfo"
+
+  nmh_resolve_update_configuration || exit 1
+  printf 'update configuration: %s\n' "$NMH_UPDATE_STATE"
 
   cat >"$NMH_INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -219,6 +342,7 @@ nmh_build_bundle() {
   <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Niko Music Hub does not record your microphone. Recorder uses system audio capture; allow it under Screen &amp; System Audio Recording in System Settings.</string>
+$NMH_SPARKLE_PLIST_FRAGMENT
 </dict>
 </plist>
 PLIST
@@ -242,11 +366,7 @@ PLIST
         | awk '/Apple Development:/ && $0 !~ /REVOKED|EXPIRED/ { print $2; exit }'
     )"
   fi
-  if [[ -n "$sign_identity" ]]; then
-    /usr/bin/codesign --force --deep --options runtime --entitlements "$NMH_ENTITLEMENTS_PLIST" --sign "$sign_identity" "$NMH_APP_BUNDLE" >/dev/null
-  else
-    /usr/bin/codesign --force --deep --sign - "$NMH_APP_BUNDLE" >/dev/null
-  fi
+  nmh_sign_bundle "${sign_identity:--}"
 }
 
 nmh_open_app() {
