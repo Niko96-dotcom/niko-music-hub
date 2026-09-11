@@ -1,146 +1,121 @@
-# Niko Music Hub
+<p align="center">
+  <img src="Resources/Brand/AppLogo-96.png" width="88" alt="Niko Music Hub icon">
+</p>
 
-Native macOS SwiftUI app for music-production chores around Cubase: browse a local Cubase archive, tap tempos, convert audio to Cubase-ready WAV, record system audio, download media, separate stems locally, and collect generated files in one output inbox.
+<h1 align="center">Niko Music Hub</h1>
 
-The app is local-first. Archive scanning is read-only by default: it never renames, moves, deletes, or rewrites real Cubase/music files.
+<p align="center">
+  The production desk beside your DAW.<br>
+  Recall any song in your Cubase or Ableton archive, audition it instantly, and handle the chores around it — in one native macOS app.
+</p>
 
-## Local dev flow
+<p align="center">
+  <a href="https://github.com/Niko96-dotcom/niko-music-hub/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Niko96-dotcom/niko-music-hub?display_name=tag&color=1f6feb"></a>
+  <img alt="macOS 14.2+" src="https://img.shields.io/badge/macOS-14.2%2B-000000?logo=apple&logoColor=white">
+  <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-arm64-333333">
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
+  <img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0A84FF">
+  <img alt="License" src="https://img.shields.io/badge/license-proprietary%2C%20source--available-6f42c1">
+</p>
 
-If you do not want to think like a developer, use the friendly front door:
+<p align="center">
+  <img src="docs/assets/board.png" width="920" alt="The archive board: songs as cards in workflow stages, with the persistent preview player docked at the bottom">
+</p>
 
-```bash
-./script/dev.sh run
-```
+## Why
 
-Or double-click `Run Niko Music Hub.command` in Finder. Both paths build a fresh `dist/NikoMusicHub.app`, stop any old running copy, and open the new one.
+Producers accumulate hundreds of song folders, each with a handful of project versions and a pile of bounces. Finding the right one, hearing it, and opening the latest project should take seconds — without ever risking the files themselves. Niko Music Hub is built around that: **everything it does to your archive is read-only**, and everything it *creates* lands in one place.
 
-To check whether this Mac and repo are ready:
+## What it does
 
-```bash
-./script/dev.sh doctor
-```
+**Archive Browser** — scans your song folders once, then keeps a fast local index. Browse as a board (songs as cards moving through Songstarter → Song → Session → Prod → Feedback → Done) or as a searchable list. Search is diacritic- and typo-tolerant across titles, aliases, notes and collaborators.
 
-To prove everything important is green:
+**Persistent preview player** — press play on any card or row and the mixdown keeps playing while you switch tools, songs or views. **Compare** swaps between bounces of the same song at the same elapsed moment, so you hear the difference, not the restart.
 
-```bash
-./script/dev.sh check
-```
+**Song detail** — the main project with one-click *Open in Cubase* / *Open in Ableton*, every project version, every preview candidate (with automatic main-preview ranking you can override), song info, notes, and the plugins the main project uses.
 
-See `docs/local-dev-flow.md` for the full no-dev workflow.
+**Project Vault** — optional, off by default: safely archive finished projects to a second location and restore them on demand, with verified copies, recovery records and a read-only view of what lives where.
 
-## Build and run
+**Production tools** — a **WAV Converter** with DAW-ready presets, a **system-audio Recorder**, a **Downloader** (via `yt-dlp`), local **Stem Separation** (via `demucs-mlx`), and a **BPM Tapper**. Everything they produce appears in the **Output Inbox**, ready to reveal or drag into a session.
 
-Requirements:
+**Always at hand** — a menu-bar quick-access menu routes to every tool, and the app keeps itself current with **in-app updates** from a signed release feed.
 
-- macOS 14.2 or newer
-- Apple silicon (`arm64`); Intel and universal builds are not supported release targets
-- Xcode with the Swift 6 toolchain
-- Optional helper tools for all workflows: `ffmpeg` and `yt-dlp`
+<table>
+  <tr>
+    <td><img src="docs/assets/song-detail.png" alt="Song detail: main project, versions, and the details rail"></td>
+    <td><img src="docs/assets/previews.png" alt="Preview candidates with Compare and main-preview selection"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Song detail — versions, previews, song info, plugins</sub></td>
+    <td align="center"><sub>Preview candidates — compare bounces at the same moment</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/converter.png" alt="WAV Converter"></td>
+    <td><img src="docs/assets/recorder.png" alt="Audio Recorder"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>WAV Converter — drop files, pick a preset, hand off to the inbox</sub></td>
+    <td align="center"><sub>Audio Recorder — capture system audio, previews pause automatically</sub></td>
+  </tr>
+</table>
 
-```bash
-./script/build_and_run.sh
-```
+## Install
 
-Produces `dist/NikoMusicHub.app`. The first launch starts clean: add the folder that contains your Cubase song/project folders, choose an output folder if the default is not right, then scan.
+Requires **macOS 14.2 or newer on Apple silicon**.
 
-Codex is wired to the same command through `.codex/environments/environment.toml`, so the app Run button builds a fresh bundle and launches Niko Music Hub.
+1. Download `NikoMusicHub-<version>.dmg` and its `.sha256` from the [latest release](https://github.com/Niko96-dotcom/niko-music-hub/releases/latest).
+2. Optionally verify it: `shasum -a 256 -c NikoMusicHub-<version>.dmg.sha256`
+3. Open the DMG and drag **Niko Music Hub** into `/Applications`.
 
-## Local gates
+The app is signed with a Developer ID and notarized. After the first install it checks for updates once a day and installs them for you; **Niko Music Hub ▸ Check for Updates…** checks immediately, and **Settings ▸ Updates** turns automatic checks off. Updates are downloaded from a signed feed and verified before anything is unpacked.
 
-```bash
-./script/dev.sh check
-```
+Optional helpers, each detected automatically if present: [`ffmpeg`](https://ffmpeg.org) for conversion and downloads, [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for the Downloader, [`demucs-mlx`](docs/user-guide-stem-separation.md) for stem separation.
 
-Equivalent manual gates:
+## Safety guarantees
 
-```bash
-./script/ci.sh
-./script/e2e_user_smoke.sh
-./script/build_and_run.sh --verify
-```
+- Archive scanning, previews and project opening are **read-only** toward your music folders. The app never renames, moves, deletes or rewrites a file there — the only exception is a Project Vault transfer you explicitly confirm.
+- Everything the app creates goes to the output folder you choose (default `~/Music/Niko Music Hub/Inbox`).
+- App state lives in `~/Library/Application Support/Niko Music Hub/`. Uninstall by removing the app; remove that folder only if you want to clear the local index and settings.
+- Automation runs use `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`, which logs what it would open instead of launching your DAW.
 
-`ci.sh` skips host-only CoreAudio recorder tests that need a working system-audio capture device.
-
-For visual proof of a foreground app window:
-
-```bash
-./script/capture_window_proof.sh
-```
-
-This saves `dist/window-visible-proof.png` and `dist/desktop-proof.png`.
-
-## GitHub workflow
-
-This repo uses GitHub for review and history, but local gates are the source of truth. Before opening or merging a PR, run:
-
-```bash
-./script/ci.sh
-./script/e2e_user_smoke.sh
-```
-
-GitHub Actions are intentionally not required for this project.
-
-## Release engineering
-
-`VERSION` is the canonical release version and `BUNDLE_ID` is the permanent app identity. Maintainer release commands live in `script/release-all.sh`; public mode signs, notarizes, staples, validates, checksums, creates an approval record, and optionally publishes GitHub Release assets. Local-only mode is explicitly labeled and cannot publish.
+## Build from source
 
 ```bash
-./script/release-all.sh --local-only
-./script/release-all.sh --public --dry-run-publish
+git clone https://github.com/Niko96-dotcom/niko-music-hub.git
+cd niko-music-hub
+./script/dev.sh run        # builds dist/NikoMusicHub.app and opens it
 ```
 
-See `docs/release.md` and `docs/release-validation.md`.
-
-## Updates
-
-Released builds update themselves through Sparkle, using the signed `appcast.xml` published alongside each GitHub Release. Enclosures are EdDSA-signed and verified before extraction. Builds without a signing key — and debug builds generally — ship with updates disabled rather than unverified. See `docs/update-feed.md`.
-
-## Fixtures
+`./script/dev.sh doctor` checks that this Mac has what it needs; `./script/dev.sh check` runs every gate that matters. The two gates are:
 
 ```bash
-./script/fixtures/generate_cubase_archive_fixtures.sh
-swift run NikoMusicCoreSelfTest
+./script/ci.sh              # build, unit tests, release-engineering regression tests
+./script/e2e_user_smoke.sh  # drives the real app through the fixture archive
 ```
 
-Fixture archive layout: `Fixtures/CubaseArchive/` — synthetic song folders covering the happy path
-(Neon Hook, Second Song), preview ranking and score tiebreaks (Preview Ranking Lab, Equal Score
-Duration/Version/Extension Tiebreak), real-world naming (90s Rave, Amber Moth), and malformed input
-(Broken Folder Example, LOOSE_FILE.txt). `.cpr` files are empty placeholders and `.wav` files are
-minimal silence — never copy a real user archive into this tree. See
-`Fixtures/CubaseArchive/README.md`.
+Tests run against a synthetic archive under `Fixtures/CubaseArchive/` — empty placeholder projects and near-silent mixdowns generated by `script/fixtures/generate_cubase_archive_fixtures.sh`. Never point tests at a real archive.
 
-## Visible tools
+### Architecture
 
-| Tool | What it does |
-|------|--------------|
-| Archive | Scans selected Cubase archive roots, searches songs, previews mixdowns, and opens the newest `.cpr` read-only. |
-| BPM Tapper | Tap or press Space to estimate tempo, adjust half/double time, save recent BPMs, and copy results. |
-| WAV Converter | Drag or choose audio files, convert to Cubase-ready WAV presets, and hand verified outputs to the inbox. |
-| Recorder | Capture system audio on supported macOS versions and save recordings to the selected output folder. |
-| Downloader | Download supported URLs through `yt-dlp` into the shared output folder. |
-| Stem Separation | Split audio into vocals/drums/bass/other stems locally using `demucs-mlx`. |
-| Output Inbox | Shows generated files from registered tools with reveal/drag-out actions. |
+| Module | Role |
+|---|---|
+| `NikoMusicCore` | Pure Swift: scanning, indexing, search, preview ranking, project-vault engine, opening safety. No UI. |
+| `AppCore` | Shared shell: tool registry, settings, jobs, output inbox, diagnostics, design system. |
+| `FeatureArchiveBrowser` | The board, list, song detail, persistent player and Project Vault UI. |
+| `FeatureAudioConverter` · `FeatureAudioRecorder` · `FeatureDownloader` · `FeatureStemSeparation` · `FeatureBPMTapper` | Independent tools registered through the same `ToolFeature` boundary. |
+| `AppUpdates` | Sparkle integration, isolated so nothing else links it. |
+| `NikoMusicHub` | The app target: composition root, shell, menus, settings. |
 
-## Safety
+Full detail in [`docs/architecture.md`](docs/architecture.md); product intent in [`docs/product-scope.md`](docs/product-scope.md).
 
-- Archive scanning and CPR open are **read-only** toward music roots.
-- Use `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` for automation (logs path, does not open Cubase).
-- App metadata lives under `~/Library/Application Support/Niko Music Hub/`.
-- Developer-only surfaces are hidden from normal builds. Set `NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1` only when working on app internals.
+### Releases
 
-## Known limitations
+Releases are built locally and fail closed: a clean tagged checkout, every gate green, an approved exact-commit acceptance record, Developer ID signing, notarization, stapling, and a signed update feed verified against the key inside the shipped app — before a single byte is uploaded. See [`docs/release.md`](docs/release.md), [`docs/release-validation.md`](docs/release-validation.md) and [`docs/update-feed.md`](docs/update-feed.md).
 
-- GitHub Actions are not configured; local gates are the source of truth.
-- System-audio recording depends on macOS support and local privacy permission.
-- `ffmpeg` and `yt-dlp` are optional external tools. The app shows compact helper health, but installing or updating them is still a user action.
-- `demucs-mlx` is an optional external tool for stem separation. See `docs/user-guide-stem-separation.md`.
-- The archive browser is intentionally local-only and does not manage files inside real Cubase archives.
-- Menu bar quick access provides one-click routing to all tools from the macOS status bar. See `docs/menu-bar-quick-access.md` for the entry list and design rationale.
+## Contributing
 
-## Automation
+Issues and pull requests are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). Keep product code in Swift, keep archive access read-only, and run both gates before opening a PR. GitHub Actions are intentionally not used; the local gates are the source of truth.
 
-`./script/e2e_user_smoke.sh` covers the fixture archive flow, dry-run CPR open, read-only archive proof, diagnostics export parity, and a public first-run UI smoke that rejects prototype labels, fixture paths, temp paths, and exposed diagnostics in the normal app window.
+## License
 
-Every public build requires a newly approved exact-commit UAT record. See `docs/release.md` for the evidence format and `docs/user-e2e.md` for smoke details.
-
-For a commercial source handoff, use `script/export-source-sale.sh`. It creates a buyer-safe export without private planning/agent history and refuses a sale-labeled archive without an exact-commit provenance attestation.
+Niko Music Hub is **source-available, not open source**. The source is published so you can read it, audit it and build it for yourself; any other use needs a written agreement — see [`LICENSE`](LICENSE). Third-party components keep their own licenses, listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
