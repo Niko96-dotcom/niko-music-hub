@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0 - 2026-09-11
+
+- Update Niko Music Hub from inside the app: a daily automatic check, Check for Updates… in the app menu, and an Updates section in Settings. Downloads come from a signed release feed and are verified before anything is installed.
+- Replace the per-row, detail, and board transports with one persistent preview player that keeps playing while you switch tools or songs.
+- Add play buttons to song rows and board cards, and a Previews tab in song detail for choosing the main preview and comparing mixdowns at the same elapsed moment.
+- Pause previews automatically while the Recorder captures system audio, so a preview can never end up inside a recording.
+- Reorganise song detail around a main-project card, Versions / Previews / Song info / Plugins tabs, and a details rail; Project Vault moves to a sheet unless it needs attention.
+- Let empty board stages collapse to a compact rail, narrow the song list, and alternate list and detail below the split-view width.
+- Quiet the tool chrome: palette-derived hover fills that work in the light appearance, plain tool titles, a leaner converter intake, and ½ / 1× / 2× tempo chips.
+- Generate and verify the update feed as part of every public release, checking both signatures against the key embedded in the shipped app.
+- Remove the retired waveform peak loader, transport bar, and metadata chip row, and keep the release-notes check current across version bumps.
+
 ## 1.4.3 - 2026-09-10
 
 - Add Ableton project support alongside Cubase.

@@ -2,7 +2,7 @@
 
 ## Mission
 
-**Niko Music Hub** is a shipped native macOS SwiftUI app (currently `1.4.3`, see `VERSION`) that combines
+**Niko Music Hub** is a shipped native macOS SwiftUI app (currently `1.5.0`, see `VERSION`) that combines
 the outside-Cubase production tools with a Cubase archive browser and Project Vault.
 
 The app is built. Work on it as a maintained product: extend and harden existing modules rather than
