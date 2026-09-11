@@ -51,7 +51,9 @@ CONTENT_PATTERNS = {
     ),
 }
 FORBIDDEN_SUFFIXES = {".env", ".key", ".mobileprovision", ".p12", ".pem", ".pfx", ".xcresult"}
+# Scanner and hygiene tests must spell out the very strings they reject.
 CONTENT_PATTERN_EXEMPTIONS = {
+    Path("Tests/test_release_scripts.sh"),
     Path("Tests/test_source_distribution_scripts.sh"),
     Path("script/public-tree-hygiene.sh"),
     Path("script/verify-source-distribution.py"),
