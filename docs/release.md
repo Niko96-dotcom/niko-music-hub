@@ -88,3 +88,4 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 - App Store review is not part of this release path.
 - The update feed URL is permanent. Every installed build polls the URL it shipped with, so `nmh_update_feed_url` cannot be changed without stranding the field.
 - Local-only mode skips feed generation when no `SPARKLE_PUBLIC_ED_KEY` is configured; it does not skip it when a key is present and generation fails.
+- `CFBundleVersion` is the commit count of `HEAD`, and Sparkle orders updates by it. Every public release must be built from the public `niko-music-hub` history (this repository), never from the private archive or another clone, or a later release can carry a lower build number than an earlier one and never be offered.
