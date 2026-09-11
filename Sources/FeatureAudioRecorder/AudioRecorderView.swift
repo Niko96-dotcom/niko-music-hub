@@ -95,7 +95,6 @@ public struct AudioRecorderView: View {
     private var header: some View {
         ToolHeaderBlock(
             title: "Audio Recorder",
-            systemImage: "waveform.circle",
             statusText: statusText,
             statusColor: statusColor
         )

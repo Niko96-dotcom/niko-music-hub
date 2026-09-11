@@ -263,7 +263,6 @@ struct SettingsView: View {
     private var header: some View {
         ToolHeaderBlock(
             title: "Settings",
-            systemImage: "gearshape",
             statusText: "Hub-wide preferences for startup, output, and tools.",
             statusColor: HubDesignSystem.Palette.textSecondary
         )

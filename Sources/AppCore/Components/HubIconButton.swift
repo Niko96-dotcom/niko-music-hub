@@ -98,7 +98,7 @@ public struct HubIconButton: View {
             return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
         }
         if isSelected { return HubDesignSystem.Palette.accentFill }
-        return isHovered ? Color.white.opacity(0.06) : Color.clear
+        return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
     }
 
     private var compactChipButton: some View {

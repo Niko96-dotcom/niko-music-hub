@@ -27,7 +27,6 @@ struct DevToolDetailView: View {
         HubToolPage {
             ToolHeaderBlock(
                 title: metadata.shortLabel,
-                systemImage: metadata.systemImage,
                 statusText: "Registered through AppComposition.",
                 statusColor: HubDesignSystem.Palette.textSecondary
             )

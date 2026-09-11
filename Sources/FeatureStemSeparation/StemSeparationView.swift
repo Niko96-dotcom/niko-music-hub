@@ -24,7 +24,6 @@ public struct StemSeparationView: View {
     private var header: some View {
         ToolHeaderBlock(
             title: "Stem Separation",
-            systemImage: "slider.horizontal.below.rectangle",
             statusText: viewModel.statusMessage,
             statusColor: viewModel.errorMessage == nil
                 ? HubDesignSystem.Palette.textSecondary

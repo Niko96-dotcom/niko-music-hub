@@ -43,7 +43,6 @@ public struct BPMTapperView: View {
     private var header: some View {
         ToolHeaderBlock(
             title: "BPM Tapper",
-            systemImage: "metronome",
             statusText: viewModel.statusText,
             statusColor: statusColor
         )
@@ -86,14 +85,13 @@ public struct BPMTapperView: View {
         .padding(HubDesignSystem.Spacing.cardPadding)
         .frame(minHeight: 94)
         .frame(maxWidth: .infinity)
-        .hubCard(state: viewModel.displayedBPM == nil ? .disabled : .selected)
     }
 
     private var adjustmentPicker: some View {
         HubChoiceChips("Adjustment", selection: adjustmentBinding, choices: [
-            .init(BPMAdjustment.original, label: "Original"),
-            .init(BPMAdjustment.halfTime, label: "Half-Time"),
-            .init(BPMAdjustment.doubleTime, label: "Double-Time"),
+            .init(BPMAdjustment.halfTime, label: "½"),
+            .init(BPMAdjustment.original, label: "1×"),
+            .init(BPMAdjustment.doubleTime, label: "2×"),
         ])
         .disabled(viewModel.displayedBPM == nil)
         .opacity(viewModel.displayedBPM == nil ? 0.45 : 1)
@@ -109,7 +107,7 @@ public struct BPMTapperView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
         .padding(HubDesignSystem.Spacing.cardPadding)
-        .frame(maxWidth: HubToolLayout.maxContentWidth, minHeight: 160)
+        .frame(maxWidth: 360, minHeight: 140)
         .hubCard(
             state: tapSurfaceFocused ? .selected : .normal,
             interactive: true
@@ -227,12 +225,6 @@ public struct BPMTapperView: View {
                     Text("No tempos saved yet")
                         .font(HubDesignSystem.Typography.body())
                         .fontWeight(.semibold)
-
-                    Text("Saved BPM results will appear here with their time and adjustment mode. Tap a tempo, then Save BPM to keep it for this session.")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: HubToolLayout.maxContentWidth)
                 .padding(HubDesignSystem.Spacing.cardPadding)

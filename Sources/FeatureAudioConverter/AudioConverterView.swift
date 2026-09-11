@@ -25,10 +25,17 @@ public struct AudioConverterView: View {
     public var body: some View {
         HubToolPage {
             header
-            intakeSurface
+            if viewModel.rows.isEmpty {
+                intakeSurface
+            } else {
+                batchRows
+                HubLabeledButton(icon: "plus", label: "Add files", style: .secondary) {
+                    fileImporterVisible = true
+                }
+                .onDrop(of: [UTType.fileURL.identifier], isTargeted: $dropTargeted, perform: handleDrop)
+            }
             presetStrip
             actionRow
-            batchRows
         }
         .onAppear {
             consumeConverterHandoffIfNeeded()
@@ -51,7 +58,6 @@ public struct AudioConverterView: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             ToolHeaderBlock(
                 title: "WAV Converter",
-                systemImage: "waveform.badge.plus",
                 statusText: headerStatus,
                 statusColor: HubDesignSystem.Palette.textSecondary
             )
@@ -67,21 +73,9 @@ public struct AudioConverterView: View {
 
     private var intakeSurface: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [HubDesignSystem.Palette.accent.opacity(0.16), HubDesignSystem.Palette.accent.opacity(0)],
-                            center: .center,
-                            startRadius: 2,
-                            endRadius: 58
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-                Image(systemName: "arrow.down.doc")
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundStyle(HubDesignSystem.Palette.accent)
-            }
+            Image(systemName: "doc.badge.plus")
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
                 .font(HubDesignSystem.Typography.sectionTitle())

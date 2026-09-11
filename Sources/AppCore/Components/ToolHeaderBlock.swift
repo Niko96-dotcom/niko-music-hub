@@ -2,25 +2,22 @@ import SwiftUI
 
 public struct ToolHeaderBlock: View {
     public let title: String
-    public let systemImage: String
     public let statusText: String
     public let statusColor: Color
 
     public init(
         title: String,
-        systemImage: String,
         statusText: String,
         statusColor: Color = .secondary
     ) {
         self.title = title
-        self.systemImage = systemImage
         self.statusText = statusText
         self.statusColor = statusColor
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Label(title, systemImage: systemImage)
+            Text(title)
                 .font(HubDesignSystem.Typography.screenTitle())
                 .lineLimit(1)
             Text(statusText)

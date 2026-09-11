@@ -66,7 +66,6 @@ public struct DownloaderView: View {
     private var header: some View {
         ToolHeaderBlock(
             title: DownloaderCopy.toolLabel,
-            systemImage: "arrow.down.circle",
             statusText: headerStatus,
             statusColor: HubDesignSystem.Palette.textSecondary
         )

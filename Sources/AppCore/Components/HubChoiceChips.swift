@@ -58,7 +58,7 @@ public struct HubChoiceChips<Value: Hashable>: View {
                         .fill(
                             isSelected
                                 ? HubDesignSystem.Palette.accentFill
-                                : (isHovered ? Color.white.opacity(0.05) : Color.clear)
+                                : (isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.05) : Color.clear)
                         )
                 }
                 .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous))

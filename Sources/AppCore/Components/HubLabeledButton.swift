@@ -76,9 +76,9 @@ public struct HubLabeledButton: View {
         case .primary:
             return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
         case .secondary:
-            return Color.white.opacity(isHovered ? 0.12 : 0.08)
+            return HubDesignSystem.Palette.textPrimary.opacity(isHovered ? 0.10 : 0.06)
         case .ghost:
-            return isHovered ? Color.white.opacity(0.06) : Color.clear
+            return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
         }
     }
 
