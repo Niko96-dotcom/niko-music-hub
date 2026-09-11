@@ -36,7 +36,13 @@ REQUIRED_FILES = {
     "VERSION",
 }
 CONTENT_PATTERNS = {
-    "personal home path": re.compile(r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|\b))[A-Za-z0-9_.-]+(?:/|\b)", re.IGNORECASE),
+    # Any home directory that is not an obvious placeholder is treated as a real
+    # person's path. Fixtures use the placeholder names below on purpose.
+    "personal home path": re.compile(
+        r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|\b))"
+        r"[A-Za-z0-9_.-]+(?:/|\b)",
+        re.IGNORECASE,
+    ),
     "private machine name": re.compile(r"\b(?:MacBook|Mac Studio)\b", re.IGNORECASE),
     "private workflow state": re.compile(r"(?:^|/)\.(?:ai|planning|cursor|deslop)(?:/|$)"),
     "credential-shaped value": re.compile(
