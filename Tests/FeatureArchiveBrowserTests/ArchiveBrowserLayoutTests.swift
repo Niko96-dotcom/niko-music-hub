@@ -8,7 +8,8 @@ final class ArchiveBrowserLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(520 - narrow, 200)
 
         let wide = ArchiveBrowserLayout.listWidth(totalWidth: 1_000)
-        XCTAssertEqual(wide, 410)
+        XCTAssertEqual(wide, 260)
+        XCTAssertEqual(ArchiveBrowserLayout.listWidth(totalWidth: 1600), 300)
         XCTAssertGreaterThanOrEqual(1_000 - wide, 400)
     }
 

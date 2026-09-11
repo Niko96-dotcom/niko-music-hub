@@ -19,7 +19,17 @@ public final class AudioRecorderViewModel: ObservableObject {
     /// How many finished recordings stay visible on the tool page (full history lives in the Output Inbox).
     static let recentRecordingsLimit = 5
 
-    @Published public private(set) var recordingState: RecordingDisplayState = .idle
+    @Published public private(set) var recordingState: RecordingDisplayState = .idle {
+        didSet {
+            let active: Bool
+            switch recordingState {
+            case .starting, .recording, .reconnecting, .stopping: active = true
+            default: active = false
+            }
+            AudioCaptureActivity.shared.setActive(active, owner: captureActivityID)
+        }
+    }
+    private let captureActivityID = UUID()
     @Published public var filenameOverride: String = ""
     @Published public var maxDurationMinutes: Int = 30
     @Published public private(set) var elapsedTime: TimeInterval = 0
@@ -83,6 +93,8 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     deinit {
         inboxObservationTask?.cancel()
+        let owner = captureActivityID
+        Task { @MainActor in AudioCaptureActivity.shared.setActive(false, owner: owner) }
     }
 
     public func startRecording() async {

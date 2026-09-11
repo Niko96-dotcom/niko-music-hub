@@ -8,26 +8,21 @@ struct SongCardView: View {
     let isSelected: Bool
     var matchSummary: String?
     var onSelect: (() -> Void)?
+    var onPlay: (() -> Void)?
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
     var vaultPresentation: ProjectVaultCardPresentation?
     var onProjectVaultPrimaryAction: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
-    @ObservedObject private var playbackCoordinator = ArchivePlaybackCoordinator.shared
+    @ObservedObject private var session = ArchivePreviewSession.shared
 
     private var hasScanWarning: Bool {
         !song.displayScanWarnings().isEmpty
     }
 
-    private var metadataChips: [SongCardMetadataChip] {
-        SongCardMetadataChipBuilder.chips(for: song, matchSummary: matchSummary)
-    }
-
-    private var isRowPlaying: Bool {
-        guard let mainPreviewURL = song.mainPreviewURL else { return false }
-        return playbackCoordinator.activeURL == mainPreviewURL
-    }
+    private var isRowLoaded: Bool { session.songID == song.id }
+    private var isRowPlaying: Bool { isRowLoaded && session.isPlaying }
 
     private var isArchivedProject: Bool {
         vaultPresentation?.state == .archived
@@ -39,38 +34,42 @@ struct SongCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                HStack(spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(song.effectiveDisplayTitle)
-                        .font(HubDesignSystem.Typography.body().weight(.semibold))
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 5) {
+                        Text("\(song.workflowStatus?.displayTitle ?? "No Status") · \(song.visibleProjectVersions.count) version\(song.visibleProjectVersions.count == 1 ? "" : "s")")
+                            .font(HubDesignSystem.Typography.micro()).foregroundStyle(.secondary)
+                        if isRowLoaded {
+                            Text(isRowPlaying ? "Playing" : "In player")
+                                .font(HubDesignSystem.Typography.micro()).foregroundStyle(HubDesignSystem.Palette.accent)
+                        }
+                    }
+                    if let matchSummary, !matchSummary.isEmpty {
+                        Text(matchSummary).font(HubDesignSystem.Typography.micro())
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                if allowsWorkflowMutation, let onWorkflowStatusChange {
-                    ArchiveWorkflowStatusMenu(
-                        status: song.workflowStatus,
-                        compact: true,
-                        onSelect: onWorkflowStatusChange
-                    )
-                } else if let status = song.workflowStatus {
-                    ArchiveWorkflowStatusPill(status: status, compact: true)
-                } else {
-                    Text("No Status")
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                ArchiveCardPlayButton(
+                    title: song.effectiveDisplayTitle,
+                    isPlaying: isRowPlaying,
+                    isLoaded: isRowLoaded,
+                    isEnabled: song.mainPreviewURL != nil && !session.captureActive
+                ) {
+                    if isRowLoaded { session.toggle() }
+                    else if let onPlay { onPlay() }
+                    else { session.audition(song: song, openSong: { onSelect?() }) }
                 }
-
                 if hasScanWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.warning)
                         .help(song.displayScanWarnings().joined(separator: " "))
                 }
             }
-
             if let vaultPresentation, vaultPresentation.state != .active {
                 HStack(spacing: 5) {
                     Text(vaultPresentation.state.rawValue)
@@ -108,14 +107,6 @@ struct SongCardView: View {
                     }
                 }
             }
-
-            SongCardMetadataChipRow(chips: metadataChips)
-
-            ArchiveMiniPlayerView(
-                url: song.mainPreviewURL,
-                style: .compact,
-                showsSlider: isRowPlaying
-            )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
@@ -132,6 +123,14 @@ struct SongCardView: View {
         // transport. Child buttons retain their own actions.
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
+        .contextMenu {
+            if allowsWorkflowMutation, let onWorkflowStatusChange {
+                Button("No Status") { onWorkflowStatusChange(nil) }
+                ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                    Button(status.displayTitle) { onWorkflowStatusChange(status) }
+                }
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(song.effectiveDisplayTitle)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

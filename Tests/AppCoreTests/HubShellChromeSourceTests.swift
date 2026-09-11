@@ -16,7 +16,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             "context.preferences.set",
             "toolPaneCache",
             "ensureMounted",
-            "ArchivePreviewPlayback.stopAll()",
+            "ArchivePersistentPlayerView",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing shell Liquid chrome source: \(required)")
         }

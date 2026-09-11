@@ -37,21 +37,33 @@ struct ArchiveBrowserView: View {
                         .padding(.top, HubToolLayout.topPadding)
                         .padding(.bottom, HubToolLayout.bottomPadding)
                 case .list:
+                    // Below the split-view breakpoint the list and the detail pane take
+                    // turns owning the full width instead of squeezing side by side.
+                    let splitView = proxy.size.width >= ArchiveBrowserLayout.splitViewMinWidth
                     HStack(spacing: 0) {
-                        ArchiveSidebarView(
-                            viewModel: viewModel,
-                            compactList: compactList,
-                            showNewSongSheet: $showNewSongSheet,
-                            onChooseRoot: chooseRoot
-                        )
-                        .frame(width: listWidth)
-
-                        Divider().opacity(0.35)
-
-                        detailPane
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .background(Color.clear)
-                            .clipped()
+                        if splitView || viewModel.selectedSong == nil {
+                            ArchiveSidebarView(
+                                viewModel: viewModel,
+                                compactList: compactList,
+                                showNewSongSheet: $showNewSongSheet,
+                                onChooseRoot: chooseRoot
+                            )
+                            .frame(width: splitView ? listWidth : proxy.size.width)
+                        }
+                        if splitView { Divider().opacity(0.35) }
+                        if splitView || viewModel.selectedSong != nil {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if !splitView {
+                                    Button("Back to songs") { viewModel.clearSelection(stopPlayback: false) }
+                                        .buttonStyle(.plain)
+                                        .padding(20)
+                                }
+                                detailPane
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                    .background(Color.clear)
+                                    .clipped()
+                            }
+                        }
                     }
                     .background(Color.clear)
                 }
@@ -111,11 +123,12 @@ struct ArchiveBrowserView: View {
             }
         }
         .onKeyPress(.space) {
-            // Board only: exactly one player view (the bottom bar) is mounted
-            // per URL there, so the toggle broadcast has a single receiver.
-            guard allowsSongShortcuts, viewModel.viewMode == .board,
-                  let url = viewModel.selectedSong?.mainPreviewURL else { return .ignored }
-            ArchivePlaybackCoordinator.shared.requestTogglePlayPause(for: url)
+            guard allowsSongShortcuts else { return .ignored }
+            if ArchivePreviewSession.shared.preview != nil {
+                ArchivePreviewSession.shared.toggle()
+            } else if let song = viewModel.selectedSong {
+                viewModel.audition(song)
+            } else { return .ignored }
             return .handled
         }
         .sheet(isPresented: $showNewSongSheet) {
@@ -142,19 +155,19 @@ struct ArchiveBrowserView: View {
     private var boardDetailPage: some View {
         if let song = viewModel.selectedSong {
             VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
-                HubLabeledButton(
-                    icon: "chevron.backward",
-                    label: "Board",
-                    style: .ghost,
-                    help: "Back to the board (Esc)"
-                ) {
-                    viewModel.viewMode = .board
+                HStack {
+                    HubLabeledButton(icon: "chevron.backward", label: "Board", style: .ghost,
+                        help: "Back to the board (Esc)") { viewModel.viewMode = .board }
+                    Spacer()
+                    HubLabeledButton(icon: "sidebar.leading", label: "Browse", style: .ghost) {
+                        viewModel.viewMode = .list
+                    }
                 }
 
                 SongDetailView(song: song, viewModel: viewModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+            .frame(maxWidth: 1150, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, HubToolLayout.horizontalPadding)
             .padding(.top, HubToolLayout.topPadding)

@@ -1,21 +1,14 @@
 import XCTest
 
 final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
-    func testArchiveBrowserUsesAppCoreMediaSurfaces() throws {
-        let miniPlayer = try featureSource("ArchiveMiniPlayerView.swift")
-        let waveform = try featureSource("ArchiveWaveformView.swift")
-        let hero = try featureSource("ArchiveWaveformHeroView.swift")
-
-        XCTAssertTrue(miniPlayer.contains("HubTransportBar"))
-        XCTAssertTrue(miniPlayer.contains("markerProgress"))
-        XCTAssertTrue(hero.contains("HubTransportBar"))
-        XCTAssertTrue(hero.contains("showsSkipControls: true"))
-        XCTAssertTrue(hero.contains("showsSurface: false"))
-        XCTAssertTrue(hero.contains("volumeLevel: nil"))
-        XCTAssertTrue(waveform.contains("HubWaveformSurface"))
-        XCTAssertTrue(waveform.contains("variant != .rowStrip") || waveform.contains(".rowStrip"))
-        XCTAssertFalse(waveform.contains("Canvas"))
-        XCTAssertFalse(waveform.contains("drawWaveform"))
+    func testArchiveBrowserUsesOnePersistentTransport() throws {
+        let player = try featureSource("ArchivePersistentPlayerView.swift")
+        let row = try featureSource("SongCardView.swift")
+        let detail = try featureSource("SongDetailView.swift")
+        XCTAssertTrue(player.contains("Persistent preview player"))
+        XCTAssertFalse(row.contains("ArchivePreviewPlayer()"))
+        XCTAssertFalse(detail.contains("ArchivePreviewPlayer()"))
+        XCTAssertFalse(detail.contains("ArchiveWaveformHeroView"))
     }
 
     func testArchiveBrowserUsesLiquidCardsFieldsAndDiagnosticsChrome() throws {
@@ -33,7 +26,6 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         // primitives and ControlState (`state:`) instead of the deleted Liquid adapters.
         [
             "hubCard",
-            "state: .selected",
             "state: .warning",
             "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge",
             "Welcome to your music archive",
@@ -42,35 +34,25 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         }
 
         let songCard = try featureSource("SongCardView.swift")
-        XCTAssertTrue(songCard.contains("SongCardMetadataChipRow"), "Song rows must show metadata chips")
-        XCTAssertTrue(songCard.contains("ArchiveMiniPlayerView"), "Song rows must keep inline preview transport")
         XCTAssertFalse(songCard.contains("variant: .rowStrip"), "Song rows must not host the thin waveform strip")
 
         let detail = try featureSource("SongDetailView.swift")
-        XCTAssertTrue(detail.contains("hubSurface(.raised"), "Song detail preview should use a quiet raised surface")
-        XCTAssertTrue(detail.contains("hubSurface(.panel"), "Collapsed detail groups should use Settings-like panels")
-        XCTAssertTrue(detail.contains("metadataExpanded"), "Metadata must start collapsed (ARCH-07)")
+        XCTAssertTrue(detail.contains("hubSurface(.panel"), "Vault attention state must preserve its panel")
         XCTAssertTrue(detail.contains("liveSong.openProjectLabel"), "Primary project action must identify the selected DAW")
         XCTAssertTrue(detail.contains("Mixdown BPM"), "BPM fidelity must remain visible in essential info")
         XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
         XCTAssertTrue(detail.contains("liveSong"), "Detail must resolve live catalog snapshots")
 
-        let hero = try featureSource("ArchiveWaveformHeroView.swift")
-        XCTAssertTrue(hero.contains("WaveformPeakCache.shared"), "Hero must reuse shared peak cache")
-        XCTAssertTrue(hero.contains("stopGeneration"), "Hero must observe global stop broadcasts")
-        XCTAssertTrue(hero.contains("guard !Task.isCancelled"), "Hero peak load must ignore cancelled tasks")
 
-        let miniPlayer = try featureSource("ArchiveMiniPlayerView.swift")
-        XCTAssertTrue(miniPlayer.contains("preparesOnAppear"), "List rows must support lazy player prepare")
+        let miniPlayer = try featureSource("ArchivePreviewPlayer.swift")
         XCTAssertTrue(miniPlayer.contains("func bind(url"), "Lazy bind must exist for list rows")
         XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
-        XCTAssertTrue(miniPlayer.contains("stopGeneration"), "List players must observe global stop")
 
         let viewModel = try archiveBrowserViewModelSources()
         XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
         XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
-        XCTAssertTrue(viewModel.contains("stopAllPlayback"), "Song change must stop playback")
+        XCTAssertTrue(viewModel.contains("ArchivePreviewPlayback.stopAll"), "Explicit lifecycle reset must stop playback")
         XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
         XCTAssertTrue(viewModel.contains("mixdownAnalysisCacheKey"), "BPM/key must key off preview id")
 

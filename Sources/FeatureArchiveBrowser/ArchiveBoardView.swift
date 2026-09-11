@@ -11,6 +11,7 @@ struct ArchiveBoardView: View {
     /// Opens the archive-root folder picker (owned by the browser shell).
     let onChooseRoot: () -> Void
 
+    @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
     @StateObject private var projectionCache: ArchiveBoardProjectionCache
     @State private var columnOrigins: [String: CGFloat] = [:]
     @State private var boardViewportWidth: CGFloat = 0
@@ -39,6 +40,13 @@ struct ArchiveBoardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if !viewModel.songs.isEmpty {
+                Toggle("Compact empty stages", isOn: $compactEmptyStages)
+                    .toggleStyle(.checkbox)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .padding(.top, 12)
+            }
 
             if viewModel.songs.isEmpty {
                 emptyArchiveState
@@ -51,6 +59,7 @@ struct ArchiveBoardView: View {
                                 ArchiveBoardColumnView(
                                     column: column,
                                     viewModel: viewModel,
+                                    compactWhenEmpty: compactEmptyStages && !viewModel.songs.contains { $0.workflowStatus == column.status },
                                     onDragLocationChanged: { columnID, localX in
                                         handleDragLocation(
                                             columnID: columnID,
@@ -100,10 +109,6 @@ struct ArchiveBoardView: View {
                     keyboardFocus = .archive
                 })
 
-                if let song = viewModel.selectedSong {
-                    ArchiveBoardPlayerBar(song: song, viewModel: viewModel)
-                        .padding(.top, 10)
-                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -123,9 +128,6 @@ struct ArchiveBoardView: View {
                 Text("Board")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                Text("Drag songs between stages")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
             .layoutPriority(1)
 
@@ -137,7 +139,6 @@ struct ArchiveBoardView: View {
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
-                .help("New songs appear as the scan finds them")
             }
 
             Spacer(minLength: 8)
@@ -162,7 +163,7 @@ struct ArchiveBoardView: View {
             HubIconButton(
                 systemImage: "chart.bar",
                 accessibilityLabel: "Show analytics",
-                help: "Analytics — activity, finish rate, and where songs get stuck",
+                help: "Analytics",
                 isEnabled: !viewModel.songs.isEmpty
             ) {
                 viewModel.showAnalytics()
@@ -171,7 +172,7 @@ struct ArchiveBoardView: View {
             HubIconButton(
                 systemImage: "folder.badge.plus",
                 accessibilityLabel: "Add archive root",
-                help: "Add a folder of Cubase or Ableton song folders"
+                help: "Add archive folder"
             ) {
                 onChooseRoot()
             }
@@ -179,7 +180,7 @@ struct ArchiveBoardView: View {
             HubIconButton(
                 systemImage: "sidebar.leading",
                 accessibilityLabel: "Open list view",
-                help: "Switch to the song list layout"
+                help: "Browse"
             ) {
                 viewModel.viewMode = .list
             }
@@ -199,7 +200,7 @@ struct ArchiveBoardView: View {
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(viewModel.isScanning
                 ? "Songs will appear on the board as the scan finds them."
-                : "Add a folder of Cubase or Ableton song folders to fill the board.")
+                : "Add archive folder to fill the board.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -290,6 +291,9 @@ struct ArchiveBoardView: View {
 private struct ArchiveBoardColumnView: View {
     let column: ArchiveBoardColumn
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    let compactWhenEmpty: Bool
+    private var isCompact: Bool { compactWhenEmpty && !isDropTargeted }
+    private var columnWidth: CGFloat { isCompact ? 56 : 220 }
     let onDragLocationChanged: (String, CGFloat) -> Void
     let onDragEnded: () -> Void
     let onInteract: () -> Void
@@ -308,7 +312,8 @@ private struct ArchiveBoardColumnView: View {
                 vaultPresentations: viewModel.projectVaultPresentationsBySongID,
                 isTargeted: isDropTargeted,
                 reduceMotion: reduceMotion,
-                colorScheme: colorScheme
+                colorScheme: colorScheme,
+                isCompact: compactWhenEmpty
             ),
             accepts: { id in
                 guard let song = viewModel.songs.first(where: { $0.id == id }) else { return false }
@@ -332,7 +337,7 @@ private struct ArchiveBoardColumnView: View {
             },
             reduceMotion: reduceMotion
         )
-        .frame(width: 220)
+        .frame(width: columnWidth)
         .frame(maxHeight: .infinity)
     }
 
@@ -355,7 +360,7 @@ private struct ArchiveBoardColumnView: View {
             }
         }
         .padding(8)
-        .frame(width: 220)
+        .frame(width: columnWidth)
         .frame(maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
@@ -369,7 +374,29 @@ private struct ArchiveBoardColumnView: View {
         .accessibilityLabel("\(column.title) column, \(column.songs.count) songs")
     }
 
+    @ViewBuilder
     private func columnHeader(_ column: ArchiveBoardColumn) -> some View {
+        if isCompact {
+            VStack(spacing: 12) {
+                Image(systemName: column.status?.archiveSymbolName ?? "tray")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(column.status?.archiveTint ?? HubDesignSystem.Palette.textTertiary)
+                Text(column.title)
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize()
+                    .frame(width: 150, height: 20, alignment: .leading)
+                    .rotationEffect(.degrees(90))
+                    .frame(width: 20, height: 150)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+        } else {
+            expandedColumnHeader(column)
+        }
+    }
+
+    private func expandedColumnHeader(_ column: ArchiveBoardColumn) -> some View {
         HStack(spacing: 6) {
             Image(systemName: column.status?.archiveSymbolName ?? "tray")
                 .font(.system(size: 10, weight: .semibold))
@@ -377,7 +404,8 @@ private struct ArchiveBoardColumnView: View {
             Text(column.title)
                 .font(HubDesignSystem.Typography.caption().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .lineLimit(1)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 2)
             Text("\(column.songs.count)")
                 .font(HubDesignSystem.Typography.micro())
@@ -481,6 +509,8 @@ struct ArchiveBoardCardView: View {
     let onSelect: () -> Void
     let onOpenDetail: () -> Void
     let onProjectVaultPrimaryAction: (() -> Void)?
+    var onPlay: (() -> Void)?
+    @ObservedObject private var session = ArchivePreviewSession.shared
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -489,32 +519,43 @@ struct ArchiveBoardCardView: View {
         ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(for: vaultPresentation)
     }
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMM"
-        return formatter
-    }()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(song.effectiveDisplayTitle)
-                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(song.effectiveDisplayTitle)
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Text(captionLine)
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { performInteraction(.singleClick) }
+                .simultaneousGesture(TapGesture(count: 2).onEnded { _ in
+                    performInteraction(.doubleClick)
+                })
                 if !song.displayScanWarnings().isEmpty {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.warning)
                 }
+                if song.mainPreviewURL != nil, let onPlay {
+                    ArchiveCardPlayButton(
+                        title: song.effectiveDisplayTitle,
+                        isPlaying: session.songID == song.id && session.isPlaying,
+                        isLoaded: session.songID == song.id,
+                        isEnabled: !session.captureActive
+                    ) {
+                        if session.songID == song.id { session.toggle() } else { onPlay() }
+                    }
+                } else if song.mainPreviewURL == nil {
+                    Image(systemName: "speaker.slash").help("No preview")
+                }
             }
-
-            Text(captionLine)
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                .lineLimit(1)
 
             if let vaultPresentation, vaultPresentation.state != .active {
                 HStack(spacing: 4) {
@@ -542,11 +583,6 @@ struct ArchiveBoardCardView: View {
                     }
                 }
             }
-
-            Label(song.mainPreviewURL == nil ? "No preview" : "Preview available",
-                  systemImage: song.mainPreviewURL == nil ? "speaker.slash" : "waveform")
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -562,20 +598,10 @@ struct ArchiveBoardCardView: View {
                 .allowsHitTesting(false)
         }
         .contentShape(Rectangle())
-        // A separate double-tap recognizer must not make the one-click
-        // selection wait for macOS's double-click disambiguation interval.
-        // The gestures are deliberately simultaneous: click one selects
-        // immediately; click two opens detail. `selectSongOnBoard` is
-        // idempotent for the already-selected card.
+        // The title area owns double-click; transport clicks must never open detail.
         .onTapGesture {
             performInteraction(.singleClick)
         }
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded { _ in
-                performInteraction(.doubleClick)
-            },
-            including: .gesture
-        )
         .onHover { hovering in
             isHovered = hovering
         }
@@ -585,12 +611,9 @@ struct ArchiveBoardCardView: View {
             status: song.workflowStatus,
             isEnabled: allowsWorkflowMutation
         ))
-        .help(allowsWorkflowMutation
-            ? "Click to preview \(song.effectiveDisplayTitle) — double-click to open, drag to change stage"
-            : "Click to preview \(song.effectiveDisplayTitle) — restore it locally before changing its stage")
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(song.effectiveDisplayTitle)
-        .accessibilityHint("Press to preview. Use Open song detail to view details.")
+        .accessibilityHint("Press to select. Use Open song detail to view details.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(.default) {
@@ -603,9 +626,6 @@ struct ArchiveBoardCardView: View {
 
     private var captionLine: String {
         var parts: [String] = []
-        if let latest = ArchiveShelfRanker.latestCPRActivity(for: song) {
-            parts.append(Self.dayFormatter.string(from: latest))
-        }
         let versions = song.visibleProjectVersions.count
         if versions > 0 {
             parts.append("\(versions) version\(versions == 1 ? "" : "s")")
@@ -672,52 +692,5 @@ private struct ArchiveBoardCardDragModifier: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-/// Persistent transport at the bottom of the board: the selected card's
-/// preview player plus a jump into song detail — audition without leaving
-/// the board.
-private struct ArchiveBoardPlayerBar: View {
-    let song: Song
-    @ObservedObject var viewModel: ArchiveBrowserViewModel
-
-    var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.effectiveDisplayTitle)
-                    .font(HubDesignSystem.Typography.body().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                    .lineLimit(1)
-                if let status = song.workflowStatus {
-                    ArchiveWorkflowStatusPill(status: status, compact: true)
-                }
-            }
-            .frame(minWidth: 120, maxWidth: 260, alignment: .leading)
-
-            if song.mainPreviewURL != nil {
-                ArchiveMiniPlayerView(url: song.mainPreviewURL, style: .full, showsSlider: true)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("No preview file for this song")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            HubIconButton(
-                systemImage: "info.circle",
-                accessibilityLabel: "Open song detail",
-                help: "Open \(song.effectiveDisplayTitle) in song detail"
-            ) {
-                viewModel.selectSong(song)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Board player, \(song.effectiveDisplayTitle)")
     }
 }

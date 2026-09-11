@@ -60,7 +60,7 @@ struct ArchiveSidebarView: View {
 
             Spacer(minLength: 4)
 
-            if viewModel.canBrowseArchivedProjects {
+            if viewModel.canBrowseArchivedProjects && !compactList {
                 HubIconButton(
                     systemImage: "archivebox",
                     accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects",
@@ -79,22 +79,23 @@ struct ArchiveSidebarView: View {
             HubIconButton(
                 systemImage: "rectangle.split.3x1",
                 accessibilityLabel: "Show board",
-                help: "Board — songs as cards in workflow stage columns",
+                help: "Board",
                 isEnabled: !viewModel.songs.isEmpty
             ) {
                 viewModel.viewMode = .board
             }
 
-            HubIconButton(
-                systemImage: "arrow.clockwise",
-                accessibilityLabel: viewModel.isScanning ? "Scanning archive" : "Scan archive",
-                help: "Rescan archive roots",
-                isEnabled: !viewModel.isScanning && !viewModel.roots.isEmpty
-            ) {
-                Task { await viewModel.scan() }
-            }
-
             Menu {
+                Button(viewModel.isScanning ? "Scanning archive…" : "Scan archive") {
+                    Task { await viewModel.scan() }
+                }
+                .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
+                if viewModel.canBrowseArchivedProjects {
+                    Button(viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects") {
+                        viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    }
+                }
+                Divider()
                 Button {
                     showNewSongSheet = true
                 } label: {
@@ -231,8 +232,8 @@ struct ArchiveSidebarView: View {
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
-        .help("Browse shelves and filters")
-        .accessibilityLabel("Browse shelves and filters")
+        .help("Filters")
+        .accessibilityLabel("Filters")
         .disabled(viewModel.songs.isEmpty)
     }
 
@@ -313,6 +314,7 @@ struct ArchiveSidebarView: View {
                             isSelected: viewModel.selectedSong?.id == song.id,
                             matchSummary: viewModel.searchMatchSummaries[song.id],
                             onSelect: { viewModel.selectSong(song) },
+                            onPlay: { viewModel.audition(song) },
                             onWorkflowStatusChange: { status in
                                 viewModel.updateWorkflowStatus(for: song, status: status)
                             },

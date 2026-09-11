@@ -29,33 +29,59 @@ final class SongCardInteractionTests: XCTestCase {
                                          modifiedAt: .distantPast, detectedRole: .mainMix)
         let song = Song(folderPath: url.deletingLastPathComponent(), originalFolderName: "Fixture song",
                         displayTitle: "Fixture song", previewCandidates: [candidate], mainPreviewCandidateID: candidate.id)
-        defer { ArchivePlaybackCoordinator.shared.stopAllPlayback() }
+        defer { ArchivePreviewPlayback.stopAll() }
         try withRow(song: song, onSelect: { selections += 1 }) { window in
-            try click(CGPoint(x: 25, y: 20), in: window)
-            XCTAssertEqual(ArchivePlaybackCoordinator.shared.activeURL, url, "The embedded play button must still receive the click")
-            XCTAssertEqual(selections, 0, "Playing a row preview must not also select the song")
+            // The glyph sits at the centre; all four padded corners must also activate it.
+            let midY = window.contentView!.bounds.midY
+            for point in [CGPoint(x: 269, y: midY - 19), CGPoint(x: 307, y: midY - 19),
+                          CGPoint(x: 269, y: midY + 19), CGPoint(x: 307, y: midY + 19)] {
+                ArchivePreviewPlayback.stopAll()
+                try click(point, in: window)
+                XCTAssertEqual(ArchivePreviewSession.shared.preview?.filePath, url, "Padded play target at \(point) must load its preview")
+                XCTAssertEqual(selections, 0, "Playing a row preview must not also select the song")
+            }
         }
     }
 
-    func testWorkflowMenuDoesNotSelectSong() throws {
+    func testBoardPlayPaddingDoesNotSelectOrOpenCard() throws {
+        var plays = 0
         var selections = 0
-        let song = Song(folderPath: URL(fileURLWithPath: "/fixture/song"),
-                        originalFolderName: "Fixture song", displayTitle: "Fixture song")
-        try withRow(song: song, onSelect: { selections += 1 }) { window in
-            let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
-            try click(CGPoint(x: 285, y: window.contentView!.bounds.height - 18), in: window)
-            XCTAssertEqual(selections, 0, "The status control must not also select the song")
-            XCTAssertTrue(NSApp.windows.contains { $0.isVisible && !visibleWindows.contains($0.windowNumber) },
-                          "The workflow picker must open")
+        var opens = 0
+        let candidate = PreviewCandidate(filePath: URL(fileURLWithPath: "/fixture/board.wav"), fileName: "board.wav",
+                                         folderRole: .mixdown, modifiedAt: .distantPast, detectedRole: .mainMix)
+        let song = Song(folderPath: URL(fileURLWithPath: "/fixture/board"), originalFolderName: "Board song",
+                        displayTitle: "Board song", previewCandidates: [candidate], mainPreviewCandidateID: candidate.id)
+        ArchivePreviewPlayback.stopAll()
+        let card = ArchiveBoardCardView(song: song, isSelected: false, vaultPresentation: nil,
+                                       onSelect: { selections += 1 }, onOpenDetail: { opens += 1 },
+                                       onProjectVaultPrimaryAction: nil, onPlay: { plays += 1 })
+        try withView(card.frame(width: 220)) { window in
+            let midY = window.contentView!.bounds.midY
+            for point in [CGPoint(x: 167, y: midY - 19), CGPoint(x: 205, y: midY - 19),
+                          CGPoint(x: 167, y: midY + 19), CGPoint(x: 205, y: midY + 19)] {
+                try click(point, in: window)
+            }
+            XCTAssertEqual(plays, 4)
+            XCTAssertEqual(selections, 0)
+            XCTAssertEqual(opens, 0)
+            try click(CGPoint(x: 40, y: midY), in: window)
+            XCTAssertEqual(selections, 1, "Card selection should respond to the first click")
+            try click(CGPoint(x: 40, y: midY), in: window)
+            XCTAssertEqual(opens, 1, "Double-clicking the title area still opens detail")
+            XCTAssertEqual(plays, 4)
         }
     }
 
     private func withRow(song: Song, onSelect: @escaping () -> Void,
                          perform: (NSWindow) throws -> Void) rethrows {
-        let host = NSHostingView(rootView: SongCardView(
+        try withView(SongCardView(
             song: song, isSelected: false, onSelect: onSelect,
             onWorkflowStatusChange: { _ in }
-        ).frame(width: 320))
+        ).frame(width: 320), perform: perform)
+    }
+
+    private func withView<Content: View>(_ view: Content, perform: (NSWindow) throws -> Void) rethrows {
+        let host = NSHostingView(rootView: view)
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 320, height: 110),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

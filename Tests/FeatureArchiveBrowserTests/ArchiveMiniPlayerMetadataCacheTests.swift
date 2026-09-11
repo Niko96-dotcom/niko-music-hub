@@ -5,21 +5,21 @@ import XCTest
 @MainActor
 final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     func testFreshBindHidesPrimedMetadataUntilAsyncValidation() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-bind-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
         try makeMono16BitWAV(seconds: 12, loudBurstAt: 8, at: url)
-        let primingPlayer = ArchiveMiniPlayerModel()
+        let primingPlayer = ArchivePreviewPlayer()
         primingPlayer.toggle(at: url)
         _ = try await waitForHook(on: primingPlayer)
         primingPlayer.forceStop()
 
-        let freshPlayer = ArchiveMiniPlayerModel()
+        let freshPlayer = ArchivePreviewPlayer()
         freshPlayer.bind(url: url)
 
         XCTAssertNil(freshPlayer.hookTime)
@@ -28,11 +28,11 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     func testSamePathOverwriteDoesNotSeekFromStaleHookOnImmediatePlay() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-overwrite-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
@@ -42,7 +42,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
             ofItemAtPath: url.path
         )
 
-        let firstPlayer = ArchiveMiniPlayerModel()
+        let firstPlayer = ArchivePreviewPlayer()
         firstPlayer.toggle(at: url)
         let staleHook = try await waitForHook(on: firstPlayer)
         XCTAssertGreaterThan(staleHook, 5)
@@ -57,7 +57,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
             ofItemAtPath: url.path
         )
 
-        let replacementPlayer = ArchiveMiniPlayerModel()
+        let replacementPlayer = ArchivePreviewPlayer()
         replacementPlayer.prefetch(url: url)
         replacementPlayer.toggle(at: url)
 
@@ -71,16 +71,16 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     func testLateValidatedCachedHookSeeksForTheStillActivePlayRequest() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-late-hook-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
         try makeMono16BitWAV(seconds: 12, loudBurstAt: 8, at: url)
-        let primingPlayer = ArchiveMiniPlayerModel()
+        let primingPlayer = ArchivePreviewPlayer()
         primingPlayer.toggle(at: url)
         let cachedHook = try await waitForHook(on: primingPlayer)
         XCTAssertGreaterThan(cachedHook, 5)
@@ -92,7 +92,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
         // prepare() validates the cache once without seeking. The next validation, triggered
         // by play, is held until playback is demonstrably past the old 0.35 s cutoff.
         let revisions = RevisionGate(responses: [revision], delayedCall: 2)
-        let player = ArchiveMiniPlayerModel(metadataRevisionLoader: { _ in
+        let player = ArchivePreviewPlayer(metadataRevisionLoader: { _ in
             await revisions.load()
         })
         player.prepare(url: url)
@@ -114,16 +114,16 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     func testLateValidatedCachedHookDoesNotSeekAfterPause() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-paused-hook-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
         try makeMono16BitWAV(seconds: 12, loudBurstAt: 8, at: url)
-        let primingPlayer = ArchiveMiniPlayerModel()
+        let primingPlayer = ArchivePreviewPlayer()
         primingPlayer.toggle(at: url)
         let cachedHook = try await waitForHook(on: primingPlayer)
         primingPlayer.forceStop()
@@ -132,7 +132,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
             try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         )
         let revisions = RevisionGate(responses: [revision], delayedCall: 2)
-        let player = ArchiveMiniPlayerModel(metadataRevisionLoader: { _ in
+        let player = ArchivePreviewPlayer(metadataRevisionLoader: { _ in
             await revisions.load()
         })
         player.prepare(url: url)
@@ -155,22 +155,22 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     func testUnknownRevisionDoesNotExposePrimedMetadata() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-unknown-revision-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
         try makeMono16BitWAV(seconds: 12, loudBurstAt: 8, at: url)
-        let primingPlayer = ArchiveMiniPlayerModel()
+        let primingPlayer = ArchivePreviewPlayer()
         primingPlayer.toggle(at: url)
         _ = try await waitForHook(on: primingPlayer)
         primingPlayer.forceStop()
 
         let revisions = RevisionGate(responses: [])
-        let player = ArchiveMiniPlayerModel(metadataRevisionLoader: { _ in
+        let player = ArchivePreviewPlayer(metadataRevisionLoader: { _ in
             await revisions.load()
         })
         player.toggle(at: url)
@@ -182,11 +182,11 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     func testChangedRevisionAfterAnalysisDiscardsNewHookBeforeCacheCommit() async throws {
-        ArchiveMiniPlayerModel.clearMetadataCaches()
+        ArchivePreviewPlayer.clearMetadataCaches()
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("preview-cache-revision-race-\(UUID().uuidString).wav")
         defer {
-            ArchiveMiniPlayerModel.clearMetadataCaches()
+            ArchivePreviewPlayer.clearMetadataCaches()
             try? FileManager.default.removeItem(at: url)
         }
 
@@ -196,7 +196,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
         )
 
         // Prime duration only, so the model has to perform a fresh hook analysis during play.
-        let durationPrimer = ArchiveMiniPlayerModel()
+        let durationPrimer = ArchivePreviewPlayer()
         durationPrimer.prefetch(url: url)
         _ = try await waitForDuration(on: durationPrimer)
         durationPrimer.forceStop()
@@ -205,7 +205,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
         // its post-analysis revision read is delayed and then reports a replacement render.
         let replacementRevision = revision.addingTimeInterval(1)
         let revisions = RevisionGate(responses: [revision, revision], delayedCall: 3)
-        let player = ArchiveMiniPlayerModel(metadataRevisionLoader: { _ in
+        let player = ArchivePreviewPlayer(metadataRevisionLoader: { _ in
             await revisions.load()
         })
         player.prepare(url: url)
@@ -232,7 +232,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     private func waitForHook(
-        on player: ArchiveMiniPlayerModel,
+        on player: ArchivePreviewPlayer,
         attempts: Int = 150
     ) async throws -> Double {
         for _ in 0..<attempts {
@@ -249,7 +249,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     private func waitForDuration(
-        on player: ArchiveMiniPlayerModel,
+        on player: ArchivePreviewPlayer,
         attempts: Int = 150
     ) async throws -> Double {
         for _ in 0..<attempts {
@@ -266,7 +266,7 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
     }
 
     private func waitForCurrentTime(
-        on player: ArchiveMiniPlayerModel,
+        on player: ArchivePreviewPlayer,
         atLeast minimum: Double,
         attempts: Int = 200
     ) async throws -> Double {

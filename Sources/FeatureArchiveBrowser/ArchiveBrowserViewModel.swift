@@ -419,11 +419,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func selectSong(_ song: Song) {
-        let previousID = selectedSong?.id
-        // Stop list/detail audio when changing songs so detail never fights a row player.
-        if previousID != song.id {
-            ArchivePlaybackCoordinator.shared.stopAllPlayback()
-        }
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
         if songDetailsExpanded {
@@ -452,12 +447,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         analyticsSnapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history)
     }
 
-    /// Board single-click: highlight the card and load it into the board's
-    /// player bar without leaving the board. Double-click uses `selectSong`.
+    /// Board selection changes the highlight; only explicit Play replaces audio.
     func selectSongOnBoard(_ song: Song) {
         guard selectedSong?.id != song.id else { return }
-        // One audible source at a time — same rule as list/detail selection.
-        ArchivePlaybackCoordinator.shared.stopAllPlayback()
         selectedSong = song
         if songDetailsExpanded {
             songDetailsExpanded = false
@@ -474,11 +466,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     func reconcileSelectedSong(requireVisibleInFilteredList: Bool = true) {
         guard let current = selectedSong else { return }
         guard let fresh = songs.first(where: { $0.id == current.id }) else {
-            clearSelection(stopPlayback: true)
+            clearSelection(stopPlayback: ArchivePreviewSession.shared.songID == current.id)
             return
         }
         if requireVisibleInFilteredList, !filteredSongs.contains(where: { $0.id == fresh.id }) {
-            clearSelection(stopPlayback: true)
+            clearSelection(stopPlayback: false)
             return
         }
         if fresh != current {
@@ -488,7 +480,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func clearSelection(stopPlayback: Bool) {
         if stopPlayback {
-            ArchivePlaybackCoordinator.shared.stopAllPlayback()
+            ArchivePreviewPlayback.stopAll()
         }
         selectedSong = nil
         songDetailsExpanded = false

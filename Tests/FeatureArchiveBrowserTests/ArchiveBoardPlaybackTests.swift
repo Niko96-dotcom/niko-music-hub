@@ -27,18 +27,6 @@ final class ArchiveBoardPlaybackTests: XCTestCase {
     }
 
     @MainActor
-    func testTogglePlayPauseRequestBumpsGenerationAndCarriesURL() {
-        let coordinator = ArchivePlaybackCoordinator.shared
-        let before = coordinator.togglePlayPauseGeneration
-        let url = URL(fileURLWithPath: "/tmp/track/mix.wav")
-
-        coordinator.requestTogglePlayPause(for: url)
-
-        XCTAssertEqual(coordinator.togglePlayPauseGeneration, before &+ 1)
-        XCTAssertEqual(coordinator.togglePlayPauseURL, url)
-    }
-
-    @MainActor
     func testGlobalStopDoesNotBroadcastWhenNoPreviewIsAudible() {
         let coordinator = ArchivePlaybackCoordinator.shared
         if let activeURL = coordinator.activeURL {
@@ -60,7 +48,7 @@ final class ArchiveBoardPlaybackTests: XCTestCase {
 
     @MainActor
     func testForceStopKeepsLazyBoundRowUntouched() {
-        let model = ArchiveMiniPlayerModel()
+        let model = ArchivePreviewPlayer()
         let url = URL(fileURLWithPath: "/tmp/track/lazy-bound.wav")
         model.bind(url: url)
 
@@ -84,7 +72,7 @@ final class ArchiveBoardPlaybackTests: XCTestCase {
             coordinator.endPlayback(for: activeURL)
         }
 
-        let model = ArchiveMiniPlayerModel()
+        let model = ArchivePreviewPlayer()
         let url = URL(fileURLWithPath: "/tmp/track/prepared.wav")
         model.prepare(url: url)
         coordinator.beginPlayback(for: url)

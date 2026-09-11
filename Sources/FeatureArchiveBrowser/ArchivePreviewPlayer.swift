@@ -3,105 +3,8 @@ import AVFoundation
 import NikoMusicCore
 import SwiftUI
 
-enum ArchiveMiniPlayerStyle {
-    case compact
-    case full
-}
-
-struct ArchiveMiniPlayerView: View {
-    let url: URL?
-    var style: ArchiveMiniPlayerStyle = .full
-    var label: String?
-    /// Reference rule: the scrub slider is hidden at rest — only the actively playing row shows it.
-    var showsSlider: Bool = true
-    var showsSurface: Bool = true
-    /// When false, the model stays idle until the user hits play (list rows). Detail/hero sets true.
-    var preparesOnAppear: Bool = false
-
-    @StateObject private var playback = ArchiveMiniPlayerModel()
-    @ObservedObject private var coordinator = ArchivePlaybackCoordinator.shared
-
-    var body: some View {
-        HubTransportBar(
-            style: style.transportStyle,
-            title: style == .compact ? "" : displayLabel,
-            subtitle: style == .full ? "Preview" : nil,
-            isPlaying: playback.isPlaying(url),
-            currentTime: playback.currentTime,
-            duration: playback.duration,
-            isEnabled: url != nil,
-            markerProgress: hookProgress,
-            volumeLevel: style == .full ? 1 : nil,
-            showsSurface: style == .full && showsSurface,
-            showsSlider: showsSlider,
-            onPlayPause: {
-                playback.toggle(at: url)
-            },
-            onSeek: { seconds in
-                playback.seek(to: seconds, url: url)
-            }
-        )
-        .onChange(of: url) { _, newURL in
-            if preparesOnAppear {
-                playback.prepare(url: newURL)
-            } else {
-                playback.bind(url: newURL)
-            }
-        }
-        .onAppear {
-            if preparesOnAppear {
-                playback.prepare(url: url)
-            } else {
-                playback.bind(url: url)
-            }
-        }
-        .onDisappear {
-            playback.stopIfPlaying(url: url)
-        }
-        .onChange(of: coordinator.activeURL) { _, active in
-            if active != url {
-                playback.pauseIfPlaying(url: url)
-            }
-        }
-        .onChange(of: coordinator.stopGeneration) { _, _ in
-            playback.forceStop()
-        }
-        .onChange(of: coordinator.togglePlayPauseGeneration) { _, _ in
-            guard let url, coordinator.togglePlayPauseURL == url else { return }
-            playback.toggle(at: url)
-        }
-    }
-
-    private var displayLabel: String {
-        if let label, !label.isEmpty { return label }
-        return url?.lastPathComponent ?? "No preview"
-    }
-
-    private var hookProgress: Double? {
-        guard style == .full,
-              let hook = playback.hookTime,
-              playback.duration > 0,
-              hook > 0,
-              hook < playback.duration else {
-            return nil
-        }
-        return hook / playback.duration
-    }
-}
-
-private extension ArchiveMiniPlayerStyle {
-    var transportStyle: HubTransportBarStyle {
-        switch self {
-        case .compact:
-            return .compact
-        case .full:
-            return .full
-        }
-    }
-}
-
 @MainActor
-final class ArchiveMiniPlayerModel: ObservableObject {
+final class ArchivePreviewPlayer: ObservableObject {
     typealias MetadataRevisionLoader = @Sendable (URL) async -> Date?
 
     @Published private(set) var currentTime: Double = 0
@@ -115,7 +18,13 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     private var hookSeekPending = false
     /// A hook discovered after play starts may still be applied, but only for the exact
     /// play request that asked for it. Pausing, stopping, or manually scrubbing revokes it.
-    private var playbackIntentActive = false
+    @Published private(set) var playbackIntentActive = false
+    @Published private(set) var playbackError: String?
+    @Published private(set) var isLoading = false
+    private var statusObservation: NSKeyValueObservation?
+    private var pendingStart: Double?
+    private var requestGeneration: UInt64 = 0
+    private var volume: Float = 1
     private var prepareTask: Task<Void, Never>?
     private let metadataRevisionLoader: MetadataRevisionLoader
 
@@ -265,6 +174,9 @@ final class ArchiveMiniPlayerModel: ObservableObject {
             return
         }
 
+        if duration > 0, currentTime >= duration - 0.02 {
+            seek(to: 0, url: url)
+        }
         playbackIntentActive = true
         ArchivePlaybackCoordinator.shared.beginPlayback(for: url)
 
@@ -272,21 +184,71 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         // unvalidated cache entry. The warmup validates its revision off-main and
         // applies the hook only while this fresh play is still at its start.
         scheduleMetadataWarmup(for: url, seekToHookIfIdle: true, includesHook: true)
-        player.play()
+        if !isLoading { player.play() }
     }
 
     func seek(to seconds: Double, url: URL?) {
-        guard let url else { return }
+        guard seconds.isFinite, let url else { return }
         if activeURL != url || player == nil {
             prepare(url: url)
         }
         guard activeURL == url, let player else { return }
         hookSeekPending = false
-        playbackIntentActive = false
+        pendingStart = nil
         let upper = duration > 0 ? duration : seconds + 1
         let clamped = min(max(0, seconds), upper)
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
         currentTime = clamped
+    }
+
+    /// Explicit auditioning starts from zero; Compare carries a timestamp. Readiness,
+    /// cancellation and clamping belong to the engine, not to a particular view.
+    func load(url: URL, position: Double = 0, autoplay: Bool = true) {
+        stop()
+        bind(url: url)
+        prepare(url: url)
+        playbackError = nil
+        pendingStart = max(0, position.isFinite ? position : 0)
+        hookSeekPending = false
+        playbackIntentActive = autoplay
+        isLoading = true
+        if autoplay { ArchivePlaybackCoordinator.shared.beginPlayback(for: url) }
+        resolvePendingStart()
+    }
+
+    func pause() {
+        playbackIntentActive = false
+        player?.pause()
+        if let activeURL { ArchivePlaybackCoordinator.shared.endPlayback(for: activeURL) }
+    }
+
+    func setVolume(_ value: Double) {
+        volume = Float(min(max(value, 0), 1))
+        player?.volume = volume
+    }
+
+    private func resolvePendingStart() {
+        guard let item = playerItem, let player else { return }
+        if item.status == .failed {
+            playbackError = item.error?.localizedDescription ?? "This preview could not be opened."
+            isLoading = false
+            pause()
+            return
+        }
+        guard item.status == .readyToPlay, let start = pendingStart else { return }
+        pendingStart = nil
+        let seconds = item.duration.seconds
+        if seconds.isFinite, seconds > 0 { duration = seconds }
+        let target = duration > 0 ? min(start, duration) : start
+        currentTime = target
+        let generation = requestGeneration
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            Task { @MainActor [weak self] in
+                guard let self, self.requestGeneration == generation else { return }
+                self.isLoading = false
+                if finished, self.playbackIntentActive { self.player?.play() }
+            }
+        }
     }
 
     func seekRelative(_ delta: Double, url: URL?) {
@@ -330,6 +292,10 @@ final class ArchiveMiniPlayerModel: ObservableObject {
         let item = AVPlayerItem(url: url)
         playerItem = item
         player = AVPlayer(playerItem: item)
+        player?.volume = volume
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.resolvePendingStart() }
+        }
         installTimeObserver()
     }
 
@@ -436,6 +402,11 @@ final class ArchiveMiniPlayerModel: ObservableObject {
     }
 
     private func stop() {
+        requestGeneration &+= 1
+        pendingStart = nil
+        statusObservation = nil
+        playbackError = nil
+        isLoading = false
         prepareTask?.cancel()
         prepareTask = nil
         if let timeObserver, let player {
@@ -464,12 +435,17 @@ final class ArchiveMiniPlayerModel: ObservableObject {
 
     private func installTimeObserver() {
         guard let player else { return }
+        let generation = requestGeneration
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = CMTimeGetSeconds(time)
             guard seconds.isFinite else { return }
             Task { @MainActor [weak self] in
-                self?.currentTime = seconds
+                guard let self, self.requestGeneration == generation, !self.isLoading else { return }
+                self.currentTime = seconds
+                if self.duration > 0, seconds >= self.duration - 0.02, self.playbackIntentActive {
+                    self.pause()
+                }
             }
         }
     }

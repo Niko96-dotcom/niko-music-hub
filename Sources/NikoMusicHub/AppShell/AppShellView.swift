@@ -71,7 +71,12 @@ struct AppShellView: View {
                         shellDivider
                     }
 
-                    activeToolView
+                    VStack(spacing: 0) {
+                        activeToolView
+                        ArchivePersistentPlayerView {
+                            selectTool(ToolFeatureID("archive-browser"))
+                        }
+                    }
                         .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .layoutPriority(1)
                         .background(HubDesignSystem.Palette.canvas)
@@ -115,12 +120,9 @@ struct AppShellView: View {
                 }
             }
         }
-        .onChange(of: selectedToolID) { previousID, newID in
+        .onChange(of: selectedToolID) { _, newID in
             guard let newID else { return }
             toolPaneCache.ensureMounted(newID)
-            if previousID == "archive-browser", newID != "archive-browser" {
-                ArchivePreviewPlayback.stopAll()
-            }
         }
         .onChange(of: router.selectedToolID) { _, newID in
             if let newID {

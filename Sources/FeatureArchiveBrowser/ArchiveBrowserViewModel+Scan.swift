@@ -40,9 +40,8 @@ extension ArchiveBrowserViewModel {
         cprPlugins.cancel()
         persistenceWarningMessage = nil
         scanOrchestrator.clearPendingPaths()
-        ArchivePlaybackCoordinator.shared.stopAllPlayback()
-        ArchiveMiniPlayerModel.clearMetadataCaches()
-        WaveformPeakCache.shared.clear()
+        ArchivePreviewPlayback.stopAll()
+        ArchivePreviewPlayer.clearMetadataCaches()
         songs = []
         filteredSongs = []
         searchMatchSummaries = [:]

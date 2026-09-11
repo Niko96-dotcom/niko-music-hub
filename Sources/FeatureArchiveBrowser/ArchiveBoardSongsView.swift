@@ -73,7 +73,8 @@ struct ArchiveBoardSongCard: View, Equatable {
             onOpenDetail: { viewModel.selectSong(song) },
             onProjectVaultPrimaryAction: {
                 viewModel.performProjectVaultPrimaryAction(for: song)
-            }
+            },
+            onPlay: { viewModel.audition(song) }
         )
     }
 }

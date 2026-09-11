@@ -31,15 +31,4 @@ final class ArchivePlaybackCoordinator: ObservableObject {
         activeURL = nil
         stopGeneration &+= 1
     }
-
-    /// Bumped by keyboard shortcuts (board spacebar) to ask the player bound to
-    /// `togglePlayPauseURL` to toggle. Only safe where a single player view is
-    /// mounted for that URL (the board's bottom bar).
-    @Published private(set) var togglePlayPauseGeneration: UInt64 = 0
-    private(set) var togglePlayPauseURL: URL?
-
-    func requestTogglePlayPause(for url: URL) {
-        togglePlayPauseURL = url
-        togglePlayPauseGeneration &+= 1
-    }
 }

@@ -138,4 +138,5 @@ struct ArchiveBoardColumnRenderKey: Equatable {
     let isTargeted: Bool
     let reduceMotion: Bool
     let colorScheme: ColorScheme
+    var isCompact: Bool = false
 }

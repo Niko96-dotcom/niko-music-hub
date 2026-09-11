@@ -47,7 +47,7 @@ extension ArchiveBrowserViewModel {
         invalidateMixdownAnalysis(for: song.id)
         if let path = songs.first(where: { $0.id == song.id })?
             .previewCandidates.first(where: { $0.id == candidateID })?.filePath {
-            ArchiveMiniPlayerModel.invalidateMetadataCaches(for: path)
+            ArchivePreviewPlayer.invalidateMetadataCaches(for: path)
         }
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.previewSelectionMode = .manual
@@ -121,7 +121,7 @@ extension ArchiveBrowserViewModel {
             metadata.isIgnored = hidden
         }
         if hidden, selectedSong?.id == song.id {
-            clearSelection(stopPlayback: true)
+            clearSelection(stopPlayback: ArchivePreviewSession.shared.songID == song.id)
         }
     }
 
