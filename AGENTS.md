@@ -40,7 +40,7 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 
 ## Working approach
 
-Work directly from the user request, current source, Git state and validation evidence. Treat `.planning/` as historical reference only; do not require or recreate GSD workflows. Preserve unrelated work and complete the relevant checks.
+Work directly from the user request, current source, Git state and validation evidence. `.planning/`, `.ai/`, `.codex/` and `.cursor/` are local-only working state on the maintainer's machine — gitignored, never part of the public tree; treat `.planning/` as historical reference only and do not require or recreate GSD workflows. Preserve unrelated work and complete the relevant checks.
 
 ## Local gates
 
@@ -70,7 +70,7 @@ unverified. See `docs/update-feed.md`.
 
 ## Ultimate De-Slop
 
-Vendored from [Niko96-dotcom/ultimate-de-slop](https://github.com/Niko96-dotcom/ultimate-de-slop):
+Vendored locally from [Niko96-dotcom/ultimate-de-slop](https://github.com/Niko96-dotcom/ultimate-de-slop) (the `.cursor/` tree is gitignored; a fresh clone re-vendors it with the refresh command below):
 
 - Skill: `.cursor/skills/ultimate-de-slop/`
 - Slash command: `.cursor/commands/ultimate-de-slop.md`

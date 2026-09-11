@@ -37,7 +37,7 @@ var index = MusicSearchIndex()
 let buildStart = clock.now
 index.rebuild(from: songs)
 let buildMS = milliseconds(buildStart.duration(to: clock.now))
-let queries = ["neon", "neon hook", "maria final", "gravity v3 mix", "noen hook", "blumchen", "zzzz absent", "hook neon", "blumchen maria", "silver lining", "summer rain"]
+let queries = ["neon", "neon hook", "maria final", "gravity v3 mix", "noen hook", "gluhwurm", "zzzz absent", "hook neon", "gluhwurm maria", "silver lining", "summer rain"]
 // Stable FNV-1a digest of ordered IDs, scores and explanations guards benchmark parity.
 func digest(_ results: [MusicSearchResult]) -> String {
     var value: UInt64 = 14695981039346656037

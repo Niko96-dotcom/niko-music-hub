@@ -3868,7 +3868,7 @@
     "isolation": {
       "NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER": "1",
       "NIKO_MUSIC_HUB_DRY_RUN_OPEN": "1",
-      "NIKO_MUSIC_HUB_FIXTURE_ROOT": "/Users/example/Documents/Niko-Music-Hub/Fixtures/CubaseArchive",
+      "NIKO_MUSIC_HUB_FIXTURE_ROOT": "<repo>/Fixtures/CubaseArchive",
       "NIKO_MUSIC_HUB_SETTINGS_SUITE": "NMH.UIPerformance.FullApp.6a254b93-0348-4a12-8077-abd117bdc059"
     },
     "pid": 15599

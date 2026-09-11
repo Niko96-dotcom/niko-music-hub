@@ -15,7 +15,7 @@ final class MusicSearchConjunctionTests: XCTestCase {
             collaboratorNames: ["María Klein"], workflowStatus: .waitingFeedback
         )
         // Include hits in every field, fuzzy hits, duplicate tokens, and misses in either position.
-        let tokens = ["blumchen", "neon", "blmchn", "summer", "smmer", "maria", "mrkl",
+        let tokens = ["gluhwurm", "neon", "glhwrm", "summer", "smmer", "maria", "mrkl",
                       "waiting", "original", "orgnl", "arrangement", "arrngmnt", "bounce",
                       "bncmx", "missing", "mssng", "approval", "apprvl", "chorus", "chrs", "zzzz"]
         let singles = tokens.map { MusicSearchMatcher.matchDetails(song: song, queryTokens: [$0]) }
@@ -36,10 +36,10 @@ final class MusicSearchConjunctionTests: XCTestCase {
         var song = Song(folderPath: URL(fileURLWithPath: "/fixture-only/Seed"),
                         originalFolderName: "Seed", displayTitle: "Seed", virtualTitle: "Glühwurm")
         var index = MusicSearchIndex(songs: [song])
-        XCTAssertEqual(index.search("blumchen").map(\.id), [song.id])
+        XCTAssertEqual(index.search("gluhwurm").map(\.id), [song.id])
         song.virtualTitle = "Ocean"
         index.rebuild(from: [song])
-        XCTAssertTrue(index.search("blumchen").isEmpty)
+        XCTAssertTrue(index.search("gluhwurm").isEmpty)
         XCTAssertEqual(index.search("ocean").map(\.id), [song.id])
     }
 

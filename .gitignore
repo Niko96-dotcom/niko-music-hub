@@ -34,3 +34,11 @@ goal-agents/
 
 # Ultimate De-Slop runtime state (the skill itself is vendored under .cursor/skills/)
 .deslop/
+
+# Private working state: planning history, agent harness state, vendored skills.
+# These live only on the maintainer's machine and never in the public tree.
+.planning/
+.ai/
+.codex/
+.cursor/
+.claude/

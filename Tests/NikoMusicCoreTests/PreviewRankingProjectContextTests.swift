@@ -14,6 +14,6 @@ final class PreviewRankingProjectContextTests: XCTestCase {
         let context = PreviewRankingProjectContext.from(projectVersions: versions)
         XCTAssertEqual(context.anchorCPRVersion, 4)
         XCTAssertTrue(context.titleTokens.contains("90s"))
-        XCTAssertTrue(context.titleTokens.contains("icon"))
+        XCTAssertTrue(context.titleTokens.contains("heart"))
     }
 }

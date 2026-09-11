@@ -39,7 +39,7 @@ final class MusicSearchNormalizationTests: XCTestCase {
             return true
         }
         let values = ["", "ab", "abc", "axbyc", "a\r\nb", "a\0b", "\r\n", "\rX\n",
-                      "a\u{0301}b", "ábc", "a\u{200D}b", "🙂ab", "Glühwurm", "blmchn",
+                      "a\u{0301}b", "ábc", "a\u{200D}b", "🙂ab", "Glühwurm", "glhwrm",
                       "123", "1️⃣", "한글", "한", "Mix WAV", "mxwv", "a-b-c"]
         for needle in values {
             for haystack in values {

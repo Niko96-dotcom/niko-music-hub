@@ -62,8 +62,8 @@ final class MusicSearchIndexTests: XCTestCase {
         )
         let index = MusicSearchIndex(songs: [song])
 
-        XCTAssertEqual(index.search("blumchen").count, 1)
-        XCTAssertEqual(index.search("BLUMCHEN").count, 1)
+        XCTAssertEqual(index.search("gluhwurm").count, 1)
+        XCTAssertEqual(index.search("GLUHWURM").count, 1)
     }
 
     func testSubsequenceFuzzyMatchToleratesMinorTypos() {
