@@ -11,6 +11,7 @@
 - Quiet the tool chrome: palette-derived hover fills that work in the light appearance, plain tool titles, a leaner converter intake, and ½ / 1× / 2× tempo chips.
 - Generate and verify the update feed as part of every public release, checking both signatures against the key embedded in the shipped app.
 - Remove the retired waveform peak loader, transport bar, and metadata chip row, and keep the release-notes check current across version bumps.
+- Fix "Convert preview" doing nothing once the WAV Converter had already been opened in the same session; the handoff now queues the file every time.
 
 ## 1.4.3 - 2026-09-10
 

@@ -27,8 +27,7 @@ public struct AudioConverterFeature: ToolFeature {
     public func makeView(context: ToolContext) -> AnyView {
         AnyView(AudioConverterView(
             context: context,
-            viewModel: viewModel(for: context),
-            router: router
+            viewModel: viewModel(for: context)
         ))
     }
 
@@ -38,6 +37,9 @@ public struct AudioConverterFeature: ToolFeature {
             return viewModel
         }
         let viewModel = AudioConverterViewModel(context: context)
+        if let router {
+            viewModel.bindConverterHandoff(to: router)
+        }
         session.viewModel = viewModel
         return viewModel
     }

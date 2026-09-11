@@ -23,6 +23,49 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rows[0].plannedOutputName, "Loop - 44100Hz 24bit.wav")
     }
 
+    func testRouterHandoffQueuesFilesWhileSessionIsAlreadyBound() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let preview = try makeFile(named: "Preview.wav", in: directory)
+        let router = QuickAccessRouter()
+        let viewModel = makeViewModel(outputFolder: directory)
+        viewModel.bindConverterHandoff(to: router)
+        XCTAssertTrue(viewModel.rows.isEmpty)
+
+        // Simulates Archive → "Convert preview" after the converter pane was already visited.
+        router.openConverter(with: [preview])
+        await drainMainQueue()
+
+        XCTAssertEqual(viewModel.rows.map(\.sourceURL), [preview])
+        XCTAssertEqual(viewModel.rows.map(\.state), [.queued])
+        XCTAssertTrue(router.prefilledConverterURLs.isEmpty, "handoff must be consumed exactly once")
+
+        // A second handoff for the same session queues again instead of being dropped.
+        let second = try makeFile(named: "Second.m4a", in: directory)
+        router.openConverter(with: [second])
+        await drainMainQueue()
+
+        XCTAssertEqual(viewModel.rows.map(\.sourceURL), [preview, second])
+    }
+
+    func testRouterHandoffPendingBeforeBindIsDrainedOnBind() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let preview = try makeFile(named: "Preview.wav", in: directory)
+        let router = QuickAccessRouter()
+        router.openConverter(with: [preview])
+
+        // Simulates the first visit: the session is created after the handoff was requested.
+        let viewModel = makeViewModel(outputFolder: directory)
+        viewModel.bindConverterHandoff(to: router)
+        await drainMainQueue()
+
+        XCTAssertEqual(viewModel.rows.map(\.sourceURL), [preview])
+        XCTAssertTrue(router.prefilledConverterURLs.isEmpty)
+    }
+
     func testConvertButtonDisabledWithoutQueuedRows() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -348,6 +391,13 @@ final class AudioConverterViewModelTests: XCTestCase {
             ),
             ffmpegHealthChecker: ffmpegHealthChecker
         )
+    }
+
+    /// The handoff is delivered on the next main-queue turn (see `bindConverterHandoff`).
+    private func drainMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 
     private func makeTemporaryDirectory() throws -> URL {

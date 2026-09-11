@@ -18,6 +18,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private let ffmpegHealthChecker: FFmpegHealthChecker
     private var stopController: StopAfterCurrentController?
     private var conversionTask: Task<Void, Never>?
+    private var handoffSubscription: AnyCancellable?
 
     public static let supportedSampleRates = [44100, 48000, 88200, 96000]
     public static let supportedBitDepths = [16, 24, 32]
@@ -58,6 +59,22 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
 
     public var presetSummaryText: String {
         "\(Self.sampleRateLabel(for: currentAudioPreset.sampleRate)) - \(currentAudioPreset.bitDepth)-bit - \(Self.channelModeLabel(for: currentAudioPreset.channelMode))"
+    }
+
+    /// Drain files other tools hand off through the router (Archive → "Convert preview").
+    /// The shell keeps visited tool panes mounted, so the view's `onAppear` never fires
+    /// for a handoff that arrives while the converter is already alive; the session
+    /// view model owns the subscription instead. `@Published` emits on `willSet`, so the
+    /// router is read on the next main-queue turn, after its stored value is updated.
+    public func bindConverterHandoff(to router: QuickAccessRouter) {
+        handoffSubscription = router.$prefilledConverterURLs
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak router] _ in
+                guard let self, let router else { return }
+                let urls = router.consumePrefilledConverterURLs()
+                guard !urls.isEmpty else { return }
+                self.addFileURLs(urls)
+            }
     }
 
     public func addFileURLs(_ urls: [URL]) {
