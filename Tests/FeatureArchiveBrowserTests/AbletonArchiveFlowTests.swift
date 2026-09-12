@@ -5,10 +5,14 @@ import XCTest
 
 @MainActor
 final class AbletonArchiveFlowTests: XCTestCase {
+    // ArchiveUserFlowSmoke is a DEBUG-only harness; keep the release-configuration
+    // test build compiling (script/ci-release.sh) like ArchiveUserFlowTests does.
+    #if DEBUG
     func testMixedDAWSongUIFlow() throws {
         let run = try ArchiveUserFlowSmoke.runAbletonFlow(context: TestToolContext.make())
         XCTAssertTrue(run.isValid, "\(run.evidence)")
     }
+    #endif
 
     func testIncrementalLooseALSReplacementDoesNotLeaveStaleSong() async throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build").appendingPathComponent("nmh-ableton-incremental-\(UUID())")

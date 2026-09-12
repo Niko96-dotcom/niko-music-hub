@@ -2467,6 +2467,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[fixture.song.id], 1)
     }
 
+    // NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS is honoured by ArchiveScanOrchestrator only in
+    // DEBUG builds; without the hold the incremental scan finishes before the assertions
+    // can observe it, so these two tests are DEBUG-only (script/ci-release.sh runs release).
+    #if DEBUG
     func testIncrementalScanCompletionDoesNotOverwriteNewerProjectVaultStatus() async throws {
         let fixture = try ProjectVaultViewModelFixture()
         defer { fixture.cleanUp() }
@@ -2507,6 +2511,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isScanning)
         XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
     }
+    #endif
 
     func testManualPreviewSurvivesRescan() async throws {
         try CubaseFixtures.ensureGenerated()
@@ -3118,6 +3123,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertGreaterThan(decoded.songCount, 0)
     }
 
+    #if DEBUG
     func testStaleIncrementalRescanDoesNotClearIsScanningDuringFullScan() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -3203,6 +3209,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         gate.release()
         await fullScanTask.value
     }
+    #endif
 
     func testRevealInFinderAcceptsSymlinkedArchiveRoot() async throws {
         try CubaseFixtures.ensureGenerated()
