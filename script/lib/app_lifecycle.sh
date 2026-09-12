@@ -242,22 +242,25 @@ nmh_sign_bundle() {
   # element rather than relying on "${array[@]}" of an empty array.
   sign_options=(--force)
   if [[ "$identity" != "-" ]]; then
-    sign_options+=(--options runtime)
+    # Notarization rejects every nested Sparkle binary whose signature lacks a
+    # secure timestamp (1.5.0 was refused for exactly that), so request one
+    # explicitly for real identities. Ad-hoc signatures cannot carry one.
+    sign_options+=(--options runtime --timestamp)
+  else
+    sign_options+=(--timestamp=none)
   fi
 
   if [[ -d "$NMH_SPARKLE_FRAMEWORK" ]]; then
     for nested in "$NMH_SPARKLE_FRAMEWORK/Versions/B/XPCServices/"*.xpc; do
       [[ -e "$nested" ]] || continue
-      /usr/bin/codesign "${sign_options[@]}" --timestamp=none \
-        --sign "$identity" "$nested" >/dev/null
+      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null
     done
     for nested in \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B/Updater.app" \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B/Autoupdate" \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B"; do
       [[ -e "$nested" ]] || continue
-      /usr/bin/codesign "${sign_options[@]}" --timestamp=none \
-        --sign "$identity" "$nested" >/dev/null
+      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null
     done
   fi
 
