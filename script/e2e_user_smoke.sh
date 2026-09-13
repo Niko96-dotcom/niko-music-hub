@@ -30,8 +30,8 @@ cleanup_smoke_suites() {
   nmh_stop_app true
   launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
   rm -rf "$ISOLATED_ROOT/$ARCHIVE_SUITE" "$ISOLATED_ROOT/$UI_SUITE"
-  defaults delete "$ARCHIVE_SUITE" >/dev/null 2>&1 || true
-  defaults delete "$UI_SUITE" >/dev/null 2>&1 || true
+  nmh_forget_settings_suite "$ARCHIVE_SUITE"
+  nmh_forget_settings_suite "$UI_SUITE"
 }
 trap cleanup_smoke_suites EXIT
 

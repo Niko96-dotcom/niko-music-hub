@@ -98,6 +98,27 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(items)
         try data.write(to: storageURL, options: .atomic)
+        sweepStaleAtomicWriteTemporaries()
+    }
+
+    /// `Data.write(options: .atomic)` stages the new file as `<name>.sb-<hash>-<random>`
+    /// next to the target and renames it into place. A process that dies between the
+    /// two steps leaves the stage file behind forever; 27 of them had accumulated in
+    /// Application Support. Only stage files for this store's own file are touched, and
+    /// only once they are old enough that no in-flight write can still own them.
+    public static let staleTemporaryAge: TimeInterval = 60 * 60
+
+    private func sweepStaleAtomicWriteTemporaries(now: Date = Date()) {
+        let directory = storageURL.deletingLastPathComponent()
+        let prefix = storageURL.lastPathComponent + ".sb-"
+        guard let names = try? fileManager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix(prefix) {
+            let url = directory.appendingPathComponent(name)
+            guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+                  let modified = attributes[.modificationDate] as? Date,
+                  now.timeIntervalSince(modified) > Self.staleTemporaryAge else { continue }
+            try? fileManager.removeItem(at: url)
+        }
     }
 
     private func regularFileExists(at url: URL) -> Bool {

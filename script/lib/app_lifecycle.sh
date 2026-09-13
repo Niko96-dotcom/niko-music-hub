@@ -142,6 +142,20 @@ nmh_stop_app() {
   nmh_stop_app_binary "$NMH_APP_BINARY" "${1:-false}"
 }
 
+# Forget a throwaway settings suite completely. `defaults delete` only empties the
+# domain; cfprefsd leaves a 42-byte plist behind, and one pair per E2E run had
+# piled up to ~270 files in ~/Library/Preferences. Only call this for suites the
+# caller created itself (UUID-named smoke/review suites), never for the app's
+# real domain. Stop the process that owns the suite first.
+nmh_forget_settings_suite() {
+  local suite="${1:?missing settings suite name}"
+  case "$suite" in
+    ""|com.niko96.NikoMusicHub|*/*) echo "refusing to forget settings suite: $suite" >&2; return 1 ;;
+  esac
+  defaults delete "$suite" >/dev/null 2>&1 || true
+  rm -f "$HOME/Library/Preferences/$suite.plist"
+}
+
 nmh_swift() {
   if [[ -n "${DEVELOPER_DIR:-}" ]]; then
     DEVELOPER_DIR="$DEVELOPER_DIR" swift "$@"

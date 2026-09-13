@@ -133,6 +133,33 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.listItems())
     }
 
+    func testSaveSweepsStaleAtomicWriteTemporariesButKeepsFreshOnes() throws {
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        let directory = storeURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let stale = directory.appendingPathComponent("inbox.json.sb-deadbeef-stale")
+        let fresh = directory.appendingPathComponent("inbox.json.sb-deadbeef-fresh")
+        let unrelated = directory.appendingPathComponent("other.json.sb-deadbeef-stale")
+        for url in [stale, fresh, unrelated] {
+            try Data("partial".utf8).write(to: url)
+        }
+        let longAgo = Date().addingTimeInterval(-JSONOutputInboxStore.staleTemporaryAge * 2)
+        try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: stale.path)
+        try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: unrelated.path)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+
+        try store.addItem(OutputInboxItem(
+            fileURL: directory.appendingPathComponent("take.wav"),
+            sourceToolID: "audio-recorder",
+            status: .available
+        ))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path), "stale stage file must be swept")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path), "a stage file that may belong to an in-flight write must survive")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path), "only this store's own stage files are touched")
+        XCTAssertEqual(try store.listItems().count, 1)
+    }
+
     func testOutputInboxInspectorSurfacesLoadErrors() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift",

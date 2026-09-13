@@ -31,7 +31,7 @@ if [[ "$MODE" == "--verify-isolated" ]]; then
   cleanup_startup() {
     # Do not remove state while its process could still be writing it.
     nmh_stop_app true || return 1
-    defaults delete "$STARTUP_SUITE" >/dev/null 2>&1 || true
+    nmh_forget_settings_suite "$STARTUP_SUITE"
     rm -rf "$HOME/Library/Application Support/Niko Music Hub/Isolated/$STARTUP_SUITE"
   }
   trap cleanup_startup EXIT

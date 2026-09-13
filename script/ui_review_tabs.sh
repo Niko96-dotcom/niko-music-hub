@@ -63,7 +63,7 @@ capture_tool() {
   echo "captured $tool @ $size_label -> $OUT_DIR/${tool}-${size_label}.png"
 
   # Cleanup suite to prevent preference bleed (research Pitfall 5).
-  defaults delete "$suite" >/dev/null 2>&1 || true
+  nmh_forget_settings_suite "$suite"
 }
 
 capture_inbox_state() {
@@ -98,7 +98,7 @@ capture_inbox_state() {
   echo "captured output-inbox-${state} @ $size_label -> $OUT_DIR/output-inbox-${state}-${size_label}.png"
 
   # Cleanup suite.
-  defaults delete "$suite" >/dev/null 2>&1 || true
+  nmh_forget_settings_suite "$suite"
 }
 
 nmh_build_bundle

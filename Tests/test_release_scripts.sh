@@ -99,6 +99,11 @@ NMH_ROOT_DIR="$ROOT_DIR"
 NMH_APP_BINARY="$NMH_DIST_DIR/NikoMusicHub.app/Contents/MacOS/NikoMusicHub"
 nmh_stop_app() { echo stop >>"$NMH_STARTUP_TEST_EVENTS"; }
 nmh_build_bundle() { echo build >>"$NMH_STARTUP_TEST_EVENTS"; }
+# Cleanup must forget the throwaway suite only after the app is stopped.
+nmh_forget_settings_suite() {
+  [[ "$1" == NikoMusicHubStartup.* ]]
+  echo forget >>"$NMH_STARTUP_TEST_EVENTS"
+}
 nmh_open_app() {
   [[ "$NIKO_MUSIC_HUB_SETTINGS_SUITE" == NikoMusicHubStartup.* ]]
   [[ "$NIKO_MUSIC_HUB_DRY_RUN_OPEN" == 1 ]]
@@ -121,19 +126,19 @@ assert_pass isolated-startup env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
   NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT=/must-not-scan \
   NIKO_MUSIC_HUB_BOOKMARK_PROOF_MODE=must-not-run \
   bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
-[[ "$(cat "$STARTUP_EVENTS")" == $'stop\nbuild\nopen\nstop' ]]
+[[ "$(cat "$STARTUP_EVENTS")" == $'stop\nbuild\nopen\nstop\nforget' ]]
 assert_contains "$TMP/isolated-startup.out" 'verify ok: isolated visible main window'
 
 : >"$STARTUP_EVENTS"
 assert_fail isolated-no-window-api env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
   NMH_STARTUP_TEST_PROBE_STATUS=2 bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
 assert_contains "$TMP/isolated-no-window-api.err" 'no verified visible window'
-[[ "$(tail -n 1 "$STARTUP_EVENTS")" == stop ]]
+[[ "$(tail -n 2 "$STARTUP_EVENTS" | tr '\n' ' ')" == "stop forget " ]]
 
 : >"$STARTUP_EVENTS"
 assert_fail isolated-open-fails env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
   NMH_STARTUP_TEST_OPEN_STATUS=8 bash "$STARTUP_REPO/script/build_and_run.sh" --verify-isolated
-[[ "$(tail -n 1 "$STARTUP_EVENTS")" == stop ]]
+[[ "$(tail -n 2 "$STARTUP_EVENTS" | tr '\n' ' ')" == "stop forget " ]]
 
 : >"$STARTUP_EVENTS"
 assert_fail startup-invalid-mode env NMH_STARTUP_TEST_EVENTS="$STARTUP_EVENTS" \
@@ -289,6 +294,18 @@ assert_pass preflight-clean "$ROOT/script/release-preflight.sh" --root "$PREFLIG
 printf 'dirty\n' >"$PREFLIGHT_REPO/untracked.txt"
 assert_fail preflight-dirty "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
 assert_contains "$TMP/preflight-dirty.err" "completely clean working tree"
+rm -f "$PREFLIGHT_REPO/untracked.txt"
+
+echo "== throwaway settings suites are forgotten completely, the real domain never =="
+SUITE_PROBE="NikoMusicHubE2E.release-script-test.$(uuidgen)"
+defaults write "$SUITE_PROBE" probe -int 1
+bash -c "source '$LIFECYCLE'; nmh_forget_settings_suite '$SUITE_PROBE'"
+if [[ -e "$HOME/Library/Preferences/$SUITE_PROBE.plist" ]]; then
+  echo "nmh_forget_settings_suite left $SUITE_PROBE.plist behind" >&2
+  exit 1
+fi
+assert_fail forget-real-domain bash -c "source '$LIFECYCLE'; nmh_forget_settings_suite com.niko96.NikoMusicHub"
+assert_contains "$TMP/forget-real-domain.err" "refusing to forget settings suite"
 
 echo "== consolidated exact-commit UAT evidence =="
 UAT="$TMP/uat.json"

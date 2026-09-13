@@ -16,7 +16,9 @@ ISOLATED_SUPPORT="$HOME/Library/Application Support/Niko Music Hub/Isolated/$SUI
 mkdir -p "$ACTIVE_ROOT" "$ARCHIVE_ROOT"
 
 cleanup() {
+  # Same reason as nmh_forget_settings_suite: `defaults delete` leaves the plist behind.
   defaults delete "$SUITE" >/dev/null 2>&1 || true
+  rm -f "$HOME/Library/Preferences/$SUITE.plist"
   rm -rf "$ISOLATED_SUPPORT" "$PROOF_ROOT"
 }
 trap cleanup EXIT
