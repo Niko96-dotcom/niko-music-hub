@@ -34,7 +34,7 @@ No UI. Owns archive domain and safety.
 
 | Area | Types / services | Notes |
 |------|------------------|-------|
-| Domain | `Song`, `ProjectVersion` (CPR), `PreviewCandidate`, `MusicRoot`, `ScanResult` | App-owned model; no SQLite requirement in v0.1 — in-memory + JSON cache OK |
+| Domain | `Song`, `ProjectVersion` (CPR), `PreviewCandidate`, `StoredMusicRoot`, `ScanResult` | App-owned model; no SQLite requirement in v0.1 — in-memory + JSON cache OK |
 | Scanning | `CubaseArchiveScanner`, `CPRVersionDetector`, `PreviewCandidateDetector`, `SongTitleResolver` | One child folder = one song; recurse for `.cpr` and audio |
 | Search | `MusicSearchIndex` | In-memory index; fields per spec §10 |
 | Opening | `MusicItemOpener` | Reveal/open latest CPR; supports `dryRun: Bool` for tests |

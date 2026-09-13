@@ -1,10 +1,6 @@
 import AppCore
 import Foundation
 
-public enum DemucsMLXBackendError: LocalizedError, Equatable, Sendable {
-    case processLaunchFailed(String)
-}
-
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
     private let settings: HelperToolSettings
     private let healthChecker: DemucsMLXHealthChecker

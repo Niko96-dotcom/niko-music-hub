@@ -5,10 +5,6 @@ import XCTest
 
 @MainActor
 final class HubDesignComponentsTests: XCTestCase {
-    func testHubSectionDividerHostsWithoutCrash() {
-        XCTAssertNoThrow(try hostView(HubSectionDivider(), size: CGSize(width: 200, height: 12)))
-    }
-
     func testHubLabeledButtonStylesCompile() throws {
         for style in [HubLabeledButtonStyle.primary, .secondary, .ghost] {
             let button = HubLabeledButton(

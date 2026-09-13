@@ -3,12 +3,6 @@ import Foundation
 import NikoMusicCore
 
 public final class RecordSystemAudioUseCase: Sendable {
-    public enum RecordingState: Sendable {
-        case idle
-        case recording(startedAt: Date, fileURL: URL)
-        case stopped
-    }
-
     public struct Config: Sendable {
         public let outputURL: URL
         public let preset: AudioPreset
