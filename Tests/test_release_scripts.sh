@@ -347,6 +347,33 @@ grep -Fq 'nmh_notary_upload_endpoint_reachable' "$ROOT/script/release-all.sh" ||
   exit 1
 }
 
+echo "== notary verdicts are read without pipe races =="
+# A `writer | grep -q` pipeline under pipefail can fail with SIGPIPE when grep exits
+# early; that turned an Accepted verdict into a failed rehearsal once.
+for fn in notarize require_secure_timestamps; do
+  if awk "/^$fn\\(\\) \\{/{p=1} p{print} p&&/^}/{exit}" "$ROOT/script/release-all.sh" | grep -v '^ *#' | grep -Eq '\| *grep +-[a-zA-Z]*q'; then
+    echo "$fn must not pipe into grep -q (pipefail + SIGPIPE race)" >&2
+    exit 1
+  fi
+done
+NOTARY_STUB="$TMP/notary-stub"
+mkdir -p "$NOTARY_STUB"
+cat >"$NOTARY_STUB/xcrun" <<'STUB'
+#!/usr/bin/env bash
+# Mimics `notarytool submit --wait` with a verbose Accepted transcript.
+for i in $(seq 1 400); do echo "  progress line $i"; done
+echo "  id: 00000000-0000-0000-0000-000000000000"
+echo "  status: Accepted"
+STUB
+chmod +x "$NOTARY_STUB/xcrun"
+NOTARIZE_FN="$(awk '/^notarize\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/release-all.sh")"
+for i in $(seq 1 25); do
+  if ! PATH="$NOTARY_STUB:$PATH" bash -c "set -euo pipefail; LOG_FILE=/dev/null; RELEASE_DIR='$TMP'; NMH_NOTARY_PROFILE=stub; $NOTARIZE_FN; notarize app /dev/null" >/dev/null 2>&1; then
+    echo "notarize helper rejected an Accepted verdict on run $i" >&2
+    exit 1
+  fi
+done
+
 echo "== throwaway settings suites are forgotten completely, the real domain never =="
 SUITE_PROBE="NikoMusicHubE2E.release-script-test.$(uuidgen)"
 defaults write "$SUITE_PROBE" probe -int 1

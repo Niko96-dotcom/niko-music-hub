@@ -93,15 +93,17 @@ run() {
 notarize() {
   local label="$1" file="$2" attempt output submission_id
   for attempt in 1 2 3; do
-    output="$(xcrun notarytool submit "$file" --keychain-profile "$NMH_NOTARY_PROFILE" --wait 2>&1)" && {
-      printf '%s\n' "$output" | tee -a "$LOG_FILE"
-      if printf '%s' "$output" | grep -q 'status: Accepted'; then
-        return 0
-      fi
-    }
-    printf '%s\n' "$output" | tee -a "$LOG_FILE"
-    if printf '%s' "$output" | grep -q 'status: Invalid'; then
-      submission_id="$(printf '%s' "$output" | awk '/^ *id: /{print $2; exit}')"
+    # Never pipe into `grep -q` under pipefail: grep can exit before the writer
+    # finishes and the SIGPIPE turns a verdict into a false failure (that
+    # aborted a rehearsal right after "status: Accepted"). Grep here-strings.
+    output="$(xcrun notarytool submit "$file" --keychain-profile "$NMH_NOTARY_PROFILE" --wait 2>&1)" || true
+    printf '%s\n' "$output" >>"$LOG_FILE"
+    printf '%s\n' "$output"
+    if grep -q 'status: Accepted' <<<"$output"; then
+      return 0
+    fi
+    if grep -q 'status: Invalid' <<<"$output"; then
+      submission_id="$(grep -m1 -E '^ *id: ' <<<"$output" | awk '{print $2}')"
       if [[ -n "$submission_id" ]]; then
         xcrun notarytool log "$submission_id" --keychain-profile "$NMH_NOTARY_PROFILE" \
           >"$RELEASE_DIR/notary-$label-$submission_id.json" 2>&1 || true
@@ -109,7 +111,7 @@ notarize() {
       fi
       return 1
     fi
-    if printf '%s' "$output" | grep -Eq 'deadlineExceeded|HTTPClientError|connection|timed out'; then
+    if grep -Eq 'deadlineExceeded|HTTPClientError|connection|timed out' <<<"$output"; then
       echo "notary upload of $label failed on attempt $attempt (transport); retrying in 30s" | tee -a "$LOG_FILE" >&2
       sleep 30
       continue
