@@ -57,9 +57,7 @@ public struct DownloaderView: View {
            let host = URL(string: source)?.host {
             parts.append(host)
         }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        parts.append(formatter.localizedString(for: item.createdAt, relativeTo: Date()))
+        parts.append(HubRelativeTime.string(for: item.createdAt))
         return parts.joined(separator: " · ")
     }
 

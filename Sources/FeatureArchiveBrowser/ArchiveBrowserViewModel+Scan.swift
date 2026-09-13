@@ -97,9 +97,7 @@ extension ArchiveBrowserViewModel {
                 }
                 // While the launch scan runs, its status line stays in charge.
                 if !self.isScanning {
-                    let formatter = RelativeDateTimeFormatter()
-                    formatter.unitsStyle = .abbreviated
-                    let relative = formatter.localizedString(for: scannedAt, relativeTo: Date())
+                    let relative = HubRelativeTime.string(for: scannedAt)
                     self.setBackgroundStatusMessage("Loaded \(songs.count) songs from cache (\(relative)). Scan to refresh.")
                 }
             }

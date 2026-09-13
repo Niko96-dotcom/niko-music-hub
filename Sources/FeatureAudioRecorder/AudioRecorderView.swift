@@ -221,9 +221,7 @@ public struct AudioRecorderView: View {
             let seconds = Int(duration) % 60
             parts.append(String(format: "%d:%02d", minutes, seconds))
         }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        parts.append(formatter.localizedString(for: item.createdAt, relativeTo: Date()))
+        parts.append(HubRelativeTime.string(for: item.createdAt))
         return parts.joined(separator: " · ")
     }
 
