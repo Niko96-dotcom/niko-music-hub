@@ -87,6 +87,58 @@ run() {
   fi
 }
 
+# Submit to the notary service, retrying only transport failures. A verdict of
+# Invalid is final: fetch Apple's log next to the release output so the reason is
+# in the record instead of buried in a browser session.
+notarize() {
+  local label="$1" file="$2" attempt output submission_id
+  for attempt in 1 2 3; do
+    output="$(xcrun notarytool submit "$file" --keychain-profile "$NMH_NOTARY_PROFILE" --wait 2>&1)" && {
+      printf '%s\n' "$output" | tee -a "$LOG_FILE"
+      if printf '%s' "$output" | grep -q 'status: Accepted'; then
+        return 0
+      fi
+    }
+    printf '%s\n' "$output" | tee -a "$LOG_FILE"
+    if printf '%s' "$output" | grep -q 'status: Invalid'; then
+      submission_id="$(printf '%s' "$output" | awk '/^ *id: /{print $2; exit}')"
+      if [[ -n "$submission_id" ]]; then
+        xcrun notarytool log "$submission_id" --keychain-profile "$NMH_NOTARY_PROFILE" \
+          >"$RELEASE_DIR/notary-$label-$submission_id.json" 2>&1 || true
+        echo "notarization of $label rejected; Apple's log: $RELEASE_DIR/notary-$label-$submission_id.json" >&2
+      fi
+      return 1
+    fi
+    if printf '%s' "$output" | grep -Eq 'deadlineExceeded|HTTPClientError|connection|timed out'; then
+      echo "notary upload of $label failed on attempt $attempt (transport); retrying in 30s" | tee -a "$LOG_FILE" >&2
+      sleep 30
+      continue
+    fi
+    return 1
+  done
+  echo "notarization of $label failed after 3 upload attempts" >&2
+  return 1
+}
+
+# Notarization rejects any Developer ID signature without a secure timestamp,
+# and it checks every nested binary, not just the app wrapper (1.5.0 was refused
+# for Sparkle's helpers). Prove it locally before uploading anything.
+require_secure_timestamps() {
+  local app="$1" nested
+  for nested in \
+    "$app" \
+    "$app/Contents/Frameworks/Sparkle.framework/Versions/B" \
+    "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+    "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
+    "$app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/"*.xpc; do
+    [[ -e "$nested" ]] || continue
+    if ! codesign -dvv "$nested" 2>&1 | grep -q '^Timestamp='; then
+      echo "signature without a secure timestamp (notarization would reject it): $nested" >&2
+      return 1
+    fi
+  done
+}
+
 verify_remote_release_tag() {
   local remote_refs remote_tag_ref="" remote_tag_peeled="" remote_tag_commit="" object ref
 
@@ -421,13 +473,30 @@ if [[ "$MODE" == "public" ]]; then
     echo "public release requires SPARKLE_PUBLIC_ED_KEY so the published feed matches the shipped app" >&2
     exit 1
   fi
-  "$ROOT/script/release-preflight.sh"
+  if [[ "$PUBLISH" == true ]]; then
+    "$ROOT/script/release-preflight.sh"
+  else
+    "$ROOT/script/release-preflight.sh" --allow-missing-tag
+  fi
   "$ROOT/script/validate-release-uat.sh" --evidence "$NMH_RELEASE_UAT_EVIDENCE" --commit "$COMMIT"
   if [[ "$PUBLISH" == true ]]; then
     command -v gh >/dev/null || { echo "public publish requires gh CLI" >&2; exit 1; }
     gh auth status >/dev/null
     verify_remote_release_tag
   fi
+  # Fail on environment problems now, not after eight minutes of gates.
+  if [[ "$SKIP_TESTS" != true && "$EMERGENCY_SKIP_TESTS" != true ]] && nmh_console_locked; then
+    echo "public release gates drive the app's UI; unlock the screen first (macOS hides window content from accessibility while the console is locked)" >&2
+    exit 1
+  fi
+  if ! nmh_notary_upload_endpoint_reachable; then
+    echo "notary upload endpoint $NMH_NOTARY_UPLOAD_HOST is unreachable over IPv4; notarytool would time out after the gates" >&2
+    exit 1
+  fi
+  xcrun notarytool history --keychain-profile "$NMH_NOTARY_PROFILE" >/dev/null 2>&1 || {
+    echo "notary credentials for keychain profile $NMH_NOTARY_PROFILE do not work" >&2
+    exit 1
+  }
 fi
 
 # A release artifact records an exact source commit. Never package a dirty
@@ -521,10 +590,12 @@ if [[ "$MODE" == "public" ]]; then
     exit 1
   fi
 
+  run secure-timestamps require_secure_timestamps "$APP"
+
   APP_ZIP="$RELEASE_DIR/NikoMusicHub-$VERSION-app-notary.zip"
   run ditto ditto -c -k --keepParent "$APP" "$APP_ZIP"
   log "notarize and staple app"
-  run notary-app xcrun notarytool submit "$APP_ZIP" --keychain-profile "$NMH_NOTARY_PROFILE" --wait
+  notarize app "$APP_ZIP"
   run staple-app xcrun stapler staple "$APP"
   run validate-staple-app xcrun stapler validate "$APP"
   run spctl-app spctl --assess --type execute --verbose "$APP"
@@ -540,7 +611,7 @@ run hdiutil-create hdiutil create -volname "Niko Music Hub $VERSION" -srcfolder 
 if [[ "$MODE" == "public" ]]; then
   run sign-dmg codesign --force --timestamp --sign "$NMH_DEVELOPER_ID_APPLICATION" "$DMG"
   log "notarize and staple dmg"
-  run notary-dmg xcrun notarytool submit "$DMG" --keychain-profile "$NMH_NOTARY_PROFILE" --wait
+  notarize dmg "$DMG"
   run staple-dmg xcrun stapler staple "$DMG"
 fi
 

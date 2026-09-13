@@ -214,3 +214,21 @@ nmh_release_tag() {
 nmh_release_build_id() {
   printf '%s+%s\n' "$(nmh_release_version)" "$(nmh_git_short_commit)"
 }
+
+# The strict E2E gate reads the app's window through accessibility, which macOS
+# withholds while the console is locked; the public pipeline burned eight minutes
+# of gates before finding that out. Check up front instead.
+nmh_console_locked() {
+  /usr/sbin/ioreg -n Root -d1 -a 2>/dev/null | grep -A1 IOConsoleLocked | grep -q '<true/>'
+}
+
+# notarytool uploads to this S3 bucket over IPv4 and gives up after ~100 s. The
+# API host answering is not enough: with the bucket unreachable every run dies
+# after the gates with HTTPClientError.deadlineExceeded.
+NMH_NOTARY_UPLOAD_HOST="https://notary-submissions-prod.s3.amazonaws.com/"
+
+nmh_notary_upload_endpoint_reachable() {
+  local code
+  code="$(curl -4 --silent --output /dev/null --max-time 15 --write-out '%{http_code}' "$NMH_NOTARY_UPLOAD_HOST" 2>/dev/null || true)"
+  [[ "$code" == "403" || "$code" == "200" ]]
+}

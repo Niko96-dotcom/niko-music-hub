@@ -204,7 +204,8 @@ assert_order 'log "checksums and manifest"' 'log "publication"' "$ROOT/script/re
 assert_order 'run validate-artifact-final' 'run validate-approval' "$ROOT/script/release-all.sh"
 assert_order 'run validate-approval' 'log "publication"' "$ROOT/script/release-all.sh"
 assert_order 'log "public app signature validation"' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"
-assert_order 'run notary-dmg' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"
+assert_order 'notarize dmg "$DMG"' 'log "checksums and manifest"' "$ROOT/script/release-all.sh"
+assert_order 'run secure-timestamps require_secure_timestamps' 'notarize app "$APP_ZIP"' "$ROOT/script/release-all.sh"
 assert_order 'run hdiutil-create' '(cd "$RELEASE_DIR" && shasum' "$ROOT/script/release-all.sh"
 assert_contains "$ROOT/script/release-all.sh" 'nmh_validate_release_host_architecture'
 assert_contains "$ROOT/script/release-all.sh" '--architectures "$RELEASE_ARCHITECTURES"'
@@ -295,6 +296,56 @@ printf 'dirty\n' >"$PREFLIGHT_REPO/untracked.txt"
 assert_fail preflight-dirty "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
 assert_contains "$TMP/preflight-dirty.err" "completely clean working tree"
 rm -f "$PREFLIGHT_REPO/untracked.txt"
+
+echo "== publish rehearsal may run before the tag exists, publishing may not =="
+git -C "$PREFLIGHT_REPO" tag -d "v$(cat "$ROOT/VERSION")" >/dev/null
+assert_fail preflight-untagged "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+assert_contains "$TMP/preflight-untagged.err" "to resolve exactly to HEAD"
+assert_pass preflight-rehearsal "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO" --allow-missing-tag
+assert_contains "$TMP/preflight-rehearsal.out" "not created yet; rehearsal"
+git -C "$PREFLIGHT_REPO" tag "v$(cat "$ROOT/VERSION")" HEAD~0 2>/dev/null || true
+git -C "$PREFLIGHT_REPO" commit -q --allow-empty -m "moves head past the tag"
+assert_fail preflight-stale-tag-rehearsal "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO" --allow-missing-tag
+assert_contains "$TMP/preflight-stale-tag-rehearsal.err" "to resolve exactly to HEAD"
+grep -Fq -- '--allow-missing-tag' "$ROOT/script/release-all.sh" || {
+  echo "release-all.sh must run the preflight in rehearsal mode for --dry-run-publish" >&2
+  exit 1
+}
+if grep -A1 -F 'if [[ "$PUBLISH" == true ]]; then' "$ROOT/script/release-all.sh" | grep -Fq -- '--allow-missing-tag'; then
+  echo "release-all.sh must never allow a missing tag when publishing" >&2
+  exit 1
+fi
+
+echo "== every Developer ID signature carries a secure timestamp =="
+LIFECYCLE="$ROOT/script/lib/app_lifecycle.sh"
+grep -Fq -- '--options runtime --timestamp' "$LIFECYCLE" || {
+  echo "nmh_sign_bundle must request a secure timestamp for real identities" >&2
+  exit 1
+}
+if [[ "$(grep -c -- '--timestamp=none' "$LIFECYCLE")" != "1" ]]; then
+  echo "--timestamp=none may only appear once, in the ad-hoc branch of nmh_sign_bundle" >&2
+  exit 1
+fi
+grep -Fq 'require_secure_timestamps "$APP"' "$ROOT/script/release-all.sh" || {
+  echo "public release must assert nested secure timestamps before notarization" >&2
+  exit 1
+}
+grep -Fq 'notarize app "$APP_ZIP"' "$ROOT/script/release-all.sh" || {
+  echo "app notarization must go through the retrying notarize helper" >&2
+  exit 1
+}
+grep -Fq 'notarize dmg "$DMG"' "$ROOT/script/release-all.sh" || {
+  echo "dmg notarization must go through the retrying notarize helper" >&2
+  exit 1
+}
+grep -Fq 'nmh_console_locked' "$ROOT/script/release-all.sh" || {
+  echo "public release must fail fast on a locked console" >&2
+  exit 1
+}
+grep -Fq 'nmh_notary_upload_endpoint_reachable' "$ROOT/script/release-all.sh" || {
+  echo "public release must fail fast when the notary upload endpoint is unreachable" >&2
+  exit 1
+}
 
 echo "== throwaway settings suites are forgotten completely, the real domain never =="
 SUITE_PROBE="NikoMusicHubE2E.release-script-test.$(uuidgen)"

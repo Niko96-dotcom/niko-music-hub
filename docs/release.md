@@ -44,7 +44,7 @@ Credential-free local artifact validation (from a clean checkout):
 ./script/release-all.sh --local-only
 ```
 
-Public release validation without upload:
+Public release rehearsal without upload — run this **before** creating the tag. It executes every gate, signs, notarizes and staples the real artifacts, generates and validates the signed feed, and stops short of publishing. The preflight accepts a missing `v<VERSION>` tag in this mode (an existing tag must still point at `HEAD`), so a fix found by the rehearsal only costs a commit, not a moved tag:
 
 ```bash
 ./script/release-all.sh --public --dry-run-publish
@@ -60,7 +60,7 @@ git push origin "v$(cat VERSION)"
 
 Public mode generates and validates `appcast.xml` after the DMG is signed, notarized and stapled, so the enclosure signature covers the exact published bytes. Both the enclosure signature and the feed signature are re-verified against the `SUPublicEDKey` embedded in the candidate bundle: a feed signed by a key the app does not trust fails the release instead of silently disabling updates for every user. Publishing uploads a complete six-asset set and re-validates the hosted feed after download.
 
-`release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin`, an identity differs from `BUNDLE_ID`, or any gate fails. Publishing creates one new Release with its complete six-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
+`release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin` (publishing only), an identity differs from `BUNDLE_ID`, or any gate fails. Before spending minutes on gates it also refuses a locked console (the strict E2E gate reads the app's window through accessibility, which macOS withholds while locked), an unreachable notary upload endpoint (`notarytool` uploads to an S3 bucket over IPv4 and gives up after about 100 seconds), and notary credentials that do not answer. Every Developer ID signature, including Sparkle's nested helpers, is checked for a secure timestamp before upload because the notary service rejects the whole app otherwise. Notary uploads are retried up to three times on transport failures; a rejection is final and Apple's log is saved as `notary-<app|dmg>-<submission id>.json` in the release directory. Publishing creates one new Release with its complete six-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
 
 Copy `docs/release-uat-evidence.template.json` outside the repository and fill it only after testing the exact commit. The validator requires clean install, upgrade/settings retention, uninstall, launch-at-login, privacy permissions, real recorder audio, live downloader, archive read-only behavior, output handoffs, and user-style E2E to be passed and approved. Historical UAT does not satisfy a new commit.
 

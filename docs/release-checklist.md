@@ -13,9 +13,9 @@
 - [ ] `Tests/test_release_scripts.sh` passed.
 - [ ] `./script/ci-release.sh` passed.
 - [ ] `./script/ci-tsan.sh` passed.
+- [ ] `./script/release-all.sh --public --dry-run-publish` rehearsed on the exact commit (before tagging; it accepts a missing tag).
 - [ ] Public tag `v<VERSION>` points at the intended commit.
 - [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved.
-- [ ] `./script/release-all.sh --public --dry-run-publish` passed.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
 - [ ] `appcast.xml` was generated after stapling and validated against the key embedded in the candidate app.

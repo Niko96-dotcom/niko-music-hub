@@ -35,6 +35,12 @@ cleanup_smoke_suites() {
 }
 trap cleanup_smoke_suites EXIT
 
+# nmh_console_locked comes from release-env.sh via app_lifecycle.sh.
+if [[ "${NMH_STRICT_UI_E2E:-0}" == "1" ]] && nmh_console_locked; then
+  echo "E2E failed: strict UI mode needs an unlocked screen (macOS hides window content from accessibility while the console is locked)" >&2
+  exit 1
+fi
+
 echo "== generate fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
 
