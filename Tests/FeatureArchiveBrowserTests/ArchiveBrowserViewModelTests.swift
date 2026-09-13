@@ -2467,51 +2467,43 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[fixture.song.id], 1)
     }
 
-    // NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS is honoured by ArchiveScanOrchestrator only in
-    // DEBUG builds; without the hold the incremental scan finishes before the assertions
-    // can observe it, so these two tests are DEBUG-only (script/ci-release.sh runs release).
-    #if DEBUG
     func testIncrementalScanCompletionDoesNotOverwriteNewerProjectVaultStatus() async throws {
         let fixture = try ProjectVaultViewModelFixture()
         defer { fixture.cleanUp() }
         let watcher = TestArchiveRootWatcher()
         let runtime = RecordingProjectVaultRuntime(snapshots: [fixture.snapshot])
+        // The gate holds the incremental rescan in flight, so the Vault action below is
+        // guaranteed to finish while the scan is still running — no timing involved.
+        let incrementalGate = ScanReleaseGate()
         let viewModel = ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: fixture.settingsStore),
             archiveRootWatcher: watcher,
-            projectVaultRuntime: runtime
+            projectVaultRuntime: runtime,
+            scanOverride: nil,
+            incrementalRescanHold: { await incrementalGate.waitForRelease() }
         )
         viewModel.scannedSongs = [fixture.song]
         viewModel.songs = [fixture.song]
         viewModel.filteredSongs = [fixture.song]
         await viewModel.refreshProjectVaultSnapshots()
+        try await waitUntil("launch scan settled") { !viewModel.isScanning }
 
-        for _ in 0..<100 where viewModel.isScanning {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        setenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS", "250000000", 1)
-        defer { unsetenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS") }
         let changedURL = fixture.song.folderPath.appendingPathComponent("new-preview.wav")
         FileManager.default.createFile(atPath: changedURL.path, contents: Data("fixture".utf8))
         watcher.simulateFilesystemChange(paths: [changedURL])
+        try await waitUntil("incremental rescan claimed isScanning") { viewModel.isScanning }
+        try await waitUntil("incremental rescan is parked at the hold") { incrementalGate.isWaiting }
 
-        for _ in 0..<100 where !viewModel.isScanning {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(viewModel.isScanning)
         viewModel.performProjectVaultPrimaryAction(for: fixture.song)
-        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
+        try await waitUntil("vault action finished") { !viewModel.projectVaultBusySongIDs.contains(fixture.song.id) }
+        let vaultMessage = "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks."
+        XCTAssertEqual(viewModel.statusMessage, vaultMessage)
+        XCTAssertTrue(viewModel.isScanning, "the held rescan must still be in flight when the newer status lands")
 
-        for _ in 0..<100 where viewModel.isScanning {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertFalse(viewModel.isScanning)
-        XCTAssertEqual(viewModel.statusMessage, "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
+        incrementalGate.release()
+        try await waitUntil("incremental rescan completed") { !viewModel.isScanning }
+        XCTAssertEqual(viewModel.statusMessage, vaultMessage)
     }
-    #endif
 
     func testManualPreviewSurvivesRescan() async throws {
         try CubaseFixtures.ensureGenerated()
@@ -3123,12 +3115,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertGreaterThan(decoded.songCount, 0)
     }
 
-    #if DEBUG
     func testStaleIncrementalRescanDoesNotClearIsScanningDuringFullScan() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
-        setenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS", "300000000", 1)
-        defer { unsetenv("NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS") }
 
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -3159,9 +3148,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
 
         let gate = ScanReleaseGate()
+        let incrementalGate = ScanReleaseGate()
         let watcher = TestArchiveRootWatcher()
+        let diagnostics = CapturingDiagnostics()
         let viewModel = ArchiveBrowserViewModel(
-            context: TestToolContext.make(settingsStore: settingsStore),
+            context: TestToolContext.make(settingsStore: settingsStore, diagnostics: diagnostics),
             archiveRootWatcher: watcher,
             scanOverride: { _ in
                 await gate.waitForRelease()
@@ -3172,35 +3163,32 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                         displayTitle: "Song A"
                     )
                 ])
-            }
+            },
+            incrementalRescanHold: { await incrementalGate.waitForRelease() }
         )
 
-        let initialScanDeadline = Date().addingTimeInterval(2)
-        while viewModel.songs.isEmpty, Date() < initialScanDeadline {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
+        try await waitUntil("launch scan parked at the gate") { gate.isWaiting }
         gate.release()
+        try await waitUntil("launch scan applied") { !viewModel.songs.isEmpty && !viewModel.isScanning }
 
         let mixdownFolder = songA.appendingPathComponent("mixdown", isDirectory: true)
         try FileManager.default.createDirectory(at: mixdownFolder, withIntermediateDirectories: true)
         let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
         FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
         watcher.simulateFilesystemChange(paths: [mixdown])
+        try await waitUntil("incremental rescan parked at its hold") { incrementalGate.isWaiting }
+        XCTAssertTrue(viewModel.isScanning)
 
-        let incrementalStartDeadline = Date().addingTimeInterval(2)
-        while !viewModel.isScanning, Date() < incrementalStartDeadline {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-
+        // A newer full scan starts (and parks) while the incremental rescan is still held.
         viewModel.roots = [rootB]
         let fullScanTask = Task { await viewModel.scan() }
+        try await waitUntil("full scan parked at the gate") { gate.isWaiting }
 
-        let fullScanStartDeadline = Date().addingTimeInterval(2)
-        while !viewModel.isScanning, Date() < fullScanStartDeadline {
-            try await Task.sleep(nanoseconds: 10_000_000)
+        // Now let the stale incremental rescan finish underneath the running full scan.
+        incrementalGate.release()
+        try await waitUntil("stale incremental rescan finished") {
+            diagnostics.lines.contains { $0.contains("Incremental archive rescan finished") }
         }
-
-        try await Task.sleep(nanoseconds: 350_000_000)
         XCTAssertTrue(
             viewModel.isScanning,
             "Stale incremental completion must not clear isScanning while a full scan is active"
@@ -3208,8 +3196,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         gate.release()
         await fullScanTask.value
+        XCTAssertFalse(viewModel.isScanning)
     }
-    #endif
 
     func testRevealInFinderAcceptsSymlinkedArchiveRoot() async throws {
         try CubaseFixtures.ensureGenerated()
@@ -3493,6 +3481,27 @@ private final class CancellationAwareScanGate: @unchecked Sendable {
         self.continuation = nil
         lock.unlock()
         continuation?.resume(throwing: CancellationError())
+    }
+}
+
+/// Bounded polling with a named failure. The gates above make the *ordering* of
+/// scan phases deterministic; this only bridges the few main-actor hops between a
+/// released gate and the observable state it leads to.
+@MainActor
+private func waitUntil(
+    _ what: String,
+    timeout: TimeInterval = 5,
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ condition: @MainActor () -> Bool
+) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+        if Date() >= deadline {
+            XCTFail("timed out waiting for \(what)", file: file, line: line)
+            throw CancellationError()
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
     }
 }
 

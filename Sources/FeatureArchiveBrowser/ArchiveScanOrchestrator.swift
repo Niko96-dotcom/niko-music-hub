@@ -23,6 +23,9 @@ protocol ArchiveScanHost: AnyObject {
     var diagnostics: Diagnostics { get }
     var archiveRootWatcher: (any ArchiveRootWatching)? { get }
     var scanOverride: (([URL]) async throws -> ScanResult)? { get }
+    /// Test seam: awaited after an incremental rescan has claimed `isScanning` and
+    /// before it reads the filesystem, so a test can hold the scan in flight.
+    var incrementalRescanHold: (() async -> Void)? { get }
 
     func mutateCatalog(_ updates: () -> Void)
     func setStatusMessage(_ message: String?)
@@ -267,15 +270,13 @@ final class ArchiveScanOrchestrator {
             if activeScanGeneration == nil {
                 host.isScanning = false
             }
+            host.diagnostics.log(.info, "Incremental archive rescan finished")
             Task { await drainPendingIncrementalRescan() }
         }
 
-        #if DEBUG
-        if let holdRaw = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_TEST_INCREMENTAL_HOLD_NS"],
-           let holdNanoseconds = UInt64(holdRaw), holdNanoseconds > 0 {
-            try? await Task.sleep(nanoseconds: holdNanoseconds)
+        if let hold = host.incrementalRescanHold {
+            await hold()
         }
-        #endif
 
         let rootsSnapshot = host.roots
         let generationSnapshot = host.rootGeneration
@@ -289,7 +290,10 @@ final class ArchiveScanOrchestrator {
             ) else { return }
 
             guard host.rootGeneration == generationSnapshot,
-                  host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else { return }
+                  host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else {
+                host.diagnostics.log(.info, "Incremental archive rescan discarded: roots changed while it ran")
+                return
+            }
 
             host.applyCatalogScanUpdate(update.catalogApplyResult, roots: rootsSnapshot)
             host.diagnostics.log(.info, "Incremental archive rescan updated \(update.incrementalSongCount) song(s)")

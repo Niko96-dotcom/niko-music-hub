@@ -123,6 +123,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let archiveRootWatcher: (any ArchiveRootWatching)?
     let runtime: MusicHubRuntimeEnvironment
     let scanOverride: (([URL]) async throws -> ScanResult)?
+    let incrementalRescanHold: (() async -> Void)?
 
     deinit {
         projectVaultRecoveryTask?.cancel()
@@ -191,7 +192,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         projectVaultRuntime: (any ProjectVaultOperating)? = nil,
         browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
         runtime: MusicHubRuntimeEnvironment = .current,
-        scanOverride: (([URL]) async throws -> ScanResult)?
+        scanOverride: (([URL]) async throws -> ScanResult)?,
+        incrementalRescanHold: (() async -> Void)? = nil
     ) {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
@@ -201,6 +203,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.runtime = runtime
         self.projectVaultRuntime = projectVaultRuntime
         self.scanOverride = scanOverride
+        self.incrementalRescanHold = incrementalRescanHold
         self.catalog = ArchiveCatalogCoordinator(
             archiveIndexStore: archiveIndexStore,
             songMetadataStore: songMetadataStore,

@@ -12,7 +12,11 @@ enum TestToolContext {
         )
     }
 
-    static func make(settingsStore: SettingsStore, fileActions: (any FileActions)? = nil) -> ToolContext {
+    static func make(
+        settingsStore: SettingsStore,
+        fileActions: (any FileActions)? = nil,
+        diagnostics: CapturingDiagnostics = CapturingDiagnostics()
+    ) -> ToolContext {
         ToolContext(
             registeredToolCount: 1,
             settingsStore: settingsStore,
@@ -22,7 +26,7 @@ enum TestToolContext {
             ),
             jobRunner: JobRunner(),
             fileActions: fileActions ?? NoopTestFileActions(),
-            diagnostics: CapturingDiagnostics()
+            diagnostics: diagnostics
         )
     }
 
