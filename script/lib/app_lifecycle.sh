@@ -257,8 +257,9 @@ nmh_sign_bundle() {
   sign_options=(--force)
   if [[ "$identity" != "-" ]]; then
     # Notarization rejects every nested Sparkle binary whose signature lacks a
-    # secure timestamp (1.5.0 was refused for exactly that), so request one
-    # explicitly for real identities. Ad-hoc signatures cannot carry one.
+    # secure timestamp (the first public release was refused for exactly that),
+    # so request one explicitly for real identities. Ad-hoc signatures cannot
+    # carry one.
     sign_options+=(--options runtime --timestamp)
   else
     sign_options+=(--timestamp=none)

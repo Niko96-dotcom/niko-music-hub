@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.1 - 2026-09-13
+
+- Show "now" instead of "in 0 s" for a download or recording that was just added to the Output Inbox.
+- Clean up leftover temporary files next to the Output Inbox index that an interrupted save could leave behind.
+- Stop test and review runs from leaving empty preference files behind.
+- Harden the release pipeline: refuse to start on a locked screen or without a reachable notary service, retry notary uploads, check secure timestamps on every nested component before upload, and allow a full release rehearsal before the version tag exists.
+- Make the incremental archive-rescan tests deterministic instead of timing-based.
+
 ## 1.5.0 - 2026-09-11
 
 - Update Niko Music Hub from inside the app: a daily automatic check, Check for Updates… in the app menu, and an Updates section in Settings. Downloads come from a signed release feed and are verified before anything is installed.

@@ -121,8 +121,8 @@ notarize() {
 }
 
 # Notarization rejects any Developer ID signature without a secure timestamp,
-# and it checks every nested binary, not just the app wrapper (1.5.0 was refused
-# for Sparkle's helpers). Prove it locally before uploading anything.
+# and it checks every nested binary, not just the app wrapper (the first public
+# release was refused for Sparkle's helpers). Prove it locally before uploading.
 require_secure_timestamps() {
   local app="$1" nested
   for nested in \
