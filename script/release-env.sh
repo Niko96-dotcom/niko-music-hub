@@ -219,7 +219,9 @@ nmh_release_build_id() {
 # withholds while the console is locked; the public pipeline burned eight minutes
 # of gates before finding that out. Check up front instead.
 nmh_console_locked() {
-  /usr/sbin/ioreg -n Root -d1 -a 2>/dev/null | grep -A1 IOConsoleLocked | grep -q '<true/>'
+  local registry
+  registry="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null || true)"
+  grep -A1 IOConsoleLocked <<<"$registry" | grep -q '<true/>'
 }
 
 # notarytool uploads to this S3 bucket over IPv4 and gives up after ~100 s. The

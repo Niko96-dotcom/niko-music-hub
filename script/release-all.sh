@@ -124,7 +124,7 @@ notarize() {
 # and it checks every nested binary, not just the app wrapper (the first public
 # release was refused for Sparkle's helpers). Prove it locally before uploading.
 require_secure_timestamps() {
-  local app="$1" nested
+  local app="$1" nested signature
   for nested in \
     "$app" \
     "$app/Contents/Frameworks/Sparkle.framework/Versions/B" \
@@ -132,7 +132,11 @@ require_secure_timestamps() {
     "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
     "$app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/"*.xpc; do
     [[ -e "$nested" ]] || continue
-    if ! codesign -dvv "$nested" 2>&1 | grep -q '^Timestamp='; then
+    # Capture first: under `set -o pipefail` a `codesign | grep -q` pipeline can
+    # fail with SIGPIPE when grep exits early, which read as "no timestamp" for
+    # the app wrapper in the first 1.5.1 rehearsal.
+    signature="$(codesign -dvv "$nested" 2>&1 || true)"
+    if ! grep -q '^Timestamp=' <<<"$signature"; then
       echo "signature without a secure timestamp (notarization would reject it): $nested" >&2
       return 1
     fi
