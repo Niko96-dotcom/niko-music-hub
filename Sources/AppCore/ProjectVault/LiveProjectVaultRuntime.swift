@@ -38,6 +38,12 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case activityPostponed(VaultAutomationPostponement)
     case archiveFailed(String)
     case noVerifiedArchive
+    /// The project folder is not present in Active Projects; nothing was recorded.
+    case sourceUnavailable(title: String)
+    /// The project folder could not be read completely; nothing was recorded.
+    case sourceInventoryIncomplete(title: String, reason: String)
+    /// The catalog cannot say which entry this project is; nothing was recorded.
+    case identityAmbiguous(title: String, reason: String)
 
     public var errorDescription: String? {
         switch self {
@@ -56,6 +62,9 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .activityPostponed(let reason): reason.message
         case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
         case .noVerifiedArchive: "No verified archive generation is available."
+        case .sourceUnavailable(let title): "The project folder for “\(title)” is not available in Active Projects. Rescan the archive, then retry. Nothing was changed."
+        case .sourceInventoryIncomplete(let title, let reason): "Project Vault could not read every project file for “\(title)”: \(reason). Rescan the archive, then retry. Nothing was changed."
+        case .identityAmbiguous(let title, let reason): "Project Vault cannot tell which catalog entry “\(title)” belongs to: \(reason). The catalog was left unchanged; this project needs a catalog review before archiving."
         }
     }
 }
@@ -457,6 +466,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     private let capacityProbe: any ProjectVaultCapacityProbing
     private let archiveProviderFactory: @Sendable (URL) -> any ArchiveStorageProvider
     private let sourceManifestBuilder: @Sendable (URL) throws -> VaultManifest
+    private let sourceInventory: ProjectSourceInventory
     private let now: @Sendable () -> Date
     private let recoveryPolicy: VaultTransferRecoveryPolicy
     private var mutationLeaseToken: UUID?
@@ -478,6 +488,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         sourceManifestBuilder: @escaping @Sendable (URL) throws -> VaultManifest = {
             try VaultManifestBuilder().build(at: $0)
         },
+        sourceInventory: ProjectSourceInventory = ProjectSourceInventory(),
         now: @escaping @Sendable () -> Date = Date.init,
         recoveryPolicy: VaultTransferRecoveryPolicy = .production
     ) {
@@ -489,6 +500,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         self.capacityProbe = capacityProbe
         self.archiveProviderFactory = archiveProviderFactory
         self.sourceManifestBuilder = sourceManifestBuilder
+        self.sourceInventory = sourceInventory
         self.now = now
         self.recoveryPolicy = recoveryPolicy
     }
@@ -1005,15 +1017,25 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             ))
             return entries[index]
         }
-        let files = Set(song.projectVersions.map { version in
-            let values = try? version.filePath.resourceValues(forKeys: [.fileSizeKey])
-            return ProjectFileIdentity(name: version.fileName, byteCount: Int64(values?.fileSize ?? 0), modifiedAt: version.modifiedAt)
-        })
-        let evidence = ProjectIdentityEvidence(folderName: song.originalFolderName, cubaseFiles: files)
         let canonicalActive = configuration.active.url.standardizedFileURL.resolvingSymlinksInPath()
         guard PathSafety().isResolvedContainedWithoutNestedSymlinks(canonicalSource, in: canonicalActive),
               canonicalSource.path != canonicalActive.path else {
             throw LocalVaultTransferError.sourceOutsideActiveRoot
+        }
+        // Identity evidence is read from the files as they are now, never from the observed
+        // `Song`: a cached song carries whole-second timestamps and may list files that are
+        // gone, and either would fork the project's identity. An incomplete view records nothing.
+        let evidence: ProjectIdentityEvidence
+        switch try sourceInventory.collect(in: canonicalSource, for: song) {
+        case .unavailable:
+            throw ProjectVaultRuntimeError.sourceUnavailable(title: song.effectiveDisplayTitle)
+        case .incomplete(let failure):
+            throw ProjectVaultRuntimeError.sourceInventoryIncomplete(
+                title: song.effectiveDisplayTitle,
+                reason: failure.description
+            )
+        case .complete(let freshEvidence, _):
+            evidence = freshEvidence
         }
         let location = ProjectLocation(
             rootID: configuration.active.id,
@@ -1021,9 +1043,15 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             kind: .active
         )
         // Identical files can be separate songs. Do not adopt another folder's
-        // identity while that Active folder still exists beside this one.
+        // identity while that Active folder still exists beside this one. An entry
+        // that already claims this exact folder is never set aside, though: it must
+        // reach the reconciler, which either reuses it or refuses as ambiguous.
         let separateActiveEntries = existing.filter { entry in
-            entry.record.locations.contains { location in
+            let claimsObservedFolder = entry.record.locations.contains {
+                $0.rootID == location.rootID && $0.relativePath == location.relativePath
+            }
+            guard !claimsObservedFolder else { return false }
+            return entry.record.locations.contains { location in
                 guard location.kind == .active, location.rootID == configuration.active.id else { return false }
                 let other = configuration.active.url.appendingPathComponent(location.relativePath)
                     .standardizedFileURL.resolvingSymlinksInPath()
@@ -1031,12 +1059,20 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             }
         }
         let separateIDs = Set(separateActiveEntries.map { $0.record.id })
-        let reconciliation = ProjectCatalogReconciler().reconcile(
-            existing: existing.filter { !separateIDs.contains($0.record.id) },
-            existingReviews: try catalogStore.loadReviews(),
-            observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)],
-            markUnobservedMissing: false
-        )
+        let reconciliation: ProjectCatalogReconciliation
+        do {
+            reconciliation = try ProjectCatalogReconciler().reconcile(
+                existing: existing.filter { !separateIDs.contains($0.record.id) },
+                existingReviews: try catalogStore.loadReviews(),
+                observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)],
+                markUnobservedMissing: false
+            )
+        } catch let ambiguity as ProjectCatalogReconciler.Ambiguity {
+            throw ProjectVaultRuntimeError.identityAmbiguous(
+                title: song.effectiveDisplayTitle,
+                reason: ambiguity.description
+            )
+        }
         var updated = reconciliation
         updated.entries.append(contentsOf: separateActiveEntries)
         // Reconciliation refreshes lastSeenAt on an existing location. Resolve

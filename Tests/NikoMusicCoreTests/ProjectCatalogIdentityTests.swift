@@ -8,14 +8,14 @@ final class ProjectCatalogIdentityTests: XCTestCase {
 
     func testMovingFixtureBetweenTypedRootsPreservesProjectIDAndMetadataMapping() throws {
         let reconciler = ProjectCatalogReconciler()
-        let initial = reconciler.reconcile(
+        let initial = try reconciler.reconcile(
             existing: [],
             observations: [observation(rootID: activeRootID, path: "Neon Sky", kind: .active)],
             observedAt: Date(timeIntervalSince1970: 1_000)
         )
         let original = try XCTUnwrap(initial.entries.first)
 
-        let moved = reconciler.reconcile(
+        let moved = try reconciler.reconcile(
             existing: initial.entries,
             observations: [observation(rootID: archiveRootID, path: "2026/Neon Sky", kind: .archive)],
             observedAt: observedAt
@@ -34,7 +34,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
     }
 
     func testActiveAndArchiveObservationsCoalesceIntoOneProjectRecord() throws {
-        let result = ProjectCatalogReconciler().reconcile(
+        let result = try ProjectCatalogReconciler().reconcile(
             existing: [],
             observations: [
                 observation(rootID: activeRootID, path: "Neon Sky", kind: .active),
@@ -48,7 +48,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         XCTAssertTrue(result.reviews.isEmpty)
     }
 
-    func testSameNameWithInsufficientOrConflictingEvidenceStaysSeparateForReview() {
+    func testSameNameWithInsufficientOrConflictingEvidenceStaysSeparateForReview() throws {
         let insufficient = ProjectIdentityEvidence(folderName: "Same Song", cubaseFiles: [])
         let conflictingA = ProjectIdentityEvidence(
             folderName: "Conflict Song",
@@ -58,7 +58,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
             folderName: "Conflict Song",
             cubaseFiles: [ProjectFileIdentity(name: "Conflict.cpr", byteCount: 20, modifiedAt: .distantPast)]
         )
-        let result = ProjectCatalogReconciler().reconcile(
+        let result = try ProjectCatalogReconciler().reconcile(
             existing: [],
             observations: [
                 observation(rootID: activeRootID, path: "Same Song", kind: .active, evidence: insufficient),
@@ -77,11 +77,11 @@ final class ProjectCatalogIdentityTests: XCTestCase {
 
     func testDeliveryTitleRefreshPreservesProjectIDAndSurvivesOlderArchiveLabels() throws {
         let reconciler = ProjectCatalogReconciler()
-        let first = reconciler.reconcile(existing: [], observations: [observation(rootID: activeRootID, path: "Working Session", kind: .active)])
+        let first = try reconciler.reconcile(existing: [], observations: [observation(rootID: activeRootID, path: "Working Session", kind: .active)])
         let originalID = try XCTUnwrap(first.entries.first?.record.id)
         var active = observation(rootID: activeRootID, path: "Working Session", kind: .active)
         active.canonicalTitle = "NEW SONG"
-        let refreshed = reconciler.reconcile(existing: first.entries, observations: [active,
+        let refreshed = try reconciler.reconcile(existing: first.entries, observations: [active,
             observation(rootID: archiveRootID, path: "Working Session", kind: .archive)], markUnobservedMissing: false)
         let record = try XCTUnwrap(refreshed.entries.first?.record)
         XCTAssertEqual(refreshed.entries.count, 1)
@@ -92,7 +92,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
 
     func testIncrementalObservationPreservesOtherLocationsAndExistingReviewDecisions() throws {
         let reconciler = ProjectCatalogReconciler()
-        let first = reconciler.reconcile(
+        let first = try reconciler.reconcile(
             existing: [],
             observations: [
                 observation(rootID: activeRootID, path: "Neon Sky", kind: .active),
@@ -116,7 +116,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         )
         resolvedReview.resolution = .keepSeparate
 
-        let incremental = reconciler.reconcile(
+        let incremental = try reconciler.reconcile(
             existing: first.entries,
             existingReviews: [resolvedReview],
             observations: [observation(rootID: activeRootID, path: "Neon Sky", kind: .active)],
@@ -127,6 +127,210 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         XCTAssertEqual(incremental.entries.count, 2)
         XCTAssertTrue(incremental.entries.flatMap(\.record.locations).allSatisfy { $0.availability == .local })
         XCTAssertEqual(incremental.reviews, [resolvedReview])
+    }
+
+    // MARK: - Location-aware decisions (Slice 1)
+
+    func testDuplicateLocationEntriesAreAmbiguousWithoutWriting() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let duplicates = [
+            entry(id: "aaaaaaaa-0000-0000-0000-000000000001", path: "Mirror", evidence: evidence),
+            entry(id: "aaaaaaaa-0000-0000-0000-000000000002", path: "Mirror", evidence: evidence),
+        ]
+
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: duplicates,
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )) { error in
+            XCTAssertEqual(
+                error as? ProjectCatalogReconciler.Ambiguity,
+                .duplicateLocation(duplicates.map(\.record.id))
+            )
+        }
+    }
+
+    func testUniqueLocationWithNonMatchingEvidenceIsAmbiguousNotANewIdentity() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let fresh = preciseEvidence()
+        let truncated = ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(
+                name: "Mirror-03.cpr",
+                byteCount: 200_017_946,
+                modifiedAt: Date(timeIntervalSinceReferenceDate: 805_032_438)
+            )]
+        )
+        let zeroByte = ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(
+                name: "Mirror-03.cpr",
+                byteCount: 0,
+                modifiedAt: Date(timeIntervalSinceReferenceDate: 805_032_438)
+            )]
+        )
+        let differentFiles = ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(name: "Other.cpr", byteCount: 7, modifiedAt: .distantPast)]
+        )
+
+        for (label, stored) in [("whole-second legacy", truncated), ("zero-byte legacy", zeroByte), ("different project", differentFiles)] {
+            let existing = [entry(id: "bbbbbbbb-0000-0000-0000-000000000001", path: "Mirror", evidence: stored)]
+            XCTAssertThrowsError(try reconciler.reconcile(
+                existing: existing,
+                observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: fresh)],
+                markUnobservedMissing: false,
+                observedAt: observedAt
+            ), label) { error in
+                XCTAssertEqual(
+                    error as? ProjectCatalogReconciler.Ambiguity,
+                    .locationEvidenceMismatch(existing[0].record.id),
+                    label
+                )
+            }
+        }
+    }
+
+    func testUniqueLocationWithExactEvidenceReusesItsID() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let existing = [entry(id: "cccccccc-0000-0000-0000-000000000001", path: "Mirror", evidence: evidence)]
+
+        let result = try reconciler.reconcile(
+            existing: existing,
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(result.entries.map(\.record.id), existing.map(\.record.id))
+        XCTAssertEqual(result.entries.first?.record.locations.first?.lastSeenAt, observedAt)
+        XCTAssertTrue(result.reviews.isEmpty)
+    }
+
+    func testMultipleStrongMatchesAreAmbiguousInsteadOfForking() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let copies = [
+            entry(id: "dddddddd-0000-0000-0000-000000000001", path: "Mirror", evidence: evidence),
+            entry(id: "dddddddd-0000-0000-0000-000000000002", path: "Mirror copy", evidence: evidence),
+        ]
+
+        // Observed at a third location: both copies match, so neither may be chosen.
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: copies,
+            observations: [observation(rootID: archiveRootID, path: "2026/Mirror", kind: .archive, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )) { error in
+            XCTAssertEqual(
+                error as? ProjectCatalogReconciler.Ambiguity,
+                .multipleStrongMatches(copies.map(\.record.id))
+            )
+        }
+        // Observed at the first copy's own location: still ambiguous while another copy matches.
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: copies,
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )) { error in
+            XCTAssertEqual(
+                error as? ProjectCatalogReconciler.Ambiguity,
+                .multipleStrongMatches(copies.map(\.record.id))
+            )
+        }
+    }
+
+    func testIdenticalWholeSecondEvidenceStillMatchesAcrossLocations() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let wholeSecond = ProjectIdentityEvidence(
+            folderName: "Winter",
+            cubaseFiles: [ProjectFileIdentity(
+                name: "Winter.cpr",
+                byteCount: 4_096,
+                modifiedAt: Date(timeIntervalSinceReferenceDate: 801_650_882)
+            )]
+        )
+        let existing = [entry(id: "eeeeeeee-0000-0000-0000-000000000001", path: "Winter", evidence: wholeSecond)]
+
+        let moved = try reconciler.reconcile(
+            existing: existing,
+            observations: [observation(rootID: archiveRootID, path: "2026/Winter", kind: .archive, evidence: wholeSecond)],
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(moved.entries.map(\.record.id), existing.map(\.record.id))
+        XCTAssertEqual(moved.entries.first?.record.locations.count, 2)
+        XCTAssertTrue(moved.reviews.isEmpty)
+    }
+
+    func testResolvedReviewsAndReviewRowsAreNeverRewritten() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let existing = [
+            entry(id: "ffffffff-0000-0000-0000-000000000001", path: "Mirror", evidence: evidence),
+            entry(id: "ffffffff-0000-0000-0000-000000000002", path: "Elsewhere", evidence: ProjectIdentityEvidence(
+                folderName: "Elsewhere",
+                cubaseFiles: [ProjectFileIdentity(name: "Elsewhere.cpr", byteCount: 9, modifiedAt: .distantPast)]
+            )),
+        ]
+        var keepSeparate = ProjectIdentityReview(
+            existingProjectID: existing[0].record.id,
+            candidateProjectID: existing[1].record.id,
+            reason: "Reviewed"
+        )
+        keepSeparate.resolution = .keepSeparate
+        let pending = ProjectIdentityReview(
+            existingProjectID: existing[1].record.id,
+            candidateProjectID: ProjectID(),
+            reason: "Still open"
+        )
+
+        let merged = try reconciler.reconcile(
+            existing: existing,
+            existingReviews: [keepSeparate, pending],
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+        XCTAssertEqual(merged.reviews, [keepSeparate, pending])
+        XCTAssertEqual(merged.entries.map(\.record.id), existing.map(\.record.id))
+
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: existing,
+            existingReviews: [keepSeparate, pending],
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: ProjectIdentityEvidence(
+                folderName: "Mirror",
+                cubaseFiles: [ProjectFileIdentity(name: "Mirror-05.cpr", byteCount: 1, modifiedAt: observedAt)]
+            ))],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        ))
+    }
+
+    private func preciseEvidence() -> ProjectIdentityEvidence {
+        ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(
+                name: "Mirror-03.cpr",
+                byteCount: 200_017_946,
+                modifiedAt: Date(timeIntervalSinceReferenceDate: 805_032_438.412_305_4)
+            )]
+        )
+    }
+
+    private func entry(id: String, path: String, evidence: ProjectIdentityEvidence) -> ProjectCatalogEntry {
+        ProjectCatalogEntry(
+            record: ProjectRecord(
+                id: ProjectID(rawValue: UUID(uuidString: id)!),
+                canonicalTitle: path,
+                locations: [ProjectLocation(rootID: activeRootID, relativePath: path, kind: .active)]
+            ),
+            evidence: evidence
+        )
     }
 
     private func observation(

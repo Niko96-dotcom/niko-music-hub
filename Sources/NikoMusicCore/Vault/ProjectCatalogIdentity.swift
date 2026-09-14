@@ -184,15 +184,46 @@ public struct ProjectCatalogReconciliation: Sendable {
 }
 
 public struct ProjectCatalogReconciler: Sendable {
+    /// Identity that cannot be decided from the catalog and the observation alone. Nothing is
+    /// written for the observation; a person or a later repair has to decide.
+    public enum Ambiguity: Error, Equatable, Sendable, CustomStringConvertible {
+        /// More than one catalog entry claims the observed location.
+        case duplicateLocation([ProjectID])
+        /// Exactly one entry claims the observed location, but its evidence does not match
+        /// the fresh evidence: legacy, partial, or a different project in the same folder.
+        case locationEvidenceMismatch(ProjectID)
+        /// The evidence matches more than one entry.
+        case multipleStrongMatches([ProjectID])
+
+        public var description: String {
+            switch self {
+            case .duplicateLocation(let ids):
+                "\(ids.count) catalog entries share this folder"
+            case .locationEvidenceMismatch:
+                "the catalog entry for this folder does not match its current project files"
+            case .multipleStrongMatches(let ids):
+                "\(ids.count) catalog entries share this project's file evidence"
+            }
+        }
+    }
+
     public init() {}
 
+    /// Matching order per observation. Location means the same root and the identical
+    /// relative path string; evidence means the existing high-confidence rule (a shared
+    /// content hash, or the exact same set of file identities).
+    /// 1. Two or more entries at the location: ambiguous.
+    /// 2. One entry at the location: reuse it only if it is the single strong match.
+    /// 3. No entry at the location: one strong match merges (a moved folder); several are
+    ///    ambiguous; none creates a new entry and, for matching names, a review.
+    /// Ambiguity throws so a caller cannot persist a half-decided result.
     public func reconcile(
         existing: [ProjectCatalogEntry],
         existingReviews: [ProjectIdentityReview] = [],
         observations: [ProjectCatalogObservation],
         markUnobservedMissing: Bool = true,
         observedAt: Date = Date()
-    ) -> ProjectCatalogReconciliation {
+    ) throws -> ProjectCatalogReconciliation {
         var entries = existing.map { entry in
             var copy = entry
             if markUnobservedMissing {
@@ -208,14 +239,38 @@ public struct ProjectCatalogReconciler: Sendable {
         var migrations: [String: ProjectID] = [:]
 
         for observation in observations {
+            let sameLocation = entries.indices.filter { index in
+                entries[index].record.locations.contains {
+                    $0.rootID == observation.location.rootID
+                        && $0.relativePath == observation.location.relativePath
+                }
+            }
             let strongMatches = entries.indices.filter {
                 entries[$0].evidence.isHighConfidenceMatch(with: observation.evidence)
+            }
+
+            if sameLocation.count > 1 {
+                throw Ambiguity.duplicateLocation(sameLocation.map { entries[$0].record.id })
+            }
+            if let index = sameLocation.first {
+                guard strongMatches.contains(index) else {
+                    throw Ambiguity.locationEvidenceMismatch(entries[index].record.id)
+                }
+                guard strongMatches.count == 1 else {
+                    throw Ambiguity.multipleStrongMatches(strongMatches.map { entries[$0].record.id })
+                }
+                merge(observation, into: &entries[index], observedAt: observedAt)
+                migrations[legacyPath(for: observation.location)] = entries[index].record.id
+                continue
             }
 
             if strongMatches.count == 1, let index = strongMatches.first {
                 merge(observation, into: &entries[index], observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = entries[index].record.id
                 continue
+            }
+            if strongMatches.count > 1 {
+                throw Ambiguity.multipleStrongMatches(strongMatches.map { entries[$0].record.id })
             }
 
             let newEntry = ProjectCatalogEntry(
@@ -235,15 +290,6 @@ public struct ProjectCatalogReconciler: Sendable {
                     candidateProjectID: newEntry.record.id,
                     reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
                 ), to: &reviews)
-            }
-            if strongMatches.count > 1 {
-                for index in strongMatches {
-                    appendReviewIfNeeded(ProjectIdentityReview(
-                        existingProjectID: entries[index].record.id,
-                        candidateProjectID: newEntry.record.id,
-                        reason: "Multiple projects share strong identity evidence. Review before linking."
-                    ), to: &reviews)
-                }
             }
         }
 

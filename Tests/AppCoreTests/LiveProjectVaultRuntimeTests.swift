@@ -2,6 +2,7 @@
 import Darwin
 import Foundation
 import NikoMusicCore
+import SQLite3
 import XCTest
 
 final class LiveProjectVaultRuntimeTests: XCTestCase {
@@ -2190,7 +2191,11 @@ private extension LiveProjectVaultRuntimeTests {
             project = active.appendingPathComponent("Synthetic Song")
             try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
-            try Data("synthetic-cpr".utf8).write(to: project.appendingPathComponent("Synthetic Song.cpr"))
+            let cpr = project.appendingPathComponent("Synthetic Song.cpr")
+            try Data("synthetic-cpr".utf8).write(to: cpr)
+            // Catalog evidence is read from the file itself, so its modification time must be
+            // the one `song` advertises for seeded entries to match.
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: cpr.path)
             database = try SQLiteArchiveDatabase(databaseURL: root.appendingPathComponent("vault.sqlite"))
             suite = "LiveProjectVaultRuntimeTests.\(UUID().uuidString)"
             settingsStore = UserDefaultsSettingsStore(userDefaults: UserDefaults(suiteName: suite)!)
@@ -2214,6 +2219,7 @@ private extension LiveProjectVaultRuntimeTests {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let cpr = folder.appendingPathComponent("\(name).cpr")
             try Data("additional-cpr".utf8).write(to: cpr)
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 2)], ofItemAtPath: cpr.path)
             let version = ProjectVersion(
                 filePath: cpr,
                 fileName: cpr.lastPathComponent,
@@ -2943,4 +2949,411 @@ private actor InterruptingRetryProvider: ArchiveStorageProvider {
     }
     func materialize(_ location: URL) async throws {}
     func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+}
+
+// MARK: - Catalog identity from fresh source evidence (Slice 1)
+
+extension LiveProjectVaultRuntimeTests {
+    /// The two live failure paths: a Done song evaluated once from the cached index (whole-second
+    /// timestamps) and once from a fresh scan (nanoseconds) must not fork into two catalog entries.
+    func testArchiveDoneSongFromCachedAndFreshRepresentationsWritesOneCatalogEntry() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let cpr = fixture.project.appendingPathComponent("Synthetic Song.cpr")
+        let fractional = Date(timeIntervalSinceReferenceDate: 805_032_438.412_305_4)
+        try FileManager.default.setAttributes([.modificationDate: fractional], ofItemAtPath: cpr.path)
+        let onDisk = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: cpr.path)[.modificationDate] as? Date)
+        guard onDisk.timeIntervalSinceReferenceDate != onDisk.timeIntervalSinceReferenceDate.rounded(.down) else {
+            throw XCTSkip("this volume floors modification times to whole seconds; the precision case cannot be exercised here")
+        }
+
+        var fresh = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
+            $0.originalFolderName == "Synthetic Song"
+        })
+        fresh.workflowStatus = .done
+        let indexStore = try SQLiteArchiveIndexStore(database: fixture.database)
+        try indexStore.save(ArchiveIndexSnapshot(roots: [fixture.active.path], songs: [fresh], scannedAt: Date()))
+        let cached = try XCTUnwrap(try indexStore.loadLatest()?.songs.first)
+        XCTAssertEqual(fresh.projectVersions.first?.modifiedAt, onDisk)
+        XCTAssertNotEqual(cached.projectVersions.first?.modifiedAt, onDisk, "the cached index is expected to drop fractional seconds")
+
+        let gib: Int64 = 1_073_741_824
+        let blocked = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 7 * gib,
+            archiveAvailableCapacityBytes: 7 * gib,
+            projectedArchiveBytes: 4 * gib
+        ))
+        for song in [cached, fresh, cached] {
+            do {
+                _ = try await blocked.archive(song: song, trigger: .workflowDone)
+                XCTFail("expected capacity postponement after the catalog entry is recorded")
+            } catch {
+                XCTAssertEqual(error as? ProjectVaultRuntimeError, .activityPostponed(.insufficientArchiveCapacity))
+            }
+        }
+
+        let entries = try fixture.catalogStore().loadEntries()
+        XCTAssertEqual(entries.count, 1, "cached and fresh representations of one folder must share one identity")
+        XCTAssertTrue(try fixture.catalogStore().loadReviews().isEmpty)
+        XCTAssertEqual(
+            entries.first?.evidence.cubaseFiles,
+            [ProjectFileIdentity(name: "Synthetic Song.cpr", byteCount: 13, modifiedAt: onDisk)],
+            "stored evidence comes from the file on disk at full precision"
+        )
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testArchiveDoneSongWithVanishedVersionWritesNothing() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let seeded = ProjectID()
+        let decision = try fixture.seedCatalogWithMetadataAndDecision(projectID: seeded)
+        let before = try fixture.catalogRows()
+        try FileManager.default.removeItem(at: fixture.project.appendingPathComponent("Synthetic Song.cpr"))
+
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("a song whose listed project file is gone must be refused")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .sourceInventoryIncomplete(title: "Synthetic Song", reason: "“Synthetic Song.cpr” is no longer in the project folder")
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before, "an incomplete inventory must not touch catalog, reviews, metadata, or history")
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().map(\.record.id), [seeded])
+        XCTAssertEqual(try fixture.catalogStore().loadReviews(), [decision])
+        try fixture.assertSeededMetadataUnchanged(projectID: seeded)
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testArchiveDoneSongWhoseFolderIsGoneWritesNothing() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        try fixture.saveCatalogEntry(projectID: ProjectID())
+        let before = try fixture.catalogRows()
+        try FileManager.default.removeItem(at: fixture.project)
+
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("a song whose folder is gone must be refused")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .sourceUnavailable(title: "Synthetic Song"))
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before)
+    }
+
+    func testArchiveDoneSongWithUnreadableSubfolderWritesNothing() async throws {
+        try XCTSkipIf(geteuid() == 0, "root ignores directory permissions")
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        try fixture.saveCatalogEntry(projectID: ProjectID())
+        let before = try fixture.catalogRows()
+        let nested = fixture.project.appendingPathComponent("Nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: nested.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: nested.path) }
+
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("a partially enumerable folder must be refused")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .sourceInventoryIncomplete(title: "Synthetic Song", reason: "“Nested” could not be enumerated")
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before)
+    }
+
+    /// A catalog row written from a cached observation carries whole-second timestamps. Once the
+    /// fresh evidence differs, the runtime must refuse rather than create a second identity.
+    func testLegacyWholeSecondEntryAtUniqueLocationRefusesInsteadOfForking() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let cpr = fixture.project.appendingPathComponent("Synthetic Song.cpr")
+        let fractional = Date(timeIntervalSinceReferenceDate: 805_032_438.412_305_4)
+        try FileManager.default.setAttributes([.modificationDate: fractional], ofItemAtPath: cpr.path)
+        let onDisk = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: cpr.path)[.modificationDate] as? Date)
+        guard onDisk.timeIntervalSinceReferenceDate != onDisk.timeIntervalSinceReferenceDate.rounded(.down) else {
+            throw XCTSkip("this volume floors modification times to whole seconds; the precision case cannot be exercised here")
+        }
+        let legacy = ProjectID()
+        let decision = try fixture.seedCatalogWithMetadataAndDecision(
+            projectID: legacy,
+            modifiedAt: Date(timeIntervalSinceReferenceDate: onDisk.timeIntervalSinceReferenceDate.rounded(.down))
+        )
+        let before = try fixture.catalogRows()
+        var fresh = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
+            $0.originalFolderName == "Synthetic Song"
+        })
+        fresh.workflowStatus = .done
+
+        do {
+            _ = try await fixture.runtime().archive(song: fresh, trigger: .workflowDone)
+            XCTFail("legacy evidence at the folder's location must be refused, not forked")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .identityAmbiguous(
+                    title: "Synthetic Song",
+                    reason: "the catalog entry for this folder does not match its current project files"
+                )
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before, "the legacy row, its review decision, metadata, and history stay exactly as they were")
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().map(\.record.id), [legacy])
+        XCTAssertEqual(try fixture.catalogStore().loadReviews(), [decision])
+        try fixture.assertSeededMetadataUnchanged(projectID: legacy)
+    }
+
+    func testDuplicateCatalogEntriesForOneFolderRefuseArchiveWithoutWriting() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let first = ProjectID()
+        let second = ProjectID()
+        try fixture.saveCatalogEntries(projectIDs: [first, second])
+        let before = try fixture.catalogRows()
+
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("two entries for one folder must be refused")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .identityAmbiguous(title: "Synthetic Song", reason: "2 catalog entries share this folder")
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before)
+        XCTAssertEqual(Set(try fixture.catalogStore().loadEntries().map(\.record.id)), [first, second])
+    }
+
+    /// Ordinary behaviour must hold on fresh evidence: a scanned song makes a backup copy, is
+    /// archived, restored, and archived again, and the catalog keeps one identity whose evidence
+    /// is the file on disk.
+    func testScannedSongArchivesRestoresAndReArchivesOnOneIdentityWithDiskEvidence() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let cpr = fixture.project.appendingPathComponent("Synthetic Song.cpr")
+        let onDisk = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: cpr.path)[.modificationDate] as? Date)
+        let scanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
+            $0.originalFolderName == "Synthetic Song"
+        })
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+
+        let copy = try await runtime.archive(song: scanned, trigger: .backupCopy)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        let entries = try fixture.catalogStore().loadEntries()
+        XCTAssertEqual(entries.map(\.record.id), [copy.record.id])
+        XCTAssertEqual(
+            entries.first?.evidence.cubaseFiles,
+            [ProjectFileIdentity(name: "Synthetic Song.cpr", byteCount: 13, modifiedAt: onDisk)],
+            "stored evidence is the file on disk, not the scanned representation"
+        )
+
+        let archived = try await runtime.archive(song: scanned, trigger: .manual)
+        XCTAssertEqual(archived.record.id, copy.record.id)
+        XCTAssertEqual(archived.transfer?.id, copy.transfer?.id)
+        XCTAssertEqual(archived.transfer?.state, .archivedLocal)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        let restored = try await runtime.restoreAndOpen(snapshot: archived)
+        XCTAssertNotNil(restored.completedAt)
+        try VaultManifestBuilder().verify(before, at: fixture.project)
+
+        let again = try await runtime.archive(song: scanned, trigger: .manual)
+        XCTAssertEqual(again.record.id, copy.record.id)
+        XCTAssertEqual(again.transfer?.id, copy.transfer?.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().map(\.record.id), [copy.record.id])
+        XCTAssertTrue(try fixture.catalogStore().loadReviews().isEmpty)
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+    }
+
+    /// An entry that claims the observed folder and another still-existing Active folder used to
+    /// be set aside as a "separate sibling" before reconciliation, which forked the observed folder
+    /// into a second identity. Such an entry must reach the reconciler.
+    func testEntryClaimingObservedFolderAndAnotherExistingFolderIsReusedNotForked() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        _ = try fixture.makeAdditionalSong(named: "Sibling")
+        let shared = ProjectID()
+        try fixture.saveCatalogEntry(projectID: shared, activePaths: ["Synthetic Song", "Sibling"], byteCount: 13)
+        let gib: Int64 = 1_073_741_824
+        let blocked = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 7 * gib,
+            archiveAvailableCapacityBytes: 7 * gib,
+            projectedArchiveBytes: 4 * gib
+        ))
+
+        do {
+            _ = try await blocked.archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("expected capacity postponement after the catalog entry is reused")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .activityPostponed(.insufficientArchiveCapacity))
+        }
+
+        let entries = try fixture.catalogStore().loadEntries()
+        XCTAssertEqual(entries.map(\.record.id), [shared], "the entry claiming this folder is reused, never forked")
+        XCTAssertEqual(Set(entries.first?.record.locations.map(\.relativePath) ?? []), ["Synthetic Song", "Sibling"])
+        XCTAssertTrue(try fixture.catalogStore().loadReviews().isEmpty)
+    }
+
+    func testEntryClaimingObservedFolderAndAnotherExistingFolderWithOtherEvidenceIsAmbiguous() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        _ = try fixture.makeAdditionalSong(named: "Sibling")
+        let shared = ProjectID()
+        try fixture.saveCatalogEntry(projectID: shared, activePaths: ["Synthetic Song", "Sibling"], byteCount: 99)
+        let before = try fixture.catalogRows()
+
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("mismatched evidence at a claimed folder must be refused")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .identityAmbiguous(
+                    title: "Synthetic Song",
+                    reason: "the catalog entry for this folder does not match its current project files"
+                )
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before)
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().map(\.record.id), [shared])
+    }
+}
+
+private extension LiveProjectVaultRuntimeTests.Fixture {
+    func saveCatalogEntry(projectID: ProjectID, modifiedAt: Date) throws {
+        try saveCatalogEntries(projectIDs: [projectID], modifiedAt: modifiedAt)
+    }
+
+    /// One catalog entry plus everything a refusal must leave alone: a persisted Keep-separate
+    /// decision, path-keyed metadata with a status change, and ProjectID-keyed metadata.
+    @discardableResult
+    func seedCatalogWithMetadataAndDecision(
+        projectID: ProjectID,
+        modifiedAt: Date = Date(timeIntervalSince1970: 1)
+    ) throws -> ProjectIdentityReview {
+        var decision = ProjectIdentityReview(
+            existingProjectID: projectID,
+            candidateProjectID: ProjectID(rawValue: UUID(uuidString: "0A0A0A0A-0000-4000-8000-000000000AAA")!),
+            reason: "Reviewed earlier"
+        )
+        decision.resolution = .keepSeparate
+        try saveCatalogEntries(projectIDs: [projectID], modifiedAt: modifiedAt, reviews: [decision])
+        let metadataStore = try SQLiteSongUserMetadataStore(database: database)
+        try metadataStore.upsert(SongUserMetadata(songID: project.path, appNote: "path-keyed note", workflowStatus: .prod))
+        try metadataStore.upsert(SongUserMetadata(songID: project.path, appNote: "path-keyed note", workflowStatus: .done))
+        try metadataStore.upsert(SongUserMetadata(songID: projectID.description, virtualTitle: "ID-keyed title", aliases: ["alias"]))
+        return decision
+    }
+
+    func assertSeededMetadataUnchanged(projectID: ProjectID, file: StaticString = #filePath, line: UInt = #line) throws {
+        let metadataStore = try SQLiteSongUserMetadataStore(database: database)
+        let metadata = try metadataStore.loadAll()
+        XCTAssertEqual(metadata[project.path]?.appNote, "path-keyed note", file: file, line: line)
+        XCTAssertEqual(metadata[project.path]?.workflowStatus, .done, file: file, line: line)
+        XCTAssertEqual(metadata[projectID.description]?.virtualTitle, "ID-keyed title", file: file, line: line)
+        XCTAssertEqual(metadata[projectID.description]?.aliases, ["alias"], file: file, line: line)
+        XCTAssertEqual(try metadataStore.statusHistory(forSongID: project.path).map(\.toStatus), [.prod, .done], file: file, line: line)
+    }
+
+    /// One entry claiming several Active folders at once.
+    func saveCatalogEntry(projectID: ProjectID, activePaths: [String], byteCount: Int64) throws {
+        let entry = ProjectCatalogEntry(
+            record: ProjectRecord(
+                id: projectID,
+                canonicalTitle: "Synthetic Song",
+                locations: activePaths.map {
+                    ProjectLocation(rootID: activeID, relativePath: $0, kind: .active, availability: .local)
+                },
+                workflowState: .done
+            ),
+            evidence: ProjectIdentityEvidence(
+                folderName: project.lastPathComponent,
+                cubaseFiles: [ProjectFileIdentity(name: "Synthetic Song.cpr", byteCount: byteCount, modifiedAt: Date(timeIntervalSince1970: 1))]
+            )
+        )
+        try catalogStore().apply(ProjectCatalogReconciliation(entries: [entry], reviews: [], metadataMigrations: [:]))
+    }
+
+    func saveCatalogEntries(
+        projectIDs: [ProjectID],
+        modifiedAt: Date = Date(timeIntervalSince1970: 1),
+        reviews: [ProjectIdentityReview] = []
+    ) throws {
+        let entries = projectIDs.map { projectID in
+            ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: projectID,
+                    canonicalTitle: "Synthetic Song",
+                    locations: [ProjectLocation(
+                        rootID: activeID,
+                        relativePath: project.lastPathComponent,
+                        kind: .active,
+                        availability: .local
+                    )],
+                    workflowState: .done
+                ),
+                evidence: ProjectIdentityEvidence(
+                    folderName: project.lastPathComponent,
+                    cubaseFiles: [ProjectFileIdentity(name: "Synthetic Song.cpr", byteCount: 13, modifiedAt: modifiedAt)]
+                )
+            )
+        }
+        try catalogStore().apply(ProjectCatalogReconciliation(entries: entries, reviews: reviews, metadataMigrations: [:]))
+    }
+
+    /// Raw catalog, review, metadata, and status-history rows, for byte-level "nothing changed"
+    /// assertions. Metadata tables are included only once a metadata store has created them.
+    func catalogRows() throws -> [String] {
+        try database.withConnection { db in
+            var rows: [String] = []
+            let optionalTables = [
+                "song_metadata": "SELECT song_id || '\u{1F}' || COALESCE(virtual_title, '') || '\u{1F}' || aliases_json || '\u{1F}' || COALESCE(app_note, '') || '\u{1F}' || COALESCE(workflow_status, '') || '\u{1F}' || updated_at FROM song_metadata ORDER BY song_id;",
+                "song_status_history": "SELECT id || '\u{1F}' || song_id || '\u{1F}' || COALESCE(from_status, '') || '\u{1F}' || COALESCE(to_status, '') || '\u{1F}' || changed_at FROM song_status_history ORDER BY id;",
+            ]
+            var queries = [
+                "SELECT project_id || '\u{1F}' || entry_json FROM project_catalog ORDER BY project_id;",
+                "SELECT review_id || '\u{1F}' || review_json FROM project_identity_review ORDER BY review_id;",
+            ]
+            for (table, sql) in optionalTables.sorted(by: { $0.key < $1.key }) {
+                var probe: OpaquePointer?
+                defer { sqlite3_finalize(probe) }
+                guard sqlite3_prepare_v2(db, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?;", -1, &probe, nil) == SQLITE_OK else { continue }
+                sqlite3_bind_text(probe, 1, table, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                if sqlite3_step(probe) == SQLITE_ROW { queries.append(sql) }
+            }
+            for sql in queries {
+                var statement: OpaquePointer?
+                defer { sqlite3_finalize(statement) }
+                guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                    throw SQLiteArchiveDatabase.StoreError.prepare(String(cString: sqlite3_errmsg(db)))
+                }
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    rows.append(String(cString: sqlite3_column_text(statement, 0)))
+                }
+            }
+            return rows
+        }
+    }
 }
