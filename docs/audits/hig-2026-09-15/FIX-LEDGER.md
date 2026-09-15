@@ -1,0 +1,156 @@
+# FIX-LEDGER — HIG 2026-09-15
+
+Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status values: `pending` | `in-progress` | `implemented-awaiting-runtime` | `blocked` | `fixed` | `verified-no-change` | `preserved` | `skipped-n/a`. Intermediate states do not count as completed.
+
+| NMH id | phase | status | commit | files | evidence | notes/deviations/decisions |
+|---|---|---|---|---|---|---|
+| NMH-002 | 1 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-003 | 1 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-058 | 1 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-001 | 2 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-015 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-012 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-013 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-014 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-016 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-022 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-017 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-019 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-020 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-021 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-033 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-034 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-005 | 3 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-006 | 3 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-007 | 3 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-018 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-029 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-030 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-031 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-032 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-035 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-040 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-045 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-046 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-051 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-080 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-085 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-086 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-088 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-004 | 4 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-052 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-008 | 4 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-009 | 4 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-094 | 4 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-063 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-010 | 4 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-011 | 4 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-059 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-060 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-062 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-065 | 4 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-023 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-024 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-025 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-026 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-028 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-036 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-037 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-038 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-043 | 5 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-074 | 5 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-079 | 5 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-068 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-069 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-070 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-071 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-072 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-027 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-073 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-075 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-076 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-077 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-078 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-041 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-042 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-081 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-082 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-044 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-047 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-049 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-050 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-083 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-084 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-087 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-089 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-039 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-048 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-053 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-054 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-055 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-056 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-057 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-090 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-091 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-092 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-061 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-064 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-066 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-067 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-093 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-095 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-096 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-097 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-127 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-128 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-129 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-130 | 7 | pending |  |  |  | class=needs verification; sev=Low |
+| NMH-131 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-132 | 7 | pending |  |  |  | class=needs verification; sev=Low |
+| NMH-133 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-134 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-135 | 7 | pending |  |  |  | class=needs verification; sev=Low |
+| NMH-136 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-137 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-138 | 7 | pending |  |  |  | class=needs verification; sev=— |
+| NMH-139 | 7 | pending |  |  |  | class=needs verification; sev=— |
+| NMH-140 | 7 | pending |  |  |  | class=needs verification; sev=Low |
+| NMH-141 | 7 | pending |  |  |  | class=needs verification; sev=Low / Medium / — |
+| NMH-142 | 7 | pending |  |  |  | class=needs verification; sev=— |
+| NMH-098 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-099 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-100 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-101 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-102 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-103 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-104 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-105 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-106 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-107 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-108 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-109 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-110 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-111 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-112 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-113 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-114 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-115 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-116 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-117 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-118 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-119 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-120 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-121 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-122 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-123 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-124 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-125 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-126 | 8 | pending |  |  |  | class=passes tested check; sev=— |
+| NMH-143 | 8 | pending |  |  |  | class=not applicable; sev=— |
+| NMH-144 | 8 | pending |  |  |  | class=not applicable; sev=— |
+
+## Footer
+
+- Baseline main SHA: `55e8cf8f98fe8e4a46d0ac7066c1643070a2f62c`
+- Run root: durable directory under Application Support/NikoMusicHub-HIG-Overnight
+
