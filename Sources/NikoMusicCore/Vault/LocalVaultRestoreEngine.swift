@@ -76,6 +76,9 @@ public struct SafeVaultProjectOpener: VaultProjectOpening, @unchecked Sendable {
 public actor LocalVaultRestoreEngine {
     public typealias FaultInjector = @Sendable (VaultRestoreFaultPoint, VaultRestoreRecord) throws -> Void
 
+    public typealias LinkedArchiveValidation = @Sendable (ProjectID, ProjectLocation, URL) throws -> Void
+    private let linkedArchiveValidation: LinkedArchiveValidation
+
     private let activeRoot: URL
     private let archiveRoot: URL?
     private let activeRootID: UUID
@@ -109,8 +112,12 @@ public actor LocalVaultRestoreEngine {
             throw LocalVaultTransferError.writeAdmissionRequired
         },
         volumeIdentifier: LocalVaultTransferEngine.VolumeIdentifier? = nil,
-        manifestBuilder: VaultManifestBuilder? = nil
+        manifestBuilder: VaultManifestBuilder? = nil,
+        linkedArchiveValidation: @escaping LinkedArchiveValidation = { _, _, _ in
+            throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+        }
     ) {
+        self.linkedArchiveValidation = linkedArchiveValidation
         self.activeRoot = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
         self.archiveRoot = archiveRoot?.standardizedFileURL.resolvingSymlinksInPath()
         self.activeRootID = activeRootID
@@ -167,6 +174,34 @@ public actor LocalVaultRestoreEngine {
         return try await execute(record, requiresArchiveTransferBinding: false)
     }
 
+    /// A fresh content manifest binds this restore to an ordinary catalog-linked folder.
+    /// No historical archive transfer is synthesized or rewritten.
+    @discardableResult
+    public func restoreLinkedArchive(
+        projectID: ProjectID, location: ProjectLocation, archiveURL: URL,
+        manifest: VaultManifest, destinationRelativePath: String
+    ) async throws -> VaultRestoreRecord {
+        try linkedArchiveValidation(projectID, location, archiveURL)
+        try manifest.validatePersistedContentEnvelope()
+        let destination = try destinationURL(relativePath: destinationRelativePath)
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            throw LocalVaultRestoreError.occupiedDestination
+        }
+        let id = UUID()
+        let record = VaultRestoreRecord(
+            id: id, projectID: projectID, archiveGenerationURL: archiveURL,
+            stagingURL: activeRoot.appendingPathComponent(".niko-staging")
+                .appendingPathComponent(projectID.description).appendingPathComponent(id.uuidString.lowercased()),
+            destinationURL: destination, manifest: manifest, linkedArchiveLocation: location,
+            requiresArchiveMaterialization: true, createdAt: now()
+        )
+        switch try store.claimRestore(record) {
+        case .claimed: break
+        case .existing: throw LocalVaultRestoreError.restoreAlreadyInProgress
+        }
+        return try await execute(record, requiresArchiveTransferBinding: true)
+    }
+
     @discardableResult
     public func recoverAtLaunch() async -> [VaultRestoreRecord] {
         // Reconciliation is a persistence barrier: every legacy duplicate loser
@@ -205,7 +240,7 @@ public actor LocalVaultRestoreEngine {
     ) async throws -> VaultRestoreRecord {
         var record = initial
         do {
-            try validateArchiveGeneration(record.archiveGenerationURL)
+            try validateArchiveGeneration(record.archiveGenerationURL, linkedLocation: record.linkedArchiveLocation)
             if requiresArchiveTransferBinding {
                 try requireArchiveTransferBinding(&record)
             }
@@ -218,6 +253,9 @@ public actor LocalVaultRestoreEngine {
                     try inject(.materializingArchive, record)
                     let provider = self.provider
                     let archiveURL = record.archiveGenerationURL
+                    let linkedLocation = record.linkedArchiveLocation
+                    let linkedValidation = self.linkedArchiveValidation
+                    let projectID = record.projectID
                     let manifest = record.manifest
                     let needsLegacySupplement = Self.requiresProjectionSupplement(manifest)
                     let locality: ArchiveStorageLocality
@@ -271,8 +309,10 @@ public actor LocalVaultRestoreEngine {
                             try Self.validateArchiveGeneration(
                                 archiveURL,
                                 archiveRoot: archiveRoot,
-                                fileManager: fileManager.value
+                                fileManager: fileManager.value,
+                                linkedLocation: linkedLocation
                             )
+                            if let linkedLocation { try linkedValidation(projectID, linkedLocation, archiveURL) }
                             try await provider.materialize(archiveURL, manifest: manifest)
                         }
                     } else {
@@ -299,7 +339,7 @@ public actor LocalVaultRestoreEngine {
                     if requiresArchiveTransferBinding {
                         try requireArchiveTransferBinding(&record)
                     }
-                    try validateArchiveGeneration(record.archiveGenerationURL)
+                    try validateArchiveGeneration(record.archiveGenerationURL, linkedLocation: record.linkedArchiveLocation)
                     if needsLegacySupplement, record.projectionSupplement == nil {
                         guard let projectionStore,
                               let archiveTransferID = record.archiveTransferID,
@@ -459,6 +499,7 @@ public actor LocalVaultRestoreEngine {
         let manifestBuilder = self.manifestBuilder
         let provider = self.provider
         let recordForValidation = record
+        let linkedValidation = self.linkedArchiveValidation
         let fileManager = VaultRestoreSendableFileManager(self.fileManager)
         let volumeIdentifier = self.volumeIdentifier
         if requiresArchiveTransferBinding {
@@ -476,7 +517,8 @@ public actor LocalVaultRestoreEngine {
             try Self.validateArchiveGeneration(
                 sourceURL,
                 archiveRoot: archiveRoot,
-                fileManager: fileManager.value
+                fileManager: fileManager.value,
+                linkedLocation: recordForValidation.linkedArchiveLocation
             )
             let locality: ArchiveStorageLocality
             do {
@@ -490,11 +532,15 @@ public actor LocalVaultRestoreEngine {
             try Self.validateArchiveGeneration(
                 sourceURL,
                 archiveRoot: archiveRoot,
-                fileManager: fileManager.value
+                fileManager: fileManager.value,
+                linkedLocation: recordForValidation.linkedArchiveLocation
             )
             guard try volumeIdentifier(stagingURL.deletingLastPathComponent())
                     == volumeIdentifier(activeRoot) else {
                 throw LocalVaultRestoreError.writeTargetVolumeMismatch
+            }
+            if let location = recordForValidation.linkedArchiveLocation {
+                try linkedValidation(recordForValidation.projectID, location, sourceURL)
             }
             try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try VaultManifestCopier.copy(
@@ -580,20 +626,29 @@ public actor LocalVaultRestoreEngine {
         }
     }
 
-    private func validateArchiveGeneration(_ generationURL: URL) throws {
+    private func validateArchiveGeneration(_ generationURL: URL, linkedLocation: ProjectLocation? = nil) throws {
         try Self.validateArchiveGeneration(
             generationURL,
             archiveRoot: archiveRoot,
-            fileManager: fileManager
+            fileManager: fileManager,
+            linkedLocation: linkedLocation
         )
     }
 
     private static func validateArchiveGeneration(
         _ generationURL: URL,
         archiveRoot: URL?,
-        fileManager: FileManager
+        fileManager: FileManager,
+        linkedLocation: ProjectLocation? = nil
     ) throws {
         guard let archiveRoot else { throw LocalVaultRestoreError.unsafeArchiveGenerationPath }
+        if let linkedLocation {
+            guard let resolved = ProjectArchiveLocationResolver(rootID: linkedLocation.rootID, rootURL: archiveRoot).resolve(linkedLocation),
+                  canonicalPath(resolved) == canonicalPath(generationURL) else {
+                throw LocalVaultRestoreError.unsafeArchiveGenerationPath
+            }
+            return
+        }
         let generationsRoot = archiveRoot.appendingPathComponent("generations", isDirectory: true)
         let safety = PathSafety(fileManager: fileManager)
         guard safety.isResolvedContainedWithoutNestedSymlinks(generationsRoot, in: archiveRoot),
@@ -637,6 +692,13 @@ public actor LocalVaultRestoreEngine {
     }
 
     private func requireArchiveTransferBinding(_ record: inout VaultRestoreRecord) throws {
+        if let location = record.linkedArchiveLocation {
+            guard record.archiveTransferID == nil, record.archiveTransferState == nil else {
+                throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+            }
+            try linkedArchiveValidation(record.projectID, location, record.archiveGenerationURL)
+            return
+        }
         let verifiedTerminalStates: Set<VaultTransferState> = [
             .archiveVerified, .archivedLocal, .archivedOnlineOnly,
         ]

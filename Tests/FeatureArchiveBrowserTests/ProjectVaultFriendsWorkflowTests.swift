@@ -6,7 +6,58 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
-    func testLinkedArchiveAppearsWithFinderActionAndPreservesHistoricalMetadata() async throws {
+    func testLinkedArchiveRestoreDownloadsVerifiesAndPreservesIdentity() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let archive = fixture.archive.appendingPathComponent("Historical")
+        try FileManager.default.copyItem(at: fixture.project, to: archive)
+        let song = Song(folderPath: archive, originalFolderName: "Historical", displayTitle: "Historical")
+        guard case .complete(let evidence, _) = try ProjectSourceInventory().collect(in: archive, for: song) else {
+            return XCTFail("Missing fixture identity")
+        }
+        let location = ProjectLocation(rootID: fixture.archiveID, relativePath: "Historical", kind: .archive, availability: .onlineOnly)
+        let entry = ProjectCatalogEntry(record: ProjectRecord(canonicalTitle: "Historical title",
+            locations: [ProjectLocation(rootID: fixture.activeID, relativePath: "Old Name ", kind: .active, availability: .missing), location],
+            workflowState: .done, lastActivityAt: Date(timeIntervalSince1970: 1234.125)), evidence: evidence)
+        let catalog = try fixture.catalogStore()
+        try catalog.apply(ProjectCatalogReconciliation(entries: [entry], reviews: [], metadataMigrations: [:]))
+        let provider = LinkedDownloadProvider(root: fixture.archive)
+        let runtime = try fixture.runtime(provider: provider)
+        let snapshots = try await runtime.snapshots()
+        let snapshot = try XCTUnwrap(snapshots.first { $0.record.id == entry.record.id })
+        let failingRuntime = try fixture.runtime(provider: provider, projectOpener: LinkedFailingOpener())
+        do {
+            _ = try await failingRuntime.restoreAndOpen(snapshot: snapshot)
+            XCTFail("Expected the fixture opener to fail")
+        } catch {}
+        let pendingSnapshots = try await runtime.snapshots()
+        let pending = try XCTUnwrap(pendingSnapshots.first { $0.record.id == entry.record.id }?.restore)
+        XCTAssertEqual(pending.phase, .openingInCubase)
+        let restored = try await runtime.retryRestore(id: pending.id)
+        XCTAssertNotNil(restored.completedAt)
+        XCTAssertNil(restored.archiveTransferID)
+        XCTAssertEqual(restored.linkedArchiveLocation?.relativePath, "Historical")
+        XCTAssertEqual(restored.destinationURL.lastPathComponent, "Old Name ")
+        XCTAssertEqual(restored.projectID, entry.record.id)
+        let downloads = await provider.downloads
+        XCTAssertEqual(downloads, 1)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: restored.destinationURL)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: archive)
+        let persisted = try XCTUnwrap(catalog.loadEntries().first { $0.record.id == entry.record.id })
+        XCTAssertEqual(persisted.record.canonicalTitle, entry.record.canonicalTitle)
+        XCTAssertEqual(persisted.record.lastActivityAt, entry.record.lastActivityAt)
+        XCTAssertEqual(persisted.record.locations.first { $0.kind == .archive }, location)
+        XCTAssertEqual(persisted.evidence, evidence)
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        // A repeated request must not overwrite the now occupied Active folder.
+        do {
+            _ = try await runtime.restoreAndOpen(snapshot: snapshot)
+            XCTFail("Occupied destination must be preserved")
+        } catch {}
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: restored.destinationURL)
+    }
+
+    func testLinkedArchiveOffersRestoreAndPreservesHistoricalMetadata() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
@@ -56,23 +107,22 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertNil(snapshot.record.lastVerifiedAt)
         let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: song))
         XCTAssertEqual(presentation.state, .archived)
-        XCTAssertEqual(presentation.primaryAction, .revealArchive)
+        XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: song))
         let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: song))
-        XCTAssertTrue(openBlockReason.contains("Show in Finder"))
+        XCTAssertTrue(openBlockReason.contains("Get Local & Open"))
         XCTAssertThrowsError(try viewModel.openLatestCPR(for: song))
         XCTAssertEqual(viewModel.statusMessage, openBlockReason)
         XCTAssertNil(viewModel.lastDryRunLog)
         XCTAssertFalse(viewModel.canArchiveInProjectVault(song))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
-        viewModel.performProjectVaultPrimaryAction(for: song)
-        XCTAssertEqual(revealed.urls.map { $0.resolvingSymlinksInPath() }, [archived.resolvingSymlinksInPath()])
+        XCTAssertTrue(revealed.urls.isEmpty)
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
         XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: archived)
 
         let online = ProjectVaultCardPresentation(record: snapshot.record, linkedArchiveAvailability: .onlineOnly)
-        XCTAssertEqual(online.primaryAction, .revealArchive)
+        XCTAssertEqual(online.primaryAction, .restoreAndOpen)
         XCTAssertTrue(online.explanation.contains("online-only"))
 
         let reopened = fixture.viewModel(runtime: try fixture.runtime(), songMetadataStore: metadataStore)
@@ -97,7 +147,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         // A cached card is never authority after the configured archive root changes.
         try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
         viewModel.performProjectVaultPrimaryAction(for: song)
-        XCTAssertEqual(revealed.urls.count, 1)
+        try await waitUntil { !viewModel.projectVaultBusySongIDs.contains(song.id) }
+        XCTAssertTrue(revealed.urls.isEmpty)
+        XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
     }
 
     func testRapidArchiveAndRestoreRequestsQueueAndDeduplicate() async throws {
@@ -708,13 +760,14 @@ private final class FriendsWorkflowFixture {
 
     func runtime(
         provider: (any ArchiveStorageProvider)? = nil,
+        projectOpener: any VaultProjectOpening = SafeVaultProjectOpener(),
         recoveryPolicy: VaultTransferRecoveryPolicy = .production
     ) throws -> LiveProjectVaultRuntime {
         try LiveProjectVaultRuntime(
             settingsStore: settingsStore,
             transferStore: transferStore(),
             catalogStore: catalogStore(),
-            projectOpener: SafeVaultProjectOpener(),
+            projectOpener: projectOpener,
             activityProbe: FriendsClearActivityProbe(),
             capacityProbe: FriendsSafeCapacityProbe(),
             archiveProviderFactory: { root in provider ?? LocalFolderArchiveStorage(root: root) },
@@ -797,4 +850,27 @@ private final class ProjectVaultRecordingArchiveIndexStore: ArchiveIndexStoring,
     }
 
     func clear() throws {}
+}
+
+private actor LinkedDownloadProvider: ArchiveStorageProvider {
+    let local: LocalFolderArchiveStorage
+    var downloads = 0
+    init(root: URL) { local = LocalFolderArchiveStorage(root: root) }
+    func capabilities() async throws -> StorageCapabilities {
+        StorageCapabilities(waitsForDurability: false, supportsMaterialization: true, supportsEviction: false)
+    }
+    func currentLocality(at location: URL, manifest: VaultManifest) async throws -> ArchiveStorageLocality {
+        downloads == 0 ? .materializationRequired : .fullyLocalCurrent
+    }
+    func prepareForRead(_ location: URL) async throws { try await local.prepareForRead(location) }
+    func prepareForWrite(at root: URL) async throws { try await local.prepareForWrite(at: root) }
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func materialize(_ location: URL) async throws { downloads += 1 }
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
+}
+
+private struct LinkedFailingOpener: VaultProjectOpening {
+    func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
+        throw LocalVaultRestoreError.noSupportedProject
+    }
 }

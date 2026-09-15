@@ -4,6 +4,87 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultRestoreEngineTests: XCTestCase {
+    func testLinkedArchiveRecoversInterruptedCopyWithoutInventingTransfer() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let linked = fixture.archive.appendingPathComponent("Historical")
+        try FileManager.default.moveItem(at: fixture.generation, to: linked)
+        let location = ProjectLocation(rootID: UUID(), relativePath: "Historical", kind: .archive, availability: .local)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let validate: LocalVaultRestoreEngine.LinkedArchiveValidation = { projectID, claim, url in
+            guard projectID == fixture.projectID, claim == location, url == linked else {
+                throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+            }
+        }
+        let interrupted = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .verifyingActiveStaging { throw VaultTransferInterruption() }
+            }, writeAdmission: allowRestoreWrites, linkedArchiveValidation: validate)
+        do {
+            _ = try await interrupted.restoreLinkedArchive(projectID: fixture.projectID, location: location,
+                archiveURL: linked, manifest: fixture.manifest, destinationRelativePath: "Restored")
+            XCTFail("Expected interruption")
+        } catch is VaultTransferInterruption {}
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        XCTAssertNil(pending.archiveTransferID)
+        XCTAssertEqual(pending.linkedArchiveLocation, location)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        let recovered = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites, linkedArchiveValidation: validate)
+        let results = await recovered.recoverAtLaunch()
+        XCTAssertEqual(results.count, 1)
+        XCTAssertNotNil(results.first?.completedAt)
+        XCTAssertEqual(workspace.opened.count, 1)
+        XCTAssertTrue(try store.allTransferRecords().isEmpty)
+        try VaultManifestBuilder().verify(fixture.manifest, at: pending.destinationURL)
+        try VaultManifestBuilder().verify(fixture.manifest, at: linked)
+    }
+
+    func testLinkedArchiveRetryRejectsRevokedBindingAndChangedContent() async throws {
+        for revoke in [false, true] {
+            let fixture = try VaultRestoreFixture()
+            defer { fixture.remove() }
+            let linked = fixture.archive.appendingPathComponent("Historical")
+            try FileManager.default.moveItem(at: fixture.generation, to: linked)
+            let location = ProjectLocation(rootID: UUID(), relativePath: "Historical", kind: .archive, availability: .local)
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let events = VaultRestoreEventLog()
+            let workspace = VaultRestoreWorkspaceSpy(events: events)
+            let initial = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+                activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+                store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+                catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+                faultInjector: { _, _ in throw VaultTransferInterruption() },
+                writeAdmission: allowRestoreWrites, linkedArchiveValidation: { _, _, _ in })
+            do {
+                _ = try await initial.restoreLinkedArchive(projectID: fixture.projectID, location: location,
+                    archiveURL: linked, manifest: fixture.manifest, destinationRelativePath: "Restored")
+                XCTFail("Expected interruption")
+            } catch is VaultTransferInterruption {}
+            let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+            if !revoke { try Data("changed".utf8).write(to: linked.appendingPathComponent("Synthetic Song.cpr")) }
+            let retry = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+                activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+                store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+                catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+                writeAdmission: allowRestoreWrites, linkedArchiveValidation: { _, _, _ in
+                    if revoke { throw LocalVaultRestoreError.archiveTransferBindingUnavailable }
+                })
+            do { _ = try await retry.retryRestore(id: pending.id); XCTFail("Unsafe restore must stop") } catch {}
+            XCTAssertFalse(FileManager.default.fileExists(atPath: pending.destinationURL.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: pending.stagingURL.path))
+            XCTAssertTrue(workspace.opened.isEmpty)
+        }
+    }
+
     func testChangedArchiveFilePersistsActionableIntegrityFailureBeforeCopying() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }

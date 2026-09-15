@@ -554,7 +554,10 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
-        enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: "Restoring the verified project into Active Projects…") { model in
+        let message = snapshot.linkedArchive == nil
+            ? "Restoring the verified project into Active Projects…"
+            : "Checking and downloading archive files before restoring into Active Projects…"
+        enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: message) { model in
             do {
                 _ = try await model.waitForProjectVaultSlot {
                     try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot)

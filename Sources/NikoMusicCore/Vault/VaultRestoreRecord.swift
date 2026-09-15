@@ -25,6 +25,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
     public var stagingURL: URL
     public let destinationURL: URL
     public let manifest: VaultManifest
+    public let linkedArchiveLocation: ProjectLocation?
     public let archiveTransferID: UUID?
     public let archiveTransferState: VaultTransferState?
     public let requiresArchiveMaterialization: Bool
@@ -49,6 +50,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         stagingURL: URL,
         destinationURL: URL,
         manifest: VaultManifest,
+        linkedArchiveLocation: ProjectLocation? = nil,
         archiveTransferID: UUID? = nil,
         archiveTransferState: VaultTransferState? = nil,
         requiresArchiveMaterialization: Bool = true,
@@ -62,6 +64,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         self.stagingURL = stagingURL
         self.destinationURL = destinationURL
         self.manifest = manifest
+        self.linkedArchiveLocation = linkedArchiveLocation
         self.archiveTransferID = archiveTransferID
         self.archiveTransferState = archiveTransferState
         self.requiresArchiveMaterialization = requiresArchiveMaterialization
@@ -78,6 +81,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, projectID, archiveGenerationURL, stagingURL, destinationURL
+        case linkedArchiveLocation
         case manifest, archiveTransferID, archiveTransferState, requiresArchiveMaterialization
         case projectionSupplement, phase, catalogLocationPersisted
         case completedAt, createdAt, updatedAt, error, failureReason, supersededBy
@@ -91,6 +95,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         stagingURL = try values.decode(URL.self, forKey: .stagingURL)
         destinationURL = try values.decode(URL.self, forKey: .destinationURL)
         manifest = try values.decode(VaultManifest.self, forKey: .manifest)
+        linkedArchiveLocation = try values.decodeIfPresent(ProjectLocation.self, forKey: .linkedArchiveLocation)
         archiveTransferID = try values.decodeIfPresent(UUID.self, forKey: .archiveTransferID)
         archiveTransferState = try values.decodeIfPresent(
             VaultTransferState.self,
@@ -125,6 +130,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         try values.encode(stagingURL, forKey: .stagingURL)
         try values.encode(destinationURL, forKey: .destinationURL)
         try values.encode(manifest, forKey: .manifest)
+        try values.encodeIfPresent(linkedArchiveLocation, forKey: .linkedArchiveLocation)
         try values.encodeIfPresent(archiveTransferID, forKey: .archiveTransferID)
         try values.encodeIfPresent(archiveTransferState, forKey: .archiveTransferState)
         try values.encode(requiresArchiveMaterialization, forKey: .requiresArchiveMaterialization)

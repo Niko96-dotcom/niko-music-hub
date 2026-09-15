@@ -259,17 +259,8 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             explanation = "Ready in Active Projects."
         } else if let availability = linkedArchiveAvailability, availability != .missing {
             state = .archived
-            primaryAction = .revealArchive
-            switch availability {
-            case .onlineOnly:
-                explanation = "This existing archive folder has online-only files. Show it in Finder to download them."
-            case .materializing:
-                explanation = "Files in this existing archive folder are downloading. Show it in Finder to check progress."
-            case .local:
-                explanation = "This existing archive folder is available locally. Show it in Finder to access its files."
-            case .missing:
-                explanation = "The archive folder is unavailable."
-            }
+            primaryAction = .restoreAndOpen
+            explanation = "Get Local & Open downloads any online-only files, verifies a copy in Active Projects, then opens it in its DAW. The original archive stays intact."
         } else if record.locations.contains(where: { $0.kind == .archive && $0.availability != .missing }) {
             state = .archived
             primaryAction = .restoreAndOpen

@@ -538,6 +538,12 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 if candidate.failureReason == .activeDestinationIntegrityMismatch {
                     return candidate
                 }
+                if let location = candidate.linkedArchiveLocation,
+                   let url = ProjectArchiveLocationResolver(rootID: configuration.archive.id,
+                       rootURL: configuration.archive.url).resolve(location),
+                   url.resolvingSymlinksInPath() == candidate.archiveGenerationURL.resolvingSymlinksInPath() {
+                    return candidate
+                }
                 return generationResolver?.resolveGeneration(candidate.archiveGenerationURL) == nil
                     ? nil
                     : candidate
@@ -772,8 +778,9 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         defer { releaseMutationLease(lease) }
         let configuration = try configuration()
         let settings = try settingsStore.loadSettings()
-        guard try transferStore.verifiedArchiveGeneration(projectID: snapshot.record.id) != nil else {
-            throw ProjectVaultRuntimeError.noVerifiedArchive
+        guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
+        if try transferStore.verifiedArchiveGeneration(projectID: snapshot.record.id) == nil {
+            return try await restoreLinkedArchive(snapshot: snapshot, configuration: configuration, settings: settings)
         }
         let engine = LocalVaultRestoreEngine(
             activeRoot: configuration.active.url,
@@ -785,11 +792,91 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             provider: archiveProvider(root: configuration.archive.url),
             catalog: catalogStore,
             projectOpener: projectOpener,
-            writeAdmission: makeWriteAdmission(settings: settings)
+            writeAdmission: makeWriteAdmission(settings: settings),
+            linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
         let relativePath = snapshot.transfer?.sourceURL.lastPathComponent
             ?? snapshot.record.canonicalTitle
         return try await engine.restoreAndOpen(projectID: snapshot.record.id, destinationRelativePath: relativePath)
+    }
+
+    private func linkedArchiveValidation(configuration: Configuration) -> LocalVaultRestoreEngine.LinkedArchiveValidation {
+        let catalog = catalogStore
+        let settingsStore = settingsStore
+        return { projectID, location, url in
+            let settings = try settingsStore.loadSettings()
+            guard settings.vault.isEnabled, !settings.vault.automationEmergencyStop,
+                  settings.vault.activeRootID == configuration.active.id,
+                  settings.vault.archiveRootID == configuration.archive.id,
+                  location.rootID == configuration.archive.id,
+                  let root = settings.musicRoots.first(where: { $0.id == location.rootID && $0.isEnabled && $0.role == .archive }),
+                  let active = settings.musicRoots.first(where: { $0.id == configuration.active.id && $0.isEnabled && $0.role == .active }),
+                  try active.resolvedURL(using: FoundationSecurityScopedBookmarks()).resolvingSymlinksInPath() == configuration.active.url.resolvingSymlinksInPath(),
+                  let resolved = ProjectArchiveLocationResolver(rootID: root.id,
+                    rootURL: try root.resolvedURL(using: FoundationSecurityScopedBookmarks())).resolve(location),
+                  resolved.resolvingSymlinksInPath() == url.resolvingSymlinksInPath() else {
+                throw ProjectVaultRuntimeError.unavailable
+            }
+            let claims = try catalog.loadEntries().filter { entry in
+                entry.record.locations.contains { $0.kind == .archive && $0.rootID == location.rootID
+                    && $0.relativePath == location.relativePath }
+            }
+            guard claims.count == 1, claims[0].record.id == projectID else {
+                throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+            }
+        }
+    }
+
+    private func restoreLinkedArchive(
+        snapshot: ProjectVaultRuntimeSnapshot, configuration: Configuration, settings: AppSettings
+    ) async throws -> VaultRestoreRecord {
+        guard let requested = snapshot.linkedArchive,
+              let entry = try catalogStore.loadEntries().first(where: { $0.record.id == snapshot.record.id }),
+              let location = entry.record.locations.first(where: {
+                  $0.kind == .archive && $0.rootID == requested.location.rootID
+                    && $0.relativePath == requested.location.relativePath
+              }),
+              let archiveURL = ProjectArchiveLocationResolver(rootID: configuration.archive.id,
+                  rootURL: configuration.archive.url).resolve(location) else {
+            throw ProjectVaultRuntimeError.noVerifiedArchive
+        }
+        let validate = linkedArchiveValidation(configuration: configuration)
+        try validate(entry.record.id, location, archiveURL)
+        let provider = archiveProvider(root: configuration.archive.url)
+        let inventory = LinkedArchiveInventory()
+        let download = try inventory.materializationManifest(at: archiveURL)
+        let admission = makeWriteAdmission(settings: settings)
+        if try await provider.currentLocality(at: archiveURL, manifest: download) != .fullyLocalCurrent {
+            try await admission(VaultWriteAdmissionRequest(target: .archive, sourceURL: nil,
+                targetRootURL: archiveURL, minimumProjectedBytes: try download.validatedTotalBytes(), manifest: nil)) {
+                try validate(entry.record.id, location, archiveURL)
+                try await provider.prepareForRead(archiveURL)
+                try validate(entry.record.id, location, archiveURL)
+                try await provider.materialize(archiveURL, manifest: download)
+            }
+        }
+        try validate(entry.record.id, location, archiveURL)
+        guard try await provider.currentLocality(at: archiveURL, manifest: download) == .fullyLocalCurrent else {
+            throw LocalVaultRestoreError.archiveLocalityUnavailable
+        }
+        let observed = Song(folderPath: archiveURL, originalFolderName: archiveURL.lastPathComponent,
+            displayTitle: entry.record.canonicalTitle)
+        guard case .complete(let evidence, _) = try ProjectSourceInventory().collect(in: archiveURL, for: observed),
+              entry.evidence.isHighConfidenceMatch(with: evidence) else {
+            throw LocalVaultRestoreError.legacyProjectionIdentityMismatch
+        }
+        let manifest = try VaultManifestBuilder().build(at: archiveURL)
+        try inventory.verifyMetadata(download, against: inventory.materializationManifest(at: archiveURL))
+        try validate(entry.record.id, location, archiveURL)
+        let engine = LocalVaultRestoreEngine(activeRoot: configuration.active.url,
+            archiveRoot: configuration.archive.url, activeRootID: configuration.active.id,
+            resolver: transferStore, store: transferStore, projectionStore: transferStore,
+            provider: provider, catalog: catalogStore, projectOpener: projectOpener,
+            writeAdmission: admission, linkedArchiveValidation: validate)
+        let relativePath = entry.record.locations.first { $0.kind == .active && $0.rootID == configuration.active.id }?.relativePath
+            ?? archiveURL.lastPathComponent
+        return try await engine.restoreLinkedArchive(projectID: entry.record.id, location: location,
+            archiveURL: archiveURL, manifest: manifest, destinationRelativePath: relativePath)
     }
 
     public func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
@@ -830,7 +917,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             activeRootID: configuration.active.id, resolver: transferStore,
             store: transferStore, projectionStore: transferStore, provider: provider,
             catalog: catalogStore, projectOpener: projectOpener,
-            writeAdmission: makeWriteAdmission(settings: settings)
+            writeAdmission: makeWriteAdmission(settings: settings),
+            linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
         return try await restore.restoreAndOpen(
             projectID: verified.projectID, destinationRelativePath: verified.sourceURL.lastPathComponent
@@ -852,7 +940,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             provider: archiveProvider(root: configuration.archive.url),
             catalog: catalogStore,
             projectOpener: projectOpener,
-            writeAdmission: makeWriteAdmission(settings: settings)
+            writeAdmission: makeWriteAdmission(settings: settings),
+            linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
         return try await engine.retryRestore(id: id)
     }
@@ -947,7 +1036,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             provider: provider,
             catalog: catalogStore,
             projectOpener: projectOpener,
-            writeAdmission: makeWriteAdmission(settings: settings)
+            writeAdmission: makeWriteAdmission(settings: settings),
+            linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
         _ = await restoreEngine.recoverAtLaunch()
     }
