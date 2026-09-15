@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.2 - 2026-09-15
+
+- Preserve original project and file names when archiving through providers that cannot store trailing spaces or certain special characters. Restoring a project reproduces its original names.
+- Safely retry affected legacy archives after verifying the Active source, while retaining previous staging copies for recovery.
+- Show linked existing archive folders in the browser with their actual availability and a Show in Finder action for online-only files.
+- Prevent duplicate Project Vault identities caused by stale scan data or incomplete project-file inventories, while preserving exact timestamp precision and existing history.
+- Include the Sparkle updater's complete license notices in the app and correct the dependency inventory.
+- Remove unused types left behind by earlier implementations.
+
 ## 1.5.1 - 2026-09-13
 
 - Show "now" instead of "in 0 s" for a download or recording that was just added to the Output Inbox.

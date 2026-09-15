@@ -174,9 +174,14 @@ nmh_swift() {
 nmh_embed_sparkle_framework() {
   local build_dir="${1:?missing build directory}"
   local source_framework="$build_dir/Sparkle.framework"
+  local license_file="$NMH_ROOT_DIR/.build/artifacts/sparkle/Sparkle/LICENSE"
 
   if [[ ! -d "$source_framework" ]]; then
     echo "Sparkle.framework missing from build output: $source_framework" >&2
+    return 1
+  fi
+  if [[ ! -s "$license_file" ]]; then
+    echo "Sparkle license notices missing from the resolved package artifact: $license_file" >&2
     return 1
   fi
 
@@ -185,6 +190,8 @@ nmh_embed_sparkle_framework() {
   # ditto keeps the versioned-bundle symlinks and executable bits that codesign
   # and the installer both depend on.
   /usr/bin/ditto "$source_framework" "$NMH_SPARKLE_FRAMEWORK"
+  mkdir -p "$NMH_APP_CONTENTS/Resources"
+  cp "$license_file" "$NMH_APP_CONTENTS/Resources/Sparkle-LICENSE.txt"
 
   if ! /usr/bin/otool -l "$NMH_APP_BINARY" \
     | /usr/bin/grep -q '@executable_path/../Frameworks'; then

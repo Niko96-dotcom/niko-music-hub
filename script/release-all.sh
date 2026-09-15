@@ -136,7 +136,7 @@ require_secure_timestamps() {
     [[ -e "$nested" ]] || continue
     # Capture first: under `set -o pipefail` a `codesign | grep -q` pipeline can
     # fail with SIGPIPE when grep exits early, which read as "no timestamp" for
-    # the app wrapper in the first 1.5.1 rehearsal.
+    # the app wrapper in an earlier release rehearsal.
     signature="$(codesign -dvv "$nested" 2>&1 || true)"
     if ! grep -q '^Timestamp=' <<<"$signature"; then
       echo "signature without a secure timestamp (notarization would reject it): $nested" >&2

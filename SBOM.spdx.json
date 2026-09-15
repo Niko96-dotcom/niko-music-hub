@@ -2,10 +2,10 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
-  "name": "Niko-Music-Hub-1.5.1-source",
-  "documentNamespace": "urn:uuid:5ad7ba55-bc6b-4ba8-a5f3-c46575ab61bb",
+  "name": "Niko-Music-Hub-1.5.2-source",
+  "documentNamespace": "urn:uuid:305a9607-f80e-4df1-bfeb-e67f94ddecfe",
   "creationInfo": {
-    "created": "2026-09-13T00:00:00Z",
+    "created": "2026-09-15T00:00:00Z",
     "creators": [
       "Tool: Niko Music Hub source-sale inventory"
     ]
@@ -14,12 +14,23 @@
     {
       "SPDXID": "SPDXRef-Package-NikoMusicHub",
       "name": "Niko Music Hub",
-      "versionInfo": "1.5.1",
+      "versionInfo": "1.5.2",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "LicenseRef-Proprietary",
       "licenseDeclared": "LicenseRef-Proprietary",
       "copyrightText": "Copyright (c) 2026 Niko96"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-Sparkle",
+      "name": "Sparkle",
+      "versionInfo": "2.9.6",
+      "downloadLocation": "git+https://github.com/sparkle-project/Sparkle.git@ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "licenseComments": "Sparkle is MIT licensed; its upstream LICENSE also includes BSD-2-Clause and Zlib notices for included third-party components. The build copies the complete resolved package license into the app resources before signing.",
+      "copyrightText": "NOASSERTION"
     }
   ],
   "relationships": [
@@ -27,6 +38,11 @@
       "spdxElementId": "SPDXRef-DOCUMENT",
       "relationshipType": "DESCRIBES",
       "relatedSpdxElement": "SPDXRef-Package-NikoMusicHub"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-NikoMusicHub",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-Sparkle"
     }
   ],
   "hasExtractedLicensingInfos": [
@@ -38,10 +54,10 @@
   ],
   "annotations": [
     {
-      "annotationDate": "2026-07-13T00:00:00Z",
+      "annotationDate": "2026-09-15T00:00:00Z",
       "annotationType": "OTHER",
       "annotator": "Tool: Niko Music Hub source-sale inventory",
-      "comment": "The Swift package declares no remote package dependencies. FFmpeg, yt-dlp, and demucs-mlx are optional user-supplied helpers and are not bundled. Apple frameworks and SQLite are provided by the supported system/toolchain."
+      "comment": "The Swift package pins Sparkle 2.9.6 and bundles its framework and updater helpers. FFmpeg, yt-dlp, and demucs-mlx are optional user-supplied helpers and are not bundled. Apple frameworks and SQLite are provided by the supported system/toolchain."
     }
   ]
 }
