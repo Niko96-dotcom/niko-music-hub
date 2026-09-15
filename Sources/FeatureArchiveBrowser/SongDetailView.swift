@@ -581,6 +581,12 @@ struct SongDetailView: View {
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.warning)
             } else {
+                if let reason = viewModel.projectOpenBlockReason(for: liveSong) {
+                    Text(reason)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 // Version archives can contain hundreds of CPRs. Build rows (and
                 // read their file metadata) as they enter the detail viewport.
                 LazyVStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
@@ -605,6 +611,7 @@ struct SongDetailView: View {
     private func cprVersionRow(_ version: ProjectVersion) -> some View {
         let isMain = liveSong.effectiveLatestCPR?.id == version.id
         let isIgnored = liveSong.ignoredCPRVersionIDs.contains(version.id)
+        let openBlockReason = viewModel.projectOpenBlockReason(for: liveSong)
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(version.fileName)
@@ -629,6 +636,8 @@ struct SongDetailView: View {
                         Button("Open in \(version.applicationName)") {
                             try? viewModel.openProjectVersion(version, for: liveSong)
                         }
+                        .disabled(openBlockReason != nil)
+                        .help(openBlockReason ?? "Open this version in \(version.applicationName)")
                         Button("Set Main") {
                             viewModel.setManualMainCPR(for: liveSong, versionID: version.id)
                         }

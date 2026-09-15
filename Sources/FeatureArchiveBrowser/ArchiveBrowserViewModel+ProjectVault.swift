@@ -99,6 +99,21 @@ extension ArchiveBrowserViewModel {
         projectVaultPresentation(for: song)?.state == .archived
     }
 
+    func projectOpenBlockReason(for song: Song) -> String? {
+        guard blocksGenericProjectVaultFileActions(for: song) else { return nil }
+        guard let presentation = projectVaultPresentation(for: song) else {
+            return "Check this project's storage in Project Vault before opening a version."
+        }
+        switch presentation.primaryAction {
+        case .restoreAndOpen:
+            return "Use Get Local & Open to restore this project, then choose the version you want to open."
+        case .revealArchive:
+            return "Use Show in Finder to access this archive. Project versions cannot be opened directly here."
+        case .openInCubase, .retry, .review:
+            return presentation.explanation
+        }
+    }
+
     /// Project Vault destinations are restore/review handles, never generic
     /// filesystem authority. Source-path cards also stay non-actionable while a
     /// destructive or binding review owns the project, even if the source path

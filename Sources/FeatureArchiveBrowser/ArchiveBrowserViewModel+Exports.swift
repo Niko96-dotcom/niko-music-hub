@@ -93,10 +93,11 @@ extension ArchiveBrowserViewModel {
     }
 
     func openLatestCPR(for song: Song) throws {
+        if let reason = projectOpenBlockReason(for: song) {
+            setStatusMessage(reason)
+            throw MusicItemOpenerError.pathOutsideAllowedRoots(song.folderPath.standardizedFileURL)
+        }
         do {
-            guard !blocksGenericProjectVaultFileActions(for: song) else {
-                throw MusicItemOpenerError.pathOutsideAllowedRoots(song.folderPath.standardizedFileURL)
-            }
             if let result = try opener.openLatestCPR(
                 for: song,
                 dryRun: runtime.dryRunOpen,

@@ -1858,6 +1858,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
+        XCTAssertEqual(viewModel.projectOpenBlockReason(for: archivedSong), presentation.explanation)
         XCTAssertNil(viewModel.preferredRevealURL(for: archivedSong))
 
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
@@ -2222,6 +2223,12 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
         XCTAssertFalse(viewModel.canArchiveInProjectVault(archivedSong))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
+        let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: archivedSong))
+        XCTAssertTrue(openBlockReason.contains("Get Local & Open"))
+        let archivedVersion = try XCTUnwrap(archivedSong.visibleProjectVersions.first)
+        XCTAssertThrowsError(try viewModel.openProjectVersion(archivedVersion, for: archivedSong))
+        XCTAssertEqual(viewModel.statusMessage, openBlockReason)
+        XCTAssertFalse(try XCTUnwrap(viewModel.statusMessage).contains(transfer.destinationURL.path))
         XCTAssertNil(
             viewModel.preferredRevealURL(for: archivedSong),
             "archive-only virtual songs must not acquire generic filesystem authority"
