@@ -6,6 +6,7 @@ import SwiftUI
 struct ArchivePreviewRowView: View {
     let song: Song
     let candidate: PreviewCandidate
+    var folderLabel: String? = nil
     let isMain: Bool
     let onPlay: () -> Void
     let onSetMain: () -> Void
@@ -13,16 +14,25 @@ struct ArchivePreviewRowView: View {
     @ObservedObject private var session = ArchivePreviewSession.shared
     @State private var audioDescription: String?
 
+    private var accessibleName: String {
+        [candidate.fileName, folderLabel].compactMap { $0 }.joined(separator: ", ")
+    }
+
     private var isLoaded: Bool { session.songID == song.id && session.preview?.id == candidate.id }
 
     var body: some View {
         HStack(spacing: 12) {
             HubIconButton(systemImage: isLoaded && session.isPlaying ? "pause.fill" : "play.fill",
-                accessibilityLabel: "\(isLoaded && session.isPlaying ? "Pause" : "Play") \(candidate.fileName)",
+                accessibilityLabel: "\(isLoaded && session.isPlaying ? "Pause" : "Play") \(accessibleName)",
                 isEnabled: !session.captureActive, action: onPlay)
             VStack(alignment: .leading, spacing: 6) {
                 Text(candidate.fileName).font(HubDesignSystem.Typography.bodySmall().weight(.medium))
                     .lineLimit(2).truncationMode(.middle).help(candidate.filePath.path)
+                if let folderLabel {
+                    Text(folderLabel)
+                        .font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle).help(folderLabel)
+                }
                 Text(audioDescription ?? metadataFallback)
                     .font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                 if isMain || isLoaded {
@@ -37,14 +47,14 @@ struct ArchivePreviewRowView: View {
                     .controlSize(.small)
                     .disabled(session.songID != song.id || isLoaded || session.captureActive)
                     .help("Switch at the same elapsed time. Use aligned bounces.")
-                    .accessibilityLabel("Compare \(candidate.fileName)")
+                    .accessibilityLabel("Compare \(accessibleName)")
                 Menu {
                     Button("Set Main", action: onSetMain).disabled(isMain)
                     Button("Ignore preview", action: onIgnore)
                     Text(candidate.filePath.path)
                 } label: { Image(systemName: "ellipsis").frame(width: 28, height: 24) }
                     .menuStyle(.borderlessButton).fixedSize()
-                    .accessibilityLabel("Actions for \(candidate.fileName)")
+                    .accessibilityLabel("Actions for \(accessibleName)")
             }
         }
         .padding(.vertical, 12)

@@ -16,6 +16,7 @@ struct SongDetailView: View {
     @State private var syncedAppNote = ""
     @State private var syncedAliases = ""
     @State private var previewCandidatePage = 0
+    @State private var previewFilter = ""
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
     private var liveSong: Song {
@@ -82,10 +83,12 @@ struct SongDetailView: View {
             syncDrafts(from: liveSong)
             workspaceTab = .versions
             storageExpanded = false
+            previewFilter = ""
             previewCandidatePage = 0
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
         }
+        .onChange(of: previewFilter) { _, _ in previewCandidatePage = 0 }
         .onChange(of: metadataFingerprint) { _, _ in
             refreshDraftsFromCatalogIfUnedited()
         }
@@ -676,12 +679,13 @@ struct SongDetailView: View {
 
     @ViewBuilder
     private var alternatePreviewsSection: some View {
-        let alternates = rankedPreviews
+        let alternates = ArchivePreviewCandidateFilter.candidates(rankedPreviews, matching: previewFilter)
+        let folderLabels = ArchivePreviewCandidateFilter.folderLabels(for: rankedPreviews, relativeTo: liveSong.folderPath)
         let page = ArchivePreviewCandidatePagination.page(
             from: alternates,
             requestedIndex: previewCandidatePage
         )
-        if page.elements.isEmpty {
+        if rankedPreviews.isEmpty {
             Text("No previews found.").foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
@@ -694,6 +698,13 @@ struct SongDetailView: View {
                     Text("Page \(page.index + 1) of \(page.pageCount)")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
+
+                TextField("Filter preview filenames", text: $previewFilter)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Filter preview filenames")
+                if page.elements.isEmpty {
+                    Text("No previews match this filter.").foregroundStyle(.secondary)
                 }
 
                 HStack {
@@ -709,6 +720,7 @@ struct SongDetailView: View {
                     ForEach(page.elements, id: \.id) { candidate in
                         ArchivePreviewRowView(
                             song: liveSong, candidate: candidate,
+                            folderLabel: folderLabels[candidate.id],
                             isMain: candidate.id == liveSong.mainPreviewCandidateID,
                             onPlay: { viewModel.audition(liveSong, candidate: candidate) },
                             onSetMain: { viewModel.setManualMainPreview(for: liveSong, candidateID: candidate.id) },
