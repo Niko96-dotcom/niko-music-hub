@@ -6,6 +6,21 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testLaunchRecoveryRefreshesSongsWithoutFilesystemWatcher() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime(projectOpener: LinkedFailOnceOpener())
+        let archived = try await runtime.archive(song: Song(folderPath: fixture.project,
+            originalFolderName: fixture.project.lastPathComponent, displayTitle: "Recovery"), trigger: .manual)
+        do {
+            _ = try await runtime.restoreAndOpen(snapshot: archived)
+            XCTFail("Expected first open to fail")
+        } catch {}
+        let model = fixture.viewModel(runtime: runtime, archiveRootWatcher: nil)
+        try await waitUntil { model.songs.contains { $0.folderPath.lastPathComponent == fixture.project.lastPathComponent } }
+        XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
+    }
+
     func testRestoreDialogSelectsVersionAndKeepsOccupiedDestination() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -415,6 +430,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         viewModel.setShowArchivedProjects(false)
         XCTAssertTrue(viewModel.songs.contains { $0.id == original.id })
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        let restored = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        XCTAssertNil(viewModel.projectVaultQueueMessage(for: restored))
     }
 
     func testMountedBrowserResumesTimedOutCopyAtPersistedDeadlineWithoutAnotherTransfer() async throws {

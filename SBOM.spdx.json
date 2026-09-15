@@ -2,7 +2,7 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
-  "name": "Niko-Music-Hub-1.5.3-source",
+  "name": "Niko-Music-Hub-1.5.4-source",
   "documentNamespace": "urn:uuid:305a9607-f80e-4df1-bfeb-e67f94ddecfe",
   "creationInfo": {
     "created": "2026-09-15T00:00:00Z",
@@ -14,7 +14,7 @@
     {
       "SPDXID": "SPDXRef-Package-NikoMusicHub",
       "name": "Niko Music Hub",
-      "versionInfo": "1.5.3",
+      "versionInfo": "1.5.4",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "LicenseRef-Proprietary",

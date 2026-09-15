@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.4 - 2026-09-15
+
+- Restore linked historical archives into Active Projects while preserving project identity, metadata, and the original archive.
+- Choose a CPR or ALS version before restoring, and choose another destination when an existing folder must be kept.
+- Show archive availability and live restore stages, with clear recovery actions for interrupted transfers and failed project opening.
+- Keep the selected version through restore recovery and retry, refresh recovered projects without relying on filesystem events, and clear outdated archive messages after restoring.
+
 ## 1.5.3 - 2026-09-15
 
 - Guide archived project versions to the appropriate restore or Finder action instead of offering an open action that cannot succeed.

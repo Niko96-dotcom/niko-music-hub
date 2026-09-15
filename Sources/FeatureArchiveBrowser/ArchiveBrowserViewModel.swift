@@ -237,8 +237,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         restartArchiveRootWatching()
         loadCachedIndexIfAvailable()
         Task {
-            await projectVaultRuntime?.recoverAtLaunch()
-            await refreshProjectVaultSnapshots()
+            await recoverProjectVaultAndRefresh()
         }
         if archiveRootWatcher != nil, !roots.isEmpty, !runtime.usesFixtureRoot {
             setStatusMessage("Scanning archive...")

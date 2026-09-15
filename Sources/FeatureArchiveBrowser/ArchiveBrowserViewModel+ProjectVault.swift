@@ -36,6 +36,24 @@ enum ProjectVaultCardWorkflowPolicy {
 }
 
 extension ArchiveBrowserViewModel {
+    func recoverProjectVaultAndRefresh() async {
+        guard let projectVaultRuntime else { return }
+        let hadPendingRestore = (try? await projectVaultRuntime.snapshots())?.contains { $0.restore != nil } ?? false
+        await projectVaultRuntime.recoverAtLaunch()
+        await refreshProjectVaultSnapshots()
+        // Recovery can create an Active folder after the initial scan completed.
+        // Refresh explicitly even when filesystem observation is unavailable.
+        if hadPendingRestore { await scan() }
+    }
+
+    private func clearRestoreDestinationMessage(_ restore: VaultRestoreRecord) {
+        let destination = Self.vaultCanonicalPath(restore.destinationURL)
+        for key in Array(projectVaultOperationMessages.keys)
+            where Self.vaultCanonicalPath(URL(fileURLWithPath: key)) == destination {
+            projectVaultOperationMessages.removeValue(forKey: key)
+        }
+    }
+
     /// Applies a Project Vault setup change to the already-mounted Archive Browser.
     /// Settings owns persistence; this method deliberately reloads the effective scan roots,
     /// restarts observation, and refreshes vault recovery/snapshots without requiring a relaunch.
@@ -43,8 +61,7 @@ extension ArchiveBrowserViewModel {
         guard !runtime.usesFixtureRoot else {
             refreshProjectVaultPresentationContext()
             Task {
-                await projectVaultRuntime?.recoverAtLaunch()
-                await refreshProjectVaultSnapshots()
+                await recoverProjectVaultAndRefresh()
             }
             return
         }
@@ -69,8 +86,7 @@ extension ArchiveBrowserViewModel {
         }
 
         Task {
-            await projectVaultRuntime?.recoverAtLaunch()
-            await refreshProjectVaultSnapshots()
+            await recoverProjectVaultAndRefresh()
         }
     }
 
@@ -602,9 +618,10 @@ extension ArchiveBrowserViewModel {
             : "Checking and downloading archive files before restoring into Active Projects…"
         enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: message, tracksRestoreProgress: true) { model in
             do {
-                _ = try await model.waitForProjectVaultSlot {
+                let restored = try await model.waitForProjectVaultSlot {
                     try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot, selectedProjectRelativePath: selectedPath, destinationRelativePath: destinationRelativePath)
                 }
+                model.clearRestoreDestinationMessage(restored)
                 await model.refreshProjectVaultSnapshots()
                 await model.scan()
                 model.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
@@ -665,6 +682,7 @@ extension ArchiveBrowserViewModel {
                       completed.failureReason == nil else {
                     throw ProjectVaultRuntimeError.unavailable
                 }
+                model.clearRestoreDestinationMessage(completed)
                 if await model.refreshProjectVaultSnapshots() {
                     await model.scan()
                     model.setProjectVaultStatusMessage(
