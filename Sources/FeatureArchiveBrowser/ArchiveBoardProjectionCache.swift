@@ -10,12 +10,14 @@ import NikoMusicCore
 final class ArchiveBoardProjectionCache: ObservableObject {
     @Published private(set) var columns: [ArchiveBoardColumn]
 
+    private var cachedPreservingOrder: Bool
     private var cachedSongs: [Song]
     private(set) var projectionGeneration: UInt64 = 0
 
-    init(songs: [Song]) {
+    init(songs: [Song], preservingOrder: Bool = false) {
+        cachedPreservingOrder = preservingOrder
         cachedSongs = songs
-        columns = ArchiveBoardProjection.columns(from: songs)
+        columns = ArchiveBoardProjection.columns(from: songs, preservingOrder: preservingOrder)
         projectionGeneration = 1
     }
 
@@ -23,11 +25,12 @@ final class ArchiveBoardProjectionCache: ObservableObject {
     /// input is an array value, so its copy-on-write storage is shared with
     /// the view model until one side changes it.
     @discardableResult
-    func refresh(with songs: [Song]) -> Bool {
-        guard songs != cachedSongs else { return false }
+    func refresh(with songs: [Song], preservingOrder: Bool = false) -> Bool {
+        guard songs != cachedSongs || preservingOrder != cachedPreservingOrder else { return false }
 
+        cachedPreservingOrder = preservingOrder
         cachedSongs = songs
-        columns = ArchiveBoardProjection.columns(from: songs)
+        columns = ArchiveBoardProjection.columns(from: songs, preservingOrder: preservingOrder)
         projectionGeneration &+= 1
         return true
     }

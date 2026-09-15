@@ -78,8 +78,16 @@ struct ArchiveBrowserView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let message = viewModel.statusMessage, !message.isEmpty {
-                Text(message)
+            if viewModel.searchResultCountText != nil || viewModel.statusMessage?.isEmpty == false {
+                HStack {
+                    if let count = viewModel.searchResultCountText {
+                        Text(count)
+                        Spacer()
+                    }
+                    if let message = viewModel.statusMessage, !message.isEmpty {
+                        Text(message)
+                    }
+                }
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .textSelection(.enabled)

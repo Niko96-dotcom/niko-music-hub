@@ -78,6 +78,7 @@ extension ArchiveBrowserViewModel {
     }
 
     private func applyBrowseResult(_ result: ArchiveBrowseResult) {
+        isSearching = result.isSearching
         filteredSongs = result.filteredSongs
         searchMatchSummaries = result.searchMatchSummaries
         skippedSearchMatches = result.skippedSearchMatches

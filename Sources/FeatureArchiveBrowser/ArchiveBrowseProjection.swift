@@ -18,6 +18,7 @@ struct ArchiveBrowseResult: Equatable, Sendable {
     var filteredSongs: [Song]
     var searchMatchSummaries: [String: String]
     var skippedSearchMatches: [SkippedEntrySearchResult]
+    var isSearching: Bool = false
 }
 
 /// Pure browse projection: shelf → search → filter → sort.
@@ -65,7 +66,8 @@ enum ArchiveBrowseProjection {
         return ArchiveBrowseResult(
             filteredSongs: filtered,
             searchMatchSummaries: summaries,
-            skippedSearchMatches: skippedMatches
+            skippedSearchMatches: skippedMatches,
+            isSearching: !trimmed.isEmpty
         )
     }
 }

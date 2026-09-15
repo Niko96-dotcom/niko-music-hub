@@ -5,6 +5,27 @@ import XCTest
 
 @MainActor
 final class ArchiveBrowseRefreshDriverTests: XCTestCase {
+    func testResultCountTracksAppliedSearchAndClears() {
+        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
+        model.songs = state("").songs
+        model.recomputeBrowseResults()
+        XCTAssertNil(model.searchResultCountText)
+        model.setSearchQuery("neon")
+        XCTAssertNil(model.searchResultCountText)
+        model.recomputeBrowseResults()
+        XCTAssertTrue(model.isSearching)
+        XCTAssertEqual(model.searchResultCountText, "1 result")
+        model.setSearchQuery("zzzzzzzzzzzz")
+        model.recomputeBrowseResults()
+        XCTAssertEqual(model.searchResultCountText, "0 results")
+        model.statusMessage = "Scan needs attention"
+        model.setSearchQuery("")
+        XCTAssertFalse(model.isSearching)
+        XCTAssertNil(model.searchResultCountText)
+        XCTAssertEqual(model.filteredSongs.count, 2)
+        XCTAssertEqual(model.statusMessage, "Scan needs attention")
+    }
+
     func testTypingPublishesTextWithoutInvalidatingArchiveUntilResultsApply() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.songs = state("").songs
@@ -94,11 +115,15 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertEqual(Set(model.filteredSongs.map(\.id)), Set(model.songs.map(\.id)))
         model.setSearchQuery("ocean")
+        model.recomputeBrowseResults()
+        XCTAssertEqual(model.searchResultCountText, "1 result")
         model.clearScanResults()
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertTrue(model.filteredSongs.isEmpty)
         XCTAssertTrue(model.searchMatchSummaries.isEmpty)
         XCTAssertEqual(model.searchQuery, "")
+        XCTAssertFalse(model.isSearching)
+        XCTAssertNil(model.searchResultCountText)
     }
 
     private func waitForCalls(_ count: Int, projector: SuspendedBrowseProjector) async throws {

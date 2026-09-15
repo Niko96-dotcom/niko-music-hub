@@ -13,13 +13,16 @@ struct ArchiveBoardColumn: Equatable, Identifiable {
 }
 
 /// Pure board projection: the browse list split into workflow columns,
-/// most recent CPR activity first within each column.
+/// preserving search relevance or sorting by recent CPR activity within each column.
 enum ArchiveBoardProjection {
-    static func columns(from songs: [Song]) -> [ArchiveBoardColumn] {
+    static func columns(from songs: [Song], preservingOrder: Bool = false) -> [ArchiveBoardColumn] {
         let statuses: [ProjectWorkflowStatus?] = [nil] + ProjectWorkflowStatus.allCases
         return statuses.map { status in
-            let members = songs
-                .filter { $0.workflowStatus == status }
+            let matching = songs.filter { $0.workflowStatus == status }
+            if preservingOrder {
+                return ArchiveBoardColumn(status: status, songs: matching)
+            }
+            let members = matching
                 // CPR selection walks version/ignore lists. Derive the date once
                 // per member instead of repeating that walk in every comparison.
                 .map { (song: $0, date: ArchiveShelfRanker.latestCPRActivity(for: $0) ?? .distantPast) }

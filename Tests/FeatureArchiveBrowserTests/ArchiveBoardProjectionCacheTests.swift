@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 final class ArchiveBoardProjectionCacheTests: XCTestCase {
+    func testSearchOrderAndClearingSearchWithIdenticalSongs() {
+        let firstMatch = song("/tmp/z", title: "Zebra", status: .done)
+        let secondMatch = song("/tmp/a", title: "Alpha", status: .done)
+        let songs = [firstMatch, secondMatch]
+        let cache = ArchiveBoardProjectionCache(songs: songs, preservingOrder: true)
+        XCTAssertEqual(cache.columns.first { $0.status == .done }?.songs.map(\.id), songs.map(\.id))
+        XCTAssertFalse(cache.refresh(with: songs, preservingOrder: true))
+        XCTAssertTrue(cache.refresh(with: songs, preservingOrder: false))
+        XCTAssertEqual(cache.columns.first { $0.status == .done }?.songs.map(\.id), [secondMatch.id, firstMatch.id])
+        XCTAssertTrue(cache.refresh(with: songs, preservingOrder: true))
+        XCTAssertEqual(cache.columns.first { $0.status == .done }?.songs.map(\.id), songs.map(\.id))
+    }
+
     func testSameFilteredSongsReuseExistingProjection() {
         let untriaged = song("/tmp/untriaged", title: "Untriaged", status: nil)
         let inProduction = song("/tmp/production", title: "Production", status: .prod)

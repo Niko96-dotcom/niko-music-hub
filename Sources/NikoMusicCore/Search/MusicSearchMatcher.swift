@@ -108,45 +108,20 @@ enum MusicSearchMatcher {
         if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
 
         if token.count >= 3 {
-            if let fuzzy = fuzzyEditDistanceMatch(token, in: title) {
+            if let fuzzy = fuzzyEditDistanceMatch(token, in: song.effectiveDisplayTitle) {
                 return (.fuzzyTitle, fuzzy)
             }
             for alias in song.aliases {
-                if let fuzzy = fuzzyEditDistanceMatch(token, in: normalize(alias)) {
+                if let fuzzy = fuzzyEditDistanceMatch(token, in: alias) {
                     return (.fuzzyAlias, fuzzy)
                 }
             }
-            if let fuzzy = fuzzyEditDistanceMatch(token, in: folder) {
+            if let fuzzy = fuzzyEditDistanceMatch(token, in: song.originalFolderName) {
                 return (.fuzzyFolderName, fuzzy)
             }
         }
 
-        let haystack = searchableHaystack(for: song, normalize: normalize)
-        if isSubsequence(token, in: haystack) { return (.fuzzyHaystack, 5) }
-
         return nil
-    }
-
-    private static func searchableHaystack(for song: Song, normalize: (String) -> String) -> String {
-        var parts = [
-            song.effectiveDisplayTitle,
-            song.originalFolderName,
-        ]
-        parts.append(contentsOf: song.aliases)
-        parts.append(contentsOf: song.collaboratorNames)
-        if let workflowStatus = song.workflowStatus {
-            parts.append(workflowStatus.searchableText)
-        }
-        parts.append(contentsOf: song.projectVersions.map(\.fileName))
-        parts.append(contentsOf: song.previewCandidates.map(\.fileName))
-        parts.append(contentsOf: song.scanWarnings)
-        if let appNote = song.appNote {
-            parts.append(appNote)
-        }
-        if let notes = song.sidecarNotes {
-            parts.append(notes)
-        }
-        return normalize(parts.joined(separator: " "))
     }
 
     static func normalize(_ value: String) -> String {
@@ -200,7 +175,7 @@ enum MusicSearchMatcher {
         maxDistance: Int = 2
     ) -> Int? {
         guard token.count >= 3 else { return nil }
-        let words = haystack.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        let words = tokens(from: haystack)
         var best: Int?
         for word in words where abs(word.count - token.count) <= maxDistance {
             if let distance = boundedEditDistance(token, word, max: maxDistance) {
@@ -211,8 +186,9 @@ enum MusicSearchMatcher {
             }
         }
         if let best { return best }
-        if haystack.count >= token.count,
-           let distance = boundedEditDistance(token, String(haystack.prefix(token.count + maxDistance)), max: maxDistance) {
+        let normalized = normalize(haystack)
+        if normalized.count >= token.count,
+           let distance = boundedEditDistance(token, String(normalized.prefix(token.count + maxDistance)), max: maxDistance) {
             return max(6, 20 - distance * 6)
         }
         return nil

@@ -29,6 +29,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
     var scannedSongs: [Song] = []
+    // Updated before filteredSongs publishes, so Board uses the applied query mode.
+    var isSearching = false
+
+    var searchResultCountText: String? {
+        guard isSearching else { return nil }
+        return "\(filteredSongs.count) \(filteredSongs.count == 1 ? "result" : "results")"
+    }
+
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
     @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []

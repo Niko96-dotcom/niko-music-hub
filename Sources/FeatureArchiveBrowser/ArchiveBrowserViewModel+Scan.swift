@@ -43,6 +43,7 @@ extension ArchiveBrowserViewModel {
         ArchivePreviewPlayback.stopAll()
         ArchivePreviewPlayer.clearMetadataCaches()
         songs = []
+        isSearching = false
         filteredSongs = []
         searchMatchSummaries = [:]
         skippedSearchMatches = []

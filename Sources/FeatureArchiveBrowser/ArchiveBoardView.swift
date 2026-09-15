@@ -27,7 +27,7 @@ struct ArchiveBoardView: View {
         self.onChooseRoot = onChooseRoot
         self._keyboardFocus = keyboardFocus
         _projectionCache = StateObject(
-            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs)
+            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
         )
     }
 
@@ -118,7 +118,7 @@ struct ArchiveBoardView: View {
         // Selection publishes on the same view model but never emits on this
         // property publisher, so it cannot trigger a full board re-projection.
         .onReceive(viewModel.$filteredSongs) { songs in
-            projectionCache.refresh(with: songs)
+            projectionCache.refresh(with: songs, preservingOrder: viewModel.isSearching)
         }
     }
 
@@ -331,7 +331,7 @@ private struct ArchiveBoardColumnView: View {
             targeted: { if isDropTargeted != $0 { isDropTargeted = $0 } },
             landingFrame: { dropLayout.frames[$0] },
             refreshedContent: {
-                let current = ArchiveBoardProjection.columns(from: viewModel.filteredSongs)
+                let current = ArchiveBoardProjection.columns(from: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
                     .first(where: { $0.id == column.id }) ?? column
                 return columnContent(current)
             },
