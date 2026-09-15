@@ -319,6 +319,7 @@ struct ArchiveSidebarView: View {
                                 viewModel.updateWorkflowStatus(for: song, status: status)
                             },
                             vaultPresentation: viewModel.projectVaultPresentation(for: song),
+                            vaultActivityMessage: viewModel.projectVaultActivityMessages[song.id],
                             onProjectVaultPrimaryAction: {
                                 viewModel.performProjectVaultPrimaryAction(for: song)
                             }

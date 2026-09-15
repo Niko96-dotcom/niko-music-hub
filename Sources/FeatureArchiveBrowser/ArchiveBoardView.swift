@@ -310,6 +310,7 @@ private struct ArchiveBoardColumnView: View {
                 column: column,
                 selectedSongID: viewModel.selectedSong?.id,
                 vaultPresentations: viewModel.projectVaultPresentationsBySongID,
+                vaultActivity: viewModel.projectVaultActivityMessages,
                 isTargeted: isDropTargeted,
                 reduceMotion: reduceMotion,
                 colorScheme: colorScheme,
@@ -351,6 +352,7 @@ private struct ArchiveBoardColumnView: View {
                     $0.workflowStatus == column.status ? $0.id : nil
                 },
                 vaultPresentations: viewModel.projectVaultPresentationsBySongID,
+                vaultActivity: viewModel.projectVaultActivityMessages,
                 viewModel: viewModel
             )
             .equatable()
@@ -506,6 +508,7 @@ struct ArchiveBoardCardView: View {
     let song: Song
     let isSelected: Bool
     let vaultPresentation: ProjectVaultCardPresentation?
+    var vaultActivityMessage: String? = nil
     let onSelect: () -> Void
     let onOpenDetail: () -> Void
     let onProjectVaultPrimaryAction: (() -> Void)?
@@ -557,28 +560,30 @@ struct ArchiveBoardCardView: View {
                 }
             }
 
-            if let vaultPresentation, vaultPresentation.state != .active {
+            if let vaultPresentation, vaultPresentation.state != .active || vaultActivityMessage != nil {
                 HStack(spacing: 4) {
-                    Text(vaultPresentation.state.rawValue)
+                    Text(vaultActivityMessage ?? vaultPresentation.statusLabel)
+                        .lineLimit(2)
                         .font(HubDesignSystem.Typography.micro().weight(.semibold))
                         .foregroundStyle(vaultPresentation.state == .archived
                             ? HubDesignSystem.Palette.textSecondary
                             : HubDesignSystem.Palette.accent)
                     Spacer(minLength: 0)
-                    if [.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction),
+                    if vaultActivityMessage == nil,
+                       ([.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction) || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil)),
                        let onProjectVaultPrimaryAction {
                         Button(
-                            vaultPresentation.primaryAction == .retry ? "Retry" : "Get",
+                            (vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil)) ? "Retry" : "Get",
                             action: onProjectVaultPrimaryAction
                         )
                             .font(HubDesignSystem.Typography.micro().weight(.semibold))
                             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                             .buttonStyle(.plain)
-                            .help(vaultPresentation.primaryAction == .retry
-                                ? "Retry the preserved Project Vault transfer"
+                            .help((vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil))
+                                ? vaultPresentation.explanation
                                 : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
-                            .accessibilityLabel(vaultPresentation.primaryAction == .retry
-                                ? "Retry Project Vault transfer"
+                            .accessibilityLabel((vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil))
+                                ? vaultPresentation.primaryActionLabel
                                 : "Restore local copy and open project")
                     }
                 }

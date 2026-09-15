@@ -128,7 +128,7 @@ extension ArchiveBrowserViewModel {
         }
         if let restore = snapshot.restore,
            restore.projectID == snapshot.record.id,
-           restore.failureReason == .activeDestinationIntegrityMismatch,
+           restore.completedAt == nil,
            songPath == Self.vaultCanonicalPath(restore.destinationURL) {
             return true
         }
@@ -233,6 +233,18 @@ extension ArchiveBrowserViewModel {
                     || restore.failureReason == .activeDestinationIntegrityMismatch
                     || restore.phase == .superseded
                     || restore.supersededBy != nil {
+                    return restore
+                }
+                if let location = restore.linkedArchiveLocation,
+                   restore.archiveTransferID == nil, restore.archiveTransferState == nil,
+                   let root = context.archiveRoot, root.isEnabled, root.role == .archive,
+                   let resolvedRoot = try? root.resolvedURL(using: FoundationSecurityScopedBookmarks()),
+                   let linkedURL = ProjectArchiveLocationResolver(rootID: root.id, rootURL: resolvedRoot).resolve(location),
+                   Self.vaultCanonicalPath(linkedURL) == Self.vaultCanonicalPath(restore.archiveGenerationURL),
+                   restore.projectID == snapshot.record.id,
+                   snapshot.record.locations.contains(where: {
+                       $0.kind == .archive && $0.rootID == location.rootID && $0.relativePath == location.relativePath
+                   }) {
                     return restore
                 }
                 guard let transferID = restore.archiveTransferID,
@@ -390,7 +402,9 @@ extension ArchiveBrowserViewModel {
         case .retry:
             retryProjectVaultTransfer(song)
         case .review:
-            if case .makeAvailableOfflineInFinder(let generationURL) = presentation.reviewAction {
+            if presentation.retryRestoreID != nil, presentation.reviewAction == nil {
+                retryReviewedProjectVaultRestore(for: song)
+            } else if case .makeAvailableOfflineInFinder(let generationURL) = presentation.reviewAction {
                 setProjectVaultStatusMessage(
                     "Make this exact archive generation available offline in Finder, then choose Retry Get Local."
                 )
@@ -557,7 +571,7 @@ extension ArchiveBrowserViewModel {
         let message = snapshot.linkedArchive == nil
             ? "Restoring the verified project into Active Projects…"
             : "Checking and downloading archive files before restoring into Active Projects…"
-        enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: message) { model in
+        enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: message, tracksRestoreProgress: true) { model in
             do {
                 _ = try await model.waitForProjectVaultSlot {
                     try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot)
@@ -612,7 +626,7 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
-        enqueueProjectVaultOperation(for: song, label: "Retry restore", startMessage: "Retrying this preserved Project Vault restore…") { model in
+        enqueueProjectVaultOperation(for: song, label: "Retry restore", startMessage: "Retrying this preserved Project Vault restore…", tracksRestoreProgress: true) { model in
             do {
                 let completed = try await model.waitForProjectVaultSlot {
                     try await runtime.retryRestore(id: restoreID)
@@ -654,7 +668,7 @@ extension ArchiveBrowserViewModel {
         }
         if let restore = snapshot.restore,
            restore.projectID == snapshot.record.id,
-           restore.failureReason == .activeDestinationIntegrityMismatch,
+           restore.completedAt == nil,
            let activeRoot = projectVaultPresentationContext?.activeRoot {
             let activeRootURL = activeRoot.fallbackURL
                 .standardizedFileURL

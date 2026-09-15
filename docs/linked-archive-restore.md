@@ -30,3 +30,16 @@ A changed source, revoked link or occupied destination stops the operation safel
 
 Tests use local fixtures and a simulated materializing provider. Real Dropbox
 availability and DAW prompts remain host-dependent acceptance checks.
+
+## Availability, progress and recovery actions
+
+Board and list cards distinguish local archives, online-only archives and downloads.
+During an operation they show the observed restore stage. The detail panel also
+shows the total file count and size when known. These totals describe the project;
+they are not a completion percentage. Progress reads persisted restore phases and
+the current download preparation state without rescanning the archive tree.
+
+A stopped restore shows guidance for its stage: provider connection, copying,
+verification, destination placement, library persistence or DAW opening. A failed
+DAW launch offers **Retry Open** on the restored Active card; retry verifies that
+copy again before opening. Integrity or identity failures remain review-only.

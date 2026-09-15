@@ -1769,16 +1769,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                     XCTAssertEqual(presentation.state, .needsAttention, label)
                     XCTAssertEqual(presentation.explanation, integrityExplanation, label)
                 } else {
-                    XCTAssertEqual(presentation.state, .restoring, label)
-                    XCTAssertEqual(
-                        presentation.explanation,
-                        ProjectVaultActivityExplanation.restore(phase),
-                        label
-                    )
+                    XCTAssertEqual(presentation.state, .needsAttention, label)
+                    XCTAssertEqual(presentation.primaryActionLabel,
+                        phase == .openingInCubase ? "Retry Open" : "Retry Get Local", label)
                 }
                 XCTAssertEqual(presentation.primaryAction, .review, label)
                 XCTAssertNil(presentation.reviewAction, label)
-                XCTAssertNil(presentation.retryRestoreID, label)
+                XCTAssertEqual(presentation.retryRestoreID,
+                    failureReason == nil ? restore.id : nil, label)
                 XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong), label)
                 XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong), label)
                 XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong), label)
@@ -1794,7 +1792,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 viewModel.archiveInProjectVault(sourceSong)
                 viewModel.performProjectVaultPrimaryAction(for: sourceSong)
                 viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
-                try await Task.sleep(for: .milliseconds(20))
+                for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(sourceSong.id) {
+                    try await Task.sleep(for: .milliseconds(10))
+                }
 
                 XCTAssertEqual(metadataStore.upsertCallCount, 0, label)
                 XCTAssertTrue(revealed.urls.isEmpty, label)
@@ -1806,7 +1806,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 XCTAssertEqual(archiveCalls, 0, label)
                 XCTAssertEqual(retryCalls, 0, label)
                 XCTAssertEqual(restoreCalls, 0, label)
-                XCTAssertTrue(restoreRetryIDs.isEmpty, label)
+                XCTAssertEqual(restoreRetryIDs, failureReason == nil ? [restore.id] : [], label)
             }
         }
     }

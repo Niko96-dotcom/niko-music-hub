@@ -135,6 +135,7 @@ struct ArchiveBoardColumnRenderKey: Equatable {
     let column: ArchiveBoardColumn
     let selectedSongID: String?
     let vaultPresentations: [String: ProjectVaultCardPresentation]
+    var vaultActivity: [String: String] = [:]
     let isTargeted: Bool
     let reduceMotion: Bool
     let colorScheme: ColorScheme

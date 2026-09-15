@@ -146,6 +146,31 @@ public struct ProjectVaultGenerationReviewResolver: Equatable, Sendable {
 }
 
 public struct ProjectVaultCardPresentation: Equatable, Sendable {
+    public let availability: Availability?
+    public let restorePhase: VaultRestorePhase?
+
+    public var statusLabel: String {
+        guard state == .archived || state == .active || state == .keepLocal || state == .needsAttention else {
+            return state.rawValue
+        }
+        guard let availability else { return state.rawValue }
+        let label: String = switch availability {
+        case .local: "Local"
+        case .onlineOnly: "Online-only"
+        case .materializing: "Downloading"
+        case .missing: "Unavailable"
+        }
+        return state == .archived ? "Archived · \(label)" : (state == .needsAttention ? "Needs Attention · \(label)" : state.rawValue)
+    }
+
+    public var retryRestoreLabel: String {
+        restorePhase == .openingInCubase ? "Retry Open" : "Retry Get Local"
+    }
+
+    public var primaryActionLabel: String {
+        retryRestoreID == nil ? primaryAction.label : retryRestoreLabel
+    }
+
     public let state: ProjectVaultLocationState
     public let primaryAction: ProjectVaultPrimaryAction
     public let explanation: String
@@ -162,6 +187,11 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         linkedArchiveAvailability: Availability? = nil
     ) {
         isKeepLocal = record.pinned
+        self.restorePhase = restore?.phase ?? restorePhase
+        availability = record.locations.contains { $0.kind == .active && $0.availability == .local }
+            ? .local
+            : linkedArchiveAvailability ?? record.locations.first { $0.kind == .archive && $0.availability != .missing }?.availability
+                ?? record.locations.first { $0.kind == .archive }?.availability
         if restore?.failureReason == .activeDestinationIntegrityMismatch {
             reviewAction = nil
             retryRestoreID = nil
@@ -188,12 +218,27 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         }
         if let restore, restore.completedAt == nil, restore.error != nil,
            restore.failureReason == nil,
-           [.materializingArchive, .copyingToActiveStaging, .verifyingActiveStaging].contains(restore.phase) {
+           restore.phase != .superseded {
             reviewAction = nil
             retryRestoreID = restore.id
             state = .needsAttention
             primaryAction = .review
-            explanation = "Restore stopped before completion. Existing copies were kept. Check archive availability and integrity, then choose Retry Get Local to verify and resume this restore."
+            switch restore.phase {
+            case .materializingArchive:
+                explanation = "The archive could not finish downloading. Check the archive drive or provider connection, then choose Retry Get Local. Existing copies were kept."
+            case .copyingToActiveStaging:
+                explanation = "Copying stopped. Check free space and access to Active Projects, then choose Retry Get Local. The archive and partial copy were kept."
+            case .verifyingActiveStaging:
+                explanation = "The copied files could not be verified. Check archive availability, then choose Retry Get Local to recheck the preserved copy. The project has not been opened."
+            case .promotingActiveCopy:
+                explanation = "The verified copy could not be placed in Active Projects. Check for an existing folder with the same name and folder access, then choose Retry Get Local. Existing files will not be overwritten."
+            case .persistingActiveLocation:
+                explanation = "The copy is restored, but its library location could not be saved. Check disk space and access, then choose Retry Get Local. The copy will be verified again before opening."
+            case .openingInCubase:
+                explanation = "The project was restored and verified, but its DAW could not open it. Check that the DAW is installed and available, then choose Retry Open. The restored copy will be verified again."
+            case .superseded:
+                explanation = ProjectVaultActivityExplanation.restore(.superseded)
+            }
             return
         }
         if let restore,

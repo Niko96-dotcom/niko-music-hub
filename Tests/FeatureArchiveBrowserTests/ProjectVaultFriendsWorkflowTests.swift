@@ -21,19 +21,40 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
             workflowState: .done, lastActivityAt: Date(timeIntervalSince1970: 1234.125)), evidence: evidence)
         let catalog = try fixture.catalogStore()
         try catalog.apply(ProjectCatalogReconciliation(entries: [entry], reviews: [], metadataMigrations: [:]))
-        let provider = LinkedDownloadProvider(root: fixture.archive)
-        let runtime = try fixture.runtime(provider: provider)
+        let provider = LinkedDownloadProvider(root: fixture.archive, holdDownloads: true)
+        let runtime = try fixture.runtime(provider: provider, projectOpener: LinkedFailOnceOpener())
+        let model = fixture.viewModel(runtime: runtime, archiveRootWatcher: nil)
+        await model.refreshProjectVaultSnapshots()
+        await runtime.recoverAtLaunch()
         let snapshots = try await runtime.snapshots()
         let snapshot = try XCTUnwrap(snapshots.first { $0.record.id == entry.record.id })
-        let failingRuntime = try fixture.runtime(provider: provider, projectOpener: LinkedFailingOpener())
-        do {
-            _ = try await failingRuntime.restoreAndOpen(snapshot: snapshot)
-            XCTFail("Expected the fixture opener to fail")
-        } catch {}
+        model.setShowArchivedProjects(true)
+        let archivedSong = try XCTUnwrap(model.songs.first { $0.folderPath.lastPathComponent == "Historical" })
+        model.performProjectVaultPrimaryAction(for: archivedSong)
+        try await provider.waitForDownloadStart()
+        try await waitUntil { model.projectVaultRestoreProgress != nil }
+        let progress = model.projectVaultRestoreProgress
+        XCTAssertEqual(model.projectVaultActivityMessages[archivedSong.id], progress?.title)
+        XCTAssertEqual(progress?.phase, .materializingArchive)
+        XCTAssertEqual(progress?.fileCount, 2)
+        XCTAssertEqual(progress?.totalBytes, fixture.sourceManifest.totalBytes)
+        await provider.releaseDownload()
+        try await waitUntil { !model.projectVaultBusySongIDs.contains(archivedSong.id) }
+        XCTAssertNil(model.projectVaultRestoreProgress)
+        XCTAssertTrue(model.projectVaultActivityMessages.isEmpty)
         let pendingSnapshots = try await runtime.snapshots()
         let pending = try XCTUnwrap(pendingSnapshots.first { $0.record.id == entry.record.id }?.restore)
         XCTAssertEqual(pending.phase, .openingInCubase)
-        let restored = try await runtime.retryRestore(id: pending.id)
+        await model.refreshProjectVaultSnapshots()
+        let activeSong = Song(folderPath: pending.destinationURL, originalFolderName: "Old Name ", displayTitle: "Historical title")
+        model.songs = [activeSong]
+        let retryPresentation = try XCTUnwrap(model.projectVaultPresentation(for: activeSong))
+        XCTAssertEqual(retryPresentation.state, .needsAttention)
+        XCTAssertEqual(retryPresentation.retryRestoreID, pending.id)
+        XCTAssertEqual(retryPresentation.primaryActionLabel, "Retry Open")
+        model.performProjectVaultPrimaryAction(for: activeSong)
+        try await waitUntil { !model.projectVaultBusySongIDs.contains(activeSong.id) }
+        let restored = try XCTUnwrap(fixture.transferStore().restoreRecord(id: pending.id))
         XCTAssertNotNil(restored.completedAt)
         XCTAssertNil(restored.archiveTransferID)
         XCTAssertEqual(restored.linkedArchiveLocation?.relativePath, "Historical")
@@ -855,7 +876,20 @@ private final class ProjectVaultRecordingArchiveIndexStore: ArchiveIndexStoring,
 private actor LinkedDownloadProvider: ArchiveStorageProvider {
     let local: LocalFolderArchiveStorage
     var downloads = 0
-    init(root: URL) { local = LocalFolderArchiveStorage(root: root) }
+    var holdDownloads: Bool
+    var downloadStarted = false
+    init(root: URL, holdDownloads: Bool = false) {
+        local = LocalFolderArchiveStorage(root: root)
+        self.holdDownloads = holdDownloads
+    }
+    func waitForDownloadStart() async throws {
+        for _ in 0..<250 {
+            if downloadStarted { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw ProjectVaultRuntimeError.unavailable
+    }
+    func releaseDownload() { holdDownloads = false }
     func capabilities() async throws -> StorageCapabilities {
         StorageCapabilities(waitsForDurability: false, supportsMaterialization: true, supportsEviction: false)
     }
@@ -865,12 +899,24 @@ private actor LinkedDownloadProvider: ArchiveStorageProvider {
     func prepareForRead(_ location: URL) async throws { try await local.prepareForRead(location) }
     func prepareForWrite(at root: URL) async throws { try await local.prepareForWrite(at: root) }
     func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
-    func materialize(_ location: URL) async throws { downloads += 1 }
+    func materialize(_ location: URL) async throws {
+        downloadStarted = true
+        while holdDownloads { try await Task.sleep(for: .milliseconds(20)) }
+        downloads += 1
+    }
     func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
 }
 
-private struct LinkedFailingOpener: VaultProjectOpening {
+private final class LinkedFailOnceOpener: VaultProjectOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var didFail = false
     func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
-        throw LocalVaultRestoreError.noSupportedProject
+        let fail = lock.withLock {
+            let first = !didFail
+            didFail = true
+            return first
+        }
+        if fail { throw LocalVaultRestoreError.noSupportedProject }
+        return try SafeVaultProjectOpener().openProject(at: projectURL, allowedRoot: allowedRoot)
     }
 }

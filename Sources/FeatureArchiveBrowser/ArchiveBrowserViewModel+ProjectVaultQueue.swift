@@ -7,6 +7,7 @@ struct ProjectVaultQueuedOperation {
     let projectKey: String
     let songName: String
     let label: String
+    let tracksRestoreProgress: Bool
     let startMessage: String
     let rootIDs: [UUID?]
     let perform: @MainActor (ArchiveBrowserViewModel) async -> Bool
@@ -17,12 +18,23 @@ extension ArchiveBrowserViewModel {
         [projectVaultPresentationContext?.activeRoot?.id, projectVaultPresentationContext?.archiveRoot?.id]
     }
 
+    var projectVaultActivityMessages: [String: String] {
+        var messages: [String: String] = [:]
+        for (index, operation) in projectVaultPendingOperations.enumerated() {
+            messages[operation.songID] = "Queued · \(index + 1) ahead"
+        }
+        if let operation = projectVaultActiveOperation {
+            messages[operation.songID] = projectVaultRestoreProgress?.title ?? operation.startMessage
+        }
+        return messages
+    }
+
     func projectVaultQueueMessage(for song: Song) -> String? {
         if let position = projectVaultPendingOperations.firstIndex(where: { $0.songID == song.id }) {
             return "Queued: \(projectVaultPendingOperations[position].label) — \(position + 1) ahead."
         }
         if let operation = projectVaultActiveOperation, operation.songID == song.id {
-            return "\(operation.label) in progress…"
+            return projectVaultRestoreProgress?.title ?? operation.startMessage
         }
         return projectVaultOperationMessages[song.id]
     }
@@ -46,6 +58,7 @@ extension ArchiveBrowserViewModel {
         for song: Song,
         label: String,
         startMessage: String,
+        tracksRestoreProgress: Bool = false,
         perform: @escaping @MainActor (ArchiveBrowserViewModel) async -> Bool
     ) {
         let key = projectVaultSnapshot(for: song)?.record.id.description
@@ -62,7 +75,7 @@ extension ArchiveBrowserViewModel {
         projectVaultOperationMessages.removeValue(forKey: song.id)
         projectVaultPendingOperations.append(ProjectVaultQueuedOperation(
             songID: song.id, projectKey: key, songName: song.effectiveDisplayTitle,
-            label: label, startMessage: startMessage, rootIDs: vaultQueueRootIDs, perform: perform
+            label: label, tracksRestoreProgress: tracksRestoreProgress, startMessage: startMessage, rootIDs: vaultQueueRootIDs, perform: perform
         ))
         if projectVaultActiveOperation == nil {
             startNextProjectVaultOperation()
@@ -78,6 +91,18 @@ extension ArchiveBrowserViewModel {
         setProjectVaultStatusMessage(operation.startMessage)
         projectVaultQueueTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            let progressTask = Task { @MainActor [weak self] in
+                guard operation.tracksRestoreProgress, let projectID = UUID(uuidString: operation.projectKey) else { return }
+                while !Task.isCancelled {
+                    let progress = await self?.projectVaultRuntime?.restoreProgress(for: ProjectID(rawValue: projectID))
+                    guard !Task.isCancelled,
+                          self?.projectVaultActiveOperation?.projectKey == operation.projectKey else { return }
+                    if self?.projectVaultRestoreProgress != progress { self?.projectVaultRestoreProgress = progress }
+                    do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                }
+            }
+            defer { progressTask.cancel(); self.projectVaultRestoreProgress = nil }
+
             self.refreshProjectVaultPresentationContext()
             let succeeded: Bool
             if operation.rootIDs != self.vaultQueueRootIDs {
@@ -89,6 +114,8 @@ extension ArchiveBrowserViewModel {
             self.projectVaultOperationMessages[operation.songID] = self.statusBaseMessage
             if !succeeded { self.projectVaultQueueFailures.append(operation.songName) }
             self.projectVaultBusySongIDs.remove(operation.songID)
+            progressTask.cancel()
+            self.projectVaultRestoreProgress = nil
             self.projectVaultActiveOperation = nil
             self.projectVaultQueueTask = nil
             if !self.projectVaultPendingOperations.isEmpty {

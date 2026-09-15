@@ -248,11 +248,12 @@ struct SongDetailView: View {
         HubLabeledButton(
             icon: vaultPresentation?.reviewAction == nil ? "arrow.up.right" : "folder",
             label: vaultPresentation?.reviewAction?.label
-                ?? (vaultPresentation?.primaryAction == .openInCubase ? liveSong.openProjectLabel : vaultPresentation?.primaryAction.label)
+                ?? (vaultPresentation?.primaryAction == .openInCubase ? liveSong.openProjectLabel : vaultPresentation?.primaryActionLabel)
                 ?? liveSong.openProjectLabel,
             style: .primary,
             help: vaultPresentation?.explanation ?? "Open the main project in its DAW (O)",
-            isEnabled: (vaultPresentation?.primaryAction ?? .openInCubase) != .openInCubase || liveSong.effectiveLatestCPR != nil
+            isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                && ((vaultPresentation?.primaryAction ?? .openInCubase) != .openInCubase || liveSong.effectiveLatestCPR != nil)
         ) { viewModel.performProjectVaultPrimaryAction(for: liveSong) }
     }
 
@@ -285,7 +286,7 @@ struct SongDetailView: View {
                 Divider()
                 Label("Project Vault", systemImage: "archivebox")
                     .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
-                Text(presentation.state.rawValue).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
+                Text(presentation.statusLabel).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                 Button("Manage storage") { storageExpanded = true }.buttonStyle(.plain)
                     .foregroundStyle(HubDesignSystem.Palette.accent)
             }
@@ -301,7 +302,7 @@ struct SongDetailView: View {
                     Label("Project Vault", systemImage: "archivebox")
                         .font(HubDesignSystem.Typography.body().weight(.semibold))
                     Spacer()
-                    Text(presentation.state.rawValue)
+                    Text(presentation.statusLabel)
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
@@ -310,9 +311,16 @@ struct SongDetailView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
-                    Text(message)
-                        .font(HubDesignSystem.Typography.caption())
-                        .fixedSize(horizontal: false, vertical: true)
+                    if viewModel.projectVaultActiveOperation?.songID == liveSong.id {
+                        ProgressView(message).controlSize(.small)
+                        if let scope = viewModel.projectVaultRestoreProgress?.scopeDescription {
+                            Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text(message)
+                            .font(HubDesignSystem.Typography.caption())
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 if viewModel.projectVaultPendingOperations.contains(where: { $0.songID == liveSong.id }) {
                     Text("Waiting requests run while Niko Music Hub is open.")
@@ -370,7 +378,7 @@ struct SongDetailView: View {
                     icon: "arrow.clockwise.circle",
                     label: viewModel.projectVaultBusySongIDs.contains(liveSong.id)
                         ? "Retrying…"
-                        : "Retry Get Local",
+                        : vaultPresentation.retryRestoreLabel,
                     style: .secondary,
                     help: "Recheck and retry this preserved restore after resolving the reported problem",
                     isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)

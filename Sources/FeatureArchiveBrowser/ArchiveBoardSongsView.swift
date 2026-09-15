@@ -9,6 +9,7 @@ struct ArchiveBoardSongsView: View, Equatable {
     let songs: [Song]
     let selectedSongID: String?
     let vaultPresentations: [String: ProjectVaultCardPresentation]
+    var vaultActivity: [String: String] = [:]
     let viewModel: ArchiveBrowserViewModel
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
@@ -16,6 +17,7 @@ struct ArchiveBoardSongsView: View, Equatable {
             && lhs.viewModel === rhs.viewModel
             && lhs.songs == rhs.songs
             && lhs.vaultPresentations == rhs.vaultPresentations
+            && lhs.vaultActivity == rhs.vaultActivity
     }
 
     var body: some View {
@@ -26,6 +28,7 @@ struct ArchiveBoardSongsView: View, Equatable {
                         song: song,
                         isSelected: selectedSongID == song.id,
                         vaultPresentation: vaultPresentations[song.id],
+                        vaultActivityMessage: vaultActivity[song.id],
                         viewModel: viewModel
                     )
                     .equatable()
@@ -55,11 +58,13 @@ struct ArchiveBoardSongCard: View, Equatable {
     let song: Song
     let isSelected: Bool
     let vaultPresentation: ProjectVaultCardPresentation?
+    var vaultActivityMessage: String? = nil
     let viewModel: ArchiveBrowserViewModel
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.isSelected == rhs.isSelected
             && lhs.vaultPresentation == rhs.vaultPresentation
+            && lhs.vaultActivityMessage == rhs.vaultActivityMessage
             && lhs.viewModel === rhs.viewModel
             && lhs.song == rhs.song
     }
@@ -69,6 +74,7 @@ struct ArchiveBoardSongCard: View, Equatable {
             song: song,
             isSelected: isSelected,
             vaultPresentation: vaultPresentation,
+            vaultActivityMessage: vaultActivityMessage,
             onSelect: { viewModel.selectSongOnBoard(song) },
             onOpenDetail: { viewModel.selectSong(song) },
             onProjectVaultPrimaryAction: {

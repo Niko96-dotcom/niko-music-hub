@@ -444,6 +444,7 @@ public struct FoundationProjectVaultCapacityProbe: ProjectVaultCapacityProbing, 
 }
 
 public protocol ProjectVaultOperating: Sendable {
+    func restoreProgress(for projectID: ProjectID) async -> ProjectVaultRestoreProgress?
     func snapshots() async throws -> [ProjectVaultRuntimeSnapshot]
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot
     func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord
@@ -455,6 +456,8 @@ public protocol ProjectVaultOperating: Sendable {
 }
 
 public extension ProjectVaultOperating {
+    func restoreProgress(for projectID: ProjectID) async -> ProjectVaultRestoreProgress? { nil }
+
     func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
         throw ProjectVaultRuntimeError.unavailable
     }
@@ -473,6 +476,16 @@ public extension ProjectVaultOperating {
 public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     private let settingsStore: any SettingsStore
     private let transferStore: SQLiteVaultTransferStore
+    private var preparingLinkedRestores: [ProjectID: ProjectVaultRestoreProgress] = [:]
+
+    public func restoreProgress(for projectID: ProjectID) async -> ProjectVaultRestoreProgress? {
+        if let preparation = preparingLinkedRestores[projectID] { return preparation }
+        guard let record = try? transferStore.recoverableRestoreRecords()
+            .filter({ $0.projectID == projectID && $0.error == nil && $0.failureReason == nil })
+            .max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
+        return ProjectVaultRestoreProgress(phase: record.phase, manifest: record.manifest)
+    }
+
     private let catalogStore: SQLiteProjectCatalogStore
     private let projectOpener: any VaultProjectOpening
     private let activityProbe: any VaultAutomationActivityProbing
@@ -843,8 +856,11 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         let validate = linkedArchiveValidation(configuration: configuration)
         try validate(entry.record.id, location, archiveURL)
         let provider = archiveProvider(root: configuration.archive.url)
+        preparingLinkedRestores[entry.record.id] = ProjectVaultRestoreProgress(phase: .materializingArchive)
+        defer { preparingLinkedRestores.removeValue(forKey: entry.record.id) }
         let inventory = LinkedArchiveInventory()
         let download = try inventory.materializationManifest(at: archiveURL)
+        preparingLinkedRestores[entry.record.id] = ProjectVaultRestoreProgress(phase: .materializingArchive, manifest: download)
         let admission = makeWriteAdmission(settings: settings)
         if try await provider.currentLocality(at: archiveURL, manifest: download) != .fullyLocalCurrent {
             try await admission(VaultWriteAdmissionRequest(target: .archive, sourceURL: nil,
@@ -875,6 +891,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             writeAdmission: admission, linkedArchiveValidation: validate)
         let relativePath = entry.record.locations.first { $0.kind == .active && $0.rootID == configuration.active.id }?.relativePath
             ?? archiveURL.lastPathComponent
+        preparingLinkedRestores.removeValue(forKey: entry.record.id)
         return try await engine.restoreLinkedArchive(projectID: entry.record.id, location: location,
             archiveURL: archiveURL, manifest: manifest, destinationRelativePath: relativePath)
     }

@@ -11,6 +11,7 @@ struct SongCardView: View {
     var onPlay: (() -> Void)?
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
     var vaultPresentation: ProjectVaultCardPresentation?
+    var vaultActivityMessage: String? = nil
     var onProjectVaultPrimaryAction: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,9 +71,9 @@ struct SongCardView: View {
                         .help(song.displayScanWarnings().joined(separator: " "))
                 }
             }
-            if let vaultPresentation, vaultPresentation.state != .active {
+            if let vaultPresentation, vaultPresentation.state != .active || vaultActivityMessage != nil {
                 HStack(spacing: 5) {
-                    Text(vaultPresentation.state.rawValue)
+                    Text(vaultActivityMessage ?? vaultPresentation.statusLabel)
                         .font(HubDesignSystem.Typography.micro().weight(.semibold))
                         .foregroundStyle(isArchivedProject ? HubDesignSystem.Palette.textSecondary : HubDesignSystem.Palette.accent)
                     Text(vaultPresentation.explanation)
@@ -82,12 +83,12 @@ struct SongCardView: View {
 
                     Spacer(minLength: 3)
 
-                    if [.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction),
+                    if vaultActivityMessage == nil, ([.restoreAndOpen, .retry].contains(vaultPresentation.primaryAction) || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil)),
                        let onProjectVaultPrimaryAction {
                         Button(action: onProjectVaultPrimaryAction) {
                             Label(
-                                vaultPresentation.primaryAction == .retry ? "Retry" : "Get",
-                                systemImage: vaultPresentation.primaryAction == .retry
+                                (vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil)) ? "Retry" : "Get",
+                                systemImage: (vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil))
                                     ? "arrow.clockwise.circle"
                                     : "arrow.down.circle"
                             )
@@ -98,11 +99,11 @@ struct SongCardView: View {
                                 .background(HubDesignSystem.Palette.selection, in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help(vaultPresentation.primaryAction == .retry
-                            ? "Retry the preserved Project Vault transfer"
+                        .help((vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil))
+                            ? vaultPresentation.explanation
                             : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
-                        .accessibilityLabel(vaultPresentation.primaryAction == .retry
-                            ? "Retry Project Vault transfer"
+                        .accessibilityLabel((vaultPresentation.primaryAction == .retry || (vaultPresentation.retryRestoreID != nil && vaultPresentation.reviewAction == nil))
+                            ? vaultPresentation.primaryActionLabel
                             : "Restore local copy and open project")
                     }
                 }
