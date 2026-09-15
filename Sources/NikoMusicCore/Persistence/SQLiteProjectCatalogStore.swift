@@ -73,6 +73,63 @@ public struct SQLiteProjectCatalogStore: ActiveProjectLocationPersisting, @unche
         }
     }
 
+    /// All links commit together against the current catalog. Unrelated rows and all
+    /// historical evidence remain untouched, including verification dates and metadata keys.
+    public func linkArchiveLocations(_ links: [ProjectCatalogArchiveLink]) throws {
+        try database.withConnection { db in
+            try begin(db)
+            do {
+                let original = try loadJSONRows(db: db, sql: "SELECT entry_json FROM project_catalog ORDER BY project_id;", as: ProjectCatalogEntry.self)
+                var entries = original
+                for link in links {
+                    guard link.location.kind == .archive,
+                          link.location.availability != .missing,
+                          ProjectArchiveLocationResolver.isOrdinaryArchivePath(link.location.relativePath),
+                          let index = entries.firstIndex(where: { $0.record.id == link.projectID }) else {
+                        throw SQLiteArchiveDatabase.StoreError.exec("invalid existing archive link")
+                    }
+                    let matches = entries.filter { $0.evidence.isHighConfidenceMatch(with: link.evidence) }
+                    guard matches.count == 1, matches[0].record.id == link.projectID else {
+                        throw SQLiteArchiveDatabase.StoreError.exec("archive evidence does not uniquely match the requested project")
+                    }
+                    let claims = entries.filter { entry in
+                        entry.record.locations.contains {
+                            $0.rootID == link.location.rootID && $0.relativePath == link.location.relativePath
+                        }
+                    }
+                    guard claims.isEmpty || (claims.count == 1 && claims[0].record.id == link.projectID) else {
+                        throw SQLiteArchiveDatabase.StoreError.exec("archive location is already claimed by another project")
+                    }
+                    if let locationIndex = entries[index].record.locations.firstIndex(where: {
+                        $0.rootID == link.location.rootID && $0.relativePath == link.location.relativePath
+                    }) {
+                        guard entries[index].record.locations[locationIndex].kind == .archive else {
+                            throw SQLiteArchiveDatabase.StoreError.exec("archive link conflicts with a historical location")
+                        }
+                        entries[index].record.locations[locationIndex] = link.location
+                    } else {
+                        entries[index].record.locations.append(link.location)
+                    }
+                }
+                for (before, after) in zip(original, entries) where before != after {
+                    var statement: OpaquePointer?
+                    defer { sqlite3_finalize(statement) }
+                    guard sqlite3_prepare_v2(db, "UPDATE project_catalog SET entry_json = ? WHERE project_id = ?;", -1, &statement, nil) == SQLITE_OK else {
+                        throw storeError(db)
+                    }
+                    let json = try encode(after)
+                    sqlite3_bind_text(statement, 1, json, -1, projectCatalogSQLiteTransient)
+                    sqlite3_bind_text(statement, 2, after.record.id.description, -1, projectCatalogSQLiteTransient)
+                    guard sqlite3_step(statement) == SQLITE_DONE else { throw storeError(db) }
+                }
+                try commit(db)
+            } catch {
+                sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw error
+            }
+        }
+    }
+
     private func migrateMetadata(_ migrations: [String: ProjectID], db: OpaquePointer) throws {
         guard try tableExists("song_metadata", db: db) else { return }
         for (legacyID, projectID) in migrations where legacyID != projectID.description {

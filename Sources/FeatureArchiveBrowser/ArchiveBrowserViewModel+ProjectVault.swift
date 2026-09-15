@@ -75,8 +75,8 @@ extension ArchiveBrowserViewModel {
     }
 
     /// Project Vault is deliberately exposed as a separate browse layer. The generic
-    /// archive scanner never walks the Dropbox root, but a verified vault snapshot can
-    /// still project an archive-only project into the Hub when the user asks to see it.
+    /// archive scanner never walks the Dropbox root. Verified generations and explicitly
+    /// linked archive folders are projected from the catalog when the user asks to see them.
     var canBrowseArchivedProjects: Bool {
         projectVaultRuntime != nil && projectVaultPresentationContext != nil
     }
@@ -108,6 +108,9 @@ extension ArchiveBrowserViewModel {
             return false
         }
         let songPath = Self.vaultCanonicalPath(song.folderPath)
+        if let linked = linkedArchive(for: snapshot), songPath == Self.vaultCanonicalPath(linked.url) {
+            return true
+        }
         if let restore = snapshot.restore,
            restore.projectID == snapshot.record.id,
            restore.failureReason == .activeDestinationIntegrityMismatch,
@@ -270,7 +273,8 @@ extension ArchiveBrowserViewModel {
                 transferState: transferState,
                 transferErrorOrigin: snapshot.transfer?.error?.origin,
                 restorePhase: safeRestore?.phase,
-                restore: safeRestore
+                restore: safeRestore,
+                linkedArchiveAvailability: linkedArchive(for: snapshot)?.location.availability
             )
         }
         guard let active = context.activeRoot else { return nil }
@@ -366,6 +370,8 @@ extension ArchiveBrowserViewModel {
             try? openLatestCPR(for: song)
         case .restoreAndOpen:
             restoreAndOpenFromProjectVault(song)
+        case .revealArchive:
+            revealLinkedArchiveInFinder(for: song)
         case .retry:
             retryProjectVaultTransfer(song)
         case .review:
@@ -377,6 +383,27 @@ extension ArchiveBrowserViewModel {
             } else {
                 setProjectVaultStatusMessage(presentation.explanation)
             }
+        }
+    }
+
+    private func revealLinkedArchiveInFinder(for song: Song) {
+        do {
+            let settings = try settingsStore.loadSettings()
+            guard settings.vault.isEnabled,
+                  let root = settings.musicRoots.first(where: { $0.id == settings.vault.archiveRootID }),
+                  let snapshot = projectVaultSnapshot(for: song), snapshot.transfer == nil,
+                  let linked = snapshot.linkedArchive,
+                  let url = ProjectArchiveLocationResolver(
+                    rootID: root.id,
+                    rootURL: try root.resolvedURL(using: FoundationSecurityScopedBookmarks())
+                  ).resolve(linked.location),
+                  Self.vaultCanonicalPath(url) == Self.vaultCanonicalPath(song.folderPath),
+                  FileManager.default.fileExists(atPath: url.path) else {
+                throw MusicItemOpenerError.pathOutsideAllowedRoots(song.folderPath)
+            }
+            fileActions.revealInFinder(url)
+        } catch {
+            setProjectVaultStatusMessage("The linked archive folder could not be revealed: \(error.localizedDescription)")
         }
     }
 
@@ -604,6 +631,9 @@ extension ArchiveBrowserViewModel {
     }
 
     private func cacheProjectVaultSnapshot(_ snapshot: ProjectVaultRuntimeSnapshot) {
+        if let linked = linkedArchive(for: snapshot) {
+            projectVaultSnapshotsByPath[Self.vaultCanonicalPath(linked.url)] = snapshot
+        }
         if let restore = snapshot.restore,
            restore.projectID == snapshot.record.id,
            restore.failureReason == .activeDestinationIntegrityMismatch,
@@ -636,12 +666,38 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    private func linkedArchive(for snapshot: ProjectVaultRuntimeSnapshot) -> ProjectVaultLinkedArchive? {
+        guard snapshot.transfer == nil,
+              let linked = snapshot.linkedArchive, linked.location.availability != .missing,
+              snapshot.record.locations.contains(linked.location),
+              let root = projectVaultPresentationContext?.archiveRoot,
+              let resolved = ProjectArchiveLocationResolver(rootID: root.id, rootURL: root.fallbackURL).resolve(linked.location),
+              Self.vaultCanonicalPath(resolved) == Self.vaultCanonicalPath(linked.url) else { return nil }
+        return linked
+    }
+
+    private func archiveDestination(for snapshot: ProjectVaultRuntimeSnapshot) -> URL? {
+        snapshot.transfer?.destinationURL ?? linkedArchive(for: snapshot)?.url
+    }
+
+    private func archiveSourcePath(for snapshot: ProjectVaultRuntimeSnapshot) -> String? {
+        if let transfer = snapshot.transfer { return transfer.sourceURL.standardizedFileURL.path }
+        guard let activeRoot = projectVaultPresentationContext?.activeRoot,
+              let location = snapshot.record.locations.first(where: { $0.kind == .active && $0.rootID == activeRoot.id }) else {
+            return nil
+        }
+        return activeRoot.fallbackURL.appendingPathComponent(location.relativePath).standardizedFileURL.path
+    }
+
     private func archivedOnlySnapshots(from snapshots: [ProjectVaultRuntimeSnapshot]) -> [ProjectVaultRuntimeSnapshot] {
         guard let generationResolver = projectVaultPresentationContext?.generationReviewResolver else {
             return []
         }
         return snapshots.filter { snapshot in
-            guard let transfer = snapshot.transfer else { return false }
+            guard let transfer = snapshot.transfer else {
+                return linkedArchive(for: snapshot) != nil
+                    && !snapshot.record.locations.contains { $0.kind == .active && $0.availability == .local }
+            }
             let isVerifiedTerminal = [
                 VaultTransferState.archiveVerified,
                 .archivedLocal,
@@ -677,10 +733,10 @@ extension ArchiveBrowserViewModel {
     func projectVaultCatalog(from baselineSongs: [Song]) -> (scannedSongs: [Song], visibleSongs: [Song]) {
         let archivedSnapshots = archivedOnlySnapshots(from: projectVaultSnapshots)
         let archivedDestinationPaths = Set(archivedSnapshots.compactMap { snapshot in
-            snapshot.transfer.map { Self.vaultCanonicalPath($0.destinationURL) }
+            archiveDestination(for: snapshot).map(Self.vaultCanonicalPath)
         })
         let archivedSourcePaths = Set(archivedSnapshots.compactMap { snapshot in
-            snapshot.transfer.map { Self.vaultCanonicalPath($0.sourceURL) }
+            archiveSourcePath(for: snapshot).map { Self.vaultCanonicalPath(URL(fileURLWithPath: $0)) }
         })
 
         // Old cache snapshots may contain an archive projection from a previous app
@@ -701,8 +757,9 @@ extension ArchiveBrowserViewModel {
                 recordPersistenceWarning("Archived project metadata could not be loaded: \(error.localizedDescription)")
             }
             archivedSongs = archivedSnapshots.compactMap { snapshot in
-                let sourceID = snapshot.transfer?.sourceURL.standardizedFileURL.path
-                return makeArchivedSong(from: snapshot, metadata: sourceID.flatMap { metadata[$0] })
+                let sourceMetadata = archiveSourcePath(for: snapshot).flatMap { metadata[$0] }
+                let archiveMetadata = archiveDestination(for: snapshot).flatMap { metadata[$0.standardizedFileURL.path] }
+                return makeArchivedSong(from: snapshot, metadata: sourceMetadata ?? archiveMetadata ?? metadata[snapshot.record.id.description])
             }
         }
         let visibleSongs = SongCatalogDeduplicator.uniqueByID(cleanScannedSongs + archivedSongs)
@@ -710,8 +767,9 @@ extension ArchiveBrowserViewModel {
     }
 
     private func makeArchivedSong(from snapshot: ProjectVaultRuntimeSnapshot, metadata: SongUserMetadata?) -> Song? {
-        guard let transfer = snapshot.transfer else { return nil }
-        let destination = transfer.destinationURL.standardizedFileURL
+        guard let archiveURL = archiveDestination(for: snapshot) else { return nil }
+        let destination = archiveURL.standardizedFileURL
+        let originalName = snapshot.transfer?.sourceURL.lastPathComponent ?? destination.lastPathComponent
         let detector = ProjectVersionDetector()
         let hasMaterializedDestination = FileManager.default.fileExists(atPath: destination.path)
         let versions = hasMaterializedDestination
@@ -720,8 +778,8 @@ extension ArchiveBrowserViewModel {
         let title = snapshot.record.canonicalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         return Song(
             folderPath: destination,
-            originalFolderName: transfer.sourceURL.lastPathComponent,
-            displayTitle: title.isEmpty ? transfer.sourceURL.lastPathComponent : title,
+            originalFolderName: originalName,
+            displayTitle: title.isEmpty ? originalName : title,
             projectVersions: versions,
             latestCPR: detector.latestCPR(from: versions),
             virtualTitle: metadata?.virtualTitle,

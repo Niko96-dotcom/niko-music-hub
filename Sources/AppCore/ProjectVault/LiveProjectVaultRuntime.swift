@@ -12,15 +12,28 @@ public struct ProjectVaultRuntimeSnapshot: Sendable, Equatable {
     public let record: ProjectRecord
     public let transfer: VaultTransferRecord?
     public let restore: VaultRestoreRecord?
+    public let linkedArchive: ProjectVaultLinkedArchive?
 
     public init(
         record: ProjectRecord,
         transfer: VaultTransferRecord?,
-        restore: VaultRestoreRecord? = nil
+        restore: VaultRestoreRecord? = nil,
+        linkedArchive: ProjectVaultLinkedArchive? = nil
     ) {
         self.record = record
         self.transfer = transfer
         self.restore = restore
+        self.linkedArchive = linkedArchive
+    }
+}
+
+public struct ProjectVaultLinkedArchive: Sendable, Equatable {
+    public let location: ProjectLocation
+    public let url: URL
+
+    public init(location: ProjectLocation, url: URL) {
+        self.location = location
+        self.url = url
     }
 }
 
@@ -1113,7 +1126,22 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 record.locations.append(ProjectLocation(rootID: configuration.archive.id, relativePath: transfer.destinationURL.path, kind: .archive, availability: transfer.state == .archivedOnlineOnly ? .onlineOnly : .local))
             }
         }
-        return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer, restore: restore)
+        var linkedArchive: ProjectVaultLinkedArchive?
+        if transfer == nil {
+            let archiveIndices = record.locations.indices.filter {
+                record.locations[$0].kind == .archive && record.locations[$0].rootID == configuration.archive.id
+            }
+            let resolver = ProjectArchiveLocationResolver(rootID: configuration.archive.id, rootURL: configuration.archive.url)
+            if archiveIndices.count == 1, let index = archiveIndices.first,
+               let url = resolver.resolve(record.locations[index]),
+               let availability = try? ProjectArchiveAvailabilityProbe().availability(at: url) {
+                record.locations[index].availability = availability
+                if availability != .missing {
+                    linkedArchive = ProjectVaultLinkedArchive(location: record.locations[index], url: url)
+                }
+            }
+        }
+        return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer, restore: restore, linkedArchive: linkedArchive)
     }
 
     /// Repairs availability flags written by older incremental reconciliation.

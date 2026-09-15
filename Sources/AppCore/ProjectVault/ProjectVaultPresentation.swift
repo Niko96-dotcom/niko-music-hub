@@ -13,6 +13,7 @@ public enum ProjectVaultLocationState: String, Codable, CaseIterable, Sendable {
 public enum ProjectVaultPrimaryAction: Equatable, Sendable {
     case openInCubase
     case restoreAndOpen
+    case revealArchive
     case retry
     case review
 
@@ -20,6 +21,7 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
         switch self {
         case .openInCubase: "Open project"
         case .restoreAndOpen: "Get Local & Open"
+        case .revealArchive: "Show in Finder"
         case .retry: "Retry"
         case .review: "Review"
         }
@@ -156,7 +158,8 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         transferState: VaultTransferState? = nil,
         transferErrorOrigin: VaultTransferState? = nil,
         restorePhase: VaultRestorePhase? = nil,
-        restore: VaultRestoreRecord? = nil
+        restore: VaultRestoreRecord? = nil,
+        linkedArchiveAvailability: Availability? = nil
     ) {
         isKeepLocal = record.pinned
         if restore?.failureReason == .activeDestinationIntegrityMismatch {
@@ -254,6 +257,19 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             state = .active
             primaryAction = .openInCubase
             explanation = "Ready in Active Projects."
+        } else if let availability = linkedArchiveAvailability, availability != .missing {
+            state = .archived
+            primaryAction = .revealArchive
+            switch availability {
+            case .onlineOnly:
+                explanation = "This existing archive folder has online-only files. Show it in Finder to download them."
+            case .materializing:
+                explanation = "Files in this existing archive folder are downloading. Show it in Finder to check progress."
+            case .local:
+                explanation = "This existing archive folder is available locally. Show it in Finder to access its files."
+            case .missing:
+                explanation = "The archive folder is unavailable."
+            }
         } else if record.locations.contains(where: { $0.kind == .archive && $0.availability != .missing }) {
             state = .archived
             primaryAction = .restoreAndOpen

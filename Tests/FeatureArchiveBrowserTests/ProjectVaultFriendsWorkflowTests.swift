@@ -6,6 +6,83 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testLinkedArchiveAppearsWithFinderActionAndPreservesHistoricalMetadata() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let archived = fixture.archive.appendingPathComponent("Existing Archive")
+        try FileManager.default.copyItem(at: fixture.project, to: archived)
+        let observedSong = Song(folderPath: archived, originalFolderName: "Existing Archive", displayTitle: "Existing Archive")
+        guard case .complete(let evidence, _) = try ProjectSourceInventory().collect(in: archived, for: observedSong) else {
+            return XCTFail("Fixture inventory must be complete")
+        }
+        let historicPath = fixture.active.appendingPathComponent("Old Name ")
+        let entry = ProjectCatalogEntry(
+            record: ProjectRecord(
+                canonicalTitle: "Preserved title",
+                locations: [ProjectLocation(rootID: fixture.activeID, relativePath: "Old Name ", kind: .active, availability: .missing)],
+                workflowState: .done
+            ),
+            evidence: evidence
+        )
+        let store = try fixture.catalogStore()
+        try store.apply(ProjectCatalogReconciliation(entries: [entry], reviews: [], metadataMigrations: [:]))
+        try store.linkArchiveLocations([ProjectCatalogArchiveLink(
+            projectID: entry.record.id,
+            location: ProjectLocation(rootID: fixture.archiveID, relativePath: "Existing Archive", kind: .archive, availability: .onlineOnly),
+            evidence: evidence
+        )])
+        let metadataStore = try SQLiteSongUserMetadataStore(database: fixture.database)
+        try metadataStore.upsert(SongUserMetadata(songID: historicPath.path, virtualTitle: "My existing title", appNote: "Historical note", workflowStatus: .done))
+        let revealed = RevealedURLBox()
+        let runtime = try fixture.runtime()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: fixture.settingsStore, fileActions: CapturingTestFileActions(revealed: revealed)),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [MusicHubRuntimeEnvironment.dryRunOpenKey: "1"])
+        )
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.archivedProjectCount, 1)
+        viewModel.setShowArchivedProjects(true)
+        let song = try XCTUnwrap(viewModel.songs.first { $0.folderPath.lastPathComponent == "Existing Archive" })
+        XCTAssertEqual(song.effectiveDisplayTitle, "My existing title")
+        XCTAssertEqual(song.appNote, "Historical note")
+        let snapshot = try XCTUnwrap(viewModel.projectVaultSnapshot(for: song))
+        XCTAssertEqual(snapshot.record.id, entry.record.id)
+        XCTAssertEqual(snapshot.linkedArchive?.location.availability, .local, "Fresh file metadata must replace the stale stored online-only flag.")
+        XCTAssertNil(snapshot.transfer)
+        XCTAssertNil(snapshot.record.lastVerifiedAt)
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: song))
+        XCTAssertEqual(presentation.state, .archived)
+        XCTAssertEqual(presentation.primaryAction, .revealArchive)
+        XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: song))
+        XCTAssertFalse(viewModel.canArchiveInProjectVault(song))
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
+        viewModel.performProjectVaultPrimaryAction(for: song)
+        XCTAssertEqual(revealed.urls.map { $0.resolvingSymlinksInPath() }, [archived.resolvingSymlinksInPath()])
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: archived)
+
+        let online = ProjectVaultCardPresentation(record: snapshot.record, linkedArchiveAvailability: .onlineOnly)
+        XCTAssertEqual(online.primaryAction, .revealArchive)
+        XCTAssertTrue(online.explanation.contains("online-only"))
+
+        let reopened = fixture.viewModel(runtime: try fixture.runtime(), songMetadataStore: metadataStore)
+        await reopened.refreshProjectVaultSnapshots()
+        reopened.setShowArchivedProjects(true)
+        XCTAssertEqual(reopened.archivedProjectCount, 1)
+        XCTAssertEqual(reopened.songs.first?.appNote, "Historical note")
+        XCTAssertEqual(try store.loadEntries().first?.record.locations.first?.relativePath, "Old Name ")
+
+        // A cached card is never authority after the configured archive root changes.
+        try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
+        viewModel.performProjectVaultPrimaryAction(for: song)
+        XCTAssertEqual(revealed.urls.count, 1)
+    }
+
     func testRapidArchiveAndRestoreRequestsQueueAndDeduplicate() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
