@@ -78,9 +78,21 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let reopened = fixture.viewModel(runtime: try fixture.runtime(), songMetadataStore: metadataStore)
         await reopened.refreshProjectVaultSnapshots()
         reopened.setShowArchivedProjects(true)
+        // The launch scan adds an active song ahead of the archive projection.
+        // Exercise that ordering before checking the historical project's metadata.
+        try await waitUntil {
+            !reopened.isScanning && reopened.scannedSongs.contains {
+                $0.folderPath.resolvingSymlinksInPath() == fixture.project.resolvingSymlinksInPath()
+            }
+        }
         XCTAssertEqual(reopened.archivedProjectCount, 1)
-        XCTAssertEqual(reopened.songs.first?.appNote, "Historical note")
-        XCTAssertEqual(try store.loadEntries().first?.record.locations.first?.relativePath, "Old Name ")
+        let reopenedSong = try XCTUnwrap(reopened.songs.first {
+            reopened.projectVaultSnapshot(for: $0)?.record.id == entry.record.id
+        })
+        XCTAssertEqual(reopenedSong.effectiveDisplayTitle, "My existing title")
+        XCTAssertEqual(reopenedSong.appNote, "Historical note")
+        let persistedEntry = try XCTUnwrap(store.loadEntries().first { $0.record.id == entry.record.id })
+        XCTAssertEqual(persistedEntry.record.locations.first { $0.kind == .active }?.relativePath, "Old Name ")
 
         // A cached card is never authority after the configured archive root changes.
         try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
