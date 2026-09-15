@@ -6,6 +6,44 @@ import XCTest
 
 @MainActor
 final class ProjectVaultFriendsWorkflowTests: XCTestCase {
+    func testRestoreDialogSelectsVersionAndKeepsOccupiedDestination() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let chosen = fixture.project.appendingPathComponent("Chosen.als")
+        try Data("older-ableton-version".utf8).write(to: chosen)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 100)], ofItemAtPath: chosen.path)
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
+        await model.scan()
+        let original = try XCTUnwrap(model.songs.first)
+        model.archiveInProjectVault(original)
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        model.setShowArchivedProjects(true)
+        let archived = try XCTUnwrap(model.songs.first)
+        try FileManager.default.createDirectory(at: fixture.project, withIntermediateDirectories: true)
+        let sentinel = fixture.project.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: sentinel)
+        model.performProjectVaultPrimaryAction(for: archived)
+        try await waitUntil { model.projectVaultRestoreRequest != nil }
+        let request = try XCTUnwrap(model.projectVaultRestoreRequest)
+        XCTAssertTrue(request.options.versions.contains { $0.relativePath == "Chosen.als" })
+        XCTAssertNotNil(request.options.destinationIssue(for: request.options.destinationRelativePath))
+        model.confirmProjectVaultRestore(selectedPath: "Chosen.als")
+        XCTAssertNotNil(model.projectVaultRestoreRequest)
+        XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
+        XCTAssertEqual(try Data(contentsOf: sentinel), Data("keep".utf8))
+        model.confirmProjectVaultRestore(selectedPath: "Chosen.als", destinationRelativePath: "Restored separately")
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+        XCTAssertNil(model.projectVaultRestoreRequest)
+        XCTAssertTrue(model.projectVaultQueueFailures.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: sentinel), Data("keep".utf8))
+        let destination = fixture.active.appendingPathComponent("Restored separately")
+        XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("Chosen.als")), Data("older-ableton-version".utf8))
+        let archive = try XCTUnwrap(fixture.transferStore().verifiedArchiveGeneration(projectID: fixture.projectID()))
+        try VaultManifestBuilder().verify(try XCTUnwrap(archive.manifest), at: destination)
+        try VaultManifestBuilder().verify(try XCTUnwrap(archive.manifest), at: archive.destinationURL)
+    }
+
     func testLinkedArchiveRestoreDownloadsVerifiesAndPreservesIdentity() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -31,6 +69,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         model.setShowArchivedProjects(true)
         let archivedSong = try XCTUnwrap(model.songs.first { $0.folderPath.lastPathComponent == "Historical" })
         model.performProjectVaultPrimaryAction(for: archivedSong)
+        try await waitUntil { model.projectVaultRestoreRequest != nil }
+        model.confirmProjectVaultRestore()
         try await provider.waitForDownloadStart()
         try await waitUntil { model.projectVaultRestoreProgress != nil }
         let progress = model.projectVaultRestoreProgress
@@ -202,8 +242,10 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         for song in archived {
             model.performProjectVaultPrimaryAction(for: song)
             model.performProjectVaultPrimaryAction(for: song)
+            try await waitUntil { model.projectVaultRestoreRequest != nil }
+            model.confirmProjectVaultRestore()
         }
-        XCTAssertEqual(model.projectVaultPendingOperations.count, 1)
+        XCTAssertLessThanOrEqual(model.projectVaultPendingOperations.count, 1)
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
         try VaultManifestBuilder().verify(secondManifest, at: second)
@@ -367,6 +409,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let archived = try XCTUnwrap(viewModel.songs.first)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: archived)?.primaryAction, .restoreAndOpen)
         viewModel.performProjectVaultPrimaryAction(for: archived)
+        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        viewModel.confirmProjectVaultRestore()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
         viewModel.setShowArchivedProjects(false)
         XCTAssertTrue(viewModel.songs.contains { $0.id == original.id })
@@ -472,6 +516,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         corrupted[0] ^= 0xff
         try corrupted.write(to: archiveAudio)
         viewModel.performProjectVaultPrimaryAction(for: archived)
+        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        viewModel.confirmProjectVaultRestore()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
         let failed = try XCTUnwrap(viewModel.projectVaultPresentation(for: archived))
         XCTAssertEqual(failed.state, .needsAttention)
@@ -662,6 +708,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(pinnedArchivedPresentation.primaryAction, .restoreAndOpen)
 
         viewModel.performProjectVaultPrimaryAction(for: reShownArchivedSong)
+        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        viewModel.confirmProjectVaultRestore()
         try await waitUntil {
             FileManager.default.fileExists(atPath: fixture.project.path)
                 && viewModel.projectVaultBusySongIDs.isEmpty

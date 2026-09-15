@@ -1,9 +1,18 @@
 # Restoring linked historical archives
 
-Linked archive cards offer **Get Local & Open**. This downloads online-only files
-through the archive provider, verifies a copy in Active Projects, and opens the
-newest supported project in its DAW. After restoring, other project versions can
-be opened from the Versions list. The original archive remains intact.
+Archived cards offer **Get Local & Open**. A dialog lists CPR and ALS versions,
+including their relative paths and modification dates, and shows the destination
+inside Active Projects. Choose a version or keep **Newest available version**.
+The complete project folder is restored, including audio and other versions.
+Online-only files are downloaded through the archive provider, the local copy is
+verified, and the chosen project opens in its DAW. The original archive remains intact.
+
+If the destination already exists, choose a different folder name in the dialog.
+The engine checks again before writing, so a folder created after the dialog
+opened is also protected. Cancel closes the dialog without starting a restore.
+Version listing uses stored manifest metadata or a metadata-only linked inventory;
+it does not download file content. If no versions can be listed, make the archive
+available locally and retry.
 
 The operation retains the catalog project ID, title, workflow state, identity
 evidence and activity timestamp. It uses the historical Active relative path when
@@ -26,6 +35,10 @@ overwritten.
 A download failure before the content manifest is established leaves the archive
 in place; selecting Get Local & Open again restarts preparation. Once a restore
 record exists, the existing recovery and Retry Get Local flow resumes that record.
+The explicitly selected relative project path is saved in the restore record,
+so interruption recovery and Retry Open use the same version. Older records and
+the default newest-version choice retain their existing behavior. A missing or
+invalid explicit selection stops safely instead of opening another version.
 A changed source, revoked link or occupied destination stops the operation safely.
 
 Tests use local fixtures and a simulated materializing provider. Real Dropbox

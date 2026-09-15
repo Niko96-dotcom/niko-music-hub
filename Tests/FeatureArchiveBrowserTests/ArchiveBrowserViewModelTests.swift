@@ -2264,7 +2264,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         // The dedicated Get Local & Open action is the sole mutating authority.
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
-        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
+        for _ in 0..<100 where viewModel.projectVaultRestoreOptionsLoading || viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
             try await Task.sleep(for: .milliseconds(10))
         }
         let restoreCalls = await runtime.restoreCallCount()

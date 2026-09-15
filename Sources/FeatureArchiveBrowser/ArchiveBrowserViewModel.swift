@@ -79,6 +79,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
     @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation?
     @Published var projectVaultOperationMessages: [String: String] = [:]
+    var projectVaultRestoreOptionsLoading = false
+    @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
     var projectVaultQueueTask: Task<Void, Never>?
     var projectVaultQueueFailures: [String] = []

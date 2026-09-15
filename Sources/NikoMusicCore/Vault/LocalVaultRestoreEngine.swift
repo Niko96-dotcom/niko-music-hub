@@ -31,6 +31,10 @@ public enum LocalVaultRestoreError: LocalizedError, Equatable, Sendable {
         switch self {
         case .archiveContentsChanged(let detail):
             "Archive verification failed: \(detail) The archive was kept. Review the changed file before restoring."
+        case .occupiedDestination:
+            "A folder already exists at this Active Projects destination. Choose a different folder name. Existing files were kept."
+        case .noSupportedProject:
+            "The chosen project version is unavailable. Review the archive and choose an available CPR or ALS file."
         case .archiveLocalityUnavailable:
             "The archive provider could not confirm that the verified files are available locally. Check the provider's download status before retrying."
         default:
@@ -60,8 +64,20 @@ public struct SafeVaultProjectOpener: VaultProjectOpening, @unchecked Sendable {
     }
 
     public func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
+        try openProject(at: projectURL, allowedRoot: allowedRoot, selectedRelativePath: nil)
+    }
+
+    public func openProject(at projectURL: URL, allowedRoot: URL, selectedRelativePath: String?) throws -> MusicItemOpener.OpenResult? {
         let versions = try detector.detectVersions(in: projectURL)
-        guard let latest = detector.latestProject(from: versions) else { throw LocalVaultRestoreError.noSupportedProject }
+        let chosen: ProjectVersion?
+        if let selectedRelativePath {
+            chosen = versions.first {
+                $0.filePath.standardizedFileURL.resolvingSymlinksInPath() == projectURL.appendingPathComponent(selectedRelativePath).standardizedFileURL.resolvingSymlinksInPath()
+            }
+        } else {
+            chosen = detector.latestProject(from: versions)
+        }
+        guard let latest = chosen else { throw LocalVaultRestoreError.noSupportedProject }
         let song = Song(
             folderPath: projectURL,
             originalFolderName: projectURL.lastPathComponent,
@@ -136,7 +152,7 @@ public actor LocalVaultRestoreEngine {
     }
 
     @discardableResult
-    public func restoreAndOpen(projectID: ProjectID, destinationRelativePath: String) async throws -> VaultRestoreRecord {
+    public func restoreAndOpen(projectID: ProjectID, destinationRelativePath: String, selectedProjectRelativePath: String? = nil) async throws -> VaultRestoreRecord {
         let destination = try destinationURL(relativePath: destinationRelativePath)
         guard let archive = try resolver.verifiedArchiveGeneration(projectID: projectID) else {
             throw LocalVaultRestoreError.archiveGenerationNotFound
@@ -146,6 +162,8 @@ public actor LocalVaultRestoreEngine {
         }
         try validateArchiveGeneration(archive.destinationURL)
         guard let manifest = archive.manifest else { throw LocalVaultRestoreError.missingManifest }
+        try validateSelection(selectedProjectRelativePath, manifest: manifest)
+        guard !fileManager.fileExists(atPath: destination.path) else { throw LocalVaultRestoreError.occupiedDestination }
         let id = UUID()
         let staging = activeRoot
             .appendingPathComponent(".niko-staging", isDirectory: true)
@@ -158,6 +176,7 @@ public actor LocalVaultRestoreEngine {
             stagingURL: staging,
             destinationURL: destination,
             manifest: manifest,
+            selectedProjectRelativePath: selectedProjectRelativePath,
             archiveTransferID: archive.id,
             archiveTransferState: archive.state,
             requiresArchiveMaterialization: archive.state == .archivedOnlineOnly,
@@ -179,10 +198,11 @@ public actor LocalVaultRestoreEngine {
     @discardableResult
     public func restoreLinkedArchive(
         projectID: ProjectID, location: ProjectLocation, archiveURL: URL,
-        manifest: VaultManifest, destinationRelativePath: String
+        manifest: VaultManifest, destinationRelativePath: String, selectedProjectRelativePath: String? = nil
     ) async throws -> VaultRestoreRecord {
         try linkedArchiveValidation(projectID, location, archiveURL)
         try manifest.validatePersistedContentEnvelope()
+        try validateSelection(selectedProjectRelativePath, manifest: manifest)
         let destination = try destinationURL(relativePath: destinationRelativePath)
         guard !fileManager.fileExists(atPath: destination.path) else {
             throw LocalVaultRestoreError.occupiedDestination
@@ -192,7 +212,7 @@ public actor LocalVaultRestoreEngine {
             id: id, projectID: projectID, archiveGenerationURL: archiveURL,
             stagingURL: activeRoot.appendingPathComponent(".niko-staging")
                 .appendingPathComponent(projectID.description).appendingPathComponent(id.uuidString.lowercased()),
-            destinationURL: destination, manifest: manifest, linkedArchiveLocation: location,
+            destinationURL: destination, manifest: manifest, selectedProjectRelativePath: selectedProjectRelativePath, linkedArchiveLocation: location,
             requiresArchiveMaterialization: true, createdAt: now()
         )
         switch try store.claimRestore(record) {
@@ -240,6 +260,7 @@ public actor LocalVaultRestoreEngine {
     ) async throws -> VaultRestoreRecord {
         var record = initial
         do {
+            try validateSelection(record.selectedProjectRelativePath, manifest: record.manifest)
             try validateArchiveGeneration(record.archiveGenerationURL, linkedLocation: record.linkedArchiveLocation)
             if requiresArchiveTransferBinding {
                 try requireArchiveTransferBinding(&record)
@@ -428,7 +449,7 @@ public actor LocalVaultRestoreEngine {
                 case .openingInCubase:
                     try inject(.openingInCubase, record)
                     try revalidatePromotedActiveDestination(&record)
-                    _ = try projectOpener.openProject(at: record.destinationURL, allowedRoot: activeRoot)
+                    _ = try projectOpener.openProject(at: record.destinationURL, allowedRoot: activeRoot, selectedRelativePath: record.selectedProjectRelativePath)
                     record.completedAt = now()
                     record.error = nil
                     try persist(&record)
@@ -655,6 +676,15 @@ public actor LocalVaultRestoreEngine {
               safety.isResolvedContainedWithoutNestedSymlinks(generationURL, in: generationsRoot),
               generationURL != generationsRoot else {
             throw LocalVaultRestoreError.unsafeArchiveGenerationPath
+        }
+    }
+
+    private func validateSelection(_ path: String?, manifest: VaultManifest) throws {
+        guard let path else { return }
+        guard !path.hasPrefix("/"), !path.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
+              manifest.entries.contains(where: { $0.relativePath == path && $0.type == .regularFile }),
+              ProjectFileFormat(url: URL(fileURLWithPath: path)) != nil else {
+            throw LocalVaultRestoreError.noSupportedProject
         }
     }
 

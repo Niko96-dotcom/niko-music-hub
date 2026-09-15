@@ -911,7 +911,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let transfer = try XCTUnwrap(archived.transfer)
         let manifest = try XCTUnwrap(transfer.manifest)
         let restore = Task {
-            try await runtime.restoreAndOpen(snapshot: archived)
+            try await runtime.restoreAndOpen(snapshot: archived, selectedProjectRelativePath: nil, destinationRelativePath: "Capacity check restore")
         }
         await provider.waitUntilPrepareEntered()
         try fixture.settingsStore.updateSettings {

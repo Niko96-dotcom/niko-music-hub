@@ -24,6 +24,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
     public let archiveGenerationURL: URL
     public var stagingURL: URL
     public let destinationURL: URL
+    public let selectedProjectRelativePath: String?
     public let manifest: VaultManifest
     public let linkedArchiveLocation: ProjectLocation?
     public let archiveTransferID: UUID?
@@ -50,6 +51,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         stagingURL: URL,
         destinationURL: URL,
         manifest: VaultManifest,
+        selectedProjectRelativePath: String? = nil,
         linkedArchiveLocation: ProjectLocation? = nil,
         archiveTransferID: UUID? = nil,
         archiveTransferState: VaultTransferState? = nil,
@@ -63,6 +65,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         self.archiveGenerationURL = archiveGenerationURL
         self.stagingURL = stagingURL
         self.destinationURL = destinationURL
+        self.selectedProjectRelativePath = selectedProjectRelativePath
         self.manifest = manifest
         self.linkedArchiveLocation = linkedArchiveLocation
         self.archiveTransferID = archiveTransferID
@@ -81,7 +84,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, projectID, archiveGenerationURL, stagingURL, destinationURL
-        case linkedArchiveLocation
+        case linkedArchiveLocation, selectedProjectRelativePath
         case manifest, archiveTransferID, archiveTransferState, requiresArchiveMaterialization
         case projectionSupplement, phase, catalogLocationPersisted
         case completedAt, createdAt, updatedAt, error, failureReason, supersededBy
@@ -94,6 +97,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         archiveGenerationURL = try values.decode(URL.self, forKey: .archiveGenerationURL)
         stagingURL = try values.decode(URL.self, forKey: .stagingURL)
         destinationURL = try values.decode(URL.self, forKey: .destinationURL)
+        selectedProjectRelativePath = try values.decodeIfPresent(String.self, forKey: .selectedProjectRelativePath)
         manifest = try values.decode(VaultManifest.self, forKey: .manifest)
         linkedArchiveLocation = try values.decodeIfPresent(ProjectLocation.self, forKey: .linkedArchiveLocation)
         archiveTransferID = try values.decodeIfPresent(UUID.self, forKey: .archiveTransferID)
@@ -129,6 +133,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         try values.encode(archiveGenerationURL, forKey: .archiveGenerationURL)
         try values.encode(stagingURL, forKey: .stagingURL)
         try values.encode(destinationURL, forKey: .destinationURL)
+        try values.encodeIfPresent(selectedProjectRelativePath, forKey: .selectedProjectRelativePath)
         try values.encode(manifest, forKey: .manifest)
         try values.encodeIfPresent(linkedArchiveLocation, forKey: .linkedArchiveLocation)
         try values.encodeIfPresent(archiveTransferID, forKey: .archiveTransferID)
@@ -179,6 +184,14 @@ public protocol ActiveProjectLocationPersisting: Sendable {
 }
 
 public protocol VaultProjectOpening: Sendable {
+    func openProject(at projectURL: URL, allowedRoot: URL, selectedRelativePath: String?) throws -> MusicItemOpener.OpenResult?
     @discardableResult
     func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult?
+}
+
+public extension VaultProjectOpening {
+    func openProject(at projectURL: URL, allowedRoot: URL, selectedRelativePath: String?) throws -> MusicItemOpener.OpenResult? {
+        guard selectedRelativePath == nil else { throw LocalVaultRestoreError.noSupportedProject }
+        return try openProject(at: projectURL, allowedRoot: allowedRoot)
+    }
 }

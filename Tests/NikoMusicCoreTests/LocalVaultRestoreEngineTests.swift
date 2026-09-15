@@ -4,6 +4,47 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultRestoreEngineTests: XCTestCase {
+    func testSelectedManagedVersionSurvivesRetryOpenAndRejectsInvalidSelection() async throws {
+        let fixture = try VaultRestoreFixture(projectFiles: ["Versions/Chosen.als", "Newest.cpr"])
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .openingInCubase { throw VaultTransferInterruption() }
+            }, writeAdmission: allowRestoreWrites)
+        for path in ["../Newest.cpr", "/Newest.cpr", "Missing.cpr", "Versions/../Newest.cpr"] {
+            do {
+                _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored", selectedProjectRelativePath: path)
+                XCTFail("Expected invalid selection rejection")
+            } catch { XCTAssertEqual(error as? LocalVaultRestoreError, .noSupportedProject) }
+        }
+        XCTAssertTrue(try store.recoverableRestoreRecords().isEmpty)
+        do {
+            _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored", selectedProjectRelativePath: "Versions/Chosen.als")
+            XCTFail("Expected interruption")
+        } catch is VaultTransferInterruption {}
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        let decoded = try JSONDecoder().decode(VaultRestoreRecord.self, from: JSONEncoder().encode(pending))
+        XCTAssertEqual(decoded.selectedProjectRelativePath, "Versions/Chosen.als")
+        XCTAssertTrue(workspace.opened.isEmpty)
+        let retry = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites)
+        let completed = try await retry.retryRestore(id: pending.id)
+        XCTAssertNotNil(completed.completedAt)
+        XCTAssertEqual(workspace.opened.map(\.lastPathComponent), ["Chosen.als"])
+        try VaultManifestBuilder().verify(fixture.manifest, at: completed.destinationURL)
+        try VaultManifestBuilder().verify(fixture.manifest, at: fixture.generation)
+    }
+
     func testLinkedArchiveRecoversInterruptedCopyWithoutInventingTransfer() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
@@ -43,6 +84,51 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
         XCTAssertNotNil(results.first?.completedAt)
         XCTAssertEqual(workspace.opened.count, 1)
+        XCTAssertTrue(try store.allTransferRecords().isEmpty)
+        try VaultManifestBuilder().verify(fixture.manifest, at: pending.destinationURL)
+        try VaultManifestBuilder().verify(fixture.manifest, at: linked)
+    }
+
+    func testSelectedLinkedVersionSurvivesInterruptedCopyAndRecovery() async throws {
+        let fixture = try VaultRestoreFixture(projectFiles: ["Versions/Chosen.als", "Newest.cpr"])
+        defer { fixture.remove() }
+        let linked = fixture.archive.appendingPathComponent("Historical")
+        try FileManager.default.moveItem(at: fixture.generation, to: linked)
+        let location = ProjectLocation(rootID: UUID(), relativePath: "Historical", kind: .archive, availability: .local)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let validate: LocalVaultRestoreEngine.LinkedArchiveValidation = { projectID, claim, url in
+            guard projectID == fixture.projectID, claim == location, url == linked else {
+                throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+            }
+        }
+        let interrupted = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .verifyingActiveStaging { throw VaultTransferInterruption() }
+            }, writeAdmission: allowRestoreWrites, linkedArchiveValidation: validate)
+        do {
+            _ = try await interrupted.restoreLinkedArchive(projectID: fixture.projectID, location: location,
+                archiveURL: linked, manifest: fixture.manifest, destinationRelativePath: "Restored", selectedProjectRelativePath: "Versions/Chosen.als")
+            XCTFail("Expected interruption")
+        } catch is VaultTransferInterruption {}
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        XCTAssertEqual(pending.selectedProjectRelativePath, "Versions/Chosen.als")
+        XCTAssertNil(pending.archiveTransferID)
+        XCTAssertEqual(pending.linkedArchiveLocation, location)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        let recovered = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites, linkedArchiveValidation: validate)
+        let results = await recovered.recoverAtLaunch()
+        XCTAssertEqual(results.count, 1)
+        XCTAssertNotNil(results.first?.completedAt)
+        XCTAssertEqual(workspace.opened.map(\.lastPathComponent), ["Chosen.als"])
         XCTAssertTrue(try store.allTransferRecords().isEmpty)
         try VaultManifestBuilder().verify(fixture.manifest, at: pending.destinationURL)
         try VaultManifestBuilder().verify(fixture.manifest, at: linked)
@@ -1119,9 +1205,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
         XCTAssertTrue(catalog.locations.isEmpty)
         XCTAssertTrue(workspace.opened.isEmpty)
-        let interrupted = try XCTUnwrap(try store.recoverableRestoreRecords().first)
-        XCTAssertEqual(interrupted.phase, .promotingActiveCopy)
-        XCTAssertNotNil(interrupted.error)
+        XCTAssertTrue(try store.recoverableRestoreRecords().isEmpty)
     }
 
     func testCopyingRecoveryWithMissingStagingRewindsThroughAdmittedExactMaterialization() async throws {

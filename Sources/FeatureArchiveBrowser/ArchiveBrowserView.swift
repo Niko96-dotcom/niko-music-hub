@@ -139,6 +139,9 @@ struct ArchiveBrowserView: View {
             } else { return .ignored }
             return .handled
         }
+        .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
+            ProjectVaultRestoreSheet(request: request, viewModel: viewModel)
+        }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
         }

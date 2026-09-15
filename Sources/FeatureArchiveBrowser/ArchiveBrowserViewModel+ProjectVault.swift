@@ -106,7 +106,7 @@ extension ArchiveBrowserViewModel {
         }
         switch presentation.primaryAction {
         case .restoreAndOpen:
-            return "Use Get Local & Open to restore this project, then choose the version you want to open."
+            return "Use Get Local & Open to choose a version and restore this project."
         case .revealArchive:
             return "Use Show in Finder to access this archive. Project versions cannot be opened directly here."
         case .openInCubase, .retry, .review:
@@ -563,6 +563,35 @@ extension ArchiveBrowserViewModel {
     }
 
     private func restoreAndOpenFromProjectVault(_ song: Song) {
+        guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song),
+              !projectVaultBusySongIDs.contains(song.id), projectVaultRestoreRequest == nil, !projectVaultRestoreOptionsLoading else { return }
+        projectVaultRestoreOptionsLoading = true
+        Task { [weak self] in
+            defer { self?.projectVaultRestoreOptionsLoading = false }
+            do {
+                let options = try await runtime.restoreOptions(snapshot: snapshot)
+                guard let self else { return }
+                if let options {
+                    self.projectVaultRestoreRequest = ProjectVaultRestoreRequest(song: song, options: options)
+                } else {
+                    self.enqueueProjectVaultRestore(song)
+                }
+            } catch {
+                self?.setProjectVaultStatusMessage("Restore options could not be loaded: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func confirmProjectVaultRestore(selectedPath: String? = nil, destinationRelativePath: String? = nil) {
+        guard let request = projectVaultRestoreRequest else { return }
+        let destination = destinationRelativePath ?? request.options.destinationRelativePath
+        guard request.options.destinationIssue(for: destination) == nil,
+              selectedPath == nil || request.options.versions.contains(where: { $0.relativePath == selectedPath }) else { return }
+        projectVaultRestoreRequest = nil
+        enqueueProjectVaultRestore(request.song, selectedPath: selectedPath, destinationRelativePath: destination)
+    }
+
+    private func enqueueProjectVaultRestore(_ song: Song, selectedPath: String? = nil, destinationRelativePath: String? = nil) {
         guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song) else {
             setProjectVaultStatusMessage("Restore is unavailable because no verified Project Vault generation was found.")
             return
@@ -574,7 +603,7 @@ extension ArchiveBrowserViewModel {
         enqueueProjectVaultOperation(for: song, label: "Restore", startMessage: message, tracksRestoreProgress: true) { model in
             do {
                 _ = try await model.waitForProjectVaultSlot {
-                    try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot)
+                    try await runtime.restoreAndOpen(snapshot: model.projectVaultSnapshot(for: song) ?? snapshot, selectedProjectRelativePath: selectedPath, destinationRelativePath: destinationRelativePath)
                 }
                 await model.refreshProjectVaultSnapshots()
                 await model.scan()

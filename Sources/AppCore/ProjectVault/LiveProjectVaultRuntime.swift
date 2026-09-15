@@ -444,6 +444,8 @@ public struct FoundationProjectVaultCapacityProbe: ProjectVaultCapacityProbing, 
 }
 
 public protocol ProjectVaultOperating: Sendable {
+    func restoreOptions(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRestoreOptions?
+    func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot, selectedProjectRelativePath: String?, destinationRelativePath: String?) async throws -> VaultRestoreRecord
     func restoreProgress(for projectID: ProjectID) async -> ProjectVaultRestoreProgress?
     func snapshots() async throws -> [ProjectVaultRuntimeSnapshot]
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot
@@ -456,6 +458,12 @@ public protocol ProjectVaultOperating: Sendable {
 }
 
 public extension ProjectVaultOperating {
+    func restoreOptions(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRestoreOptions? { nil }
+    func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot, selectedProjectRelativePath: String?, destinationRelativePath: String?) async throws -> VaultRestoreRecord {
+        guard selectedProjectRelativePath == nil, destinationRelativePath == nil else { throw ProjectVaultRuntimeError.unavailable }
+        return try await restoreAndOpen(snapshot: snapshot)
+    }
+
     func restoreProgress(for projectID: ProjectID) async -> ProjectVaultRestoreProgress? { nil }
 
     func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
@@ -786,14 +794,32 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         return snapshot(entry: updatedEntry, transfer: transfer, configuration: configuration)
     }
 
+    public func restoreOptions(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRestoreOptions? {
+        let configuration = try configuration()
+        if let archive = try transferStore.verifiedArchiveGeneration(projectID: snapshot.record.id), let manifest = archive.manifest {
+            return ProjectVaultRestoreOptions(manifest: manifest, activeRoot: configuration.active.url,
+                destinationRelativePath: archive.sourceURL.lastPathComponent)
+        }
+        guard let linked = snapshot.linkedArchive else { throw ProjectVaultRuntimeError.noVerifiedArchive }
+        try linkedArchiveValidation(configuration: configuration)(snapshot.record.id, linked.location, linked.url)
+        let manifest = try LinkedArchiveInventory().materializationManifest(at: linked.url)
+        let path = snapshot.record.locations.first { $0.kind == .active && $0.rootID == configuration.active.id }?.relativePath
+            ?? linked.url.lastPathComponent
+        return ProjectVaultRestoreOptions(manifest: manifest, activeRoot: configuration.active.url, destinationRelativePath: path)
+    }
+
     public func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
+        try await restoreAndOpen(snapshot: snapshot, selectedProjectRelativePath: nil, destinationRelativePath: nil)
+    }
+
+    public func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot, selectedProjectRelativePath: String?, destinationRelativePath: String?) async throws -> VaultRestoreRecord {
         let lease = try acquireMutationLease()
         defer { releaseMutationLease(lease) }
         let configuration = try configuration()
         let settings = try settingsStore.loadSettings()
         guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
         if try transferStore.verifiedArchiveGeneration(projectID: snapshot.record.id) == nil {
-            return try await restoreLinkedArchive(snapshot: snapshot, configuration: configuration, settings: settings)
+            return try await restoreLinkedArchive(snapshot: snapshot, configuration: configuration, settings: settings, selectedProjectRelativePath: selectedProjectRelativePath, destinationRelativePath: destinationRelativePath)
         }
         let engine = LocalVaultRestoreEngine(
             activeRoot: configuration.active.url,
@@ -808,9 +834,9 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
-        let relativePath = snapshot.transfer?.sourceURL.lastPathComponent
+        let relativePath = destinationRelativePath ?? snapshot.transfer?.sourceURL.lastPathComponent
             ?? snapshot.record.canonicalTitle
-        return try await engine.restoreAndOpen(projectID: snapshot.record.id, destinationRelativePath: relativePath)
+        return try await engine.restoreAndOpen(projectID: snapshot.record.id, destinationRelativePath: relativePath, selectedProjectRelativePath: selectedProjectRelativePath)
     }
 
     private func linkedArchiveValidation(configuration: Configuration) -> LocalVaultRestoreEngine.LinkedArchiveValidation {
@@ -841,7 +867,8 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     }
 
     private func restoreLinkedArchive(
-        snapshot: ProjectVaultRuntimeSnapshot, configuration: Configuration, settings: AppSettings
+        snapshot: ProjectVaultRuntimeSnapshot, configuration: Configuration, settings: AppSettings,
+        selectedProjectRelativePath: String?, destinationRelativePath: String?
     ) async throws -> VaultRestoreRecord {
         guard let requested = snapshot.linkedArchive,
               let entry = try catalogStore.loadEntries().first(where: { $0.record.id == snapshot.record.id }),
@@ -889,11 +916,11 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
             resolver: transferStore, store: transferStore, projectionStore: transferStore,
             provider: provider, catalog: catalogStore, projectOpener: projectOpener,
             writeAdmission: admission, linkedArchiveValidation: validate)
-        let relativePath = entry.record.locations.first { $0.kind == .active && $0.rootID == configuration.active.id }?.relativePath
+        let relativePath = destinationRelativePath ?? entry.record.locations.first { $0.kind == .active && $0.rootID == configuration.active.id }?.relativePath
             ?? archiveURL.lastPathComponent
         preparingLinkedRestores.removeValue(forKey: entry.record.id)
         return try await engine.restoreLinkedArchive(projectID: entry.record.id, location: location,
-            archiveURL: archiveURL, manifest: manifest, destinationRelativePath: relativePath)
+            archiveURL: archiveURL, manifest: manifest, destinationRelativePath: relativePath, selectedProjectRelativePath: selectedProjectRelativePath)
     }
 
     public func recoverInterruptedArchive(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {
