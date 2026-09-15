@@ -328,10 +328,18 @@ public actor LocalVaultTransferEngine {
               record.state == .failedRecoverable,
               let origin = record.error?.origin,
               VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else { return nil }
-        record.state = origin
-        record.error = nil
-        record.nextRetryAt = nil
+        let recopy: Bool
         do {
+            recopy = try await preparePortableArchiveRetry(&record)
+        } catch {
+            record.error = VaultTransferError(origin: origin, reason: failureReason(for: error), message: error.localizedDescription)
+            try? persist(&record)
+            return record
+        }
+        do {
+            record.state = recopy ? .copyingToArchiveStaging : origin
+            record.error = nil
+            record.nextRetryAt = nil
             try persist(&record)
             return try await execute(record)
         } catch is VaultTransferInterruption {
@@ -339,6 +347,49 @@ public actor LocalVaultTransferEngine {
         } catch {
             return (try? store.record(id: record.id)) ?? record
         }
+    }
+
+    /// Rebuild legacy provider-incompatible staging only on explicit retry and
+    /// only while the complete original source still matches its saved hashes.
+    /// Retain the failed tree; never reinterpret a provider-renamed path as proof.
+    private func preparePortableArchiveRetry(_ record: inout VaultTransferRecord) async throws -> Bool {
+        guard let manifest = record.manifest, manifest.archiveLayout == nil,
+              manifest.preparedForArchive().archiveLayout != nil else { return false }
+        try validatePaths(record)
+        guard record.manifestID == manifest.id, record.supersededBy == nil else {
+            throw LocalVaultTransferError.missingPersistedArchiveEvidence
+        }
+        try manifest.validatePersistedContentEnvelope()
+        let observed = try manifestBuilder.build(at: record.sourceURL)
+        guard manifest.hasSameImmutableContent(as: observed) else { throw LocalVaultTransferError.sourceMutated }
+        // Promotion recovery must not abandon a generation that already exists.
+        guard !fileManager.fileExists(atPath: record.destinationURL.path) else {
+            throw LocalVaultTransferError.occupiedDestination
+        }
+        if fileManager.fileExists(atPath: record.stagingURL.path) {
+            let retained = record.stagingURL.deletingLastPathComponent()
+                .appendingPathComponent("\(record.id.uuidString.lowercased())-legacy-\(UUID().uuidString.lowercased())", isDirectory: true)
+            record.preservedArchiveCopies = (record.preservedArchiveCopies ?? []) + [retained]
+            try persist(&record)
+            let transfer = record
+            let activeRoot = self.activeRoot
+            let archiveRoot = self.archiveRoot
+            let manager = VaultSendableFileManager(fileManager)
+            try await writeAdmission(VaultWriteAdmissionRequest(
+                target: .archive, sourceURL: record.sourceURL,
+                targetRootURL: archiveRoot, minimumProjectedBytes: manifest.totalBytes
+            )) {
+                try Self.validatePaths(transfer, activeRoot: activeRoot, archiveRoot: archiveRoot)
+                guard PathSafety(fileManager: manager.value).isResolvedContainedWithoutNestedSymlinks(retained, in: archiveRoot),
+                      !manager.value.fileExists(atPath: retained.path) else {
+                    throw LocalVaultTransferError.unsafeStagingPath
+                }
+                try manager.value.moveItem(at: transfer.stagingURL, to: retained)
+            }
+        }
+        record.durability = nil
+        record.projectionSupplement = nil
+        return true
     }
 
     /// Explicit user recovery only. Never resumes removal: preserve any surviving
@@ -368,7 +419,7 @@ public actor LocalVaultTransferEngine {
         }
         try await provider.prepareForRead(destination)
         try validatePaths(record)
-        try manifestBuilder.verify(manifest, at: destination)
+        try manifestBuilder.verifyArchive(manifest, at: destination)
         if fileManager.fileExists(atPath: record.sourceURL.path) {
             let binding = try SourceRootFileSystemBinding(opening: record.sourceURL)
             let preserved = activeRoot.appendingPathComponent(".niko-recovery", isDirectory: true)
@@ -396,7 +447,7 @@ public actor LocalVaultTransferEngine {
         guard !fileManager.fileExists(atPath: record.sourceURL.path) else {
             throw LocalVaultTransferError.occupiedDestination
         }
-        try manifestBuilder.verify(manifest, at: destination)
+        try manifestBuilder.verifyArchive(manifest, at: destination)
         record.state = .archiveVerified
         record.error = nil
         record.nextRetryAt = nil
@@ -415,7 +466,7 @@ public actor LocalVaultTransferEngine {
               !fileManager.fileExists(atPath: preserved.path), let manifest = record.manifest else {
             throw LocalVaultTransferError.unsafeDestinationPath
         }
-        try manifestBuilder.verify(manifest, at: record.destinationURL)
+        try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
         try fileManager.createDirectory(at: preserved.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard safety.isResolvedContainedWithoutNestedSymlinks(preserved, in: activeRoot),
               try Self.sourceFileSystemIdentity(at: record.sourceURL) == expectedIdentity else {
@@ -441,7 +492,7 @@ public actor LocalVaultTransferEngine {
         else {
             throw LocalVaultTransferError.missingPersistedArchiveEvidence
         }
-        try manifestBuilder.verify(manifest, at: persisted.destinationURL)
+        try manifestBuilder.verifyArchive(manifest, at: persisted.destinationURL)
         var record = persisted
         // A restored project can reuse an earlier archived generation. Fresh
         // manifest verification above re-establishes its removal evidence.
@@ -496,7 +547,7 @@ public actor LocalVaultTransferEngine {
                 case .verifyingArchiveStaging:
                     try inject(.verifyingArchiveStaging, record)
                     guard let manifest = record.manifest else { throw LocalVaultTransferError.missingManifest }
-                    try manifestBuilder.verify(manifest, at: record.stagingURL)
+                    try manifestBuilder.verifyArchive(manifest, at: record.stagingURL)
                     try advance(&record, to: .awaitingProviderDurability)
                 case .awaitingProviderDurability:
                     try inject(.awaitingProviderDurability, record)
@@ -519,7 +570,7 @@ public actor LocalVaultTransferEngine {
                     guard let manifest = record.manifest else {
                         throw LocalVaultTransferError.missingManifest
                     }
-                    try manifestBuilder.verify(manifest, at: record.destinationURL)
+                    try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
                     record.durability = finalDurability
                     try persist(&record)
                     record.state = .archiveVerified
@@ -600,7 +651,11 @@ public actor LocalVaultTransferEngine {
         // Building the source manifest is read-only evidence collection. The
         // admission callback still re-probes capacity immediately around the
         // first destructive/new-byte staging operation below.
-        let sourceBefore = try manifestBuilder.build(at: record.sourceURL)
+        let observedSource = try manifestBuilder.build(at: record.sourceURL)
+        if record.preservedArchiveCopies != nil, let previous = record.manifest, previous.archiveLayout == nil {
+            guard previous.hasSameImmutableContent(as: observedSource) else { throw LocalVaultTransferError.sourceMutated }
+        }
+        let sourceBefore = observedSource.preparedForArchive()
         let sourceURL = record.sourceURL
         let stagingURL = record.stagingURL
         let archiveRoot = self.archiveRoot
@@ -630,7 +685,11 @@ public actor LocalVaultTransferEngine {
                 try fileManager.value.removeItem(at: stagingURL)
             }
             try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try fileManager.value.copyItem(at: sourceURL, to: stagingURL)
+            if sourceBefore.archiveLayout != nil {
+                try VaultManifestCopier.copy(sourceBefore, from: sourceURL, to: stagingURL, fileManager: fileManager.value, toArchive: true)
+            } else {
+                try fileManager.value.copyItem(at: sourceURL, to: stagingURL)
+            }
             try Self.removeIgnoredMetadataFiles(
                 below: stagingURL,
                 fileManager: fileManager.value
@@ -751,7 +810,7 @@ public actor LocalVaultTransferEngine {
             guard !stagingExists else { throw LocalVaultTransferError.occupiedDestination }
             // A previous rename completed before process termination. Verify it
             // rather than overwrite or create a second generation.
-            try manifestBuilder.verify(manifest, at: record.destinationURL)
+            try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
             return
         }
         guard stagingExists else { throw VaultManifestError.missingRoot }
@@ -765,7 +824,7 @@ public actor LocalVaultTransferEngine {
         } else {
             throw LocalVaultTransferError.crossVolumePromotion
         }
-        try manifestBuilder.verify(manifest, at: record.destinationURL)
+        try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
     }
 
     private func validatePaths(_ record: VaultTransferRecord) throws {
@@ -818,7 +877,7 @@ public actor LocalVaultTransferEngine {
             throw LocalVaultTransferError.missingPersistedArchiveEvidence
         }
         try validatePaths(persisted)
-        try manifestBuilder.verify(manifest, at: persisted.destinationURL)
+        try manifestBuilder.verifyArchive(manifest, at: persisted.destinationURL)
         // Bind manifest verification to one concrete source-root filesystem
         // object. Content-identical path replacement must still be retained for
         // manual review rather than inheriting deletion authorization.
@@ -948,7 +1007,7 @@ public actor LocalVaultTransferEngine {
         }
         guard fileManager.fileExists(atPath: record.destinationURL.path) else { return false }
         do {
-            try manifestBuilder.verify(manifest, at: record.destinationURL)
+            try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
             return true
         } catch {
             return false

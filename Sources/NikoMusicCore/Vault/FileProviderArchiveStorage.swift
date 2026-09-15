@@ -286,7 +286,7 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
         let generationRoot = location.standardizedFileURL.resolvingSymlinksInPath()
         let safety = PathSafety()
         var seen: Set<String> = []
-        return try manifest.entries.compactMap { entry in
+        return try manifest.archiveStorageManifest.entries.compactMap { entry in
             guard entry.type == .regularFile else { return nil }
             let components = entry.relativePath.split(separator: "/", omittingEmptySubsequences: false)
             guard !entry.relativePath.isEmpty,

@@ -1186,7 +1186,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         switch transfer.state {
         case .archiveVerified, .archivedLocal:
             do {
-                try manifestBuilder.verify(manifest, at: transfer.destinationURL)
+                try manifestBuilder.verifyArchive(manifest, at: transfer.destinationURL)
                 return true
             } catch {
                 return false

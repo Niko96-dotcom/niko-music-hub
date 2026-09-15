@@ -130,6 +130,7 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
                   Self.canonicalPath(record.destinationURL) == Self.canonicalPath(expectedDestinationURL),
                   let manifest = record.manifest,
                   manifest.id == expectedManifest.id,
+                  manifest.archiveLayout == expectedManifest.archiveLayout,
                   manifest.hasSameImmutableContent(as: expectedManifest) else {
                 throw VaultProjectionSupplementError.conflict
             }

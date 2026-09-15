@@ -61,6 +61,12 @@ Restore opens the newest working project in the restored folder. For mixed songs
 
 If the app stops while removing an Active copy or evicting a provider cache, launch recovery pauses that transfer for review. Song details offer **Recover Verified Project**. This downloads the archive if needed, verifies its complete manifest, preserves any surviving Active folder under `.niko-recovery` inside Active Projects, and restores a complete verified copy. **Reveal Preserved Files** opens the preserved folder so you can compare any newer work. Recovery never merges or deletes those surviving files. It requires available configured folders, sufficient free space, closed DAWs/project files, and Emergency Stop off. A corrupt archive or unsafe path stops recovery and retains existing copies.
 
+## Names in provider-backed archives
+
+Project Vault preserves original project paths when a storage provider cannot accept names such as a trailing-space folder or Finder's `Icon` file with a carriage return. New transfers use a versioned archive representation for those names. Restore recreates the original names and verifies the restored content against the original manifest.
+
+For a failed legacy transfer, Retry can rebuild that representation only after the complete Active source matches the saved content hashes. It retains the previous staging tree for recovery. Existing literal-path archives remain supported. Older app builds cannot restore the new representation and fail verification safely; use the current build for those generations.
+
 ## Independent backup and catalog recovery
 
 The independent-backup checkbox records your confirmation; Music Hub does not create or verify that backup for you. Back up the complete song folders and Vault generations, plus the Hub catalog and settings. Archive manifests, transfer history and song metadata are stored in `~/Library/Application Support/Niko Music Hub/archive-index.sqlite`. With Music Hub quit, back up its application-support folder and settings together; a live SQLite copy requires a consistent SQLite backup, including committed WAL changes, rather than copying just the database file.

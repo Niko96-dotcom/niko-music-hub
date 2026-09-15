@@ -32,6 +32,9 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
     public var durability: VaultDurability?
     public var supersededBy: UUID?
     public var preservedActiveCopies: [URL]?
+    /// Retained staging trees from an explicit archive-layout upgrade. Locations
+    /// are recorded before the move so interrupted upgrades remain traceable.
+    public var preservedArchiveCopies: [URL]?
 
     public init(
         id: UUID = UUID(),
@@ -61,12 +64,13 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         self.durability = nil
         self.supersededBy = nil
         self.preservedActiveCopies = nil
+        self.preservedArchiveCopies = nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, projectID, sourceURL, stagingURL, destinationURL
         case manifestID, manifest, projectionSupplement, state, completedBytes, totalBytes, retryCount
-        case nextRetryAt, createdAt, updatedAt, error, durability, supersededBy, preservedActiveCopies
+        case nextRetryAt, createdAt, updatedAt, error, durability, supersededBy, preservedActiveCopies, preservedArchiveCopies
     }
 
     public init(from decoder: Decoder) throws {
@@ -93,6 +97,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         durability = try values.decodeIfPresent(VaultDurability.self, forKey: .durability)
         supersededBy = try values.decodeIfPresent(UUID.self, forKey: .supersededBy)
         preservedActiveCopies = try values.decodeIfPresent([URL].self, forKey: .preservedActiveCopies)
+        preservedArchiveCopies = try values.decodeIfPresent([URL].self, forKey: .preservedArchiveCopies)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -116,6 +121,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         try values.encodeIfPresent(durability, forKey: .durability)
         try values.encodeIfPresent(supersededBy, forKey: .supersededBy)
         try values.encodeIfPresent(preservedActiveCopies, forKey: .preservedActiveCopies)
+        try values.encodeIfPresent(preservedArchiveCopies, forKey: .preservedArchiveCopies)
     }
 }
 

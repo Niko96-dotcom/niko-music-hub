@@ -54,19 +54,22 @@ public struct VaultManifest: Codable, Equatable, Sendable, Identifiable {
     public let entries: [Entry]
     public let rootAllocatedByteCount: Int64?
     public let rootExtendedAttributeBytes: Int64?
+    public let archiveLayout: VaultArchiveLayout?
 
     public init(
         id: UUID = UUID(),
         createdAt: Date = Date(),
         entries: [Entry],
         rootAllocatedByteCount: Int64? = nil,
-        rootExtendedAttributeBytes: Int64? = nil
+        rootExtendedAttributeBytes: Int64? = nil,
+        archiveLayout: VaultArchiveLayout? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
         self.entries = entries.sorted { $0.relativePath < $1.relativePath }
         self.rootAllocatedByteCount = rootAllocatedByteCount
         self.rootExtendedAttributeBytes = rootExtendedAttributeBytes
+        self.archiveLayout = archiveLayout
     }
 
     public var totalBytes: Int64 {
@@ -132,6 +135,9 @@ public struct VaultManifest: Codable, Equatable, Sendable, Identifiable {
                     throw VaultManifestError.mismatch
                 }
             }
+        }
+        if archiveLayout != nil {
+            try archiveStorageManifest.validatePersistedContentEnvelope()
         }
 
         for entry in entries {
@@ -260,23 +266,25 @@ public struct VaultProjectionSupplementBuilder: Sendable {
     ) throws -> VaultProjectionSupplement {
         try beforeObservedBuild?()
         let observed = try manifestBuilder.build(at: root)
-        guard manifest.hasSameImmutableContent(as: observed) else {
+        guard manifest.archiveStorageManifest.hasSameImmutableContent(as: observed) else {
             throw VaultProjectionSupplementError.identityMismatch
         }
         guard let rootAllocatedByteCount = observed.rootAllocatedByteCount,
               let rootExtendedAttributeBytes = observed.rootExtendedAttributeBytes else {
             throw VaultProjectionSupplementError.invalidEvidence
         }
+        let observedByPath = Dictionary(uniqueKeysWithValues: observed.entries.map { ($0.relativePath, $0) })
         let supplement = VaultProjectionSupplement(
             rootAllocatedByteCount: rootAllocatedByteCount,
             rootExtendedAttributeBytes: rootExtendedAttributeBytes,
-            entries: try observed.entries.map { entry in
-                guard let allocatedByteCount = entry.allocatedByteCount,
+            entries: try manifest.entries.map { logicalEntry in
+                guard let entry = observedByPath[manifest.archiveRelativePath(for: logicalEntry.relativePath)],
+                      let allocatedByteCount = entry.allocatedByteCount,
                       let extendedAttributeBytes = entry.extendedAttributeBytes else {
                     throw VaultProjectionSupplementError.invalidEvidence
                 }
                 return .init(
-                    relativePath: entry.relativePath,
+                    relativePath: logicalEntry.relativePath,
                     allocatedByteCount: allocatedByteCount,
                     extendedAttributeBytes: extendedAttributeBytes
                 )
@@ -415,6 +423,13 @@ public struct VaultManifestBuilder: @unchecked Sendable {
                 throw VaultManifestError.mismatch
             }
         }
+    }
+
+    /// Archive paths may use an explicitly versioned representation. Original
+    /// source and restored trees always use `verify`, preserving their names.
+    public func verifyArchive(_ manifest: VaultManifest, at root: URL) throws {
+        try manifest.validatePersistedContentEnvelope()
+        try verify(manifest.archiveStorageManifest, at: root)
     }
 
     private static func verificationEntry(
