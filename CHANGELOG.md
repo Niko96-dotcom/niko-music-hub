@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.3 - 2026-09-15
+
+- Guide archived project versions to the appropriate restore or Finder action instead of offering an open action that cannot succeed.
+- Improve song search relevance while retaining typo and abbreviation matching, preserve ranked results within Board columns, and show the filtered result count.
+- Filter preview candidates by filename and distinguish same-name files with their relative folders, while preserving playback, Compare position, and Main selection.
+
 ## 1.5.2 - 2026-09-15
 
 - Preserve original project and file names when archiving through providers that cannot store trailing spaces or certain special characters. Restoring a project reproduces its original names.
