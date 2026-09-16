@@ -38,4 +38,32 @@ public struct ProjectVaultRestoreOptions: Sendable {
         }
         return nil
     }
+
+    /// First available sibling name for an occupied destination (`Hook` → `Hook 2` → `Hook 3` …).
+    /// Returns the input itself when it is already free and valid, `nil` when no suggestion applies.
+    /// Never touches the filesystem beyond existence checks; the caller must still honor `destinationIssue`.
+    public func suggestedUniqueRelativePath(for path: String) -> String? {
+        var base = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") && !base.isEmpty { base.removeLast() }
+        guard !base.isEmpty else { return nil }
+        if destinationIssue(for: base) == nil { return base }
+        guard isOccupied(base) else { return nil }
+        for index in 2...999 {
+            let candidate = "\(base) \(index)"
+            if destinationIssue(for: candidate) == nil { return candidate }
+        }
+        return nil
+    }
+
+    private func isOccupied(_ path: String) -> Bool {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !path.isEmpty, !path.hasPrefix("/"),
+              !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || $0.hasPrefix(".niko-") }) else {
+            return false
+        }
+        let root = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
+        let destination = root.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
+        guard destination.path.hasPrefix(root.path + "/") else { return false }
+        return FileManager.default.fileExists(atPath: destination.path)
+    }
 }

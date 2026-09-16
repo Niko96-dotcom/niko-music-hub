@@ -17,4 +17,20 @@ final class ProjectVaultRestoreOptionsTests: XCTestCase {
         XCTAssertNotNil(options.destinationIssue(for: "/Outside"))
         XCTAssertNotNil(options.destinationIssue(for: ".niko-staging/Project"))
     }
+
+    func testSuggestedUniqueNameWhenOccupied() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Hook"),
+            withIntermediateDirectories: true)
+        let manifest = VaultManifest(entries: [])
+        let options = ProjectVaultRestoreOptions(manifest: manifest, activeRoot: root,
+            destinationRelativePath: "Hook")
+        XCTAssertNotNil(options.destinationIssue(for: "Hook"))
+        XCTAssertEqual(options.suggestedUniqueRelativePath(for: "Hook"), "Hook 2")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Hook 2"),
+            withIntermediateDirectories: true)
+        XCTAssertEqual(options.suggestedUniqueRelativePath(for: "Hook"), "Hook 3")
+    }
 }
