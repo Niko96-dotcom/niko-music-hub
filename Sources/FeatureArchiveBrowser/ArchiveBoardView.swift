@@ -240,6 +240,7 @@ struct ArchiveBoardView: View {
             ArchiveSearchTextField(
                 input: viewModel.searchInput,
                 onEdit: { viewModel.setSearchQuery($0) },
+                isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
             )
         }

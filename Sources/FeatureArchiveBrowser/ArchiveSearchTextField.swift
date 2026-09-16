@@ -16,16 +16,28 @@ final class ArchiveSearchInput: ObservableObject {
 struct ArchiveSearchTextField: View {
     @ObservedObject var input: ArchiveSearchInput
     let onEdit: @MainActor @Sendable (String) -> Void
+    var isDisabled: Bool = false
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
 
     var body: some View {
-        TextField("", text: Binding(
-            get: { input.query },
-            set: { value in onEdit(value) }
-        ), prompt: Text("Search songs").foregroundColor(HubDesignSystem.Palette.textTertiary))
+        TextField(
+            "Search songs",
+            text: Binding(
+                get: { input.query },
+                set: { onEdit($0) }
+            ),
+            prompt: Text("Search songs")
+                .foregroundColor(HubDesignSystem.Palette.textTertiary)
+        )
         .textFieldStyle(.plain)
         .font(HubDesignSystem.Typography.body())
         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
         .focused($keyboardFocus, equals: .search)
+        .disabled(isDisabled)
+        .accessibilityHint(
+            isDisabled
+                ? "Scan the archive first."
+                : "Filters the song list as you type."
+        )
     }
 }

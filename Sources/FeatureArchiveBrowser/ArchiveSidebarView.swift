@@ -15,7 +15,6 @@ struct ArchiveSidebarView: View {
             archiveToolbar
 
             searchField
-                .disabled(viewModel.songs.isEmpty)
                 .padding(.top, HubToolLayout.secondaryRowGap)
 
             if viewModel.roots.isEmpty {
@@ -270,6 +269,7 @@ struct ArchiveSidebarView: View {
             ArchiveSearchTextField(
                 input: viewModel.searchInput,
                 onEdit: { viewModel.setSearchQuery($0) },
+                isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
             )
         }
