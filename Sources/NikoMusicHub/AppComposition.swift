@@ -17,6 +17,7 @@ struct AppComposition {
     let router: QuickAccessRouter
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
+    let archiveViewModel: ArchiveBrowserViewModel
     let pendingVaultOperationCount: @MainActor () -> Int
 
     @MainActor
@@ -166,11 +167,7 @@ struct AppComposition {
             AudioRecorderFeature(),
             DownloaderFeature(),
             StemSeparationFeature(),
-            SettingsFeature(
-                archiveViewModel: archiveViewModel,
-                appearanceController: appearanceController,
-                updateController: updateController
-            )
+            SettingsFeature()
         ]
         if showsDevTool {
             features.append(DevToolFeature())
@@ -217,6 +214,7 @@ struct AppComposition {
             router: quickAccessRouter,
             appearanceController: appearanceController,
             updateController: updateController,
+            archiveViewModel: archiveViewModel,
             pendingVaultOperationCount: { archiveViewModel.pendingProjectVaultOperationCount }
         )
     }

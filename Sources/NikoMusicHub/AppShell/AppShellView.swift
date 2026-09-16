@@ -8,10 +8,12 @@ struct AppShellView: View {
     private static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
     private static let activeToolMinWidth: CGFloat = 540
     private static let compactInboxCollapseWidth: CGFloat = 1180
+    private static let settingsToolID = ToolFeatureID("settings")
 
     let registry: ToolRegistry
     let context: ToolContext
     @ObservedObject var router: QuickAccessRouter
+    @Environment(\.openSettings) private var openSettings
     @StateObject private var toolPaneCache: ToolPaneCache
 
     @State private var selectedToolID: ToolFeatureID?
@@ -24,9 +26,12 @@ struct AppShellView: View {
         self.registry = registry
         self.context = context
         self.router = router
-        let initialToolID = ToolRegistry.initialToolID()
+        let requestedToolID = ToolRegistry.initialToolID()
             .flatMap { registry.feature(for: $0)?.metadata.id }
             ?? registry.preferredDefaultFeatureID
+        let initialToolID = requestedToolID == Self.settingsToolID
+            ? registry.preferredDefaultFeatureID
+            : requestedToolID
         _toolPaneCache = StateObject(
             wrappedValue: ToolPaneCache(
                 registry: registry,
@@ -64,7 +69,7 @@ struct AppShellView: View {
                         ToolSidebarView(
                             context: context,
                             registry: registry,
-                            selectedToolID: $selectedToolID
+                            selectedToolID: sidebarSelectedToolID
                         )
                         .frame(width: HubDesignSystem.Size.navWidth)
                         .hubChromeMaterial()
@@ -209,7 +214,26 @@ struct AppShellView: View {
         context.preferences.set(visible, forKey: Self.showOutputInboxKey)
     }
 
+    /// Sidebar writes go through `selectTool` so Settings opens the Settings
+    /// window instead of replacing the main pane.
+    private var sidebarSelectedToolID: Binding<ToolFeatureID?> {
+        Binding(
+            get: { selectedToolID },
+            set: { newValue in
+                guard let newValue else {
+                    selectedToolID = nil
+                    return
+                }
+                selectTool(newValue)
+            }
+        )
+    }
+
     private func selectTool(_ toolID: ToolFeatureID) {
+        if toolID == Self.settingsToolID {
+            openSettings()
+            return
+        }
         toolPaneCache.ensureMounted(toolID)
         selectedToolID = toolID
     }

@@ -6,13 +6,15 @@ struct AboutCommand: Commands {
     let updateController: AppUpdateController
 
     var body: some Commands {
-        // About and Check for Updates share the one group that replaces
-        // .appInfo, which is the conventional macOS app-menu layout.
+        // About stays at .appInfo (NMH-098). The Settings scene injects
+        // Settings… with ⌘, at .appSettings. Check for Updates follows that
+        // group so the App menu is About → Settings… → Updates → Hide/Quit.
         CommandGroup(replacing: .appInfo) {
             Button("About Niko Music Hub") {
                 NSApp.orderFrontStandardAboutPanel(nil)
             }
-            Divider()
+        }
+        CommandGroup(after: .appSettings) {
             AppUpdateCheckButton(controller: updateController)
         }
     }

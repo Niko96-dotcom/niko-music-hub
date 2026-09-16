@@ -35,6 +35,16 @@ struct NikoMusicHubApp: App {
             AboutCommand(updateController: composition.updateController)
         }
 
+        Settings {
+            HubSettingsScene(
+                context: composition.context,
+                archiveViewModel: composition.archiveViewModel,
+                appearanceController: appearanceController,
+                updateController: composition.updateController
+            )
+            .preferredColorScheme(appearanceController.preferredColorScheme)
+        }
+
         MenuBarExtra {
             MenuBarMenuView(
                 entries: MenuBarMenuModel.resolvedEntries(registry: composition.registry),

@@ -154,18 +154,19 @@ final class UpdatePackagingContractTests: XCTestCase {
         )
     }
 
-    /// The manual check must stay in the app menu. It lives in the same group
-    /// that replaces .appInfo, so a second `CommandGroup` anchored at that
-    /// placement is the easy way to lose it.
+    /// The manual check must stay in the app menu. About replaces .appInfo;
+    /// Settings comes from the Settings scene at .appSettings; Updates is
+    /// anchored after that group so it cannot fall out of the App menu.
     func testCheckForUpdatesIsInTheAppMenu() throws {
         let menu = try source("Sources/NikoMusicHub/AppMenu.swift")
 
         XCTAssertTrue(menu.contains("CommandGroup(replacing: .appInfo)"))
+        XCTAssertTrue(menu.contains("CommandGroup(after: .appSettings)"))
         XCTAssertTrue(menu.contains("AppUpdateCheckButton(controller: updateController)"))
         XCTAssertEqual(
             menu.components(separatedBy: "CommandGroup(").count - 1,
-            1,
-            "About and Check for Updates belong in one group at the .appInfo placement"
+            2,
+            "About at .appInfo and Check for Updates after .appSettings (Settings sits between)"
         )
 
         let button = try source("Sources/AppUpdates/AppUpdateCheckButton.swift")
