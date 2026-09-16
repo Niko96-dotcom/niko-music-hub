@@ -31,8 +31,8 @@ Fixture: CubaseArchive + DRY_RUN_OPEN=1 + isolated suite; no ~/Music writes.
 
 - `focusEffectDisabled` absent in source; pad is `.focusable()` + `.focused`
 - AX: Tap Tempo receives FOCUS after opening BPM Tapper / clicking pad (`ax-035-*`)
-- Screenshots: `captures/035-after-click-pad.png`, `035-bpm-tool.png` — system focus-ring visibility still judgment call / inconclusive in full-desktop capture
-- Tab-to-pad: not proven (Tab stuck on Settings “Follow System” after visiting Settings)
+- Screenshot `captures/035-after-click-pad.png` shows a **visible blue system focus ring** around the Tap Tempo pad (click/open focus path)
+- Still IAR vs FIX-SPECS Accept: **Tab** to Tap Tempo not proven (Tab stuck on Settings “Follow System”); light+dark ring matrix not run; Space-tap not re-proven this pass
 
 ## NMH-043 — still IAR
 
