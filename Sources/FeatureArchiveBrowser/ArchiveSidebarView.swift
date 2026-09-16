@@ -82,6 +82,8 @@ struct ArchiveSidebarView: View {
                 isEnabled: !viewModel.songs.isEmpty
             ) {
                 viewModel.viewMode = .board
+                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+                keyboardFocus = .archive
             }
 
             if viewModel.isScanning {
@@ -354,7 +356,11 @@ struct ArchiveSidebarView: View {
                             song: song,
                             isSelected: viewModel.selectedSong?.id == song.id,
                             matchSummary: viewModel.searchMatchSummaries[song.id],
-                            onSelect: { viewModel.selectSong(song) },
+                            onSelect: {
+                                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+                                keyboardFocus = .archive
+                                viewModel.selectSong(song)
+                            },
                             onOpenDetail: { viewModel.openSongDetail(song) },
                             onPlay: { viewModel.audition(song) },
                             onOpenProject: { try? viewModel.openLatestCPR(for: song) },

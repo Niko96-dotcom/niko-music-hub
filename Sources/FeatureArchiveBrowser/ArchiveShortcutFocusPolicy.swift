@@ -16,6 +16,24 @@ enum ArchiveShortcutFocusPolicy {
         let firstResponder = NSApp?.keyWindow?.firstResponder
         return allowsSongShortcuts(archiveFocused: true, firstResponder: firstResponder)
     }
+
+    /// NMH-006: after mode switch / song click, SwiftUI `@FocusState` alone can leave
+    /// AppKit firstResponder on the search field editor (or nil). Song arrows/Space and
+    /// Option-skip (`canSkipPreview`) require a non-text firstResponder.
+    @MainActor
+    static func claimArchiveKeyFocus() {
+        // NSApp is nil in plain XCTest hosts — never force-unwrap.
+        guard let window = NSApp?.keyWindow ?? NSApp?.mainWindow else { return }
+        let first = window.firstResponder
+        let needsClaim =
+            first == nil
+            || first is NSTextView
+            || first is NSTextField
+            || first is NSSearchField
+        if needsClaim {
+            _ = window.makeFirstResponder(window.contentView)
+        }
+    }
 }
 
 /// Actions the Song menu runs while the archive group is focused (NMH-034).

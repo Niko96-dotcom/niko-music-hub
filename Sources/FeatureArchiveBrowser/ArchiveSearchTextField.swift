@@ -60,6 +60,7 @@ struct ArchiveSearchTextField: View {
 
     private func handleEscape() {
         if input.query.isEmpty {
+            ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             keyboardFocus = .archive
         } else {
             onEdit("")

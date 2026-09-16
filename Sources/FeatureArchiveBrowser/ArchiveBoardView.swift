@@ -74,7 +74,10 @@ struct ArchiveBoardView: View {
                                     onDragEnded: {
                                         edgeAutoScroller.stop()
                                     },
-                                    onInteract: { keyboardFocus = .archive }
+                                    onInteract: {
+                                        ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+                                        keyboardFocus = .archive
+                                    }
 
                                 )
                                 .id(column.id)
@@ -110,6 +113,7 @@ struct ArchiveBoardView: View {
                 .simultaneousGesture(TapGesture().onEnded {
                     // Clicking a card returns keyboard control to the board;
                     // otherwise the AppKit search editor can keep Space as text.
+                    ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
                     keyboardFocus = .archive
                 })
 
@@ -196,6 +200,8 @@ struct ArchiveBoardView: View {
                 help: "Browse"
             ) {
                 viewModel.viewMode = .list
+                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+                keyboardFocus = .archive
             }
         }
         .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)

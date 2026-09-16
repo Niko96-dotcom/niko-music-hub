@@ -25,4 +25,10 @@ final class ArchiveShortcutFocusPolicyTests: XCTestCase {
             "FeatureArchiveBrowser.archiveShowSongVersions"
         )
     }
+
+    func testClaimArchiveKeyFocusIsSafeWithoutKeyWindow() {
+        // Smoke: no key window in unit tests — must not trap.
+        ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+        XCTAssertFalse(ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true, firstResponder: nil))
+    }
 }

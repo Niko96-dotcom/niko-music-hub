@@ -136,6 +136,7 @@ struct ArchiveBrowserView: View {
             }
         }
         .onAppear {
+            ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             keyboardFocus = .archive
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
             viewModel.presentPendingIdentityReviewsIfNeeded()
@@ -405,7 +406,7 @@ struct ArchiveBrowserView: View {
             allowsUnmodifiedShortcuts: allowsSongShortcuts,
             allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
             isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.selectedSong?.id,
-            canSkipPreview: previewSession.preview != nil && previewPlayer.duration > 0 && allowsSongShortcuts,
+            canSkipPreview: previewSession.preview != nil && previewPlayer.duration > 0 && ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true),
             playPausePreview: { _ = performPlayPausePreview() },
             openPreview: performOpenPreview,
             openProject: performOpenProject,
