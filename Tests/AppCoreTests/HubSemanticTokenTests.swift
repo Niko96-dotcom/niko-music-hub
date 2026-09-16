@@ -32,8 +32,8 @@ final class HubSemanticTokenTests: XCTestCase {
         _ = HubDesignSystem.Palette.warning
         _ = HubDesignSystem.Palette.danger
 
-        // DS-05: ControlState 7-case enum
-        XCTAssertEqual(HubDesignSystem.ControlState.allCases.count, 7)
+        // DS-05 / NMH-025: ControlState includes `.focused`
+        XCTAssertEqual(HubDesignSystem.ControlState.allCases.count, 8)
 
         // Motion durations locked per CONTEXT.md
         XCTAssertEqual(HubDesignSystem.Motion.short, 0.15)

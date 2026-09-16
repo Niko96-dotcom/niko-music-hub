@@ -525,21 +525,17 @@ struct SongDetailView: View {
                 }
 
                 metadataField(label: "Display title") {
-                    TextField("Virtual title (app only)", text: $virtualTitleDraft)
-                        .quietFieldStyle()
+                    HubQuietTextField("Virtual title (app only)", text: $virtualTitleDraft)
                         .onSubmit { commitVirtualTitle() }
                 }
 
                 metadataField(label: "Aliases") {
-                    TextField("e.g. rave hook, neon v2", text: $aliasesDraft)
-                        .quietFieldStyle()
+                    HubQuietTextField("e.g. rave hook, neon v2", text: $aliasesDraft)
                         .onSubmit { commitAliases() }
                 }
 
                 metadataField(label: "Song note") {
-                    TextField("Your note", text: $appNoteDraft, axis: .vertical)
-                        .lineLimit(2...4)
-                        .quietFieldStyle()
+                    HubQuietTextField("Your note", text: $appNoteDraft, axis: .vertical, lineLimit: 2...4)
                         .onSubmit { commitAppNote() }
                 }
 

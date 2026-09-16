@@ -95,9 +95,11 @@ public struct HubSurface: ViewModifier {
 
     @ViewBuilder
     private func surfaceStroke(shape: RoundedRectangle) -> some View {
-        // Reference fields are quiet inset fills with no stroke; grouped panels keep
-        // a hairline instead of a glossy rim.
-        if level == .field && [HubDesignSystem.ControlState.normal, .hover, .pressed, .disabled].contains(state) {
+        // Quiet fields are unstroked until focused; then a 2 pt Palette.focus ring
+        // replaces the hidden system roundedBorder (NMH-025).
+        if level == .field, state == .focused {
+            shape.strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+        } else if level == .field && [HubDesignSystem.ControlState.normal, .hover, .pressed, .disabled].contains(state) {
             EmptyView()
         } else {
             strokedBorder(shape: shape)
@@ -115,7 +117,7 @@ public struct HubSurface: ViewModifier {
 
     private var fillColor: Color {
         switch state {
-        case .normal: return HubDesignSystem.Palette.surface
+        case .normal, .focused: return HubDesignSystem.Palette.surface
         case .hover: return HubDesignSystem.Palette.surfaceRaised
         case .pressed: return HubDesignSystem.Palette.surface
         case .selected: return HubDesignSystem.Palette.selection
@@ -128,6 +130,7 @@ public struct HubSurface: ViewModifier {
     private var midStrokeColor: Color {
         switch state {
         case .selected: return HubDesignSystem.Palette.selectionStroke
+        case .focused: return HubDesignSystem.Palette.focus
         case .warning: return HubDesignSystem.Palette.warning.opacity(0.45)
         case .error: return HubDesignSystem.Palette.danger.opacity(0.48)
         case .disabled: return HubDesignSystem.Palette.separator.opacity(0.5)
@@ -140,7 +143,7 @@ public struct HubSurface: ViewModifier {
         case .selected, .hover: return 0.025
         case .disabled: return 0.006
         case .warning, .error: return 0.012
-        case .normal, .pressed: return 0.01
+        case .normal, .pressed, .focused: return 0.01
         }
     }
 
@@ -150,6 +153,7 @@ public struct HubSurface: ViewModifier {
         }
         switch state {
         case .selected: return 0.75
+        case .focused: return 2
         case .warning, .error: return 0.75
         case .normal, .hover, .pressed, .disabled: return 0.5
         }
@@ -158,6 +162,7 @@ public struct HubSurface: ViewModifier {
     private var strokeOpacity: Double {
         switch state {
         case .selected: return 0.75
+        case .focused: return 1
         case .warning, .error: return 0.60
         case .disabled: return 0.35
         case .normal, .hover, .pressed: return 0.55
@@ -170,7 +175,7 @@ public struct HubSurface: ViewModifier {
         case .hover: return level == .raised ? HubDesignSystem.Elevation.medium : HubDesignSystem.Elevation.low
         case .selected: return level == .raised ? HubDesignSystem.Elevation.medium : HubDesignSystem.Elevation.flat
         case .pressed, .disabled: return HubDesignSystem.Elevation.flat
-        case .normal, .warning, .error: return level.baseElevation
+        case .normal, .warning, .error, .focused: return level.baseElevation
         }
     }
 }

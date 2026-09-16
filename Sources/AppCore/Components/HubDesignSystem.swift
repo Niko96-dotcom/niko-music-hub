@@ -424,9 +424,8 @@ public enum HubDesignSystem {
 
     // MARK: - Control State (DS-05)
     //
-    // Seven-case interactive state enum. Replaces the v1.6 `Liquid.Intent` shape
-    // with a `pressed` case added for explicit press-state tracking. Behavioral
-    // tests instantiate each control in each state and assert the consumed token.
+    // Interactive state enum including `.focused` for quiet-field rings (NMH-025).
+    // Behavioral tests instantiate each control in each state and assert the consumed token.
 
     public enum ControlState: CaseIterable, Sendable {
         case normal
@@ -436,5 +435,6 @@ public enum HubDesignSystem {
         case disabled
         case warning
         case error
+        case focused
     }
 }

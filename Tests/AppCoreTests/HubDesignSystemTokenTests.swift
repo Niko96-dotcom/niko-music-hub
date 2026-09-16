@@ -95,12 +95,37 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(HubDesignSystem.Motion.duration(.short, reduceMotion: false), 0.15)
     }
 
-    /// DS-05: ControlState enum covers all 7 interactive states.
-    func testControlStateCoversAllSevenCases() {
-        XCTAssertEqual(HubDesignSystem.ControlState.allCases.count, 7)
+    /// DS-05 / NMH-025: ControlState includes `.focused` for quiet-field rings.
+    func testControlStateCoversAllSevenCases() throws {
+        XCTAssertEqual(HubDesignSystem.ControlState.allCases.count, 8)
         XCTAssertEqual(
             HubDesignSystem.ControlState.allCases,
-            [.normal, .hover, .pressed, .selected, .disabled, .warning, .error]
+            [.normal, .hover, .pressed, .selected, .disabled, .warning, .error, .focused]
+        )
+
+        let surface = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubSurface.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            surface.contains("if level == .field, state == .focused"),
+            "Focused fields must take the NMH-025 Palette.focus stroke path."
+        )
+        XCTAssertTrue(
+            surface.contains("shape.strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)"),
+            "Focused quiet fields must draw a 2 pt Palette.focus ring."
+        )
+
+        let quiet = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubQuietField.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(quiet.contains("textFieldStyle(.plain)"))
+        XCTAssertTrue(quiet.contains("@FocusState"))
+        XCTAssertTrue(quiet.contains("state: isFocused ? .focused : .normal"))
+        XCTAssertFalse(
+            quiet.contains("focusEffectDisabled"),
+            "Quiet fields must not suppress the keyboard focus effect."
         )
     }
 
