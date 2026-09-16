@@ -49,3 +49,12 @@ Zero additional spend. No overages, upgrades, other accounts, paid API fallback,
 
 ## Amendment (2026-09-16 14:35 CEST)
 Primary coding worker switched to OpenCode `opencode-go/muse-spark-1.3-contributor` variant `xhigh` after Cursor agent usage exhausted (`ActionRequiredError`). Credentials remain in `~/.local/share/opencode/auth.json` (opencode-go). Invocation uses `opencode run --pure` + `OPENCODE_CONFIG_CONTENT` (same proven path as subscription-squad worker). Do not buy Cursor credits unless explicitly authorized.
+
+## Amendment (2026-09-16 17:30 CEST)
+Independent reviewer: OpenCode `opencode/union-alpha` (Union Alpha Free), read-only `hig-reviewer` agent after each Muse implement.
+- Writes `/tmp/nmh-hig-NMH-XXX-review.md` with verdict approve|changes_requested|block
+- CODE-RED (`block`) skips integrate and marks ledger blocked
+- Otherwise integrate proceeds; ledger evidence includes `union-review=<verdict>`
+- Disable with `HIG_REVIEW_ENABLED=0`. Override model with `HIG_REVIEW_MODEL`.
+End-phase: after confirmed issues are done, supervisor processes deferred preserve / not-applicable rows, then retries blocked items.
+
