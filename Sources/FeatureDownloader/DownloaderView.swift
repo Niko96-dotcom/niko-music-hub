@@ -102,6 +102,9 @@ public struct DownloaderView: View {
                 .onChange(of: viewModel.urlText) { _, _ in
                     viewModel.urlTextDidChange()
                 }
+                .onSubmit {
+                    viewModel.submitIfReady()
+                }
 
             HubLabeledButton(
                 icon: "arrow.down.circle",
@@ -111,6 +114,15 @@ public struct DownloaderView: View {
                 isEnabled: viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled
             ) {
                 viewModel.startDownload()
+            }
+
+            if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled {
+                Button(DownloaderCopy.download) {
+                    viewModel.startDownload()
+                }
+                .keyboardShortcut(.defaultAction)
+                .hidden()
+                .accessibilityHidden(true)
             }
 
             if !viewModel.urlText.isEmpty {

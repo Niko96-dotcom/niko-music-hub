@@ -230,6 +230,15 @@ public struct AudioConverterView: View {
                     viewModel.startConversion()
                 }
 
+                if viewModel.canConvertToWAV {
+                    Button("Convert") {
+                        viewModel.startConversion()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .hidden()
+                    .accessibilityHidden(true)
+                }
+
                 if viewModel.isConverting {
                     HubLabeledButton(
                         icon: "stop.fill",
@@ -239,6 +248,13 @@ public struct AudioConverterView: View {
                     ) {
                         viewModel.requestStopAfterCurrent()
                     }
+                    Button("Stop After This File") {
+                        viewModel.requestStopAfterCurrent()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(!viewModel.canRequestStopAfterCurrent)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
             }
 

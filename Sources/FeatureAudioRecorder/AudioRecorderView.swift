@@ -141,41 +141,53 @@ public struct AudioRecorderView: View {
     }
 
     private var controlSection: some View {
-        Button {
-            if viewModel.isCaptureActive {
-                Task { await viewModel.stopRecording() }
-            } else {
-                Task { await viewModel.startRecording() }
-            }
-        } label: {
-            HStack(spacing: 8) {
+        ZStack {
+            Button {
                 if viewModel.isCaptureActive {
-                    Circle()
-                        .fill(HubDesignSystem.Palette.danger)
-                        .frame(width: 10, height: 10)
-                        .animation(
-                            reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
-                            value: viewModel.isRecording
-                        )
+                    Task { await viewModel.stopRecording() }
+                } else {
+                    Task { await viewModel.startRecording() }
                 }
-                Label(
-                    viewModel.isCaptureActive ? "Stop" : "Record",
-                    systemImage: viewModel.isCaptureActive ? "stop.fill" : "record.circle"
-                )
-                .font(HubDesignSystem.Typography.body())
-                .fontWeight(.semibold)
+            } label: {
+                HStack(spacing: 8) {
+                    if viewModel.isCaptureActive {
+                        Circle()
+                            .fill(HubDesignSystem.Palette.danger)
+                            .frame(width: 10, height: 10)
+                            .animation(
+                                reduceMotion ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                                value: viewModel.isRecording
+                            )
+                    }
+                    Label(
+                        viewModel.isCaptureActive ? "Stop" : "Record",
+                        systemImage: viewModel.isCaptureActive ? "stop.fill" : "record.circle"
+                    )
+                    .font(HubDesignSystem.Typography.body())
+                    .fontWeight(.semibold)
+                }
+                .foregroundStyle(HubDesignSystem.Palette.canvas)
+                .frame(height: 34)
+                .padding(.horizontal, 18)
             }
-            .foregroundStyle(HubDesignSystem.Palette.canvas)
-            .frame(height: 34)
-            .padding(.horizontal, 18)
+            .buttonStyle(.plain)
+            .background {
+                Capsule()
+                    .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
+            }
+            .disabled(viewModel.recordingState == .stopping)
+            .accessibilityLabel(viewModel.isCaptureActive ? "Stop recording" : "Start recording")
+
+            if viewModel.isCaptureActive {
+                Button("Stop") {
+                    Task { await viewModel.stopRecording() }
+                }
+                .keyboardShortcut(.cancelAction)
+                .frame(width: 0, height: 0)
+                .hidden()
+                .accessibilityHidden(true)
+            }
         }
-        .buttonStyle(.plain)
-        .background {
-            Capsule()
-                .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
-        }
-        .disabled(viewModel.recordingState == .stopping)
-        .accessibilityLabel(viewModel.isCaptureActive ? "Stop recording" : "Start recording")
         .padding(12)
     }
 

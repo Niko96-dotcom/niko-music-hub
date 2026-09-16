@@ -163,6 +163,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         validationGeneration == generation && urlText == input
     }
 
+    public func submitIfReady() {
+        guard downloadState == .readyToDownload else { return }
+        startDownload()
+    }
+
     public func startDownload() {
         guard downloadState == .readyToDownload || downloadState == .canceled,
               let sourceURL = Self.validatedHTTPURL(urlText) else {

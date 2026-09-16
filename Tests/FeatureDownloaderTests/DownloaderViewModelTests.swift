@@ -101,6 +101,39 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertNil(weakViewModel)
     }
 
+    func testSubmitIfReadyStartsOnlyWhenReady() async throws {
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .completed,
+            progress: 1,
+            message: "Downloaded"
+        )
+        let useCase = FakeDownloaderUseCase(job: job, delay: .milliseconds(10))
+        let viewModel = makeViewModel(
+            useCase: useCase,
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore()
+        )
+        viewModel.urlText = "https://example.com/first"
+
+        viewModel.downloadState = .idle
+        viewModel.submitIfReady()
+        XCTAssertEqual(viewModel.downloadState, .idle)
+        XCTAssertEqual(useCase.callCount, 0)
+
+        viewModel.downloadState = .checkingURL
+        viewModel.submitIfReady()
+        XCTAssertEqual(viewModel.downloadState, .checkingURL)
+        XCTAssertEqual(useCase.callCount, 0)
+
+        viewModel.downloadState = .readyToDownload
+        viewModel.submitIfReady()
+        XCTAssertEqual(viewModel.downloadState, .downloading)
+        try await waitUntil { useCase.callCount == 1 }
+        XCTAssertEqual(useCase.receivedURLs, [URL(string: "https://example.com/first")!])
+    }
+
     func testStartDownloadSetsDownloadingSynchronouslyAndRejectsDuplicateStarts() async throws {
         let job = Job(
             sourceToolID: "downloader",

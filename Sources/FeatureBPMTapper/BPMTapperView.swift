@@ -136,6 +136,7 @@ public struct BPMTapperView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Tap Tempo")
         .accessibilityValue(viewModel.statusText)
+        .accessibilityHint("Space taps tempo. Escape resets the current run.")
     }
 
     private var actionRow: some View {

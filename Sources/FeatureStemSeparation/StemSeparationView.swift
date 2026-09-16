@@ -122,6 +122,9 @@ public struct StemSeparationView: View {
                 .textFieldStyle(.plain)
                 .font(HubDesignSystem.Typography.body())
                 .disabled(viewModel.isRunning)
+                .onSubmit {
+                    submitPrimaryStemJob()
+                }
 
             HubLabeledButton(
                 icon: "arrow.down.circle",
@@ -189,6 +192,15 @@ public struct StemSeparationView: View {
                     viewModel.startSeparation()
                 }
 
+                if viewModel.canStart || viewModel.canStartYouTube {
+                    Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
+                        submitPrimaryStemJob()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .hidden()
+                    .accessibilityHidden(true)
+                }
+
                 if viewModel.canCancel {
                     HubLabeledButton(
                         icon: "xmark",
@@ -197,6 +209,12 @@ public struct StemSeparationView: View {
                     ) {
                         viewModel.cancelSeparation()
                     }
+                    Button("Cancel") {
+                        viewModel.cancelSeparation()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
             }
         }
@@ -238,5 +256,15 @@ public struct StemSeparationView: View {
             subtitle: { $0.metadata["displayName"] },
             onReveal: { viewModel.reveal(item: $0) }
         )
+    }
+
+    /// Return starts the one enabled primary: YouTube if a URL is present, else a dropped file.
+    private func submitPrimaryStemJob() {
+        let hasURL = !viewModel.youtubeURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasURL {
+            viewModel.startYouTubeSeparation()
+        } else if viewModel.canStart {
+            viewModel.startSeparation()
+        }
     }
 }
