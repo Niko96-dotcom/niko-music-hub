@@ -7,7 +7,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-002 | 1 | implemented-awaiting-runtime | 34ec4f60ba8d6512f8d3406fbd5c096303fb9a27 | ProjectVaultConfirmation.swift, SongDetailView.swift, ArchiveBrowserViewModel*.swift, ArchiveNowConfirmationTests, ProjectVaultConfirmationTests | swift build + ArchiveNowConfirmationTests + ProjectVaultConfirmationTests pass; GUI Accept pending | batch-NMH-002-98bd007f; no live GUI |
 | NMH-003 | 1 | implemented-awaiting-runtime | 81f228bd92e439bc83bc643555a73f668d49c436 | ProjectVaultConfirmation, ArchiveBoardView, ArchiveBrowserViewModel*, WorkflowDoneArchiveConfirmationTests | swift build + WorkflowDoneArchiveConfirmationTests (6) + related vault tests pass; GUI drag-onto-Done pending | batch-NMH-003-1c7cac75; no live GUI |
 | NMH-058 | 1 | implemented-awaiting-runtime | d348a8000fc3cc5b5408f5f7193ff9a4785e0e70 | (see commit) | see nmh-hig-NMH-058-result.md; worker exit 0 | batch-NMH-058-bc6b1749; auto-integrated |
-| NMH-001 | 2 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-001 | 2 | implemented-awaiting-runtime | 00ef78978ba8cafdefc937c6445670136df6f953 | (see commit) | see nmh-hig-NMH-001-result.md; worker exit 0 | batch-NMH-001-2ca7a451; auto-integrated |
 | NMH-015 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
 | NMH-012 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
 | NMH-013 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
