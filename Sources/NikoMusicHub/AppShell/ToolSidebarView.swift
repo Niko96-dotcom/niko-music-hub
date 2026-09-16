@@ -46,6 +46,7 @@ struct ToolSidebarView: View {
             }
 
             if context != nil {
+                HubSectionHeader("Status")
                 helperHealthRow
                     .padding(.bottom, 12)
             }
@@ -54,6 +55,15 @@ struct ToolSidebarView: View {
         .padding(.top, HubToolLayout.topPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(width: HubDesignSystem.Size.navWidth)
+        .onMoveCommand { direction in
+            if let next = ToolSidebarSelection.move(
+                direction: direction,
+                metadata: registry.metadata,
+                selectedID: selectedToolID
+            ) {
+                selectedToolID = next
+            }
+        }
     }
 
     private var appMark: some View {
@@ -115,7 +125,8 @@ struct ToolSidebarView: View {
         }
         .help(metadata.displayName)
         .accessibilityLabel(metadata.displayName)
-        .accessibilityValue(metadata.shortLabel)
+        .accessibilityValue(ToolSidebarSelection.accessibilityValue(isSelected: isSelected(metadata)))
+        .accessibilityAddTraits(ToolSidebarSelection.accessibilityTraits(isSelected: isSelected(metadata)))
         .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
     }
 
@@ -152,6 +163,7 @@ struct ToolSidebarView: View {
         .onHover { helperHealthHovered = $0 }
         .help("Helper tools status")
         .accessibilityLabel("Helper tools status")
+        .accessibilityHint("Shows whether yt-dlp, FFmpeg, and demucs-mlx are ready.")
         .popover(isPresented: $showHelperHealth, arrowEdge: .leading) {
             if let context {
                 HelperToolsHealthStrip(context: context)
