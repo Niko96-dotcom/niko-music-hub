@@ -402,14 +402,7 @@ struct SettingsView: View {
                 session.settings.helperTools.demucsMlx = url
                 session.persistSettings { $0.helperTools.demucsMlx = url }
             }
-            if let helperPathError = session.helperPathError {
-                Text(helperPathError)
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Colors.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-        helperPathErrorBanner
     }
 
     @ViewBuilder
@@ -470,19 +463,6 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var helperPathErrorBanner: some View {
-        if let helperPathError = session.helperPathError {
-            Label(helperPathError, systemImage: "exclamationmark.triangle.fill")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Colors.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(HubDesignSystem.Spacing.section)
-                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
-        }
-    }
-
     private func pathRow(label: String, path: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -536,44 +516,53 @@ struct SettingsView: View {
         prompt: String,
         onSet: @escaping (URL?) -> Void
     ) -> some View {
-        LabeledContent(label) {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Text(url?.path ?? "Auto-detect")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent(label) {
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    Text(url?.path ?? "Auto-detect")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
 
-                HubLabeledButton(
-                    icon: "ellipsis",
-                    label: "Choose…",
-                    style: .ghost,
-                    isEnabled: session.settingsLoadError == nil
-                ) {
-                    guard let chosen = session.context.fileActions.chooseExecutable(prompt: prompt) else { return }
-                    if let validationError = HelperExecutableValidation.validate(url: chosen) {
-                        session.helperPathError = "\(label): \(validationError)"
-                        return
-                    }
-                    session.helperPathError = nil
-                    onSet(chosen)
-                }
-
-                if url != nil {
-                    HubIconButton(
-                        systemImage: "xmark",
-                        accessibilityLabel: "Use auto-detect for \(label)",
-                        help: "Use auto-detect for \(label)",
+                    HubLabeledButton(
+                        icon: "ellipsis",
+                        label: "Choose…",
+                        style: .ghost,
                         isEnabled: session.settingsLoadError == nil
                     ) {
-                        onSet(nil)
+                        guard let chosen = session.context.fileActions.chooseExecutable(prompt: prompt) else { return }
+                        if let validationError = HelperExecutableValidation.validate(url: chosen) {
+                            session.helperPathError = "\(label): \(validationError)"
+                            return
+                        }
+                        session.helperPathError = nil
+                        onSet(chosen)
+                    }
+
+                    if url != nil {
+                        HubIconButton(
+                            systemImage: "xmark",
+                            accessibilityLabel: "Use auto-detect for \(label)",
+                            help: "Use auto-detect for \(label)",
+                            isEnabled: session.settingsLoadError == nil
+                        ) {
+                            onSet(nil)
+                        }
                     }
                 }
+                .padding(8)
+                .hubSurface(.field)
+                .frame(minHeight: 40)
             }
-            .padding(8)
-            .hubSurface(.field)
-            .frame(minHeight: 40)
+            if let helperPathError = session.helperPathError,
+               helperPathError.hasPrefix("\(label): ") {
+                Text(helperPathError)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
