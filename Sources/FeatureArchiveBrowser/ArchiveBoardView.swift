@@ -526,6 +526,9 @@ struct ArchiveBoardCardView: View {
     let onOpenDetail: () -> Void
     let onProjectVaultPrimaryAction: (() -> Void)?
     var onPlay: (() -> Void)?
+    var onOpenProject: (() -> Void)? = nil
+    var onRevealInFinder: (() -> Void)? = nil
+    var canRevealInFinder: Bool = false
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)? = nil
     @ObservedObject private var session = ArchivePreviewSession.shared
 
@@ -560,14 +563,14 @@ struct ArchiveBoardCardView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(HubDesignSystem.Palette.warning)
                 }
-                if song.mainPreviewURL != nil, let onPlay {
+                if song.mainPreviewURL != nil, onPlay != nil {
                     ArchiveCardPlayButton(
                         title: song.effectiveDisplayTitle,
                         isPlaying: session.songID == song.id && session.isPlaying,
                         isLoaded: session.songID == song.id,
                         isEnabled: !session.captureActive
                     ) {
-                        if session.songID == song.id { session.toggle() } else { onPlay() }
+                        playPreview()
                     }
                 } else if song.mainPreviewURL == nil {
                     Image(systemName: "speaker.slash").help("No preview")
@@ -625,9 +628,16 @@ struct ArchiveBoardCardView: View {
             isHovered = hovering
         }
         .contextMenu {
-            SongWorkflowContextMenu(
-                allowsMutation: allowsWorkflowMutation,
-                onSelect: onWorkflowStatusChange
+            SongItemCommands(
+                song: song,
+                isPreviewPlaying: session.songID == song.id && session.isPlaying,
+                captureActive: session.captureActive,
+                canRevealInFinder: canRevealInFinder,
+                allowsWorkflowMutation: allowsWorkflowMutation,
+                onOpenProject: { onOpenProject?() },
+                onPlayPreview: playPreview,
+                onRevealInFinder: { onRevealInFinder?() },
+                onWorkflowStatusChange: onWorkflowStatusChange
             )
         }
         .modifier(ArchiveBoardCardDragModifier(
@@ -676,6 +686,14 @@ struct ArchiveBoardCardView: View {
             onSelect()
         case .openDetail:
             onOpenDetail()
+        }
+    }
+
+    private func playPreview() {
+        if session.songID == song.id {
+            session.toggle()
+        } else {
+            onPlay?()
         }
     }
 }

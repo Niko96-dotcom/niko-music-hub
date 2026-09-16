@@ -23,6 +23,8 @@ public struct ArchiveSongFocusedActions {
     public let hasSelectedSong: Bool
     public let allowsUnmodifiedShortcuts: Bool
     public let allowsWorkflowMutation: Bool
+    /// True when the selected song is the one currently playing (NMH-046 titles).
+    public let isPreviewPlaying: Bool
     public let playPausePreview: () -> Void
     public let openPreview: () -> Void
     public let openProject: () -> Void

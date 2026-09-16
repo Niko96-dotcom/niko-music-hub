@@ -28,7 +28,7 @@ final class ArchiveBoardWorkflowAccessTests: XCTestCase {
         let menu = try featureSource("SongWorkflowContextMenu.swift")
         let list = try featureSource("SongCardView.swift")
 
-        XCTAssertTrue(board.contains("SongWorkflowContextMenu"), "Board card must share the list workflow context menu")
+        XCTAssertTrue(board.contains("SongItemCommands"), "Board card must share the list item context menu")
         XCTAssertTrue(board.contains("SongWorkflowAccessibilityActions"), "Board card must expose named Move to… VoiceOver actions")
         XCTAssertTrue(board.contains("ArchiveBoardCardDragModifier"), "Drag onto columns must remain")
         XCTAssertTrue(board.contains(".draggable(songID)"), "Drag payload stays the song id")
@@ -38,7 +38,7 @@ final class ArchiveBoardWorkflowAccessTests: XCTestCase {
         )
         XCTAssertTrue(menu.contains("Button(SongWorkflowActions.clearStatusMenuTitle)"))
         XCTAssertTrue(menu.contains("ForEach(ProjectWorkflowStatus.allCases"))
-        XCTAssertTrue(list.contains("SongWorkflowContextMenu"), "List menu must keep the same workflow items")
+        XCTAssertTrue(list.contains("SongItemCommands"), "List menu must keep Open / Play / Reveal / status")
         XCTAssertFalse(list.contains("Button(\"No Status\")"), "List must not keep a parallel hardcoded status menu")
     }
 

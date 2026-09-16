@@ -12,25 +12,25 @@ struct HubSongCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Song") {
-            Button("Play/Pause Preview") {
-                songActions?.playPausePreview()
-            }
-            .help("Space when the archive is focused")
-            .disabled(songActions == nil)
-
-            Button("Open Project") {
+            Button(SongItemCommandCopy.openProject) {
                 songActions?.openProject()
             }
             .keyboardShortcut("o", modifiers: .command)
             .disabled(songActions?.hasSelectedSong != true)
 
-            Button("Reveal in Finder") {
+            Button(SongItemCommandCopy.previewTitle(isPlaying: songActions?.isPreviewPlaying == true)) {
+                songActions?.playPausePreview()
+            }
+            .help("Space when the archive is focused")
+            .disabled(songActions == nil)
+
+            Button(SongItemCommandCopy.revealInFinder) {
                 songActions?.revealInFinder()
             }
             .keyboardShortcut("r", modifiers: .command)
             .disabled(songActions?.hasSelectedSong != true)
 
-            Button("Reveal in Finder") {
+            Button(SongItemCommandCopy.revealInFinder) {
                 songActions?.revealInFinder()
             }
             .keyboardShortcut("f", modifiers: [])

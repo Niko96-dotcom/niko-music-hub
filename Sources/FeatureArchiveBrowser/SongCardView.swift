@@ -9,6 +9,9 @@ struct SongCardView: View {
     var matchSummary: String?
     var onSelect: (() -> Void)?
     var onPlay: (() -> Void)?
+    var onOpenProject: (() -> Void)?
+    var onRevealInFinder: (() -> Void)?
+    var canRevealInFinder: Bool = false
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)?
     var vaultPresentation: ProjectVaultCardPresentation?
     var vaultActivityMessage: String? = nil
@@ -62,9 +65,7 @@ struct SongCardView: View {
                         isLoaded: isRowLoaded,
                         isEnabled: song.mainPreviewURL != nil && !session.captureActive
                     ) {
-                        if isRowLoaded { session.toggle() }
-                        else if let onPlay { onPlay() }
-                        else { session.audition(song: song, openSong: { onSelect?() }) }
+                        playPreview()
                     }
                     if hasScanWarning {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -128,9 +129,16 @@ struct SongCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .contextMenu {
-            SongWorkflowContextMenu(
-                allowsMutation: allowsWorkflowMutation,
-                onSelect: onWorkflowStatusChange
+            SongItemCommands(
+                song: song,
+                isPreviewPlaying: isRowPlaying,
+                captureActive: session.captureActive,
+                canRevealInFinder: canRevealInFinder,
+                allowsWorkflowMutation: allowsWorkflowMutation,
+                onOpenProject: { onOpenProject?() },
+                onPlayPreview: playPreview,
+                onRevealInFinder: { onRevealInFinder?() },
+                onWorkflowStatusChange: onWorkflowStatusChange
             )
         }
         .accessibilityElement(children: .contain)
@@ -149,5 +157,11 @@ struct SongCardView: View {
     private var rowFill: Color {
         if isSelected { return HubDesignSystem.Palette.selection }
         return isHovered ? HubDesignSystem.Palette.surface : Color.clear
+    }
+
+    private func playPreview() {
+        if isRowLoaded { session.toggle() }
+        else if let onPlay { onPlay() }
+        else { session.audition(song: song, openSong: { onSelect?() }) }
     }
 }

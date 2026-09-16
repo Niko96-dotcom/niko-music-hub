@@ -5,12 +5,14 @@ import SwiftUI
 
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @ObservedObject private var previewSession = ArchivePreviewSession.shared
     @Environment(\.undoManager) private var undoManager
     @State private var showNewSongSheet = false
     @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
 
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
+        self._previewSession = ObservedObject(wrappedValue: ArchivePreviewSession.shared)
     }
 
     var body: some View {
@@ -329,7 +331,7 @@ struct ArchiveBrowserView: View {
     }
 
     private var songCommandSyncToken: String {
-        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)"
+        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)-\(previewSession.isPlaying)-\(previewSession.songID ?? "")"
     }
 
     private var archiveSongFocusedActions: ArchiveSongFocusedActions {
@@ -337,6 +339,7 @@ struct ArchiveBrowserView: View {
             hasSelectedSong: viewModel.selectedSong != nil,
             allowsUnmodifiedShortcuts: allowsSongShortcuts,
             allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
+            isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.selectedSong?.id,
             playPausePreview: { _ = performPlayPausePreview() },
             openPreview: performOpenPreview,
             openProject: performOpenProject,

@@ -321,6 +321,9 @@ struct ArchiveSidebarView: View {
                             matchSummary: viewModel.searchMatchSummaries[song.id],
                             onSelect: { viewModel.selectSong(song) },
                             onPlay: { viewModel.audition(song) },
+                            onOpenProject: { try? viewModel.openLatestCPR(for: song) },
+                            onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song)) },
+                            canRevealInFinder: viewModel.preferredRevealURL(for: song) != nil,
                             onWorkflowStatusChange: { status in
                                 viewModel.applyWorkflowStatus(status, for: song)
                             },

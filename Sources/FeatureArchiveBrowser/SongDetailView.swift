@@ -159,7 +159,18 @@ struct SongDetailView: View {
     /// at the page bottom.
     private var overflowMenu: some View {
         Menu {
-            Button("Reveal in Finder") { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong)) }
+            SongItemCommands(
+                song: liveSong,
+                isPreviewPlaying: isMainPlaying,
+                captureActive: previewSession.captureActive,
+                canRevealInFinder: viewModel.preferredRevealURL(for: liveSong) != nil,
+                allowsWorkflowMutation: false,
+                showsWorkflowStatus: false,
+                onOpenProject: { try? viewModel.openLatestCPR(for: liveSong) },
+                onPlayPreview: { viewModel.audition(liveSong) },
+                onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong)) },
+                onWorkflowStatusChange: nil
+            )
             Button("Convert main preview") { viewModel.convertMainPreview(for: liveSong) }
                 .disabled(mainPreviewURL == nil)
             Divider()
