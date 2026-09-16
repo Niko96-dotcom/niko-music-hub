@@ -42,6 +42,7 @@ struct AppShellView: View {
             )
         )
         _selectedToolID = State(initialValue: initialToolID)
+        shellSession.setSelectedToolID(initialToolID)
     }
 
     var body: some View {
@@ -219,6 +220,7 @@ struct AppShellView: View {
         }
         toolPaneCache.ensureMounted(toolID)
         selectedToolID = toolID
+        shellSession.setSelectedToolID(toolID)
     }
 
     @ViewBuilder

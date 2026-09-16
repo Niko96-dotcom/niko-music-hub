@@ -35,6 +35,11 @@ struct NikoMusicHubApp: App {
         .commands {
             AboutCommand(updateController: composition.updateController)
             HubViewCommands(session: composition.shellSession)
+            HubToolsCommands(
+                registry: composition.registry,
+                router: composition.router,
+                session: composition.shellSession
+            )
         }
 
         Settings {

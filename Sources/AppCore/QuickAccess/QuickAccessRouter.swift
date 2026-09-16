@@ -32,6 +32,7 @@ public final class QuickAccessRouter: ObservableObject {
     public func execute(_ command: QuickAccessCommand) {
         switch command {
         case .openTool(let id):
+            // Tools menu (NMH-013) and MenuBarExtra both select content tools here.
             selectedToolID = id
         case .openApp:
             // No-op at the model layer in Phase 46.

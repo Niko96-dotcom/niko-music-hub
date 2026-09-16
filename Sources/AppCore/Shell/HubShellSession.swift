@@ -17,6 +17,8 @@ public final class HubShellSession: ObservableObject {
     @Published public private(set) var showToolSidebar: Bool
     @Published public private(set) var showOutputInbox: Bool
     @Published public private(set) var inboxUserWantsVisible: Bool
+    /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persistence is NMH-017.
+    @Published public private(set) var selectedToolID: ToolFeatureID?
 
     public init(preferences: any PreferenceStore) {
         self.preferences = preferences
@@ -36,6 +38,11 @@ public final class HubShellSession: ObservableObject {
         }
         self.showOutputInbox = initialInboxVisible
         self.inboxUserWantsVisible = initialInboxVisible
+        self.selectedToolID = nil
+    }
+
+    public func setSelectedToolID(_ id: ToolFeatureID?) {
+        selectedToolID = id
     }
 
     public func setToolSidebarVisible(_ visible: Bool) {
