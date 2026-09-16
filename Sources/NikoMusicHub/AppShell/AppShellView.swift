@@ -4,7 +4,6 @@ import SwiftUI
 
 struct AppShellView: View {
     private static let activeToolMinWidth: CGFloat = 540
-    private static let compactInboxCollapseWidth: CGFloat = 1180
     private static let settingsToolID = ToolFeatureID("settings")
 
     let registry: ToolRegistry
@@ -15,7 +14,6 @@ struct AppShellView: View {
     @StateObject private var toolPaneCache: ToolPaneCache
 
     @State private var selectedToolID: ToolFeatureID?
-    @State private var windowWidth: CGFloat = 1400
 
     @MainActor
     init(
@@ -68,7 +66,7 @@ struct AppShellView: View {
                         .layoutPriority(1)
                         .background(HubDesignSystem.Palette.canvas)
 
-                    if shellSession.showOutputInbox {
+                    if shellSession.inboxEffectiveVisible {
                         shellDivider
                         OutputInboxInspectorView(context: context)
                             .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
@@ -141,12 +139,9 @@ struct AppShellView: View {
         .background {
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { windowWidth = proxy.size.width }
+                    .onAppear { shellSession.applyWindowWidth(proxy.size.width) }
                     .onChange(of: proxy.size.width) { _, width in
-                        windowWidth = width
-                        if width < Self.compactInboxCollapseWidth, shellSession.showOutputInbox {
-                            setOutputInboxVisible(false)
-                        }
+                        shellSession.applyWindowWidth(width)
                     }
             }
         }
@@ -168,7 +163,7 @@ struct AppShellView: View {
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
         if shellSession.showToolSidebar { width += HubDesignSystem.Size.navWidth }
-        if shellSession.showOutputInbox { width += 232 }
+        if shellSession.inboxEffectiveVisible { width += 232 }
         return width
     }
 

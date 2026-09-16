@@ -48,6 +48,62 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
     }
 
+    func testCompactHideDoesNotPersistUserPreference() throws {
+        let store = try makeIsolatedStore()
+        let session = HubShellSession(preferences: store)
+
+        session.setOutputInboxVisible(true)
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertTrue(session.inboxEffectiveVisible)
+        XCTAssertTrue(session.showToolSidebar)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
+
+        session.applyWindowWidth(1000)
+        XCTAssertFalse(session.inboxEffectiveVisible)
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertTrue(session.showToolSidebar)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
+
+        session.applyWindowWidth(HubShellSession.compactInboxCollapseWidth)
+        XCTAssertTrue(session.inboxEffectiveVisible)
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
+
+        session.applyWindowWidth(1280)
+        XCTAssertTrue(session.inboxEffectiveVisible)
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
+
+        let reloaded = HubShellSession(preferences: store)
+        XCTAssertTrue(reloaded.inboxUserWantsVisible)
+        XCTAssertTrue(reloaded.inboxEffectiveVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
+    }
+
+    func testUserHideStaysHiddenAfterWiden() throws {
+        let store = try makeIsolatedStore()
+        let session = HubShellSession(preferences: store)
+
+        session.setOutputInboxVisible(true)
+        session.applyWindowWidth(1280)
+        XCTAssertTrue(session.inboxEffectiveVisible)
+
+        session.setOutputInboxVisible(false)
+        XCTAssertFalse(session.inboxUserWantsVisible)
+        XCTAssertFalse(session.inboxEffectiveVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
+
+        session.applyWindowWidth(1000)
+        XCTAssertFalse(session.inboxEffectiveVisible)
+        XCTAssertFalse(session.inboxUserWantsVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
+
+        session.applyWindowWidth(1400)
+        XCTAssertFalse(session.inboxEffectiveVisible)
+        XCTAssertFalse(session.inboxUserWantsVisible)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
+    }
+
     func testShowMenuBarExtraDefaultsOnWithoutSettingsStore() throws {
         let store = try makeIsolatedStore()
         let session = HubShellSession(preferences: store)
@@ -135,6 +191,8 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(shell.contains("restoreSelectedToolID(registry:"))
         XCTAssertTrue(shell.contains("initialToolID: initialToolID"))
         XCTAssertTrue(shell.contains("persistSelectedToolID"))
+        XCTAssertTrue(shell.contains("applyWindowWidth"))
+        XCTAssertTrue(shell.contains("inboxEffectiveVisible"))
         XCTAssertFalse(shell.contains("selectedToolID = Self.settingsToolID"))
         XCTAssertTrue(shell.contains("toolPaneCache"))
     }

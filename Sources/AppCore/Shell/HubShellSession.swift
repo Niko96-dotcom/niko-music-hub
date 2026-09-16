@@ -5,20 +5,26 @@ import Foundation
 ///
 /// Persistence keys: `hub.shell.panels.toolsVisible`, `hub.shell.panels.inboxVisible`,
 /// and `hub.shell.selectedToolID`. `inboxUserWantsVisible` is the user-owned inbox
-/// preference so NMH-020 can hide the compact-width inbox without writing that preference.
+/// preference. Compact width below `compactInboxCollapseWidth` hides the column via
+/// `inboxEffectiveVisible` without writing that preference (NMH-020).
 @MainActor
 public final class HubShellSession: ObservableObject {
     public static let toolsVisibleKey = "hub.shell.panels.toolsVisible"
     public static let inboxVisibleKey = "hub.shell.panels.inboxVisible"
     public static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
     public static let selectedToolIDKey = "hub.shell.selectedToolID"
+    public static let compactInboxCollapseWidth: CGFloat = 1180
 
     private let preferences: any PreferenceStore
     private let settingsStore: (any SettingsStore)?
+    /// Default is above the compact threshold until the shell reports a real width.
+    private var windowWidth: CGFloat = 1400
 
     @Published public private(set) var showToolSidebar: Bool
     @Published public private(set) var showOutputInbox: Bool
     @Published public private(set) var inboxUserWantsVisible: Bool
+    /// Derived display flag: false under 1180 pt, otherwise `inboxUserWantsVisible`.
+    public var inboxEffectiveVisible: Bool { showOutputInbox }
     /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persisted as `selectedToolIDKey`.
     @Published public private(set) var selectedToolID: ToolFeatureID?
     /// Live MenuBarExtra insertion. Canonical persistence is `AppSettings.showMenuBarExtra`.
@@ -42,9 +48,10 @@ public final class HubShellSession: ObservableObject {
         } else {
             initialInboxVisible = storedInbox ?? false
         }
-        self.showOutputInbox = initialInboxVisible
         self.inboxUserWantsVisible = initialInboxVisible
+        self.showOutputInbox = initialInboxVisible
         self.selectedToolID = nil
+        refreshEffectiveInboxVisibility()
     }
 
     public func setSelectedToolID(_ id: ToolFeatureID?) {
@@ -83,13 +90,27 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func setOutputInboxVisible(_ visible: Bool) {
-        showOutputInbox = visible
         inboxUserWantsVisible = visible
         preferences.set(visible, forKey: Self.inboxVisibleKey)
+        refreshEffectiveInboxVisibility()
     }
 
     public func toggleOutputInbox() {
         setOutputInboxVisible(!showOutputInbox)
+    }
+
+    /// Update derived inbox visibility from the live window width. Does not persist.
+    public func applyWindowWidth(_ width: CGFloat) {
+        windowWidth = width
+        refreshEffectiveInboxVisibility()
+    }
+
+    private func refreshEffectiveInboxVisibility() {
+        if windowWidth < Self.compactInboxCollapseWidth {
+            showOutputInbox = false
+        } else {
+            showOutputInbox = inboxUserWantsVisible
+        }
     }
 
     /// Persist the extra and update the live `MenuBarExtra(isInserted:)` binding.
