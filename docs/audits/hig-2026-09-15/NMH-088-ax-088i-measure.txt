@@ -1,0 +1,7 @@
+menu_en=true
+playing=Pause preview
+opt_right: delta=5.300 excess=4.782
+opt_left: delta=-4.700 excess=-5.198
+menu_fwd: delta=5.300 excess=4.776
+menu_back: delta=-4.800 excess=-5.323
+btn_fwd: delta=5.100 excess=4.673
