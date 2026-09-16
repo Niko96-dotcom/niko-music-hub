@@ -7,8 +7,11 @@ struct ArchiveIntelligencePanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Intelligence (read-only)")
+            Text("Library Insights")
                 .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            Text("Accept saves collaborator names to this song’s metadata. Dismiss only hides the suggestion until the next scan.")
+                .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             if !viewModel.pendingCollaboratorSuggestions.isEmpty {
@@ -31,7 +34,7 @@ struct ArchiveIntelligencePanelView: View {
                             HubIconButton(
                                 systemImage: "xmark",
                                 accessibilityLabel: "Dismiss suggestion",
-                                help: "Dismiss this suggestion"
+                                help: "Hide this suggestion until the next scan"
                             ) {
                                 viewModel.dismissCollaboratorSuggestion(suggestion)
                             }
