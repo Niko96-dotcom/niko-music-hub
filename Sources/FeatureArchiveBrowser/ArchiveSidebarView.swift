@@ -225,25 +225,32 @@ struct ArchiveSidebarView: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(
-                    browseFilterMenuIsActive
-                        ? HubDesignSystem.Palette.textPrimary
-                        : HubDesignSystem.Palette.textSecondary
-                )
-                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
-                .background {
-                    if browseFilterMenuIsActive {
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
-                            .fill(HubDesignSystem.Palette.accentFill)
-                    }
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(viewModel.selectedShelf.sidebarChipTitle)
+                    .font(HubDesignSystem.Typography.caption().weight(.medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(
+                browseFilterMenuIsActive
+                    ? HubDesignSystem.Palette.textPrimary
+                    : HubDesignSystem.Palette.textSecondary
+            )
+            .frame(minHeight: HubDesignSystem.Size.iconButtonSize)
+            .padding(.horizontal, 6)
+            .background {
+                if browseFilterMenuIsActive {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                        .fill(HubDesignSystem.Palette.accentFill)
                 }
-                .contentShape(Rectangle())
+            }
+            .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
-        .help("Filters")
-        .accessibilityLabel("Filters")
+        .help("Filters and shelves")
+        .accessibilityLabel("Filters and shelves")
+        .accessibilityValue(viewModel.selectedShelf.title)
         .disabled(viewModel.songs.isEmpty)
     }
 
