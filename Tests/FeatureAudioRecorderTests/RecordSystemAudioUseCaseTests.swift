@@ -64,6 +64,19 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         XCTAssertTrue(filename.hasPrefix("Recording "))
         XCTAssertTrue(filename.hasSuffix(".wav"))
     }
+
+    // NMH-064: preview and write share one formatter; a frozen instant
+    // renders the exact next-take name.
+    func testPreviewNameMatchesGenerateOutputFilenameWithFrozenNow() throws {
+        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
+        let frozen = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2020, month: 1, day: 2, hour: 3, minute: 4, second: 5
+        )))
+        XCTAssertEqual(
+            useCase.generateOutputFilename(override: nil, now: { frozen }),
+            "Recording 2020-01-02 03-04-05.wav"
+        )
+    }
 }
 
 private final class MockAudioCapturePort: AudioCapturePort, @unchecked Sendable {

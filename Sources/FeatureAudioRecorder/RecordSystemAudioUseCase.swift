@@ -86,19 +86,20 @@ public final class RecordSystemAudioUseCase: Sendable {
         return try await capturePort.stopRecording()
     }
 
-    public func generateOutputFilename(override: String?) -> String {
+    public func generateOutputFilename(override: String?, now: () -> Date = Date.init) -> String {
         if let override = override, !override.isEmpty {
             let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
             let basename = URL(fileURLWithPath: trimmed).lastPathComponent
-            return basename.isEmpty ? defaultOutputFilename() : ensureWAVExtension(basename)
+            return basename.isEmpty ? defaultOutputFilename(now: now) : ensureWAVExtension(basename)
         }
-        return defaultOutputFilename()
+        return defaultOutputFilename(now: now)
     }
 
-    private func defaultOutputFilename() -> String {
+    private func defaultOutputFilename(now: () -> Date = Date.init) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
-        return "Recording \(formatter.string(from: Date())).wav"
+        return "Recording \(formatter.string(from: now())).wav"
     }
 
     private func ensureWAVExtension(_ filename: String) -> String {

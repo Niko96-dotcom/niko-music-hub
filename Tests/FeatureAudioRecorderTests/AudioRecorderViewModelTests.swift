@@ -145,6 +145,27 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.filenameOverride, "My Recording.wav")
     }
 
+    // NMH-064: with an empty override the idle preview equals the name the
+    // next take will use.
+    func testProposedFilenameTracksUseCase() throws {
+        let frozen = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2020, month: 1, day: 2, hour: 3, minute: 4, second: 5
+        )))
+        let port = MockAudioCapturePort()
+        let useCase = RecordSystemAudioUseCase(capturePort: port)
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: useCase,
+            outputURL: URL(fileURLWithPath: "/tmp"),
+            outputInboxStore: InMemoryOutputInboxStore(),
+            now: { frozen }
+        )
+
+        XCTAssertTrue(vm.filenameOverride.isEmpty)
+        XCTAssertEqual(vm.proposedFilename, useCase.generateOutputFilename(override: nil, now: { frozen }))
+        XCTAssertEqual(vm.proposedFilename, "Recording 2020-01-02 03-04-05.wav")
+    }
+
     func testMaxDurationPassedToUseCase() async throws {
         let port = MockAudioCapturePort()
         let useCase = RecordSystemAudioUseCase(capturePort: port)

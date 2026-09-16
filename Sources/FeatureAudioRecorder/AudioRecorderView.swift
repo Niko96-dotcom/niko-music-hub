@@ -103,19 +103,12 @@ public struct AudioRecorderView: View {
     }
 
     private var filenameDisplay: some View {
-        Group {
-            if viewModel.filenameOverride.isEmpty {
-                Text("Recording \(Date().formatted(date: .complete, time: .omitted)).wav")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            } else {
-                Text(viewModel.filenameOverride)
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            }
-        }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
+        TextField(viewModel.proposedFilename, text: $viewModel.filenameOverride)
+            .quietFieldStyle()
+            .accessibilityLabel("Recording filename")
+            .disabled(viewModel.isCaptureActive)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private var meterSection: some View {

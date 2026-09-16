@@ -70,6 +70,10 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
     private let captureActivityID = UUID()
     @Published public var filenameOverride: String = ""
+    /// NMH-064: frozen preview of the next take's filename. Captured at
+    /// appear / when idle so the idle field does not re-render a live
+    /// `Date()` on every body evaluate.
+    @Published public private(set) var proposedFilename: String = ""
     @Published public var maxDurationMinutes: Int = 30
     @Published public private(set) var elapsedTime: TimeInterval = 0
     @Published public private(set) var currentLevel: RecorderAudioLevel?
@@ -96,6 +100,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private var inboxObservationTask: Task<Void, Never>?
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
+    private let now: @Sendable () -> Date
     private let outputURLProvider: @MainActor () -> URL
     private let outputInboxStore: any OutputInboxStore
     private var isStartInFlight = false
@@ -105,14 +110,16 @@ public final class AudioRecorderViewModel: ObservableObject {
         useCase: RecordSystemAudioUseCase,
         outputURL: URL,
         outputInboxStore: any OutputInboxStore,
-        initialMaxDurationMinutes: Int = 30
+        initialMaxDurationMinutes: Int = 30,
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.init(
             capturePort: capturePort,
             useCase: useCase,
             outputURLProvider: { outputURL },
             outputInboxStore: outputInboxStore,
-            initialMaxDurationMinutes: initialMaxDurationMinutes
+            initialMaxDurationMinutes: initialMaxDurationMinutes,
+            now: now
         )
     }
 
@@ -121,13 +128,16 @@ public final class AudioRecorderViewModel: ObservableObject {
         useCase: RecordSystemAudioUseCase,
         outputURLProvider: @escaping @MainActor () -> URL,
         outputInboxStore: any OutputInboxStore,
-        initialMaxDurationMinutes: Int = 30
+        initialMaxDurationMinutes: Int = 30,
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.capturePort = capturePort
         self.useCase = useCase
+        self.now = now
         self.outputURLProvider = outputURLProvider
         self.outputInboxStore = outputInboxStore
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
+        refreshProposedFilename()
     }
 
     deinit {
@@ -342,6 +352,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         recordingState = .idle
         elapsedTime = 0
         currentLevel = nil
+        refreshProposedFilename()
         HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.recordingStopped)
         loadRecentRecordings()
     }
@@ -358,7 +369,16 @@ public final class AudioRecorderViewModel: ObservableObject {
         recordingState = .idle
     }
 
+    /// NMH-064: snapshot the next take's default filename with a frozen
+    /// instant so the idle field matches the writer's format without
+    /// re-rendering a live `Date()` on every view evaluate.
+    public func refreshProposedFilename() {
+        let frozen = now()
+        proposedFilename = useCase.generateOutputFilename(override: nil, now: { frozen })
+    }
+
     public func onAppear() {
+        refreshProposedFilename()
         loadRecentRecordings()
         guard inboxObservationTask == nil else { return }
         inboxObservationTask = Task { @MainActor [weak self] in
