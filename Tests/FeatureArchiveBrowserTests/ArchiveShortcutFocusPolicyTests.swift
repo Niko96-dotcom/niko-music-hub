@@ -16,5 +16,13 @@ final class ArchiveShortcutFocusPolicyTests: XCTestCase {
         XCTAssertTrue(ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true, firstResponder: NSView()))
         XCTAssertFalse(ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: false, firstResponder: NSView()))
         XCTAssertFalse(ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true, firstResponder: nil))
+        XCTAssertFalse(ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: false))
+    }
+
+    func testShowVersionsNotificationNameIsStable() {
+        XCTAssertEqual(
+            Notification.Name.archiveShowSongVersions.rawValue,
+            "FeatureArchiveBrowser.archiveShowSongVersions"
+        )
     }
 }

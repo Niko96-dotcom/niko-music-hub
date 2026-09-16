@@ -71,7 +71,12 @@ struct SongDetailView: View {
             .padding(24)
             .frame(width: 660, height: 440)
         }
-        .onChange(of: viewModel.songDetailsExpanded) { _, _ in workspaceTab = .versions }
+        .onChange(of: viewModel.songDetailsExpanded) { _, expanded in
+            if expanded { workspaceTab = .versions }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .archiveShowSongVersions)) { _ in
+            workspaceTab = .versions
+        }
         .onChange(of: workspaceTab) { _, tab in
             if tab == .plugins {
                 viewModel.pluginsSectionExpanded = true

@@ -100,26 +100,42 @@ struct ArchiveBrowserView: View {
         }
         .focusable(interactions: .edit)
         .focused($keyboardFocus, equals: .archive)
-        .focusEffectDisabled()
-        .onAppear { keyboardFocus = .archive }
+        .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
+        .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
+        .overlay {
+            if keyboardFocus == .archive {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.panel, style: .continuous)
+                    .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+                    .padding(2)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .onAppear {
+            keyboardFocus = .archive
+            ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
+        }
+        .onChange(of: songCommandSyncToken) { _, _ in
+            ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
+        }
         .onKeyPress("p") {
-            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
-            try? viewModel.openMainPreview(for: song)
+            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            performOpenPreview()
             return .handled
         }
         .onKeyPress("o") {
-            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
-            try? viewModel.openLatestCPR(for: song)
+            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            performOpenProject()
             return .handled
         }
         .onKeyPress("f") {
-            guard allowsSongShortcuts, let song = viewModel.selectedSong else { return .ignored }
-            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            performRevealInFinder()
             return .handled
         }
         .onKeyPress("d") {
             guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
-            viewModel.songDetailsExpanded.toggle()
+            performShowVersions()
             return .handled
         }
         .onKeyPress(.escape) {
@@ -133,11 +149,7 @@ struct ArchiveBrowserView: View {
         }
         .onKeyPress(.space) {
             guard allowsSongShortcuts else { return .ignored }
-            if ArchivePreviewSession.shared.preview != nil {
-                ArchivePreviewSession.shared.toggle()
-            } else if let song = viewModel.selectedSong {
-                viewModel.audition(song)
-            } else { return .ignored }
+            guard performPlayPausePreview() else { return .ignored }
             return .handled
         }
         .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
@@ -289,10 +301,57 @@ struct ArchiveBrowserView: View {
     }
 
     private var allowsSongShortcuts: Bool {
-        ArchiveShortcutFocusPolicy.allowsSongShortcuts(
-            archiveFocused: keyboardFocus == .archive,
-            firstResponder: NSApp.keyWindow?.firstResponder
+        ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: keyboardFocus == .archive)
+    }
+
+    private var songCommandSyncToken: String {
+        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")"
+    }
+
+    private var archiveSongFocusedActions: ArchiveSongFocusedActions {
+        ArchiveSongFocusedActions(
+            hasSelectedSong: viewModel.selectedSong != nil,
+            allowsUnmodifiedShortcuts: allowsSongShortcuts,
+            playPausePreview: { _ = performPlayPausePreview() },
+            openPreview: performOpenPreview,
+            openProject: performOpenProject,
+            revealInFinder: performRevealInFinder,
+            showVersions: performShowVersions
         )
+    }
+
+    private func performOpenPreview() {
+        guard let song = viewModel.selectedSong else { return }
+        try? viewModel.openMainPreview(for: song)
+    }
+
+    private func performOpenProject() {
+        guard let song = viewModel.selectedSong else { return }
+        try? viewModel.openLatestCPR(for: song)
+    }
+
+    private func performRevealInFinder() {
+        guard let song = viewModel.selectedSong else { return }
+        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+    }
+
+    private func performShowVersions() {
+        guard viewModel.selectedSong != nil else { return }
+        viewModel.songDetailsExpanded = true
+        NotificationCenter.default.post(name: .archiveShowSongVersions, object: nil)
+    }
+
+    @discardableResult
+    private func performPlayPausePreview() -> Bool {
+        if ArchivePreviewSession.shared.preview != nil {
+            ArchivePreviewSession.shared.toggle()
+            return true
+        }
+        if let song = viewModel.selectedSong {
+            viewModel.audition(song)
+            return true
+        }
+        return false
     }
 
     private func chooseRoot() {
