@@ -12,6 +12,7 @@ struct OutputInboxInspectorView: View {
     @State private var settingsError: String?
     @State private var inboxError: String?
     @State private var analyzingItemID: OutputInboxItem.ID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
@@ -246,8 +247,16 @@ struct OutputInboxInspectorView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.14)) {
+            let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
+            let apply = {
                 hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
+            }
+            if duration == 0 {
+                apply()
+            } else {
+                withAnimation(.easeOut(duration: duration)) {
+                    apply()
+                }
             }
         }
         .contextMenu {

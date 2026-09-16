@@ -11,6 +11,7 @@ struct ArchiveBoardSongsView: View, Equatable {
     let vaultPresentations: [String: ProjectVaultCardPresentation]
     var vaultActivity: [String: String] = [:]
     let viewModel: ArchiveBrowserViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.selectedSongID == rhs.selectedSongID
@@ -40,16 +41,22 @@ struct ArchiveBoardSongsView: View, Equatable {
                             )
                         }
                     }
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 4)),
-                        removal: .opacity
-                    ))
+                    .transition(cardInsertTransition)
                 }
             }
         }
         .onMoveCommand { direction in
             viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
         }
+    }
+
+    private var cardInsertTransition: AnyTransition {
+        reduceMotion
+            ? .identity
+            : .asymmetric(
+                insertion: .opacity.combined(with: .offset(y: 4)),
+                removal: .opacity
+            )
     }
 }
 

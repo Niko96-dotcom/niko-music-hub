@@ -18,6 +18,7 @@ struct ArchiveBoardView: View {
     @State private var boardViewportWidth: CGFloat = 0
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         viewModel: ArchiveBrowserViewModel,
@@ -282,11 +283,19 @@ struct ArchiveBoardView: View {
             columnCount: columns.count
         ) { targetIndex, direction in
             guard columns.indices.contains(targetIndex) else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
+            let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
+            let scroll = {
                 scrollProxy.scrollTo(
                     columns[targetIndex].id,
                     anchor: direction == .right ? .leading : .trailing
                 )
+            }
+            if duration == 0 {
+                scroll()
+            } else {
+                withAnimation(.easeOut(duration: duration)) {
+                    scroll()
+                }
             }
         }
     }

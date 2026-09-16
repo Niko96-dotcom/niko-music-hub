@@ -6,11 +6,12 @@ struct ArchiveSidebarMorePanel: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @Binding var isExpanded: Bool
     @ObservedObject var sidebarUI: ArchiveSidebarUIState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                animateDisclosure {
                     isExpanded.toggle()
                 }
             } label: {
@@ -93,7 +94,7 @@ struct ArchiveSidebarMorePanel: View {
         // which makes these rows feel dead. The entire nav row is the tap target.
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: HubDesignSystem.Motion.short)) {
+                animateDisclosure {
                     isExpanded.wrappedValue.toggle()
                 }
             } label: {
@@ -123,6 +124,17 @@ struct ArchiveSidebarMorePanel: View {
                 content()
                     .padding(.top, 4)
                     .padding(.leading, HubDesignSystem.Size.sidebarIconFrame + HubDesignSystem.Spacing.controlGap)
+            }
+        }
+    }
+
+    private func animateDisclosure(_ updates: @escaping () -> Void) {
+        let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
+        if duration == 0 {
+            updates()
+        } else {
+            withAnimation(.easeInOut(duration: duration)) {
+                updates()
             }
         }
     }
