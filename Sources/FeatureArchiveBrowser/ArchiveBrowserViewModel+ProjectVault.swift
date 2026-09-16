@@ -362,13 +362,37 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    func requestArchiveNow(for song: Song) {
+        guard canArchiveInProjectVault(song) else { return }
+        let settings = (try? settingsStore.loadSettings())?.vault
+        pendingArchiveConfirmation = ProjectVaultArchiveConfirmation(
+            songID: song.id,
+            songTitle: song.effectiveDisplayTitle,
+            trigger: .manual,
+            willRemoveActiveCopy: true, // Archive Now always uses .manual → reuseTerminal
+            independentBackupConfirmed: settings?.independentBackupConfirmed ?? false
+        )
+    }
+
+    func confirmPendingArchive() {
+        guard let pending = pendingArchiveConfirmation,
+              let song = songs.first(where: { $0.id == pending.songID }) else { return }
+        pendingArchiveConfirmation = nil
+        archiveInProjectVault(song, trigger: pending.trigger)
+    }
+
+    func cancelPendingArchive() {
+        pendingArchiveConfirmation = nil
+    }
+
     func archiveInProjectVault(_ song: Song, trigger: ProjectVaultArchiveTrigger = .manual) {
         guard let projectVaultRuntime,
               canArchiveInProjectVault(song),
               !projectVaultBusySongIDs.contains(song.id) else { return }
         enqueueProjectVaultOperation(
             for: song, label: trigger == .backupCopy ? "Backup" : "Archive",
-            startMessage: trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…"
+            startMessage: trigger == .workflowDone ? "Done — checking Project Vault safety…" : "Archiving and verifying a Project Vault copy…",
+            trigger: trigger
         ) { model in
             do {
                 let currentSong = model.songs.first { $0.id == song.id } ?? song

@@ -82,6 +82,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultRestoreOptionsLoading = false
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
+    @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
     var projectVaultQueueTask: Task<Void, Never>?
     var projectVaultQueueFailures: [String] = []
     var projectVaultQueueBatchCount = 0

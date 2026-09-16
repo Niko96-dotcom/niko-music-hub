@@ -344,7 +344,28 @@ struct SongDetailView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
+            .alert(
+                "Archive this project?",
+                isPresented: Binding(
+                    get: { viewModel.pendingArchiveConfirmation?.trigger == .manual },
+                    set: { if !$0 { viewModel.cancelPendingArchive() } }
+                )
+            ) {
+                Button("Keep in Active", role: .cancel) { viewModel.cancelPendingArchive() }
+                    .keyboardShortcut(.defaultAction)
+                Button("Archive", role: .destructive) { viewModel.confirmPendingArchive() }
+            } message: {
+                Text(archiveNowAlertMessage)
+            }
         }
+    }
+
+    private var archiveNowAlertMessage: String {
+        guard let pending = viewModel.pendingArchiveConfirmation else { return "" }
+        return ProjectVaultConfirmationCopy.archiveNowMessage(
+            songTitle: pending.songTitle,
+            independentBackupConfirmed: pending.independentBackupConfirmed
+        )
     }
 
     @ViewBuilder
@@ -392,9 +413,10 @@ struct SongDetailView: View {
                     icon: "archivebox",
                     label: viewModel.projectVaultBusySongIDs.contains(liveSong.id) ? "Archiving…" : "Archive Now",
                     style: .secondary,
-                    help: "Verify the archive, remove the Active copy, and keep this song available through Show archived projects"
+                    help: "Copies and verifies in Project Vault, then deletes the Active folder after you confirm",
+                    role: .destructive
                 ) {
-                    viewModel.archiveInProjectVault(liveSong)
+                    viewModel.requestArchiveNow(for: liveSong)
                 }
                 HubLabeledButton(
                     icon: "doc.on.doc",

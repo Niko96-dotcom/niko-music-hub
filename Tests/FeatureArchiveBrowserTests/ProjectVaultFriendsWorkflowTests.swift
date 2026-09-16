@@ -788,7 +788,7 @@ private struct FriendsClearActivityProbe: VaultAutomationActivityProbing {
     func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
 }
 
-private final class FriendsWorkflowFixture {
+final class FriendsWorkflowFixture {
     let root: URL
     let active: URL
     let archive: URL

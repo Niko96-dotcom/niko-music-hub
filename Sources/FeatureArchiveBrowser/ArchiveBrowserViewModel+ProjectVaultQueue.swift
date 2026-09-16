@@ -10,6 +10,7 @@ struct ProjectVaultQueuedOperation {
     let tracksRestoreProgress: Bool
     let startMessage: String
     let rootIDs: [UUID?]
+    let trigger: ProjectVaultArchiveTrigger?
     let perform: @MainActor (ArchiveBrowserViewModel) async -> Bool
 }
 
@@ -59,6 +60,7 @@ extension ArchiveBrowserViewModel {
         label: String,
         startMessage: String,
         tracksRestoreProgress: Bool = false,
+        trigger: ProjectVaultArchiveTrigger? = nil,
         perform: @escaping @MainActor (ArchiveBrowserViewModel) async -> Bool
     ) {
         let key = projectVaultSnapshot(for: song)?.record.id.description
@@ -75,7 +77,7 @@ extension ArchiveBrowserViewModel {
         projectVaultOperationMessages.removeValue(forKey: song.id)
         projectVaultPendingOperations.append(ProjectVaultQueuedOperation(
             songID: song.id, projectKey: key, songName: song.effectiveDisplayTitle,
-            label: label, tracksRestoreProgress: tracksRestoreProgress, startMessage: startMessage, rootIDs: vaultQueueRootIDs, perform: perform
+            label: label, tracksRestoreProgress: tracksRestoreProgress, startMessage: startMessage, rootIDs: vaultQueueRootIDs, trigger: trigger, perform: perform
         ))
         if projectVaultActiveOperation == nil {
             startNextProjectVaultOperation()
