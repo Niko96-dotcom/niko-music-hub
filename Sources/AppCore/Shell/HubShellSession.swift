@@ -55,6 +55,11 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func setSelectedToolID(_ id: ToolFeatureID?) {
+        // LAUNCH-HANG: @Published always emits objectWillChange even for an
+        // equal value. The App Scene re-creates AppShellView on every publish,
+        // so an unconditional assign here (via restore in view init) looped
+        // graphDidChange/scenesDidChange before any window appeared.
+        guard id != selectedToolID else { return }
         selectedToolID = id
         if let id {
             persistSelectedToolID(id)
@@ -67,20 +72,34 @@ public final class HubShellSession: ObservableObject {
     }
 
     /// Apply `-ui-tool` or the stored id. Does not write preferences.
+    /// Idempotent: no publish when the resolved id already matches, so calling
+    /// this during Scene evaluation cannot loop the App graph.
     @discardableResult
     public func restoreSelectedToolID(
         registry: ToolRegistry,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> ToolFeatureID? {
-        let resolved = registry.resolvedLaunchToolID(
-            storedRaw: preferences.string(forKey: Self.selectedToolIDKey),
-            environment: environment
-        )
-        selectedToolID = resolved
+        let resolved = peekInitialToolID(registry: registry, environment: environment)
+        if resolved != selectedToolID {
+            selectedToolID = resolved
+        }
         return resolved
     }
 
+    /// Non-mutating launch resolution for use during Scene/View init.
+    /// Use `restoreSelectedToolID` (onAppear/task) when the live value must update.
+    public func peekInitialToolID(
+        registry: ToolRegistry,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> ToolFeatureID? {
+        registry.resolvedLaunchToolID(
+            storedRaw: preferences.string(forKey: Self.selectedToolIDKey),
+            environment: environment
+        )
+    }
+
     public func setToolSidebarVisible(_ visible: Bool) {
+        guard visible != showToolSidebar else { return }
         showToolSidebar = visible
         preferences.set(visible, forKey: Self.toolsVisibleKey)
     }
@@ -90,6 +109,7 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func setOutputInboxVisible(_ visible: Bool) {
+        guard visible != inboxUserWantsVisible else { return }
         inboxUserWantsVisible = visible
         preferences.set(visible, forKey: Self.inboxVisibleKey)
         refreshEffectiveInboxVisibility()
@@ -100,27 +120,36 @@ public final class HubShellSession: ObservableObject {
     }
 
     /// Update derived inbox visibility from the live window width. Does not persist.
+    /// Guarded so GeometryReader width reports cannot oscillate layout when unchanged.
     public func applyWindowWidth(_ width: CGFloat) {
+        guard width.isFinite, width != windowWidth else { return }
         windowWidth = width
         refreshEffectiveInboxVisibility()
     }
 
     private func refreshEffectiveInboxVisibility() {
+        let next: Bool
         if windowWidth < Self.compactInboxCollapseWidth {
-            showOutputInbox = false
+            next = false
         } else {
-            showOutputInbox = inboxUserWantsVisible
+            next = inboxUserWantsVisible
         }
+        guard next != showOutputInbox else { return }
+        showOutputInbox = next
     }
 
     /// Persist the extra and update the live `MenuBarExtra(isInserted:)` binding.
+    /// Guarded: MenuBarExtra re-evaluates the binding on every Scene pass, and an
+    /// unconditional publish + defaults write there fed preferencesDidChange churn.
     public func setShowMenuBarExtra(_ visible: Bool) {
+        guard visible != showMenuBarExtra else { return }
         applyShowMenuBarExtra(visible)
         try? settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
     }
 
     /// Update the live extra without writing settings (Settings already persisted).
     public func applyShowMenuBarExtra(_ visible: Bool) {
+        guard visible != showMenuBarExtra else { return }
         showMenuBarExtra = visible
     }
 }
