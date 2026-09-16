@@ -25,6 +25,7 @@ struct NewSongSheet: View {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 TextField("Song folder name", text: $name)
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit { createSong() }
 
                 TextField("Note (optional)", text: $note, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
@@ -83,12 +84,14 @@ struct NewSongSheet: View {
             }
 
             HStack {
+                Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
-                Spacer()
+                    .keyboardShortcut(.cancelAction)
                 Button("Create Draft") { createSong() }
                     .buttonStyle(.borderedProminent)
                     .tint(HubDesignSystem.Colors.accent)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -97,6 +100,8 @@ struct NewSongSheet: View {
     }
 
     private func createSong() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
         let request = NewSongRequest(
             name: name,
             root: viewModel.newSongDraftRoot,
@@ -108,12 +113,8 @@ struct NewSongSheet: View {
         do {
             _ = try viewModel.createNewSong(request: request)
             dismiss()
-        } catch NewSongFolderCreator.CreationError.folderExists {
-            errorMessage = "A folder with that name already exists."
-        } catch NewSongFolderCreator.CreationError.emptyName {
-            errorMessage = "Enter a song name."
-        } catch NewSongFolderCreator.CreationError.invalidName {
-            errorMessage = "Use a plain folder name without slashes or parent-folder segments."
+        } catch let creationError as NewSongFolderCreator.CreationError {
+            errorMessage = NewSongCreationErrorCopy.errorDescription(for: creationError, name: trimmedName)
         } catch {
             errorMessage = error.localizedDescription
         }
