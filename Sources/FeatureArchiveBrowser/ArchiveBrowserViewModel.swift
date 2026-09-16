@@ -2,6 +2,16 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
+struct ArchiveAccessFailure: Equatable, Sendable {
+    var displayName: String
+    var reason: String
+    var storedRootID: UUID
+
+    var recoveryMessage: String {
+        "Niko Music Hub could not open “\(displayName)”. \(reason) Grant access again to scan this folder. Songs already in the catalog stay on disk; they are hidden until access is restored."
+    }
+}
+
 /// Archive shell view model. Browse, scan, metadata, and exports live in `ArchiveBrowserViewModel+*.swift`
 /// extensions; mixdown/CPR analysis is delegated to dedicated coordinators.
 @MainActor
@@ -58,6 +68,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var lastDiagnosticsExportPath: String?
     @Published var lastIndexExportPath: String?
     @Published var needsFirstRunOnboarding = false
+    @Published var archiveAccessFailure: ArchiveAccessFailure?
     @Published var collaborators: [Collaborator] = []
     @Published var showHiddenSongs = false
     @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
@@ -251,11 +262,17 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    var showsArchiveAccessRecovery: Bool {
+        roots.isEmpty && archiveAccessFailure != nil
+    }
+
     func loadRootsFromSettings() {
         if let fixtureRoot = runtime.fixtureRootURL {
             roots = [fixtureRoot]
+            archiveAccessFailure = nil
             return
         }
+        archiveAccessFailure = nil
         do {
             let settings = try settingsStore.loadSettings()
             let resolver = FoundationSecurityScopedBookmarks()
@@ -272,6 +289,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                     }
                     return resolved
                 } catch {
+                    if archiveAccessFailure == nil {
+                        archiveAccessFailure = ArchiveAccessFailure(
+                            displayName: root.displayName,
+                            reason: Self.userFacingArchiveAccessReason(from: error),
+                            storedRootID: root.id
+                        )
+                    }
                     recordPersistenceWarning("Archive root access could not be restored: \(root.displayName).")
                     diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
                     return nil
@@ -292,6 +316,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             return
         }
         if !roots.isEmpty {
+            needsFirstRunOnboarding = false
+            return
+        }
+        if archiveAccessFailure != nil {
             needsFirstRunOnboarding = false
             return
         }
@@ -385,6 +413,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             changed = true
         }
         if changed {
+            archiveAccessFailure = nil
             completeArchiveOnboarding()
             persistRoots()
             restartArchiveRootWatching()
@@ -392,6 +421,63 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
         }
+    }
+
+    @discardableResult
+    func retryStoredArchiveAccess() -> Bool {
+        guard let failure = archiveAccessFailure else { return false }
+        do {
+            let settings = try settingsStore.loadSettings()
+            guard let root = settings.effectiveScanRoots.first(where: { $0.id == failure.storedRootID }) else {
+                return false
+            }
+            let resolver = FoundationSecurityScopedBookmarks()
+            let resolved = try root.resolvedURL(using: resolver)
+            if root.securityScopedBookmark != nil {
+                securityScopedRootAccesses.append(SecurityScopedRootAccess(url: resolved))
+            }
+            roots = ArchiveRootDisplayPolicy.storedRoots(from: [resolved])
+            archiveAccessFailure = nil
+            refreshFirstRunState()
+            restartArchiveRootWatching()
+            setStatusMessage("Scanning archive...")
+            Task { await scanInBackground() }
+            return true
+        } catch {
+            archiveAccessFailure = ArchiveAccessFailure(
+                displayName: failure.displayName,
+                reason: Self.userFacingArchiveAccessReason(from: error),
+                storedRootID: failure.storedRootID
+            )
+            recordPersistenceWarning("Archive root access could not be restored: \(failure.displayName).")
+            diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
+            return false
+        }
+    }
+
+    func storedArchiveAccessDirectory() -> URL? {
+        guard let failure = archiveAccessFailure else { return nil }
+        guard let settings = try? settingsStore.loadSettings() else { return nil }
+        guard let root = settings.effectiveScanRoots.first(where: { $0.id == failure.storedRootID }) else {
+            return nil
+        }
+        return root.fallbackURL
+    }
+
+    static func userFacingArchiveAccessReason(from error: Error) -> String {
+        if let bookmarkError = error as? SecurityScopedBookmarkError {
+            switch bookmarkError {
+            case .staleBookmark:
+                return "Saved folder access is out of date."
+            case .missingBookmark:
+                return "Saved folder access is missing."
+            }
+        }
+        let description = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !description.isEmpty else {
+            return "Saved folder access could not be restored."
+        }
+        return description.hasSuffix(".") ? description : "\(description)."
     }
 
     public func removeRoot(_ url: URL) {

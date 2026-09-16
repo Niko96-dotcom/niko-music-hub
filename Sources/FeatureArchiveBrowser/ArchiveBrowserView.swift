@@ -84,6 +84,15 @@ struct ArchiveBrowserView: View {
                         .ignoresSafeArea()
                     ArchiveFirstRunView(viewModel: viewModel, onChooseRoot: chooseRoot)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.showsArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                    ArchiveAccessRecoveryView(
+                        failure: failure,
+                        onChooseFolder: chooseRoot,
+                        onGrantAccess: grantArchiveAccess
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -413,6 +422,25 @@ struct ArchiveBrowserView: View {
         panel.message = "Select one or more folders that contain Cubase or Ableton song folders."
         if panel.runModal() == .OK {
             viewModel.addRoots(panel.urls)
+            viewModel.completeArchiveOnboarding()
+        }
+    }
+
+    private func grantArchiveAccess() {
+        if viewModel.retryStoredArchiveAccess() {
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Grant Access"
+        if let failure = viewModel.archiveAccessFailure {
+            panel.message = "Grant access to “\(failure.displayName)” so Niko Music Hub can scan this folder."
+            panel.directoryURL = viewModel.storedArchiveAccessDirectory()
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.addRoots([url])
             viewModel.completeArchiveOnboarding()
         }
     }

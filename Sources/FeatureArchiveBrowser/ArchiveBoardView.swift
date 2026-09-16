@@ -49,7 +49,9 @@ struct ArchiveBoardView: View {
                     .padding(.top, 12)
             }
 
-            if viewModel.songs.isEmpty {
+            if viewModel.showsArchiveAccessRecovery {
+                EmptyView()
+            } else if viewModel.songs.isEmpty {
                 emptyArchiveState
                     .padding(.top, 14)
             } else {
