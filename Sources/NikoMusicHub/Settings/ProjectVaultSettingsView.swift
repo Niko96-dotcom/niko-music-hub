@@ -6,7 +6,9 @@ struct ProjectVaultSettingsView: View {
     let context: ToolContext
     @Binding var settings: AppSettings
     let settingsAvailable: Bool
+    let loginItemEnabled: Bool
     let onSave: (@escaping @Sendable (inout AppSettings) -> Void) -> Bool
+    let onOpenLoginSetting: () -> Void
 
     @State private var showSetup = false
     @State private var message: String?
@@ -38,8 +40,7 @@ struct ProjectVaultSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Stepper("Keep previous generation \(settings.vault.keepPreviousGenerationDays) days", value: intBinding(\.keepPreviousGenerationDays, range: 7...365))
-                    Toggle("Launch at login for automation", isOn: launchAtLoginBinding)
-                        .toggleStyle(.switch)
+                    loginItemStatusRow
 
                     Picker("Rollout", selection: rolloutBinding) {
                         ForEach(VaultSettings.RolloutStage.allCases, id: \.self) { stage in
@@ -129,10 +130,8 @@ struct ProjectVaultSettingsView: View {
             $0.vault.minimumFreeSpaceGiB = 120
             $0.vault.transferFreeSpaceReserveGiB = 5
             $0.vault.keepPreviousGenerationDays = 30
-            $0.vault.launchAtLogin = true
             $0.vault.rolloutStage = .privateBeta
         }) else { return }
-        reconcileLaunchAtLogin(settings.vault)
         showSetup = false
         message = ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage
     }
@@ -200,11 +199,31 @@ struct ProjectVaultSettingsView: View {
         Binding(get: { settings.vault[keyPath: keyPath] }, set: { value in updateVault { $0[keyPath: keyPath] = min(max(value, range.lowerBound), range.upperBound) } })
     }
 
-    private var launchAtLoginBinding: Binding<Bool> {
-        Binding(get: { settings.vault.launchAtLogin }, set: { value in
-            updateVault { $0.launchAtLogin = value }
-            reconcileLaunchAtLogin(settings.vault)
-        })
+    @ViewBuilder
+    private var loginItemStatusRow: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            Text(VaultLaunchAtLoginPolicy.loginItemLabel(isEnabled: loginItemEnabled))
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            Spacer(minLength: 8)
+            HubLabeledButton(
+                icon: "gearshape",
+                label: "Open Login Setting",
+                style: .ghost,
+                help: "Open the General Open at login switch"
+            ) {
+                onOpenLoginSetting()
+            }
+        }
+        if let warning = VaultLaunchAtLoginPolicy.warning(
+            for: settings.vault,
+            loginItemEnabled: loginItemEnabled
+        ) {
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func updateVault(_ mutation: @escaping @Sendable (inout VaultSettings) -> Void) {
@@ -234,11 +253,6 @@ struct ProjectVaultSettingsView: View {
         } catch {
             message = "That folder cannot be used: \(error.localizedDescription)"
         }
-    }
-
-    private func reconcileLaunchAtLogin(_ vault: VaultSettings) {
-        do { try VaultLaunchAtLoginReconciler(controller: context.launchAtLogin).reconcile(settings: vault) }
-        catch { message = "Launch at login could not be updated: \(error.localizedDescription)" }
     }
 
     private func runRestoreDrill() {

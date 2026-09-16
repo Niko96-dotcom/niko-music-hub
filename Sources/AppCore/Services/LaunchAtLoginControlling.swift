@@ -24,16 +24,25 @@ public struct NoopLaunchAtLoginController: LaunchAtLoginControlling {
 
 public enum VaultLaunchAtLoginDecision: Equatable, Sendable {
     case unchanged
-    case setEnabled(Bool)
 }
 
-/// Project Vault leaves the app's existing general login-item preference alone
-/// while Vault automation is off. Once automation is enabled, its explicit
-/// launch-at-login preference becomes authoritative.
+/// General's Open at login switch is the only SMAppService writer. Vault
+/// automation reads that bit and warns when copies cannot run at login.
 public enum VaultLaunchAtLoginPolicy {
-    public static func decision(for settings: VaultSettings) -> VaultLaunchAtLoginDecision {
-        guard settings.isEnabled, settings.automaticArchiving else { return .unchanged }
-        return .setEnabled(settings.launchAtLogin)
+    public static let automationWithoutLoginWarning =
+        "Automatic archiving is on, but Niko Music Hub will not open at login. Turn on Open at login in General to run copies while you are away."
+
+    public static func decision(for _: VaultSettings) -> VaultLaunchAtLoginDecision {
+        .unchanged
+    }
+
+    public static func loginItemLabel(isEnabled: Bool) -> String {
+        isEnabled ? "Login item: On" : "Login item: Off"
+    }
+
+    public static func warning(for settings: VaultSettings, loginItemEnabled: Bool) -> String? {
+        guard settings.isEnabled, settings.automaticArchiving, !loginItemEnabled else { return nil }
+        return automationWithoutLoginWarning
     }
 }
 
@@ -45,11 +54,11 @@ public struct VaultLaunchAtLoginReconciler {
         self.controller = controller
     }
 
+    /// Reads the login item. Never registers or unregisters SMAppService.
     public func reconcile(settings: VaultSettings) throws {
-        guard case let .setEnabled(desired) = VaultLaunchAtLoginPolicy.decision(for: settings) else {
-            return
-        }
-        guard controller.isEnabled() != desired else { return }
-        try controller.setEnabled(desired)
+        _ = VaultLaunchAtLoginPolicy.warning(
+            for: settings,
+            loginItemEnabled: controller.isEnabled()
+        )
     }
 }

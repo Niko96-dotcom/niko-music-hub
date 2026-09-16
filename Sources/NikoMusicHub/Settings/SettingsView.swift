@@ -197,7 +197,9 @@ struct SettingsView: View {
                 context: session.context,
                 settings: $session.settings,
                 settingsAvailable: session.settingsLoadError == nil,
-                onSave: saveProjectVaultSettings
+                loginItemEnabled: session.launchAtLogin,
+                onSave: saveProjectVaultSettings,
+                onOpenLoginSetting: openLoginSetting
             )
         case .helpers:
             helpersPane
@@ -224,7 +226,13 @@ struct SettingsView: View {
                 )
                 .disabled(session.settingsLoadError != nil)
             }
+        }
 
+        SettingsSection(
+            title: "Open at login",
+            importance: .high,
+            footer: "Opens Niko Music Hub when you log in to this Mac. Project Vault automatic archiving needs this so copies can run while you are away."
+        ) {
             Toggle("Open at login", isOn: $session.launchAtLogin)
                 .toggleStyle(.switch)
                 .tint(HubDesignSystem.Palette.accent)
@@ -586,6 +594,10 @@ struct SettingsView: View {
             archiveViewModel.applyProjectVaultSettingsChange()
         }
         return saved
+    }
+
+    private func openLoginSetting() {
+        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.general)
     }
 }
 
