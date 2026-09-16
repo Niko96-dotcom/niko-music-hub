@@ -52,6 +52,12 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         if !window.collectionBehavior.contains(.fullScreenPrimary) {
             window.collectionBehavior.insert(.fullScreenPrimary)
         }
+        // NMH-129: ensure Full Screen style mask
+        // Hidden-title-bar scenes can omit bits toggleFullScreen needs.
+        let needed: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+        if !needed.isSubset(of: window.styleMask) {
+            window.styleMask.formUnion(needed)
+        }
         // NMH-130: make the main window frame restorable across relaunch.
         // Default 1280x820 from `.defaultSize` still applies when no saved frame exists.
         if window.isRestorable != true {
