@@ -880,6 +880,7 @@ final class FriendsWorkflowFixture {
             songMetadataStore: songMetadataStore,
             archiveRootWatcher: archiveRootWatcher,
             projectVaultRuntime: runtime,
+            projectCatalogStore: try? catalogStore(),
             runtime: MusicHubRuntimeEnvironment(environment: [
                 MusicHubRuntimeEnvironment.settingsSuiteKey: suite,
                 MusicHubRuntimeEnvironment.dryRunOpenKey: "1",

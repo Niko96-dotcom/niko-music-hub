@@ -77,7 +77,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .noVerifiedArchive: "No verified archive generation is available."
         case .sourceUnavailable(let title): "The project folder for “\(title)” is not available in Active Projects. Rescan the archive, then retry. Nothing was changed."
         case .sourceInventoryIncomplete(let title, let reason): "Project Vault could not read every project file for “\(title)”: \(reason). Rescan the archive, then retry. Nothing was changed."
-        case .identityAmbiguous(let title, let reason): "Project Vault cannot tell which catalog entry “\(title)” belongs to: \(reason). The catalog was left unchanged; this project needs a catalog review before archiving."
+        case .identityAmbiguous(let title, let reason): "Project Vault cannot tell whether “\(title)” is the same project as an existing catalog entry. \(reason) Choose Link if these are the same project. Choose Keep Separate if they are different projects. Nothing is archived until you choose."
         }
     }
 }
@@ -455,6 +455,7 @@ public protocol ProjectVaultOperating: Sendable {
     func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot
     func recoverAtLaunch() async
     func nextAutomaticRecoveryDate() async throws -> Date?
+    func consumePendingIdentityReview() async -> ProjectIdentityReview?
 }
 
 public extension ProjectVaultOperating {
@@ -479,6 +480,8 @@ public extension ProjectVaultOperating {
     func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot {
         throw ProjectVaultRuntimeError.unavailable
     }
+
+    func consumePendingIdentityReview() async -> ProjectIdentityReview? { nil }
 }
 
 public actor LiveProjectVaultRuntime: ProjectVaultOperating {
@@ -494,6 +497,12 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         return ProjectVaultRestoreProgress(phase: record.phase, manifest: record.manifest)
     }
 
+    public func consumePendingIdentityReview() async -> ProjectIdentityReview? {
+        let review = pendingIdentityReview
+        pendingIdentityReview = nil
+        return review
+    }
+
     private let catalogStore: SQLiteProjectCatalogStore
     private let projectOpener: any VaultProjectOpening
     private let activityProbe: any VaultAutomationActivityProbing
@@ -506,6 +515,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     private var mutationLeaseToken: UUID?
     private var mutationFileLease: ProjectVaultMutationFileLease?
     private var recoveryTask: (id: UUID, task: Task<Void, Never>)?
+    private var pendingIdentityReview: ProjectIdentityReview?
 
     public init(
         settingsStore: any SettingsStore,
@@ -1215,6 +1225,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
                 markUnobservedMissing: false
             )
         } catch let ambiguity as ProjectCatalogReconciler.Ambiguity {
+            pendingIdentityReview = identityReview(for: ambiguity)
             throw ProjectVaultRuntimeError.identityAmbiguous(
                 title: song.effectiveDisplayTitle,
                 reason: ambiguity.description
@@ -1234,6 +1245,29 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         updated.entries[index].record.lastActivityAt = song.effectiveLatestCPR?.modifiedAt
         try catalogStore.apply(updated)
         return updated.entries[index]
+    }
+
+    private func identityReview(for ambiguity: ProjectCatalogReconciler.Ambiguity) -> ProjectIdentityReview {
+        switch ambiguity {
+        case .duplicateLocation(let ids):
+            return ProjectIdentityReview(
+                existingProjectID: ids[0],
+                candidateProjectID: ids.count > 1 ? ids[1] : ProjectID(),
+                reason: ambiguity.description
+            )
+        case .locationEvidenceMismatch(let id):
+            return ProjectIdentityReview(
+                existingProjectID: id,
+                candidateProjectID: ProjectID(),
+                reason: ambiguity.description
+            )
+        case .multipleStrongMatches(let ids):
+            return ProjectIdentityReview(
+                existingProjectID: ids[0],
+                candidateProjectID: ids.count > 1 ? ids[1] : ProjectID(),
+                reason: ambiguity.description
+            )
+        }
     }
 
     private func snapshot(

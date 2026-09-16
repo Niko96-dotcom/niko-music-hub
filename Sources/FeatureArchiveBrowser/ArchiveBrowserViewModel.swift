@@ -94,6 +94,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
+    @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
+    let identityReviewViewModel: ProjectIdentityReviewViewModel
     /// Window undo stack for workflow-status changes. Views bind this from
     /// `@Environment(\.undoManager)`. Undo of Mark Done is status-only.
     weak var workflowUndoManager: UndoManager?
@@ -160,6 +162,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         projectVaultQueueTask?.cancel()
     }
     let projectVaultRuntime: (any ProjectVaultOperating)?
+    let projectCatalogStore: SQLiteProjectCatalogStore?
     public var requestConverterHandoff: ((URL) -> Void)?
     var statusBaseMessage: String?
     var persistenceWarningMessage: String?
@@ -197,6 +200,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         archiveRootWatcher: (any ArchiveRootWatching)? = nil,
         collaboratorStore: (any CollaboratorStoring)? = nil,
         projectVaultRuntime: (any ProjectVaultOperating)?,
+        projectCatalogStore: SQLiteProjectCatalogStore? = nil,
         browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
         runtime: MusicHubRuntimeEnvironment = .current
     ) {
@@ -207,6 +211,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             archiveRootWatcher: archiveRootWatcher,
             collaboratorStore: collaboratorStore,
             projectVaultRuntime: projectVaultRuntime,
+            projectCatalogStore: projectCatalogStore,
             browseSearchDebounceNanoseconds: browseSearchDebounceNanoseconds,
             runtime: runtime,
             scanOverride: nil
@@ -220,6 +225,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         archiveRootWatcher: (any ArchiveRootWatching)? = nil,
         collaboratorStore: (any CollaboratorStoring)? = nil,
         projectVaultRuntime: (any ProjectVaultOperating)? = nil,
+        projectCatalogStore: SQLiteProjectCatalogStore? = nil,
         browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
         runtime: MusicHubRuntimeEnvironment = .current,
         bookmarkProvider: any SecurityScopedBookmarkProviding = FoundationSecurityScopedBookmarks(),
@@ -233,6 +239,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
         self.projectVaultRuntime = projectVaultRuntime
+        self.projectCatalogStore = projectCatalogStore
+        self.identityReviewViewModel = ProjectIdentityReviewViewModel(catalogStore: projectCatalogStore)
         self.scanOverride = scanOverride
         self.incrementalRescanHold = incrementalRescanHold
         self.bookmarkProvider = bookmarkProvider

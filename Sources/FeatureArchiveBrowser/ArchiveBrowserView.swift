@@ -133,6 +133,7 @@ struct ArchiveBrowserView: View {
         .onAppear {
             keyboardFocus = .archive
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
+            viewModel.presentPendingIdentityReviewsIfNeeded()
         }
         .onChange(of: songCommandSyncToken) { _, _ in
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
@@ -191,6 +192,9 @@ struct ArchiveBrowserView: View {
         }
         .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
             ProjectVaultRestoreSheet(request: request, viewModel: viewModel)
+        }
+        .sheet(item: $viewModel.identityReviewPresentation) { presentation in
+            ProjectIdentityReviewSheet(presentation: presentation, viewModel: viewModel)
         }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)

@@ -311,6 +311,112 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         ))
     }
 
+    func testKeepSeparateResolutionLetsMismatchedLocationCreateNewIdentity() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let existingID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-0000-4000-8000-000000000001")!)
+        let candidateID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-0000-4000-8000-000000000099")!)
+        let stored = ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(name: "Other.cpr", byteCount: 7, modifiedAt: .distantPast)]
+        )
+        let existing = [entry(id: existingID.rawValue.uuidString, path: "Mirror", evidence: stored)]
+        var review = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "the catalog entry for this folder does not match its current project files"
+        )
+        review.resolution = .keepSeparate
+        let fresh = preciseEvidence()
+
+        let result = try reconciler.reconcile(
+            existing: existing,
+            existingReviews: [review],
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: fresh)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(Set(result.entries.map(\.record.id)), [existingID, candidateID])
+        let created = try XCTUnwrap(result.entries.first { $0.record.id == candidateID })
+        XCTAssertEqual(created.record.locations.first?.relativePath, "Mirror")
+        XCTAssertEqual(created.record.locations.first?.availability, .local)
+        let previous = try XCTUnwrap(result.entries.first { $0.record.id == existingID })
+        XCTAssertEqual(previous.record.locations.first?.availability, .missing)
+        XCTAssertEqual(result.reviews, [review])
+        XCTAssertEqual(
+            result.metadataMigrations["root://\(activeRootID.uuidString.lowercased())/Mirror"],
+            candidateID
+        )
+    }
+
+    func testLinkResolutionReusesMismatchedLocationAndUpdatesEvidence() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let existingID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-0000-4000-8000-000000000001")!)
+        let candidateID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-0000-4000-8000-000000000099")!)
+        let stored = ProjectIdentityEvidence(
+            folderName: "Mirror",
+            cubaseFiles: [ProjectFileIdentity(name: "Other.cpr", byteCount: 7, modifiedAt: .distantPast)]
+        )
+        let existing = [entry(id: existingID.rawValue.uuidString, path: "Mirror", evidence: stored)]
+        var review = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "the catalog entry for this folder does not match its current project files"
+        )
+        review.resolution = .link
+        let fresh = preciseEvidence()
+
+        let result = try reconciler.reconcile(
+            existing: existing,
+            existingReviews: [review],
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: fresh)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(result.entries.map(\.record.id), [existingID])
+        XCTAssertTrue(result.entries[0].evidence.cubaseFiles.isSuperset(of: fresh.cubaseFiles))
+        XCTAssertEqual(
+            result.metadataMigrations["root://\(activeRootID.uuidString.lowercased())/Mirror"],
+            existingID
+        )
+    }
+
+    func testKeepSeparateResolutionUnclaimsDuplicateLocationWithoutAdoptingPeer() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let first = ProjectID(rawValue: UUID(uuidString: "cccccccc-0000-4000-8000-000000000001")!)
+        let second = ProjectID(rawValue: UUID(uuidString: "cccccccc-0000-4000-8000-000000000002")!)
+        let duplicates = [
+            entry(id: first.rawValue.uuidString, path: "Mirror", evidence: evidence),
+            entry(id: second.rawValue.uuidString, path: "Mirror", evidence: evidence),
+        ]
+        var review = ProjectIdentityReview(
+            existingProjectID: first,
+            candidateProjectID: second,
+            reason: "2 catalog entries share this folder"
+        )
+        review.resolution = .keepSeparate
+
+        let result = try reconciler.reconcile(
+            existing: duplicates,
+            existingReviews: [review],
+            observations: [observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(Set(result.entries.map(\.record.id)), [first, second])
+        let owner = try XCTUnwrap(result.entries.first { $0.record.id == second })
+        XCTAssertEqual(owner.record.locations.first?.availability, .local)
+        let other = try XCTUnwrap(result.entries.first { $0.record.id == first })
+        XCTAssertEqual(other.record.locations.first?.availability, .missing)
+        XCTAssertEqual(
+            result.metadataMigrations["root://\(activeRootID.uuidString.lowercased())/Mirror"],
+            second
+        )
+    }
+
     private func preciseEvidence() -> ProjectIdentityEvidence {
         ProjectIdentityEvidence(
             folderName: "Mirror",

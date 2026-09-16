@@ -153,6 +153,7 @@ struct AppComposition {
             archiveRootWatcher: archiveRootWatcher,
             collaboratorStore: collaboratorStore,
             projectVaultRuntime: projectVaultRuntime,
+            projectCatalogStore: projectCatalogStore,
             runtime: runtime
         )
 
