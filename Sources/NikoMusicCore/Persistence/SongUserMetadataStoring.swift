@@ -7,7 +7,9 @@ public protocol SongUserMetadataStoring: Sendable {
 }
 
 /// Optional capability: stores that record workflow status transitions expose
-/// them for analytics (per-stage dwell time). The SQLite store conforms.
+/// them for analytics (per-stage dwell time) and per-song history UI.
+/// The SQLite store conforms.
 public protocol WorkflowStatusHistoryReading: Sendable {
     func loadAllStatusHistory() throws -> [WorkflowStatusChange]
+    func statusHistory(forSongID songID: String) throws -> [WorkflowStatusChange]
 }

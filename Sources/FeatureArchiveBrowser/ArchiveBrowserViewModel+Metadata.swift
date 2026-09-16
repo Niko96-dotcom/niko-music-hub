@@ -29,6 +29,83 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// NMH-048: autosave unsaved title/aliases/note drafts when the selected
+    /// song changes. Looks up the previous song by id and applies the same
+    /// merge as Save. No-op if the song disappeared.
+    func flushMetadataDrafts(
+        songID: String,
+        virtualTitle: String,
+        aliases: String,
+        appNote: String
+    ) {
+        guard let song = songs.first(where: { $0.id == songID }) else { return }
+        updateVirtualTitle(for: song, title: virtualTitle)
+        updateAliases(for: song, aliasesText: aliases)
+        updateAppNote(for: song, note: appNote)
+    }
+
+    /// NMH-048: last few recorded workflow status transitions for the detail
+    /// pane, newest last. Empty when the store does not record history.
+    func statusHistory(for song: Song, limit: Int = 5) -> [WorkflowStatusChange] {
+        guard let reader = catalog.songMetadataStore as? WorkflowStatusHistoryReading else {
+            return []
+        }
+        let all = (try? reader.statusHistory(forSongID: song.id)) ?? []
+        return Array(all.suffix(limit))
+    }
+
+    /// NMH-048: metadata commits (Save, Return, autosave flush) are undoable
+    /// as a single "Edit Song Notes" step. Only music-adjacent SQLite values
+    /// are restored; music files are never written.
+    func registerMetadataUndo(
+        songID: String,
+        previousVirtualTitle: String?,
+        previousAliases: [String],
+        previousAppNote: String?,
+        actionName: String = "Edit Song Notes"
+    ) {
+        guard let undoManager = workflowUndoManager else { return }
+        undoManager.registerUndo(withTarget: self) { viewModel in
+            MainActor.assumeIsolated {
+                viewModel.undoMetadata(
+                    songID: songID,
+                    previousVirtualTitle: previousVirtualTitle,
+                    previousAliases: previousAliases,
+                    previousAppNote: previousAppNote,
+                    actionName: actionName
+                )
+            }
+        }
+        if !undoManager.isUndoing, !undoManager.isRedoing {
+            undoManager.setActionName(actionName)
+        }
+    }
+
+    func undoMetadata(
+        songID: String,
+        previousVirtualTitle: String?,
+        previousAliases: [String],
+        previousAppNote: String?,
+        actionName: String = "Edit Song Notes"
+    ) {
+        guard let song = songs.first(where: { $0.id == songID }) else { return }
+        let currentTitle = song.virtualTitle
+        let currentAliases = song.aliases
+        let currentNote = song.appNote
+        updateVirtualTitle(for: song, title: previousVirtualTitle ?? "")
+        guard let refreshed = songs.first(where: { $0.id == songID }) else { return }
+        updateAliases(for: refreshed, aliasesText: previousAliases.joined(separator: ", "))
+        guard let refreshedNote = songs.first(where: { $0.id == songID }) else { return }
+        updateAppNote(for: refreshedNote, note: previousAppNote ?? "")
+        registerMetadataUndo(
+            songID: songID,
+            previousVirtualTitle: currentTitle,
+            previousAliases: currentAliases,
+            previousAppNote: currentNote,
+            actionName: actionName
+        )
+    }
+
     func applyWorkflowStatus(
         _ status: ProjectWorkflowStatus?,
         for song: Song,

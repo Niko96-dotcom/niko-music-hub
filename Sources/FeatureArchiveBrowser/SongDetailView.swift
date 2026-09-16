@@ -86,7 +86,10 @@ struct SongDetailView: View {
             viewModel.workflowUndoManager = undoManager
             syncDrafts(from: liveSong)
         }
-        .onChange(of: liveSong.id) { _, _ in
+        .onChange(of: liveSong.id) { oldID, _ in
+            // NMH-048: autosave unsaved title/aliases/note drafts for the
+            // previous song before replacing the fields with the next song.
+            flushMetadataDraftsForSongChange(previousSongID: oldID)
             syncDrafts(from: liveSong)
             workspaceTab = .versions
             storageExpanded = false
@@ -538,6 +541,15 @@ struct SongDetailView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
+                    if let stage = liveSong.workflowStatus {
+                        Text("Stage \(stage.stagePosition) of \(ProjectWorkflowStatus.stageCount)")
+                            .font(HubDesignSystem.Typography.caption())
+                            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    }
+                }
+
+                metadataField(label: "Status history") {
+                    statusHistorySection
                 }
 
                 metadataField(label: "Display title") {
@@ -562,9 +574,7 @@ struct SongDetailView: View {
                         style: .secondary,
                         help: "Save display title, aliases, and note"
                     ) {
-                        commitVirtualTitle()
-                        commitAliases()
-                        commitAppNote()
+                        commitAllMetadata()
                     }
                     Spacer(minLength: 0)
                 }
@@ -886,19 +896,126 @@ struct SongDetailView: View {
         }
     }
 
-    private func commitVirtualTitle() {
-        viewModel.updateVirtualTitle(for: liveSong, title: virtualTitleDraft)
+    private var statusHistorySection: some View {
+        let history = viewModel.statusHistory(for: liveSong)
+        return Group {
+            if history.isEmpty {
+                Text("No status changes recorded yet.")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(history.enumerated()), id: \.offset) { _, change in
+                        Text("\(change.toStatus?.displayTitle ?? "No Status") · \(HubRelativeTime.string(for: change.changedAt))")
+                            .font(HubDesignSystem.Typography.caption())
+                            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// NMH-048: flush the previous song's drafts before the fields are
+    /// replaced. Undo restores the previous SQLite values (Edit Song Notes).
+    private func flushMetadataDraftsForSongChange(previousSongID: String) {
+        guard let previousSong = viewModel.songs.first(where: { $0.id == previousSongID }) else {
+            return
+        }
+        let previousTitle = previousSong.virtualTitle
+        let previousAliases = previousSong.aliases
+        let previousNote = previousSong.appNote
+        viewModel.flushMetadataDrafts(
+            songID: previousSongID,
+            virtualTitle: virtualTitleDraft,
+            aliases: aliasesDraft,
+            appNote: appNoteDraft
+        )
+        guard let updated = viewModel.songs.first(where: { $0.id == previousSongID }) else {
+            return
+        }
+        if updated.virtualTitle != previousTitle
+            || updated.aliases != previousAliases
+            || updated.appNote != previousNote
+        {
+            viewModel.registerMetadataUndo(
+                songID: previousSongID,
+                previousVirtualTitle: previousTitle,
+                previousAliases: previousAliases,
+                previousAppNote: previousNote
+            )
+        }
+    }
+
+    private func commitAllMetadata() {
+        let song = liveSong
+        let previousTitle = song.virtualTitle
+        let previousAliases = song.aliases
+        let previousNote = song.appNote
+        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
+        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
+        viewModel.updateAppNote(for: song, note: appNoteDraft)
         syncedVirtualTitle = virtualTitleDraft
+        syncedAliases = aliasesDraft
+        syncedAppNote = appNoteDraft
+        guard let updated = viewModel.songs.first(where: { $0.id == song.id }) else {
+            return
+        }
+        if updated.virtualTitle != previousTitle
+            || updated.aliases != previousAliases
+            || updated.appNote != previousNote
+        {
+            viewModel.registerMetadataUndo(
+                songID: song.id,
+                previousVirtualTitle: previousTitle,
+                previousAliases: previousAliases,
+                previousAppNote: previousNote
+            )
+        }
+    }
+
+    private func commitVirtualTitle() {
+        let song = liveSong
+        let previousTitle = song.virtualTitle
+        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
+        syncedVirtualTitle = virtualTitleDraft
+        if viewModel.songs.first(where: { $0.id == song.id })?.virtualTitle != previousTitle {
+            viewModel.registerMetadataUndo(
+                songID: song.id,
+                previousVirtualTitle: previousTitle,
+                previousAliases: song.aliases,
+                previousAppNote: song.appNote
+            )
+        }
     }
 
     private func commitAppNote() {
-        viewModel.updateAppNote(for: liveSong, note: appNoteDraft)
+        let song = liveSong
+        let previousNote = song.appNote
+        viewModel.updateAppNote(for: song, note: appNoteDraft)
         syncedAppNote = appNoteDraft
+        if viewModel.songs.first(where: { $0.id == song.id })?.appNote != previousNote {
+            viewModel.registerMetadataUndo(
+                songID: song.id,
+                previousVirtualTitle: song.virtualTitle,
+                previousAliases: song.aliases,
+                previousAppNote: previousNote
+            )
+        }
     }
 
     private func commitAliases() {
-        viewModel.updateAliases(for: liveSong, aliasesText: aliasesDraft)
+        let song = liveSong
+        let previousAliases = song.aliases
+        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
         syncedAliases = aliasesDraft
+        if viewModel.songs.first(where: { $0.id == song.id })?.aliases != previousAliases {
+            viewModel.registerMetadataUndo(
+                songID: song.id,
+                previousVirtualTitle: song.virtualTitle,
+                previousAliases: previousAliases,
+                previousAppNote: song.appNote
+            )
+        }
     }
 }
 
