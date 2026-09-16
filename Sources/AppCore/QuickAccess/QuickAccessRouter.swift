@@ -23,6 +23,9 @@ public final class QuickAccessRouter: ObservableObject {
     /// Monotonic request counter so repeated Restore Project commands are observable.
     @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
 
+    /// Pending Settings pane. Does not change `selectedToolID`.
+    @Published public private(set) var openSettingsPane: HubSettingsPane?
+
     public init() {}
 
     /// Process a quick-access command.
@@ -71,6 +74,16 @@ public final class QuickAccessRouter: ObservableObject {
         let urls = prefilledConverterURLs
         prefilledConverterURLs = []
         return urls
+    }
+
+    /// Open a Settings pane without selecting the Settings sidebar tool.
+    public func requestSettingsPane(_ pane: HubSettingsPane) {
+        openSettingsPane = pane
+        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: pane)
+    }
+
+    public func clearOpenSettingsPane() {
+        openSettingsPane = nil
     }
 }
 

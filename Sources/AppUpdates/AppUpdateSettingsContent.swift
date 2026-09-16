@@ -1,10 +1,10 @@
 import AppCore
 import SwiftUI
 
-/// Rows for the Settings "Updates" section.
+/// Rows for the Settings Updates pane (NMH-015 / NMH-105).
 ///
-/// Deliberately unwrapped: `SettingsView` owns the surrounding `SettingsSection`
-/// so this stays consistent with every other settings block.
+/// The Updates pane owns the surrounding `SettingsSection` so fail-closed
+/// copy stays consistent with every other settings block.
 public struct AppUpdateSettingsContent: View {
     @ObservedObject private var controller: AppUpdateController
 

@@ -4,21 +4,20 @@ import FeatureArchiveBrowser
 import SwiftUI
 
 /// Hosts hub-wide preferences in the SwiftUI Settings scene (⌘, / App menu).
-/// Pane split is NMH-015; this window currently presents the existing Settings form.
 struct HubSettingsScene: View {
     let context: ToolContext
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var appearanceController: AppAppearanceController
     @ObservedObject var updateController: AppUpdateController
+    @ObservedObject var router: QuickAccessRouter
 
     var body: some View {
-        SettingsView(
+        HubSettingsRoot(
             context: context,
             archiveViewModel: archiveViewModel,
             appearanceController: appearanceController,
-            updateController: updateController
+            updateController: updateController,
+            router: router
         )
-        .navigationTitle("Niko Music Hub Settings")
-        .frame(minWidth: 560, minHeight: 480)
     }
 }

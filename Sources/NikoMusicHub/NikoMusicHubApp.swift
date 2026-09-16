@@ -40,7 +40,8 @@ struct NikoMusicHubApp: App {
                 context: composition.context,
                 archiveViewModel: composition.archiveViewModel,
                 appearanceController: appearanceController,
-                updateController: composition.updateController
+                updateController: composition.updateController,
+                router: composition.router
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }

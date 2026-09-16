@@ -89,6 +89,7 @@ struct ProjectVaultSettingsView: View {
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showSetup) {
             ProjectVaultSetupSheet(
                 settings: $settings,

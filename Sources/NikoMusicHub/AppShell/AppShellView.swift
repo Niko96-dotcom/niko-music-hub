@@ -124,6 +124,9 @@ struct AppShellView: View {
                     router.consumeArchiveSearchFocusRequest()
                 }
             }
+            if router.openSettingsPane != nil {
+                openSettings()
+            }
         }
         .onChange(of: selectedToolID) { _, newID in
             guard let newID else { return }
@@ -152,6 +155,10 @@ struct AppShellView: View {
             DispatchQueue.main.async {
                 router.consumeArchiveSearchFocusRequest()
             }
+        }
+        .onChange(of: router.openSettingsPane) { _, pane in
+            guard pane != nil else { return }
+            openSettings()
         }
         .background {
             GeometryReader { proxy in

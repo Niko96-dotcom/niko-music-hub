@@ -4,233 +4,373 @@ import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
 
-struct SettingsView: View {
+@MainActor
+final class HubSettingsSession: ObservableObject {
     let context: ToolContext
+    let appearanceController: AppAppearanceController
+    let updateController: AppUpdateController
+
+    @Published var settings: AppSettings = .default
+    @Published var launchAtLogin = false
+    @Published var launchAtLoginError: String?
+    @Published var settingsLoadError: String?
+    @Published var saveError: String?
+    @Published var helperPathError: String?
+
+    let recordingDurationChoices = RecordingDurationOptions.supportedMinutes
+
+    init(
+        context: ToolContext,
+        appearanceController: AppAppearanceController,
+        updateController: AppUpdateController
+    ) {
+        self.context = context
+        self.appearanceController = appearanceController
+        self.updateController = updateController
+    }
+
+    var updatesFooter: String {
+        updateController.status.isUnavailable
+            ? "Update checks are switched off for this build."
+            : "Updates are downloaded from the signed release feed and verified before they are installed."
+    }
+
+    var maxRecordingBinding: Binding<Int> {
+        Binding(
+            get: { self.settings.maxRecordingDurationMinutes },
+            set: { newValue in
+                let normalized = RecordingDurationOptions.normalized(newValue)
+                let settings = self.settings
+                let previous = settings.maxRecordingDurationMinutes
+                self.settings.maxRecordingDurationMinutes = normalized
+                if !self.persistSettings({ $0.maxRecordingDurationMinutes = normalized }) {
+                    self.settings.maxRecordingDurationMinutes = previous
+                }
+            }
+        )
+    }
+
+    var appearanceBinding: Binding<AppAppearance> {
+        Binding(
+            get: { self.settings.appearance },
+            set: { newValue in
+                let settings = self.settings
+                let previous = settings.appearance
+                self.settings.appearance = newValue
+                self.appearanceController.apply(newValue)
+                if !self.persistSettings({ $0.appearance = newValue }) {
+                    self.settings.appearance = previous
+                    self.appearanceController.apply(previous)
+                }
+            }
+        )
+    }
+
+    var scanExclusionBinding: Binding<String> {
+        Binding(
+            get: { self.settings.scanExclusionTerms },
+            set: { newValue in
+                let previous = self.settings.scanExclusionTerms
+                self.settings.scanExclusionTerms = newValue
+                if !self.persistSettings({ $0.scanExclusionTerms = newValue }) {
+                    self.settings.scanExclusionTerms = previous
+                }
+            }
+        )
+    }
+
+    func refresh() {
+        do {
+            settings = try context.settingsStore.loadSettings()
+            settings.maxRecordingDurationMinutes = RecordingDurationOptions.normalized(
+                settings.maxRecordingDurationMinutes
+            )
+            settingsLoadError = nil
+            appearanceController.apply(settings.appearance)
+        } catch {
+            settings = .default
+            settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
+            context.diagnostics.log(.error, "Settings load failed: \(error)")
+        }
+        launchAtLogin = context.launchAtLogin.isEnabled()
+        launchAtLoginError = nil
+        saveError = nil
+        helperPathError = nil
+    }
+
+    @discardableResult
+    func persistSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
+        guard settingsLoadError == nil else {
+            saveError = "Settings were not saved because the current settings could not be loaded."
+            return false
+        }
+        do {
+            try context.settingsStore.updateSettings(update)
+            settings = try context.settingsStore.loadSettings()
+            saveError = nil
+            return true
+        } catch {
+            saveError = "Could not save settings."
+            context.diagnostics.log(.error, "Settings save failed")
+            return false
+        }
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            try context.launchAtLogin.setEnabled(enabled)
+            launchAtLogin = context.launchAtLogin.isEnabled()
+            launchAtLoginError = nil
+        } catch let error as LaunchAtLoginError {
+            launchAtLogin = context.launchAtLogin.isEnabled()
+            switch error {
+            case .registrationFailed(let message):
+                launchAtLoginError = message
+            }
+        } catch {
+            launchAtLogin = context.launchAtLogin.isEnabled()
+            launchAtLoginError = error.localizedDescription
+        }
+    }
+
+    func chooseOutputFolder() {
+        guard settingsLoadError == nil else {
+            saveError = "Settings were not saved because the current settings could not be loaded."
+            return
+        }
+        guard let folder = context.fileActions.chooseOutputFolder() else { return }
+        do {
+            try OutputWriteGuard().validateCanWriteOutput(
+                to: folder,
+                archiveRoots: settings.archiveRoots.map(\.url)
+            )
+        } catch {
+            saveError = error.localizedDescription
+            return
+        }
+        settings.outputFolder = StoredFolderLocation(url: folder)
+        persistSettings { $0.outputFolder = StoredFolderLocation(url: folder) }
+    }
+}
+
+struct SettingsView: View {
+    @ObservedObject var session: HubSettingsSession
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
-    @ObservedObject var appearanceController: AppAppearanceController
-    @ObservedObject var updateController: AppUpdateController
-
-    @State private var settings: AppSettings = .default
-    @State private var launchAtLogin = false
-    @State private var launchAtLoginError: String?
-    @State private var settingsLoadError: String?
-    @State private var saveError: String?
-    @State private var helperPathError: String?
-
-    private let recordingDurationChoices = RecordingDurationOptions.supportedMinutes
+    let pane: HubSettingsPane
 
     var body: some View {
         HubToolPage {
-            header
             settingsLoadErrorBanner
+            paneContent
+            saveErrorBanner
+        }
+    }
 
-            SettingsSection(
-                title: "General",
-                importance: .high,
-                footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
-            ) {
-                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                    Text("Appearance")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    HubChoiceChips(
-                        "Appearance",
-                        selection: appearanceBinding,
-                        choices: AppAppearance.allCases.map { .init($0, label: $0.label) }
-                    )
-                    .disabled(settingsLoadError != nil)
-                }
-
-                Toggle("Open at login", isOn: $launchAtLogin)
-                    .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        setLaunchAtLogin(enabled)
-                    }
-                if let launchAtLoginError {
-                    inlineWarning(launchAtLoginError)
-                }
-            }
-
-            SettingsSection(
-                title: "Output",
-                importance: .high,
-                footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
-            ) {
-                pathRow(
-                    label: "Output folder",
-                    path: settings.outputFolder.url.path
-                )
-                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                    HubLabeledButton(
-                        icon: "folder.badge.gearshape",
-                        label: "Choose Folder",
-                        style: .secondary,
-                        help: "Pick where exports and recordings are saved",
-                        isEnabled: settingsLoadError == nil
-                    ) {
-                        chooseOutputFolder()
-                    }
-                    HubLabeledButton(
-                        icon: "folder",
-                        label: "Reveal in Finder",
-                        style: .ghost,
-                        help: "Show output folder in Finder"
-                    ) {
-                        context.fileActions.revealInFinder(settings.outputFolder.url)
-                    }
-                }
-            }
-
-            SettingsSection(
-                title: "Music archive",
-                importance: .high,
-                footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
-            ) {
-                archiveRootsSection
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Scan exclusions")
-                        .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    TextField(
-                        "",
-                        text: scanExclusionBinding,
-                        prompt: Text("backup, tmp, archive")
-                            .foregroundColor(HubDesignSystem.Palette.textTertiary)
-                    )
-                    .textFieldStyle(.plain)
-                    .font(HubDesignSystem.Typography.body())
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
-                    .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
-                    Text("Comma-separated folder-name terms to skip during scan.")
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                }
-            }
-
+    @ViewBuilder
+    private var paneContent: some View {
+        switch pane {
+        case .general:
+            generalPane
+        case .archive:
+            archivePane
+        case .vault:
             ProjectVaultSettingsView(
-                context: context,
-                settings: $settings,
-                settingsAvailable: settingsLoadError == nil,
+                context: session.context,
+                settings: $session.settings,
+                settingsAvailable: session.settingsLoadError == nil,
                 onSave: saveProjectVaultSettings
             )
-
-            SettingsSection(
-                title: "Audio conversion",
-                importance: .medium,
-                footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
-            ) {
-                LabeledContent("Sample rate") {
-                    Text("\(settings.audioPreset.sampleRate) Hz")
-                }
-                LabeledContent("Bit depth") {
-                    Text("\(settings.audioPreset.bitDepth)-bit")
-                }
-                LabeledContent("Channels") {
-                    Text(channelModeLabel(settings.audioPreset.channelMode))
-                }
-            }
-
-            SettingsSection(
-                title: "Recording",
-                importance: .medium,
-                footer: "Maximum length for system-audio capture sessions."
-            ) {
-                Picker("Max duration", selection: maxRecordingBinding) {
-                    ForEach(recordingDurationChoices, id: \.self) { minutes in
-                        Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
-                    }
-                }
-                .pickerStyle(.menu)
-                .disabled(settingsLoadError != nil)
-                .frame(maxWidth: 280, alignment: .leading)
-            }
-
-            SettingsSection(
-                title: "Privacy & recording",
-                importance: .low,
-                footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
-            ) {
-                Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                HubLabeledButton(
-                    icon: "lock.shield",
-                    label: "Open System Settings",
-                    style: .primary,
-                    help: "Open Screen & System Audio Recording in System Settings"
-                ) {
-                    SystemPrivacySettings.openSystemAudioRecordingSettings()
-                }
-            }
-
-            SettingsSection(
-                title: "Helper tools",
-                importance: .low,
-                footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
-            ) {
-                helperPathRow(label: "FFmpeg", url: settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
-                    settings.helperTools.ffmpeg = url
-                    persistSettings { $0.helperTools.ffmpeg = url }
-                }
-                helperPathRow(label: "ffprobe", url: settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
-                    settings.helperTools.ffprobe = url
-                    persistSettings { $0.helperTools.ffprobe = url }
-                }
-                helperPathRow(label: "yt-dlp", url: settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
-                    settings.helperTools.ytDlp = url
-                    persistSettings { $0.helperTools.ytDlp = url }
-                }
-                helperPathRow(label: "demucs-mlx", url: settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
-                    settings.helperTools.demucsMlx = url
-                    persistSettings { $0.helperTools.demucsMlx = url }
-                }
-            }
-
-            SettingsSection(
-                title: "Updates",
-                importance: .medium,
-                footer: updatesFooter
-            ) {
-                AppUpdateSettingsContent(controller: updateController)
-            }
-
-            SettingsSection(title: "About", importance: .low) {
-                let buildIdentity = AppBuildIdentity()
-                LabeledContent("App") {
-                    Text("Niko Music Hub")
-                }
-                if let version = buildIdentity.marketingVersion {
-                    LabeledContent("Version") {
-                        Text(version)
-                    }
-                }
-                if let buildID = buildIdentity.buildID {
-                    LabeledContent("Build") {
-                        Text(buildID)
-                            .textSelection(.enabled)
-                    }
-                }
-                if let commit = buildIdentity.shortSourceCommit {
-                    LabeledContent("Source") {
-                        Text(commit)
-                            .monospaced()
-                            .textSelection(.enabled)
-                    }
-                }
-                Text("Local-first recall for Cubase and Ableton archives plus production utilities. Archive browsing stays read-only toward your music folders.")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            saveErrorBanner
-            helperPathErrorBanner
+        case .helpers:
+            helpersPane
+        case .updates:
+            updatesPane
         }
-        .onAppear { refresh() }
+    }
+
+    @ViewBuilder
+    private var generalPane: some View {
+        SettingsSection(
+            title: "General",
+            importance: .high,
+            footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
+        ) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Text("Appearance")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                HubChoiceChips(
+                    "Appearance",
+                    selection: session.appearanceBinding,
+                    choices: AppAppearance.allCases.map { .init($0, label: $0.label) }
+                )
+                .disabled(session.settingsLoadError != nil)
+            }
+
+            Toggle("Open at login", isOn: $session.launchAtLogin)
+                .toggleStyle(.switch)
+                .tint(HubDesignSystem.Palette.accent)
+                .onChange(of: session.launchAtLogin) { _, enabled in
+                    session.setLaunchAtLogin(enabled)
+                }
+            if let launchAtLoginError = session.launchAtLoginError {
+                inlineWarning(launchAtLoginError)
+            }
+        }
+
+        SettingsSection(
+            title: "Output",
+            importance: .high,
+            footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
+        ) {
+            pathRow(
+                label: "Output folder",
+                path: session.settings.outputFolder.url.path
+            )
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                HubLabeledButton(
+                    icon: "folder.badge.gearshape",
+                    label: "Choose Folder",
+                    style: .secondary,
+                    help: "Pick where exports and recordings are saved",
+                    isEnabled: session.settingsLoadError == nil
+                ) {
+                    session.chooseOutputFolder()
+                }
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Reveal in Finder",
+                    style: .ghost,
+                    help: "Show output folder in Finder"
+                ) {
+                    session.context.fileActions.revealInFinder(session.settings.outputFolder.url)
+                }
+            }
+        }
+
+        SettingsSection(
+            title: "Audio conversion",
+            importance: .medium,
+            footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
+        ) {
+            LabeledContent("Sample rate") {
+                Text("\(session.settings.audioPreset.sampleRate) Hz")
+            }
+            LabeledContent("Bit depth") {
+                Text("\(session.settings.audioPreset.bitDepth)-bit")
+            }
+            LabeledContent("Channels") {
+                Text(channelModeLabel(session.settings.audioPreset.channelMode))
+            }
+        }
+
+        SettingsSection(
+            title: "Recording",
+            importance: .medium,
+            footer: "Maximum length for system-audio capture sessions."
+        ) {
+            Picker("Max duration", selection: session.maxRecordingBinding) {
+                ForEach(session.recordingDurationChoices, id: \.self) { minutes in
+                    Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(session.settingsLoadError != nil)
+            .frame(maxWidth: 280, alignment: .leading)
+        }
+
+        SettingsSection(
+            title: "Privacy & recording",
+            importance: .low,
+            footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
+        ) {
+            Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HubLabeledButton(
+                icon: "lock.shield",
+                label: "Open System Settings",
+                style: .primary,
+                help: "Open Screen & System Audio Recording in System Settings"
+            ) {
+                SystemPrivacySettings.openSystemAudioRecordingSettings()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var archivePane: some View {
+        SettingsSection(
+            title: "Music archive",
+            importance: .high,
+            footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
+        ) {
+            archiveRootsSection
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Scan exclusions")
+                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                TextField(
+                    "",
+                    text: session.scanExclusionBinding,
+                    prompt: Text("backup, tmp, archive")
+                        .foregroundColor(HubDesignSystem.Palette.textTertiary)
+                )
+                .textFieldStyle(.plain)
+                .font(HubDesignSystem.Typography.body())
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
+                Text("Comma-separated folder-name terms to skip during scan.")
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var helpersPane: some View {
+        SettingsSection(
+            title: "Helper tools",
+            importance: .low,
+            footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
+        ) {
+            helperPathRow(label: "FFmpeg", url: session.settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
+                session.settings.helperTools.ffmpeg = url
+                session.persistSettings { $0.helperTools.ffmpeg = url }
+            }
+            helperPathRow(label: "ffprobe", url: session.settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
+                session.settings.helperTools.ffprobe = url
+                session.persistSettings { $0.helperTools.ffprobe = url }
+            }
+            helperPathRow(label: "yt-dlp", url: session.settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
+                session.settings.helperTools.ytDlp = url
+                session.persistSettings { $0.helperTools.ytDlp = url }
+            }
+            helperPathRow(label: "demucs-mlx", url: session.settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
+                session.settings.helperTools.demucsMlx = url
+                session.persistSettings { $0.helperTools.demucsMlx = url }
+            }
+            if let helperPathError = session.helperPathError {
+                Text(helperPathError)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        helperPathErrorBanner
+    }
+
+    @ViewBuilder
+    private var updatesPane: some View {
+        SettingsSection(
+            title: "Updates",
+            importance: .medium,
+            footer: session.updatesFooter
+        ) {
+            AppUpdateSettingsContent(controller: session.updateController)
+        }
     }
 
     @ViewBuilder
@@ -254,23 +394,9 @@ struct SettingsView: View {
         )
     }
 
-    private var updatesFooter: String {
-        updateController.status.isUnavailable
-            ? "Update checks are switched off for this build."
-            : "Updates are downloaded from the signed release feed and verified before they are installed."
-    }
-
-    private var header: some View {
-        ToolHeaderBlock(
-            title: "Settings",
-            statusText: "Hub-wide preferences for startup, output, and tools.",
-            statusColor: HubDesignSystem.Palette.textSecondary
-        )
-    }
-
     @ViewBuilder
     private var settingsLoadErrorBanner: some View {
-        if let settingsLoadError {
+        if let settingsLoadError = session.settingsLoadError {
             Label(settingsLoadError, systemImage: "exclamationmark.triangle.fill")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
@@ -283,7 +409,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var saveErrorBanner: some View {
-        if let saveError {
+        if let saveError = session.saveError {
             Label(saveError, systemImage: "exclamationmark.triangle.fill")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Colors.danger)
@@ -296,7 +422,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var helperPathErrorBanner: some View {
-        if let helperPathError {
+        if let helperPathError = session.helperPathError {
             Label(helperPathError, systemImage: "exclamationmark.triangle.fill")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
@@ -305,48 +431,6 @@ struct SettingsView: View {
                 .padding(HubDesignSystem.Spacing.section)
                 .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
         }
-    }
-
-    private var maxRecordingBinding: Binding<Int> {
-        Binding(
-            get: { settings.maxRecordingDurationMinutes },
-            set: { newValue in
-                let normalized = RecordingDurationOptions.normalized(newValue)
-                let previous = settings.maxRecordingDurationMinutes
-                settings.maxRecordingDurationMinutes = normalized
-                if !persistSettings({ $0.maxRecordingDurationMinutes = normalized }) {
-                    settings.maxRecordingDurationMinutes = previous
-                }
-            }
-        )
-    }
-
-    private var appearanceBinding: Binding<AppAppearance> {
-        Binding(
-            get: { settings.appearance },
-            set: { newValue in
-                let previous = settings.appearance
-                settings.appearance = newValue
-                appearanceController.apply(newValue)
-                if !persistSettings({ $0.appearance = newValue }) {
-                    settings.appearance = previous
-                    appearanceController.apply(previous)
-                }
-            }
-        )
-    }
-
-    private var scanExclusionBinding: Binding<String> {
-        Binding(
-            get: { settings.scanExclusionTerms },
-            set: { newValue in
-                let previous = settings.scanExclusionTerms
-                settings.scanExclusionTerms = newValue
-                if !persistSettings({ $0.scanExclusionTerms = newValue }) {
-                    settings.scanExclusionTerms = previous
-                }
-            }
-        )
     }
 
     private func pathRow(label: String, path: String) -> some View {
@@ -415,14 +499,14 @@ struct SettingsView: View {
                     icon: "ellipsis",
                     label: "Choose…",
                     style: .ghost,
-                    isEnabled: settingsLoadError == nil
+                    isEnabled: session.settingsLoadError == nil
                 ) {
-                    guard let chosen = context.fileActions.chooseExecutable(prompt: prompt) else { return }
+                    guard let chosen = session.context.fileActions.chooseExecutable(prompt: prompt) else { return }
                     if let validationError = HelperExecutableValidation.validate(url: chosen) {
-                        helperPathError = "\(label): \(validationError)"
+                        session.helperPathError = "\(label): \(validationError)"
                         return
                     }
-                    helperPathError = nil
+                    session.helperPathError = nil
                     onSet(chosen)
                 }
 
@@ -431,7 +515,7 @@ struct SettingsView: View {
                         systemImage: "xmark",
                         accessibilityLabel: "Use auto-detect for \(label)",
                         help: "Use auto-detect for \(label)",
-                        isEnabled: settingsLoadError == nil
+                        isEnabled: session.settingsLoadError == nil
                     ) {
                         onSet(nil)
                     }
@@ -461,86 +545,13 @@ struct SettingsView: View {
         }
     }
 
-    private func refresh() {
-        do {
-            settings = try context.settingsStore.loadSettings()
-            settings.maxRecordingDurationMinutes = RecordingDurationOptions.normalized(
-                settings.maxRecordingDurationMinutes
-            )
-            settingsLoadError = nil
-            appearanceController.apply(settings.appearance)
-        } catch {
-            settings = .default
-            settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
-            context.diagnostics.log(.error, "Settings load failed: \(error)")
-        }
-        launchAtLogin = context.launchAtLogin.isEnabled()
-        launchAtLoginError = nil
-        saveError = nil
-        helperPathError = nil
-    }
-
-    @discardableResult
-    private func persistSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
-        guard settingsLoadError == nil else {
-            saveError = "Settings were not saved because the current settings could not be loaded."
-            return false
-        }
-        do {
-            try context.settingsStore.updateSettings(update)
-            settings = try context.settingsStore.loadSettings()
-            saveError = nil
-            return true
-        } catch {
-            saveError = "Could not save settings."
-            context.diagnostics.log(.error, "Settings save failed")
-            return false
-        }
-    }
-
-    private func setLaunchAtLogin(_ enabled: Bool) {
-        do {
-            try context.launchAtLogin.setEnabled(enabled)
-            launchAtLogin = context.launchAtLogin.isEnabled()
-            launchAtLoginError = nil
-        } catch let error as LaunchAtLoginError {
-            launchAtLogin = context.launchAtLogin.isEnabled()
-            switch error {
-            case .registrationFailed(let message):
-                launchAtLoginError = message
-            }
-        } catch {
-            launchAtLogin = context.launchAtLogin.isEnabled()
-            launchAtLoginError = error.localizedDescription
-        }
-    }
-
-    private func chooseOutputFolder() {
-        guard settingsLoadError == nil else {
-            saveError = "Settings were not saved because the current settings could not be loaded."
-            return
-        }
-        guard let folder = context.fileActions.chooseOutputFolder() else { return }
-        do {
-            try OutputWriteGuard().validateCanWriteOutput(
-                to: folder,
-                archiveRoots: settings.archiveRoots.map(\.url)
-            )
-        } catch {
-            saveError = error.localizedDescription
-            return
-        }
-        settings.outputFolder = StoredFolderLocation(url: folder)
-        persistSettings { $0.outputFolder = StoredFolderLocation(url: folder) }
-    }
-
     private func addArchiveRoot() {
-        guard let folder = context.fileActions.chooseDirectory(prompt: "Choose Archive Root") else { return }
+        guard let folder = session.context.fileActions.chooseDirectory(prompt: "Choose Archive Root") else { return }
         archiveViewModel.addRoot(folder)
     }
 
     private func saveProjectVaultSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
-        let saved = persistSettings(update)
+        let saved = session.persistSettings(update)
         if saved {
             archiveViewModel.applyProjectVaultSettingsChange()
         }
