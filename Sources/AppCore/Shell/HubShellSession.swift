@@ -59,8 +59,11 @@ public final class HubShellSession: ObservableObject {
         // equal value. The App Scene re-creates AppShellView on every publish,
         // so an unconditional assign here (via restore in view init) looped
         // graphDidChange/scenesDidChange before any window appeared.
-        guard id != selectedToolID else { return }
-        selectedToolID = id
+        // Publish only on change; persistence still writes (same-value sets must
+        // overwrite a previously persisted id, e.g. Settings -> tool).
+        if id != selectedToolID {
+            selectedToolID = id
+        }
         if let id {
             persistSelectedToolID(id)
         }
@@ -99,8 +102,10 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func setToolSidebarVisible(_ visible: Bool) {
-        guard visible != showToolSidebar else { return }
-        showToolSidebar = visible
+        // Publish only on change (Scene loop); persistence always writes.
+        if visible != showToolSidebar {
+            showToolSidebar = visible
+        }
         preferences.set(visible, forKey: Self.toolsVisibleKey)
     }
 
@@ -109,10 +114,12 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func setOutputInboxVisible(_ visible: Bool) {
-        guard visible != inboxUserWantsVisible else { return }
-        inboxUserWantsVisible = visible
+        // Publish only on change (Scene loop); persistence always writes.
+        if visible != inboxUserWantsVisible {
+            inboxUserWantsVisible = visible
+            refreshEffectiveInboxVisibility()
+        }
         preferences.set(visible, forKey: Self.inboxVisibleKey)
-        refreshEffectiveInboxVisibility()
     }
 
     public func toggleOutputInbox() {

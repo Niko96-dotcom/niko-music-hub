@@ -16,6 +16,9 @@ final class AppAppearanceController: ObservableObject {
     }
 
     func apply(_ appearance: AppAppearance) {
+        // Guarded: Scene reads preferredColorScheme, so a redundant publish here
+        // would re-evaluate every Window/Settings/MenuBarExtra pass.
+        guard appearance != self.appearance else { return }
         self.appearance = appearance
         applySystemAppearance(appearance)
     }

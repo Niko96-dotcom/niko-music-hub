@@ -26,7 +26,12 @@ struct AppShellView: View {
         self.context = context
         self.router = router
         self.shellSession = shellSession
-        let initialToolID = shellSession.restoreSelectedToolID(registry: registry)
+        // LAUNCH-HANG: never mutate HubShellSession (@Published) during Scene
+        // evaluation. The previous restoreSelectedToolID(registry:) call here
+        // published on every App graph pass, looping scenesDidChange /
+        // preferencesDidChange before any window appeared. Resolve without
+        // publishing; the authoritative restore runs in onAppear below.
+        let initialToolID = shellSession.peekInitialToolID(registry: registry)
         _toolPaneCache = StateObject(
             wrappedValue: ToolPaneCache(
                 registry: registry,
@@ -84,6 +89,16 @@ struct AppShellView: View {
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .hubOpensMainWindowFromDock()
         .onAppear {
+            // LAUNCH-HANG: authoritative launch-tool restore happens here, not in
+            // init. Mutating the shared session during Scene evaluation looped the
+            // App graph before a window existed; onAppear runs once the Window is
+            // committed. restoreSelectedToolID(registry:) is idempotent (no-op
+            // when already resolved).
+            let restored = shellSession.restoreSelectedToolID(registry: registry)
+            if let restored, restored != selectedToolID {
+                toolPaneCache.ensureMounted(restored)
+                selectedToolID = restored
+            }
             // Drain any pending router state that was set while the window was absent
             // (closed-window case). The menu bar action may fire router.execute() before
             // openWindow() recreates this view; onChange only fires on transitions AFTER

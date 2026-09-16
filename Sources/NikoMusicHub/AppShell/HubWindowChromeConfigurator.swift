@@ -8,30 +8,53 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        configure(windowFor: view)
+        if view.window != nil {
+            configure(windowFor: view)
+        } else {
+            // Window attaches after makeNSView; apply once it exists instead of
+            // re-applying on every update.
+            DispatchQueue.main.async {
+                self.applyChrome(to: view.window)
+            }
+        }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        configure(windowFor: nsView)
+        // LAUNCH-HANG: never unconditionally mutate NSWindow or schedule async
+        // work here. Every mutation risks another updateNSView pass; the old
+        // always-set + always-dispatch-async pair kept invalidating the view
+        // hierarchy. applyChrome is now guarded (no-op when already correct).
+        applyChrome(to: nsView.window)
     }
 
     private func configure(windowFor view: NSView) {
         applyChrome(to: view.window)
-        DispatchQueue.main.async {
-            self.applyChrome(to: view.window)
-        }
     }
 
     private func applyChrome(to window: NSWindow?) {
         guard let window else { return }
-        window.title = windowTitle
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.styleMask.insert(.fullSizeContentView)
+        // Guarded: setting title/style triggers Window-menu / layout work, so
+        // only touch the window when a value actually differs.
+        if window.title != windowTitle {
+            window.title = windowTitle
+        }
+        if window.titlebarAppearsTransparent != true {
+            window.titlebarAppearsTransparent = true
+        }
+        if window.titleVisibility != .hidden {
+            window.titleVisibility = .hidden
+        }
+        if !window.styleMask.contains(.fullSizeContentView) {
+            window.styleMask.insert(.fullSizeContentView)
+        }
         // NMH-130: make the main window frame restorable across relaunch.
         // Default 1280x820 from `.defaultSize` still applies when no saved frame exists.
-        window.isRestorable = true
-        window.identifier = NSUserInterfaceItemIdentifier("hub.main")
+        if window.isRestorable != true {
+            window.isRestorable = true
+        }
+        if window.identifier != NSUserInterfaceItemIdentifier("hub.main") {
+            window.identifier = NSUserInterfaceItemIdentifier("hub.main")
+        }
     }
 }
