@@ -1,0 +1,15 @@
+1:AXWindow title=BPM Tapper id=hub.main
+2:    AXButton value=On description=Hide tools sidebar id=sidebar.leading
+3:    AXButton value=Off description=Show output inbox id=sidebar.trailing
+4:    AXStaticText value=Niko Music Hub v1.5.4+92fa3a0fd07c
+8:    AXButton value=Selected description=BPM Tapper id=hub_tool_bpm-tapper
+16:      AXStaticText value=BPM Tapper
+17:      AXStaticText value=First estimate ready. Keep tapping to steady it.
+18:      AXStaticText value=180 description=Current BPM
+19:      AXStaticText value=BPM
+20:      AXStaticText value=4 taps
+25:      AXButton value=First estimate ready. Keep tapping to steady it. description=Tap Tempo
+26:      AXButton description=Copy BPM
+27:      AXButton description=Save BPM
+30:      AXStaticText value=0
+31:      AXStaticText value=No tempos saved yet

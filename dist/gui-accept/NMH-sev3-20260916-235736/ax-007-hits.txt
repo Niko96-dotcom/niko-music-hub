@@ -1,0 +1,27 @@
+1:AXWindow title=BPM Tapper id=hub.main
+2:    AXButton value=On description=Hide tools sidebar id=sidebar.leading
+3:    AXButton value=Off description=Show output inbox id=sidebar.trailing
+4:    AXStaticText value=Niko Music Hub v1.5.4+92fa3a0fd07c
+6:    AXButton description=Archive Browser id=hub_tool_archive-browser
+8:    AXButton value=Selected description=BPM Tapper id=hub_tool_bpm-tapper
+9:    AXButton description=WAV Converter id=hub_tool_wav-converter
+10:    AXButton description=Audio Recorder id=hub_tool_audio-recorder
+11:    AXButton description=Downloader id=hub_tool_downloader
+12:    AXButton description=Stem Separation id=hub_tool_stem-separation
+13:    AXButton description=Settings id=hub_tool_settings
+15:    AXButton description=Helper tools status
+16:      AXStaticText value=BPM Tapper
+17:      AXStaticText value=Tap the pad or press Space
+18:      AXStaticText value=Not recorded description=Current BPM
+19:      AXStaticText value=BPM
+20:      AXStaticText value=0 taps
+22:        AXButton description=½
+23:        AXButton description=1×
+24:        AXButton description=2×
+25:      AXButton value=Tap the pad or press Space description=Tap Tempo
+26:      AXButton description=Copy BPM
+27:      AXButton description=Save BPM
+28:      AXButton description=Reset
+30:      AXStaticText value=0
+31:      AXStaticText value=No tempos saved yet
+32:      AXButton description=Clear History

@@ -1,0 +1,5 @@
+7:    AXTextField value=Neon
+8:    AXButton description=Clear search id=xmark.circle.fill
+27:              AXButton description=Neon Hook
+28:                AXStaticText value=Neon Hook
+30:                AXButton description=Play Neon Hook id=play.fill

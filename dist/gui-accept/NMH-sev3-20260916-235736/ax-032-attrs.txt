@@ -1,0 +1,2 @@
+FIELD role=AXTextField title=[] desc=[] value=[Neon] help=[Filters the song list as you type.] id=[] placeholder=[Search songs]
+CLEAR title=[] desc=[Clear search]

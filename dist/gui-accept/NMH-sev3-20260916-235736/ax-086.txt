@@ -1,0 +1,85 @@
+AXWindow title=Archive Browser id=hub.main
+    AXButton value=On description=Hide tools sidebar id=sidebar.leading
+    AXButton value=Off description=Show output inbox id=sidebar.trailing
+    AXStaticText value=Niko Music Hub v1.5.4+92fa3a0fd07c
+    AXStaticText value=Board
+    AXImage description=Suchen id=magnifyingglass
+    AXButton description=Show analytics id=chart.bar
+    AXButton description=Add archive root id=folder.badge.plus
+    AXButton description=Open list view id=sidebar.leading
+    AXHeading description=Library
+    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+    AXCheckBox value=1 description=Compact empty stages
+    AXHeading description=Production
+    AXButton description=BPM Tapper id=hub_tool_bpm-tapper
+    AXButton description=WAV Converter id=hub_tool_wav-converter
+    AXButton description=Audio Recorder id=hub_tool_audio-recorder
+    AXButton description=Downloader id=hub_tool_downloader
+    AXButton description=Stem Separation id=hub_tool_stem-separation
+    AXButton description=Settings id=hub_tool_settings
+    AXHeading description=Status
+        AXGroup description=No Status column, 9 songs
+          AXImage description=Eingang id=tray
+          AXStaticText value=No Status
+          AXStaticText value=9
+              AXButton description=Neon Hook
+                AXStaticText value=Neon Hook
+                AXStaticText value=2 versions
+                AXButton description=Play Neon Hook id=play.fill
+              AXButton description=Amber Moth
+                AXStaticText value=Amber Moth
+                AXStaticText value=1 version · stems
+                AXButton description=Play Amber Moth id=play.fill
+              AXButton description=Graffiti
+                AXStaticText value=Graffiti
+                AXStaticText value=1 version
+                AXButton description=Play Graffiti id=play.fill
+              AXButton description=Tie Song
+                AXStaticText value=Tie Song
+                AXStaticText value=1 version
+                AXButton description=Play Tie Song id=play.fill
+              AXButton description=Tie Song
+                AXStaticText value=Tie Song
+                AXStaticText value=1 version
+                AXButton description=Play Tie Song id=play.fill
+              AXButton description=Equal Score Duration Tiebreak
+                AXStaticText value=Equal Score Duration Tiebreak
+                AXStaticText value=1 version
+                AXButton description=Play Equal Score Duration Tiebreak id=play.fill
+              AXButton description=Lab Song
+                AXStaticText value=Lab Song
+                AXStaticText value=1 version
+                AXButton description=Play Lab Song id=play.fill
+              AXButton description=Second Song
+                AXStaticText value=Second Song
+                AXStaticText value=1 version
+                AXButton description=Play Second Song id=play.fill
+              AXButton value=Warning: No project files (.cpr or .als) found description=Broken Folder Example
+                AXStaticText value=Broken Folder Example
+                AXStaticText value=No project files
+                AXImage description=Ton Aus id=speaker.slash
+            AXScrollBar value=0
+              AXValueIndicator value=0
+        AXGroup description=Songstarter/Beat column, 0 songs
+          AXImage description=Funken id=sparkles
+          AXStaticText value=Songstarter/Beat
+        AXGroup description=Song column, 0 songs
+          AXImage description=Titel id=music.note
+          AXStaticText value=Song
+        AXGroup description=Session Prod column, 0 songs
+          AXImage description=person.2 id=person.2
+          AXStaticText value=Session Prod
+        AXGroup description=Prod column, 0 songs
+          AXImage description=Bearbeiten id=slider.horizontal.3
+          AXStaticText value=Prod
+        AXGroup description=Waiting Feedback column, 0 songs
+          AXImage description=Dauer id=hourglass
+          AXStaticText value=Waiting Feedback
+        AXGroup description=Feedback Todo column, 0 songs
+          AXImage description=checklist id=checklist
+          AXStaticText value=Feedback Todo
+        AXGroup description=Done column, 0 songs
+          AXImage description=Überprüft id=checkmark.seal
+          AXStaticText value=Done
+    AXButton description=Helper tools status
+    AXStaticText value=9 songs · 1 with warnings · 2 skipped

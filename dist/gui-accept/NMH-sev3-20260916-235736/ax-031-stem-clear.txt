@@ -1,0 +1,3 @@
+FIELD role=AXTextField title=[] desc=[] value=[https://youtube.com/watch?v=stemclear] help=[] id=[] placeholder=[Paste YouTube URL…]
+CLEAR title=[] desc=[Clear YouTube URL]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]

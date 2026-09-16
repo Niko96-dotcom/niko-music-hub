@@ -1,0 +1,637 @@
+=== NMH-018 ===
+NMH-018_ARCHIVE_SELECTED=PASS
+NMH-018_HELPER_NOT_TOOL=PASS
+NMH-018_BPM_SELECTED=PASS
+=== NMH-007 / NMH-035 BPM AX ===
+1:AXWindow title=BPM Tapper id=hub.main
+2:    AXButton value=On description=Hide tools sidebar id=sidebar.leading
+3:    AXButton value=Off description=Show output inbox id=sidebar.trailing
+4:    AXStaticText value=Niko Music Hub v1.5.4+92fa3a0fd07c
+6:    AXButton description=Archive Browser id=hub_tool_archive-browser
+8:    AXButton value=Selected description=BPM Tapper id=hub_tool_bpm-tapper
+9:    AXButton description=WAV Converter id=hub_tool_wav-converter
+10:    AXButton description=Audio Recorder id=hub_tool_audio-recorder
+11:    AXButton description=Downloader id=hub_tool_downloader
+12:    AXButton description=Stem Separation id=hub_tool_stem-separation
+13:    AXButton description=Settings id=hub_tool_settings
+15:    AXButton description=Helper tools status
+16:      AXStaticText value=BPM Tapper
+17:      AXStaticText value=Tap the pad or press Space
+18:      AXStaticText value=Not recorded description=Current BPM
+19:      AXStaticText value=BPM
+20:      AXStaticText value=0 taps
+22:        AXButton description=½
+23:        AXButton description=1×
+24:        AXButton description=2×
+25:      AXButton value=Tap the pad or press Space description=Tap Tempo
+26:      AXButton description=Copy BPM
+27:      AXButton description=Save BPM
+28:      AXButton description=Reset
+30:      AXStaticText value=0
+31:      AXStaticText value=No tempos saved yet
+32:      AXButton description=Clear History
+1:AXWindow title=BPM Tapper id=hub.main
+2:    AXButton value=On description=Hide tools sidebar id=sidebar.leading
+3:    AXButton value=Off description=Show output inbox id=sidebar.trailing
+4:    AXStaticText value=Niko Music Hub v1.5.4+92fa3a0fd07c
+8:    AXButton value=Selected description=BPM Tapper id=hub_tool_bpm-tapper
+16:      AXStaticText value=BPM Tapper
+17:      AXStaticText value=First estimate ready. Keep tapping to steady it.
+18:      AXStaticText value=180 description=Current BPM
+19:      AXStaticText value=BPM
+20:      AXStaticText value=4 taps
+25:      AXButton value=First estimate ready. Keep tapping to steady it. description=Tap Tempo
+26:      AXButton description=Copy BPM
+27:      AXButton description=Save BPM
+30:      AXStaticText value=0
+31:      AXStaticText value=No tempos saved yet
+=== NMH-031 Clear labels on Downloader ===
+6:    AXButton description=Archive Browser id=hub_tool_archive-browser
+8:    AXButton description=BPM Tapper id=hub_tool_bpm-tapper
+9:    AXButton description=WAV Converter id=hub_tool_wav-converter
+10:    AXButton description=Audio Recorder id=hub_tool_audio-recorder
+12:    AXButton description=Stem Separation id=hub_tool_stem-separation
+13:    AXButton description=Settings id=hub_tool_settings
+15:    AXButton description=Helper tools status
+19:      AXButton description=Download
+21:        AXButton description=Single video
+22:        AXButton description=Playlist
+23:        AXButton description=Channel (limited)
+26:        AXButton description=Audio only
+27:        AXButton description=Video + audio
+=== NMH-088 Song menu ===
+New Song Draft, missing value, Open Project, Play Preview, Reveal in Finder, Reveal in Finder, Show Versions, Open Preview, Skip Back 5 Seconds, Skip Forward 5 Seconds, missing value, Move to…
+NMH-088_MENU_SKIP=PASS
+=== NMH-005 Song menu status submenu ===
+115:120: execution error: „System Events“ hat einen Fehler erhalten: „every item of process "NikoMusicHub"“ kann nicht als „name of every menu item of menu "Song" of menu bar item "Song" of menu bar 1 of process "NikoMusicHub"“ gesetzt werden. (-10006)
+=== NMH-086 ===
+NMH-086_WARNING_AX=PASS
+=== NMH-032 search ===
+Undo, Redo, missing value, Cut, Copy, Paste, Delete, Select All, Find, Jump to Search Field, missing value, Cancel, Cancel, missing value, Writing Tools, AutoFill, Start Dictation, Emoji & Symbols
+7:    AXTextField value=Neon
+8:    AXButton description=Clear search id=xmark.circle.fill
+27:              AXButton description=Neon Hook
+28:                AXStaticText value=Neon Hook
+30:                AXButton description=Play Neon Hook id=play.fill
+=== NMH-046 context menu AXShowMenu ===
+=== NMH-032 deep field attrs ===
+=== NMH-032 attrs ===
+FIELD role=AXTextField title=[] desc=[] value=[Neon] help=[Filters the song list as you type.] id=[] placeholder=[Search songs]
+CLEAR title=[] desc=[Clear search]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[Filters the song list as you type.] id=[] placeholder=[Search songs]
+=== NMH-005 Move to ===
+No StatusSongstarter/BeatSongSession ProdProdWaiting FeedbackFeedback TodoDone | CLICKED Songstarter/Beat
+21:        AXGroup description=No Status column, 8 songs
+57:        AXGroup description=Songstarter/Beat column, 1 songs
+61:              AXButton description=Neon Hook
+62:                AXStaticText value=Neon Hook
+64:                AXButton description=Play Neon Hook id=play.fill
+=== NMH-046 show menu ===
+actions=nil
+AXShowMenu=0
+
+click at 621.0,270.0
+
+=== NMH-031 downloader clear ===
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[] placeholder=[Paste a supported URL…]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]
+=== NMH-046 rightclick + AXMenus ===
+click at 621.0,270.0
+no AXMenus attr
+app/0/0/20/1/1 role=AXMenu title=[] desc=[]
+app/0/0/20/1/1/0 role=AXMenuItem title=[Open Project] desc=[]
+app/0/0/20/1/1/1 role=AXMenuItem title=[Play Preview] desc=[]
+app/0/0/20/1/1/2 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/0/0/20/1/1/3 role=AXMenuItem title=[] desc=[]
+app/0/0/20/1/1/4 role=AXMenuItem title=[Move to…] desc=[]
+app/0/0/20/1/1/4/0 role=AXMenu title=[] desc=[]
+app/0/0/20/1/1/4/0/0 role=AXMenuItem title=[No Status] desc=[]
+app/0/0/20/1/1/4/0/1 role=AXMenuItem title=[Songstarter/Beat] desc=[]
+app/0/0/20/1/1/4/0/2 role=AXMenuItem title=[Song] desc=[]
+app/0/0/20/1/1/4/0/3 role=AXMenuItem title=[Session Prod] desc=[]
+app/0/0/20/1/1/4/0/4 role=AXMenuItem title=[Prod] desc=[]
+app/0/0/20/1/1/4/0/5 role=AXMenuItem title=[Waiting Feedback] desc=[]
+app/0/0/20/1/1/4/0/6 role=AXMenuItem title=[Feedback Todo] desc=[]
+app/0/0/20/1/1/4/0/7 role=AXMenuItem title=[Done] desc=[]
+app/0/0/20/1/1/5 role=AXMenuItem title=[] desc=[]
+app/1 role=AXMenuBar title=[] desc=[]
+app/1/0 role=AXMenuBarItem title=[Apple] desc=[]
+app/1/0/0 role=AXMenu title=[] desc=[]
+app/1/0/0/0 role=AXMenuItem title=[Über diesen Mac] desc=[]
+app/1/0/0/1 role=AXMenuItem title=[Systeminformationen] desc=[]
+app/1/0/0/2 role=AXMenuItem title=[] desc=[]
+app/1/0/0/3 role=AXMenuItem title=[Systemeinstellungen …] desc=[]
+app/1/0/0/4 role=AXMenuItem title=[App Store] desc=[]
+app/1/0/0/5 role=AXMenuItem title=[] desc=[]
+app/1/0/0/6 role=AXMenuItem title=[Benutzte Objekte] desc=[]
+app/1/0/0/6/0 role=AXMenu title=[] desc=[]
+app/1/0/0/6/0/0 role=AXMenuItem title=[Apps] desc=[]
+app/1/0/0/6/0/1 role=AXMenuItem title=[Antigravity] desc=[]
+app/1/0/0/6/0/2 role=AXMenuItem title=[„Antigravity“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/3 role=AXMenuItem title=[App Store] desc=[]
+app/1/0/0/6/0/4 role=AXMenuItem title=[„App Store“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/5 role=AXMenuItem title=[Archivierungsprogramm] desc=[]
+app/1/0/0/6/0/6 role=AXMenuItem title=[„Archivierungsprogramm“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/7 role=AXMenuItem title=[Bildschirm­freigabe] desc=[]
+app/1/0/0/6/0/8 role=AXMenuItem title=[„Bildschirm­freigabe“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/9 role=AXMenuItem title=[ChatGPT] desc=[]
+app/1/0/0/6/0/10 role=AXMenuItem title=[„ChatGPT“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/11 role=AXMenuItem title=[Claude] desc=[]
+app/1/0/0/6/0/12 role=AXMenuItem title=[„Claude“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/13 role=AXMenuItem title=[Clearly] desc=[]
+app/1/0/0/6/0/14 role=AXMenuItem title=[„Clearly“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/15 role=AXMenuItem title=[Consistency Repaired] desc=[]
+app/1/0/0/6/0/16 role=AXMenuItem title=[„Consistency Repaired“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/17 role=AXMenuItem title=[ConsistencyFixture] desc=[]
+app/1/0/0/6/0/18 role=AXMenuItem title=[„ConsistencyFixture“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/19 role=AXMenuItem title=[Cubase 15] desc=[]
+app/1/0/0/6/0/20 role=AXMenuItem title=[„Cubase 15“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/21 role=AXMenuItem title=[Cursor] desc=[]
+app/1/0/0/6/0/22 role=AXMenuItem title=[„Cursor“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/23 role=AXMenuItem title=[Erinnerungen] desc=[]
+app/1/0/0/6/0/24 role=AXMenuItem title=[„Erinnerungen“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/25 role=AXMenuItem title=[Ghostty] desc=[]
+app/1/0/0/6/0/26 role=AXMenuItem title=[„Ghostty“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/27 role=AXMenuItem title=[Google Chrome] desc=[]
+app/1/0/0/6/0/28 role=AXMenuItem title=[„Google Chrome“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/29 role=AXMenuItem title=[Grok Bot] desc=[]
+app/1/0/0/6/0/30 role=AXMenuItem title=[„Grok Bot“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/31 role=AXMenuItem title=[Kalender] desc=[]
+app/1/0/0/6/0/32 role=AXMenuItem title=[„Kalender“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/33 role=AXMenuItem title=[Mail] desc=[]
+app/1/0/0/6/0/34 role=AXMenuItem title=[„Mail“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/35 role=AXMenuItem title=[Musik] desc=[]
+app/1/0/0/6/0/36 role=AXMenuItem title=[„Musik“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/37 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/38 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/39 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/40 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/41 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/42 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/43 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/44 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/45 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/46 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/47 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/48 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/49 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/50 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/51 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/52 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/53 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/54 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/55 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/56 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/57 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/58 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/59 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/60 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/61 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/62 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/63 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/64 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/65 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/66 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/67 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/68 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/69 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/70 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/71 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/72 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/73 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/74 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/75 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/76 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/77 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/78 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/79 role=AXMenuItem title=[NikoMusicHub] desc=[]
+app/1/0/0/6/0/80 role=AXMenuItem title=[„NikoMusicHub“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/81 role=AXMenuItem title=[Passwörter] desc=[]
+app/1/0/0/6/0/82 role=AXMenuItem title=[„Passwörter“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/83 role=AXMenuItem title=[Safari] desc=[]
+app/1/0/0/6/0/84 role=AXMenuItem title=[„Safari“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/85 role=AXMenuItem title=[Splice] desc=[]
+app/1/0/0/6/0/86 role=AXMenuItem title=[„Splice“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/87 role=AXMenuItem title=[Spotify] desc=[]
+app/1/0/0/6/0/88 role=AXMenuItem title=[„Spotify“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/89 role=AXMenuItem title=[Steam] desc=[]
+app/1/0/0/6/0/90 role=AXMenuItem title=[„Steam“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/91 role=AXMenuItem title=[System­einstellungen] desc=[]
+app/1/0/0/6/0/92 role=AXMenuItem title=[„System­einstellungen“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/93 role=AXMenuItem title=[Terminal] desc=[]
+app/1/0/0/6/0/94 role=AXMenuItem title=[„Terminal“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/95 role=AXMenuItem title=[TextEdit] desc=[]
+app/1/0/0/6/0/96 role=AXMenuItem title=[„TextEdit“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/97 role=AXMenuItem title=[UAD Console] desc=[]
+app/1/0/0/6/0/98 role=AXMenuItem title=[„UAD Console“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/99 role=AXMenuItem title=[WhatsApp] desc=[]
+app/1/0/0/6/0/100 role=AXMenuItem title=[„WhatsApp“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/101 role=AXMenuItem title=[] desc=[]
+app/1/0/0/6/0/102 role=AXMenuItem title=[Dokumente] desc=[]
+app/1/0/0/6/0/103 role=AXMenuItem title=[[8turn]Diamond_Rough_.mp3] desc=[]
+app/1/0/0/6/0/104 role=AXMenuItem title=[„[8turn]Diamond_Rough_.mp3“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/105 role=AXMenuItem title=[004 - How to Sound Gefährlich The Key to Captivating an Audience.mp3] desc=[]
+app/1/0/0/6/0/106 role=AXMenuItem title=[„004 - How to Sound Gefährlich The Key to Captivating an Audience.mp3“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/107 role=AXMenuItem title=[2026-09-10 - Tabea 30. Geburtstag_Day_01-2_analog.jpg] desc=[]
+app/1/0/0/6/0/108 role=AXMenuItem title=[„2026-09-10 - Tabea 30. Geburtstag_Day_01-2_analog.jpg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/109 role=AXMenuItem title=[2026-09-12 - Tabea 30. Geburtstag_Day_03-135.jpg] desc=[]
+app/1/0/0/6/0/110 role=AXMenuItem title=[„2026-09-12 - Tabea 30. Geburtstag_Day_03-135.jpg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/111 role=AXMenuItem title=[ANNE MOSTERS ESC-01.cpr] desc=[]
+app/1/0/0/6/0/112 role=AXMenuItem title=[„ANNE MOSTERS ESC-01.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/113 role=AXMenuItem title=[APM44-Manual-QA-signed.pkg] desc=[]
+app/1/0/0/6/0/114 role=AXMenuItem title=[„APM44-Manual-QA-signed.pkg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/115 role=AXMenuItem title=[APM44-USB-Fix.pkg] desc=[]
+app/1/0/0/6/0/116 role=AXMenuItem title=[„APM44-USB-Fix.pkg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/117 role=AXMenuItem title=[APM44Bridge-0.12.6.pkg] desc=[]
+app/1/0/0/6/0/118 role=AXMenuItem title=[„APM44Bridge-0.12.6.pkg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/119 role=AXMenuItem title=[Artemas.pdf] desc=[]
+app/1/0/0/6/0/120 role=AXMenuItem title=[„Artemas.pdf“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/121 role=AXMenuItem title=[BEVERLY V2.als] desc=[]
+app/1/0/0/6/0/122 role=AXMenuItem title=[„BEVERLY V2.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/123 role=AXMenuItem title=[Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 2.wav] desc=[]
+app/1/0/0/6/0/124 role=AXMenuItem title=[„Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 2.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/125 role=AXMenuItem title=[Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 3.wav] desc=[]
+app/1/0/0/6/0/126 role=AXMenuItem title=[„Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 3.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/127 role=AXMenuItem title=[Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 4.wav] desc=[]
+app/1/0/0/6/0/128 role=AXMenuItem title=[„Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 4.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/129 role=AXMenuItem title=[Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 5.wav] desc=[]
+app/1/0/0/6/0/130 role=AXMenuItem title=[„Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit 5.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/131 role=AXMenuItem title=[Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit.wav] desc=[]
+app/1/0/0/6/0/132 role=AXMenuItem title=[„Bounce HAT [2026-07-21 142500]-1 - 44100Hz 24bit.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/133 role=AXMenuItem title=[CHANIN - RADIO-04.cpr] desc=[]
+app/1/0/0/6/0/134 role=AXMenuItem title=[„CHANIN - RADIO-04.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/135 role=AXMenuItem title=[chords__warm-drive__4x.wav] desc=[]
+app/1/0/0/6/0/136 role=AXMenuItem title=[„chords__warm-drive__4x.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/137 role=AXMenuItem title=[Codex-Bild 13. Sept. 2026, 11.PNG] desc=[]
+app/1/0/0/6/0/138 role=AXMenuItem title=[„Codex-Bild 13. Sept. 2026, 11.PNG“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/139 role=AXMenuItem title=[DAVID IDEA 2 .als] desc=[]
+app/1/0/0/6/0/140 role=AXMenuItem title=[„DAVID IDEA 2 .als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/141 role=AXMenuItem title=[DAVID PUENTEZ - LAST NIGHT ON EARTH SESSION BOUNCE (ROE BYRNE, JOSH RECORD, NIKO MOHR).wav] desc=[]
+app/1/0/0/6/0/142 role=AXMenuItem title=[„DAVID PUENTEZ - LAST NIGHT ON EARTH SESSION BOUNCE (ROE BYRNE, JOSH RECORD, NIKO MOHR).wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/143 role=AXMenuItem title=[Dela - MUORE.wav] desc=[]
+app/1/0/0/6/0/144 role=AXMenuItem title=[„Dela - MUORE.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/145 role=AXMenuItem title=[FCP_SMT_802_Backbone_Samples.vstsound] desc=[]
+app/1/0/0/6/0/146 role=AXMenuItem title=[„FCP_SMT_802_Backbone_Samples.vstsound“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/147 role=AXMenuItem title=[fff.cpr] desc=[]
+app/1/0/0/6/0/148 role=AXMenuItem title=[„fff.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/149 role=AXMenuItem title=[FRIDAY 8 TURN.als] desc=[]
+app/1/0/0/6/0/150 role=AXMenuItem title=[„FRIDAY 8 TURN.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/151 role=AXMenuItem title=[GODMODE.als] desc=[]
+app/1/0/0/6/0/152 role=AXMenuItem title=[„GODMODE.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/153 role=AXMenuItem title=[index.html] desc=[]
+app/1/0/0/6/0/154 role=AXMenuItem title=[„index.html“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/155 role=AXMenuItem title=[LAST NIGHT ON EARTH DEMO V1.als] desc=[]
+app/1/0/0/6/0/156 role=AXMenuItem title=[„LAST NIGHT ON EARTH DEMO V1.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/157 role=AXMenuItem title=[LE SSERSAFIM ALONE .cpr] desc=[]
+app/1/0/0/6/0/158 role=AXMenuItem title=[„LE SSERSAFIM ALONE .cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/159 role=AXMenuItem title=[MULAY x WANJA .als] desc=[]
+app/1/0/0/6/0/160 role=AXMenuItem title=[„MULAY x WANJA .als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/161 role=AXMenuItem title=[MULAY x WANJA v2 .als] desc=[]
+app/1/0/0/6/0/162 role=AXMenuItem title=[„MULAY x WANJA v2 .als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/163 role=AXMenuItem title=[nmh-1.5.2-test-tone - 44100Hz 24bit.wav] desc=[]
+app/1/0/0/6/0/164 role=AXMenuItem title=[„nmh-1.5.2-test-tone - 44100Hz 24bit.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/165 role=AXMenuItem title=[opencode] desc=[]
+app/1/0/0/6/0/166 role=AXMenuItem title=[„opencode“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/167 role=AXMenuItem title=[Pure SUB MORiA.pkg] desc=[]
+app/1/0/0/6/0/168 role=AXMenuItem title=[„Pure SUB MORiA.pkg“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/169 role=AXMenuItem title=[RAVE STABS.midi] desc=[]
+app/1/0/0/6/0/170 role=AXMenuItem title=[„RAVE STABS.midi“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/171 role=AXMenuItem title=[README.md] desc=[]
+app/1/0/0/6/0/172 role=AXMenuItem title=[„README.md“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/173 role=AXMenuItem title=[Release Recovery Test.cpr] desc=[]
+app/1/0/0/6/0/174 role=AXMenuItem title=[„Release Recovery Test.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/175 role=AXMenuItem title=[S2 SEOUL-05.cpr] desc=[]
+app/1/0/0/6/0/176 role=AXMenuItem title=[„S2 SEOUL-05.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/177 role=AXMenuItem title=[SEPA-Mandat_Finanzamt_Trade-Republic_unterschrieben_felder-repariert.pdf] desc=[]
+app/1/0/0/6/0/178 role=AXMenuItem title=[„SEPA-Mandat_Finanzamt_Trade-Republic_unterschrieben_felder-repariert.pdf“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/179 role=AXMenuItem title=[SEPA-Mandat_Finanzamt_Trade-Republic_unterschriftsfertig.pdf] desc=[]
+app/1/0/0/6/0/180 role=AXMenuItem title=[„SEPA-Mandat_Finanzamt_Trade-Republic_unterschriftsfertig.pdf“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/181 role=AXMenuItem title=[TEARS IN MY EYES SESSION BOUNCE V1.wav] desc=[]
+app/1/0/0/6/0/182 role=AXMenuItem title=[„TEARS IN MY EYES SESSION BOUNCE V1.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/183 role=AXMenuItem title=[test.als] desc=[]
+app/1/0/0/6/0/184 role=AXMenuItem title=[„test.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/185 role=AXMenuItem title=[tristan-sample.mp4] desc=[]
+app/1/0/0/6/0/186 role=AXMenuItem title=[„tristan-sample.mp4“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/187 role=AXMenuItem title=[UAT 120 BPM stereo - 44100Hz 24bit.wav] desc=[]
+app/1/0/0/6/0/188 role=AXMenuItem title=[„UAT 120 BPM stereo - 44100Hz 24bit.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/189 role=AXMenuItem title=[UAT 120 BPM stereo - 44100Hz 24bit.wav] desc=[]
+app/1/0/0/6/0/190 role=AXMenuItem title=[„UAT 120 BPM stereo - 44100Hz 24bit.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/191 role=AXMenuItem title=[UAT 120 BPM stereo.wav] desc=[]
+app/1/0/0/6/0/192 role=AXMenuItem title=[„UAT 120 BPM stereo.wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/193 role=AXMenuItem title=[Unbenannt.als] desc=[]
+app/1/0/0/6/0/194 role=AXMenuItem title=[„Unbenannt.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/195 role=AXMenuItem title=[Unbenannt.als] desc=[]
+app/1/0/0/6/0/196 role=AXMenuItem title=[„Unbenannt.als“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/197 role=AXMenuItem title=[Zara Larsson - Pretty Ugly (Official Music Video) [Paddtn5IdCk].wav] desc=[]
+app/1/0/0/6/0/198 role=AXMenuItem title=[„Zara Larsson - Pretty Ugly (Official Music Video) [Paddtn5IdCk].wav“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/199 role=AXMenuItem title=[ZEITGEIST.cpr] desc=[]
+app/1/0/0/6/0/200 role=AXMenuItem title=[„ZEITGEIST.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/201 role=AXMenuItem title=[ZEITGEIST.cpr] desc=[]
+app/1/0/0/6/0/202 role=AXMenuItem title=[„ZEITGEIST.cpr“ im Finder anzeigen] desc=[]
+app/1/0/0/6/0/203 role=AXMenuItem title=[] desc=[]
+app/1/0/0/6/0/204 role=AXMenuItem title=[Server] desc=[]
+app/1/0/0/6/0/205 role=AXMenuItem title=[MACBOOK BACKUP] desc=[]
+app/1/0/0/6/0/206 role=AXMenuItem title=[Macintosh HD] desc=[]
+app/1/0/0/6/0/207 role=AXMenuItem title=[Macintosh HD] desc=[]
+app/1/0/0/6/0/208 role=AXMenuItem title=[NIKO VAULT] desc=[]
+app/1/0/0/6/0/209 role=AXMenuItem title=[nikolaymohr] desc=[]
+app/1/0/0/6/0/210 role=AXMenuItem title=[NIKOS FESTPLATTE] desc=[]
+app/1/0/0/6/0/211 role=AXMenuItem title=[TIME MACHINE] desc=[]
+app/1/0/0/6/0/212 role=AXMenuItem title=[] desc=[]
+app/1/0/0/6/0/213 role=AXMenuItem title=[Einträge löschen] desc=[]
+app/1/0/0/7 role=AXMenuItem title=[] desc=[]
+app/1/0/0/8 role=AXMenuItem title=[Sofort beenden …] desc=[]
+app/1/0/0/9 role=AXMenuItem title=[Niko Music Hub sofort beenden] desc=[]
+app/1/0/0/10 role=AXMenuItem title=[] desc=[]
+app/1/0/0/11 role=AXMenuItem title=[Ruhezustand] desc=[]
+app/1/0/0/12 role=AXMenuItem title=[Neustart …] desc=[]
+app/1/0/0/13 role=AXMenuItem title=[Neustart] desc=[]
+app/1/0/0/14 role=AXMenuItem title=[Ausschalten …] desc=[]
+app/1/0/0/15 role=AXMenuItem title=[Ausschalten] desc=[]
+app/1/0/0/16 role=AXMenuItem title=[] desc=[]
+app/1/0/0/17 role=AXMenuItem title=[Bildschirm sperren] desc=[]
+app/1/0/0/18 role=AXMenuItem title=[Niko abmelden …] desc=[]
+app/1/0/0/19 role=AXMenuItem title=[Niko abmelden] desc=[]
+app/1/0/0/20 role=AXMenuItem title=[] desc=[]
+app/1/1 role=AXMenuBarItem title=[Niko Music Hub] desc=[]
+app/1/1/0 role=AXMenu title=[] desc=[]
+app/1/1/0/0 role=AXMenuItem title=[About Niko Music Hub] desc=[]
+app/1/1/0/1 role=AXMenuItem title=[] desc=[]
+app/1/1/0/2 role=AXMenuItem title=[Check for Updates…] desc=[]
+app/1/1/0/3 role=AXMenuItem title=[Settings…] desc=[]
+app/1/1/0/4 role=AXMenuItem title=[] desc=[]
+app/1/1/0/5 role=AXMenuItem title=[Services] desc=[]
+app/1/1/0/5/0 role=AXMenu title=[] desc=[]
+app/1/1/0/5/0/0 role=AXMenuItem title=[Activity Monitor] desc=[]
+app/1/1/0/5/0/1 role=AXMenuItem title=[Allocations & Leaks] desc=[]
+app/1/1/0/5/0/2 role=AXMenuItem title=[File Activity] desc=[]
+app/1/1/0/5/0/3 role=AXMenuItem title=[System Trace] desc=[]
+app/1/1/0/5/0/4 role=AXMenuItem title=[Time Profile Active Application] desc=[]
+app/1/1/0/5/0/5 role=AXMenuItem title=[Time Profile App Under Mouse] desc=[]
+app/1/1/0/5/0/6 role=AXMenuItem title=[Time Profile Entire System] desc=[]
+app/1/1/0/5/0/7 role=AXMenuItem title=[Toggle Instruments Recording] desc=[]
+app/1/1/0/5/0/8 role=AXMenuItem title=[An Claude senden] desc=[]
+app/1/1/0/5/0/9 role=AXMenuItem title=[Claude fragen] desc=[]
+app/1/1/0/5/0/10 role=AXMenuItem title=[Neue Claude Code-Sitzung hier] desc=[]
+app/1/1/0/5/0/11 role=AXMenuItem title=[Services Settings…] desc=[]
+app/1/1/0/6 role=AXMenuItem title=[] desc=[]
+app/1/1/0/7 role=AXMenuItem title=[Hide Niko Music Hub] desc=[]
+app/1/1/0/8 role=AXMenuItem title=[Hide Others] desc=[]
+app/1/1/0/9 role=AXMenuItem title=[Show All] desc=[]
+app/1/1/0/10 role=AXMenuItem title=[] desc=[]
+app/1/1/0/11 role=AXMenuItem title=[Quit Niko Music Hub] desc=[]
+app/1/2 role=AXMenuBarItem title=[Edit] desc=[]
+app/1/2/0 role=AXMenu title=[] desc=[]
+app/1/2/0/0 role=AXMenuItem title=[Undo] desc=[]
+app/1/2/0/1 role=AXMenuItem title=[Redo] desc=[]
+app/1/2/0/2 role=AXMenuItem title=[] desc=[]
+app/1/2/0/3 role=AXMenuItem title=[Cut] desc=[]
+app/1/2/0/4 role=AXMenuItem title=[Copy] desc=[]
+app/1/2/0/5 role=AXMenuItem title=[Paste] desc=[]
+app/1/2/0/6 role=AXMenuItem title=[Delete] desc=[]
+app/1/2/0/7 role=AXMenuItem title=[Select All] desc=[]
+app/1/2/0/8 role=AXMenuItem title=[Find] desc=[]
+app/1/2/0/9 role=AXMenuItem title=[Jump to Search Field] desc=[]
+app/1/2/0/10 role=AXMenuItem title=[] desc=[]
+app/1/2/0/11 role=AXMenuItem title=[Cancel] desc=[]
+app/1/2/0/12 role=AXMenuItem title=[Cancel] desc=[]
+app/1/2/0/13 role=AXMenuItem title=[] desc=[]
+app/1/2/0/14 role=AXMenuItem title=[Writing Tools] desc=[]
+app/1/2/0/14/0 role=AXMenu title=[] desc=[]
+app/1/2/0/14/0/0 role=AXMenuItem title=[Show Writing Tools] desc=[]
+app/1/2/0/14/0/1 role=AXMenuItem title=[] desc=[]
+app/1/2/0/14/0/2 role=AXMenuItem title=[Proofread] desc=[]
+app/1/2/0/14/0/3 role=AXMenuItem title=[Rewrite] desc=[]
+app/1/2/0/14/0/4 role=AXMenuItem title=[] desc=[]
+app/1/2/0/14/0/5 role=AXMenuItem title=[Make Friendly] desc=[]
+app/1/2/0/14/0/6 role=AXMenuItem title=[Make Professional] desc=[]
+app/1/2/0/14/0/7 role=AXMenuItem title=[Make Concise] desc=[]
+app/1/2/0/14/0/8 role=AXMenuItem title=[] desc=[]
+app/1/2/0/14/0/9 role=AXMenuItem title=[Summarize] desc=[]
+app/1/2/0/14/0/10 role=AXMenuItem title=[Create Key Points] desc=[]
+app/1/2/0/14/0/11 role=AXMenuItem title=[Make List] desc=[]
+app/1/2/0/14/0/12 role=AXMenuItem title=[Make Table] desc=[]
+app/1/2/0/14/0/13 role=AXMenuItem title=[] desc=[]
+app/1/2/0/14/0/14 role=AXMenuItem title=[Compose…] desc=[]
+app/1/2/0/15 role=AXMenuItem title=[AutoFill] desc=[]
+app/1/2/0/15/0 role=AXMenu title=[] desc=[]
+app/1/2/0/15/0/0 role=AXMenuItem title=[Contact…] desc=[]
+app/1/2/0/15/0/1 role=AXMenuItem title=[Passwords…] desc=[]
+app/1/2/0/15/0/2 role=AXMenuItem title=[Credit Card…] desc=[]
+app/1/2/0/16 role=AXMenuItem title=[Start Dictation] desc=[]
+app/1/2/0/17 role=AXMenuItem title=[Emoji & Symbols] desc=[]
+app/1/3 role=AXMenuBarItem title=[View] desc=[]
+app/1/3/0 role=AXMenu title=[] desc=[]
+app/1/3/0/0 role=AXMenuItem title=[Hide Tools Sidebar] desc=[]
+app/1/3/0/1 role=AXMenuItem title=[Show Output Inbox] desc=[]
+app/1/3/0/2 role=AXMenuItem title=[Enter Full Screen] desc=[]
+app/1/4 role=AXMenuBarItem title=[Tools] desc=[]
+app/1/4/0 role=AXMenu title=[] desc=[]
+app/1/4/0/0 role=AXMenuItem title=[Archive Browser] desc=[]
+app/1/4/0/1 role=AXMenuItem title=[BPM Tapper] desc=[]
+app/1/4/0/2 role=AXMenuItem title=[WAV Converter] desc=[]
+app/1/4/0/3 role=AXMenuItem title=[Audio Recorder] desc=[]
+app/1/4/0/4 role=AXMenuItem title=[Downloader] desc=[]
+app/1/4/0/5 role=AXMenuItem title=[Stem Separation] desc=[]
+app/1/4/0/6 role=AXMenuItem title=[] desc=[]
+app/1/4/0/7 role=AXMenuItem title=[Settings] desc=[]
+app/1/5 role=AXMenuBarItem title=[Song] desc=[]
+app/1/5/0 role=AXMenu title=[] desc=[]
+app/1/5/0/0 role=AXMenuItem title=[New Song Draft] desc=[]
+app/1/5/0/1 role=AXMenuItem title=[] desc=[]
+app/1/5/0/2 role=AXMenuItem title=[Open Project] desc=[]
+app/1/5/0/3 role=AXMenuItem title=[Play Preview] desc=[]
+app/1/5/0/4 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/1/5/0/5 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/1/5/0/6 role=AXMenuItem title=[Show Versions] desc=[]
+app/1/5/0/7 role=AXMenuItem title=[Open Preview] desc=[]
+app/1/5/0/8 role=AXMenuItem title=[Skip Back 5 Seconds] desc=[]
+app/1/5/0/9 role=AXMenuItem title=[Skip Forward 5 Seconds] desc=[]
+app/1/5/0/10 role=AXMenuItem title=[] desc=[]
+app/1/5/0/11 role=AXMenuItem title=[Move to…] desc=[]
+app/1/5/0/11/0 role=AXMenu title=[] desc=[]
+app/1/5/0/11/0/0 role=AXMenuItem title=[No Status] desc=[]
+app/1/5/0/11/0/1 role=AXMenuItem title=[Songstarter/Beat] desc=[]
+app/1/5/0/11/0/2 role=AXMenuItem title=[Song] desc=[]
+app/1/5/0/11/0/3 role=AXMenuItem title=[Session Prod] desc=[]
+app/1/5/0/11/0/4 role=AXMenuItem title=[Prod] desc=[]
+app/1/5/0/11/0/5 role=AXMenuItem title=[Waiting Feedback] desc=[]
+app/1/5/0/11/0/6 role=AXMenuItem title=[Feedback Todo] desc=[]
+app/1/5/0/11/0/7 role=AXMenuItem title=[Done] desc=[]
+app/1/6 role=AXMenuBarItem title=[Window] desc=[]
+app/1/6/0 role=AXMenu title=[] desc=[]
+app/1/6/0/0 role=AXMenuItem title=[Close] desc=[]
+app/1/6/0/1 role=AXMenuItem title=[Close All] desc=[]
+app/1/6/0/2 role=AXMenuItem title=[Minimize] desc=[]
+app/1/6/0/3 role=AXMenuItem title=[Minimize All] desc=[]
+app/1/6/0/4 role=AXMenuItem title=[Zoom] desc=[]
+app/1/6/0/5 role=AXMenuItem title=[Zoom All] desc=[]
+app/1/6/0/6 role=AXMenuItem title=[Fill] desc=[]
+app/1/6/0/7 role=AXMenuItem title=[Center] desc=[]
+app/1/6/0/8 role=AXMenuItem title=[] desc=[]
+app/1/6/0/9 role=AXMenuItem title=[Move & Resize] desc=[]
+app/1/6/0/9/0 role=AXMenu title=[] desc=[]
+app/1/6/0/9/0/0 role=AXMenuItem title=[Halves] desc=[]
+app/1/6/0/9/0/1 role=AXMenuItem title=[Left] desc=[]
+app/1/6/0/9/0/2 role=AXMenuItem title=[Right] desc=[]
+app/1/6/0/9/0/3 role=AXMenuItem title=[Top] desc=[]
+app/1/6/0/9/0/4 role=AXMenuItem title=[Bottom] desc=[]
+app/1/6/0/9/0/5 role=AXMenuItem title=[] desc=[]
+app/1/6/0/9/0/6 role=AXMenuItem title=[Quarters] desc=[]
+app/1/6/0/9/0/7 role=AXMenuItem title=[Top Left] desc=[]
+app/1/6/0/9/0/8 role=AXMenuItem title=[Top Right] desc=[]
+app/1/6/0/9/0/9 role=AXMenuItem title=[Bottom Left] desc=[]
+app/1/6/0/9/0/10 role=AXMenuItem title=[Bottom Right] desc=[]
+app/1/6/0/9/0/11 role=AXMenuItem title=[] desc=[]
+app/1/6/0/9/0/12 role=AXMenuItem title=[Arrange] desc=[]
+app/1/6/0/9/0/13 role=AXMenuItem title=[Left & Right] desc=[]
+app/1/6/0/9/0/14 role=AXMenuItem title=[Left & Quarters] desc=[]
+app/1/6/0/9/0/15 role=AXMenuItem title=[Right & Left] desc=[]
+app/1/6/0/9/0/16 role=AXMenuItem title=[Right & Quarters] desc=[]
+app/1/6/0/9/0/17 role=AXMenuItem title=[Top & Bottom] desc=[]
+app/1/6/0/9/0/18 role=AXMenuItem title=[Top & Quarters] desc=[]
+app/1/6/0/9/0/19 role=AXMenuItem title=[Bottom & Top] desc=[]
+app/1/6/0/9/0/20 role=AXMenuItem title=[Bottom & Quarters] desc=[]
+app/1/6/0/9/0/21 role=AXMenuItem title=[Quarters] desc=[]
+app/1/6/0/9/0/22 role=AXMenuItem title=[] desc=[]
+app/1/6/0/9/0/23 role=AXMenuItem title=[Return to Previous Size] desc=[]
+app/1/6/0/10 role=AXMenuItem title=[Full Screen Tile] desc=[]
+app/1/6/0/10/0 role=AXMenu title=[] desc=[]
+app/1/6/0/10/0/0 role=AXMenuItem title=[Left of Screen] desc=[]
+app/1/6/0/10/0/1 role=AXMenuItem title=[Right of Screen] desc=[]
+app/1/6/0/11 role=AXMenuItem title=[] desc=[]
+app/1/6/0/12 role=AXMenuItem title=[Remove Window from Set] desc=[]
+app/1/6/0/13 role=AXMenuItem title=[] desc=[]
+app/1/6/0/14 role=AXMenuItem title=[Niko Music Hub] desc=[]
+app/1/6/0/15 role=AXMenuItem title=[Niko Music Hub Help] desc=[]
+app/1/6/0/16 role=AXMenuItem title=[] desc=[]
+app/1/6/0/17 role=AXMenuItem title=[Bring All to Front] desc=[]
+app/1/6/0/18 role=AXMenuItem title=[Arrange in Front] desc=[]
+app/1/6/0/19 role=AXMenuItem title=[Close] desc=[]
+app/1/6/0/20 role=AXMenuItem title=[Minimize] desc=[]
+app/1/6/0/21 role=AXMenuItem title=[Enter Full Screen] desc=[]
+app/1/7 role=AXMenuBarItem title=[Help] desc=[]
+app/1/7/0 role=AXMenu title=[] desc=[]
+app/1/7/0/0 role=AXMenuItem title=[] desc=[]
+app/1/7/0/1 role=AXMenuItem title=[Niko Music Hub Help] desc=[]
+app/1/7/0/2 role=AXMenuItem title=[] desc=[]
+app/1/7/0/3 role=AXMenuItem title=[Archive Roots] desc=[]
+app/1/7/0/4 role=AXMenuItem title=[Helper Tools] desc=[]
+app/1/7/0/5 role=AXMenuItem title=[Project Vault] desc=[]
+app/1/7/0/6 role=AXMenuItem title=[Output Inbox] desc=[]
+app/2 role=AXMenuBar title=[] desc=[]
+app/2/0 role=AXMenuBarItem title=[Niko Music Hub] desc=[]
+app/2/0/0 role=AXMenu title=[] desc=[]
+app/2/0/0/0 role=AXMenuItem title=[Open Niko Music Hub] desc=[]
+app/2/0/0/1 role=AXMenuItem title=[] desc=[]
+app/2/0/0/2 role=AXMenuItem title=[Search Archive…] desc=[]
+app/2/0/0/3 role=AXMenuItem title=[Archive Browser] desc=[]
+app/2/0/0/4 role=AXMenuItem title=[Audio Recorder] desc=[]
+app/2/0/0/5 role=AXMenuItem title=[WAV Converter] desc=[]
+app/2/0/0/6 role=AXMenuItem title=[BPM Tapper] desc=[]
+app/2/0/0/7 role=AXMenuItem title=[Downloader] desc=[]
+app/2/0/0/8 role=AXMenuItem title=[Stem Separation] desc=[]
+app/2/0/0/9 role=AXMenuItem title=[] desc=[]
+app/2/0/0/10 role=AXMenuItem title=[Output Inbox] desc=[]
+app/2/0/0/11 role=AXMenuItem title=[] desc=[]
+app/2/0/0/12 role=AXMenuItem title=[Quit Niko Music Hub] desc=[]
+7:    AXButton description=Show board id=rectangle.split.3x1
+13:    AXButton description=BPM Tapper id=hub_tool_bpm-tapper
+14:    AXButton description=WAV Converter id=hub_tool_wav-converter
+15:    AXButton description=Audio Recorder id=hub_tool_audio-recorder
+16:    AXButton description=Downloader id=hub_tool_downloader
+17:    AXButton description=Stem Separation id=hub_tool_stem-separation
+18:    AXButton description=Settings id=hub_tool_settings
+19:        AXButton description=Neon Hook, Songstarter/Beat
+20:          AXButton description=Neon Hook, Songstarter/Beat · 2 versions
+21:        AXButton description=Amber Moth, No Status
+22:          AXButton description=Amber Moth, No Status · 1 version
+23:        AXButton description=Graffiti, No Status
+24:          AXButton description=Graffiti, No Status · 1 version
+25:        AXButton description=Tie Song, No Status
+26:          AXButton description=Tie Song, No Status · 1 version
+27:        AXButton description=Tie Song, No Status
+28:          AXButton description=Tie Song, No Status · 1 version
+29:        AXButton description=Equal Score Duration Tiebreak, No Status
+30:          AXButton description=Equal Score Duration Tiebreak, No Status · 1 version
+31:        AXButton description=Lab Song, No Status
+32:          AXButton description=Lab Song, No Status · 1 version
+33:        AXButton description=Second Song, No Status
+34:          AXButton description=Second Song, No Status · 1 version
+35:        AXButton description=Broken Folder Example, No Status, Warning: No project files (.cpr or .als) found
+36:          AXButton description=Broken Folder Example, No Status · 0 versions, No preview
+=== NMH-046 list context ===
+click Neon Hook at 415.0,241.0 desc=Neon Hook, Songstarter/Beat
+app/0/0/25/0 role=AXMenuItem title=[Open Project] desc=[]
+app/0/0/25/1 role=AXMenuItem title=[Play Preview] desc=[]
+app/0/0/25/2 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/0/0/25/4 role=AXMenuItem title=[Move to…] desc=[]
+app/1/5/0/2 role=AXMenuItem title=[Open Project] desc=[]
+app/1/5/0/3 role=AXMenuItem title=[Play Preview] desc=[]
+app/1/5/0/4 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/1/5/0/5 role=AXMenuItem title=[Reveal in Finder] desc=[]
+app/1/5/0/11 role=AXMenuItem title=[Move to…] desc=[]
+click Broken Folder at 415.0,756.0 desc=Broken Folder Example, No Status, Warning: No project files (.cpr or .als) found
+ITEM [Open Project] enabled=Optional(0)
+ITEM [Play Preview] enabled=Optional(0)
+ITEM [Reveal in Finder] enabled=Optional(1)
+ITEM [Move to…] enabled=Optional(1)
+ITEM [Open Project] enabled=Optional(1)
+ITEM [Play Preview] enabled=Optional(1)
+ITEM [Reveal in Finder] enabled=Optional(1)
+ITEM [Reveal in Finder] enabled=Optional(1)
+ITEM [Move to…] enabled=Optional(1)
+=== NMH-031 Clear via keystroke into fields ===
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[] placeholder=[Paste a supported URL…]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]
+=== NMH-031 fill downloader ===
+field ph=Paste a supported URL… at 587.0,192.0
+clicked
+FIELD role=AXTextField title=[] desc=[] value=[https://youtube.com/watch?v=clearlabel] help=[] id=[] placeholder=[Paste a supported URL…]
+CLEAR title=[] desc=[Clear]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]
+19:      AXTextField value=https://youtube.com/watch?v=clearlabel
+21:      AXButton description=Clear id=xmark.circle.fill
+=== NMH-031 fill stem ===
+field ph=Paste YouTube URL… at 605.0,372.0
+clicked
+FIELD role=AXTextField title=[] desc=[] value=[https://youtube.com/watch?v=stemclear] help=[] id=[] placeholder=[Paste YouTube URL…]
+CLEAR title=[] desc=[Clear YouTube URL]
+FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]
+20:      AXTextField value=https://youtube.com/watch?v=stemclear
+22:      AXButton description=Clear YouTube URL id=xmark.circle.fill
+=== NMH-006 arrows ===
+9:    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+9:    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+=== NMH-006 retry ===
+75:    AXButton description=Show board
+9:    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+18:        AXButton description=Neon Hook, Songstarter/Beat
+19:          AXButton description=Neon Hook, Songstarter/Beat · 2 versions
+20:        AXButton description=Amber Moth, No Status
+21:          AXButton description=Amber Moth, No Status · 1 version
+38:      AXStaticText value=Neon Hook
+43:      AXStaticText value=Neon Hook.cpr
+46:      AXStaticText value=Neon Hook v3.wav
+55:        AXStaticText value=Neon Hook.cpr
+57:        AXMenuButton title=Weitere description=Actions for Neon Hook.cpr id=ellipsis
+59:        AXStaticText value=Neon Hook v2.cpr
+60:        AXMenuButton title=Weitere description=Actions for Neon Hook v2.cpr id=ellipsis
+75:    AXButton description=Show board
+9:    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+9:    AXButton value=Selected description=Archive Browser id=hub_tool_archive-browser
+20:        AXButton description=Amber Moth, No Status
+21:          AXButton description=Amber Moth, No Status · 1 version
+22:        AXButton description=Graffiti, No Status
+23:          AXButton description=Graffiti, No Status · 1 version
+=== NMH-088 during play ===
+T0=
+T1=
+69:      AXStaticText value=2 versions
+74:    AXStaticText value=9 songs · 1 with warnings · 2 skipped
+=== NMH-030 ===
+76:    AXStaticText value=Output Inbox
+77:    AXButton description=Choose output folder id=folder.badge.gearshape
+80:    AXStaticText value=No outputs yet
+APP=alive
+PHASE6_DONE
