@@ -361,11 +361,12 @@ struct SettingsView: View {
                     .font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 TextField(
-                    "",
+                    "Scan exclusions",
                     text: session.scanExclusionBinding,
                     prompt: Text("backup, tmp, archive")
                         .foregroundColor(HubDesignSystem.Palette.textTertiary)
                 )
+                .accessibilityHint("Comma-separated folder-name terms to skip during scan.")
                 .textFieldStyle(.plain)
                 .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
