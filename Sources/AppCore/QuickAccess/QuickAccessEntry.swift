@@ -20,10 +20,16 @@ public struct QuickAccessEntry: Identifiable, Hashable, Sendable {
 }
 
 public extension QuickAccessEntry {
-    /// Curated production-tool allowlist in display order (per D-01, CONTEXT.md).
-    /// Labels and system images are sourced from ToolMetadata for tool entries.
+    /// Curated extra-menu allowlist in display order: Archive Browser, then
+    /// production tools, then Output Inbox. Settings is omitted (⌘,).
     /// The resolver filters this list against the live ToolRegistry before use.
     static let allowlist: [QuickAccessEntry] = [
+        QuickAccessEntry(
+            id: "archive-browser",
+            label: "Archive Browser",
+            systemImage: "music.note.list",
+            command: .openTool("archive-browser")
+        ),
         QuickAccessEntry(
             id: "audio-recorder",
             label: "Audio Recorder",

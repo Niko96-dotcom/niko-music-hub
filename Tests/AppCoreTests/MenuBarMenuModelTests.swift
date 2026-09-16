@@ -5,9 +5,9 @@ import XCTest
 @MainActor
 final class MenuBarMenuModelTests: XCTestCase {
 
-    // MARK: - Full registry (all 5 tools registered)
+    // MARK: - Full registry (Archive Browser + production tools)
 
-    func testResolvedEntriesContainsAllFiveToolsWithFullRegistry() throws {
+    func testResolvedEntriesContainsArchiveAndProductionToolsWithFullRegistry() throws {
         let registry = try makeFullRegistry()
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
 
@@ -15,7 +15,7 @@ final class MenuBarMenuModelTests: XCTestCase {
             if case .openTool = $0.command { return true }
             return false
         }
-        XCTAssertEqual(toolEntries.count, 5)
+        XCTAssertEqual(toolEntries.count, 6)
     }
 
     func testResolvedEntriesOrderIsLockedAllowlistOrder() throws {
@@ -25,8 +25,37 @@ final class MenuBarMenuModelTests: XCTestCase {
 
         XCTAssertEqual(
             ids,
-            ["open-app", "restore-project", "audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox", "quit-app"]
+            ["open-app", "search-archive", "archive-browser", "audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox", "quit-app"]
         )
+    }
+
+    func testSearchArchiveLabelAndCommandFollowOpen() throws {
+        let registry = try makeFullRegistry()
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        XCTAssertEqual(entries[1].id, "search-archive")
+        XCTAssertEqual(entries[1].label, "Search Archive…")
+        XCTAssertEqual(entries[1].command, .focusArchiveSearch)
+        XCTAssertFalse(entries.contains { $0.label == "Restore Project…" })
+    }
+
+    func testResolvedEntriesContainArchiveBrowser() throws {
+        let registry = try ToolRegistry(features: [
+            StubToolFeature(id: "archive-browser", displayName: "Archive Browser"),
+            StubToolFeature(id: "bpm-tapper"),
+            StubToolFeature(id: "settings", displayName: "Settings"),
+        ])
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        let archive = try XCTUnwrap(entries.first { $0.id == "archive-browser" })
+        XCTAssertEqual(archive.label, "Archive Browser")
+        XCTAssertEqual(archive.systemImage, "music.note.list")
+        XCTAssertEqual(archive.command, .openTool("archive-browser"))
+        let searchIndex = try XCTUnwrap(entries.firstIndex(where: { $0.id == "search-archive" }))
+        let archiveIndex = try XCTUnwrap(entries.firstIndex(where: { $0.id == "archive-browser" }))
+        XCTAssertEqual(entries[0].command, .openApp)
+        XCTAssertEqual(entries[0].label, "Open Niko Music Hub")
+        XCTAssertEqual(archiveIndex, searchIndex + 1)
+        XCTAssertFalse(entries.contains { $0.id == "settings" })
+        XCTAssertFalse(entries.contains { $0.label == "Settings" })
     }
 
     func testOpenAppIsFirst() throws {
@@ -100,7 +129,7 @@ final class MenuBarMenuModelTests: XCTestCase {
         let registry = try ToolRegistry(features: [])
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
         XCTAssertEqual(entries.count, 4)
-        XCTAssertEqual(entries.map(\.id), ["open-app", "restore-project", "output-inbox", "quit-app"])
+        XCTAssertEqual(entries.map(\.id), ["open-app", "search-archive", "output-inbox", "quit-app"])
     }
 
     func testSingleToolRegistryYieldsOneTool() throws {
@@ -133,6 +162,7 @@ final class MenuBarMenuModelTests: XCTestCase {
 
     private func makeFullRegistry() throws -> ToolRegistry {
         try ToolRegistry(features: [
+            StubToolFeature(id: "archive-browser", displayName: "Archive Browser"),
             StubToolFeature(id: "audio-recorder"),
             StubToolFeature(id: "wav-converter"),
             StubToolFeature(id: "bpm-tapper"),

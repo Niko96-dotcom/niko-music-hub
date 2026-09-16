@@ -40,13 +40,14 @@ final class QuickAccessCommandTests: XCTestCase {
 
     // MARK: - QuickAccessEntry allowlist shape
 
-    func testAllowlistHasSixEntries() {
-        XCTAssertEqual(QuickAccessEntry.allowlist.count, 6)
+    func testAllowlistHasSevenEntries() {
+        XCTAssertEqual(QuickAccessEntry.allowlist.count, 7)
     }
 
     func testAllowlistOrderMatchesSpec() {
         let ids = QuickAccessEntry.allowlist.map(\.id)
         XCTAssertEqual(ids, [
+            "archive-browser",
             "audio-recorder",
             "wav-converter",
             "bpm-tapper",
@@ -77,7 +78,15 @@ final class QuickAccessCommandTests: XCTestCase {
             if case .openTool = $0.command { return true }
             return false
         }
-        XCTAssertEqual(toolEntries.count, 5)
+        XCTAssertEqual(toolEntries.count, 6)
+    }
+
+    func testFocusArchiveSearchMapsFormerRestoreProjectCommand() {
+        XCTAssertEqual(QuickAccessCommand.restoreProject, .focusArchiveSearch)
+    }
+
+    func testAllowlistOmitsSettings() {
+        XCTAssertFalse(QuickAccessEntry.allowlist.contains { $0.id == "settings" })
     }
 
     func testAllEntryIDsAreUnique() {

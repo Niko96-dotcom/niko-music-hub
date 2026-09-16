@@ -46,10 +46,10 @@ final class QuickAccessAllowlistTests: XCTestCase {
         }
     }
 
-    func testFullRegistryReturnsAllSixEntries() throws {
+    func testFullRegistryReturnsAllSevenEntries() throws {
         let registry = try makeFullRegistry()
         let resolved = QuickAccessResolver.resolve(entries: QuickAccessEntry.allowlist, registry: registry)
-        XCTAssertEqual(resolved.count, 6)
+        XCTAssertEqual(resolved.count, 7)
         // Verify the IDs match the allowlist order exactly — catches duplicates or spurious entries
         XCTAssertEqual(resolved.map(\.id), QuickAccessEntry.allowlist.map(\.id))
     }
@@ -101,6 +101,7 @@ final class QuickAccessAllowlistTests: XCTestCase {
 
     private func makeFullRegistry() throws -> ToolRegistry {
         try ToolRegistry(features: [
+            TestQuickAccessFeature(id: "archive-browser", displayName: "Archive Browser", systemImage: "music.note.list"),
             TestQuickAccessFeature(id: "audio-recorder", displayName: "Audio Recorder", systemImage: "waveform.circle"),
             TestQuickAccessFeature(id: "wav-converter", displayName: "WAV Converter", systemImage: "arrow.triangle.2.circlepath"),
             TestQuickAccessFeature(id: "bpm-tapper", displayName: "BPM Tapper", systemImage: "metronome"),

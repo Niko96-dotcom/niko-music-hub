@@ -21,11 +21,11 @@ public enum MenuBarMenuModel {
             systemImage: "macwindow",
             command: .openApp
         )
-        let restoreEntry = QuickAccessEntry(
-            id: "restore-project",
-            label: "Restore Project…",
+        let searchArchive = QuickAccessEntry(
+            id: "search-archive",
+            label: "Search Archive…",
             systemImage: "arrow.uturn.backward.circle",
-            command: .restoreProject
+            command: .focusArchiveSearch
         )
         let quitApp = QuickAccessEntry(
             id: "quit-app",
@@ -33,7 +33,7 @@ public enum MenuBarMenuModel {
             systemImage: "power",
             command: .quitApp
         )
-        return [openApp, restoreEntry] + existingEntries + [quitApp]
+        return [openApp, searchArchive] + existingEntries + [quitApp]
     }
 
     /// Dock menu rows: Open, Archive Browser + registered production tools, Output Inbox.

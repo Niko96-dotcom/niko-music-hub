@@ -38,9 +38,9 @@ final class MenuBarDividerLogicTests: XCTestCase {
     func testDividerAfterOpenApp() throws {
         let registry = try ToolRegistry(features: [])
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
-        let restore = try XCTUnwrap(entries.first { $0.id == "restore-project" })
+        let searchArchive = try XCTUnwrap(entries.first { $0.id == "search-archive" })
         XCTAssertTrue(
-            MenuBarMenuModel.shouldShowDivider(before: restore, in: entries),
+            MenuBarMenuModel.shouldShowDivider(before: searchArchive, in: entries),
             "Divider must follow Open Niko Music Hub"
         )
     }

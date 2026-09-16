@@ -20,7 +20,7 @@ public final class QuickAccessRouter: ObservableObject {
     /// Audio files to prefill in the WAV converter after `openConverter(with:)`.
     @Published public private(set) var prefilledConverterURLs: [URL] = []
 
-    /// Monotonic request counter so repeated Restore Project commands are observable.
+    /// Monotonic request counter so repeated Search Archive… commands are observable.
     @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
 
     /// Pending Settings pane. Does not change `selectedToolID`.
@@ -40,7 +40,7 @@ public final class QuickAccessRouter: ObservableObject {
             break
         case .revealOutputInbox:
             revealOutputInbox = true
-        case .restoreProject:
+        case .focusArchiveSearch:
             selectedToolID = ToolFeatureID("archive-browser")
             archiveSearchFocusRequest &+= 1
         }

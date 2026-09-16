@@ -10,8 +10,11 @@ public enum QuickAccessCommand: Hashable, Sendable {
     case openApp
     /// Show the Output Inbox panel in AppShellView.
     case revealOutputInbox
-    /// Open the existing Archive experience and request keyboard focus for search.
-    case restoreProject
+    /// Open Archive Browser and request keyboard focus for search.
+    case focusArchiveSearch
     /// Quit the app via `NSApp.terminate` in the menu view so the vault quit alert still runs.
     case quitApp
+
+    /// Former Restore Project extra command.
+    public static var restoreProject: QuickAccessCommand { .focusArchiveSearch }
 }
