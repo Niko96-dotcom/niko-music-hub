@@ -41,9 +41,11 @@ final class HubDesignSystemTokenTests: XCTestCase {
             hub.contains("public static func micro() -> Font"),
             "Typography.micro() must remain the 10 pt token."
         )
+        // NMH-134 supersedes the fixed-size check: micro() now maps to the
+        // scalable `.caption` text style (≥ 10 pt, Display text size aware).
         XCTAssertTrue(
-            hub.contains(".system(size: 10, weight: .medium)"),
-            "Typography.micro() must stay 10 pt."
+            hub.contains(".caption.weight(.medium)"),
+            "Typography.micro() must stay ≥ 10 pt via the .caption text style (NMH-134)."
         )
 
         let pill = try String(

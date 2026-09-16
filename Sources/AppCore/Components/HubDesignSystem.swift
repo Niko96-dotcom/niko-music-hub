@@ -375,39 +375,44 @@ public enum HubDesignSystem {
     // MARK: - Typography
     //
     // Direction A uses the default system typeface (SF Pro), not `.rounded`.
-    // Sizes per calm-native.css (--fs-* values converted to pt).
+    // NMH-134: roles map to SwiftUI `Font.TextStyle` (not fixed `.system(size:)`)
+    // so Accessibility → Display → Text Size scales Hub type on macOS 14.2+.
+    // No in-app text-size slider; no UIKit/UIFontMetrics/`@ScaledMetric`/iOS Dynamic Type.
 
     public enum Typography {
         public static func display() -> Font {
-            .system(size: 30, weight: .bold)
+            .system(.largeTitle).weight(.bold)
         }
 
         public static func screenTitle() -> Font {
-            .system(size: 22, weight: .semibold)
+            .system(.title).weight(.semibold)
         }
 
         public static func sectionTitle() -> Font {
-            .system(size: 15, weight: .semibold)
+            .system(.title3).weight(.semibold)
         }
 
         public static func body() -> Font {
-            .system(size: 13, weight: .regular)
+            .body
         }
 
         public static func bodySmall() -> Font {
-            .system(size: 12, weight: .regular)
+            .callout
         }
 
         public static func caption() -> Font {
-            .system(size: 11, weight: .medium)
+            .subheadline.weight(.medium)
         }
 
         public static func micro() -> Font {
-            .system(size: 10, weight: .medium)
+            .caption.weight(.medium) // stays ≥ 10 pt after NMH-036
         }
 
-        public static func mono(size: CGFloat = 13) -> Font {
-            .system(size: size, weight: .medium, design: .monospaced)
+        public static func mono(size _: CGFloat = 13) -> Font {
+            // `size` kept for source compatibility; intentionally ignored so
+            // mono scales with Display text size via the `.body` text style.
+            // Call sites needing lining figures use `.monospacedDigit()` on Text.
+            .body.weight(.medium).monospaced()
         }
     }
 
