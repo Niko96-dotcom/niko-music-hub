@@ -192,18 +192,13 @@ public struct BPMTapperView: View {
                     .foregroundStyle(HubDesignSystem.Colors.success)
             }
 
-            if viewModel.errorText != nil {
+            if let errorText = viewModel.errorText {
                 let card = AppErrorCard(
                     category: .conversionFile,
                     label: "Could Not Save BPM",
                     icon: "externaldrive.badge.xmark",
-                    body: "Check available disk space. The output folder may be full or on a read-only volume.",
+                    body: errorText,
                     recoveryActions: [
-                        AppErrorCard.RecoveryAction(
-                            label: "Reveal in Finder",
-                            style: .secondary,
-                            action: .revealInFinder
-                        ),
                         AppErrorCard.RecoveryAction(
                             label: "Try Again",
                             style: .primary,
@@ -211,7 +206,13 @@ public struct BPMTapperView: View {
                         )
                     ]
                 )
-                StandardErrorCard(card: card)
+                StandardErrorCard(card: card) { action in
+                    // NMH-043: every shown action must do something. The card
+                    // offers Try Again only; it retries the failed storage work.
+                    if action == .tryAgain {
+                        viewModel.retryAfterStorageError()
+                    }
+                }
             }
         }
         .frame(minHeight: 18)

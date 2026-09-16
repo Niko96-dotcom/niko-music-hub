@@ -77,6 +77,59 @@ final class AudioRecorderViewModelTests: XCTestCase {
         }
     }
 
+    // NMH-043: the Dismiss action on error cards must hide the card.
+    func testDismissErrorReturnsToIdle() async throws {
+        let port = StartFailingCapturePort(error: .writeError("disk full"))
+        let useCase = RecordSystemAudioUseCase(capturePort: port)
+        let outputInboxStore = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: useCase,
+            outputURL: URL(fileURLWithPath: "/tmp"),
+            outputInboxStore: outputInboxStore
+        )
+
+        await vm.startRecording()
+
+        // The capture failure surfaces from the recording task; wait for it.
+        for _ in 0..<100 {
+            if case .error = vm.recordingState { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        guard case .error = vm.recordingState else {
+            XCTFail("Expected .error but got \(vm.recordingState)")
+            return
+        }
+
+        vm.dismissError()
+
+        XCTAssertEqual(vm.recordingState, .idle)
+    }
+
+    // NMH-043: the Dismiss action on the incompatible-macOS card must hide it.
+    func testDismissIncompatibleMacOSReturnsToIdle() async throws {
+        let port = IncompatibleCapturePort()
+        let useCase = RecordSystemAudioUseCase(capturePort: port)
+        let outputInboxStore = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: useCase,
+            outputURL: URL(fileURLWithPath: "/tmp"),
+            outputInboxStore: outputInboxStore
+        )
+
+        await vm.startRecording()
+
+        guard case .incompatibleMacOS = vm.recordingState else {
+            XCTFail("Expected .incompatibleMacOS but got \(vm.recordingState)")
+            return
+        }
+
+        vm.dismissError()
+
+        XCTAssertEqual(vm.recordingState, .idle)
+    }
+
     func testFilenameOverridePassedToUseCase() async throws {
         let port = MockAudioCapturePort()
         let useCase = RecordSystemAudioUseCase(capturePort: port)

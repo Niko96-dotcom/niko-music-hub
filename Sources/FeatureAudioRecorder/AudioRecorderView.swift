@@ -294,6 +294,16 @@ public struct AudioRecorderView: View {
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(
+                        icon: "xmark",
+                        label: "Dismiss",
+                        style: .secondary
+                    ) {
+                        viewModel.dismissError()
+                    }
+                }
             }
             .padding(12)
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .disabled)
@@ -310,7 +320,14 @@ public struct AudioRecorderView: View {
                 Task { await viewModel.startRecording() }
             case .openSystemSettings:
                 SystemPrivacySettings.openSystemAudioRecordingSettings()
-            default:
+            case .revealInFinder:
+                // NMH-043: the write-error card's Show Output Folder action
+                // reveals the output folder; it must not fall through to break.
+                let settings = (try? context.settingsStore.loadSettings()) ?? .default
+                context.fileActions.revealInFinder(settings.outputFolder.url)
+            case .dismiss:
+                viewModel.dismissError()
+            case .openHubSettingsHelpers, .chooseToolPath, .openTerminal:
                 break
             }
         }
@@ -340,7 +357,7 @@ public struct AudioRecorderView: View {
                 icon: "exclamationmark.shield",
                 body: "System audio recording is restricted on this device (MDM or parental controls).",
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "OK", style: .secondary, action: .dismiss)
+                    AppErrorCard.RecoveryAction(label: "Dismiss", style: .secondary, action: .dismiss)
                 ]
             )
         case .apiError(let message):
@@ -351,7 +368,7 @@ public struct AudioRecorderView: View {
                 body: message,
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Open System Settings", style: .secondary, action: .openSystemSettings),
-                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
         case .writeError:
@@ -361,8 +378,8 @@ public struct AudioRecorderView: View {
                 icon: "externaldrive.badge.xmark",
                 body: "Check available disk space. The output folder may be full or on a read-only volume.",
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Check Disk Space", style: .secondary, action: .revealInFinder),
-                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                    AppErrorCard.RecoveryAction(label: "Show Output Folder", style: .secondary, action: .revealInFinder),
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
         case .verificationFailed:
@@ -372,7 +389,7 @@ public struct AudioRecorderView: View {
                 icon: "checkmark.shield",
                 body: "The recorded file could not be verified. It may be corrupted.",
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
         case .noAudioCaptured:
@@ -383,7 +400,7 @@ public struct AudioRecorderView: View {
                 body: "macOS did not deliver any audio frames to the recorder. Check that Screen & System Audio Recording permission is granted for Niko Music Hub, then retry.",
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Open System Audio Recording Settings", style: .secondary, action: .openSystemSettings),
-                    AppErrorCard.RecoveryAction(label: "Retry", style: .primary, action: .tryAgain)
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
         case .incompatibleMacOS(let minimum, let current):
@@ -392,7 +409,9 @@ public struct AudioRecorderView: View {
                 label: "macOS Too Old",
                 icon: "laptopcomputer",
                 body: "Audio Recorder requires macOS \(minimum) or later. Current version: \(current). Please upgrade macOS or use an external audio interface.",
-                recoveryActions: []
+                recoveryActions: [
+                    AppErrorCard.RecoveryAction(label: "Dismiss", style: .secondary, action: .dismiss)
+                ]
             )
         }
     }

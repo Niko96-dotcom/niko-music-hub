@@ -122,6 +122,21 @@ public final class BPMTapperViewModel: ObservableObject {
         }
     }
 
+    /// NMH-043: the BPM error card's Try Again action retries the failed
+    /// storage work (reload history, then re-attempt the pending save).
+    public func retryAfterStorageError() {
+        do {
+            try loadHistory()
+            if displayedBPM != nil {
+                saveDisplayedBPM()
+            } else {
+                errorText = nil
+            }
+        } catch {
+            errorText = "Could not save this BPM. Check local app storage, then try Save BPM again."
+        }
+    }
+
     private func applyStatus(from status: TempoEstimatorStatus) {
         switch status {
         case .idle:

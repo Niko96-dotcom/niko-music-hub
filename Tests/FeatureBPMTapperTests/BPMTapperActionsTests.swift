@@ -97,6 +97,42 @@ final class BPMTapperActionsTests: XCTestCase {
         XCTAssertEqual(viewModel.tapCount, 2)
     }
 
+    // NMH-043: the BPM error card's Try Again action retries the failed
+    // storage work via retryAfterStorageError().
+    func testRetryAfterStorageErrorRecoversWhenStoreRecovers() throws {
+        let store = FlakyHistoryStore()
+        let viewModel = BPMTapperViewModel(historyStore: store, clipboard: FakeClipboard())
+        tap120BPM(on: viewModel)
+
+        viewModel.saveDisplayedBPM()
+        XCTAssertEqual(
+            viewModel.errorText,
+            "Could not save this BPM. Check local app storage, then try Save BPM again."
+        )
+
+        store.failAdds = false
+        viewModel.retryAfterStorageError()
+
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertEqual(viewModel.saveConfirmation, "BPM saved")
+        XCTAssertEqual(viewModel.historyEntries.count, 1)
+    }
+
+    // NMH-043: retry keeps the storage error copy when the store still fails.
+    func testRetryAfterStorageErrorKeepsErrorWhenStoreStillFails() {
+        let store = FlakyHistoryStore()
+        let viewModel = BPMTapperViewModel(historyStore: store, clipboard: FakeClipboard())
+        tap120BPM(on: viewModel)
+
+        viewModel.saveDisplayedBPM()
+        viewModel.retryAfterStorageError()
+
+        XCTAssertEqual(
+            viewModel.errorText,
+            "Could not save this BPM. Check local app storage, then try Save BPM again."
+        )
+    }
+
     private func makeViewModel(
         store: FakeHistoryStore = FakeHistoryStore(),
         clipboard: FakeClipboard = FakeClipboard()
@@ -135,5 +171,25 @@ private final class FakeClipboard: BPMClipboardWriting, @unchecked Sendable {
 
     func copyPlainNumber(_ value: String) {
         copiedValues.append(value)
+    }
+}
+
+private struct FlakyHistoryStoreError: Error {}
+
+private final class FlakyHistoryStore: BPMHistoryStore, @unchecked Sendable {
+    private(set) var entries: [BPMHistoryEntry] = []
+    var failAdds = true
+
+    func listEntries() throws -> [BPMHistoryEntry] {
+        entries
+    }
+
+    func addEntry(_ entry: BPMHistoryEntry) throws {
+        if failAdds { throw FlakyHistoryStoreError() }
+        entries.insert(entry, at: 0)
+    }
+
+    func clearEntries() throws {
+        entries = []
     }
 }

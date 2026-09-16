@@ -349,6 +349,13 @@ public final class AudioRecorderViewModel: ObservableObject {
         handoffWarningMessage = nil
     }
 
+    /// NMH-043: every error card action must do something. Dismiss clears the
+    /// visible error/incompatible card and returns the tool to idle.
+    public func dismissError() {
+        error = nil
+        recordingState = .idle
+    }
+
     public func onAppear() {
         loadRecentRecordings()
         guard inboxObservationTask == nil else { return }
