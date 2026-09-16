@@ -5,6 +5,13 @@ public enum DownloadMediaKind: String, CaseIterable, Codable, Sendable, Identifi
     case videoWithAudio
 
     public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .audioOnly: "Audio only"
+        case .videoWithAudio: "Video + audio"
+        }
+    }
 }
 
 public enum DownloadAudioContainer: String, CaseIterable, Codable, Sendable, Identifiable {

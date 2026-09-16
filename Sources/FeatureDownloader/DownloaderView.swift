@@ -145,26 +145,14 @@ public struct DownloaderView: View {
     }
 
     private var playlistModeStrip: some View {
-        HStack(spacing: 8) {
-            ForEach(DownloadPlaylistMode.allCases) { mode in
-                Button {
-                    viewModel.playlistMode = mode
-                } label: {
-                    Text(mode.label)
-                        .font(HubDesignSystem.Typography.caption())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background {
-                            Capsule()
-                                .fill(
-                                    viewModel.playlistMode == mode
-                                        ? HubDesignSystem.Palette.accentFill
-                                        : Color.white.opacity(0.05)
-                                )
-                        }
+        HStack(alignment: .center, spacing: 8) {
+            HubChoiceChips(
+                "Playlist mode",
+                selection: $viewModel.playlistMode,
+                choices: DownloadPlaylistMode.allCases.map {
+                    .init($0, label: $0.label)
                 }
-                .buttonStyle(.plain)
-            }
+            )
             if viewModel.playlistMode != .single {
                 Text("Max \(viewModel.playlistMode.maxEntries ?? 0) items")
                     .font(HubDesignSystem.Typography.micro())
@@ -202,21 +190,17 @@ public struct DownloaderView: View {
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-            DownloaderTextChip(
-                title: "Audio only",
-                isSelected: viewModel.formatSelection.mediaKind == .audioOnly
-            ) {
-                viewModel.formatSelection.mediaKind = .audioOnly
-                viewModel.persistFormatSelection()
-            }
-
-            DownloaderTextChip(
-                title: "Video + audio",
-                isSelected: viewModel.formatSelection.mediaKind == .videoWithAudio
-            ) {
-                viewModel.formatSelection.mediaKind = .videoWithAudio
-                viewModel.persistFormatSelection()
-            }
+            HubChoiceChips(
+                DownloaderCopy.mediaKindLabel,
+                selection: Binding(
+                    get: { viewModel.formatSelection.mediaKind },
+                    set: {
+                        viewModel.formatSelection.mediaKind = $0
+                        viewModel.persistFormatSelection()
+                    }
+                ),
+                choices: DownloadMediaKind.allCases.map { .init($0, label: $0.label) }
+            )
 
             Text("Format:")
                 .font(HubDesignSystem.Typography.caption())
@@ -485,30 +469,6 @@ public struct DownloaderView: View {
 }
 
 // MARK: - Chip helpers
-
-private struct DownloaderTextChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(isSelected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: HubDesignSystem.Size.chipHeight)
-                .background {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                        .fill(isSelected ? HubDesignSystem.Palette.accentFill : (isHovered ? Color.white.opacity(0.05) : Color.clear))
-                }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-    }
-}
 
 private struct DownloaderChipLabel: View {
     let title: String
