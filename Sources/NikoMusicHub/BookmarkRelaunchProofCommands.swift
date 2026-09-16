@@ -19,13 +19,24 @@ enum BookmarkRelaunchProofCommands {
 
             let store = UserDefaultsSettingsStore(userDefaults: defaults)
             switch mode {
-            case "seed":
+            case "seed", "seed-vault-gui":
                 var settings = try store.loadSettings()
                 let manager = VaultRootManager()
                 settings = try manager.replacingRoot(role: .active, with: activeURL, in: settings)
                 settings = try manager.replacingRoot(role: .archive, with: archiveURL, in: settings)
+                if mode == "seed-vault-gui" {
+                    // Friends-stage vault ready for GUI Accept (NMH-138/139). No live Music roots.
+                    settings.vault.isEnabled = true
+                    settings.vault.rolloutStage = .friends
+                    settings.vault.independentBackupConfirmed = true
+                    settings.vault.automaticArchiving = false
+                    settings.vault.automationEmergencyStop = false
+                    settings.vault.transferFreeSpaceReserveGiB = 1
+                    // Keep archive browser pointed at the fixture Active root only.
+                    settings.archiveOnboardingCompleted = true
+                }
                 try store.saveSettings(settings)
-                print("[bookmark-relaunch-proof] seeded")
+                print(mode == "seed-vault-gui" ? "[bookmark-relaunch-proof] seeded-vault-gui" : "[bookmark-relaunch-proof] seeded")
             case "verify":
                 let settings = try store.loadSettings()
                 try verify(settings: settings, activeURL: activeURL, archiveURL: archiveURL)
