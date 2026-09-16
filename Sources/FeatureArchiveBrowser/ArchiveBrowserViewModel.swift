@@ -83,6 +83,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
+    /// Window undo stack for workflow-status changes. Views bind this from
+    /// `@Environment(\.undoManager)`. Undo of Mark Done is status-only.
+    weak var workflowUndoManager: UndoManager?
     var projectVaultQueueTask: Task<Void, Never>?
     var projectVaultQueueFailures: [String] = []
     var projectVaultQueueBatchCount = 0

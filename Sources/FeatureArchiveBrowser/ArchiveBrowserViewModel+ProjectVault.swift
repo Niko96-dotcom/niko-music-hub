@@ -374,10 +374,40 @@ extension ArchiveBrowserViewModel {
         )
     }
 
+    func requestWorkflowDoneArchive(for song: Song) {
+        guard canMutateWorkflowStatus(for: song), song.workflowStatus != .done else { return }
+        guard canArchiveInProjectVault(song) else {
+            applyWorkflowStatus(.done, for: song)
+            return
+        }
+        let settings = (try? settingsStore.loadSettings())?.vault
+        pendingArchiveConfirmation = ProjectVaultArchiveConfirmation(
+            songID: song.id,
+            songTitle: song.effectiveDisplayTitle,
+            trigger: .workflowDone,
+            willRemoveActiveCopy: settings.map(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval) ?? false,
+            independentBackupConfirmed: settings?.independentBackupConfirmed ?? false
+        )
+    }
+
     func confirmPendingArchive() {
         guard let pending = pendingArchiveConfirmation,
               let song = songs.first(where: { $0.id == pending.songID }) else { return }
         pendingArchiveConfirmation = nil
+        if pending.trigger == .workflowDone {
+            let previous = song.workflowStatus
+            if song.workflowStatus != .done {
+                commitWorkflowStatus(.done, for: song)
+            }
+            registerWorkflowStatusUndo(
+                songID: song.id,
+                previousStatus: previous,
+                actionName: "Mark Done"
+            )
+            let updated = songs.first(where: { $0.id == song.id }) ?? song
+            archiveInProjectVault(updated, trigger: .workflowDone)
+            return
+        }
         archiveInProjectVault(song, trigger: pending.trigger)
     }
 

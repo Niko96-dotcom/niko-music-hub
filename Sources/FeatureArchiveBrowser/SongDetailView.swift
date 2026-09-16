@@ -5,6 +5,7 @@ import SwiftUI
 struct SongDetailView: View {
     let song: Song
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @Environment(\.undoManager) private var undoManager
     @ObservedObject private var previewSession = ArchivePreviewSession.shared
     @State private var workspaceTab: SongWorkspaceTab = .versions
     @State private var storageExpanded = false
@@ -77,6 +78,7 @@ struct SongDetailView: View {
             }
         }
         .onAppear {
+            viewModel.workflowUndoManager = undoManager
             syncDrafts(from: liveSong)
         }
         .onChange(of: liveSong.id) { _, _ in
@@ -127,7 +129,7 @@ struct SongDetailView: View {
                 }
 
                 ArchiveWorkflowStatusMenu(status: liveSong.workflowStatus, compact: false) {
-                    viewModel.updateWorkflowStatus(for: liveSong, status: $0)
+                    viewModel.applyWorkflowStatus($0, for: liveSong)
                 }
                 .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
 
@@ -486,7 +488,7 @@ struct SongDetailView: View {
                 metadataField(label: "Workflow status") {
                     Picker("Workflow status", selection: Binding<ProjectWorkflowStatus?>(
                         get: { liveSong.workflowStatus },
-                        set: { viewModel.updateWorkflowStatus(for: liveSong, status: $0) }
+                        set: { viewModel.applyWorkflowStatus($0, for: liveSong) }
                     )) {
                         Text("No Status").tag(nil as ProjectWorkflowStatus?)
                         ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in

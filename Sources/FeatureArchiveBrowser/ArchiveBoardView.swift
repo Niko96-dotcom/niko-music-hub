@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// drag a card onto a column to change its status (recorded in status history).
 struct ArchiveBoardView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @Environment(\.undoManager) private var undoManager
     /// Opens the archive-root folder picker (owned by the browser shell).
     let onChooseRoot: () -> Void
 
@@ -112,6 +113,7 @@ struct ArchiveBoardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear { viewModel.workflowUndoManager = undoManager }
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
             keyboardFocus = .search
         }
@@ -323,8 +325,12 @@ private struct ArchiveBoardColumnView: View {
             perform: { id in
                 guard let song = viewModel.songs.first(where: { $0.id == id }),
                       song.workflowStatus != column.status else { return }
+                if column.status == .done {
+                    viewModel.requestWorkflowDoneArchive(for: song)
+                    return
+                }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                    viewModel.updateWorkflowStatus(for: song, status: column.status)
+                    viewModel.applyWorkflowStatus(column.status, for: song)
                 }
             },
             locationChanged: { onDragLocationChanged(column.id, $0) },

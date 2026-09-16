@@ -447,6 +447,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first)
         viewModel.updateWorkflowStatus(for: song, status: .done)
+        viewModel.confirmPendingArchive()
         let store = try fixture.transferStore()
         try await waitUntil {
             (try? store.allTransferRecords().first?.state) == .failedRecoverable
@@ -484,6 +485,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
         viewModel.updateWorkflowStatus(for: try XCTUnwrap(viewModel.songs.first), status: .done)
+        viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultRecoveryDeadline != nil }
         try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
         await viewModel.refreshProjectVaultSnapshots()
@@ -513,6 +515,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         _ = try await runtime.archive(song: active, trigger: .backupCopy)
         await viewModel.refreshProjectVaultSnapshots()
         viewModel.updateWorkflowStatus(for: active, status: .done)
+        viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
         try await waitUntil {
             !FileManager.default.fileExists(atPath: fixture.project.path)
@@ -578,6 +581,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
         try await waitUntil {
@@ -662,6 +666,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
         try await waitUntil {
@@ -693,6 +698,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        viewModel.confirmPendingArchive()
         XCTAssertFalse(viewModel.showArchivedProjects)
         viewModel.setShowArchivedProjects(true)
 

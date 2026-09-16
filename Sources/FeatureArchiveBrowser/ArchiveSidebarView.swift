@@ -316,7 +316,7 @@ struct ArchiveSidebarView: View {
                             onSelect: { viewModel.selectSong(song) },
                             onPlay: { viewModel.audition(song) },
                             onWorkflowStatusChange: { status in
-                                viewModel.updateWorkflowStatus(for: song, status: status)
+                                viewModel.applyWorkflowStatus(status, for: song)
                             },
                             vaultPresentation: viewModel.projectVaultPresentation(for: song),
                             vaultActivityMessage: viewModel.projectVaultActivityMessages[song.id],

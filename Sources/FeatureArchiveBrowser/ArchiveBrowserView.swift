@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
+    @Environment(\.undoManager) private var undoManager
     @State private var showNewSongSheet = false
     @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
 
@@ -145,6 +146,29 @@ struct ArchiveBrowserView: View {
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
         }
+        .alert(
+            workflowDoneAlertTitle,
+            isPresented: Binding(
+                get: { viewModel.pendingArchiveConfirmation?.trigger == .workflowDone },
+                set: { if !$0 { viewModel.cancelPendingArchive() } }
+            )
+        ) {
+            Button(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, role: .cancel) {
+                viewModel.cancelPendingArchive()
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(
+                ProjectVaultConfirmationCopy.workflowDoneConfirmTitle(
+                    willRemoveActiveCopy: workflowDoneRemovesActiveCopy
+                ),
+                role: workflowDoneRemovesActiveCopy ? .destructive : nil
+            ) {
+                viewModel.confirmPendingArchive()
+            }
+        } message: {
+            Text(workflowDoneAlertMessage)
+        }
+        .onAppear { viewModel.workflowUndoManager = undoManager }
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
             guard !viewModel.isScanning else { return }
             if viewModel.roots.isEmpty {
@@ -244,6 +268,24 @@ struct ArchiveBrowserView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(24)
         }
+    }
+
+    private var workflowDoneRemovesActiveCopy: Bool {
+        viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy ?? false
+    }
+
+    private var workflowDoneAlertTitle: String {
+        ProjectVaultConfirmationCopy.workflowDoneTitle(
+            willRemoveActiveCopy: workflowDoneRemovesActiveCopy
+        )
+    }
+
+    private var workflowDoneAlertMessage: String {
+        guard let pending = viewModel.pendingArchiveConfirmation else { return "" }
+        return ProjectVaultConfirmationCopy.workflowDoneMessage(
+            songTitle: pending.songTitle,
+            willRemoveActiveCopy: pending.willRemoveActiveCopy
+        )
     }
 
     private var allowsSongShortcuts: Bool {

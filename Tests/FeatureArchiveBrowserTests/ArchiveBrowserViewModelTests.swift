@@ -1245,6 +1245,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.filteredSongs = [song]
 
         viewModel.updateWorkflowStatus(for: song, status: .done)
+        viewModel.confirmPendingArchive()
 
         var archivedSong: Song?
         for _ in 0..<100 {

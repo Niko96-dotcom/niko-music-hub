@@ -29,15 +29,75 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    func updateWorkflowStatus(for song: Song, status: ProjectWorkflowStatus?) {
+    func applyWorkflowStatus(
+        _ status: ProjectWorkflowStatus?,
+        for song: Song,
+        registerUndo: Bool = true
+    ) {
+        updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
+    }
+
+    func updateWorkflowStatus(
+        for song: Song,
+        status: ProjectWorkflowStatus?,
+        registerUndo: Bool = true
+    ) {
         guard canMutateWorkflowStatus(for: song) else { return }
+        let previous = songs.first(where: { $0.id == song.id })?.workflowStatus ?? song.workflowStatus
+        guard previous != status else { return }
+        if status == .done, canArchiveInProjectVault(song) {
+            requestWorkflowDoneArchive(for: song)
+            return
+        }
+        commitWorkflowStatus(status, for: song)
+        if registerUndo {
+            registerWorkflowStatusUndo(
+                songID: song.id,
+                previousStatus: previous,
+                actionName: "Change Workflow Status"
+            )
+        }
+    }
+
+    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
         }
-        if status == .done, song.workflowStatus != .done,
-           let updatedSong = songs.first(where: { $0.id == song.id }) {
-            archiveInProjectVault(updatedSong, trigger: .workflowDone)
+    }
+
+    func registerWorkflowStatusUndo(
+        songID: String,
+        previousStatus: ProjectWorkflowStatus?,
+        actionName: String
+    ) {
+        guard let undoManager = workflowUndoManager else { return }
+        undoManager.registerUndo(withTarget: self) { viewModel in
+            MainActor.assumeIsolated {
+                viewModel.undoWorkflowStatus(
+                    songID: songID,
+                    previousStatus: previousStatus,
+                    actionName: actionName
+                )
+            }
         }
+        if !undoManager.isUndoing, !undoManager.isRedoing {
+            undoManager.setActionName(actionName)
+        }
+    }
+
+    func undoWorkflowStatus(
+        songID: String,
+        previousStatus: ProjectWorkflowStatus?,
+        actionName: String
+    ) {
+        guard let song = songs.first(where: { $0.id == songID }) else { return }
+        let currentStatus = song.workflowStatus
+        commitWorkflowStatus(previousStatus, for: song)
+        registerWorkflowStatusUndo(
+            songID: songID,
+            previousStatus: currentStatus,
+            actionName: actionName
+        )
     }
 
     func setManualMainPreview(for song: Song, candidateID: String) {
