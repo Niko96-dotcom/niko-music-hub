@@ -304,6 +304,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             downloadState = .completed
             statusMessage = "Downloaded"
             endDownloadProgressFeedback()
+            HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.downloadComplete)
             addToInbox(job: observedJob, sourceURL: sourceURL)
             return true
         case .failed:

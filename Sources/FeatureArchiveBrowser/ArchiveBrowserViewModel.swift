@@ -69,7 +69,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var lastDryRunLog: String?
     @Published var lastDiagnosticsExportPath: String?
     @Published var lastIndexExportPath: String?
-    @Published var needsFirstRunOnboarding = false
+    @Published var needsFirstRunOnboarding = false {
+        didSet {
+            // NMH-042: first-run overlay appear/dismiss changes layout.
+            if oldValue != needsFirstRunOnboarding {
+                HubAccessibilityAnnouncer.layoutChanged()
+            }
+        }
+    }
     @Published var archiveAccessFailure: ArchiveAccessFailure?
     @Published var collaborators: [Collaborator] = []
     @Published var showHiddenSongs = false
@@ -135,7 +142,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         case analytics
     }
 
-    @Published var viewMode: ArchiveViewMode = .board
+    @Published var viewMode: ArchiveViewMode = .board {
+        didSet {
+            // NMH-042: board ↔ list ↔ boardDetail ↔ analytics changes layout.
+            if oldValue != viewMode {
+                HubAccessibilityAnnouncer.layoutChanged()
+            }
+        }
+    }
     /// Compact list shows the detail page only after an explicit open (double-click / Return).
     @Published var listShowsDetail = false
     @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?

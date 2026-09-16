@@ -8,7 +8,14 @@ import Foundation
 final class ArchivePreviewSession: ObservableObject {
     static let shared = ArchivePreviewSession()
     let player: ArchivePreviewPlayer
-    @Published private(set) var songID: String?
+    @Published private(set) var songID: String? {
+        didSet {
+            // NMH-042: playback song change changes layout context.
+            if oldValue != songID {
+                HubAccessibilityAnnouncer.layoutChanged()
+            }
+        }
+    }
     @Published private(set) var songTitle = ""
     @Published private(set) var preview: PreviewCandidate?
     @Published var volume = 0.8 {

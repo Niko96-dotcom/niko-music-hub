@@ -69,6 +69,11 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
            let warning = catalog.persistUserMetadata(for: scannedSongs) {
             recordPersistenceWarning(warning)
         }
+        // NMH-042: announce only full scans (shouldPersistUserMetadata), not every
+        // incremental filesystem apply. Failures stay on statusMessage (NMH-049).
+        if update.shouldPersistUserMetadata {
+            HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.scanComplete)
+        }
         scheduleIndexPersist(afterNanoseconds: 0)
         Task { await refreshProjectVaultSnapshots() }
     }

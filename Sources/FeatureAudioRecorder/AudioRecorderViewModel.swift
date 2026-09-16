@@ -198,6 +198,7 @@ public final class AudioRecorderViewModel: ObservableObject {
 
                 guard !Task.isCancelled else { return }
                 recordingState = .recording
+                HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.recordingStarted)
 
                 for await level in stream {
                     if Task.isCancelled { break }
@@ -341,6 +342,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         recordingState = .idle
         elapsedTime = 0
         currentLevel = nil
+        HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.recordingStopped)
         loadRecentRecordings()
     }
 
