@@ -518,7 +518,7 @@ private struct DownloaderChipLabel: View {
             Text(title)
                 .font(HubDesignSystem.Typography.caption())
             Image(systemName: "chevron.down")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
         }
         .foregroundStyle(HubDesignSystem.Palette.textPrimary)

@@ -25,7 +25,76 @@ final class HubDesignSystemTokenTests: XCTestCase {
     func testSizeTokensMatchSpec() {
         XCTAssertEqual(HubDesignSystem.Size.iconButtonSize, 30)
         XCTAssertEqual(HubDesignSystem.Size.chipHeight, 28)
-        XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
+        XCTAssertGreaterThanOrEqual(HubDesignSystem.Size.statusDot, 10)
+    }
+
+    /// NMH-036: no shipping UI type below the macOS 10 pt floor. Grip is 14 pt (NMH-077 size);
+    /// StatusDot token is ≥ 10. Empty-state art stays 34/36 and is not body type.
+    func testUITypeMeetsTenPointFloor() throws {
+        XCTAssertGreaterThanOrEqual(HubDesignSystem.Size.statusDot, 10)
+
+        let hub = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            hub.contains("public static func micro() -> Font"),
+            "Typography.micro() must remain the 10 pt token."
+        )
+        XCTAssertTrue(
+            hub.contains(".system(size: 10, weight: .medium)"),
+            "Typography.micro() must stay 10 pt."
+        )
+
+        let pill = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ProjectWorkflowStatus+ArchiveUI.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(pill.contains("compact ? 8"))
+        XCTAssertFalse(pill.contains("compact ? 9"))
+        XCTAssertTrue(pill.contains(".font(.system(size: 10, weight: .semibold))"))
+        XCTAssertTrue(pill.contains(".font(.system(size: 10, weight: .medium))"))
+
+        let library = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveSidebarMorePanel.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(library.contains(".font(.system(size: 9"))
+        XCTAssertTrue(library.contains(".font(.system(size: 10, weight: .semibold))"))
+
+        let downloader = try String(
+            contentsOfFile: "Sources/FeatureDownloader/DownloaderView.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(downloader.contains(".font(.system(size: 9"))
+        XCTAssertTrue(downloader.contains("Image(systemName: \"chevron.down\")"))
+        XCTAssertTrue(downloader.contains(".font(.system(size: 10, weight: .semibold))"))
+
+        let grip = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDragAffordance.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(grip.contains("size: 8"))
+        XCTAssertTrue(grip.contains(".font(.system(size: 14, weight: .bold))"))
+        XCTAssertTrue(grip.contains(".accessibilityHidden(true)"))
+
+        let emptyArchive = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            emptyArchive.contains(".font(.system(size: 34, weight: .medium))"),
+            "Empty-state archive symbol must stay 34 pt."
+        )
+
+        let firstRun = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveFirstRunView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            firstRun.contains(".font(.system(size: 36, weight: .semibold))"),
+            "First-run empty-state symbol must stay 36 pt."
+        )
     }
 
     func testAccentIsNeutralNotTinted() {

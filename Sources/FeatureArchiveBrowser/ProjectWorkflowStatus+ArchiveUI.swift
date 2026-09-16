@@ -39,9 +39,9 @@ struct ArchiveWorkflowStatusPill: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: status?.archiveSymbolName ?? "tag")
-                .font(.system(size: compact ? 8 : 10, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
             Text(status?.shortTitle ?? "No Status")
-                .font(.system(size: compact ? 9 : 10, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
         }
         .foregroundStyle(foreground)

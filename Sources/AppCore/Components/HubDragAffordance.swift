@@ -6,7 +6,7 @@ public struct HubDragAffordance: View {
 
     public var body: some View {
         Image(systemName: "line.3.horizontal")
-            .font(.system(size: 8, weight: .bold))
+            .font(.system(size: 14, weight: .bold))
             .foregroundStyle(.tertiary)
             .padding(6)
             .accessibilityHidden(true)

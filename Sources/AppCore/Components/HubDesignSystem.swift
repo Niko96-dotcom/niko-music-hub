@@ -166,7 +166,7 @@ public enum HubDesignSystem {
         public static let buttonMinHeight: CGFloat = 32
         public static let iconButtonSize: CGFloat = 30
         public static let chipHeight: CGFloat = 28
-        public static let statusDot: CGFloat = 7
+        public static let statusDot: CGFloat = 10
         public static let sidebarWidth: ClosedRange<CGFloat> = 190 ... 250
         public static let inboxWidth: ClosedRange<CGFloat> = 220 ... 300
         /// Icon-rail width (collapsed nav mode).

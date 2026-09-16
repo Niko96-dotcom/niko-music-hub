@@ -22,7 +22,7 @@ struct ArchiveSidebarMorePanel: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
@@ -107,7 +107,7 @@ struct ArchiveSidebarMorePanel: View {
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
                 }

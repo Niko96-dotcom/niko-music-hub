@@ -13,6 +13,7 @@ final class HubSharedControlsTests: XCTestCase {
 
     func testStatusDotUsesSevenPointFrame() {
         MainActor.assumeIsolated {
+            XCTAssertGreaterThanOrEqual(HubDesignSystem.Size.statusDot, 10)
             let dot = StatusDot(state: .running)
             let controller = NSHostingController(rootView: dot)
             let size = controller.sizeThatFits(in: NSSize(width: 20, height: 20))
