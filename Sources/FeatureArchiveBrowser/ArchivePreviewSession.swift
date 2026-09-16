@@ -23,6 +23,9 @@ final class ArchivePreviewSession: ObservableObject {
     }
     @Published private(set) var captureActive = false
     private var observations: Set<AnyCancellable> = []
+    /// NMH-137: pauses preview on headphone unplug; never clears the session.
+    /// Hide (Cmd-H) keeps playing; capture pause below (NMH-116) is unchanged.
+    private(set) var routeObserver: ArchivePreviewRouteObserver?
     private var openSongAction: (() -> Void)?
 
     init(player: ArchivePreviewPlayer = ArchivePreviewPlayer(), capture: AudioCaptureActivity = .shared) {
@@ -38,6 +41,8 @@ final class ArchivePreviewSession: ObservableObject {
             self?.captureActive = active
             if active { self?.player.pause() }
         }.store(in: &observations)
+        // NMH-137: observe output-route changes once. Pause on unplug only.
+        self.routeObserver = ArchivePreviewRouteObserver.start(pausing: player)
     }
 
     @Published private(set) var isPlaying = false
