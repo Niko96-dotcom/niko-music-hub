@@ -38,6 +38,7 @@ struct NikoMusicHubApp: App {
         .defaultSize(width: 1_280, height: 820)
         .commands {
             AboutCommand(updateController: composition.updateController)
+            HubWindowCommandGroup()
             HubViewCommands(session: shellSession)
             HubToolsCommands(
                 registry: composition.registry,
@@ -152,5 +153,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        HubWindowChromeActions.installKeyMonitorIfNeeded()
     }
 }
