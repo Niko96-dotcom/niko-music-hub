@@ -39,6 +39,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     private var order: [Job.ID] = []
     private var tasks: [Job.ID: Task<Void, Never>] = [:]
     private var observers: [Job.ID: [UUID: AsyncStream<Job>.Continuation]] = [:]
+    private var snapshotObservers: [UUID: AsyncStream<[Job]>.Continuation] = [:]
     private var retainedLogBytes: [Job.ID: Int] = [:]
 
     public init(
@@ -59,6 +60,26 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     public func listJobs() -> [Job] {
         lock.withLock {
             order.compactMap { jobs[$0] }
+        }
+    }
+
+    public func snapshot() -> [Job] {
+        lock.withLock {
+            nonTerminalJobsLocked()
+        }
+    }
+
+    public func allUpdates() -> AsyncStream<[Job]> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let observerID = UUID()
+            let initial = lock.withLock { () -> [Job] in
+                snapshotObservers[observerID] = continuation
+                return nonTerminalJobsLocked()
+            }
+            continuation.yield(initial)
+            continuation.onTermination = { [weak self] _ in
+                self?.removeSnapshotObserver(id: observerID)
+            }
         }
     }
 
@@ -105,6 +126,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             jobs[job.id] = job
             order.append(job.id)
         }
+        emitSnapshot()
 
         let progress = JobProgress(
             updateHandler: { [weak self] progress, message in
@@ -167,6 +189,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         }
         outcome.0?.cancel()
         publish(outcome.1, to: outcome.2, finish: true)
+        emitSnapshot()
     }
 
     var activeTaskCount: Int {
@@ -254,6 +277,9 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             return (current, continuations, isTerminal)
         }
         publish(outcome.0, to: outcome.1, finish: outcome.2)
+        if outcome.0 != nil {
+            emitSnapshot()
+        }
     }
 
     private func publish(
@@ -282,6 +308,25 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             if observers[jobID]?.isEmpty == true {
                 observers.removeValue(forKey: jobID)
             }
+        }
+    }
+
+    private func removeSnapshotObserver(id: UUID) {
+        _ = lock.withLock {
+            snapshotObservers.removeValue(forKey: id)
+        }
+    }
+
+    private func nonTerminalJobsLocked() -> [Job] {
+        order.compactMap { jobs[$0] }.filter { !$0.state.isTerminal }
+    }
+
+    private func emitSnapshot() {
+        let payload = lock.withLock { () -> ([AsyncStream<[Job]>.Continuation], [Job]) in
+            (Array(snapshotObservers.values), nonTerminalJobsLocked())
+        }
+        for continuation in payload.0 {
+            continuation.yield(payload.1)
         }
     }
 

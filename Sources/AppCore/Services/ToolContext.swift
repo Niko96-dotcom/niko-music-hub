@@ -22,6 +22,7 @@ public struct ToolContext: Sendable {
     public let launchAtLogin: any LaunchAtLoginControlling
     public let diagnostics: any Diagnostics
     public let persistenceIssues: [PersistenceIssue]
+    public let jobStatusCenter: ShellJobStatusCenter
 
     public init(
         registeredToolCount: Int,
@@ -32,7 +33,8 @@ public struct ToolContext: Sendable {
         fileActions: any FileActions,
         launchAtLogin: any LaunchAtLoginControlling = NoopLaunchAtLoginController(),
         diagnostics: any Diagnostics,
-        persistenceIssues: [PersistenceIssue] = []
+        persistenceIssues: [PersistenceIssue] = [],
+        jobStatusCenter: ShellJobStatusCenter? = nil
     ) {
         self.registeredToolCount = registeredToolCount
         self.settingsStore = settingsStore
@@ -43,5 +45,6 @@ public struct ToolContext: Sendable {
         self.launchAtLogin = launchAtLogin
         self.diagnostics = diagnostics
         self.persistenceIssues = persistenceIssues
+        self.jobStatusCenter = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
     }
 }

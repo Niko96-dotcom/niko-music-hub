@@ -130,6 +130,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         isConverting = true
         statusText = AudioConverterCopy.converting
         overallProgress = 0
+        publishShellJobStatus()
         return controller
     }
 
@@ -152,6 +153,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             isConverting = false
             stopController = nil
             refreshStatusText()
+            publishShellJobStatus()
             return outcomes
         } catch {
             rows = rows.map { row in
@@ -167,6 +169,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             isConverting = false
             stopController = nil
             statusText = error.localizedDescription
+            publishShellJobStatus()
             return []
         }
     }
@@ -253,6 +256,25 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
+    private func publishShellJobStatus() {
+        let filename = rows.first(where: { $0.state == .converting })?.sourceURL.lastPathComponent
+            ?? rows.first(where: { $0.state == .queued && $0.isConvertible })?.sourceURL.lastPathComponent
+        let status = ConverterJobReporting.status(
+            isConverting: isConverting,
+            filename: filename,
+            percent: overallProgress
+        )
+        context.jobStatusCenter.setExtraJob(
+            sourceID: ShellJobExtraSourceID.converter,
+            status: status,
+            cancel: { [weak self] in
+                Task { @MainActor in
+                    self?.requestStopAfterCurrent()
+                }
+            }
+        )
+    }
+
     private func makeQueuedRow(_ file: ScannedAudioFile) -> AudioConverterRow {
         AudioConverterRow(
             sourceURL: file.url,
@@ -310,6 +332,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         guard let updatedRow = row(rows[index], applying: update) else { return }
         rows[index] = updatedRow
         overallProgress = update.overallProgress
+        publishShellJobStatus()
     }
 
     private func row(

@@ -49,7 +49,8 @@ struct AppShellView: View {
                         ToolSidebarView(
                             context: context,
                             registry: registry,
-                            selectedToolID: sidebarSelectedToolID
+                            selectedToolID: sidebarSelectedToolID,
+                            jobStatusCenter: context.jobStatusCenter
                         )
                         .frame(width: HubDesignSystem.Size.navWidth)
                         .hubChromeMaterial()

@@ -16,6 +16,12 @@ public protocol JobRunning: Sendable {
     ) -> Job
 
     func cancelJob(id: Job.ID)
+
+    /// Non-terminal jobs in enqueue order.
+    func snapshot() -> [Job]
+
+    /// Current non-terminal snapshot, then subsequent changes.
+    func allUpdates() -> AsyncStream<[Job]>
 }
 
 public extension JobRunning {
@@ -33,6 +39,36 @@ public extension JobRunning {
                     if current.state.isTerminal {
                         continuation.finish()
                         return
+                    }
+                    do {
+                        try await Task.sleep(for: .milliseconds(100))
+                    } catch {
+                        continuation.finish()
+                        return
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    func snapshot() -> [Job] {
+        listJobs().filter { !$0.state.isTerminal }
+    }
+
+    /// Compatibility stream for lightweight test doubles. `JobRunner` notifies on each publish.
+    func allUpdates() -> AsyncStream<[Job]> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                var last: [Job]?
+                while !Task.isCancelled {
+                    let current = snapshot()
+                    if last == nil || current != last {
+                        continuation.yield(current)
+                        last = current
                     }
                     do {
                         try await Task.sleep(for: .milliseconds(100))

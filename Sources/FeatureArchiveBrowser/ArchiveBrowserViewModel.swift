@@ -61,7 +61,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Song-detail "Details" disclosure state — hoisted so the browser-level "d"
     /// keyboard shortcut can toggle it.
     @Published var songDetailsExpanded = false
-    @Published var isScanning = false
+    @Published var isScanning = false {
+        didSet { publishShellJobStatus() }
+    }
     @Published var statusMessage: String?
     @Published var scanDiagnostics: ArchiveScanDiagnostics?
     @Published var lastDryRunLog: String?
@@ -88,7 +90,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     public var pendingProjectVaultOperationCount: Int { projectVaultBusySongIDs.count }
     @Published var projectVaultBusySongIDs: Set<String> = []
     @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
-    @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation?
+    @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation? {
+        didSet { publishShellJobStatus() }
+    }
     @Published var projectVaultOperationMessages: [String: String] = [:]
     var projectVaultRestoreOptionsLoading = false
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
@@ -151,6 +155,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let fileActions: any FileActions
     let settingsStore: SettingsStore
     let diagnostics: Diagnostics
+    let jobStatusCenter: ShellJobStatusCenter
     private let collaboratorStore: (any CollaboratorStoring)?
     let archiveRootWatcher: (any ArchiveRootWatching)?
     let runtime: MusicHubRuntimeEnvironment
@@ -237,6 +242,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.settingsStore = context.settingsStore
         self.diagnostics = context.diagnostics
         self.fileActions = context.fileActions
+        self.jobStatusCenter = context.jobStatusCenter
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
@@ -273,6 +279,45 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         if archiveRootWatcher != nil, !roots.isEmpty, !runtime.usesFixtureRoot {
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
+        }
+    }
+
+    private func publishShellJobStatus() {
+        if isScanning {
+            jobStatusCenter.setExtraJob(
+                sourceID: ShellJobExtraSourceID.archiveScan,
+                status: ShellJobStatus(
+                    id: ShellJobExtraSourceID.archiveScan,
+                    title: ShellJobStatusCopy.scanningArchive,
+                    cancelActionID: ShellJobExtraSourceID.archiveScan
+                ),
+                cancel: { [weak self] in
+                    Task { @MainActor in
+                        self?.cancelScan()
+                    }
+                }
+            )
+        } else {
+            jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.archiveScan, status: nil)
+        }
+
+        if let operation = projectVaultActiveOperation {
+            jobStatusCenter.setExtraJob(
+                sourceID: ShellJobExtraSourceID.vaultTransfer,
+                status: ShellJobStatus(
+                    id: ShellJobExtraSourceID.vaultTransfer,
+                    title: operation.songName,
+                    cancelActionID: ShellJobExtraSourceID.vaultTransfer,
+                    activityVerb: "Transferring"
+                ),
+                cancel: { [weak self] in
+                    Task { @MainActor in
+                        self?.requestStopActiveProjectVaultTransfer()
+                    }
+                }
+            )
+        } else {
+            jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.vaultTransfer, status: nil)
         }
     }
 

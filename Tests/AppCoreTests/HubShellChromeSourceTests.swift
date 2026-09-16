@@ -22,6 +22,12 @@ final class HubShellChromeSourceTests: XCTestCase {
             XCTAssertTrue(source.contains(required), "Missing shell Liquid chrome source: \(required)")
         }
 
+        XCTAssertTrue(source.contains("jobStatusCenter: context.jobStatusCenter"))
+        XCTAssertFalse(
+            source.contains("HubJobsStatusView"),
+            "NMH-011 jobs row stays in the sidebar, outside the cached tool ZStack"
+        )
+
         let sessionSource = try SourceTestSupport.read("Sources/AppCore/Shell/HubShellSession.swift")
         [
             "preferences.bool",
@@ -100,6 +106,18 @@ final class HubShellChromeSourceTests: XCTestCase {
         // The labeled nav must stay neutral: `.glassProminent` paints the SYSTEM accent
         // (blue) — the references' chrome carries no color (DS-13).
         XCTAssertFalse(source.contains(".glassProminent"), "Sidebar must not use system-accent glassProminent")
+        XCTAssertTrue(source.contains("HubJobsStatusView(center: jobStatusCenter)"))
+        XCTAssertTrue(source.contains("@ObservedObject var jobStatusCenter"))
+        if let jobsRange = source.range(of: "HubJobsStatusView(center: jobStatusCenter)"),
+           let helperRange = source.range(of: "helperHealthRow") {
+            XCTAssertLessThan(
+                jobsRange.lowerBound,
+                helperRange.lowerBound,
+                "Jobs row must sit above Helper Tools"
+            )
+        } else {
+            XCTFail("Sidebar must host HubJobsStatusView above helperHealthRow")
+        }
     }
 
     func testHelperHealthUsesSharedStatusColorsAndLiquidCard() throws {

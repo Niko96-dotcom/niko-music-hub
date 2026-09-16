@@ -31,6 +31,7 @@ struct AppComposition {
         let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
         let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL(runtime: runtime))
         let jobRunner = JobRunner()
+        let jobStatusCenter = ShellJobStatusCenter(jobRunner: jobRunner)
         let fileActions = AppKitFileActions()
         let diagnostics = ConsoleDiagnostics()
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
@@ -140,7 +141,8 @@ struct AppComposition {
             fileActions: fileActions,
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
-            persistenceIssues: persistenceIssues
+            persistenceIssues: persistenceIssues,
+            jobStatusCenter: jobStatusCenter
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -208,7 +210,8 @@ struct AppComposition {
             fileActions: fileActions,
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
-            persistenceIssues: persistenceIssues
+            persistenceIssues: persistenceIssues,
+            jobStatusCenter: jobStatusCenter
         )
 
         return AppComposition(

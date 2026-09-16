@@ -11,6 +11,7 @@ struct ToolSidebarView: View {
     var context: ToolContext? = nil
     let registry: ToolRegistry
     @Binding var selectedToolID: ToolFeatureID?
+    @ObservedObject var jobStatusCenter: ShellJobStatusCenter
 
     @State private var hoveredToolID: ToolFeatureID?
     @State private var showHelperHealth = false
@@ -47,6 +48,10 @@ struct ToolSidebarView: View {
 
             if context != nil {
                 HubSectionHeader("Status")
+                if !jobStatusCenter.jobs.isEmpty {
+                    HubJobsStatusView(center: jobStatusCenter)
+                        .padding(.bottom, 8)
+                }
                 helperHealthRow
                     .padding(.bottom, 12)
             }
