@@ -18,8 +18,9 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rows[0].statusText, "Ready for WAV conversion")
         XCTAssertEqual(
             viewModel.rows[1].statusText,
-            "This file type is not supported in Phase 3. Add M4A, MP3, WAV, AIFF, or FLAC instead."
+            "This file type is not supported. Add M4A, MP3, WAV, AIFF, or FLAC instead."
         )
+        XCTAssertFalse(viewModel.rows[1].statusText.contains("Phase"))
         XCTAssertEqual(viewModel.rows[0].plannedOutputName, "Loop - 44100Hz 24bit.wav")
     }
 

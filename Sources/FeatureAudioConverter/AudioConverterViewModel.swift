@@ -593,7 +593,7 @@ public enum AudioConverterCopy {
     public static let converting = "Converting to Cubase-ready WAV"
     public static let verified = "Verified WAV ready"
     public static let verifiedWithHandoffWarning = "Verified WAV ready, but Output Inbox could not save the handoff."
-    public static let unsupported = "This file type is not supported in Phase 3. Add M4A, MP3, WAV, AIFF, or FLAC instead."
+    public static let unsupported = "This file type is not supported. Add M4A, MP3, WAV, AIFF, or FLAC instead."
     public static let missingFFmpeg = "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
     public static let verificationFailed = "WAV verification failed. The source file was left untouched; check the output preset and try again."
     public static let genericFailure = "Could not convert this file. Keep the source selected, review the row message, then try Convert to WAV again."

@@ -452,7 +452,7 @@ public struct AudioConverterView: View {
         case .failed:
             return row.statusText
         case .unsupported:
-            return "This file type is not supported in Phase 3. Add M4A, MP3, WAV, AIFF, or FLAC instead."
+            return row.statusText
         case .skipped:
             return "Skipped"
         }
