@@ -102,8 +102,8 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-096 | 6 | implemented-awaiting-runtime | d61219f9ca6aea838a9c23566fc6f0c5ee6fc343 | (see commit) | see nmh-hig-NMH-096-result.md; worker exit 0 | batch-NMH-096-79dcf08f; auto-integrated |
 | NMH-097 | 6 | implemented-awaiting-runtime | b623b2fcd29edd17223ac2fbfb04b169cc4f8ea5 | (see commit) | see nmh-hig-NMH-097-result.md; worker exit 0 | batch-NMH-097-94716c5d; auto-integrated |
 | NMH-127 | 7 | implemented-awaiting-runtime | f03aa4c1322cf5dfc23dc6d2d2700fdae7c9aa93 | (see commit) | see nmh-hig-NMH-127-result.md; worker exit 0 | batch-NMH-127-77045c76; auto-integrated |
-| NMH-128 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-128-c760d1ab; auto-integrated |
-| NMH-129 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-129-59bb05e1; auto-integrated |
+| NMH-128 | 7 | implemented-awaiting-runtime |  | (see commit) | GUI/runtime Accept pending; parked after clean-tree env-block thrash | batch-NMH-128-c760d1ab; auto-integrated; GUI authorized 2026-09-16 |
+| NMH-129 | 7 | implemented-awaiting-runtime |  | (see commit) | GUI/runtime Accept pending; parked after clean-tree env-block thrash | batch-NMH-129-59bb05e1; auto-integrated; GUI authorized 2026-09-16 |
 | NMH-130 | 7 | implemented-awaiting-runtime | a9e083a9566a46831f96b0d3986217aa3b646df9 | (see commit) | see nmh-hig-NMH-130-result.md; worker exit 0 | batch-NMH-130-ff4e3a92; auto-integrated |
 | NMH-131 | 7 | implemented-awaiting-runtime | cb46223715cc303b23759fa29629ae6f846d4add | (see commit) | see nmh-hig-NMH-131-result.md; worker exit 0 | batch-NMH-131-8a0f6c52; auto-integrated |
 | NMH-132 | 7 | implemented-awaiting-runtime | dc2751f7b340979be286e054c8c7bd92d28350fb | (see commit) | see nmh-hig-NMH-132-result.md; worker exit 0 | batch-NMH-132-abeb713c; auto-integrated |
@@ -112,8 +112,8 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-135 | 7 | implemented-awaiting-runtime | b68232a42c2c3fce5f397725c37a19e15a5ca6cd | (see commit) | see nmh-hig-NMH-135-result.md; worker exit 0 | batch-NMH-135-a1bbdaae; auto-integrated |
 | NMH-136 | 7 | implemented-awaiting-runtime | f582ba1aa50b93b7bdec8314970ce34d4affac91 | (see commit) | see nmh-hig-NMH-136-result.md; worker exit 0 | batch-NMH-136-a8efd48f; auto-integrated |
 | NMH-137 | 7 | implemented-awaiting-runtime | 2b665db9a2df583d5450098d5c11d1e5258ea366 | (see commit) | see nmh-hig-NMH-137-result.md; worker exit 0 | batch-NMH-137-f7b9d128; auto-integrated |
-| NMH-138 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-138-5b82a968; auto-integrated |
-| NMH-139 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-139-e6aed559; auto-integrated |
+| NMH-138 | 7 | implemented-awaiting-runtime |  | (see commit) | GUI/runtime Accept pending; parked after clean-tree env-block thrash | batch-NMH-138-5b82a968; auto-integrated; GUI authorized 2026-09-16 |
+| NMH-139 | 7 | implemented-awaiting-runtime |  | (see commit) | GUI/runtime Accept pending; parked after clean-tree env-block thrash | batch-NMH-139-e6aed559; auto-integrated; GUI authorized 2026-09-16 |
 | NMH-140 | 7 | implemented-awaiting-runtime | 03c4e962b5611d9395113249bff4bc53b0dd1589 | (see commit) | see nmh-hig-NMH-140-result.md; worker exit 0 | batch-NMH-140-86317f20; auto-integrated |
 | NMH-141 | 7 | implemented-awaiting-runtime | be55e1f4dfaacf1044010e2125c70d866bd4ec89 | (see commit) | see nmh-hig-NMH-141-result.md; worker exit 0 | batch-NMH-141-6a25c394; auto-integrated |
 | NMH-142 | 7 | implemented-awaiting-runtime | d57af228ee63e2b4a4c0b332c8d6798e38b39870 | (see commit) | see nmh-hig-NMH-142-result.md; worker exit 0 | batch-NMH-142-ab4e493c; auto-integrated |
