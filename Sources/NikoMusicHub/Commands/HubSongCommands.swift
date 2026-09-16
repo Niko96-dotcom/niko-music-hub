@@ -1,3 +1,4 @@
+import AppCore
 import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
@@ -12,6 +13,13 @@ struct HubSongCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Song") {
+            Button("New Song Draft") {
+                NotificationCenter.default.post(name: .archiveNewSongDraftRequested, object: nil)
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+
+            Divider()
+
             Button(SongItemCommandCopy.openProject) {
                 songActions?.openProject()
             }

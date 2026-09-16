@@ -215,6 +215,9 @@ struct ArchiveBrowserView: View {
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .archiveNewSongDraftRequested)) { _ in
+            showNewSongSheet = true
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.needsFirstRunOnboarding },
             set: { _ in /* NMH-083: no Skip; dismiss only via a chosen root */ }

@@ -95,4 +95,6 @@ public final class QuickAccessRouter: ObservableObject {
 
 public extension Notification.Name {
     static let archiveSearchFocusRequested = Notification.Name("NikoMusicHub.archiveSearchFocusRequested")
+    /// Opens Archive Browser New Song Draft sheet (NMH-138 Accept / Song menu).
+    static let archiveNewSongDraftRequested = Notification.Name("NikoMusicHub.archiveNewSongDraftRequested")
 }

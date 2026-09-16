@@ -129,7 +129,9 @@ struct ArchiveSidebarView: View {
                     )
                 }
             } label: {
-                Image(systemName: "plus")
+                // Icon-only visually; Label keeps AX title "Archive actions" for VO / UI tests (NMH-138).
+                Label("Archive actions", systemImage: "plus")
+                    .labelStyle(.iconOnly)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
