@@ -88,6 +88,10 @@ struct ArchiveAnalyticsView: View {
     private func monthlySection(_ months: [ArchiveAnalyticsSnapshot.MonthActivity]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HubSectionHeader("Project saves per month")
+            Text("Bar chart of project saves by month for the last 12 months.")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .accessibilityAddTraits(.isHeader)
 
             if months.allSatisfy({ $0.versionCount == 0 }) {
                 emptyHint("No project file activity in the last \(months.count) months.")
