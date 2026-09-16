@@ -47,7 +47,8 @@ struct ArchiveBrowserView: View {
                                 viewModel: viewModel,
                                 compactList: compactList,
                                 showNewSongSheet: $showNewSongSheet,
-                                onChooseRoot: chooseRoot
+                                onChooseRoot: chooseRoot,
+                                keyboardFocus: $keyboardFocus
                             )
                             .frame(width: splitView ? listWidth : proxy.size.width)
                         }
@@ -148,6 +149,15 @@ struct ArchiveBrowserView: View {
             return .handled
         }
         .onKeyPress(.escape) {
+            if keyboardFocus == .search {
+                if viewModel.searchQuery.isEmpty {
+                    keyboardFocus = .archive
+                } else {
+                    viewModel.clearSearch()
+                    keyboardFocus = .search
+                }
+                return .handled
+            }
             switch viewModel.viewMode {
             case .boardDetail, .analytics:
                 viewModel.viewMode = .board

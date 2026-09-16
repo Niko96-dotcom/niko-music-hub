@@ -8,7 +8,7 @@ struct ArchiveSidebarView: View {
     let compactList: Bool
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
-    @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
+    @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -268,7 +268,13 @@ struct ArchiveSidebarView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             ArchiveSearchTextField(
                 input: viewModel.searchInput,
-                onEdit: { viewModel.setSearchQuery($0) },
+                onEdit: { query in
+                    if query.isEmpty {
+                        viewModel.clearSearch()
+                    } else {
+                        viewModel.setSearchQuery(query)
+                    }
+                },
                 isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
             )

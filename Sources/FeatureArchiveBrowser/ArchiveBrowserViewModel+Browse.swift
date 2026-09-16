@@ -44,6 +44,10 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    func clearSearch() {
+        setSearchQuery("", immediate: true)
+    }
+
     func selectShelf(_ shelf: ArchiveSmartShelf) {
         mutateBrowseInputs {
             selectedShelf = shelf

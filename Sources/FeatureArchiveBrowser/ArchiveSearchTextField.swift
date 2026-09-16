@@ -20,24 +20,50 @@ struct ArchiveSearchTextField: View {
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
 
     var body: some View {
-        TextField(
-            "Search songs",
-            text: Binding(
-                get: { input.query },
-                set: { onEdit($0) }
-            ),
-            prompt: Text("Search songs")
-                .foregroundColor(HubDesignSystem.Palette.textTertiary)
-        )
-        .textFieldStyle(.plain)
-        .font(HubDesignSystem.Typography.body())
-        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-        .focused($keyboardFocus, equals: .search)
-        .disabled(isDisabled)
-        .accessibilityHint(
-            isDisabled
-                ? "Scan the archive first."
-                : "Filters the song list as you type."
-        )
+        HStack(spacing: 4) {
+            TextField(
+                "Search songs",
+                text: Binding(
+                    get: { input.query },
+                    set: { onEdit($0) }
+                ),
+                prompt: Text("Search songs")
+                    .foregroundColor(HubDesignSystem.Palette.textTertiary)
+            )
+            .textFieldStyle(.plain)
+            .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            .focused($keyboardFocus, equals: .search)
+            .disabled(isDisabled)
+            .accessibilityHint(
+                isDisabled
+                    ? "Scan the archive first."
+                    : "Filters the song list as you type."
+            )
+            .onKeyPress(.escape) {
+                handleEscape()
+                return .handled
+            }
+
+            if !input.query.isEmpty {
+                HubIconButton(
+                    systemImage: "xmark.circle.fill",
+                    accessibilityLabel: "Clear search",
+                    help: "Clear the search field"
+                ) {
+                    onEdit("")
+                    keyboardFocus = .search
+                }
+            }
+        }
+    }
+
+    private func handleEscape() {
+        if input.query.isEmpty {
+            keyboardFocus = .archive
+        } else {
+            onEdit("")
+            keyboardFocus = .search
+        }
     }
 }

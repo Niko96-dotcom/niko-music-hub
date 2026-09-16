@@ -239,7 +239,13 @@ struct ArchiveBoardView: View {
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             ArchiveSearchTextField(
                 input: viewModel.searchInput,
-                onEdit: { viewModel.setSearchQuery($0) },
+                onEdit: { query in
+                    if query.isEmpty {
+                        viewModel.clearSearch()
+                    } else {
+                        viewModel.setSearchQuery(query)
+                    }
+                },
                 isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
             )
