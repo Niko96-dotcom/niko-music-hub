@@ -133,16 +133,14 @@ public struct StemSeparationView: View {
             }
 
             if !viewModel.youtubeURLText.isEmpty {
-                Button {
+                HubIconButton(
+                    systemImage: "xmark.circle.fill",
+                    accessibilityLabel: "Clear YouTube URL",
+                    help: "Clear the URL field",
+                    isEnabled: !viewModel.isRunning
+                ) {
                     viewModel.clearYouTubeURL()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.tertiary)
                 }
-                .buttonStyle(.plain)
-                .help("Clear YouTube URL")
-                .disabled(viewModel.isRunning)
             }
         }
         .padding(.horizontal, 12)

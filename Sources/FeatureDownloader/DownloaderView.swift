@@ -109,16 +109,14 @@ public struct DownloaderView: View {
             }
 
             if !viewModel.urlText.isEmpty {
-                Button {
+                HubIconButton(
+                    systemImage: "xmark.circle.fill",
+                    accessibilityLabel: DownloaderCopy.clear,
+                    help: DownloaderCopy.clear,
+                    isEnabled: viewModel.downloadState != .downloading
+                ) {
                     viewModel.clearInput()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
-                .buttonStyle(.plain)
-                .help(DownloaderCopy.clear)
-                .disabled(viewModel.downloadState == .downloading)
             }
         }
         .padding(.horizontal, 12)
