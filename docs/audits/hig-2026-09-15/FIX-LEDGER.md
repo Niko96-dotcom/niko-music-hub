@@ -117,37 +117,37 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-140 | 7 | implemented-awaiting-runtime | 03c4e962b5611d9395113249bff4bc53b0dd1589 | (see commit) | see nmh-hig-NMH-140-result.md; worker exit 0 | batch-NMH-140-86317f20; auto-integrated |
 | NMH-141 | 7 | implemented-awaiting-runtime | be55e1f4dfaacf1044010e2125c70d866bd4ec89 | (see commit) | see nmh-hig-NMH-141-result.md; worker exit 0 | batch-NMH-141-6a25c394; auto-integrated |
 | NMH-142 | 7 | implemented-awaiting-runtime | d57af228ee63e2b4a4c0b332c8d6798e38b39870 | (see commit) | see nmh-hig-NMH-142-result.md; worker exit 0 | batch-NMH-142-ab4e493c; auto-integrated |
-| NMH-098 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-099 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-100 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-101 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-102 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-103 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-104 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-105 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-106 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-107 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-108 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-109 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-110 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-111 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-112 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-113 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-114 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-115 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-116 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-117 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-118 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-119 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-120 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-121 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-122 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-123 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-124 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-125 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-126 | 8 | pending |  |  |  | class=passes tested check; sev=— |
-| NMH-143 | 8 | pending |  |  |  | class=not applicable; sev=— |
-| NMH-144 | 8 | pending |  |  |  | class=not applicable; sev=— |
+| NMH-098 | 8 | preserved |  | (see commit) | end-phase preserve; Regression for NMH-001. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-099 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-015 (window). NMH-071 (banner placement). NMH-102 (write guard). Ledger: `preserved` immediate-apply. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-100 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-011, NMH-017, NMH-116. Ledger: `preserved` cache + `accessibilityHidden`. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-101 | 8 | preserved |  | (see commit) | end-phase preserve; Highest-value vault pass. NMH-053 chooser must not weaken the engine. Ledger: `preserved`. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-102 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-095 preview; NMH-141 skip copy. Ledger: `preserved` writers. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-103 | 8 | preserved |  | (see commit) | end-phase preserve; Leftover motion NMH-037. IC NMH-024. Sheen NMH-074. Ledger: `preserved` Reduce Transparency/Motion chrome. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-104 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-016, NMH-121, NMH-132. Ledger: `preserved` extra-as-menu. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-105 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-015 pane move. Ledger: `preserved` fail-closed updates. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-106 | 8 | preserved |  | (see commit) | end-phase preserve; Independent of NMH-004. Ledger: `preserved`; note if the VO trait was added. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-107 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-024 IC variants. Ledger: `preserved` provider. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-108 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-026 press. NMH-066 Stems. Ledger: `preserved` labeled hierarchy. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-109 | 8 | preserved |  | (see commit) | end-phase preserve; Independent of Archive split (NMH-118). Ledger: `preserved` 680 cap. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-110 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-073 counts. Ledger: `preserved` formatter. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-111 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-005, NMH-042, NMH-101, NMH-104. Ledger: `preserved` A11Y-28 surfaces. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-112 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-083, NMH-136, NMH-052. Ledger: `preserved` first-run copy. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-113 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-033, NMH-045, NMH-047. Ledger: `preserved` live search. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-114 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-003 Done confirm, NMH-005 alternatives, NMH-037 leftover motion, NMH-141 cursor. Ledger: `preserved` drag/drop. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-115 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-036 floor. StatusDot is NMH-079 (do not reuse here). Ledger: `preserved` inclusive workflow color. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-116 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-137 unplug NV. NMH-100 cache. Ledger: `preserved` persistent player + capture pause. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-117 | 8 | preserved |  | (see commit) | end-phase preserve; Independent of NMH-134 type scaling. Ledger: `preserved` candidate UI. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-118 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-051 list activation. Ledger: `preserved` 780 split. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-119 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-050, NMH-087. Ledger: `preserved` empty/zero Analytics. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-120 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-009, NMH-044, NMH-110. Ledger: `preserved` cache+background scan. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-121 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-016 extra. Do not default Quit. Ledger: `preserved` quit alert. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-122 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-002, NMH-003, NMH-057. Friends+backup removal still gated. Ledger: `preserved` fail-closed vault paths. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-123 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-007, NMH-029, NMH-035, NMH-063, NMH-096. Ledger: `preserved` BPM pad/clipboard/confirm. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-124 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-059, NMH-064, NMH-081, NMH-126. Ledger: `preserved` recorder meter/timer/banner. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-125 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-030, NMH-061, NMH-063. Do not add informational alerts. Ledger: `preserved` shelf/drop/validation. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-126 | 8 | preserved |  | (see commit) | end-phase preserve; NMH-059 runtime denial. Do not imitate Allow. Ledger: `preserved` purpose strings. | class=passes tested check; sev=—; deferred-sweep 2026-09-16 |
+| NMH-143 | 8 | skipped-n/a |  | (see commit) | n/a: Extra uses titled Labels (NMH-104). | class=not applicable; sev=—; deferred-sweep 2026-09-16 |
+| NMH-144 | 8 | skipped-n/a |  | (see commit) | n/a: Implement NMH-011 instead. | class=not applicable; sev=—; deferred-sweep 2026-09-16 |
 
 ## Footer
 
