@@ -103,7 +103,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-097 | 6 | implemented-awaiting-runtime | b623b2fcd29edd17223ac2fbfb04b169cc4f8ea5 | (see commit) | see nmh-hig-NMH-097-result.md; worker exit 0 | batch-NMH-097-94716c5d; auto-integrated |
 | NMH-127 | 7 | implemented-awaiting-runtime | f03aa4c1322cf5dfc23dc6d2d2700fdae7c9aa93 | (see commit) | see nmh-hig-NMH-127-result.md; worker exit 0 | batch-NMH-127-77045c76; auto-integrated |
 | NMH-128 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-128-1dad007a; auto-integrated |
-| NMH-129 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-129 | 7 | blocked |  | (see commit) | worker reported progress but working tree clean | batch-NMH-129-59bb05e1; auto-integrated |
 | NMH-130 | 7 | pending |  |  |  | class=needs verification; sev=Low |
 | NMH-131 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
 | NMH-132 | 7 | pending |  |  |  | class=needs verification; sev=Low |
