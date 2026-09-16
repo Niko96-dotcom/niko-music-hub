@@ -28,10 +28,12 @@ extension ProjectWorkflowStatus {
     }
 }
 
-/// Soft status chip (reference: `color.opacity(0.16)` fill + colored text, never a saturated
-/// block, never a stroke). Status color only carries meaning when a real status is set — the
-/// "No Status" case is rendered as quiet `textTertiary` text at the call site instead of this
-/// pill (see `SongCardView`).
+/// Soft status chip (reference: `color.opacity(0.16)` fill + textPrimary label
+/// with a tinted icon, never a saturated block, never a stroke). NMH-131 moved
+/// the 10 pt label off tint-colored text (1.3-4.3:1 on the fill) to textPrimary
+/// (>= 5.2:1 on every stage fill, light and dark). Status color only carries
+/// meaning when a real status is set — the "No Status" case is a neutral fill
+/// with a quiet icon instead of this tinted pill (see `SongCardView`).
 struct ArchiveWorkflowStatusPill: View {
     let status: ProjectWorkflowStatus?
     var compact = false
@@ -40,11 +42,12 @@ struct ArchiveWorkflowStatusPill: View {
         HStack(spacing: 4) {
             Image(systemName: status?.archiveSymbolName ?? "tag")
                 .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(iconColor)
             Text(status?.shortTitle ?? "No Status")
                 .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .lineLimit(1)
         }
-        .foregroundStyle(foreground)
         .padding(.horizontal, compact ? 6 : 8)
         .frame(height: compact ? 18 : 22)
         .background(
@@ -55,7 +58,13 @@ struct ArchiveWorkflowStatusPill: View {
         .accessibilityLabel(status?.displayTitle ?? "No status")
     }
 
-    private var foreground: Color {
+    /// NMH-131: the pill icon keeps the stage tint (shape + fill carry stage
+    /// identity with the title per NMH-115; the icon is redundant with the
+    /// adjacent title, which carries the 4.5:1 requirement). No fill opacity
+    /// repairs tint-colored 10 pt text in both appearances at once — raising
+    /// the fill lowers same-hue contrast on dark, and light tints already fail
+    /// on bare surface — so the label foreground, not the fill, changed.
+    private var iconColor: Color {
         status?.archiveTint ?? HubDesignSystem.Palette.textSecondary
     }
 

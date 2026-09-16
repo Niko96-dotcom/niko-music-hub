@@ -281,10 +281,17 @@ public enum HubDesignSystem {
             dark:  Color(.sRGB, red: 156/255, green: 158/255, blue: 167/255, opacity: 1),
             lightHigh: Color(.sRGB, red: 60/255,  green: 60/255,  blue: 66/255,  opacity: 1),
             darkHigh:  Color(.sRGB, red: 196/255, green: 198/255, blue: 206/255, opacity: 1)))
-        /// Tertiary/muted text. calm-native --textTertiary rgb(108,110,120).
+        /// Tertiary/muted text. NMH-131: the standard pairs below replace the
+        /// calm-native --textTertiary rgb(108,110,120) / light rgb(132,132,136),
+        /// which measured 3.3-3.7:1 on canvas/surface/sidebar (WCAG AA needs
+        /// 4.5:1 at 10-13 pt). Measured post-fix pairs (sRGB, per opaque fill):
+        /// dark 140,142,152 -> 5.16 surface, 5.44 sidebar, 5.74 canvas, 4.58 raised;
+        /// light 105,105,110 -> 5.05 surface, 4.74 sidebar, 5.18 canvas, 5.23 raised.
+        /// Hierarchy holds: tertiary stays dimmer than textSecondary in both
+        /// appearances, and dimmer than the Increase Contrast pairs.
         public static let textTertiary = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 132/255, green: 132/255, blue: 136/255, opacity: 1),
-            dark:  Color(.sRGB, red: 108/255, green: 110/255, blue: 120/255, opacity: 1),
+            light: Color(.sRGB, red: 105/255, green: 105/255, blue: 110/255, opacity: 1),
+            dark:  Color(.sRGB, red: 140/255, green: 142/255, blue: 152/255, opacity: 1),
             lightHigh: Color(.sRGB, red: 80/255,  green: 80/255,  blue: 86/255,  opacity: 1),
             darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
         /// Subtle neutral selection fill (low-chroma, NOT accent). calm-native --selection rgb(46,48,54).
