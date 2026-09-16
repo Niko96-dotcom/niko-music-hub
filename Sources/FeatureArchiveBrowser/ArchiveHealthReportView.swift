@@ -9,7 +9,7 @@ struct ArchiveHealthReportView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
             if !compact {
-                Text("Archive health")
+                Text("Scan health")
                     .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }

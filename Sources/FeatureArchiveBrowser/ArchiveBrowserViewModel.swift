@@ -142,6 +142,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// rebuild cards without reloading settings. Settings changes replace this
     /// context through `refreshProjectVaultPresentationContext()`.
     var projectVaultPresentationContext: ProjectVaultPresentationContext?
+    /// Sidebar Project Vault provider status (NMH-057). Refreshed with the
+    /// card context so the render path never touches `SettingsStore`.
+    @Published var projectVaultHealth = ProjectVaultHealth(
+        providerStatus: .notConfigured,
+        lastSuccessfulVerificationAt: nil,
+        hasIndependentBackup: false
+    )
     var projectVaultSnapshotsByPath: [String: ProjectVaultRuntimeSnapshot] = [:]
     /// The latest runtime snapshot list is retained separately from the path lookup
     /// map so changing the archived-project visibility toggle can rebuild the catalog

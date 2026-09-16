@@ -7,6 +7,7 @@ struct ArchiveSidebarMorePanel: View {
     @Binding var isExpanded: Bool
     @ObservedObject var sidebarUI: ArchiveSidebarUIState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -34,11 +35,22 @@ struct ArchiveSidebarMorePanel: View {
 
             if isExpanded {
                 libraryRow(
-                    title: "Archive Health",
+                    title: "Scan Health",
                     systemImage: "chart.bar.doc.horizontal",
                     isExpanded: $sidebarUI.healthRowExpanded
                 ) {
                     ArchiveHealthReportView(report: viewModel.sidebarHealthContext.report, compact: true)
+                }
+
+                libraryRow(
+                    title: "Project Vault",
+                    systemImage: "archivebox",
+                    isExpanded: $sidebarUI.vaultRowExpanded
+                ) {
+                    SidebarProjectVaultStatusView(
+                        health: viewModel.projectVaultHealth,
+                        openVaultSettings: openVaultSettings
+                    )
                 }
 
                 libraryRow(
@@ -131,6 +143,47 @@ struct ArchiveSidebarMorePanel: View {
             }
         }
     }
+
+    /// NMH-057: deep-link to the Vault Settings pane. The pane notification
+    /// selects Vault when Settings is already open; `openSettings()` opens it
+    /// otherwise, and the deferred repost selects Vault once the fresh
+    /// Settings window has mounted its pane observer.
+    private func openVaultSettings() {
+        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.vault)
+        openSettings()
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.vault)
+        }
+    }
+}
+
+/// NMH-057: Project Vault provider status. Scan counts live under Scan Health;
+/// this row reports only the vault disk/provider state and links to Settings.
+private struct SidebarProjectVaultStatusView: View {
+    let health: ProjectVaultHealth
+    let openVaultSettings: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(
+                ProjectVaultHealthCopy.archiveSidebarLine(health),
+                systemImage: health.providerStatus == .offline
+                    ? "externaldrive.badge.exclamationmark" : "externaldrive.badge.checkmark"
+            )
+            .font(HubDesignSystem.Typography.caption())
+            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HubLabeledButton(
+                icon: "gearshape",
+                label: "Open Vault Settings",
+                style: .ghost,
+                help: "Open Project Vault settings"
+            ) {
+                openVaultSettings()
+            }
+        }
+        .padding(6)
+    }
 }
 
 /// Collapsed points forward (`chevron.forward`); expanded rotates down in both directions.
@@ -159,7 +212,7 @@ private struct ForwardDisclosureChevron: View {
             ForwardDisclosureChevron(isExpanded: false)
         }
         HStack {
-            Text("Archive Health")
+            Text("Scan Health")
             Spacer(minLength: 0)
             ForwardDisclosureChevron(isExpanded: true)
         }

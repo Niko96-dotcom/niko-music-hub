@@ -194,10 +194,19 @@ extension ArchiveBrowserViewModel {
     /// Loads the narrow settings context at an explicit settings boundary, then
     /// rebuilds the card map. The render path itself never calls `SettingsStore`.
     func refreshProjectVaultPresentationContext(notifyWhenChanged: Bool = true) {
-        let nextContext = (try? settingsStore.loadSettings())
+        let settings = try? settingsStore.loadSettings()
+        let nextContext = settings
             .flatMap(ProjectVaultPresentationContext.init(settings:))
         let contextChanged = nextContext != projectVaultPresentationContext
         projectVaultPresentationContext = nextContext
+        // NMH-057: sidebar Project Vault status rides the same settings
+        // boundary as the card map; views read the cached value.
+        if let settings {
+            let nextHealth = ProjectVaultHealthEvaluator().evaluate(settings: settings)
+            if nextHealth != projectVaultHealth {
+                projectVaultHealth = nextHealth
+            }
+        }
         let presentationsChanged = rebuildProjectVaultPresentationCache(notifyWhenChanged: false)
         if notifyWhenChanged && (contextChanged || presentationsChanged) {
             objectWillChange.send()
