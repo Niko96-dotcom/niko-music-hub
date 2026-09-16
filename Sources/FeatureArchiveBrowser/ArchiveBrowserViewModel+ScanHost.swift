@@ -81,6 +81,8 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyScanFailure(_ error: Error) {
         mutateCatalog {
             scanDiagnostics = nil
+            // NMH-049: nearby card shows the recovery body; the footer keeps the technical line.
+            scanError = ArchiveOpenErrorCopy.scanBody
             setBackgroundStatusMessage("Scan failed: \(error.localizedDescription)")
         }
         diagnostics.log(.error, statusMessage ?? "scan failed")

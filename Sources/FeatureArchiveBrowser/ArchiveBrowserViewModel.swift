@@ -57,14 +57,33 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
     @Published var selectedShelf: ArchiveSmartShelf = .allSongs
     @Published var selectedCollaboratorID: String?
-    @Published var selectedSong: Song?
+    @Published var selectedSong: Song? {
+        didSet {
+            // NMH-049: a song change dismisses the nearby open error.
+            // Guarded so an already-clear error adds no extra publish.
+            if oldValue?.id != selectedSong?.id, openError != nil {
+                openError = nil
+            }
+        }
+    }
     /// Song-detail "Details" disclosure state — hoisted so the browser-level "d"
     /// keyboard shortcut can toggle it.
     @Published var songDetailsExpanded = false
     @Published var isScanning = false {
-        didSet { publishShellJobStatus() }
+        didSet {
+            // NMH-049: a new scan dismisses the nearby scan error.
+            // Guarded so an already-clear error adds no extra publish.
+            if isScanning, scanError != nil {
+                scanError = nil
+            }
+            publishShellJobStatus()
+        }
     }
     @Published var statusMessage: String?
+    /// NMH-049: nearby open failure recovery (footer `statusMessage` stays the log).
+    @Published var openError: String?
+    /// NMH-049: nearby scan failure body (footer keeps `Scan failed: …`).
+    @Published var scanError: String?
     @Published var scanDiagnostics: ArchiveScanDiagnostics?
     @Published var lastDryRunLog: String?
     @Published var lastDiagnosticsExportPath: String?

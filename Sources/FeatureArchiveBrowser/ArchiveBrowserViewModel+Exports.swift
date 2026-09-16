@@ -95,6 +95,7 @@ extension ArchiveBrowserViewModel {
     func openLatestCPR(for song: Song) throws {
         if let reason = projectOpenBlockReason(for: song) {
             setStatusMessage(reason)
+            openError = reason
             throw MusicItemOpenerError.pathOutsideAllowedRoots(song.folderPath.standardizedFileURL)
         }
         do {
@@ -108,11 +109,20 @@ extension ArchiveBrowserViewModel {
                     let displayPath = Song.displayDryRunPath(result.path)
                     print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
                 }
+                // NMH-049: a successful open dismisses the nearby open error.
+                openError = nil
             } else {
                 setStatusMessage("No Cubase (.cpr) or Ableton Live (.als) project was found in this song folder.")
+                openError = nil
             }
         } catch let error as MusicItemOpenerError {
             setStatusMessage(musicItemOpenerStatusMessage(error))
+            // NMH-049: nearby recovery keeps the footer as the technical log.
+            if case .pathDoesNotExist = error {
+                openError = ArchiveOpenErrorCopy.missingProject
+            } else {
+                openError = musicItemOpenerStatusMessage(error)
+            }
             throw error
         }
     }

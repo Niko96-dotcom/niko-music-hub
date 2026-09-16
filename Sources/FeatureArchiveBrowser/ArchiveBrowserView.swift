@@ -18,6 +18,10 @@ struct ArchiveBrowserView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if viewModel.scanError != nil {
+                scanFailureCard
+            }
         GeometryReader { proxy in
             let listWidth = ArchiveBrowserLayout.listWidth(totalWidth: proxy.size.width)
             let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
@@ -95,9 +99,14 @@ struct ArchiveBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if viewModel.openError != nil {
+                    openFailureStrip
+                }
             if viewModel.searchResultCountText != nil || viewModel.statusMessage?.isEmpty == false {
                 HStack {
                     if let count = viewModel.searchResultCountText {
@@ -115,6 +124,7 @@ struct ArchiveBrowserView: View {
                     .padding(.horizontal, HubToolLayout.horizontalPadding)
                     .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
                     .background(.bar)
+            }
             }
         }
         .focusable(interactions: .edit)
@@ -406,6 +416,63 @@ struct ArchiveBrowserView: View {
         )
     }
 
+    /// NMH-049: nearby scan failure with recovery. Inline card (no `AppErrorCategory`
+    /// archive case exists, so `StandardErrorCard` with `.helperTool` would mis-tag it).
+    /// The footer `statusMessage` keeps the technical `Scan failed: …` line as a log.
+    private var scanFailureCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(ArchiveOpenErrorCopy.scanTitle)
+                .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            Text(viewModel.scanError ?? ArchiveOpenErrorCopy.scanBody)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HubLabeledButton(
+                icon: "arrow.clockwise",
+                label: ArchiveOpenErrorCopy.tryAgain,
+                style: .secondary,
+                help: "Try the archive scan again"
+            ) {
+                Task { await viewModel.scan() }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
+        .padding(.horizontal, HubToolLayout.horizontalPadding)
+        .padding(.top, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(ArchiveOpenErrorCopy.scanTitle). \(viewModel.scanError ?? ArchiveOpenErrorCopy.scanBody)")
+    }
+
+    /// NMH-049: nearby open failure above the footer for keyboard-triggered Open
+    /// while detail is hidden (board). Detail shows the same text near Open.
+    private var openFailureStrip: some View {
+        HStack(spacing: 10) {
+            Text(viewModel.openError ?? "")
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.warning)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if let song = viewModel.selectedSong,
+               viewModel.preferredRevealURL(for: song) != nil {
+                HubLabeledButton(
+                    icon: "folder",
+                    label: ArchiveOpenErrorCopy.revealSongFolder,
+                    style: .secondary,
+                    help: "Reveal the song folder in Finder"
+                ) {
+                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, HubToolLayout.horizontalPadding)
+        .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
+        .background(.bar)
+    }
+
     private func performOpenPreview() {
         guard let song = viewModel.selectedSong else { return }
         try? viewModel.openMainPreview(for: song)
@@ -413,7 +480,11 @@ struct ArchiveBrowserView: View {
 
     private func performOpenProject() {
         guard let song = viewModel.selectedSong else { return }
-        try? viewModel.openLatestCPR(for: song)
+        do {
+            try viewModel.openLatestCPR(for: song)
+        } catch {
+            // openError already set inside openLatestCPR
+        }
     }
 
     private func performRevealInFinder() {

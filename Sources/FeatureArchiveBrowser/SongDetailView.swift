@@ -208,6 +208,22 @@ struct SongDetailView: View {
                 .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hubCard()
+                // NMH-049: nearby open failure with recovery next to Open.
+                // The footer statusMessage keeps the technical line as a log.
+                if let openError = viewModel.openError {
+                    Text(openError)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HubLabeledButton(
+                        icon: "folder",
+                        label: ArchiveOpenErrorCopy.revealSongFolder,
+                        style: .secondary,
+                        help: "Reveal the song folder in Finder"
+                    ) {
+                        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
+                    }
+                }
             }
             if workspaceTab != .previews {
                 HStack(spacing: 10) {
