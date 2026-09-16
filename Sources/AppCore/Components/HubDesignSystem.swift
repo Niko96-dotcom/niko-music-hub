@@ -218,19 +218,22 @@ public enum HubDesignSystem {
     //
     // Light-catching accents (top rim, body sheen, hairlines) as tokens — these are the glassy
     // edges that separate a premium surface from a flat rectangle. Neutral white/black opacities
-    // (appearance-independent), so no DS-11 achromatic concern.
+    // that flip with appearance via HubDynamicColor (NMH-074): dark uses a white highlight,
+    // light uses a dark (black) highlight so the rim stays visible on a light fill.
 
     public enum Highlight {
         /// Bright top rim on a raised surface (the edge that catches light).
-        public static let rim = Color.white.opacity(0.04)
+        /// Dark: white 0.04; light: black 0.06.
+        public static let rim = Color(HubDynamicColor(light: Color.black.opacity(0.06), dark: Color.white.opacity(0.04)))
         /// Stronger rim for selected / emphasized surfaces.
-        public static let rimStrong = Color.white.opacity(0.07)
-        /// Soft vertical body sheen (top a touch brighter than the fill).
-        public static let sheen = Color.white.opacity(0.015)
+        public static let rimStrong = Color(HubDynamicColor(light: Color.black.opacity(0.10), dark: Color.white.opacity(0.07)))
+        /// Soft vertical body sheen (top a touch brighter than the fill in dark, a touch
+        /// darker than the fill in light).
+        public static let sheen = Color(HubDynamicColor(light: Color.black.opacity(0.03), dark: Color.white.opacity(0.015)))
         /// Darker underside edge, opposite the rim.
         public static let underside = Color.black.opacity(0.05)
-        /// Subtle neutral hairline (dividers, quiet strokes) that reads on near-black.
-        public static let hairline = Color.white.opacity(0.045)
+        /// Subtle neutral hairline (dividers, quiet strokes). Dark: white 0.045; light: black.
+        public static let hairline = Color(HubDynamicColor(light: Color.black.opacity(0.07), dark: Color.white.opacity(0.045)))
     }
 
     // MARK: - Semantic Palette

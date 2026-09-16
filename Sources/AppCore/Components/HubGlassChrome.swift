@@ -22,7 +22,11 @@ public struct HubShellBackground: View {
             HubDesignSystem.Palette.canvas
                 .opacity(reduceTransparency ? 1 : 0.82)
             LinearGradient(
-                colors: [Color.white.opacity(0.022), Color.white.opacity(0), Color.black.opacity(0.06)],
+                colors: [
+                    Color(HubDynamicColor(light: Color.black.opacity(0.05), dark: Color.white.opacity(0.022))),
+                    Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
+                    Color.black.opacity(0.06),
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )

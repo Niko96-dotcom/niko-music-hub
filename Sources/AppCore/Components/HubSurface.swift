@@ -48,6 +48,7 @@ public enum HubSurfaceLevel: Sendable {
 /// Applies a `HubSurfaceLevel` + interactive `ControlState` as a coherent surface.
 public struct HubSurface: ViewModifier {
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private let level: HubSurfaceLevel
     private let state: HubDesignSystem.ControlState
@@ -84,13 +85,34 @@ public struct HubSurface: ViewModifier {
     }
 
     private func subtleSheen(shape: RoundedRectangle) -> some View {
-        shape.fill(
-            LinearGradient(
-                colors: [Color.white.opacity(sheenOpacity), Color.white.opacity(0)],
-                startPoint: .top,
-                endPoint: .center
-            )
-        )
+        Group {
+            if reduceTransparency {
+                EmptyView()
+            } else {
+                shape.fill(
+                    LinearGradient(
+                        colors: [sheenHighlight, sheenClear],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
+            }
+        }
+    }
+
+    /// Appearance-dependent sheen highlight (NMH-074): white on dark, black on light.
+    private var sheenHighlight: Color {
+        Color(HubDynamicColor(
+            light: Color.black.opacity(min(sheenOpacity * 1.5, 1)),
+            dark: Color.white.opacity(sheenOpacity)
+        ))
+    }
+
+    private var sheenClear: Color {
+        Color(HubDynamicColor(
+            light: Color.black.opacity(0),
+            dark: Color.white.opacity(0)
+        ))
     }
 
     @ViewBuilder

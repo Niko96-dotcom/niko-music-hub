@@ -50,7 +50,11 @@ struct HubGlassBackdrop: View {
                 HubDesignSystem.Palette.sidebar.opacity(reduceTransparency ? 1 : max(tint, 0.72))
             }
             LinearGradient(
-                colors: [Color.white.opacity(0.07), Color.white.opacity(0), Color.black.opacity(0.12)],
+                colors: [
+                    Color(HubDynamicColor(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.07))),
+                    Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
+                    Color.black.opacity(0.12),
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -77,7 +81,10 @@ public extension View {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.10), Color.white.opacity(0)],
+                        colors: [
+                            Color(HubDynamicColor(light: Color.black.opacity(0.12), dark: Color.white.opacity(0.10))),
+                            Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
+                        ],
                         startPoint: .top,
                         endPoint: .bottom
                     ),
