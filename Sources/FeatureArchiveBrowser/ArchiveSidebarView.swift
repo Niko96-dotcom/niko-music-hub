@@ -379,8 +379,25 @@ struct ArchiveSidebarView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .focusable(true)
             .onMoveCommand { direction in
                 viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
+            }
+            .onKeyPress(.upArrow) {
+                viewModel.moveSongSelection(.up)
+                return .handled
+            }
+            .onKeyPress(.downArrow) {
+                viewModel.moveSongSelection(.down)
+                return .handled
+            }
+            .onKeyPress(.leftArrow) {
+                viewModel.moveSongSelection(.left)
+                return .handled
+            }
+            .onKeyPress(.rightArrow) {
+                viewModel.moveSongSelection(.right)
+                return .handled
             }
         }
     }

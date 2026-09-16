@@ -34,6 +34,44 @@ enum ArchiveShortcutFocusPolicy {
             _ = window.makeFirstResponder(window.contentView)
         }
     }
+    /// NMH-006: NSScrollView eats arrow keyDowns before SwiftUI `onMoveCommand` /
+    /// `onKeyPress` see them. While archive song shortcuts are allowed, convert
+    /// arrows into `moveSongSelection` and consume the event.
+    @MainActor
+    private static var arrowKeyMonitor: Any?
+
+    @MainActor
+    static func installArchiveArrowKeyMonitor(move: @escaping (ArchiveSongMoveDirection) -> Void) {
+        removeArchiveArrowKeyMonitor()
+        arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let direction: ArchiveSongMoveDirection?
+            switch event.keyCode {
+            case 126: direction = .up
+            case 125: direction = .down
+            case 123: direction = .left
+            case 124: direction = .right
+            default: direction = nil
+            }
+            guard let direction else { return event }
+            // Prefer claiming away from field editors; then ignore only active text editing.
+            claimArchiveKeyFocus()
+            let first = NSApp?.keyWindow?.firstResponder
+            if first is NSTextView || first is NSTextField || first is NSSearchField {
+                return event
+            }
+            move(direction)
+            return nil
+        }
+    }
+
+    @MainActor
+    static func removeArchiveArrowKeyMonitor() {
+        if let arrowKeyMonitor {
+            NSEvent.removeMonitor(arrowKeyMonitor)
+            self.arrowKeyMonitor = nil
+        }
+    }
+
 }
 
 /// Actions the Song menu runs while the archive group is focused (NMH-034).

@@ -122,7 +122,7 @@ struct ArchiveBrowserView: View {
             }
             }
         }
-        .focusable(interactions: .edit)
+        .focusable(true)
         .focused($keyboardFocus, equals: .archive)
         .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
         .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
@@ -138,15 +138,38 @@ struct ArchiveBrowserView: View {
         .onAppear {
             ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             keyboardFocus = .archive
+            ArchiveShortcutFocusPolicy.installArchiveArrowKeyMonitor { direction in
+                viewModel.moveSongSelection(direction)
+            }
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
             viewModel.presentPendingIdentityReviewsIfNeeded()
+        }
+        .onDisappear {
+            ArchiveShortcutFocusPolicy.removeArchiveArrowKeyMonitor()
         }
         .onChange(of: songCommandSyncToken) { _, _ in
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
         }
-        .onMoveCommand { direction in
-            guard allowsSongShortcuts else { return }
-            viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
+        .onMoveCommand(perform: handleArchiveMoveCommand)
+        .onKeyPress(.upArrow) {
+            guard allowsSongShortcuts else { return .ignored }
+            handleArchiveMoveCommand(.up)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            guard allowsSongShortcuts else { return .ignored }
+            handleArchiveMoveCommand(.down)
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            guard allowsSongShortcuts else { return .ignored }
+            handleArchiveMoveCommand(.left)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            guard allowsSongShortcuts else { return .ignored }
+            handleArchiveMoveCommand(.right)
+            return .handled
         }
         .onKeyPress(.return) {
             guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
@@ -203,6 +226,7 @@ struct ArchiveBrowserView: View {
             }
         }
         .onKeyPress(.space) {
+            ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             guard allowsSongShortcuts else { return .ignored }
             guard performPlayPausePreview() else { return .ignored }
             return .handled
@@ -479,6 +503,11 @@ struct ArchiveBrowserView: View {
         .padding(.horizontal, HubToolLayout.horizontalPadding)
         .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
         .background(.bar)
+    }
+
+    private func handleArchiveMoveCommand(_ direction: MoveCommandDirection) {
+        guard allowsSongShortcuts else { return }
+        viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
     }
 
     private func performOpenPreview() {
