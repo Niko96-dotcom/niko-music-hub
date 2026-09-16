@@ -31,6 +31,9 @@ public struct HubChoiceChips<Value: Hashable>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredValue: Value?
+    // NMH-133: custom ButtonStyle suppresses the system focus ring, so track
+    // which chip holds keyboard focus and draw the Hub Palette.focus ring.
+    @FocusState private var focusedValue: Value?
 
     public init(_ accessibilityLabel: String, selection: Binding<Value>, choices: [Choice]) {
         self.accessibilityLabel = accessibilityLabel
@@ -62,12 +65,20 @@ public struct HubChoiceChips<Value: Hashable>: View {
             )
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
+        .focusable()
+        .focused($focusedValue, equals: choice.value)
         .fixedSize()
         .onHover { hovering in
             updateHover(choice.value, hovering: hovering)
         }
         .hubDistinctHelp(choice.help, comparedTo: choice.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .overlay {
+            if focusedValue == choice.value {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                    .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+            }
+        }
     }
 
     private func updateHover(_ value: Value, hovering: Bool) {

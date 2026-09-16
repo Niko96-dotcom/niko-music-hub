@@ -42,6 +42,9 @@ public struct HubLabeledButton: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    // NMH-133: custom ButtonStyle suppresses the system focus ring, so track
+    // keyboard focus explicitly and draw the Hub Palette.focus ring.
+    @FocusState private var isFocused: Bool
 
     public init(
         icon: String,
@@ -76,6 +79,14 @@ public struct HubLabeledButton: View {
             )
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
+        .focusable()
+        .focused($isFocused)
+        .overlay {
+            if isFocused {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                    .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+            }
+        }
         .onHover(perform: updateHover)
         .opacity(isEnabled ? 1 : 0.45)
         .disabled(!isEnabled)

@@ -64,6 +64,9 @@ public struct HubIconButton: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    // NMH-133: custom ButtonStyle suppresses the system focus ring, so track
+    // keyboard focus explicitly and draw the Hub Palette.focus ring.
+    @FocusState private var isFocused: Bool
 
     public init(
         systemImage: String,
@@ -103,6 +106,19 @@ public struct HubIconButton: View {
         .accessibilityLabel(accessibilityLabel)
         .modifier(ToggleAccessibilityModifier(isToggle: isToggle, isSelected: isSelected))
         .hubDistinctHelp(help, comparedTo: accessibilityLabel)
+        .focusable()
+        .focused($isFocused)
+        .overlay {
+            if isFocused {
+                RoundedRectangle(
+                    cornerRadius: appearance == .toolbar
+                        ? HubDesignSystem.Radius.button
+                        : HubDesignSystem.Radius.chip,
+                    style: .continuous
+                )
+                .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+            }
+        }
         .onHover(perform: updateHover)
         .disabled(!isEnabled)
     }
