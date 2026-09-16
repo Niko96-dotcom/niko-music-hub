@@ -35,3 +35,7 @@ System Close remained disabled and ate ⌘W until the key monitor called `NSWind
 - Close + Minimize restored and verified.
 - Full Screen still does not enter full screen in fixture GUI session — leave **implemented-awaiting-runtime** until FS is proven (or root-caused).
 - Undo still needs a focused text-field proof on a later pass.
+
+## Follow-up (2026-09-16 21:45 CEST)
+Style mask titled/closable/miniaturizable/resizable forced (`913b3c5`). Retest still `AXFullScreen=false` at 1280×820 for ⌃⌘F and Window > Enter Full Screen. Close/Minimize remain PASS.
+
