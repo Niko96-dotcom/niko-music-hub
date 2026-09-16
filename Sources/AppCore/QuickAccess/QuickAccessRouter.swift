@@ -20,7 +20,7 @@ public final class QuickAccessRouter: ObservableObject {
     /// Audio files to prefill in the WAV converter after `openConverter(with:)`.
     @Published public private(set) var prefilledConverterURLs: [URL] = []
 
-    /// Monotonic request counter so repeated Search Archive… commands are observable.
+    /// Monotonic request counter so repeated Find (⌘F / ⌥⌘F) and Search Archive… commands are observable.
     @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
 
     /// Pending Settings pane. Does not change `selectedToolID`.

@@ -101,6 +101,18 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertEqual(router.archiveSearchFocusRequest, 3)
     }
 
+    func testExecuteFindIncrementsArchiveSearchFocusRequestAndSelectsArchiveBrowser() {
+        let router = QuickAccessRouter()
+        XCTAssertEqual(router.archiveSearchFocusRequest, 0)
+        XCTAssertNil(router.selectedToolID)
+        router.execute(.focusArchiveSearch)
+        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.archiveSearchFocusRequest, 1)
+        router.execute(.focusArchiveSearch)
+        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.archiveSearchFocusRequest, 2)
+    }
+
     // MARK: - clearSelectedToolID
 
     func testSelectedToolIDIsNilAfterClear() {

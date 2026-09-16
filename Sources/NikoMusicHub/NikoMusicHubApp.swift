@@ -44,6 +44,7 @@ struct NikoMusicHubApp: App {
                 router: composition.router,
                 session: shellSession
             )
+            HubFindCommands(router: composition.router)
             HubHelpCommands(router: composition.router)
         }
 
