@@ -83,12 +83,7 @@ struct ArchiveBrowserView: View {
                     .background(Color.clear)
                 }
 
-                if viewModel.needsFirstRunOnboarding {
-                    Color.black.opacity(0.35)
-                        .ignoresSafeArea()
-                    ArchiveFirstRunView(viewModel: viewModel, onChooseRoot: chooseRoot)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.showsArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
+                if viewModel.showsArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
                     Color.black.opacity(0.35)
                         .ignoresSafeArea()
                     ArchiveAccessRecoveryView(
@@ -219,6 +214,13 @@ struct ArchiveBrowserView: View {
         }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.needsFirstRunOnboarding },
+            set: { _ in /* NMH-083: no Skip; dismiss only via a chosen root */ }
+        )) {
+            ArchiveFirstRunView(onChooseRoot: chooseRoot)
+                .interactiveDismissDisabled(true)
         }
         .alert(
             workflowDoneAlertTitle,

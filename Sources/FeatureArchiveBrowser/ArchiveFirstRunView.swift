@@ -2,7 +2,6 @@ import AppCore
 import SwiftUI
 
 struct ArchiveFirstRunView: View {
-    @ObservedObject var viewModel: ArchiveBrowserViewModel
     let onChooseRoot: () -> Void
 
     var body: some View {
