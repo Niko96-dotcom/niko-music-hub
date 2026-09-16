@@ -53,3 +53,37 @@ Retest after focused FS fix attempt (`HubWindowChromeActions.forceKey` + deferre
 Also tried `.windowStyle(.titleBar)` temporarily — did **not** fix FS; reverted to `.hiddenTitleBar`.
 
 **Root cause note:** in this unattended fixture GUI session the main window never becomes key (`NSApp.keyWindow` stays nil while app is active). AppKit Full Screen appears to require a key window. Leave **implemented-awaiting-runtime** until FS is proven in an interactive session (or a different key-window ownership fix is found). Undo still not confirmed.
+
+## Follow-up (2026-09-16 23:22 CEST) — Full Screen PASS
+
+Proof: `dist/gui-accept/NMH-129-fs-20260916-232156/` (suite-isolated, `DRY_RUN_OPEN=1`, `NIKO_MUSIC_HUB_UI_TOOL=archive-browser`).
+
+### Window enumeration (root cause)
+
+Three + helper windows when FS was failing earlier:
+
+| Window | Class | Role |
+|--------|-------|------|
+| `hub.main` | `SwiftUI.AppKitWindow` | main; `canBecomeKey=true`; often `attachedSheet=true` |
+| status | `NSStatusBarWindow` | MenuBarExtra (`canBecomeKey=false`) |
+| sheet | `SheetPresentationWindow` | **was key**; ~470×249; blocks/steals key from hub.main |
+
+Earlier false FAIL: AX queried `window 1` after enter (mouse-detection strip 1728×33) so `AXFullScreen` looked false while hub.main was already full screen. A second menu toggle then **exited** FS.
+
+### Fix (code)
+
+`HubWindowChromeActions.toggleFullScreenMainWindow`:
+
+1. Dismiss attached SwiftUI sheets / `SheetPresentationWindow`
+2. `forceKey` (`.regular` activation, demote blockers, `orderFrontRegardless` + `makeKeyAndOrderFront`, clear `isExcludedFromWindowsMenu`)
+3. Temporarily remove `.fullSizeContentView` and keep `.managed` + `.fullScreenPrimary`, then `toggleFullScreen`
+4. Optional dump via `NIKO_MUSIC_HUB_FS_DEBUG=1` → `/tmp/nmh-129-fs-debug.txt`
+
+### Observed result
+
+| Check | Result |
+|-------|--------|
+| Window > Enter Full Screen | **PASS** (`menu_any_fs=true`; hub.main `AXFullScreen=true` at 1728×1084; `fsBit=true` style 16399; `NSToolbarFullScreenWindow` present) |
+| Close / Minimize | unchanged **PASS** |
+
+Verdict: promote NMH-129 to **fixed** (Close/Minimize/Full Screen verified in fixture GUI). Undo still not confirmed (out of scope for this Accept).
