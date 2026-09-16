@@ -425,6 +425,7 @@ private struct ArchiveBoardColumnView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
+            .help(column.title)
         } else {
             expandedColumnHeader(column)
         }
