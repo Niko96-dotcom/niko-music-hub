@@ -22,7 +22,7 @@ struct NikoMusicHubApp: App {
     }
 
     var body: some Scene {
-        WindowGroup(id: "main") {
+        Window("Niko Music Hub", id: "main") {
             AppShellView(
                 registry: composition.registry,
                 context: composition.context,
