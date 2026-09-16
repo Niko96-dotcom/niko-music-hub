@@ -45,7 +45,9 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         let controller = StopAfterCurrentController()
         let converter = RecordingBatchConverter { request in
             controller.requestStopAfterCurrent()
-            return makeResult(for: request, converterPath: .native)
+            let result = makeResult(for: request, converterPath: .native)
+            try Data("verified-wav-fixture".utf8).write(to: result.outputURL)
+            return result
         }
         let useCase = makeUseCase(
             directory: directory,
@@ -59,9 +61,13 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         )
 
         XCTAssertEqual(converter.requests.map(\.sourceURL), [first.sourceURL])
-        guard case .verified = outcomes[0].status else {
+        guard case let .verified(result) = outcomes[0].status else {
             return XCTFail("Expected active row to finish before stopping")
         }
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: result.outputURL.path),
+            "Verified WAV must remain after stop-after-current"
+        )
         XCTAssertEqual(outcomes[1].status, .skipped)
         XCTAssertEqual(outcomes[2].status, .skipped)
     }

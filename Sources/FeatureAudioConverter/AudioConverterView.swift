@@ -242,13 +242,14 @@ public struct AudioConverterView: View {
                 if viewModel.isConverting {
                     HubLabeledButton(
                         icon: "stop.fill",
-                        label: "Stop",
+                        label: AudioConverterCopy.stopAfterThisFile,
                         style: .secondary,
+                        help: AudioConverterCopy.stopAfterThisFileHelp,
                         isEnabled: viewModel.canRequestStopAfterCurrent
                     ) {
                         viewModel.requestStopAfterCurrent()
                     }
-                    Button("Stop After This File") {
+                    Button(AudioConverterCopy.stopAfterThisFile) {
                         viewModel.requestStopAfterCurrent()
                     }
                     .keyboardShortcut(.cancelAction)

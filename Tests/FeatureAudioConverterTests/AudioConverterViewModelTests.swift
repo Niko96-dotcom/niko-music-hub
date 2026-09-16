@@ -200,6 +200,74 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(converter.requests.map(\.sourceURL), [first])
     }
 
+    func testStopAfterCurrentSkipsRemainingRows() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.wav", in: directory)
+        let second = try makeFile(named: "Second.wav", in: directory)
+        let third = try makeFile(named: "Third.wav", in: directory)
+        var viewModel: AudioConverterViewModel!
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await MainActor.run {
+                    XCTAssertTrue(viewModel.canRequestStopAfterCurrent)
+                    viewModel.requestStopAfterCurrent()
+                    XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
+                }
+            }
+            let result = makeResult(for: request)
+            try Data("verified-wav-fixture".utf8).write(to: result.outputURL)
+            return result
+        }
+        viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second, third])
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .skipped, .skipped])
+        XCTAssertEqual(viewModel.rows.map(\.statusText), [
+            AudioConverterCopy.verified,
+            AudioConverterCopy.skipped,
+            AudioConverterCopy.skipped
+        ])
+        XCTAssertEqual(converter.requests.map(\.sourceURL), [first])
+        let verifiedURL = try XCTUnwrap(viewModel.rows[0].outputURL)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: verifiedURL.path),
+            "Verified WAV must remain after stop-after-current"
+        )
+        XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
+    }
+
+    func testStopAfterThisFileHonestyCopy() throws {
+        XCTAssertEqual(AudioConverterCopy.stopAfterThisFile, "Stop After This File")
+        XCTAssertEqual(
+            AudioConverterCopy.stopAfterThisFileHelp,
+            "Finishes the file that is converting, then skips the rest. Verified WAV files are kept."
+        )
+
+        let source = try String(
+            contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            source.contains("label: AudioConverterCopy.stopAfterThisFile")
+                || source.contains("label: \"Stop After This File\""),
+            "Visible Stop control must be labeled Stop After This File"
+        )
+        XCTAssertTrue(
+            source.contains("help: AudioConverterCopy.stopAfterThisFileHelp")
+                || source.contains("Finishes the file that is converting, then skips the rest. Verified WAV files are kept."),
+            "Stop help must explain skip-rest and kept WAVs"
+        )
+        XCTAssertTrue(source.contains(".keyboardShortcut(.cancelAction)"))
+        XCTAssertFalse(
+            source.contains("label: \"Stop\""),
+            "Visible converting control must not keep the short Stop label"
+        )
+    }
+
     func testStartConversionSetsBusySynchronouslyAndRejectsDuplicateStarts() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -319,7 +387,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             "Drop audio files to convert",
             "Choose Files",
             "Convert",
-            "Stop",
+            "AudioConverterCopy.stopAfterThisFile",
             "viewModel.presetSummaryText",
             "Ready for WAV conversion",
             "Verified WAV ready",
