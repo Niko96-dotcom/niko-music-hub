@@ -225,6 +225,22 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func testIntakeWellAccessibilityLabelIsDeclared() throws {
+        let stemSource = try String(
+            contentsOfFile: "Sources/FeatureStemSeparation/StemSeparationView.swift",
+            encoding: .utf8
+        )
+        #expect(stemSource.contains("Drop an audio file or choose a file to separate"))
+        #expect(stemSource.contains(".accessibilityElement(children: .combine)"))
+
+        let converterSource = try String(
+            contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
+            encoding: .utf8
+        )
+        #expect(converterSource.contains("Drop audio files to convert"))
+    }
+
+    @Test
     func loadResults_sortsByCreatedAtDescending() throws {
         let inbox = FakeOutputInboxStore()
         let older = OutputInboxItem(

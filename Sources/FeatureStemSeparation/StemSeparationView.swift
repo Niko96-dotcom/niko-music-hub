@@ -110,6 +110,9 @@ public struct StemSeparationView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 108)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Drop an audio file or choose a file to separate")
+        .accessibilityHint("Accepts WAV, AIFF, MP3, M4A, or FLAC.")
     }
 
     private var youtubeRow: some View {
