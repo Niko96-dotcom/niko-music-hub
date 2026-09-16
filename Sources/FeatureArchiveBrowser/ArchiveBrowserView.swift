@@ -43,8 +43,9 @@ struct ArchiveBrowserView: View {
                     // Below the split-view breakpoint the list and the detail pane take
                     // turns owning the full width instead of squeezing side by side.
                     let splitView = proxy.size.width >= ArchiveBrowserLayout.splitViewMinWidth
+                    let compactListShowsDetail = viewModel.listShowsDetail && viewModel.selectedSong != nil
                     HStack(spacing: 0) {
-                        if splitView || viewModel.selectedSong == nil {
+                        if splitView || !compactListShowsDetail {
                             ArchiveSidebarView(
                                 viewModel: viewModel,
                                 compactList: compactList,
@@ -55,11 +56,15 @@ struct ArchiveBrowserView: View {
                             .frame(width: splitView ? listWidth : proxy.size.width)
                         }
                         if splitView { Divider().opacity(0.35) }
-                        if splitView || viewModel.selectedSong != nil {
+                        if splitView || compactListShowsDetail {
                             VStack(alignment: .leading, spacing: 0) {
                                 if !splitView {
-                                    Button("Back to songs") { viewModel.clearSelection(stopPlayback: false) }
+                                    Button("Back to Songs") {
+                                        viewModel.listShowsDetail = false
+                                        viewModel.clearSelection(stopPlayback: false)
+                                    }
                                         .buttonStyle(.plain)
+                                        .help("Back to the song list")
                                         .padding(20)
                                 }
                                 detailPane

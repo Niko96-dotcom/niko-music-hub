@@ -8,6 +8,7 @@ struct SongCardView: View {
     let isSelected: Bool
     var matchSummary: String?
     var onSelect: (() -> Void)?
+    var onOpenDetail: (() -> Void)?
     var onPlay: (() -> Void)?
     var onOpenProject: (() -> Void)?
     var onRevealInFinder: (() -> Void)?
@@ -126,6 +127,9 @@ struct SongCardView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { _ in
+            onOpenDetail?()
+        })
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .contextMenu {
@@ -146,6 +150,7 @@ struct SongCardView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Select song") { onSelect?() }
+        .accessibilityAction(named: "Open song detail") { onOpenDetail?() }
         .onHover { hovering in
             withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.14)) {
                 isHovered = hovering

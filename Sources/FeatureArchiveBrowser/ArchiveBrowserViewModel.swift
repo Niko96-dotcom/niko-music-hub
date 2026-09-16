@@ -117,6 +117,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     @Published var viewMode: ArchiveViewMode = .board
+    /// Compact list shows the detail page only after an explicit open (double-click / Return).
+    @Published var listShowsDetail = false
     @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?
 
     let catalog: ArchiveCatalogCoordinator
@@ -437,10 +439,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func selectSong(_ song: Song) {
         applySongSelection(song)
-        // Opening from the board goes to fullscreen detail; list stays list.
-        if viewMode == .board {
-            viewMode = .boardDetail
-        }
         refreshMixdownAnalysis(for: song)
     }
 
@@ -451,14 +449,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func openSongDetail(_ song: Song) {
-        applySongSelection(song)
+        selectSong(song)
         switch viewMode {
         case .board, .boardDetail:
             viewMode = .boardDetail
-        case .list, .analytics:
+        case .list:
+            listShowsDetail = true
+        case .analytics:
             break
         }
-        refreshMixdownAnalysis(for: song)
     }
 
     /// Arrow keys move the highlight only. They must not open detail or start preview.
@@ -549,6 +548,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             ArchivePreviewPlayback.stopAll()
         }
         selectedSong = nil
+        listShowsDetail = false
         songDetailsExpanded = false
         pluginsSectionExpanded = false
     }
