@@ -11,16 +11,21 @@ final class PreferenceStoreTests: XCTestCase {
         let store = UserDefaultsPreferenceStore(userDefaults: defaults)
         XCTAssertNil(store.bool(forKey: "flag"))
         XCTAssertNil(store.data(forKey: "blob"))
+        XCTAssertNil(store.string(forKey: "label"))
 
         store.set(true, forKey: "flag")
         store.set(Data("value".utf8), forKey: "blob")
+        store.set("downloader", forKey: "label")
 
         XCTAssertEqual(store.bool(forKey: "flag"), true)
         XCTAssertEqual(store.data(forKey: "blob"), Data("value".utf8))
+        XCTAssertEqual(store.string(forKey: "label"), "downloader")
 
         store.removeObject(forKey: "flag")
         store.removeObject(forKey: "blob")
+        store.removeObject(forKey: "label")
         XCTAssertNil(store.bool(forKey: "flag"))
         XCTAssertNil(store.data(forKey: "blob"))
+        XCTAssertNil(store.string(forKey: "label"))
     }
 }

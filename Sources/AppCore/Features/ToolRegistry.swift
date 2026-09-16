@@ -61,4 +61,29 @@ public struct ToolRegistry: Sendable {
         }
         return ToolFeatureID(raw)
     }
+
+    /// Launch selection: `-ui-tool` / `NIKO_MUSIC_HUB_UI_TOOL` wins, then a stored id if registered.
+    /// Never restores `settings` as the main pane.
+    public func resolvedLaunchToolID(
+        storedRaw: String?,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> ToolFeatureID? {
+        if let override = Self.initialToolID(from: environment) {
+            return contentToolID(override)
+        }
+        if let storedRaw {
+            let trimmed = storedRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return contentToolID(ToolFeatureID(trimmed))
+            }
+        }
+        return preferredDefaultFeatureID
+    }
+
+    private func contentToolID(_ id: ToolFeatureID) -> ToolFeatureID? {
+        if id == ToolFeatureID("settings") {
+            return preferredDefaultFeatureID
+        }
+        return feature(for: id)?.metadata.id ?? preferredDefaultFeatureID
+    }
 }

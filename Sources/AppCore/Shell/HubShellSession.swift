@@ -3,14 +3,15 @@ import Foundation
 
 /// Shared shell panel visibility for the View menu, title-bar toggles, and router reveals.
 ///
-/// Persistence keys stay `hub.shell.panels.toolsVisible` and `hub.shell.panels.inboxVisible`.
-/// `inboxUserWantsVisible` is the user-owned inbox preference so NMH-020 can hide the
-/// compact-width inbox without writing that preference.
+/// Persistence keys: `hub.shell.panels.toolsVisible`, `hub.shell.panels.inboxVisible`,
+/// and `hub.shell.selectedToolID`. `inboxUserWantsVisible` is the user-owned inbox
+/// preference so NMH-020 can hide the compact-width inbox without writing that preference.
 @MainActor
 public final class HubShellSession: ObservableObject {
     public static let toolsVisibleKey = "hub.shell.panels.toolsVisible"
     public static let inboxVisibleKey = "hub.shell.panels.inboxVisible"
     public static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
+    public static let selectedToolIDKey = "hub.shell.selectedToolID"
 
     private let preferences: any PreferenceStore
     private let settingsStore: (any SettingsStore)?
@@ -18,7 +19,7 @@ public final class HubShellSession: ObservableObject {
     @Published public private(set) var showToolSidebar: Bool
     @Published public private(set) var showOutputInbox: Bool
     @Published public private(set) var inboxUserWantsVisible: Bool
-    /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persistence is NMH-017.
+    /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persisted as `selectedToolIDKey`.
     @Published public private(set) var selectedToolID: ToolFeatureID?
     /// Live MenuBarExtra insertion. Canonical persistence is `AppSettings.showMenuBarExtra`.
     @Published public private(set) var showMenuBarExtra: Bool
@@ -48,6 +49,28 @@ public final class HubShellSession: ObservableObject {
 
     public func setSelectedToolID(_ id: ToolFeatureID?) {
         selectedToolID = id
+        if let id {
+            persistSelectedToolID(id)
+        }
+    }
+
+    /// Persist a tool id without changing the live main pane (Settings opener).
+    public func persistSelectedToolID(_ id: ToolFeatureID) {
+        preferences.set(id.rawValue, forKey: Self.selectedToolIDKey)
+    }
+
+    /// Apply `-ui-tool` or the stored id. Does not write preferences.
+    @discardableResult
+    public func restoreSelectedToolID(
+        registry: ToolRegistry,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> ToolFeatureID? {
+        let resolved = registry.resolvedLaunchToolID(
+            storedRaw: preferences.string(forKey: Self.selectedToolIDKey),
+            environment: environment
+        )
+        selectedToolID = resolved
+        return resolved
     }
 
     public func setToolSidebarVisible(_ visible: Bool) {

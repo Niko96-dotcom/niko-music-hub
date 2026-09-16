@@ -5,6 +5,8 @@ public protocol PreferenceStore: Sendable {
     func set(_ value: Bool, forKey key: String)
     func data(forKey key: String) -> Data?
     func set(_ data: Data, forKey key: String)
+    func string(forKey key: String) -> String?
+    func set(_ value: String, forKey key: String)
     func removeObject(forKey key: String)
 }
 
@@ -31,6 +33,15 @@ public struct UserDefaultsPreferenceStore: PreferenceStore, @unchecked Sendable 
 
     public func set(_ data: Data, forKey key: String) {
         userDefaults.set(data, forKey: key)
+        userDefaults.synchronize()
+    }
+
+    public func string(forKey key: String) -> String? {
+        userDefaults.string(forKey: key)
+    }
+
+    public func set(_ value: String, forKey key: String) {
+        userDefaults.set(value, forKey: key)
         userDefaults.synchronize()
     }
 

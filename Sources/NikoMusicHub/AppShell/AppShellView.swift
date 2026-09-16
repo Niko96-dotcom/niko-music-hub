@@ -28,12 +28,7 @@ struct AppShellView: View {
         self.context = context
         self.router = router
         self.shellSession = shellSession
-        let requestedToolID = ToolRegistry.initialToolID()
-            .flatMap { registry.feature(for: $0)?.metadata.id }
-            ?? registry.preferredDefaultFeatureID
-        let initialToolID = requestedToolID == Self.settingsToolID
-            ? registry.preferredDefaultFeatureID
-            : requestedToolID
+        let initialToolID = shellSession.restoreSelectedToolID(registry: registry)
         _toolPaneCache = StateObject(
             wrappedValue: ToolPaneCache(
                 registry: registry,
@@ -42,7 +37,6 @@ struct AppShellView: View {
             )
         )
         _selectedToolID = State(initialValue: initialToolID)
-        shellSession.setSelectedToolID(initialToolID)
     }
 
     var body: some View {
@@ -216,6 +210,7 @@ struct AppShellView: View {
 
     private func selectTool(_ toolID: ToolFeatureID) {
         if toolID == Self.settingsToolID {
+            shellSession.persistSelectedToolID(toolID)
             openSettings()
             return
         }

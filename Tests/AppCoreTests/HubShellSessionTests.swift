@@ -1,4 +1,5 @@
 import AppCore
+import SwiftUI
 import XCTest
 
 @MainActor
@@ -71,6 +72,73 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(try settings.loadSettings().showMenuBarExtra)
     }
 
+    func testRestoreSelectedToolID() throws {
+        let store = MockPreferenceStore()
+        let registry = try ToolRegistry(features: [
+            StubRestoreFeature(id: "archive-browser"),
+            StubRestoreFeature(id: "downloader"),
+            StubRestoreFeature(id: "settings"),
+        ])
+
+        let session = HubShellSession(preferences: store)
+        XCTAssertNil(session.selectedToolID)
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
+
+        session.setSelectedToolID(ToolFeatureID("downloader"))
+        XCTAssertEqual(session.selectedToolID, ToolFeatureID("downloader"))
+        XCTAssertEqual(store.string(forKey: HubShellSession.selectedToolIDKey), "downloader")
+        XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
+
+        let relaunch = HubShellSession(preferences: store)
+        let restored = relaunch.restoreSelectedToolID(registry: registry, environment: [:])
+        XCTAssertEqual(restored, ToolFeatureID("downloader"))
+        XCTAssertEqual(relaunch.selectedToolID, ToolFeatureID("downloader"))
+
+        session.persistSelectedToolID(ToolFeatureID("settings"))
+        XCTAssertEqual(store.string(forKey: HubShellSession.selectedToolIDKey), "settings")
+        XCTAssertEqual(session.selectedToolID, ToolFeatureID("downloader"))
+
+        let afterSettings = HubShellSession(preferences: store)
+        XCTAssertEqual(
+            afterSettings.restoreSelectedToolID(registry: registry, environment: [:]),
+            ToolFeatureID("archive-browser")
+        )
+
+        session.setSelectedToolID(ToolFeatureID("downloader"))
+        let overrideSession = HubShellSession(preferences: store)
+        XCTAssertEqual(
+            overrideSession.restoreSelectedToolID(
+                registry: registry,
+                environment: ["NIKO_MUSIC_HUB_UI_TOOL": "archive-browser"]
+            ),
+            ToolFeatureID("archive-browser")
+        )
+        XCTAssertEqual(store.string(forKey: HubShellSession.selectedToolIDKey), "downloader")
+
+        store.set("missing-tool", forKey: HubShellSession.selectedToolIDKey)
+        let unknown = HubShellSession(preferences: store)
+        XCTAssertEqual(
+            unknown.restoreSelectedToolID(registry: registry, environment: [:]),
+            ToolFeatureID("archive-browser")
+        )
+    }
+
+    func testRestoreSelectedToolIDWiringLivesInTheShell() throws {
+        let session = try SourceTestSupport.read("Sources/AppCore/Shell/HubShellSession.swift")
+        XCTAssertTrue(session.contains("hub.shell.selectedToolID"))
+        XCTAssertTrue(session.contains("persistSelectedToolID"))
+        XCTAssertTrue(session.contains("restoreSelectedToolID"))
+        XCTAssertTrue(session.contains("hub.shell.panels.inboxVisible"))
+        XCTAssertNotEqual(HubShellSession.selectedToolIDKey, HubShellSession.inboxVisibleKey)
+
+        let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
+        XCTAssertTrue(shell.contains("restoreSelectedToolID(registry:"))
+        XCTAssertTrue(shell.contains("initialToolID: initialToolID"))
+        XCTAssertTrue(shell.contains("persistSelectedToolID"))
+        XCTAssertFalse(shell.contains("selectedToolID = Self.settingsToolID"))
+        XCTAssertTrue(shell.contains("toolPaneCache"))
+    }
+
     private func makeIsolatedStore() throws -> UserDefaultsPreferenceStore {
         let suiteName = "HubShellSessionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -79,5 +147,41 @@ final class HubShellSessionTests: XCTestCase {
             defaults.removePersistentDomain(forName: suiteName)
         }
         return UserDefaultsPreferenceStore(userDefaults: defaults)
+    }
+}
+
+private final class MockPreferenceStore: PreferenceStore, @unchecked Sendable {
+    private var bools: [String: Bool] = [:]
+    private var datas: [String: Data] = [:]
+    private var strings: [String: String] = [:]
+
+    func bool(forKey key: String) -> Bool? { bools[key] }
+    func set(_ value: Bool, forKey key: String) { bools[key] = value }
+    func data(forKey key: String) -> Data? { datas[key] }
+    func set(_ data: Data, forKey key: String) { datas[key] = data }
+    func string(forKey key: String) -> String? { strings[key] }
+    func set(_ value: String, forKey key: String) { strings[key] = value }
+    func removeObject(forKey key: String) {
+        bools.removeValue(forKey: key)
+        datas.removeValue(forKey: key)
+        strings.removeValue(forKey: key)
+    }
+}
+
+private struct StubRestoreFeature: ToolFeature {
+    let metadata: ToolMetadata
+
+    init(id: ToolFeatureID) {
+        metadata = ToolMetadata(
+            id: id,
+            displayName: id.rawValue,
+            shortLabel: id.rawValue,
+            systemImage: "hammer"
+        )
+    }
+
+    @MainActor
+    func makeView(context: ToolContext) -> AnyView {
+        AnyView(EmptyView())
     }
 }
