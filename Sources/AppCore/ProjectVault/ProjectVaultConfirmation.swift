@@ -54,4 +54,12 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         }
         return "Moving “\(songTitle)” to Done starts a Project Vault archive. The Active Projects folder stays in place. You can change the workflow status later from the card menu or with Edit → Undo."
     }
+
+    public static let independentBackupToggleTitle = "I protect the Archive with an independent backup"
+
+    public static let independentBackupToggleFooter =
+        "Archive Now can delete the Active Projects folder only when this is on and the other safety checks pass. Turning this on does not delete anything. Niko Music Hub still asks before Archive Now."
+
+    public static let vaultEnabledSuccessMessage =
+        "Project Vault is on. Private beta automation creates copies only. Archive Now can remove the Active copy after you confirm, and only when independent backup is recorded and the other safety checks pass."
 }

@@ -20,6 +20,32 @@ final class ProjectVaultConfirmationTests: XCTestCase {
         )
     }
 
+    func testArchiveNowMessageMentionsIndependentBackupWhenConfirmed() {
+        let message = ProjectVaultConfirmationCopy.archiveNowMessage(
+            songTitle: "Test Song",
+            independentBackupConfirmed: true
+        )
+        XCTAssertTrue(
+            message.contains("Settings currently records that you protect the Archive with an independent backup"),
+            "Archive Now must restate the independent-backup gate rather than treating the checkbox as the deletion itself."
+        )
+    }
+
+    func testIndependentBackupSettingsCopyKeepsCheckboxAsGate() {
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.independentBackupToggleTitle,
+            "I protect the Archive with an independent backup"
+        )
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.independentBackupToggleFooter,
+            "Archive Now can delete the Active Projects folder only when this is on and the other safety checks pass. Turning this on does not delete anything. Niko Music Hub still asks before Archive Now."
+        )
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage,
+            "Project Vault is on. Private beta automation creates copies only. Archive Now can remove the Active copy after you confirm, and only when independent backup is recorded and the other safety checks pass."
+        )
+    }
+
     func testWorkflowDoneCopyStatesRemovalAndBackup() {
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.workflowDoneTitle(willRemoveActiveCopy: false),

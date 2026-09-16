@@ -133,7 +133,7 @@ struct ProjectVaultSettingsView: View {
         }) else { return }
         reconcileLaunchAtLogin(settings.vault)
         showSetup = false
-        message = "Project Vault enabled. Private beta automation creates copies only. Archive Now verifies the archive and removes the Active copy after its safety checks."
+        message = ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage
     }
 
     @ViewBuilder
@@ -176,9 +176,13 @@ struct ProjectVaultSettingsView: View {
             .padding(8)
             .hubSurface(.card, state: .warning, cornerRadius: HubDesignSystem.Radius.row)
         }
-        Toggle("I protect the Archive with an independent backup", isOn: vaultBinding(\.independentBackupConfirmed))
+        Toggle(ProjectVaultConfirmationCopy.independentBackupToggleTitle, isOn: vaultBinding(\.independentBackupConfirmed))
             .toggleStyle(.checkbox)
             .font(HubDesignSystem.Typography.caption())
+        Text(ProjectVaultConfirmationCopy.independentBackupToggleFooter)
+            .font(HubDesignSystem.Typography.caption())
+            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var rolloutBinding: Binding<VaultSettings.RolloutStage> {
