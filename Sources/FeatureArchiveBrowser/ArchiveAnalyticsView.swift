@@ -202,16 +202,8 @@ struct ArchiveAnalyticsView: View {
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .frame(width: 56, alignment: .leading)
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule(style: .continuous)
-                        .fill(HubDesignSystem.Palette.textPrimary.opacity(0.06))
-                    Capsule(style: .continuous)
-                        .fill(tint.opacity(0.65))
-                        .frame(width: max(4, proxy.size.width * fraction.clamped01))
-                }
-            }
-            .frame(height: 8)
+            ArchiveAnalyticsFractionBar(tint: tint, fraction: fraction)
+                .frame(height: 8)
             Text(trailing)
                 .font(HubDesignSystem.Typography.caption())
                 .monospacedDigit()
@@ -244,6 +236,38 @@ struct ArchiveAnalyticsView: View {
     }()
 }
 
+private struct ArchiveAnalyticsFractionBar: View {
+    @Environment(\.layoutDirection) private var layoutDirection
+    let tint: Color
+    let fraction: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: layoutDirection == .rightToLeft ? .trailing : .leading) {
+                Capsule(style: .continuous)
+                    .fill(HubDesignSystem.Palette.textPrimary.opacity(0.06))
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.65))
+                    .frame(width: max(4, proxy.size.width * fraction.clamped01))
+            }
+        }
+    }
+}
+
 private extension Double {
     var clamped01: Double { Swift.min(Swift.max(self, 0), 1) }
 }
+
+#if DEBUG
+#Preview("Analytics bars RTL") {
+    VStack(alignment: .leading, spacing: 8) {
+        ArchiveAnalyticsFractionBar(tint: HubDesignSystem.Palette.accent, fraction: 0.7)
+            .frame(height: 8)
+        ArchiveAnalyticsFractionBar(tint: HubDesignSystem.Palette.warning, fraction: 0.35)
+            .frame(height: 8)
+    }
+    .padding()
+    .frame(width: 280)
+    .environment(\.layoutDirection, .rightToLeft)
+}
+#endif

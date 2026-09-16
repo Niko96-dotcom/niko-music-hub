@@ -9,6 +9,8 @@ public enum HubWaveformSurfaceVariant: Sendable {
 }
 
 public struct HubWaveformSurface: View {
+    @Environment(\.layoutDirection) private var layoutDirection
+
     private let peaks: [Double]
     private let progress: Double
     private let variant: HubWaveformSurfaceVariant
@@ -49,21 +51,26 @@ public struct HubWaveformSurface: View {
 
     private var waveformContent: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .leading) {
+            Group {
                 if normalizedPeaks.isEmpty || variant == .empty {
                     emptyState
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 } else {
-                    Canvas { context, size in
-                        drawPeaks(context: &context, size: size)
-                    }
+                    ZStack(alignment: .leading) {
+                        Canvas { context, size in
+                            drawPeaks(context: &context, size: size)
+                        }
 
-                    if clampedProgress > 0 {
-                        Rectangle()
-                            .fill(HubDesignSystem.Palette.accent.opacity(0.9))
-                            .frame(width: 2)
-                            .offset(x: clampedProgress * geometry.size.width)
+                        if clampedProgress > 0 {
+                            let x = clampedProgress * geometry.size.width
+                            Rectangle()
+                                .fill(HubDesignSystem.Palette.accent.opacity(0.9))
+                                .frame(width: 2)
+                                .offset(x: layoutDirection == .rightToLeft ? geometry.size.width - x : x)
+                        }
                     }
+                    // Canvas and offset(x:) use physical origin; keep leading as left.
+                    .flipsForRightToLeftLayoutDirection(false)
                 }
             }
             .contentShape(Rectangle())
@@ -125,7 +132,12 @@ public struct HubWaveformSurface: View {
                 }
             }()
             let height = CGFloat(peak) * size.height * amplitude
-            let x = CGFloat(index) * barWidth
+            let x: CGFloat = {
+                if layoutDirection == .rightToLeft {
+                    return size.width - (CGFloat(index) + 1) * barWidth
+                }
+                return CGFloat(index) * barWidth
+            }()
             let rect = CGRect(
                 x: x + barWidth * 0.15,
                 y: midY - height / 2,
@@ -165,3 +177,16 @@ public enum HubMediaSurfaceFixtures {
         0.76, 0.48, 0.28, 0.18,
     ]
 }
+
+#if DEBUG
+#Preview("Waveform RTL") {
+    HubWaveformSurface(
+        peaks: HubMediaSurfaceFixtures.archivePreviewPeaks,
+        progress: 0.4,
+        variant: .archivePreview
+    )
+    .environment(\.layoutDirection, .rightToLeft)
+    .frame(width: 360, height: 92)
+    .padding()
+}
+#endif

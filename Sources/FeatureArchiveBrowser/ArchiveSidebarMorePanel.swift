@@ -22,10 +22,7 @@ struct ArchiveSidebarMorePanel: View {
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    ForwardDisclosureChevron(isExpanded: isExpanded)
                 }
                 .padding(.top, HubDesignSystem.Spacing.sectionHeaderTop)
                 .padding(.bottom, 6)
@@ -107,10 +104,7 @@ struct ArchiveSidebarMorePanel: View {
                         .font(HubDesignSystem.Typography.body())
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                    ForwardDisclosureChevron(isExpanded: isExpanded.wrappedValue)
                 }
                 .padding(.horizontal, 4)
                 .frame(height: HubDesignSystem.Spacing.navRowHeight)
@@ -139,3 +133,40 @@ struct ArchiveSidebarMorePanel: View {
         }
     }
 }
+
+/// Collapsed points forward (`chevron.forward`); expanded rotates down in both directions.
+private struct ForwardDisclosureChevron: View {
+    @Environment(\.layoutDirection) private var layoutDirection
+    let isExpanded: Bool
+
+    var body: some View {
+        Image(systemName: "chevron.forward")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            .rotationEffect(.degrees(isExpanded ? expandAngle : 0))
+    }
+
+    private var expandAngle: Double {
+        layoutDirection == .rightToLeft ? -90 : 90
+    }
+}
+
+#if DEBUG
+#Preview("Library chevrons RTL") {
+    VStack(alignment: .leading, spacing: 8) {
+        HStack {
+            Text("Library")
+            Spacer(minLength: 0)
+            ForwardDisclosureChevron(isExpanded: false)
+        }
+        HStack {
+            Text("Archive Health")
+            Spacer(minLength: 0)
+            ForwardDisclosureChevron(isExpanded: true)
+        }
+    }
+    .padding()
+    .frame(width: 220)
+    .environment(\.layoutDirection, .rightToLeft)
+}
+#endif
