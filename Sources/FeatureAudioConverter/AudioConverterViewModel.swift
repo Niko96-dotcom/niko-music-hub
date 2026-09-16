@@ -80,13 +80,43 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     public func addFileURLs(_ urls: [URL]) {
         do {
             let intake = try scanner.scan(urls)
-            rows.append(contentsOf: intake.supportedFiles.map(makeQueuedRow))
-            rows.append(contentsOf: intake.unsupportedFiles.map(makeUnsupportedRow))
-            notices = intake.notices.map(noticeText)
+            var knownURLs = Set(rows.map { $0.sourceURL.standardizedFileURL })
+            let newSupported = intake.supportedFiles.filter { file in
+                let key = file.url.standardizedFileURL
+                guard !knownURLs.contains(key) else { return false }
+                knownURLs.insert(key)
+                return true
+            }
+            let newUnsupported = intake.unsupportedFiles.filter { file in
+                let key = file.url.standardizedFileURL
+                guard !knownURLs.contains(key) else { return false }
+                knownURLs.insert(key)
+                return true
+            }
+            rows.append(contentsOf: newSupported.map(makeQueuedRow))
+            rows.append(contentsOf: newUnsupported.map(makeUnsupportedRow))
+            notices.append(contentsOf: intake.notices.map(noticeText))
+            if notices.count > 10 {
+                notices = Array(notices.suffix(10))
+            }
             refreshStatusText()
         } catch {
             statusText = error.localizedDescription
         }
+    }
+
+    public func removeRow(id: UUID) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        if isConverting && rows[index].state == .converting { return }
+        rows.remove(at: index)
+        refreshStatusText()
+    }
+
+    public func clearAll() {
+        guard !isConverting else { return }
+        guard !rows.isEmpty else { return }
+        rows.removeAll()
+        refreshStatusText()
     }
 
     public func startConversion() {

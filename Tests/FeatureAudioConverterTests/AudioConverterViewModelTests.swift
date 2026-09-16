@@ -23,6 +23,52 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rows[0].plannedOutputName, "Loop - 44100Hz 24bit.wav")
     }
 
+    func testAddRemoveDedupeAndNoticeCap() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let files = try [
+            makeFile(named: "Track1.m4a", in: directory),
+            makeFile(named: "Track2.mp3", in: directory),
+            makeFile(named: "Track3.wav", in: directory),
+            makeFile(named: "Track4.aiff", in: directory),
+            makeFile(named: "Track5.flac", in: directory),
+        ]
+        let viewModel = makeViewModel(outputFolder: directory)
+        viewModel.addFileURLs(files)
+        XCTAssertEqual(viewModel.rows.count, 5)
+
+        viewModel.removeRow(id: viewModel.rows[0].id)
+        viewModel.removeRow(id: viewModel.rows[0].id)
+        XCTAssertEqual(viewModel.rows.count, 3)
+
+        let remaining = try XCTUnwrap(viewModel.rows.first?.sourceURL)
+        viewModel.addFileURLs([remaining])
+        XCTAssertEqual(viewModel.rows.count, 3, "Re-adding a batched URL must not duplicate the row")
+        XCTAssertEqual(viewModel.rows.filter { $0.sourceURL == remaining }.count, 1)
+
+        for index in 1...12 {
+            let folder = directory.appendingPathComponent("NoticeFolder\(index)", isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: folder.appendingPathComponent("Sub", isDirectory: true),
+                withIntermediateDirectories: true
+            )
+            viewModel.addFileURLs([folder])
+            if index == 1 {
+                XCTAssertEqual(viewModel.notices.count, 1)
+            }
+            if index == 2 {
+                XCTAssertEqual(viewModel.notices.count, 2, "Notices must append rather than replace")
+            }
+        }
+        XCTAssertEqual(viewModel.notices.count, 10, "Notices must cap at 10 lines")
+        XCTAssertEqual(viewModel.rows.count, 3, "Notice-only folders must not add rows")
+
+        viewModel.clearAll()
+        XCTAssertTrue(viewModel.rows.isEmpty, "Clear All empties the list when idle")
+    }
+
     func testRouterHandoffQueuesFilesWhileSessionIsAlreadyBound() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

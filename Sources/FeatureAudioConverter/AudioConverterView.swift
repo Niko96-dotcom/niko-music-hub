@@ -23,8 +23,15 @@ public struct AudioConverterView: View {
                 intakeSurface
             } else {
                 batchRows
-                HubLabeledButton(icon: "plus", label: "Add files", style: .secondary) {
-                    fileImporterVisible = true
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(icon: "plus", label: "Add files", style: .secondary) {
+                        fileImporterVisible = true
+                    }
+                    if !viewModel.isConverting {
+                        HubLabeledButton(icon: "trash", label: "Clear All", style: .ghost) {
+                            viewModel.clearAll()
+                        }
+                    }
                 }
                 .onDrop(of: [UTType.fileURL.identifier], isTargeted: $dropTargeted, perform: handleDrop)
             }
@@ -370,6 +377,14 @@ public struct AudioConverterView: View {
                             }
                         }
                     }
+
+                    HubIconButton(
+                        systemImage: "minus.circle",
+                        accessibilityLabel: "Remove file",
+                        help: "Remove this file from the batch",
+                        role: .destructive,
+                        isEnabled: !viewModel.isConverting || row.state != .converting
+                    ) { viewModel.removeRow(id: row.id) }
                 }
             }
             .padding(.vertical, 10)
