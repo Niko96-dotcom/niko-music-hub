@@ -94,7 +94,6 @@ struct ToolSidebarView: View {
         .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Niko Music Hub \(appVersionLabel)")
-        .help("Niko Music Hub \(appVersionLabel)")
     }
 
     private func toolRow(_ metadata: ToolMetadata) -> some View {
@@ -128,7 +127,6 @@ struct ToolSidebarView: View {
         .onHover { hovering in
             updateHover(hovering, toolID: metadata.id)
         }
-        .help(metadata.displayName)
         .accessibilityLabel(metadata.displayName)
         .accessibilityValue(ToolSidebarSelection.accessibilityValue(isSelected: isSelected(metadata)))
         .accessibilityAddTraits(ToolSidebarSelection.accessibilityTraits(isSelected: isSelected(metadata)))
@@ -166,7 +164,6 @@ struct ToolSidebarView: View {
             }
         }
         .onHover { helperHealthHovered = $0 }
-        .help("Helper tools status")
         .accessibilityLabel("Helper tools status")
         .accessibilityHint("Shows whether yt-dlp, FFmpeg, and demucs-mlx are ready.")
         .popover(isPresented: $showHelperHealth, arrowEdge: .leading) {

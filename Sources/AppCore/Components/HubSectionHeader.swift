@@ -60,7 +60,7 @@ public struct HubSectionHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { actionHovered = $0 }
-                .help(actionLabel ?? title)
+                .hubDistinctHelp(actionLabel, comparedTo: title)
                 .accessibilityLabel(actionLabel ?? title)
             }
         }

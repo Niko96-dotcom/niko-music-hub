@@ -10,7 +10,7 @@ struct HubShellTitleBarControls: View {
             HubIconButton(
                 systemImage: "sidebar.leading",
                 accessibilityLabel: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
-                help: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
+                help: session.showToolSidebar ? "Hides the tools column" : "Shows the tools column",
                 isSelected: session.showToolSidebar,
                 isToggle: true,
                 action: { session.toggleToolSidebar() }
@@ -21,7 +21,7 @@ struct HubShellTitleBarControls: View {
             HubIconButton(
                 systemImage: "sidebar.trailing",
                 accessibilityLabel: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
-                help: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
+                help: session.showOutputInbox ? "Hides the Output Inbox" : "Shows the Output Inbox",
                 isSelected: session.showOutputInbox,
                 isToggle: true,
                 action: { session.toggleOutputInbox() }

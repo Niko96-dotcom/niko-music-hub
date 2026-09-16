@@ -66,7 +66,7 @@ public struct HubChoiceChips<Value: Hashable>: View {
         .onHover { hovering in
             updateHover(choice.value, hovering: hovering)
         }
-        .help(choice.help ?? choice.label)
+        .hubDistinctHelp(choice.help, comparedTo: choice.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

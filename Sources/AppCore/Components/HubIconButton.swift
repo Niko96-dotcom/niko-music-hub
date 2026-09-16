@@ -34,7 +34,19 @@ enum HubIconButtonFill {
     }
 }
 
-/// Compact control: icon visible, label exposed to VoiceOver and `.help`.
+extension View {
+    /// Applies a tooltip only when it adds information beyond the control name (NMH-075).
+    @ViewBuilder
+    func hubDistinctHelp(_ help: String?, comparedTo name: String) -> some View {
+        if let help, help != name {
+            self.help(help)
+        } else {
+            self
+        }
+    }
+}
+
+/// Compact control: icon visible, label exposed to VoiceOver; tooltip only when `help` adds information beyond the label.
 public struct HubIconButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -90,7 +102,7 @@ public struct HubIconButton: View {
         }
         .accessibilityLabel(accessibilityLabel)
         .modifier(ToggleAccessibilityModifier(isToggle: isToggle, isSelected: isSelected))
-        .help(help ?? accessibilityLabel)
+        .hubDistinctHelp(help, comparedTo: accessibilityLabel)
         .onHover(perform: updateHover)
         .disabled(!isEnabled)
     }

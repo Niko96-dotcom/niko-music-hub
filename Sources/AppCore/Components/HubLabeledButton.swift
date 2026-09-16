@@ -79,7 +79,7 @@ public struct HubLabeledButton: View {
         .onHover(perform: updateHover)
         .opacity(isEnabled ? 1 : 0.45)
         .disabled(!isEnabled)
-        .help(help ?? label)
+        .hubDistinctHelp(help, comparedTo: label)
     }
 
     private func updateHover(_ hovering: Bool) {
