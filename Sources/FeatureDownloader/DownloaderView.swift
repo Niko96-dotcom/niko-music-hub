@@ -68,8 +68,16 @@ public struct DownloaderView: View {
         ToolHeaderBlock(
             title: DownloaderCopy.toolLabel,
             statusText: headerStatus,
-            statusColor: HubDesignSystem.Palette.textSecondary
+            statusColor: headerStatusColor
         )
+    }
+
+    /// NMH-097: failed headers use danger; idle/running/canceled stay secondary.
+    private var headerStatusColor: Color {
+        if case .failed = viewModel.downloadState {
+            return HubDesignSystem.Colors.danger
+        }
+        return HubDesignSystem.Palette.textSecondary
     }
 
     private var headerStatus: String {

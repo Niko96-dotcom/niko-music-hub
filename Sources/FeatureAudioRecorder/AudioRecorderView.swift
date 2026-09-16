@@ -421,11 +421,11 @@ public struct AudioRecorderView: View {
         case .starting:
             return "Starting…"
         case .recording:
-            return "Recording..."
+            return "Recording…"
         case .reconnecting:
             return "Reconnecting audio…"
         case .stopping:
-            return "Stopping..."
+            return "Stopping…"
         case .error(let error):
             return error.localizedDescription
         }

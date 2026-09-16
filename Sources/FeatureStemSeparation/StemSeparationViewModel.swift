@@ -186,7 +186,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         isRunning = true
         progress = 0.0
         errorMessage = nil
-        statusMessage = "Starting \(selectedPreset.displayName)..."
+        statusMessage = "Starting \(selectedPreset.displayName)…"
 
         let job = service.startJob(request: request)
         currentJobID = job.id
@@ -215,7 +215,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         isRunning = true
         progress = 0.0
         errorMessage = nil
-        statusMessage = "Downloading audio..."
+        statusMessage = "Downloading audio…"
 
         let job = youtubeWorkflow.startJob(request: request)
         currentJobID = job.id

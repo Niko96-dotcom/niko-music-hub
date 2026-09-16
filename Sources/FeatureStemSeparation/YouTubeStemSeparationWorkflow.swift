@@ -85,7 +85,7 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
         try stemService.validateOutputDirectory(downloadDirectory)
         try FileManager.default.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
 
-        progress.update(progress: 0, message: "Downloading audio...")
+        progress.update(progress: 0, message: "Downloading audio…")
         let audioURL = try await downloader.downloadAudio(
             from: request.sourceURL,
             to: downloadDirectory,
@@ -93,7 +93,7 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
                 parent: progress,
                 start: 0,
                 span: 0.35,
-                fallbackMessage: "Downloading audio..."
+                fallbackMessage: "Downloading audio…"
             )
         )
         progress.log("Downloaded audio: \(audioURL.path)")
@@ -104,14 +104,14 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
             preset: request.preset,
             title: audioURL.deletingPathExtension().lastPathComponent
         )
-        progress.update(progress: 0.35, message: "Separating stems...")
+        progress.update(progress: 0.35, message: "Separating stems…")
         try await stemService.separate(
             request: stemRequest,
             progress: mappedProgress(
                 parent: progress,
                 start: 0.35,
                 span: 0.65,
-                fallbackMessage: "Separating stems..."
+                fallbackMessage: "Separating stems…"
             )
         )
     }

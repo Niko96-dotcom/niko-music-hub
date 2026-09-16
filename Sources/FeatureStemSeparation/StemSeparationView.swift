@@ -28,7 +28,7 @@ public struct StemSeparationView: View {
             statusText: viewModel.statusMessage,
             statusColor: viewModel.errorMessage == nil
                 ? HubDesignSystem.Palette.textSecondary
-                : HubDesignSystem.Colors.warning
+                : HubDesignSystem.Colors.danger
         )
         .frame(maxWidth: .infinity, alignment: .leading)
     }
