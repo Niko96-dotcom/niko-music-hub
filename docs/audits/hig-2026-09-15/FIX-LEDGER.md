@@ -5,7 +5,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH id | phase | status | commit | files | evidence | notes/deviations/decisions |
 |---|---|---|---|---|---|---|
 | NMH-002 | 1 | implemented-awaiting-runtime | 34ec4f60ba8d6512f8d3406fbd5c096303fb9a27 | ProjectVaultConfirmation.swift, SongDetailView.swift, ArchiveBrowserViewModel*.swift, ArchiveNowConfirmationTests, ProjectVaultConfirmationTests | swift build + ArchiveNowConfirmationTests + ProjectVaultConfirmationTests pass; GUI Accept pending | batch-NMH-002-98bd007f; no live GUI |
-| NMH-003 | 1 | pending |  |  |  | class=confirmed issue; sev=High |
+| NMH-003 | 1 | implemented-awaiting-runtime | 81f228bd92e439bc83bc643555a73f668d49c436 | ProjectVaultConfirmation, ArchiveBoardView, ArchiveBrowserViewModel*, WorkflowDoneArchiveConfirmationTests | swift build + WorkflowDoneArchiveConfirmationTests (6) + related vault tests pass; GUI drag-onto-Done pending | batch-NMH-003-1c7cac75; no live GUI |
 | NMH-058 | 1 | pending |  |  |  | class=confirmed issue; sev=Medium |
 | NMH-001 | 2 | pending |  |  |  | class=confirmed issue; sev=High |
 | NMH-015 | 2 | pending |  |  |  | class=confirmed issue; sev=Medium |
