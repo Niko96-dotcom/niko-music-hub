@@ -317,11 +317,19 @@ struct ArchiveSidebarView: View {
                 systemImage: "arrow.triangle.2.circlepath"
             )
         } else if viewModel.filteredSongs.isEmpty {
-            archiveEmptyState(
-                title: "No matches",
-                body: "Try another search or filter.",
-                systemImage: "magnifyingglass"
-            )
+            if !viewModel.skippedSearchMatches.isEmpty {
+                archiveEmptyState(
+                    title: "No matches",
+                    body: ArchiveSkippedSearchCopy.emptyStateBody(matches: viewModel.skippedSearchMatches),
+                    systemImage: "magnifyingglass"
+                )
+            } else {
+                archiveEmptyState(
+                    title: "No matches",
+                    body: "Try another search or filter.",
+                    systemImage: "magnifyingglass"
+                )
+            }
         } else {
             ScrollView {
                 LazyVStack(spacing: 3) {

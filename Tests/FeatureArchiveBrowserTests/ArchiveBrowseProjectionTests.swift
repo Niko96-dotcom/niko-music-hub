@@ -102,4 +102,33 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
             [visible.id, hidden.id].sorted()
         )
     }
+
+    func testSkippedSearchMatchesSurfaceWhenSongsEmpty() {
+        let state = ArchiveBrowseState(
+            songs: [],
+            showHiddenSongs: true,
+            selectedShelf: .allSongs,
+            selectedCollaboratorID: nil,
+            searchQuery: "SecretTakes",
+            browseFilter: [],
+            sortMode: .titleAZ,
+            skippedScanEntries: [
+                SkippedScanEntry(
+                    kind: .unreadableChild,
+                    label: "SecretTakes",
+                    reason: "Permission denied"
+                )
+            ]
+        )
+
+        let result = ArchiveBrowseProjection.project(state)
+        XCTAssertTrue(result.filteredSongs.isEmpty)
+        XCTAssertEqual(result.skippedSearchMatches.count, 1)
+
+        let body = ArchiveSkippedSearchCopy.emptyStateBody(matches: result.skippedSearchMatches)
+        XCTAssertTrue(body.contains("SecretTakes"))
+        XCTAssertTrue(body.contains("Permission denied"))
+        XCTAssertTrue(body.contains("Skipped folders (1)"))
+        XCTAssertTrue(body.contains("Settings → Archive"))
+    }
 }
