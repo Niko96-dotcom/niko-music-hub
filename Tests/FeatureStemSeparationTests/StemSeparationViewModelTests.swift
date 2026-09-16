@@ -54,6 +54,66 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func testStartSeparationUsesLatestHelperPath() async throws {
+        let settingsStore = FakeSettingsStore()
+        #expect(settingsStore.stored.helperTools.demucsMlx == nil)
+
+        let fileManager = FileManager.default
+        let scratch = fileManager.temporaryDirectory
+            .appendingPathComponent("nmh-065-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: scratch) }
+
+        let fixtureAudio = scratch.appendingPathComponent("fixture.wav")
+        fileManager.createFile(atPath: fixtureAudio.path, contents: Data("RIFF".utf8))
+        let helperURL = scratch.appendingPathComponent("demucs-mlx")
+        fileManager.createFile(atPath: helperURL.path, contents: Data())
+        let outputRoot = scratch.appendingPathComponent("output", isDirectory: true)
+        try fileManager.createDirectory(at: outputRoot, withIntermediateDirectories: true)
+
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let processRunner = StubStemProcessRunner()
+        let backend = DemucsMLXBackend(
+            runner: processRunner,
+            settingsProvider: {
+                (try? settingsStore.loadSettings().helperTools) ?? HelperToolSettings()
+            }
+        )
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner
+        )
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let vm = StemSeparationViewModel(context: context, service: service)
+        #expect(backend.configuredDemucsURL == nil)
+
+        _ = vm.handleDrop(urls: [fixtureAudio])
+        try settingsStore.updateSettings { settings in
+            settings.helperTools.demucsMlx = helperURL
+            settings.outputFolder = StoredFolderLocation(url: outputRoot)
+        }
+
+        vm.startSeparation()
+
+        for _ in 0..<200 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(vm.outputFolderURL == outputRoot)
+        #expect(backend.configuredDemucsURL == helperURL)
+        #expect(processRunner.lastExecutableURL == helperURL)
+    }
+
+    @Test
     func startSeparation_enqueuesJobAndObservesProgress() async throws {
         let vm = makeViewModel()
         let url = URL(fileURLWithPath: "/Users/music/song.wav")
@@ -214,6 +274,22 @@ private struct FixtureFileActions: FileActions {
 
 private struct FakeDiagnostics: Diagnostics {
     func log(_ level: DiagnosticLevel, _ message: String) {}
+}
+
+private final class StubStemProcessRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedExecutableURL: URL?
+
+    var lastExecutableURL: URL? { lock.withLock { recordedExecutableURL } }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        lock.withLock { recordedExecutableURL = request.executableURL }
+        return ExternalProcessResult(
+            exitCode: 1,
+            standardOutput: "",
+            standardError: "stubbed"
+        )
+    }
 }
 
 private struct FakeViewModelYouTubeAudioDownloader: YouTubeAudioDownloading {

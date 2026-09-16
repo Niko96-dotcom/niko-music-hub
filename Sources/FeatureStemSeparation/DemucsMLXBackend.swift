@@ -13,6 +13,7 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
     private var currentTask: Task<StemSeparationResult, Never>?
     private var currentTaskID: UUID?
     private var cancellationRequestedTaskID: UUID?
+    private var lastConfiguredDemucsURL: URL?
 
     public init(
         settings: HelperToolSettings = HelperToolSettings(),
@@ -34,6 +35,10 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     public var supportedPresets: [StemSeparationPreset] {
         StemSeparationPreset.allCases
+    }
+
+    public var configuredDemucsURL: URL? {
+        lock.withLock { lastConfiguredDemucsURL }
     }
 
     public func health(settings: HelperToolSettings) async -> StemBackendHealth {
@@ -83,11 +88,13 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
         guard !Task.isCancelled else { return .canceled }
+        let helperSettings = settingsProvider()
+        lock.withLock { lastConfiguredDemucsURL = helperSettings.demucsMlx }
         let processRequest: ExternalProcessRequest
         do {
             processRequest = try commandBuilder.buildRequest(
                 backendRequest: request,
-                settings: settingsProvider()
+                settings: helperSettings
             )
         } catch DemucsMLXCommandBuilderError.missingExecutable {
             return .failed(message: StemSeparationHelperCopy.missingBody)

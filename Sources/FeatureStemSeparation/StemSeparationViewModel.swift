@@ -84,6 +84,8 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         guard let inputURL = droppedFileURL else { return }
         guard !isRunning else { return }
 
+        loadSettings()
+
         let request = StemSeparationRequest(
             inputURL: inputURL,
             outputRootURL: outputFolderURL,
@@ -111,6 +113,8 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             errorMessage = "YouTube to stems is unavailable."
             return
         }
+
+        loadSettings()
 
         let request = YouTubeStemSeparationRequest(
             sourceURL: sourceURL,
