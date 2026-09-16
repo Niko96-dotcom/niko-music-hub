@@ -311,11 +311,18 @@ struct ArchiveSidebarView: View {
                 systemImage: "music.note.list"
             )
         } else if viewModel.songs.isEmpty && viewModel.isScanning {
-            archiveEmptyState(
-                title: "Scanning archive",
-                body: "Loading projects from your roots.",
-                systemImage: "arrow.triangle.2.circlepath"
-            )
+            HStack(spacing: 5) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("Scanning archive…")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Scanning archive")
         } else if viewModel.filteredSongs.isEmpty {
             if !viewModel.skippedSearchMatches.isEmpty {
                 archiveEmptyState(
