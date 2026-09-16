@@ -152,6 +152,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let runtime: MusicHubRuntimeEnvironment
     let scanOverride: (([URL]) async throws -> ScanResult)?
     let incrementalRescanHold: (() async -> Void)?
+    private let bookmarkProvider: any SecurityScopedBookmarkProviding
+    private var scanRootBookmarks: [String: Data] = [:]
 
     deinit {
         projectVaultRecoveryTask?.cancel()
@@ -220,6 +222,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         projectVaultRuntime: (any ProjectVaultOperating)? = nil,
         browseSearchDebounceNanoseconds: UInt64 = 200_000_000,
         runtime: MusicHubRuntimeEnvironment = .current,
+        bookmarkProvider: any SecurityScopedBookmarkProviding = FoundationSecurityScopedBookmarks(),
         scanOverride: (([URL]) async throws -> ScanResult)?,
         incrementalRescanHold: (() async -> Void)? = nil
     ) {
@@ -232,6 +235,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.projectVaultRuntime = projectVaultRuntime
         self.scanOverride = scanOverride
         self.incrementalRescanHold = incrementalRescanHold
+        self.bookmarkProvider = bookmarkProvider
         self.catalog = ArchiveCatalogCoordinator(
             archiveIndexStore: archiveIndexStore,
             songMetadataStore: songMetadataStore,
@@ -277,6 +281,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             let settings = try settingsStore.loadSettings()
             let resolver = FoundationSecurityScopedBookmarks()
             securityScopedRootAccesses.removeAll()
+            scanRootBookmarks.removeAll()
             let loadedRoots = settings.effectiveScanRoots
                 .filter { root in
                     !(settings.vault.isEnabled && root.id == settings.vault.archiveRootID)
@@ -284,8 +289,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 .compactMap { root -> URL? in
                 do {
                     let resolved = try root.resolvedURL(using: resolver)
-                    if root.securityScopedBookmark != nil {
+                    if let bookmark = root.securityScopedBookmark {
                         securityScopedRootAccesses.append(SecurityScopedRootAccess(url: resolved))
+                        scanRootBookmarks[resolved.standardizedFileURL.path] = bookmark
                     }
                     return resolved
                 } catch {
@@ -390,9 +396,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func persistRoots() {
         let snapshot = roots
+        let bookmarks = scanRootBookmarks
         do {
             try settingsStore.updateSettings { settings in
-                settings.archiveRoots = snapshot.map { StoredArchiveRoot(path: $0.path) }
+                settings.archiveRoots = snapshot.map { url in
+                    StoredArchiveRoot(
+                        path: url.path,
+                        securityScopedBookmark: bookmarks[url.standardizedFileURL.path]
+                    )
+                }
             }
         } catch {
             recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
@@ -404,11 +416,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         addRoots([url])
     }
 
-    func addRoots(_ urls: [URL]) {
+    func addRoots(_ urls: [URL], bookmarksByURL: [URL: Data] = [:]) {
         var changed = false
         for url in urls {
             let standardized = url.standardizedFileURL
             guard !roots.contains(where: { $0.path == standardized.path }) else { continue }
+            let bookmark = bookmarkData(for: url, standardized: standardized, provided: bookmarksByURL)
+            if let bookmark {
+                scanRootBookmarks[standardized.path] = bookmark
+                securityScopedRootAccesses.append(SecurityScopedRootAccess(url: standardized))
+            }
             roots.append(standardized)
             changed = true
         }
@@ -420,6 +437,21 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             refreshFirstRunState()
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
+        }
+    }
+
+    private func bookmarkData(for url: URL, standardized: URL, provided: [URL: Data]) -> Data? {
+        if let bookmark = provided[url] ?? provided[standardized] {
+            return bookmark
+        }
+        do {
+            return try bookmarkProvider.makeBookmark(for: standardized)
+        } catch {
+            recordPersistenceWarning(
+                "Archive root bookmark could not be saved for \(standardized.lastPathComponent). The folder may need to be chosen again after quit."
+            )
+            diagnostics.log(.error, "Archive root bookmark save failed: \(error)")
+            return nil
         }
     }
 
@@ -485,6 +517,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         let standardizedPath = url.standardizedFileURL.path
         roots.removeAll { $0.standardizedFileURL.path == standardizedPath }
         guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
+        scanRootBookmarks.removeValue(forKey: standardizedPath)
         clearRootBoundArchiveState(
             statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
         )

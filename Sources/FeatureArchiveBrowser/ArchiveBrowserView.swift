@@ -421,8 +421,7 @@ struct ArchiveBrowserView: View {
         panel.prompt = "Choose Archive Roots"
         panel.message = "Select one or more folders that contain Cubase or Ableton song folders."
         if panel.runModal() == .OK {
-            viewModel.addRoots(panel.urls)
-            viewModel.completeArchiveOnboarding()
+            addArchiveRootsFromOpenPanel(panel.urls)
         }
     }
 
@@ -440,8 +439,23 @@ struct ArchiveBrowserView: View {
             panel.directoryURL = viewModel.storedArchiveAccessDirectory()
         }
         if panel.runModal() == .OK, let url = panel.url {
-            viewModel.addRoots([url])
-            viewModel.completeArchiveOnboarding()
+            addArchiveRootsFromOpenPanel([url])
         }
+    }
+
+    private func addArchiveRootsFromOpenPanel(_ urls: [URL]) {
+        let bookmarks = FoundationSecurityScopedBookmarks()
+        var bookmarksByURL: [URL: Data] = [:]
+        for url in urls {
+            do {
+                bookmarksByURL[url] = try bookmarks.makeBookmark(for: url)
+            } catch {
+                viewModel.recordPersistenceWarning(
+                    "Archive root bookmark could not be saved for \(url.lastPathComponent). The folder may need to be chosen again after quit."
+                )
+            }
+        }
+        viewModel.addRoots(urls, bookmarksByURL: bookmarksByURL)
+        viewModel.completeArchiveOnboarding()
     }
 }

@@ -18,13 +18,26 @@ public struct StoredFolderLocation: Equatable, Codable, Sendable {
 
 public struct StoredArchiveRoot: Equatable, Codable, Sendable {
     public var path: String
+    public var securityScopedBookmark: Data?
 
-    public init(path: String) {
+    public init(path: String, securityScopedBookmark: Data? = nil) {
         self.path = path
+        self.securityScopedBookmark = securityScopedBookmark
     }
 
     public var url: URL {
         URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case securityScopedBookmark
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        securityScopedBookmark = try container.decodeIfPresent(Data.self, forKey: .securityScopedBookmark)
     }
 }
 
@@ -177,7 +190,13 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.helperTools = helperTools
         self.maxRecordingDurationMinutes = maxRecordingDurationMinutes
         self.musicRoots = musicRoots.isEmpty
-            ? archiveRoots.map { StoredMusicRoot(role: .scanOnly, url: $0.url) }
+            ? archiveRoots.map {
+                StoredMusicRoot(
+                    role: .scanOnly,
+                    url: $0.url,
+                    securityScopedBookmark: $0.securityScopedBookmark
+                )
+            }
             : musicRoots
         self.vault = vault
         self.appearance = appearance
@@ -197,7 +216,13 @@ public struct AppSettings: Equatable, Codable, Sendable {
             musicRoots = typedRoots
         } else {
             let legacyRoots = (try? container.decodeIfPresent([StoredArchiveRoot].self, forKey: .archiveRoots)) ?? []
-            musicRoots = legacyRoots.map { StoredMusicRoot(role: .scanOnly, url: $0.url) }
+            musicRoots = legacyRoots.map {
+                StoredMusicRoot(
+                    role: .scanOnly,
+                    url: $0.url,
+                    securityScopedBookmark: $0.securityScopedBookmark
+                )
+            }
         }
         vault = (try? container.decodeIfPresent(VaultSettings.self, forKey: .vault)) ?? VaultSettings()
         appearance = (try? container.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? .followSystem
@@ -224,7 +249,9 @@ public struct AppSettings: Equatable, Codable, Sendable {
     /// replace Scan-only roots, so Vault selections are never silently reinterpreted.
     public var archiveRoots: [StoredArchiveRoot] {
         get {
-            effectiveScanRoots.map { StoredArchiveRoot(path: $0.pathFallback) }
+            effectiveScanRoots.map {
+                StoredArchiveRoot(path: $0.pathFallback, securityScopedBookmark: $0.securityScopedBookmark)
+            }
         }
         set {
             let retainedVaultRoots = musicRoots.filter { $0.role != .scanOnly }
@@ -234,8 +261,17 @@ public struct AppSettings: Equatable, Codable, Sendable {
                     .map { ($0.fallbackURL.path, $0) }
             )
             let replacementScanRoots = newValue.map { legacyRoot -> StoredMusicRoot in
-                existingScanRoots[legacyRoot.url.standardizedFileURL.path]
-                    ?? StoredMusicRoot(role: .scanOnly, url: legacyRoot.url)
+                if var existing = existingScanRoots[legacyRoot.url.standardizedFileURL.path] {
+                    if let bookmark = legacyRoot.securityScopedBookmark {
+                        existing.securityScopedBookmark = bookmark
+                    }
+                    return existing
+                }
+                return StoredMusicRoot(
+                    role: .scanOnly,
+                    url: legacyRoot.url,
+                    securityScopedBookmark: legacyRoot.securityScopedBookmark
+                )
             }
             musicRoots = retainedVaultRoots + replacementScanRoots
         }
