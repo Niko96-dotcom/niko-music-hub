@@ -42,8 +42,18 @@ final class ToolContextTests: XCTestCase {
         )
 
         XCTAssertFalse(source.contains("@AppStorage"))
-        XCTAssertTrue(source.contains("context.preferences.bool"))
-        XCTAssertTrue(source.contains("context.preferences.set"))
+        XCTAssertTrue(source.contains("shellSession"))
+        XCTAssertTrue(source.contains("HubShellSession"))
+
+        let session = try String(
+            contentsOfFile: "Sources/AppCore/Shell/HubShellSession.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(session.contains("preferences.bool"))
+        XCTAssertTrue(session.contains("preferences.set"))
+        XCTAssertTrue(session.contains("hub.shell.panels.toolsVisible"))
+        XCTAssertTrue(session.contains("hub.shell.panels.inboxVisible"))
+        XCTAssertFalse(session.contains("@AppStorage"))
     }
 
     func testAppCompositionCapturesSQLiteStartupIssues() throws {

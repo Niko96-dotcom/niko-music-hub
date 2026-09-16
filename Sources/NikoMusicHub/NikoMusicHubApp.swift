@@ -22,7 +22,8 @@ struct NikoMusicHubApp: App {
             AppShellView(
                 registry: composition.registry,
                 context: composition.context,
-                router: composition.router
+                router: composition.router,
+                shellSession: composition.shellSession
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }
@@ -33,6 +34,7 @@ struct NikoMusicHubApp: App {
         .defaultSize(width: 1_280, height: 820)
         .commands {
             AboutCommand(updateController: composition.updateController)
+            HubViewCommands(session: composition.shellSession)
         }
 
         Settings {

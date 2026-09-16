@@ -3,9 +3,6 @@ import FeatureArchiveBrowser
 import SwiftUI
 
 struct AppShellView: View {
-    private static let showToolSidebarKey = "hub.shell.panels.toolsVisible"
-    private static let showOutputInboxKey = "hub.shell.panels.inboxVisible"
-    private static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
     private static let activeToolMinWidth: CGFloat = 540
     private static let compactInboxCollapseWidth: CGFloat = 1180
     private static let settingsToolID = ToolFeatureID("settings")
@@ -13,19 +10,24 @@ struct AppShellView: View {
     let registry: ToolRegistry
     let context: ToolContext
     @ObservedObject var router: QuickAccessRouter
+    @ObservedObject var shellSession: HubShellSession
     @Environment(\.openSettings) private var openSettings
     @StateObject private var toolPaneCache: ToolPaneCache
 
     @State private var selectedToolID: ToolFeatureID?
-    @State private var showToolSidebar: Bool
-    @State private var showOutputInbox: Bool
     @State private var windowWidth: CGFloat = 1400
 
     @MainActor
-    init(registry: ToolRegistry, context: ToolContext, router: QuickAccessRouter) {
+    init(
+        registry: ToolRegistry,
+        context: ToolContext,
+        router: QuickAccessRouter,
+        shellSession: HubShellSession
+    ) {
         self.registry = registry
         self.context = context
         self.router = router
+        self.shellSession = shellSession
         let requestedToolID = ToolRegistry.initialToolID()
             .flatMap { registry.feature(for: $0)?.metadata.id }
             ?? registry.preferredDefaultFeatureID
@@ -40,21 +42,6 @@ struct AppShellView: View {
             )
         )
         _selectedToolID = State(initialValue: initialToolID)
-        _showToolSidebar = State(initialValue: context.preferences.bool(forKey: Self.showToolSidebarKey) ?? true)
-
-        let migrated = context.preferences.bool(forKey: Self.inboxMigrationKey) ?? false
-        let storedInbox = context.preferences.bool(forKey: Self.showOutputInboxKey)
-        let initialInboxVisible: Bool
-        if !migrated {
-            initialInboxVisible = storedInbox ?? false
-            if storedInbox == nil {
-                context.preferences.set(false, forKey: Self.showOutputInboxKey)
-            }
-            context.preferences.set(true, forKey: Self.inboxMigrationKey)
-        } else {
-            initialInboxVisible = storedInbox ?? false
-        }
-        _showOutputInbox = State(initialValue: initialInboxVisible)
     }
 
     var body: some View {
@@ -65,7 +52,7 @@ struct AppShellView: View {
                 // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
                 // inky canvas, separated by hairline dividers (no floating panels / gaps).
                 HStack(spacing: 0) {
-                    if showToolSidebar {
+                    if shellSession.showToolSidebar {
                         ToolSidebarView(
                             context: context,
                             registry: registry,
@@ -86,7 +73,7 @@ struct AppShellView: View {
                         .layoutPriority(1)
                         .background(HubDesignSystem.Palette.canvas)
 
-                    if showOutputInbox {
+                    if shellSession.showOutputInbox {
                         shellDivider
                         OutputInboxInspectorView(context: context)
                             .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
@@ -96,12 +83,7 @@ struct AppShellView: View {
             }
             .padding(.top, HubShellLayout.titleBarHeight)
 
-            HubShellTitleBarControls(
-                showToolSidebar: showToolSidebar,
-                showOutputInbox: showOutputInbox,
-                onToggleToolSidebar: { setToolSidebarVisible(!showToolSidebar) },
-                onToggleOutputInbox: { setOutputInboxVisible(!showOutputInbox) }
-            )
+            HubShellTitleBarControls(session: shellSession)
         }
         .ignoresSafeArea(edges: .top)
         .background(HubWindowChromeConfigurator())
@@ -166,7 +148,7 @@ struct AppShellView: View {
                     .onAppear { windowWidth = proxy.size.width }
                     .onChange(of: proxy.size.width) { _, width in
                         windowWidth = width
-                        if width < Self.compactInboxCollapseWidth, showOutputInbox {
+                        if width < Self.compactInboxCollapseWidth, shellSession.showOutputInbox {
                             setOutputInboxVisible(false)
                         }
                     }
@@ -184,8 +166,8 @@ struct AppShellView: View {
 
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
-        if showToolSidebar { width += HubDesignSystem.Size.navWidth }
-        if showOutputInbox { width += 232 }
+        if shellSession.showToolSidebar { width += HubDesignSystem.Size.navWidth }
+        if shellSession.showOutputInbox { width += 232 }
         return width
     }
 
@@ -211,14 +193,8 @@ struct AppShellView: View {
         }
     }
 
-    private func setToolSidebarVisible(_ visible: Bool) {
-        showToolSidebar = visible
-        context.preferences.set(visible, forKey: Self.showToolSidebarKey)
-    }
-
     private func setOutputInboxVisible(_ visible: Bool) {
-        showOutputInbox = visible
-        context.preferences.set(visible, forKey: Self.showOutputInboxKey)
+        shellSession.setOutputInboxVisible(visible)
     }
 
     /// Sidebar writes go through `selectTool` so Settings opens the Settings

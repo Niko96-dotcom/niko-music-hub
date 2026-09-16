@@ -15,6 +15,7 @@ struct AppComposition {
     let registry: ToolRegistry
     let context: ToolContext
     let router: QuickAccessRouter
+    let shellSession: HubShellSession
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
     let archiveViewModel: ArchiveBrowserViewModel
@@ -156,6 +157,7 @@ struct AppComposition {
         )
 
         let quickAccessRouter = QuickAccessRouter()
+        let shellSession = HubShellSession(preferences: preferences)
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])
         }
@@ -212,6 +214,7 @@ struct AppComposition {
             registry: registry,
             context: finalContext,
             router: quickAccessRouter,
+            shellSession: shellSession,
             appearanceController: appearanceController,
             updateController: updateController,
             archiveViewModel: archiveViewModel,

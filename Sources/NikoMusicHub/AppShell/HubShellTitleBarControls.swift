@@ -3,31 +3,28 @@ import SwiftUI
 
 /// Window-level sidebar toggles aligned with the traffic-light row (Cursor-style).
 struct HubShellTitleBarControls: View {
-    let showToolSidebar: Bool
-    let showOutputInbox: Bool
-    let onToggleToolSidebar: () -> Void
-    let onToggleOutputInbox: () -> Void
+    @ObservedObject var session: HubShellSession
 
     var body: some View {
         HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
             HubIconButton(
                 systemImage: "sidebar.left",
-                accessibilityLabel: showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
-                help: showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
-                isSelected: showToolSidebar,
+                accessibilityLabel: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
+                help: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
+                isSelected: session.showToolSidebar,
                 isToggle: true,
-                action: onToggleToolSidebar
+                action: { session.toggleToolSidebar() }
             )
 
             Spacer(minLength: 0)
 
             HubIconButton(
                 systemImage: "sidebar.right",
-                accessibilityLabel: showOutputInbox ? "Hide output inbox" : "Show output inbox",
-                help: showOutputInbox ? "Hide output inbox" : "Show output inbox",
-                isSelected: showOutputInbox,
+                accessibilityLabel: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
+                help: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
+                isSelected: session.showOutputInbox,
                 isToggle: true,
-                action: onToggleOutputInbox
+                action: { session.toggleOutputInbox() }
             )
         }
         .padding(.leading, HubShellLayout.titleBarLeadingInset)

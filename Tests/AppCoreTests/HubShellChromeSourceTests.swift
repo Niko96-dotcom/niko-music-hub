@@ -12,13 +12,22 @@ final class HubShellChromeSourceTests: XCTestCase {
             "HubShellBackground()",
             "HubShellTitleBarControls(",
             "hubSurface(.card, state: .warning",
-            "context.preferences.bool",
-            "context.preferences.set",
+            "shellSession",
             "toolPaneCache",
             "ensureMounted",
             "ArchivePersistentPlayerView",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing shell Liquid chrome source: \(required)")
+        }
+
+        let sessionSource = try SourceTestSupport.read("Sources/AppCore/Shell/HubShellSession.swift")
+        [
+            "preferences.bool",
+            "preferences.set",
+            "hub.shell.panels.toolsVisible",
+            "hub.shell.panels.inboxVisible",
+        ].forEach { required in
+            XCTAssertTrue(sessionSource.contains(required), "Missing shell session persistence source: \(required)")
         }
 
         [
