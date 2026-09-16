@@ -388,6 +388,24 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.presetSummaryText, "96 kHz - 24-bit - Stereo")
     }
 
+    func testSecondRowPreviewShowsNumericSuffixWhenFileExists() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try Data("existing-wav".utf8).write(
+            to: directory.appendingPathComponent("Loop - 44100Hz 24bit.wav", isDirectory: false)
+        )
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let viewModel = makeViewModel(outputFolder: directory)
+        viewModel.addFileURLs([source])
+
+        XCTAssertTrue(
+            viewModel.rows.first?.plannedOutputName.contains(" 2") ?? false,
+            "Planned name must suffix when the output file already exists, got: \(viewModel.rows.first?.plannedOutputName ?? "nil")"
+        )
+        XCTAssertEqual(viewModel.rows.first?.plannedOutputName, "Loop - 44100Hz 24bit 2.wav")
+    }
+
     func testEditingWAVPresetRefreshesQueuedOutputNames() throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

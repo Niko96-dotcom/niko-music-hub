@@ -182,6 +182,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             overallProgress = outcomes.last?.overallProgress ?? overallProgress
             isConverting = false
             stopController = nil
+            refreshQueuedOutputNames()
             refreshStatusText()
             publishShellJobStatus()
             return outcomes
@@ -333,7 +334,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             for: settings.outputFolder.url,
             sourceURL: sourceURL,
             preset: settings.audioPreset,
-            existingFileExists: { _ in false }
+            existingFileExists: { FileManager.default.fileExists(atPath: $0.path) }
         )
         .lastPathComponent
     }
