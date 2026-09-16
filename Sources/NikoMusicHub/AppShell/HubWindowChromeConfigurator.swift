@@ -65,11 +65,15 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         }
         // NMH-130: make the main window frame restorable across relaunch.
         // Default 1280x820 from `.defaultSize` still applies when no saved frame exists.
+        // Identifier alone is not enough — AppKit persists frames via frameAutosaveName.
         if window.isRestorable != true {
             window.isRestorable = true
         }
         if window.identifier != NSUserInterfaceItemIdentifier("hub.main") {
             window.identifier = NSUserInterfaceItemIdentifier("hub.main")
+        }
+        if window.frameAutosaveName != "hub.main" {
+            window.setFrameAutosaveName("hub.main")
         }
     }
 }
