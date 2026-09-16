@@ -60,14 +60,7 @@ struct SongCardView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    ArchiveCardPlayButton(
-                        title: song.effectiveDisplayTitle,
-                        isPlaying: isRowPlaying,
-                        isLoaded: isRowLoaded,
-                        isEnabled: song.mainPreviewURL != nil && !session.captureActive
-                    ) {
-                        playPreview()
-                    }
+                    listPlayAffordance
                     if hasScanWarning {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(HubDesignSystem.Palette.warning)
@@ -157,6 +150,39 @@ struct SongCardView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isRowPlaying)
+    }
+
+    @ViewBuilder
+    private var listPlayAffordance: some View {
+        switch SongCardPlayAffordance.kind(
+            hasPreview: song.mainPreviewURL != nil,
+            captureActive: session.captureActive
+        ) {
+        case .play(let enabled):
+            ArchiveCardPlayButton(
+                title: song.effectiveDisplayTitle,
+                isPlaying: isRowPlaying,
+                isLoaded: isRowLoaded,
+                isEnabled: enabled
+            ) {
+                playPreview()
+            }
+        case .noPreview:
+            Image(systemName: "speaker.slash")
+                .help("No preview")
+                .accessibilityLabel("No preview")
+        case .pausedForCapture:
+            ArchiveCardPlayButton(
+                title: song.effectiveDisplayTitle,
+                isPlaying: isRowPlaying,
+                isLoaded: isRowLoaded,
+                isEnabled: false
+            ) {
+                playPreview()
+            }
+            .help("Preview paused because recording is active.")
+            .accessibilityHint("Preview paused because recording is active.")
+        }
     }
 
     private var rowFill: Color {
