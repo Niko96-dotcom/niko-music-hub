@@ -6,6 +6,29 @@ public enum HubLabeledButtonStyle: Sendable {
     case ghost
 }
 
+enum HubLabeledButtonFill {
+    static func color(
+        style: HubLabeledButtonStyle,
+        isPressed: Bool,
+        isHovered: Bool
+    ) -> Color {
+        switch style {
+        case .primary:
+            if isPressed { return HubDesignSystem.Palette.accentDeep }
+            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
+        case .secondary:
+            let opacity: Double
+            if isPressed { opacity = 0.16 }
+            else if isHovered { opacity = 0.10 }
+            else { opacity = 0.06 }
+            return HubDesignSystem.Palette.textPrimary.opacity(opacity)
+        case .ghost:
+            if isPressed { return HubDesignSystem.Palette.textPrimary.opacity(0.10) }
+            return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
+        }
+    }
+}
+
 /// Labeled icon+text control for primary and secondary tool actions.
 public struct HubLabeledButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -44,22 +67,53 @@ public struct HubLabeledButton: View {
     // system accent (blue), which the references' chrome never shows.
     public var body: some View {
         Button(role: role, action: action) {
-            Label(label, systemImage: icon)
-                .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                .foregroundStyle(foreground)
-                .padding(.horizontal, 12)
-                .frame(minHeight: HubDesignSystem.Size.buttonMinHeight)
-                .background {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
-                        .fill(fill)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
+            HubLabeledButtonLabel(
+                icon: icon,
+                label: label,
+                style: style,
+                role: role,
+                isHovered: isHovered
+            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
         .onHover(perform: updateHover)
         .opacity(isEnabled ? 1 : 0.45)
         .disabled(!isEnabled)
         .help(help ?? label)
+    }
+
+    private func updateHover(_ hovering: Bool) {
+        let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
+        if duration == 0 {
+            isHovered = hovering
+        } else {
+            withAnimation(.easeInOut(duration: duration)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+private struct HubLabeledButtonLabel: View {
+    @Environment(\.hubButtonPressed) private var isPressed
+
+    let icon: String
+    let label: String
+    let style: HubLabeledButtonStyle
+    let role: ButtonRole?
+    let isHovered: Bool
+
+    var body: some View {
+        Label(label, systemImage: icon)
+            .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .frame(minHeight: HubDesignSystem.Size.buttonMinHeight)
+            .background {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                    .fill(fill)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
     }
 
     private var foreground: Color {
@@ -72,23 +126,6 @@ public struct HubLabeledButton: View {
     }
 
     private var fill: Color {
-        switch style {
-        case .primary:
-            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
-        case .secondary:
-            return HubDesignSystem.Palette.textPrimary.opacity(isHovered ? 0.10 : 0.06)
-        case .ghost:
-            return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
-        }
-    }
-
-    private func updateHover(_ hovering: Bool) {
-        if reduceMotion {
-            isHovered = hovering
-        } else {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
+        HubLabeledButtonFill.color(style: style, isPressed: isPressed, isHovered: isHovered)
     }
 }

@@ -116,15 +116,7 @@ public struct HubSurface: ViewModifier {
     // MARK: Resolved appearance
 
     private var fillColor: Color {
-        switch state {
-        case .normal, .focused: return HubDesignSystem.Palette.surface
-        case .hover: return HubDesignSystem.Palette.surfaceRaised
-        case .pressed: return HubDesignSystem.Palette.surface
-        case .selected: return HubDesignSystem.Palette.selection
-        case .disabled: return HubDesignSystem.Palette.surface
-        case .warning: return HubDesignSystem.Palette.warning.opacity(0.16)
-        case .error: return HubDesignSystem.Palette.danger.opacity(0.16)
-        }
+        HubSurfaceFill.color(for: state)
     }
 
     private var midStrokeColor: Color {
@@ -176,6 +168,22 @@ public struct HubSurface: ViewModifier {
         case .selected: return level == .raised ? HubDesignSystem.Elevation.medium : HubDesignSystem.Elevation.flat
         case .pressed, .disabled: return HubDesignSystem.Elevation.flat
         case .normal, .warning, .error, .focused: return level.baseElevation
+        }
+    }
+}
+
+enum HubSurfaceFill {
+    /// Pressed uses `Palette.sidebar`, the darker existing surface token, so click-and-hold
+    /// is distinct from hover's `surfaceRaised` lift (NMH-026).
+    static func color(for state: HubDesignSystem.ControlState) -> Color {
+        switch state {
+        case .normal, .focused: return HubDesignSystem.Palette.surface
+        case .hover: return HubDesignSystem.Palette.surfaceRaised
+        case .pressed: return HubDesignSystem.Palette.sidebar
+        case .selected: return HubDesignSystem.Palette.selection
+        case .disabled: return HubDesignSystem.Palette.surface
+        case .warning: return HubDesignSystem.Palette.warning.opacity(0.16)
+        case .error: return HubDesignSystem.Palette.danger.opacity(0.16)
         }
     }
 }

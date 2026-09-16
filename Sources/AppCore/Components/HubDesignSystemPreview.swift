@@ -290,7 +290,7 @@ public struct DesignSystemPreviewView: View {
 
             controlStateRow(.normal,   label: "normal — surface fill + separator stroke")
             controlStateRow(.hover,    label: "hover — same as normal (motion highlights)")
-            controlStateRow(.pressed,  label: "pressed — surfaceRaised fill")
+            controlStateRow(.pressed,  label: "pressed — darkened fill, flat elevation")
             controlStateRow(.selected, label: "selected — selection fill + selectionStroke")
             controlStateRow(.disabled, label: "disabled — 62% opacity, separator dimmed")
             controlStateRow(.warning,  label: "warning — amber tint fill + amber stroke")

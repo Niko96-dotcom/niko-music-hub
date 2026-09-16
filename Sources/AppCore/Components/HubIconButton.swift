@@ -5,6 +5,35 @@ public enum HubIconButtonAppearance: Sendable {
     case compactChip
 }
 
+enum HubIconButtonFill {
+    static func toolbar(
+        prominent: Bool,
+        isSelected: Bool,
+        isPressed: Bool,
+        isHovered: Bool
+    ) -> Color {
+        if prominent {
+            if isPressed { return HubDesignSystem.Palette.accentDeep }
+            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
+        }
+        if isSelected { return HubDesignSystem.Palette.accentFill }
+        if isPressed { return HubDesignSystem.Palette.textPrimary.opacity(0.10) }
+        return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
+    }
+
+    static func compactChip(
+        colors: HubCompactChipColors,
+        isSelected: Bool,
+        isPressed: Bool,
+        isHovered: Bool
+    ) -> Color {
+        if isSelected { return colors.selectedFill }
+        if isPressed { return HubDesignSystem.Palette.textPrimary.opacity(0.10) }
+        if isHovered { return HubDesignSystem.Palette.textPrimary.opacity(0.06) }
+        return colors.unselectedFill
+    }
+}
+
 /// Compact control: icon visible, label exposed to VoiceOver and `.help`.
 public struct HubIconButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,6 +91,7 @@ public struct HubIconButton: View {
         .accessibilityLabel(accessibilityLabel)
         .modifier(ToggleAccessibilityModifier(isToggle: isToggle, isSelected: isSelected))
         .help(help ?? accessibilityLabel)
+        .onHover(perform: updateHover)
         .disabled(!isEnabled)
     }
 
@@ -70,67 +100,111 @@ public struct HubIconButton: View {
     // styles (boxes + system-blue accent).
     private var toolbarButton: some View {
         Button(role: role, action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(toolbarForeground)
-                .frame(
-                    width: HubDesignSystem.Size.iconButtonSize,
-                    height: HubDesignSystem.Size.iconButtonSize
-                )
-                .background {
-                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
-                        .fill(toolbarFill)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
+            ToolbarIconLabel(
+                systemImage: systemImage,
+                prominent: prominent,
+                isSelected: isSelected,
+                isHovered: isHovered
+            )
         }
-        .buttonStyle(.plain)
-        .onHover(perform: updateHover)
+        .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
+    }
+
+    private var compactChipButton: some View {
+        Button(role: role, action: action) {
+            CompactChipLabel(
+                systemImage: systemImage,
+                chipColors: chipColors,
+                isSelected: isSelected,
+                isHovered: isHovered
+            )
+        }
+        .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
+    }
+
+    private func updateHover(_ hovering: Bool) {
+        let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
+        if duration == 0 {
+            isHovered = hovering
+        } else {
+            withAnimation(.easeInOut(duration: duration)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+private struct ToolbarIconLabel: View {
+    @Environment(\.hubButtonPressed) private var isPressed
+
+    let systemImage: String
+    let prominent: Bool
+    let isSelected: Bool
+    let isHovered: Bool
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(toolbarForeground)
+            .frame(
+                width: HubDesignSystem.Size.iconButtonSize,
+                height: HubDesignSystem.Size.iconButtonSize
+            )
+            .background {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
+                    .fill(toolbarFill)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
     }
 
     private var toolbarForeground: Color {
         if prominent { return HubDesignSystem.Palette.canvas }
         if isSelected { return HubDesignSystem.Palette.textPrimary }
-        return isHovered ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary
+        return (isHovered || isPressed) ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary
     }
 
     private var toolbarFill: Color {
-        if prominent {
-            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
-        }
-        if isSelected { return HubDesignSystem.Palette.accentFill }
-        return isHovered ? HubDesignSystem.Palette.textPrimary.opacity(0.06) : Color.clear
+        HubIconButtonFill.toolbar(
+            prominent: prominent,
+            isSelected: isSelected,
+            isPressed: isPressed,
+            isHovered: isHovered
+        )
     }
+}
 
-    private var compactChipButton: some View {
-        Button(role: role, action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
-                .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
-                .background {
-                    let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                    shape.fill(isSelected ? chipColors.selectedFill : chipColors.unselectedFill)
-                }
-                .overlay {
-                    let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
-                    shape.strokeBorder(
-                        isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
-                        lineWidth: isSelected ? 1.5 : 1
+private struct CompactChipLabel: View {
+    @Environment(\.hubButtonPressed) private var isPressed
+
+    let systemImage: String
+    let chipColors: HubCompactChipColors
+    let isSelected: Bool
+    let isHovered: Bool
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 13, weight: .semibold))
+            .frame(width: HubDesignSystem.Size.iconButtonSize, height: HubDesignSystem.Size.iconButtonSize)
+            .foregroundStyle(isSelected ? chipColors.selectedForeground : chipColors.unselectedForeground)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                shape.fill(
+                    HubIconButtonFill.compactChip(
+                        colors: chipColors,
+                        isSelected: isSelected,
+                        isPressed: isPressed,
+                        isHovered: isHovered
                     )
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func updateHover(_ hovering: Bool) {
-        if reduceMotion {
-            isHovered = hovering
-        } else {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+                )
             }
-        }
+            .overlay {
+                let shape = RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous)
+                shape.strokeBorder(
+                    isSelected ? chipColors.selectedStroke : chipColors.unselectedStroke,
+                    lineWidth: isSelected ? 1.5 : 1
+                )
+            }
+            .contentShape(Rectangle())
     }
 }
 
