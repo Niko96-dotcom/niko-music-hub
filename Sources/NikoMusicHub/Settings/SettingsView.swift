@@ -1,4 +1,5 @@
 import AppCore
+import AppKit
 import AppUpdates
 import FeatureArchiveBrowser
 import NikoMusicCore
@@ -175,7 +176,10 @@ final class HubSettingsSession: ObservableObject {
 struct SettingsView: View {
     @ObservedObject var session: HubSettingsSession
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
+    @ObservedObject var router: QuickAccessRouter
     let pane: HubSettingsPane
+
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HubToolPage {
@@ -298,6 +302,14 @@ struct SettingsView: View {
             }
             LabeledContent("Channels") {
                 Text(channelModeLabel(session.settings.audioPreset.channelMode))
+            }
+            HubLabeledButton(
+                icon: "waveform",
+                label: "Edit in WAV Converter",
+                style: .secondary,
+                help: "Opens WAV Converter to change the default preset"
+            ) {
+                openWAVConverter()
             }
         }
 
@@ -598,6 +610,12 @@ struct SettingsView: View {
 
     private func openLoginSetting() {
         NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.general)
+    }
+
+    private func openWAVConverter() {
+        router.execute(.openTool(ToolFeatureID("wav-converter")))
+        openWindow(id: "main")
+        NSApp.activate()
     }
 }
 

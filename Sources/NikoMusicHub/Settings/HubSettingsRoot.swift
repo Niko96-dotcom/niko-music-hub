@@ -38,6 +38,7 @@ struct HubSettingsRoot: View {
                 SettingsView(
                     session: session,
                     archiveViewModel: archiveViewModel,
+                    router: router,
                     pane: pane
                 )
                 .tabItem { pane.tabLabel }
