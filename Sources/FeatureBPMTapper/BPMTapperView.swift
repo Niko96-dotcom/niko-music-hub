@@ -115,7 +115,7 @@ public struct BPMTapperView: View {
             .padding(HubDesignSystem.Spacing.cardPadding)
             .frame(maxWidth: 360, minHeight: 140)
             .hubCard(
-                state: tapSurfaceFocused ? .selected : .normal,
+                state: tapSurfacePressed ? .pressed : .normal,
                 interactive: true
             )
             .scaleEffect(tapSurfacePressed ? 0.98 : 1)
@@ -123,7 +123,6 @@ public struct BPMTapperView: View {
         }
         .buttonStyle(.plain)
         .focusable()
-        .focusEffectDisabled()
         .focused($tapSurfaceFocused)
         .onKeyPress(.space) {
             animateTapPress()
