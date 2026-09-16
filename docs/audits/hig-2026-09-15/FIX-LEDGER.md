@@ -73,7 +73,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-078 | 6 | implemented-awaiting-runtime | 973036d20d9dda8ffd538f1db5597dfde59218e0 | (see commit) | see nmh-hig-NMH-078-result.md; worker exit 0 | batch-NMH-078-1e2f5210; auto-integrated |
 | NMH-041 | 6 | fixed | f3004c16238d3605e4c05193a0fa3bd12b572191 | (see commit) | gui-unit-promote: swift test --filter DownloaderChipSelectionTests PASS | batch-NMH-041-a4fa23ee; auto-integrated; gui-unit-promote |
 | NMH-042 | 6 | fixed | a9a6c62bdab382d447f8ef7c5e9f3fcefa3f69fc | (see commit) | gui-unit-promote: swift test --filter HubAccessibilityAnnouncerTests PASS | batch-NMH-042-f7a0c6b2; auto-integrated; gui-unit-promote |
-| NMH-081 | 6 | implemented-awaiting-runtime | 79c435378abd7b6b792d15e82feae917544d4c4d | (see commit) | see nmh-hig-NMH-081-result.md; worker exit 0 | batch-NMH-081-9b7ee65c; auto-integrated |
+| NMH-081 | 6 | fixed | 79c435378abd7b6b792d15e82feae917544d4c4d | (see commit) | gui-unit-promote: swift test --filter FeatureAudioRecorderTests PASS | batch-NMH-081-9b7ee65c; auto-integrated; gui-unit-promote |
 | NMH-082 | 6 | implemented-awaiting-runtime | 28ce2615cb1cd7035d2b79bf938f9b570f820ba4 | (see commit) | see nmh-hig-NMH-082-result.md; worker exit 0 | batch-NMH-082-b5ab445b; auto-integrated |
 | NMH-044 | 6 | implemented-awaiting-runtime | c0284f38cc1ab108d8fc293a195092cd29e9d812 | (see commit) | see nmh-hig-NMH-044-result.md; worker exit 0 | batch-NMH-044-f4551dfb; auto-integrated |
 | NMH-047 | 6 | implemented-awaiting-runtime | 295e66469784b737eb3dffad4daa5e52554a1ade | (see commit) | see nmh-hig-NMH-047-result.md; worker exit 0 | batch-NMH-047-5b88493a; auto-integrated |
