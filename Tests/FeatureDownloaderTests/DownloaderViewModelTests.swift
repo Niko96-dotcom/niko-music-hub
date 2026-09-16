@@ -219,6 +219,35 @@ final class DownloaderViewModelTests: XCTestCase {
         runner.cancelJob(id: runningJob.id)
     }
 
+    func testCanceledJobIsNotFailed() async throws {
+        let canceledJob = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .canceled,
+            message: "Canceled"
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: canceledJob),
+            jobRunner: StaticJobRunner(job: canceledJob),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .canceled)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.statusMessage, DownloaderCopy.downloadCanceledDetail)
+        XCTAssertTrue(inbox.items.isEmpty)
+        XCTAssertEqual(viewModel.urlText, "https://example.com/audio")
+
+        viewModel.startDownload()
+        XCTAssertEqual(viewModel.downloadState, .downloading)
+    }
+
     func testFormatSelectionLoadsFromInjectedPreferences() throws {
         let suiteName = "DownloaderViewModelTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
