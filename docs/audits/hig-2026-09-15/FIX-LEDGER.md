@@ -31,7 +31,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-035 | 3 | implemented-awaiting-runtime | af603089eaf263d22030c3e29611f6fc807896db | (see commit) | see nmh-hig-NMH-035-result.md; worker exit 0 | batch-NMH-035-6374470a; auto-integrated |
 | NMH-040 | 3 | implemented-awaiting-runtime | 64ed96b65e0138b1ad0479c3704b6a9680d44934 | (see commit) | see nmh-hig-NMH-040-result.md; worker exit 0 | batch-NMH-040-6f1ccead; auto-integrated |
 | NMH-045 | 3 | implemented-awaiting-runtime | 14ab03e14e11a0f055e5f3a6c4867ba066b83780 | (see commit) | see nmh-hig-NMH-045-result.md; worker exit 0 | batch-NMH-045-df546bce; auto-integrated |
-| NMH-046 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
+| NMH-046 | 3 | implemented-awaiting-runtime | 9a1b7edd6b7d3c572e7a6383cee6fe08db500155 | (see commit) | see nmh-hig-NMH-046-result.md; worker exit 0 | batch-NMH-046-c81797d8; auto-integrated |
 | NMH-051 | 3 | pending |  |  |  | class=confirmed issue; sev=Medium |
 | NMH-080 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
 | NMH-085 | 3 | pending |  |  |  | class=confirmed issue; sev=Low |
