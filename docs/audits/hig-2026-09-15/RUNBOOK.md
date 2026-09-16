@@ -46,3 +46,6 @@ Follow phase order and explicit dependencies. Only ONE agent edits code at a tim
 ## Spend policy
 
 Zero additional spend. No overages, upgrades, other accounts, paid API fallback, Codex, or Antigravity.
+
+## Amendment (2026-09-16 14:35 CEST)
+Primary coding worker switched to OpenCode `opencode-go/muse-spark-1.3-contributor` variant `xhigh` after Cursor agent usage exhausted (`ActionRequiredError`). Credentials remain in `~/.local/share/opencode/auth.json` (opencode-go). Invocation uses `opencode run --pure` + `OPENCODE_CONFIG_CONTENT` (same proven path as subscription-squad worker). Do not buy Cursor credits unless explicitly authorized.
