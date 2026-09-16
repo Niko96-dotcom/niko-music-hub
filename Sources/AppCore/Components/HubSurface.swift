@@ -7,11 +7,12 @@ import SwiftUI
 /// look here and the whole app inherits it — no per-view depth formulas (that was the old,
 /// scattered approach this refactor removes).
 ///
-/// Native path: real SwiftUI `.glassEffect` on macOS 26. Fallback path: semantic token fills
-/// plus AppKit vibrancy for chrome. DS-07: no raw RGB — semantic `Palette` + neutral
+/// Content levels are opaque semantic fills. Liquid Glass is chrome-only on macOS 26
+/// (`hubChromeMaterial` / `HubGlassBackdrop`); macOS 14/15 chrome uses AppKit vibrancy
+/// via `HubShellBackground`. DS-07: no raw RGB — semantic `Palette` + neutral
 /// `Highlight` opacities only.
 public enum HubSurfaceLevel: Sendable {
-    /// Translucent frosted chrome (icon rail / inspector columns). Flush, vibrancy-backed.
+    /// Translucent frosted chrome (icon rail / inspector columns). Flush; Liquid Glass on 26.
     case chrome
     /// Grouped opaque panel.
     case panel
@@ -46,12 +47,9 @@ public enum HubSurfaceLevel: Sendable {
 
 /// Applies a `HubSurfaceLevel` + interactive `ControlState` as a coherent surface.
 public struct HubSurface: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     private let level: HubSurfaceLevel
     private let state: HubDesignSystem.ControlState
     private let radiusOverride: CGFloat?
-    private let interactive: Bool
 
     public init(
         _ level: HubSurfaceLevel,
@@ -62,7 +60,7 @@ public struct HubSurface: ViewModifier {
         self.level = level
         self.state = state
         self.radiusOverride = cornerRadius
-        self.interactive = interactive
+        _ = interactive
     }
 
     public func body(content: Content) -> some View {
@@ -70,17 +68,7 @@ public struct HubSurface: ViewModifier {
             content.hubChromeMaterial()
         } else {
             let shape = RoundedRectangle(cornerRadius: radiusOverride ?? level.cornerRadius, style: .continuous)
-            // Form fields and grouped content need a stable fill, especially when
-            // nested. Reserve glass for raised surfaces; chrome retains vibrancy.
-            if #available(macOS 26.0, *), level == .raised, !reduceTransparency {
-                content
-                    .opacity(state == .disabled ? 0.62 : 1)
-                    .background { nativeGlassBackground(shape: shape) }
-                    .overlay { surfaceStroke(shape: shape) }
-                    .shadow(color: elevation.color, radius: elevation.radius, y: elevation.y)
-            } else {
-                fallbackSurface(content: content, shape: shape)
-            }
+            fallbackSurface(content: content, shape: shape)
         }
     }
 
@@ -91,24 +79,6 @@ public struct HubSurface: ViewModifier {
             .background { subtleSheen(shape: shape) }
             .overlay { surfaceStroke(shape: shape) }
             .shadow(color: elevation.color, radius: elevation.radius, y: elevation.y)
-    }
-
-    @available(macOS 26.0, *)
-    @ViewBuilder
-    private func nativeGlassBackground(shape: RoundedRectangle) -> some View {
-        ZStack {
-            if interactive {
-                shape
-                    .fill(Color.clear)
-                    .glassEffect(.regular.tint(nativeGlassTint).interactive(), in: shape)
-            } else {
-                shape
-                    .fill(Color.clear)
-                    .glassEffect(.regular.tint(nativeGlassTint), in: shape)
-            }
-
-            subtleSheen(shape: shape)
-        }
     }
 
     private func subtleSheen(shape: RoundedRectangle) -> some View {
@@ -150,18 +120,6 @@ public struct HubSurface: ViewModifier {
         case .disabled: return HubDesignSystem.Palette.surface
         case .warning: return HubDesignSystem.Palette.warning.opacity(0.16)
         case .error: return HubDesignSystem.Palette.danger.opacity(0.16)
-        }
-    }
-
-    private var nativeGlassTint: Color {
-        switch state {
-        case .normal: return HubDesignSystem.Palette.surface.opacity(0.24)
-        case .hover: return HubDesignSystem.Palette.surfaceRaised.opacity(0.32)
-        case .pressed: return HubDesignSystem.Palette.surface.opacity(0.20)
-        case .selected: return HubDesignSystem.Palette.selection.opacity(0.38)
-        case .disabled: return HubDesignSystem.Palette.surface.opacity(0.16)
-        case .warning: return HubDesignSystem.Palette.warning.opacity(0.15)
-        case .error: return HubDesignSystem.Palette.danger.opacity(0.15)
         }
     }
 

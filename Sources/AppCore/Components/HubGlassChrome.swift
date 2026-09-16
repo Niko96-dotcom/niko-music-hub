@@ -11,7 +11,13 @@ public struct HubShellBackground: View {
     public var body: some View {
         ZStack {
             if !reduceTransparency {
-                HubVisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+                if #available(macOS 26.0, *) {
+                    // Liquid Glass is one chrome-column sheet (`HubGlassBackdrop`), not a
+                    // second window-wide material under opaque content.
+                    EmptyView()
+                } else {
+                    HubVisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+                }
             }
             HubDesignSystem.Palette.canvas
                 .opacity(reduceTransparency ? 1 : 0.82)

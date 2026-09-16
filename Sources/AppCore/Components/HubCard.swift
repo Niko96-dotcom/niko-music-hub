@@ -5,8 +5,8 @@ import SwiftUI
 /// Used ONLY for genuinely bounded objects per IA-08 (drop target, focused audio player,
 /// warning, compact job/result group). The default section is unboxed.
 ///
-/// On macOS 26 this resolves to native SwiftUI Liquid Glass through `HubSurface`; older systems
-/// keep the semantic opaque fallback. The old `hubLiquidCard()` adapter and its
+/// Opaque semantic fill through `HubSurface`. Liquid Glass is chrome-only
+/// (`hubChromeMaterial` on macOS 26). The old `hubLiquidCard()` adapter and its
 /// `HubLiquidGlass.swift` file are already deleted — this is the only card surface.
 public struct HubCard: ViewModifier {
     private let cornerRadius: CGFloat

@@ -47,9 +47,8 @@ final class HubSurfaceTests: XCTestCase {
         }
     }
 
-    // DEPTH-03 refactor invariants: HubCard delegates to the single primitive, bounded custom
-    // surfaces use native macOS-26 Liquid Glass from that primitive, and chrome delegates to the
-    // shared material fallback.
+    // DEPTH-03: HubCard delegates to the single primitive; content stays opaque; chrome
+    // Liquid Glass lives in HubMaterial (macOS 26), not on raised cards.
     func testCardDelegatesToSurfaceAndChromeIsGlassMaterial() throws {
         let cardSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubCard.swift",
@@ -69,21 +68,26 @@ final class HubSurfaceTests: XCTestCase {
             surfaceSource.contains("hubChromeMaterial()"),
             "HubSurface.chrome must resolve to the glass chrome material."
         )
-        XCTAssertTrue(
-            surfaceSource.contains(".glassEffect(") && surfaceSource.contains(".interactive()"),
-            "HubSurface must use real Liquid Glass for bounded custom surfaces on macOS 26."
+        XCTAssertFalse(
+            surfaceSource.contains(".glassEffect("),
+            "HubSurface must not apply Liquid Glass to content; raised/card/field stay opaque."
+        )
+        XCTAssertFalse(
+            surfaceSource.contains("level == .raised") && surfaceSource.contains(".glassEffect("),
+            "HubSurface.swift must not pair .raised with glassEffect."
         )
 
         let materialSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
             encoding: .utf8
         )
-        // 2026-07 reference-glass spec: a per-column glassEffect backdrop composites over
-        // the column's own content (the "invisible sidebar" bug). Window-level glass lives in
-        // HubShellBackground; HubMaterial must stay a plain tint veil.
-        XCTAssertFalse(
-            materialSource.contains(".glassEffect("),
-            "HubMaterial must NOT host .glassEffect — column glass veils its own content."
+        XCTAssertTrue(
+            materialSource.contains("#available(macOS 26.0") && materialSource.contains(".glassEffect("),
+            "HubMaterial hosts one Liquid Glass sheet for chrome on macOS 26."
+        )
+        XCTAssertTrue(
+            materialSource.contains("accessibilityReduceTransparency"),
+            "Chrome glass must skip when Reduce Transparency is on."
         )
     }
 }

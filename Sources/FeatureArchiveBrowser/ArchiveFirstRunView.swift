@@ -42,7 +42,7 @@ struct ArchiveFirstRunView: View {
         .padding(28)
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity)
-        .hubSurface(.raised, cornerRadius: HubDesignSystem.Radius.popover)
+        .hubSurface(.card, cornerRadius: HubDesignSystem.Radius.popover)
         .shadow(color: HubDesignSystem.Elevation.high.color, radius: HubDesignSystem.Elevation.high.radius, y: HubDesignSystem.Elevation.high.y)
     }
 }

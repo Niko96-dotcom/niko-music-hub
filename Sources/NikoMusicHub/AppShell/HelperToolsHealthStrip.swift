@@ -39,7 +39,7 @@ struct HelperToolsHealthStrip: View {
         }
         .padding(HubDesignSystem.Spacing.controlGap)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .hubSurface(.raised, state: stripState, cornerRadius: HubDesignSystem.Radius.popover)
+        .hubSurface(.card, state: stripState, cornerRadius: HubDesignSystem.Radius.popover)
         .task {
             await refresh()
         }

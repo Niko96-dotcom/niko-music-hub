@@ -123,11 +123,9 @@ final class HubShellChromeSourceTests: XCTestCase {
     func testHelperHealthUsesSharedStatusColorsAndLiquidCard() throws {
         let source = try shellSource("HelperToolsHealthStrip.swift")
 
-        // Reference-spec migration: the popover body moved off the deprecated
-        // `hubLiquidCard()` adapter onto the semantic `hubSurface(.raised, ...)` primitive
-        // (DEPTH-03). Status colors and the Homebrew copy stay test-locked.
+        // NMH-023: helper popover body is an opaque card, not chrome glass / .raised.
         [
-            "hubSurface(.raised",
+            "hubSurface(.card",
             "HubDesignSystem.Colors.success",
             "HubDesignSystem.Colors.warning",
             "HubDesignSystem.Colors.danger",

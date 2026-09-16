@@ -216,8 +216,8 @@ final class HubSemanticTokenTests: XCTestCase {
 
     // MARK: Native Liquid Glass is centralized
 
-    /// HubCard stays a thin semantic adapter; native `.glassEffect` lives in HubSurface and
-    /// HubMaterial so callers do not hand-roll glass locally.
+    /// HubCard stays a thin semantic adapter; native `.glassEffect` lives on chrome
+    /// (`HubMaterial` / `HubGlassBackdrop`) so callers do not hand-roll glass locally.
     func testNativeLiquidGlassIsCentralized() throws {
         let cardSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubCard.swift",
@@ -225,16 +225,25 @@ final class HubSemanticTokenTests: XCTestCase {
         )
         XCTAssertFalse(
             cardSource.contains(".glassEffect("),
-            "HubCard.swift must stay a semantic adapter; native glass belongs in HubSurface."
+            "HubCard.swift must stay a semantic adapter; native glass belongs on chrome."
         )
 
         let surfaceSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubSurface.swift",
             encoding: .utf8
         )
+        XCTAssertFalse(
+            surfaceSource.contains(".glassEffect("),
+            "HubSurface.swift must not apply Liquid Glass to raised content."
+        )
+
+        let materialSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
+            encoding: .utf8
+        )
         XCTAssertTrue(
-            surfaceSource.contains("#available(macOS 26.0") && surfaceSource.contains(".glassEffect("),
-            "HubSurface.swift must centralize native Liquid Glass for bounded custom surfaces."
+            materialSource.contains("#available(macOS 26.0") && materialSource.contains(".glassEffect("),
+            "HubMaterial.swift must centralize native Liquid Glass for chrome on macOS 26."
         )
     }
 
