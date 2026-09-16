@@ -1,4 +1,5 @@
 import AppKit
+import NikoMusicCore
 import SwiftUI
 
 /// SwiftUI's container focus can remain true while an AppKit field editor owns
@@ -21,11 +22,13 @@ enum ArchiveShortcutFocusPolicy {
 public struct ArchiveSongFocusedActions {
     public let hasSelectedSong: Bool
     public let allowsUnmodifiedShortcuts: Bool
+    public let allowsWorkflowMutation: Bool
     public let playPausePreview: () -> Void
     public let openPreview: () -> Void
     public let openProject: () -> Void
     public let revealInFinder: () -> Void
     public let showVersions: () -> Void
+    public let applyWorkflowStatus: (ProjectWorkflowStatus?) -> Void
 }
 
 /// Commands read this when `FocusedValue` does not publish into the menu bar (macOS 14.2).

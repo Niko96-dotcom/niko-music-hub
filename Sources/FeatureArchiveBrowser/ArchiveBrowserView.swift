@@ -304,19 +304,26 @@ struct ArchiveBrowserView: View {
         ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: keyboardFocus == .archive)
     }
 
+    private var selectedSongAllowsWorkflowMutation: Bool {
+        guard let song = viewModel.selectedSong else { return false }
+        return viewModel.canMutateWorkflowStatus(for: song)
+    }
+
     private var songCommandSyncToken: String {
-        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")"
+        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)"
     }
 
     private var archiveSongFocusedActions: ArchiveSongFocusedActions {
         ArchiveSongFocusedActions(
             hasSelectedSong: viewModel.selectedSong != nil,
             allowsUnmodifiedShortcuts: allowsSongShortcuts,
+            allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
             playPausePreview: { _ = performPlayPausePreview() },
             openPreview: performOpenPreview,
             openProject: performOpenProject,
             revealInFinder: performRevealInFinder,
-            showVersions: performShowVersions
+            showVersions: performShowVersions,
+            applyWorkflowStatus: performApplyWorkflowStatus
         )
     }
 
@@ -339,6 +346,11 @@ struct ArchiveBrowserView: View {
         guard viewModel.selectedSong != nil else { return }
         viewModel.songDetailsExpanded = true
         NotificationCenter.default.post(name: .archiveShowSongVersions, object: nil)
+    }
+
+    private func performApplyWorkflowStatus(_ status: ProjectWorkflowStatus?) {
+        guard let song = viewModel.selectedSong else { return }
+        viewModel.applyWorkflowStatus(status, for: song)
     }
 
     @discardableResult

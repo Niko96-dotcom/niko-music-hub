@@ -80,7 +80,8 @@ struct ArchiveBoardSongCard: View, Equatable {
             onProjectVaultPrimaryAction: {
                 viewModel.performProjectVaultPrimaryAction(for: song)
             },
-            onPlay: { viewModel.audition(song) }
+            onPlay: { viewModel.audition(song) },
+            onWorkflowStatusChange: { viewModel.applyWorkflowStatus($0, for: song) }
         )
     }
 }

@@ -1,4 +1,5 @@
 import FeatureArchiveBrowser
+import NikoMusicCore
 import SwiftUI
 
 /// Song menu: labeled archive letter shortcuts (NMH-034).
@@ -46,6 +47,20 @@ struct HubSongCommands: Commands {
             }
             .keyboardShortcut("p", modifiers: [])
             .disabled(songActions?.allowsUnmodifiedShortcuts != true || songActions?.hasSelectedSong != true)
+
+            Divider()
+
+            Menu(SongWorkflowActions.songMenuTitle) {
+                Button(SongWorkflowActions.clearStatusMenuTitle) {
+                    songActions?.applyWorkflowStatus(nil)
+                }
+                ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
+                    Button(status.displayTitle) {
+                        songActions?.applyWorkflowStatus(status)
+                    }
+                }
+            }
+            .disabled(songActions?.hasSelectedSong != true || songActions?.allowsWorkflowMutation != true)
         }
     }
 }

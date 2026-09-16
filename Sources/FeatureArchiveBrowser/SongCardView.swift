@@ -125,12 +125,10 @@ struct SongCardView: View {
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
         .contextMenu {
-            if allowsWorkflowMutation, let onWorkflowStatusChange {
-                Button("No Status") { onWorkflowStatusChange(nil) }
-                ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
-                    Button(status.displayTitle) { onWorkflowStatusChange(status) }
-                }
-            }
+            SongWorkflowContextMenu(
+                allowsMutation: allowsWorkflowMutation,
+                onSelect: onWorkflowStatusChange
+            )
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(song.effectiveDisplayTitle)

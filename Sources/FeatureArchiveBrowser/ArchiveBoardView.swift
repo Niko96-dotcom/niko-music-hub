@@ -519,6 +519,7 @@ struct ArchiveBoardCardView: View {
     let onOpenDetail: () -> Void
     let onProjectVaultPrimaryAction: (() -> Void)?
     var onPlay: (() -> Void)?
+    var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)? = nil
     @ObservedObject private var session = ArchivePreviewSession.shared
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -616,6 +617,12 @@ struct ArchiveBoardCardView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .contextMenu {
+            SongWorkflowContextMenu(
+                allowsMutation: allowsWorkflowMutation,
+                onSelect: onWorkflowStatusChange
+            )
+        }
         .modifier(ArchiveBoardCardDragModifier(
             songID: song.id,
             title: song.effectiveDisplayTitle,
@@ -633,6 +640,10 @@ struct ArchiveBoardCardView: View {
         .accessibilityAction(named: "Open song detail") {
             performInteraction(.accessibilityOpenDetail)
         }
+        .modifier(SongWorkflowAccessibilityActions(
+            enabled: allowsWorkflowMutation && onWorkflowStatusChange != nil,
+            onSelect: { onWorkflowStatusChange?($0) }
+        ))
     }
 
     private var captionLine: String {
