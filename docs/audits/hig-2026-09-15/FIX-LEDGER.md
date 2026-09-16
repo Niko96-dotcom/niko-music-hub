@@ -63,7 +63,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-068 | 6 | implemented-awaiting-runtime | 379c6b48b1bcf8963a01f0a7df119733a2f31332 | (see commit) | see nmh-hig-NMH-068-result.md; worker exit 0 | batch-NMH-068-aec0a771; auto-integrated |
 | NMH-069 | 6 | implemented-awaiting-runtime | 6d7995346cb10193e3d48d43063b98c3ffc6ed07 | (see commit) | see nmh-hig-NMH-069-result.md; worker exit 0 | batch-NMH-069-b7befc3d; auto-integrated |
 | NMH-070 | 6 | implemented-awaiting-runtime | c77439a39a166ea72c313cf0f5cdfe6bad4bfc90 | (see commit) | see nmh-hig-NMH-070-result.md; worker exit 0 | batch-NMH-070-8545c3f2; auto-integrated |
-| NMH-071 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
+| NMH-071 | 6 | implemented-awaiting-runtime | 3815a7447716ad52ebd88b215d0320fdff64567f | (see commit) | see nmh-hig-NMH-071-result.md; worker exit 0 | batch-NMH-071-c2f60752; auto-integrated |
 | NMH-072 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
 | NMH-027 | 6 | pending |  |  |  | class=confirmed issue; sev=Medium |
 | NMH-073 | 6 | pending |  |  |  | class=confirmed issue; sev=Low |
