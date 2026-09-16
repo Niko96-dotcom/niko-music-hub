@@ -303,6 +303,7 @@ public enum HubDesignSystem {
         /// chrome carry NO brand tint; color comes from content). "Accent" is now a bright cool
         /// neutral: near-white on dark, near-black on light. Used for primary action / active
         /// playback / meaningful selection. Never a panel background. rgb(232,233,238).
+        /// Accent is a locked grey; system Accent Color is not applied to Hub buttons by design.
         public static let accent = Color(HubDynamicColor(
             light: Color(.sRGB, red: 48/255,  green: 50/255,  blue: 58/255,  opacity: 1),
             dark:  Color(.sRGB, red: 232/255, green: 233/255, blue: 238/255, opacity: 1)))
