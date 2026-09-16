@@ -41,13 +41,6 @@ public struct AudioRecorderView: View {
             guard normalized != lastPersistedMaxDurationMinutes else { return }
             persistMaxDuration(minutes: newValue)
         }
-        .task(id: viewModel.showSaveConfirmation) {
-            guard viewModel.showSaveConfirmation else { return }
-            try? await Task.sleep(for: .seconds(5))
-            if viewModel.showSaveConfirmation {
-                viewModel.dismissSaveConfirmation()
-            }
-        }
     }
 
     @ViewBuilder
@@ -75,6 +68,14 @@ public struct AudioRecorderView: View {
                         style: .secondary
                     ) {
                         NSWorkspace.shared.open(url)
+                    }
+
+                    HubLabeledButton(
+                        icon: "xmark",
+                        label: "Dismiss",
+                        style: .ghost
+                    ) {
+                        viewModel.dismissSaveConfirmation()
                     }
                 }
 

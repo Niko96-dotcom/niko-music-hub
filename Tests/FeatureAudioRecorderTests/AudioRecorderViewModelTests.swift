@@ -200,6 +200,34 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(vm.showSaveConfirmation)
     }
 
+    func testDismissSaveConfirmationClearsBannerFlag() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-dismiss-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: true)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        XCTAssertTrue(vm.showSaveConfirmation)
+        let recordedURL = try XCTUnwrap(vm.lastRecordedURL)
+
+        vm.dismissSaveConfirmation()
+
+        XCTAssertFalse(vm.showSaveConfirmation)
+        XCTAssertEqual(vm.lastRecordedURL, recordedURL)
+    }
+
     func testInboxAddFailureKeepsRecordingSuccessWithWarning() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-handoff-\(UUID().uuidString)", isDirectory: true)
