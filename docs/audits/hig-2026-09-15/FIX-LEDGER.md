@@ -111,7 +111,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-134 | 7 | implemented-awaiting-runtime | 1120075238b2e6d66a80b2418cda47329d5b2d98 | (see commit) | see nmh-hig-NMH-134-result.md; worker exit 0 | batch-NMH-134-f4f52c0c; auto-integrated |
 | NMH-135 | 7 | implemented-awaiting-runtime | b68232a42c2c3fce5f397725c37a19e15a5ca6cd | (see commit) | see nmh-hig-NMH-135-result.md; worker exit 0 | batch-NMH-135-a1bbdaae; auto-integrated |
 | NMH-136 | 7 | implemented-awaiting-runtime | f582ba1aa50b93b7bdec8314970ce34d4affac91 | (see commit) | see nmh-hig-NMH-136-result.md; worker exit 0 | batch-NMH-136-a8efd48f; auto-integrated |
-| NMH-137 | 7 | pending |  |  |  | class=needs verification; sev=Medium |
+| NMH-137 | 7 | implemented-awaiting-runtime | 2b665db9a2df583d5450098d5c11d1e5258ea366 | (see commit) | see nmh-hig-NMH-137-result.md; worker exit 0 | batch-NMH-137-f7b9d128; auto-integrated |
 | NMH-138 | 7 | pending |  |  |  | class=needs verification; sev=— |
 | NMH-139 | 7 | pending |  |  |  | class=needs verification; sev=— |
 | NMH-140 | 7 | pending |  |  |  | class=needs verification; sev=Low |
