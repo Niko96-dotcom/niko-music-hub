@@ -118,6 +118,15 @@ struct ArchiveBrowserView: View {
         .onChange(of: songCommandSyncToken) { _, _ in
             ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
         }
+        .onMoveCommand { direction in
+            guard allowsSongShortcuts else { return }
+            viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
+        }
+        .onKeyPress(.return) {
+            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            viewModel.openSelectedSongDetail()
+            return .handled
+        }
         .onKeyPress("p") {
             guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             performOpenPreview()

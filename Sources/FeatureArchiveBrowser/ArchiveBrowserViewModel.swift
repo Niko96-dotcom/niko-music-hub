@@ -436,6 +436,66 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func selectSong(_ song: Song) {
+        applySongSelection(song)
+        // Opening from the board goes to fullscreen detail; list stays list.
+        if viewMode == .board {
+            viewMode = .boardDetail
+        }
+        refreshMixdownAnalysis(for: song)
+    }
+
+    /// Return / Enter activate: board goes to fullscreen detail; list keeps list mode.
+    func openSelectedSongDetail() {
+        guard let song = selectedSong else { return }
+        openSongDetail(song)
+    }
+
+    func openSongDetail(_ song: Song) {
+        applySongSelection(song)
+        switch viewMode {
+        case .board, .boardDetail:
+            viewMode = .boardDetail
+        case .list, .analytics:
+            break
+        }
+        refreshMixdownAnalysis(for: song)
+    }
+
+    /// Arrow keys move the highlight only. They must not open detail or start preview.
+    func moveSongSelection(_ direction: ArchiveSongMoveDirection) {
+        guard let next = nextSongForKeyboardMove(direction), next.id != selectedSong?.id else { return }
+        switch viewMode {
+        case .list:
+            applySongSelection(next)
+            refreshMixdownAnalysis(for: next)
+        case .board:
+            selectSongOnBoard(next)
+        case .boardDetail, .analytics:
+            break
+        }
+    }
+
+    private func nextSongForKeyboardMove(_ direction: ArchiveSongMoveDirection) -> Song? {
+        switch viewMode {
+        case .list:
+            return ArchiveSongSelectionNavigator.move(
+                direction: direction,
+                songs: filteredSongs,
+                selectedID: selectedSong?.id
+            )
+        case .board:
+            return ArchiveSongSelectionNavigator.moveOnBoard(
+                direction: direction,
+                songs: filteredSongs,
+                selectedID: selectedSong?.id,
+                preservingOrder: isSearching
+            )
+        case .boardDetail, .analytics:
+            return nil
+        }
+    }
+
+    private func applySongSelection(_ song: Song) {
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
         if songDetailsExpanded {
@@ -444,11 +504,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         if pluginsSectionExpanded {
             pluginsSectionExpanded = false
         }
-        // Opening from the board goes to fullscreen detail; list stays list.
-        if viewMode == .board {
-            viewMode = .boardDetail
-        }
-        refreshMixdownAnalysis(for: song)
     }
 
     /// Opens the analytics page over the board with a fresh snapshot built
@@ -467,13 +522,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Board selection changes the highlight; only explicit Play replaces audio.
     func selectSongOnBoard(_ song: Song) {
         guard selectedSong?.id != song.id else { return }
-        selectedSong = song
-        if songDetailsExpanded {
-            songDetailsExpanded = false
-        }
-        if pluginsSectionExpanded {
-            pluginsSectionExpanded = false
-        }
+        applySongSelection(song)
     }
 
     /// Keeps `selectedSong` in sync with the live catalog and current browse results.

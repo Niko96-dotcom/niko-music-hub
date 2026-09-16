@@ -328,6 +328,9 @@ struct ArchiveSidebarView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .onMoveCommand { direction in
+                viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
+            }
         }
     }
 

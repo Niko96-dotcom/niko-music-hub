@@ -47,6 +47,9 @@ struct ArchiveBoardSongsView: View, Equatable {
                 }
             }
         }
+        .onMoveCommand { direction in
+            viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
+        }
     }
 }
 
@@ -76,7 +79,7 @@ struct ArchiveBoardSongCard: View, Equatable {
             vaultPresentation: vaultPresentation,
             vaultActivityMessage: vaultActivityMessage,
             onSelect: { viewModel.selectSongOnBoard(song) },
-            onOpenDetail: { viewModel.selectSong(song) },
+            onOpenDetail: { viewModel.openSongDetail(song) },
             onProjectVaultPrimaryAction: {
                 viewModel.performProjectVaultPrimaryAction(for: song)
             },
