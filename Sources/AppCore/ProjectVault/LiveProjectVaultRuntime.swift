@@ -494,7 +494,65 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         guard let record = try? transferStore.recoverableRestoreRecords()
             .filter({ $0.projectID == projectID && $0.error == nil && $0.failureReason == nil })
             .max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
-        return ProjectVaultRestoreProgress(phase: record.phase, manifest: record.manifest)
+        let copiedBytes = Self.stagingCopiedBytes(at: record.stagingURL, totalBytes: record.manifest.totalBytes)
+        return ProjectVaultRestoreProgress(phase: record.phase, manifest: record.manifest, copiedBytes: copiedBytes)
+    }
+
+    /// NMH-054: honest bytes-from-disk for the determinate restore bar.
+    /// Sums logical sizes of regular files under staging; clamps to `totalBytes`.
+    /// Returns 0 when staging does not exist yet or holds no files, and nil when
+    /// the size cannot be read (callers fall back to the phase checklist).
+    static func stagingCopiedBytes(at stagingURL: URL, totalBytes: Int64) -> Int64? {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: stagingURL.path, isDirectory: &isDirectory) else {
+            return 0
+        }
+        // A lone staging file (not a directory) counts directly.
+        if !isDirectory.boolValue {
+            do {
+                let values = try stagingURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                if values.isRegularFile == true, let size = values.fileSize, size >= 0 {
+                    return min(Int64(size), max(totalBytes, 0))
+                }
+                return 0
+            } catch {
+                return nil
+            }
+        }
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey]
+        guard let enumerator = fileManager.enumerator(
+            at: stagingURL,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+        var total: Int64 = 0
+        var sawFiles = false
+        for case let url as URL in enumerator {
+            do {
+                let values = try url.resourceValues(forKeys: keys)
+                guard values.isRegularFile == true else { continue }
+                guard let size = values.fileSize, size >= 0 else { continue }
+                sawFiles = true
+                let (next, overflow) = total.addingReportingOverflow(Int64(size))
+                if overflow {
+                    return min(total, max(totalBytes, 0))
+                }
+                total = next
+                if totalBytes > 0, total >= totalBytes {
+                    return totalBytes
+                }
+            } catch {
+                return nil
+            }
+        }
+        _ = sawFiles
+        if totalBytes > 0 {
+            return min(total, totalBytes)
+        }
+        return total
     }
 
     public func consumePendingIdentityReview() async -> ProjectIdentityReview? {

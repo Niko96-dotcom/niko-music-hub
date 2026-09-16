@@ -349,7 +349,27 @@ struct SongDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
                     if viewModel.projectVaultActiveOperation?.songID == liveSong.id {
-                        ProgressView(message).controlSize(.small)
+                        if let progress = viewModel.projectVaultRestoreProgress,
+                           let value = progress.fraction {
+                            ProgressView(value: value).controlSize(.small)
+                            Text(progress.title)
+                                .font(HubDesignSystem.Typography.caption())
+                                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                            if let scope = progress.scopeDescription {
+                                Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
+                            }
+                            Text("\(Int((value * 100).rounded()))% copied")
+                                .font(HubDesignSystem.Typography.caption())
+                                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        } else if let progress = viewModel.projectVaultRestoreProgress {
+                            ProgressView(progress.title).controlSize(.small)
+                            if let scope = progress.scopeDescription {
+                                Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
+                            }
+                            restorePhaseChecklist(current: progress.phase)
+                        } else {
+                            ProgressView(message).controlSize(.small)
+                        }
                         HubLabeledButton(
                             icon: "xmark",
                             label: CancelCopy.cancelTransfer,
@@ -357,9 +377,6 @@ struct SongDetailView: View {
                             help: CancelCopy.cancelTransfer
                         ) {
                             viewModel.requestStopActiveProjectVaultTransfer()
-                        }
-                        if let scope = viewModel.projectVaultRestoreProgress?.scopeDescription {
-                            Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                         }
                     } else {
                         Text(message)
@@ -411,6 +428,30 @@ struct SongDetailView: View {
             songTitle: pending.songTitle,
             independentBackupConfirmed: pending.independentBackupConfirmed
         )
+    }
+
+    /// NMH-054 fallback when byte size cannot be read: one honest check per
+    /// restore phase instead of a determinate-looking bar.
+    @ViewBuilder
+    private func restorePhaseChecklist(current: VaultRestorePhase) -> some View {
+        let phases = ProjectVaultRestoreProgress.checklistPhases
+        let currentIndex = phases.firstIndex(of: current)
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(phases.enumerated()), id: \.offset) { index, phase in
+                let done = currentIndex.map { index < $0 } ?? false
+                let isCurrent = currentIndex.map { index == $0 } ?? false
+                HStack(spacing: 6) {
+                    Image(systemName: done ? "checkmark.circle.fill" : (isCurrent ? "arrow.triangle.2.circlepath" : "circle"))
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(done || isCurrent ? HubDesignSystem.Palette.accent : HubDesignSystem.Palette.textTertiary)
+                    Text(ProjectVaultRestoreProgress(phase: phase).title)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(isCurrent ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(ProjectVaultRestoreProgress(phase: phase).title)\(done ? ", done" : (isCurrent ? ", in progress" : ", pending"))")
+            }
+        }
     }
 
     @ViewBuilder

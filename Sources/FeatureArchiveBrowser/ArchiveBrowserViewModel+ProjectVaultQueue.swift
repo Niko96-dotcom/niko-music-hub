@@ -118,6 +118,7 @@ extension ArchiveBrowserViewModel {
                     guard !Task.isCancelled,
                           self?.projectVaultActiveOperation?.projectKey == operation.projectKey else { return }
                     if self?.projectVaultRestoreProgress != progress { self?.projectVaultRestoreProgress = progress }
+                    self?.refreshVaultTransferJobStatus(songName: operation.songName, progress: progress)
                     do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
                 }
             }
@@ -154,6 +155,23 @@ extension ArchiveBrowserViewModel {
                 await self.scheduleProjectVaultRecovery()
             }
         }
+    }
+
+    /// NMH-054: mirror the honest restore fraction into the NMH-011 shell jobs
+    /// row so progress stays visible after the restore sheet dismisses.
+    /// Called from the 500 ms restore-progress poll; the operation-start publish
+    /// in `publishShellJobStatus()` still owns the indeterminate initial row.
+    private func refreshVaultTransferJobStatus(songName: String, progress: ProjectVaultRestoreProgress?) {
+        guard projectVaultActiveOperation != nil else { return }
+        jobStatusCenter.setExtraJob(
+            sourceID: ShellJobExtraSourceID.vaultTransfer,
+            status: ShellJobStatusCopy.vaultTransferStatus(songName: songName, progress: progress),
+            cancel: { [weak self] in
+                Task { @MainActor in
+                    self?.requestStopActiveProjectVaultTransfer()
+                }
+            }
+        )
     }
 
     /// Background recovery or another app instance can own the runtime lease.
