@@ -308,6 +308,17 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             addToInbox(job: observedJob, sourceURL: sourceURL)
             return true
         case .failed:
+            if Self.isAlreadyDownloadedSkip(logEntries: nextLogs, message: observedJob.message) {
+                // NMH-141 (TOOL-30): yt-dlp skipped because the file already
+                // exists (`--no-overwrites` kept). Informational status, not a
+                // fail and not an alert. Never overwrites the existing file.
+                downloadState = .completed
+                statusMessage = DownloaderCopy.alreadyExistsInInbox
+                endDownloadProgressFeedback()
+                HubAccessibilityAnnouncer.announce(DownloaderCopy.alreadyExistsInInbox)
+                loadRecentDownloads()
+                return true
+            }
             downloadState = .failed(observedJob.message)
             statusMessage = nil
             endDownloadProgressFeedback()
@@ -464,6 +475,14 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             return nil
         }
         return url
+    }
+
+    /// NMH-141 (TOOL-30): true when the failed job's logs or message carry
+    /// yt-dlp's already-downloaded marker, meaning `--no-overwrites` skipped
+    /// an existing file rather than a network failure occurring.
+    static func isAlreadyDownloadedSkip(logEntries: [String], message: String) -> Bool {
+        if YtDlpDownloader.containsAlreadyDownloadedMarker(message) { return true }
+        return logEntries.contains { YtDlpDownloader.containsAlreadyDownloadedMarker($0) }
     }
 
     private func cancelOutstandingTasks() {

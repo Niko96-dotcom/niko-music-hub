@@ -93,7 +93,10 @@ public struct DownloaderView: View {
         case .canceled:
             return DownloaderCopy.downloadCanceled
         case .completed:
-            return DownloaderCopy.downloadComplete
+            // NMH-141: prefer an explicit status message so the
+            // already-exists skip reads as status, not a generic failure.
+            // Normal completions set "Downloaded", identical to the fallback.
+            return viewModel.statusMessage ?? DownloaderCopy.downloadComplete
         case let .failed(message):
             return message
         }

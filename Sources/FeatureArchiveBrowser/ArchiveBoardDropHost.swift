@@ -50,6 +50,9 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     var landingFrame: (String) -> CGRect? = { _ in nil }
     var refreshedContent: (() -> Content)?
     var reduceMotion = false
+    /// NMH-141: tracks whether this view pushed the not-allowed cursor for a
+    /// rejected drag, so the push/pop stays balanced per view.
+    private var didPushNotAllowedCursor = false
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -75,8 +78,12 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
         guard acceptedID(sender) != nil else {
             targeted(false)
             ended()
+            // NMH-141 (TRACK-39): show the not-allowed pointer on rejected drags
+            // (archive-only projection / busy vault). Do not change accept rules.
+            pushNotAllowedCursor()
             return []
         }
+        popNotAllowedCursorIfNeeded()
         targeted(true)
         locationChanged(convert(sender.draggingLocation, from: nil).x)
         return .move
@@ -112,8 +119,21 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     }
 
     private func finish() {
+        popNotAllowedCursorIfNeeded()
         targeted(false)
         ended()
+    }
+
+    private func pushNotAllowedCursor() {
+        guard !didPushNotAllowedCursor else { return }
+        didPushNotAllowedCursor = true
+        NSCursor.operationNotAllowed.push()
+    }
+
+    private func popNotAllowedCursorIfNeeded() {
+        guard didPushNotAllowedCursor else { return }
+        didPushNotAllowedCursor = false
+        NSCursor.pop()
     }
 }
 

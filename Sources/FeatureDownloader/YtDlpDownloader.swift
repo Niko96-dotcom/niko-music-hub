@@ -215,4 +215,18 @@ public struct YtDlpDownloader: DownloadRunning {
 
         return []
     }
+
+    /// NMH-141 (TOOL-30): yt-dlp prints "[download] <path> has already been
+    /// downloaded" when `--no-overwrites` skips an existing file. Detecting
+    /// the marker lets the UI explain the skip instead of showing a generic
+    /// network failure. `--no-overwrites` itself is unchanged (NMH-102).
+    static func containsAlreadyDownloadedMarker(_ text: String) -> Bool {
+        text.contains("has already been downloaded")
+    }
+
+    /// Maps an already-downloaded yt-dlp line to the inbox status copy.
+    /// Returns nil for unrelated lines.
+    static func alreadyExistsCopy(for line: String) -> String? {
+        containsAlreadyDownloadedMarker(line) ? DownloaderCopy.alreadyExistsInInbox : nil
+    }
 }

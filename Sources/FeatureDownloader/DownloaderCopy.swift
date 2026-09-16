@@ -28,6 +28,9 @@ public enum DownloaderCopy {
     public static let downloadFailedError = "Download failed"
     public static let retryableError = "Download failed (will retry): "
     public static let permanentError = "Download failed (permanent): "
+    /// NMH-141 (TOOL-30): informational status when yt-dlp skips because the
+    /// file is already in the Output Inbox. Sentence case, no alert.
+    public static let alreadyExistsInInbox = "This file already exists in the Output Inbox."
     public static let partialCleanup = "Partial download cleaned up."
     public static func outputInboxHandoffWarning(_ reason: String) -> String {
         "Downloaded, but Output Inbox could not save the handoff. \(reason)"
