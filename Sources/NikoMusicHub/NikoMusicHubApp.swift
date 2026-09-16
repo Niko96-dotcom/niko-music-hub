@@ -81,6 +81,7 @@ struct NikoMusicHubApp: App {
             .preferredColorScheme(appearanceController.preferredColorScheme)
         } label: {
             Image(systemName: "waveform")
+                .symbolRenderingMode(.monochrome)
                 .accessibilityLabel("Niko Music Hub")
         }
         .menuBarExtraStyle(.menu)
