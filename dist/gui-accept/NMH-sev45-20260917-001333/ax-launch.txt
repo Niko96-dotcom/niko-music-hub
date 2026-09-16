@@ -1,0 +1,71 @@
+pid=86643
+AXWindow title=Niko Music Hub desc= value= id=hub.main
+  AXGroup title= desc= value= id=
+    AXButton title= desc=Hide tools sidebar value=On id=sidebar.leading
+    AXButton title= desc=Hide output inbox value=On id=sidebar.trailing
+    AXStaticText title= desc= value=Niko Music Hub v1.5.4+92fa3a0fd07c id=
+    AXStaticText title= desc= value=Board id=
+    AXImage title= desc=Suchen value= id=magnifyingglass
+    AXTextField title= desc= value= id=
+    AXButton title= desc=Show analytics value= id=chart.bar
+    AXButton title= desc=Add archive root value= id=folder.badge.plus
+    AXButton title= desc=Open list view value= id=sidebar.leading
+    AXStaticText title= desc= value=Output Inbox id=
+    AXButton title= desc=Choose output folder value= id=folder.badge.gearshape
+    AXStaticText title= desc= value=Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/worktrees/integration/dist/gui-accept/NMH-sev45-20260917-001333/isolated-output id=
+    AXHeading title= desc=Library value= id=
+    AXButton title= desc=Archive Browser value=Selected id=hub_tool_archive-browser
+    AXCheckBox title= desc=Compact empty stages value= id=
+    AXHeading title= desc=Production value= id=
+    AXButton title= desc=BPM Tapper value= id=hub_tool_bpm-tapper
+    AXButton title= desc=WAV Converter value= id=hub_tool_wav-converter
+    AXButton title= desc=Audio Recorder value= id=hub_tool_audio-recorder
+    AXButton title= desc=Downloader value= id=hub_tool_downloader
+    AXButton title= desc=Stem Separation value= id=hub_tool_stem-separation
+    AXButton title= desc=Settings value= id=hub_tool_settings
+    AXHeading title= desc=Status value= id=
+    AXScrollArea title= desc= value= id=
+        AXGroup title= desc=No Status column, 9 songs value= id=
+          AXImage title= desc=Eingang value= id=tray
+              AXButton title= desc=Neon Hook value= id=
+                AXButton title= desc=Play Neon Hook value= id=play.fill
+              AXButton title= desc=Amber Moth value= id=
+                AXButton title= desc=Play Amber Moth value= id=play.fill
+              AXButton title= desc=Graffiti value= id=
+                AXButton title= desc=Play Graffiti value= id=play.fill
+              AXButton title= desc=Tie Song value= id=
+                AXButton title= desc=Play Tie Song value= id=play.fill
+              AXButton title= desc=Tie Song value= id=
+                AXButton title= desc=Play Tie Song value= id=play.fill
+              AXButton title= desc=Equal Score Duration Tiebreak value= id=
+                AXButton title= desc=Play Equal Score Duration Tiebreak value= id=play.fill
+              AXButton title= desc=Lab Song value= id=
+                AXButton title= desc=Play Lab Song value= id=play.fill
+              AXButton title= desc=Second Song value= id=
+                AXButton title= desc=Play Second Song value= id=play.fill
+              AXButton title= desc=Broken Folder Example value=Warning: No project files (.cpr or .als) found id=
+                AXImage title= desc=Ton Aus value= id=speaker.slash
+        AXGroup title= desc=Songstarter/Beat column, 0 songs value= id=
+          AXImage title= desc=Funken value= id=sparkles
+        AXGroup title= desc=Song column, 0 songs value= id=
+          AXImage title= desc=Titel value= id=music.note
+        AXGroup title= desc=Session Prod column, 0 songs value= id=
+          AXImage title= desc=person.2 value= id=person.2
+        AXGroup title= desc=Prod column, 0 songs value= id=
+          AXImage title= desc=Bearbeiten value= id=slider.horizontal.3
+        AXGroup title= desc=Waiting Feedback column, 0 songs value= id=
+          AXImage title= desc=Dauer value= id=hourglass
+        AXGroup title= desc=Feedback Todo column, 0 songs value= id=
+          AXImage title= desc=checklist value= id=checklist
+        AXGroup title= desc=Done column, 0 songs value= id=
+          AXImage title= desc=Überprüft value= id=checkmark.seal
+    AXImage title= desc=Ende value= id=arrow.down.to.line
+    AXStaticText title= desc= value=No outputs yet id=
+    AXStaticText title= desc= value=Converted files, recordings, and
+downloads appear here. id=
+    AXButton title= desc=Helper tools status value= id=
+    AXStaticText title= desc= value=9 songs · 1 with warnings · 2 skipped id=
+  AXButton title= desc= value= id=
+  AXButton title= desc= value= id=
+    AXGroup title= desc= value= id=
+  AXButton title= desc= value= id=

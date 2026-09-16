@@ -1,0 +1,279 @@
+[0/1] Planning build
+Building for debugging...
+[0/12] Write sources
+[1/12] Write swift-version--58304C5D6DBC2206.txt
+[3/274] Emitting module NikoMusicCoreSelfTest
+[4/274] Compiling NikoMusicCoreSelfTest main.swift
+[5/274] Emitting module NikoMusicHubCLI
+[6/274] Compiling NikoMusicHubCLI main.swift
+[6/274] Write Objects.LinkFileList
+[8/274] Compiling FeatureAudioConverterTests AudioConverterHandoffTests.swift
+[10/274] Compiling FeatureStemSeparationTests resource_bundle_accessor.swift
+[11/274] Compiling FeatureDownloaderTests YtDlpVersionPolicyTests.swift
+[12/274] Compiling FeatureDownloaderTests DownloaderTestSupport.swift
+[13/274] Compiling FeatureDownloaderTests DownloadStallMonitorTests.swift
+[14/274] Compiling FeatureAudioConverterTests OutputFileNamerTests.swift
+[15/274] Compiling FeatureDownloaderTests DownloaderChipSelectionTests.swift
+[16/274] Compiling FeatureAudioConverterTests AudioConverterFeatureTests.swift
+[17/274] Compiling FeatureDownloaderTests DownloaderHelperToolResolverTests.swift
+[18/274] Emitting module FeatureAudioConverterTests
+[19/274] Compiling FeatureDownloaderTests DownloadFormatSelectionTests.swift
+[20/274] Compiling FeatureDownloaderTests DownloadProgressParsingTests.swift
+[21/274] Compiling FeatureDownloaderTests DownloaderUATCoverageTests.swift
+[22/274] Compiling FeatureBPMTapperTests TempoEstimatorTests.swift
+[23/274] Compiling FeatureBPMTapperTests BPMTapperActionsTests.swift
+[24/274] Compiling FeatureBPMTapperTests BPMAdjustmentTests.swift
+[25/274] Compiling FeatureBPMTapperTests BPMHistoryStoreTests.swift
+[26/274] Compiling FeatureBPMTapperTests BPMTapperViewModelTests.swift
+[27/274] Emitting module FeatureBPMTapperTests
+[28/274] Compiling FeatureBPMTapperTests BPMReadoutAnnouncementTests.swift
+[29/274] Compiling FeatureDownloaderTests DownloaderTrustAndErrorTests.swift
+[30/274] Compiling FeatureAudioConverterTests AudioFileIntakeScannerTests.swift
+[31/274] Emitting module FeatureDownloaderTests
+[32/274] Compiling FeatureDownloaderTests YtDlpFormatArgumentIntegrationTests.swift
+[33/274] Compiling FeatureDownloaderTests YtDlpHealthCheckerTests.swift
+[34/274] Compiling FeatureAudioConverterTests AudioConversionPipelineTests.swift
+[35/274] Compiling FeatureAudioRecorderTests CoreAudioTapAdapterTests.swift
+[36/274] Compiling FeatureAudioRecorderTests RecordSystemAudioUseCaseTests.swift
+[37/274] Compiling AppUpdatesTests AppUpdateStatusTests.swift
+[38/274] Compiling AppUpdatesTests AppUpdateConfigurationTests.swift
+[39/274] Emitting module AppUpdatesTests
+[40/274] Compiling AppUpdatesTests UpdatePackagingContractTests.swift
+[41/274] Compiling AppUpdatesTests AppUpdateControllerTests.swift
+[42/274] Compiling FeatureAudioConverterTests FFmpegHealthTests.swift
+[43/274] Compiling FeatureDownloaderTests DownloaderLiveIntegrationTests.swift
+[44/274] Compiling FeatureDownloaderTests YtDlpOutputCollectorTests.swift
+[45/274] Compiling FeatureAudioConverterTests WAVOutputVerifierTests.swift
+[46/274] Compiling FeatureAudioRecorderTests SystemAudioTapConfigurationTests.swift
+[47/274] Compiling FeatureAudioRecorderTests WAVRecorderWriterTests.swift
+[48/274] Compiling AppCoreTests HandoffSurfacingSourceTests.swift
+[49/274] Compiling AppCoreTests HelperToolsHealthStripModelTests.swift
+[50/274] Compiling AppCoreTests HubAccessibilityAnnouncerTests.swift
+[51/274] Compiling AppCoreTests HubCancelCommandsTests.swift
+[52/274] Compiling AppCoreTests HubLiquidDesignSystemTests.swift
+[53/274] Compiling AppCoreTests HubMediaSurfaceTests.swift
+[54/274] Compiling AppCoreTests HubNoNewLiquidCallSitesTests.swift
+[55/274] Compiling FeatureAudioRecorderTests RecorderIntegrationTests.swift
+[56/279] Compiling AppCoreTests OutputInboxNotificationTests.swift
+[57/279] Compiling AppCoreTests OutputInboxStoreTests.swift
+[58/279] Compiling AppCoreTests PreferenceStoreTests.swift
+[59/279] Compiling AppCoreTests ProjectVaultConfirmationTests.swift
+[60/283] Emitting module FeatureStemSeparationTests
+[61/283] Compiling FeatureAudioRecorderTests CoreAudioTapAdapterStateTests.swift
+[62/283] Compiling AppCoreTests AppAppearanceAndRecordingTests.swift
+[63/283] Compiling AppCoreTests AppAppearanceControllerSourceTests.swift
+[64/283] Compiling AppCoreTests AppBuildIdentityTests.swift
+[65/283] Compiling AppCoreTests AppCoreSmokeTests.swift
+[66/283] Compiling FeatureStemSeparationTests DemucsMLXProgressParserTests.swift
+[67/283] Compiling NikoMusicCoreTests PreviewRankingExplainabilityTests.swift
+[68/283] Compiling NikoMusicCoreTests PreviewRankingProjectContextTests.swift
+[69/283] Compiling NikoMusicCoreTests PreviewRankingTiebreakTests.swift
+[70/283] Compiling NikoMusicCoreTests ProjectArchiveLocationTests.swift
+[71/283] Compiling FeatureAudioConverterTests NativeAudioConverterTests.swift
+[72/283] Compiling AppCoreTests ToolContextTests.swift
+[73/283] Compiling AppCoreTests ToolLiquidSurfaceSourceTests.swift
+[74/283] Compiling AppCoreTests ToolRegistryUIToolTests.swift
+[75/283] Compiling AppCoreTests QuickAccessRoutingSmokeTests.swift
+[76/283] Compiling AppCoreTests QuickAccessSourceTests.swift
+[77/283] Compiling AppCoreTests SettingsLiquidSourceTests.swift
+[78/283] Compiling AppCoreTests SettingsStoreTests.swift
+[79/283] Compiling FeatureStemSeparationTests YouTubeStemSeparationWorkflowTests.swift
+[80/283] Compiling FeatureStemSeparationTests DemucsMLXCommandBuilderTests.swift
+[81/283] Compiling FeatureDownloaderTests YtDlpAlreadyExistsCopyTests.swift
+[82/283] Compiling FeatureDownloaderTests YtDlpDownloaderTests.swift
+[83/283] Compiling AppCoreTests HubDesignComponentsTests.swift
+[84/283] Compiling AppCoreTests HubDesignSystemTokenTests.swift
+[85/283] Compiling AppCoreTests E2ESmokeIsolationSourceTests.swift
+[86/283] Compiling AppCoreTests ExternalProcessRunningTests.swift
+[87/283] Compiling AppCoreTests FSEventsArchiveRootWatcherTests.swift
+[88/283] Compiling FeatureStemSeparationTests StemOutputScannerTests.swift
+[89/283] Compiling FeatureStemSeparationTests MockStemSeparationBackend.swift
+[90/283] Compiling AppCoreTests LocalExternalProofHarnessSourceTests.swift
+[91/283] Compiling AppCoreTests MenuBarDividerLogicTests.swift
+[92/283] Compiling AppCoreTests MenuBarMenuModelTests.swift
+[93/283] Compiling AppCoreTests MenuBarSourceTests.swift
+[94/283] Compiling AppCoreTests HubSettingsPaneIDTests.swift
+[95/283] Compiling AppCoreTests HubSharedControlsTests.swift
+[101/283] Compiling AppCoreTests FeatureRegistryTests.swift
+[102/283] Compiling AppCoreTests HubDragAffordanceTests.swift
+[103/283] Compiling AppCoreTests HubFindCommandsTests.swift
+[104/283] Compiling AppCoreTests ShellJobStatusCenterTests.swift
+[105/283] Compiling AppCoreTests SourceTestSupport.swift
+[106/283] Compiling AppCoreTests SystemPrivacySettingsTests.swift
+[111/283] Compiling FeatureAudioRecorderTests RecorderHardwareUATTests.swift
+[112/283] Compiling AppCoreTests ProjectVaultCopyConsistencyTests.swift
+[113/283] Compiling AppCoreTests ProjectVaultDiagnosticsExporterUniqueNameTests.swift
+[114/283] Compiling AppCoreTests HubTypographyScalingTests.swift
+[115/283] Compiling AppCoreTests HumanFriendlyPathTests.swift
+[116/283] Compiling AppCoreTests JobRunnerTests.swift
+[118/283] Compiling AppCoreTests HubRelativeTimeTests.swift
+[119/283] Compiling AppCoreTests HubSectionHeaderTests.swift
+[120/283] Compiling AppCoreTests HubSemanticTokenTests.swift
+[121/283] Compiling FeatureDownloaderTests DownloaderViewModelTests.swift
+[122/283] Compiling AppCoreTests HubDependencyDirectionTests.swift
+[125/283] Compiling FeatureDownloaderTests DownloaderUseCaseTests.swift
+[126/283] Compiling AppCoreTests HubShellChromeSourceTests.swift
+[127/283] Compiling AppCoreTests HubShellSessionTests.swift
+[128/283] Compiling AppCoreTests HubSongCommandsTests.swift
+[129/283] Compiling AppCoreTests MusicHubRuntimeEnvironmentTests.swift
+[130/283] Compiling AppCoreTests OutputHandoffTests.swift
+[132/283] Compiling AppCoreTests HubSurfaceTests.swift
+[133/283] Compiling AppCoreTests HubToolContentColumnTests.swift
+[134/283] Compiling AppCoreTests HubToolsShortcutMapTests.swift
+[137/283] Linking NikoMusicCoreSelfTest
+[139/283] Emitting module FeatureArchiveBrowserTests
+[140/283] Compiling AppCoreTests ProjectVaultRestoreProgressTests.swift
+[141/283] Compiling AppCoreTests QuickAccessAllowlistTests.swift
+[142/283] Compiling AppCoreTests QuickAccessCommandTests.swift
+[143/283] Compiling AppCoreTests QuickAccessRouterTests.swift
+[148/283] Compiling FeatureStemSeparationTests DemucsMLXHealthCheckerTests.swift
+[152/283] Applying NikoMusicCoreSelfTest
+[154/283] Emitting module AppCoreTests
+[155/283] Compiling FeatureAudioConverterTests BatchAudioConversionUseCaseTests.swift
+[156/283] Compiling FeatureAudioConverterTests AudioPresetTests.swift
+[157/283] Compiling FeatureAudioConverterTests FFmpegAudioConverterTests.swift
+[162/283] Compiling AppCoreTests ProjectVaultHealthCopyTests.swift
+[163/283] Compiling AppCoreTests ProjectVaultPolishTests.swift
+[164/283] Compiling FeatureArchiveBrowserTests TestToolContext.swift
+[165/283] Compiling FeatureArchiveBrowserTests WorkflowDoneArchiveConfirmationTests.swift
+[165/283] Linking NikoMusicHubCLI
+[168/283] Compiling AppCoreTests LiveProjectVaultRuntimeTests.swift
+[170/283] Applying NikoMusicHubCLI
+[186/283] Compiling AppCoreTests HubControlStateBehaviorTests.swift
+[193/283] Compiling FeatureAudioConverterTests AudioConverterViewModelTests.swift
+[194/283] Compiling FeatureAudioRecorderTests RecorderPCMBufferLayoutTests.swift
+[195/283] Compiling FeatureAudioRecorderTests RecorderPermissionTests.swift
+[196/283] Compiling FeatureAudioRecorderTests ResilientSystemAudioRecordingSessionTests.swift
+[205/283] Emitting module NikoMusicCoreTests
+[214/283] Compiling FeatureStemSeparationTests DemucsMLXBackendTests.swift
+[217/283] Compiling FeatureStemSeparationTests StemSeparationServiceTests.swift
+[218/283] Compiling FeatureStemSeparationTests StemSeparationFeatureTests.swift
+[224/283] Compiling AppCoreTests ToolSidebarSelectionTests.swift
+[225/283] Compiling AppCoreTests VaultLaunchAtLoginTests.swift
+[226/283] Compiling AppCoreTests VaultSettingsTests.swift
+[227/283] Emitting module FeatureAudioRecorderTests
+[228/283] Compiling FeatureAudioRecorderTests AudioRecorderViewModelTests.swift
+[234/283] Compiling FeatureStemSeparationTests StemSeparationViewModelTests.swift
+[242/283] Compiling NikoMusicCoreTests VaultAutomationTests.swift
+[243/283] Compiling NikoMusicCoreTests VaultManifestCopierCancelTests.swift
+[244/283] Compiling NikoMusicCoreTests VaultManifestTests.swift
+[245/283] Compiling NikoMusicCoreTests VaultProjectionSupplementTests.swift
+[246/283] Compiling NikoMusicCoreTests WaveAPreviewAndTitleTests.swift
+[282/285] Emitting module NikoMusicHubPackageTests
+[283/285] Compiling NikoMusicHubPackageTests runner.swift
+[283/285] Write Objects.LinkFileList
+[284/285] Linking NikoMusicHubPackageTests
+Build complete! (8.25s)
+Test Suite 'Selected tests' started at 2026-09-17 00:13:42.926.
+Test Suite 'NikoMusicHubPackageTests.xctest' started at 2026-09-17 00:13:42.927.
+Test Suite 'ArchiveAccessRecoveryTests' started at 2026-09-17 00:13:42.927.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testChooseFolderClearsAccessFailureAndLeavesRecoveryPath]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testChooseFolderClearsAccessFailureAndLeavesRecoveryPath]' passed (0.009 seconds).
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testCompletedOnboardingWithoutStoredRootIsEmptyLibraryNotRecovery]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testCompletedOnboardingWithoutStoredRootIsEmptyLibraryNotRecovery]' passed (0.001 seconds).
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testFirstRunRemainsWhenNoStoredRoot]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testFirstRunRemainsWhenNoStoredRoot]' passed (0.035 seconds).
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testRecoveryOverlayIsWiredInsteadOfEmptyBoard]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testRecoveryOverlayIsWiredInsteadOfEmptyBoard]' passed (0.001 seconds).
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testStaleBookmarkShowsAccessRecoveryNotEmptyLibrary]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testStaleBookmarkShowsAccessRecoveryNotEmptyLibrary]' passed (0.002 seconds).
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testUserFacingReasonForStaleAndMissingBookmarks]' started.
+Test Case '-[FeatureArchiveBrowserTests.ArchiveAccessRecoveryTests testUserFacingReasonForStaleAndMissingBookmarks]' passed (0.000 seconds).
+Test Suite 'ArchiveAccessRecoveryTests' passed at 2026-09-17 00:13:42.976.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.048 (0.049) seconds
+Test Suite 'DownloadStallMonitorTests' started at 2026-09-17 00:13:42.976.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testActivityResetsStallWindow]' started.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testActivityResetsStallWindow]' passed (0.000 seconds).
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testFakeClockAdvancesWithoutSleep]' started.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testFakeClockAdvancesWithoutSleep]' passed (0.000 seconds).
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testSlowHintAfter30Seconds]' started.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testSlowHintAfter30Seconds]' passed (0.000 seconds).
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testStallErrorMessage]' started.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testStallErrorMessage]' passed (0.000 seconds).
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testStallsAfter120SecondsWithoutActivity]' started.
+Test Case '-[FeatureDownloaderTests.DownloadStallMonitorTests testStallsAfter120SecondsWithoutActivity]' passed (0.000 seconds).
+Test Suite 'DownloadStallMonitorTests' passed at 2026-09-17 00:13:42.976.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'DownloaderViewModelTests' started at 2026-09-17 00:13:42.976.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCancelDownloadSetsCanceledState]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCancelDownloadSetsCanceledState]' passed (0.014 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCanceledDebounceNeverInvokesHealthChecker]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCanceledDebounceNeverInvokesHealthChecker]' passed (0.084 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCanceledJobIsNotFailed]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCanceledJobIsNotFailed]' passed (0.011 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testClearInputCancelsInFlightHealthCheck]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testClearInputCancelsInFlightHealthCheck]' passed (0.011 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCompletedDownloadUsesCapturedSourceURLForInboxMetadata]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testCompletedDownloadUsesCapturedSourceURLForInboxMetadata]' passed (0.025 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testFormatSelectionLoadsFromInjectedPreferences]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testFormatSelectionLoadsFromInjectedPreferences]' passed (0.003 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testInboxAddFailureKeepsDownloadCompletedWithHandoffWarning]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testInboxAddFailureKeepsDownloadCompletedWithHandoffWarning]' passed (0.014 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testShowsDeterminateProgress]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testShowsDeterminateProgress]' passed (0.021 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testSlowURLAResultCannotOverwriteURLB]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testSlowURLAResultCannotOverwriteURLB]' passed (0.213 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testStartDownloadSetsDownloadingSynchronouslyAndRejectsDuplicateStarts]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testStartDownloadSetsDownloadingSynchronouslyAndRejectsDuplicateStarts]' passed (0.012 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testSubmitIfReadyStartsOnlyWhenReady]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testSubmitIfReadyStartsOnlyWhenReady]' passed (0.012 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testValidatedHTTPURLRejectsDeceptiveSchemesAndMissingHosts]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testValidatedHTTPURLRejectsDeceptiveSchemesAndMissingHosts]' passed (0.001 seconds).
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testViewModelCanDeallocateWithPendingDebounce]' started.
+Test Case '-[FeatureDownloaderTests.DownloaderViewModelTests testViewModelCanDeallocateWithPendingDebounce]' passed (0.001 seconds).
+Test Suite 'DownloaderViewModelTests' passed at 2026-09-17 00:13:43.398.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.420 (0.422) seconds
+Test Suite 'HubDesignComponentsTests' started at 2026-09-17 00:13:43.399.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testChoiceChipsWrapAtNarrowWidthAndMeetDefaultHeight]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testChoiceChipsWrapAtNarrowWidthAndMeetDefaultHeight]' passed (0.163 seconds).
+Test Case '-[AppCoreTests.HubDesignComponentsTests testDesignSystemPreviewForcesAppearanceVariants]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testDesignSystemPreviewForcesAppearanceVariants]' passed (0.006 seconds).
+Test Case '-[AppCoreTests.HubDesignComponentsTests testHubButtonsUseNativeGlassStylesWhenAvailable]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testHubButtonsUseNativeGlassStylesWhenAvailable]' passed (0.002 seconds).
+Test Case '-[AppCoreTests.HubDesignComponentsTests testHubLabeledButtonStylesCompile]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testHubLabeledButtonStylesCompile]' passed (0.036 seconds).
+Test Case '-[AppCoreTests.HubDesignComponentsTests testPressedFillDiffersFromHover]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testPressedFillDiffersFromHover]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignComponentsTests testSemanticCardPathHasNoGlassEffect]' started.
+Test Case '-[AppCoreTests.HubDesignComponentsTests testSemanticCardPathHasNoGlassEffect]' passed (0.000 seconds).
+Test Suite 'HubDesignComponentsTests' passed at 2026-09-17 00:13:43.607.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.208 (0.208) seconds
+Test Suite 'HubDesignSystemTokenTests' started at 2026-09-17 00:13:43.607.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testAccentIsNeutralNotTinted]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testAccentIsNeutralNotTinted]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testControlStateCoversAllSevenCases]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testControlStateCoversAllSevenCases]' passed (0.001 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testHighContrastSecondaryDiffersFromStandard]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testHighContrastSecondaryDiffersFromStandard]' passed (0.001 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testLegacyLiquidNamespaceIsGone]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testLegacyLiquidNamespaceIsGone]' passed (0.001 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testMotionDurationsMatchLockedSpec]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testMotionDurationsMatchLockedSpec]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testRadiusTokensMatchSpec]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testRadiusTokensMatchSpec]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSelectedRowTokensUseAccentNotSystemAccent]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSelectedRowTokensUseAccentNotSystemAccent]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSemanticPaletteExposesAllRoles]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSemanticPaletteExposesAllRoles]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSizeTokensMatchSpec]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSizeTokensMatchSpec]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSpacingTokensMatchCompactSpec]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testSpacingTokensMatchCompactSpec]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testTypographySurfaceIncludesExpandedScale]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testTypographySurfaceIncludesExpandedScale]' passed (0.000 seconds).
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testUITypeMeetsTenPointFloor]' started.
+Test Case '-[AppCoreTests.HubDesignSystemTokenTests testUITypeMeetsTenPointFloor]' passed (0.004 seconds).
+Test Suite 'HubDesignSystemTokenTests' passed at 2026-09-17 00:13:43.614.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'NikoMusicHubPackageTests.xctest' passed at 2026-09-17 00:13:43.614.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 0.684 (0.688) seconds
+Test Suite 'Selected tests' passed at 2026-09-17 00:13:43.614.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 0.684 (0.688) seconds
+[error] Archive root bookmark resolution failed: Error Domain=NSCocoaErrorDomain Code=259 "Die Datei konnte nicht geöffnet werden, da sie nicht das korrekte Format hat."
+[error] Archive root bookmark resolution failed: Error Domain=NSCocoaErrorDomain Code=259 "Die Datei konnte nicht geöffnet werden, da sie nicht das korrekte Format hat."
+[error] Archive root bookmark resolution failed: Error Domain=NSCocoaErrorDomain Code=259 "Die Datei konnte nicht geöffnet werden, da sie nicht das korrekte Format hat."
+[info] Scanned 0 songs · no warnings · nothing skipped at roots
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
