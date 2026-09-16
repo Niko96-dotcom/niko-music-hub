@@ -94,8 +94,13 @@ struct ArchiveAnalyticsView: View {
             } else {
                 let peak = max(months.map(\.versionCount).max() ?? 1, 1)
                 HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(months) { month in
+                    ForEach(Array(months.enumerated()), id: \.element.id) { index, month in
                         VStack(spacing: 4) {
+                            Text("\(month.versionCount)")
+                                .font(HubDesignSystem.Typography.caption())
+                                .monospacedDigit()
+                                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                                .accessibilityHidden(true)
                             Capsule(style: .continuous)
                                 .fill(
                                     month.versionCount > 0
@@ -104,7 +109,7 @@ struct ArchiveAnalyticsView: View {
                                 )
                                 .frame(height: barHeight(month.versionCount, peak: peak))
                                 .frame(maxWidth: .infinity)
-                            Text(Self.monthFormatter.string(from: month.monthStart))
+                            Text(Self.monthLabel(for: month.monthStart, index: index, count: months.count))
                                 .font(HubDesignSystem.Typography.micro())
                                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         }
@@ -227,6 +232,20 @@ struct ArchiveAnalyticsView: View {
         formatter.dateFormat = "MMM"
         return formatter
     }()
+
+    private static let monthYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM yyyy"
+        return formatter
+    }()
+
+    /// Visible X-axis label: year on the first and last month only (NMH-050).
+    static func monthLabel(for date: Date, index: Int, count: Int) -> String {
+        if index == 0 || index == count - 1 {
+            return monthYearFormatter.string(from: date)
+        }
+        return monthFormatter.string(from: date)
+    }
 
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
