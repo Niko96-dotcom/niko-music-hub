@@ -46,7 +46,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-010 | 4 | fixed | ae095046b3fb02d08d7c847497c6d26eb3930db0 | (see commit) | gui-unit-promote: swift test --filter DownloaderTrustAndErrorTests PASS | batch-NMH-010-59c150c8; auto-integrated; gui-unit-promote |
 | NMH-011 | 4 | fixed | e6f9df89b5e1adc418a139c98fcfdebcbe1baf5c | (see commit) | gui-unit-promote: swift test --filter ShellJobStatusCenterTests PASS | batch-NMH-011-bcb4f31e; auto-integrated; gui-unit-promote |
 | NMH-059 | 4 | fixed | 2ab7e74b4431ea3776bc844ad667f56900aa1cb0 | (see commit) | gui-unit-promote: swift test --filter FeatureAudioRecorderTests PASS | batch-NMH-059-81a90bb0; auto-integrated; gui-unit-promote |
-| NMH-060 | 4 | implemented-awaiting-runtime | b7385e3858764d4818005c89deb20785a5d1c7d6 | (see commit) | see nmh-hig-NMH-060-result.md; worker exit 0 | batch-NMH-060-83afd298; auto-integrated |
+| NMH-060 | 4 | fixed | b7385e3858764d4818005c89deb20785a5d1c7d6 | (see commit) | gui-unit-promote: swift test --filter BatchAudioConversionUseCaseTests PASS | batch-NMH-060-83afd298; auto-integrated; gui-unit-promote |
 | NMH-062 | 4 | implemented-awaiting-runtime | a05db3227241fe1e3d157e1008108dd1d05ab25b | (see commit) | see nmh-hig-NMH-062-result.md; worker exit 0 | batch-NMH-062-c27b31da; auto-integrated |
 | NMH-065 | 4 | implemented-awaiting-runtime | 55da39843dfdc2b590db59dd847345ffbddce38a | (see commit) | see nmh-hig-NMH-065-result.md; worker exit 0 | batch-NMH-065-6cc15d5b; auto-integrated |
 | NMH-023 | 5 | implemented-awaiting-runtime | 98a9b28e63ffc5890991b2d16c85b8f46cb2df48 | (see commit) | see nmh-hig-NMH-023-result.md; worker exit 0 | batch-NMH-023-9c2919c9; auto-integrated |
