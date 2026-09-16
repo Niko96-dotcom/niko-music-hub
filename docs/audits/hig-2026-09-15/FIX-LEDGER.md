@@ -12,7 +12,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-012 | 2 | implemented-awaiting-runtime | ca28a36887ea5e3e59abbf88793c87e21507ab63 | (see commit) | see nmh-hig-NMH-012-result.md; worker exit 0 | batch-NMH-012-979513be; auto-integrated |
 | NMH-013 | 2 | implemented-awaiting-runtime | bdb58dbb01ef33a78031010dc32e98394dab3880 | (see commit) | see nmh-hig-NMH-013-result.md; worker exit 0 | batch-NMH-013-f246b460; auto-integrated |
 | NMH-014 | 2 | implemented-awaiting-runtime | a15adf837fa5354aa66ebe9ddb206161ce09ec80 | (see commit) | see nmh-hig-NMH-014-result.md; worker exit 0 | batch-NMH-014-f7331524; auto-integrated |
-| NMH-016 | 2 | implemented-awaiting-runtime | 9980c1f262603d4def5310f30700067b45be6def | (see commit) | see nmh-hig-NMH-016-result.md; worker exit 0 | batch-NMH-016-642359d2; auto-integrated |
+| NMH-016 | 2 | fixed | 9980c1f262603d4def5310f30700067b45be6def | (see commit) | gui-unit-promote: swift test --filter MenuBarMenuModelTests PASS | batch-NMH-016-642359d2; auto-integrated; gui-unit-promote |
 | NMH-022 | 2 | implemented-awaiting-runtime | 77a5c1766257a885790b5b57ea4b69771c8260a0 | (see commit) | see nmh-hig-NMH-022-result.md; worker exit 0 | batch-NMH-022-f53cf0cc; auto-integrated |
 | NMH-017 | 2 | implemented-awaiting-runtime | 05c51cd4b4017fd23484aadcde8eab3f138f6951 | (see commit) | see nmh-hig-NMH-017-result.md; worker exit 0 | batch-NMH-017-30e84867; auto-integrated |
 | NMH-019 | 2 | implemented-awaiting-runtime | cdf5c68fdade7c76aea7364ce8fd8b40aae9a2c1 | (see commit) | see nmh-hig-NMH-019-result.md; worker exit 0 | batch-NMH-019-107b3fb9; auto-integrated |
