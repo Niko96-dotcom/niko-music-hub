@@ -18,8 +18,19 @@ public enum HubShellLayout {
     /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
     public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
     /// Leading inset so toggles sit immediately after the traffic lights.
+    /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.
     public static let titleBarLeadingInset: CGFloat = 78
     public static let titleBarTrailingInset: CGFloat = 12
+}
+
+/// `NSWindow.title` for the hidden-title-bar shell (Window menu / Mission Control).
+public enum HubMainWindowTitle {
+    public static let fallback = "Niko Music Hub"
+
+    public static func resolved(selectedToolID: ToolFeatureID?, registry: ToolRegistry) -> String {
+        guard let selectedToolID else { return fallback }
+        return registry.feature(for: selectedToolID)?.metadata.displayName ?? fallback
+    }
 }
 
 public extension View {

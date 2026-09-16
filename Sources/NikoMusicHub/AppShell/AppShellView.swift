@@ -81,7 +81,7 @@ struct AppShellView: View {
             HubShellTitleBarControls(session: shellSession)
         }
         .ignoresSafeArea(edges: .top)
-        .background(HubWindowChromeConfigurator())
+        .background(HubWindowChromeConfigurator(windowTitle: mainWindowTitle))
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .hubOpensMainWindowFromDock()
         .onAppear {
@@ -151,6 +151,11 @@ struct AppShellView: View {
             }
         }
         .background(HubShellBackground())
+    }
+
+    /// Window menu / Mission Control title from the selected tool. Fallback when unknown.
+    private var mainWindowTitle: String {
+        HubMainWindowTitle.resolved(selectedToolID: shellSession.selectedToolID, registry: registry)
     }
 
     /// Full-height hairline that separates flush columns (the reference split-view seam).

@@ -1,3 +1,5 @@
+import AppCore
+import SwiftUI
 import XCTest
 
 final class HubShellChromeSourceTests: XCTestCase {
@@ -40,6 +42,42 @@ final class HubShellChromeSourceTests: XCTestCase {
         }
 
         XCTAssertFalse(source.contains("@AppStorage"))
+    }
+
+    func testMainWindowTitleUsesToolDisplayNameOrAppFallback() throws {
+        let registry = try ToolRegistry(features: [
+            StubChromeFeature(id: "archive-browser", displayName: "Archive Browser"),
+            StubChromeFeature(id: "downloader", displayName: "Downloader"),
+        ])
+
+        XCTAssertEqual(
+            HubMainWindowTitle.resolved(selectedToolID: ToolFeatureID("archive-browser"), registry: registry),
+            "Archive Browser"
+        )
+        XCTAssertEqual(
+            HubMainWindowTitle.resolved(selectedToolID: ToolFeatureID("downloader"), registry: registry),
+            "Downloader"
+        )
+        XCTAssertEqual(HubMainWindowTitle.resolved(selectedToolID: nil, registry: registry), "Niko Music Hub")
+        XCTAssertEqual(
+            HubMainWindowTitle.resolved(selectedToolID: ToolFeatureID("missing-tool"), registry: registry),
+            "Niko Music Hub"
+        )
+        XCTAssertEqual(HubShellLayout.titleBarLeadingInset, 78)
+
+        let chrome = try shellSource("HubWindowChromeConfigurator.swift")
+        XCTAssertTrue(chrome.contains("window.title = windowTitle"))
+        XCTAssertTrue(chrome.contains("titleVisibility = .hidden"))
+        XCTAssertTrue(chrome.contains("titlebarAppearsTransparent = true"))
+        XCTAssertTrue(chrome.contains("fullSizeContentView"))
+
+        let app = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
+        XCTAssertTrue(app.contains(".windowStyle(.hiddenTitleBar)"))
+
+        let shell = try shellSource("AppShellView.swift")
+        XCTAssertTrue(shell.contains("HubWindowChromeConfigurator(windowTitle: mainWindowTitle)"))
+        XCTAssertTrue(shell.contains("shellSession.selectedToolID"))
+        XCTAssertFalse(shell.contains("HubWindowChromeConfigurator()"))
     }
 
     func testSidebarKeepsRegistrySelectionWhileUsingLiquidRows() throws {
@@ -107,5 +145,23 @@ final class HubShellChromeSourceTests: XCTestCase {
             contentsOfFile: "Sources/NikoMusicHub/AppShell/\(filename)",
             encoding: .utf8
         )
+    }
+}
+
+private struct StubChromeFeature: ToolFeature {
+    let metadata: ToolMetadata
+
+    init(id: ToolFeatureID, displayName: String) {
+        metadata = ToolMetadata(
+            id: id,
+            displayName: displayName,
+            shortLabel: displayName,
+            systemImage: "hammer"
+        )
+    }
+
+    @MainActor
+    func makeView(context: ToolContext) -> AnyView {
+        AnyView(EmptyView())
     }
 }

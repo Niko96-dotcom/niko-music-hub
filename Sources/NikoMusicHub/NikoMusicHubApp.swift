@@ -31,8 +31,8 @@ struct NikoMusicHubApp: App {
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }
-        // Reference chrome: no titlebar band or window title — the glass columns run
-        // edge-to-edge and the traffic lights float over the nav column.
+        // Hidden title bar: no titlebar band; traffic lights float over the nav column.
+        // `NSWindow.title` is still the selected tool (Window menu / Mission Control).
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1_280, height: 820)
