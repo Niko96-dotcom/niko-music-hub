@@ -312,6 +312,81 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.recordingState, .idle)
     }
 
+    func testNoAudioCapturedMapsToPermissionNeeded() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-no-audio-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: false, inputFrameCount: 0)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        XCTAssertEqual(vm.recordingState, .permissionNeeded)
+        if case .error = vm.recordingState {
+            XCTFail("Expected .permissionNeeded, not .error")
+        }
+        XCTAssertEqual(try inbox.listItems().count, 0)
+    }
+
+    func testPermissionClassAPIErrorMapsToPermissionNeeded() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-tcc-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = StartFailingCapturePort(
+            error: .apiError("AudioDeviceStart not authorized (TCC)")
+        )
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: InMemoryOutputInboxStore()
+        )
+
+        await vm.startRecording()
+        try await waitUntil { vm.recordingState == .permissionNeeded }
+
+        XCTAssertEqual(vm.recordingState, .permissionNeeded)
+    }
+
+    func testPresentationMapsNoAudioAndPermissionClassErrors() {
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .noAudioCaptured("no frames")),
+            .permissionNeeded
+        )
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .apiError("not authorized to capture system audio")),
+            .permissionNeeded
+        )
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .permissionDenied),
+            .permissionNeeded
+        )
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .apiError("forced stop failure")),
+            .error(.apiError("forced stop failure"))
+        )
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .writeError("disk full")),
+            .error(.writeError("disk full"))
+        )
+        XCTAssertEqual(
+            RecordingDisplayState.presentation(for: .verificationFailed("Recording contained no audio frames.")),
+            .error(.verificationFailed("Recording contained no audio frames."))
+        )
+    }
+
     func testStopRecordingRejectsEmptyWAVHeader() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-empty-\(UUID().uuidString)", isDirectory: true)
@@ -498,17 +573,40 @@ private final class MockAudioCapturePort: AudioCapturePort, @unchecked Sendable 
     }
 }
 
+private final class StartFailingCapturePort: AudioCapturePort, @unchecked Sendable {
+    var recording: Bool = false
+    private let error: RecorderError
+
+    init(error: RecorderError) {
+        self.error = error
+    }
+
+    func checkPermission() async -> RecorderPermissionState { .authorized }
+    func requestPermission() async -> RecorderPermissionState { .authorized }
+    func isCompatibleMacOS() -> Bool { true }
+
+    func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
+        throw error
+    }
+
+    func stopRecording() async throws -> RecorderResult {
+        throw RecorderError.apiError("No active recording")
+    }
+}
+
 private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
     private let writesAudioFrames: Bool
     private let writeErrorCount: Int
+    private let inputFrameCount: Int64
     private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
     var recordedOutputURL: URL? { outputURL }
     var recording: Bool = false
 
-    init(writesAudioFrames: Bool, writeErrorCount: Int = 0) {
+    init(writesAudioFrames: Bool, writeErrorCount: Int = 0, inputFrameCount: Int64 = 1024) {
         self.writesAudioFrames = writesAudioFrames
         self.writeErrorCount = writeErrorCount
+        self.inputFrameCount = inputFrameCount
     }
 
     func checkPermission() async -> RecorderPermissionState {
@@ -580,7 +678,7 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
                 tapChannelCount: 2,
                 ioCallbackCount: 3,
                 inputBufferCallbackCount: 3,
-                inputFrameCount: 1024,
+                inputFrameCount: inputFrameCount,
                 convertedFrameCount: writesAudioFrames ? 512 : 0,
                 writtenFrameCount: writesAudioFrames ? 512 : 0,
                 writeErrorCount: writeErrorCount

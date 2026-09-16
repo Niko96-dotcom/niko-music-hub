@@ -11,6 +11,45 @@ public enum RecordingDisplayState: Equatable {
     case reconnecting
     case stopping
     case error(RecorderError)
+
+    /// Core Audio cannot preflight Screen & System Audio Recording. After a
+    /// failed take, map the permission-shaped failures onto the existing
+    /// permission card instead of a generic error card.
+    static func presentation(for error: RecorderError) -> RecordingDisplayState {
+        if indicatesCapturePermissionFailure(error) {
+            return .permissionNeeded
+        }
+        return .error(error)
+    }
+}
+
+private func indicatesCapturePermissionFailure(_ error: RecorderError) -> Bool {
+    switch error {
+    case .noAudioCaptured, .permissionDenied:
+        return true
+    case .apiError(let message):
+        return messageIndicatesCapturePermissionFailure(message)
+    default:
+        return false
+    }
+}
+
+private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool {
+    let lowered = message.lowercased()
+    let markers = [
+        "not authorized",
+        "unauthorized",
+        "tcc",
+        "not permitted",
+        "permission denied",
+        "permission is denied",
+        "user declined",
+        "denied authorization",
+        "screen recording",
+        "screen & system audio",
+        "system audio recording",
+    ]
+    return markers.contains { lowered.contains($0) }
 }
 
 @MainActor
@@ -142,13 +181,10 @@ public final class AudioRecorderViewModel: ObservableObject {
         do {
             fileURL = try useCase.prepareOutputURL(config: config)
         } catch let recorderError as RecorderError {
-            recordingState = .error(recorderError)
-            error = recorderError
+            presentFailure(recorderError)
             return
         } catch {
-            let wrapped = RecorderError.writeError(error.localizedDescription)
-            recordingState = .error(wrapped)
-            self.error = wrapped
+            presentFailure(RecorderError.writeError(error.localizedDescription))
             return
         }
 
@@ -181,13 +217,9 @@ public final class AudioRecorderViewModel: ObservableObject {
                     recordingState = .idle
                 }
             } catch let recorderError as RecorderError {
-                currentLevel = nil
-                recordingState = .error(recorderError)
-                error = recorderError
+                presentFailure(recorderError)
             } catch {
-                let wrapped = RecorderError.verificationFailed(error.localizedDescription)
-                recordingState = .error(wrapped)
-                self.error = wrapped
+                presentFailure(RecorderError.verificationFailed(error.localizedDescription))
             }
         }
     }
@@ -218,24 +250,27 @@ public final class AudioRecorderViewModel: ObservableObject {
         } catch let recorderError as RecorderError {
             taskToAwait?.cancel()
             recordingTask = nil
-            currentLevel = nil
-            recordingState = .error(recorderError)
-            error = recorderError
+            presentFailure(recorderError)
         } catch {
             taskToAwait?.cancel()
             recordingTask = nil
-            currentLevel = nil
-            let wrapped = RecorderError.verificationFailed(error.localizedDescription)
-            recordingState = .error(wrapped)
-            self.error = wrapped
+            presentFailure(RecorderError.verificationFailed(error.localizedDescription))
         }
     }
 
     public func requestPermission() async {
         let state = await capturePort.requestPermission()
         if case .authorized = state {
-            recordingState = .idle
+            await startRecording()
+            return
         }
+        recordingState = .permissionNeeded
+    }
+
+    private func presentFailure(_ recorderError: RecorderError) {
+        currentLevel = nil
+        recordingState = .presentation(for: recorderError)
+        error = recorderError
     }
 
     private func finalizeRecording(_ result: RecorderResult) async throws {

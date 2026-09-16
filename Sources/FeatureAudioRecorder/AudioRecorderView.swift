@@ -272,7 +272,7 @@ public struct AudioRecorderView: View {
                         label: "Try Again",
                         style: .primary
                     ) {
-                        Task { await viewModel.requestPermission() }
+                        Task { await viewModel.startRecording() }
                     }
                 }
             }
