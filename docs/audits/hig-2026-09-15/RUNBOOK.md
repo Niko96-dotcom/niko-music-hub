@@ -58,3 +58,7 @@ Independent reviewer: OpenCode `opencode/union-alpha` (Union Alpha Free), read-o
 - Disable with `HIG_REVIEW_ENABLED=0`. Override model with `HIG_REVIEW_MODEL`.
 End-phase: after confirmed issues are done, supervisor processes deferred preserve / not-applicable rows, then retries blocked items.
 
+## Amendment (2026-09-16 18:15 CEST)
+Human authorized computer/GUI use for fixture-only runtime Accept. Still never touch live music/Active Projects/production prefs.
+Blocked auto-retry is OFF (`HIG_RETRY_BLOCKED=0`); ENVIRONMENT-BLOCKED items await dedicated GUI Accept passes.
+
