@@ -162,16 +162,26 @@ struct OutputInboxInspectorView: View {
             .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
 
         if OutputHandoff.dragFileURL(for: item) != nil {
-            card
-                .onDrag {
+            withRevealHint(
+                item,
+                card.onDrag {
                     guard let dragURL = OutputHandoff.dragFileURL(for: item) else {
                         return NSItemProvider()
                     }
                     return NSItemProvider(contentsOf: dragURL) ?? NSItemProvider()
                 }
-                .accessibilityHint("Drag the file to your DAW or Finder")
+            )
         } else {
-            card
+            withRevealHint(item, card)
+        }
+    }
+
+    @ViewBuilder
+    private func withRevealHint<V: View>(_ item: OutputInboxItem, _ view: V) -> some View {
+        if OutputHandoff.isRevealable(item) {
+            view.accessibilityHint("Double-click or use Reveal to show this file in Finder.")
+        } else {
+            view
         }
     }
 
@@ -179,7 +189,8 @@ struct OutputInboxInspectorView: View {
     private func itemCard(_ item: OutputInboxItem) -> some View {
         let isHovered = hoveredItemID == item.id
         let revealable = OutputHandoff.isRevealable(item)
-        let row = HStack(alignment: .center, spacing: 10) {
+        let openable = OutputHandoff.isOpenable(item)
+        HStack(alignment: .center, spacing: 10) {
             fileIcon(for: item.fileURL)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.fileURL.lastPathComponent)
@@ -189,12 +200,39 @@ struct OutputInboxInspectorView: View {
                 statusLine(for: item)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                guard revealable else { return }
+                context.fileActions.revealInFinder(item.fileURL)
+            }
 
-            if isHovered, OutputHandoff.dragFileURL(for: item) != nil {
+            if OutputHandoff.dragFileURL(for: item) != nil {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    .help("Drag to your DAW or Finder")
                     .accessibilityHidden(true)
+            }
+
+            if revealable {
+                HubLabeledButton(
+                    icon: "folder",
+                    label: "Reveal",
+                    style: .ghost,
+                    help: "Show this file in Finder"
+                ) {
+                    context.fileActions.revealInFinder(item.fileURL)
+                }
+            }
+            if openable {
+                HubLabeledButton(
+                    icon: "arrow.up.forward.app",
+                    label: "Open",
+                    style: .ghost,
+                    help: "Open this file"
+                ) {
+                    NSWorkspace.shared.open(item.fileURL)
+                }
             }
         }
         .padding(.vertical, 9)
@@ -205,22 +243,6 @@ struct OutputInboxInspectorView: View {
             // failed/missing states (color is never the only carrier — statusLine repeats it).
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                 .fill(itemRowFill(for: item, isHovered: isHovered))
-        }
-        .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
-
-        Group {
-            if revealable {
-                Button {
-                    context.fileActions.revealInFinder(item.fileURL)
-                } label: {
-                    row
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
-            } else {
-                row
-            }
         }
         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .onHover { hovering in
@@ -243,6 +265,16 @@ struct OutputInboxInspectorView: View {
                 }
             }
         }
+        .modifier(
+            OutputInboxRowAccessibilityActions(
+                revealable: revealable,
+                openable: openable,
+                analyzable: isAudioItem(item),
+                onReveal: { context.fileActions.revealInFinder(item.fileURL) },
+                onOpen: { NSWorkspace.shared.open(item.fileURL) },
+                onAnalyze: { analyzeBPM(for: item) }
+            )
+        )
     }
 
     @ViewBuilder
@@ -342,6 +374,47 @@ struct OutputInboxInspectorView: View {
                 }
                 _ = itemID
             }
+        }
+    }
+}
+
+/// VoiceOver row actions for Output Inbox (NMH-030). Each action is omitted when it would no-op.
+private struct OutputInboxRowAccessibilityActions: ViewModifier {
+    let revealable: Bool
+    let openable: Bool
+    let analyzable: Bool
+    let onReveal: () -> Void
+    let onOpen: () -> Void
+    let onAnalyze: () -> Void
+
+    func body(content: Content) -> some View {
+        applyReveal(to: applyOpen(to: applyAnalyze(to: content)))
+    }
+
+    @ViewBuilder
+    private func applyReveal<V: View>(to content: V) -> some View {
+        if revealable {
+            content.accessibilityAction(named: "Reveal in Finder") { onReveal() }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func applyOpen<V: View>(to content: V) -> some View {
+        if openable {
+            content.accessibilityAction(named: "Open") { onOpen() }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func applyAnalyze<V: View>(to content: V) -> some View {
+        if analyzable {
+            content.accessibilityAction(named: "Analyze BPM") { onAnalyze() }
+        } else {
+            content
         }
     }
 }

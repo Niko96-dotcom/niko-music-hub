@@ -240,13 +240,19 @@ final class OutputInboxStoreTests: XCTestCase {
 
         [
             "OutputHandoff.isRevealable",
+            "OutputHandoff.isOpenable",
             "OutputHandoff.dragFileURL",
             "NSItemProvider(contentsOf:",
             "Reveal in Finder",
             "contextMenu",
             ".onDrag",
             "contentShape",
-            "Drag the file to your DAW or Finder",
+            "Double-click or use Reveal to show this file in Finder.",
+            "HubLabeledButton(",
+            "label: \"Reveal\"",
+            "label: \"Open\"",
+            "accessibilityAction(named: \"Reveal in Finder\")",
+            ".font(.system(size: 14, weight: .semibold))",
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing inspector handoff source: \($0)")
         }

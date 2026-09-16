@@ -126,18 +126,34 @@ final class HubShellChromeSourceTests: XCTestCase {
             "hubCard",
             "itemIntent",
             "OutputHandoff.isRevealable",
+            "OutputHandoff.isOpenable",
             "OutputHandoff.dragFileURL",
             "NSItemProvider(contentsOf:",
             "Reveal in Finder",
             "NSWorkspace.shared.open",
             "contextMenu",
             ".onDrag",
-            "Drag the file to your DAW or Finder",
+            "Double-click or use Reveal to show this file in Finder.",
+            "HubLabeledButton(",
+            "label: \"Reveal\"",
+            "label: \"Open\"",
+            "help: \"Show this file in Finder\"",
+            "help: \"Open this file\"",
+            ".help(\"Drag to your DAW or Finder\")",
+            "accessibilityAction(named: \"Reveal in Finder\")",
+            "accessibilityAction(named: \"Open\")",
+            "accessibilityAction(named: \"Analyze BPM\")",
+            ".font(.system(size: 14, weight: .semibold))",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Output Inbox Liquid handoff source: \(required)")
         }
 
         XCTAssertFalse(source.contains("item.status.rawValue.capitalized"))
+        XCTAssertFalse(source.contains("Drag the file to your DAW or Finder"))
+        XCTAssertFalse(
+            source.contains("if isHovered, OutputHandoff.dragFileURL"),
+            "NMH-030: drag grip must be visible at rest, not hover-gated"
+        )
     }
 
     private func shellSource(_ filename: String) throws -> String {
