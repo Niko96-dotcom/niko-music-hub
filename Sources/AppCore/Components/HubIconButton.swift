@@ -215,7 +215,7 @@ private struct ToggleAccessibilityModifier: ViewModifier {
     func body(content: Content) -> some View {
         if isToggle {
             content
-                .accessibilityValue(isSelected ? "On" : "Off")
+                .accessibilityValue(isSelected ? String(localized: "On") : String(localized: "Off"))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
         } else {
             content
