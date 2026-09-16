@@ -29,5 +29,9 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.styleMask.insert(.fullSizeContentView)
+        // NMH-130: make the main window frame restorable across relaunch.
+        // Default 1280x820 from `.defaultSize` still applies when no saved frame exists.
+        window.isRestorable = true
+        window.identifier = NSUserInterfaceItemIdentifier("hub.main")
     }
 }
