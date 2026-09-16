@@ -11,9 +11,23 @@ public struct ArchivePersistentPlayerView: View {
 
     public var body: some View {
         if let preview = session.preview {
+            let canSkip = player.duration > 0
             VStack(spacing: 0) {
                 Divider()
                 HStack(spacing: 16) {
+                    Button {
+                        session.player.seekRelative(-5, url: preview.filePath)
+                    } label: {
+                        Image(systemName: "gobackward.5")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                            .frame(width: 28, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSkip)
+                    .accessibilityLabel("Skip back 5 seconds")
+
                     Button { session.toggle() } label: {
                         Image(systemName: session.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 13, weight: .semibold))
@@ -24,6 +38,19 @@ public struct ArchivePersistentPlayerView: View {
                     .buttonStyle(.plain)
                     .disabled(session.captureActive)
                     .accessibilityLabel(session.isPlaying ? "Pause preview" : "Play preview")
+
+                    Button {
+                        session.player.seekRelative(5, url: preview.filePath)
+                    } label: {
+                        Image(systemName: "goforward.5")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                            .frame(width: 28, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSkip)
+                    .accessibilityLabel("Skip forward 5 seconds")
 
                     Button {
                         session.openSong()

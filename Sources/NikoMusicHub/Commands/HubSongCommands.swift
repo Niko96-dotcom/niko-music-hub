@@ -48,6 +48,18 @@ struct HubSongCommands: Commands {
             .keyboardShortcut("p", modifiers: [])
             .disabled(songActions?.allowsUnmodifiedShortcuts != true || songActions?.hasSelectedSong != true)
 
+            Button("Skip Back 5 Seconds") {
+                songActions?.skipPreviewBack()
+            }
+            .keyboardShortcut(.leftArrow, modifiers: .option)
+            .disabled(songActions?.canSkipPreview != true)
+
+            Button("Skip Forward 5 Seconds") {
+                songActions?.skipPreviewForward()
+            }
+            .keyboardShortcut(.rightArrow, modifiers: .option)
+            .disabled(songActions?.canSkipPreview != true)
+
             Divider()
 
             Menu(SongWorkflowActions.songMenuTitle) {

@@ -25,12 +25,16 @@ public struct ArchiveSongFocusedActions {
     public let allowsWorkflowMutation: Bool
     /// True when the selected song is the one currently playing (NMH-046 titles).
     public let isPreviewPlaying: Bool
+    /// Preview is loaded with a known duration and Option-arrows won't steal caret movement.
+    public let canSkipPreview: Bool
     public let playPausePreview: () -> Void
     public let openPreview: () -> Void
     public let openProject: () -> Void
     public let revealInFinder: () -> Void
     public let showVersions: () -> Void
     public let applyWorkflowStatus: (ProjectWorkflowStatus?) -> Void
+    public let skipPreviewBack: () -> Void
+    public let skipPreviewForward: () -> Void
 }
 
 /// Commands read this when `FocusedValue` does not publish into the menu bar (macOS 14.2).

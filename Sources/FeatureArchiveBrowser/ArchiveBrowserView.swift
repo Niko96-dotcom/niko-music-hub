@@ -6,6 +6,7 @@ import SwiftUI
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @ObservedObject private var previewSession = ArchivePreviewSession.shared
+    @ObservedObject private var previewPlayer = ArchivePreviewSession.shared.player
     @Environment(\.undoManager) private var undoManager
     @State private var showNewSongSheet = false
     @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
@@ -13,6 +14,7 @@ struct ArchiveBrowserView: View {
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
         self._previewSession = ObservedObject(wrappedValue: ArchivePreviewSession.shared)
+        self._previewPlayer = ObservedObject(wrappedValue: ArchivePreviewSession.shared.player)
     }
 
     var body: some View {
@@ -336,7 +338,7 @@ struct ArchiveBrowserView: View {
     }
 
     private var songCommandSyncToken: String {
-        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)-\(previewSession.isPlaying)-\(previewSession.songID ?? "")"
+        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)-\(previewSession.isPlaying)-\(previewSession.songID ?? "")-\(previewSession.preview != nil)-\(previewPlayer.duration)"
     }
 
     private var archiveSongFocusedActions: ArchiveSongFocusedActions {
@@ -345,12 +347,21 @@ struct ArchiveBrowserView: View {
             allowsUnmodifiedShortcuts: allowsSongShortcuts,
             allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
             isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.selectedSong?.id,
+            canSkipPreview: previewSession.preview != nil && previewPlayer.duration > 0 && allowsSongShortcuts,
             playPausePreview: { _ = performPlayPausePreview() },
             openPreview: performOpenPreview,
             openProject: performOpenProject,
             revealInFinder: performRevealInFinder,
             showVersions: performShowVersions,
-            applyWorkflowStatus: performApplyWorkflowStatus
+            applyWorkflowStatus: performApplyWorkflowStatus,
+            skipPreviewBack: {
+                guard let url = previewSession.preview?.filePath else { return }
+                previewPlayer.seekRelative(-5, url: url)
+            },
+            skipPreviewForward: {
+                guard let url = previewSession.preview?.filePath else { return }
+                previewPlayer.seekRelative(5, url: url)
+            }
         )
     }
 
