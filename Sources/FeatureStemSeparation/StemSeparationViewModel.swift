@@ -4,6 +4,12 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// NMH-066: which intake owns the filled primary action.
+public enum StemPrimaryIntake: Equatable, Sendable {
+    case file
+    case youtube
+}
+
 @MainActor
 public final class StemSeparationViewModel: ObservableObject, @unchecked Sendable {
     @Published public var selectedPreset: StemSeparationPreset = StemSeparationPreset.defaultPreset
@@ -55,6 +61,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public var canCancel: Bool {
         isRunning && currentJobID != nil
+    }
+
+    /// NMH-066: exclusive primary intake. A parsable YouTube URL wins over a
+    /// dropped file so Stems never shows two filled primaries.
+    public var primaryIntake: StemPrimaryIntake {
+        normalizedYouTubeURL() != nil ? .youtube : .file
     }
 
     public func handleDrop(urls: [URL]) -> Bool {

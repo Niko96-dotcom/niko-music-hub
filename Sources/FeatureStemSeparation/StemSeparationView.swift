@@ -118,7 +118,7 @@ public struct StemSeparationView: View {
             HubLabeledButton(
                 icon: "arrow.down.circle",
                 label: "Download & Separate",
-                style: .primary,
+                style: viewModel.primaryIntake == .youtube ? .primary : .secondary,
                 isEnabled: viewModel.canStartYouTube
             ) {
                 viewModel.startYouTubeSeparation()
@@ -175,7 +175,7 @@ public struct StemSeparationView: View {
                 HubLabeledButton(
                     icon: "waveform.path.ecg",
                     label: "Start Separation",
-                    style: .primary,
+                    style: viewModel.primaryIntake == .youtube ? .secondary : .primary,
                     isEnabled: viewModel.canStart
                 ) {
                     viewModel.startSeparation()
