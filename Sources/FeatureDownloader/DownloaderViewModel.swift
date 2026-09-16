@@ -41,9 +41,25 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public var errorMessage: String?
     @Published public private(set) var job: Job?
     @Published public private(set) var progress: Double = 0
+    @Published public private(set) var downloadStartedAt: Date?
+    @Published public private(set) var slowHintVisible = false
     @Published public private(set) var logEntries: [String] = []
     @Published public private(set) var outputURLs: [URL] = []
     @Published public private(set) var recentDownloads: [OutputInboxItem] = []
+
+    public var showsDeterminateProgress: Bool {
+        progress > 0
+    }
+
+    public func elapsedCaption(at now: Date = Date()) -> String {
+        Self.formatElapsed(since: downloadStartedAt, now: now)
+    }
+
+    static func formatElapsed(since start: Date?, now: Date) -> String {
+        let interval = start.map { max(0, now.timeIntervalSince($0)) } ?? 0
+        let totalSeconds = Int(interval)
+        return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
 
     private let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
@@ -53,6 +69,8 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private var debounceTask: Task<Void, Never>?
     private var downloadStartTask: Task<Void, Never>?
     private var inboxObservationTask: Task<Void, Never>?
+    private var progressFeedbackTask: Task<Void, Never>?
+    private var stallMonitor: DownloadStallMonitor?
     private var validationGeneration: UInt64 = 0
     private var observationGeneration: UInt64 = 0
     private static let formatSelectionDefaultsKey = "downloader.formatSelection"
@@ -211,6 +229,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         persistFormatSelection()
         downloadState = .downloading
         statusMessage = DownloaderCopy.downloading
+        beginDownloadProgressFeedback()
 
         downloadStartTask?.cancel()
         observeTask?.cancel()
@@ -244,6 +263,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         guard observationGeneration == generation else { return }
         downloadState = .failed(error.localizedDescription)
         statusMessage = nil
+        endDownloadProgressFeedback()
     }
 
     private func observeJob(id: Job.ID, sourceURL: URL, generation: UInt64) {
@@ -269,23 +289,33 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         generation: UInt64
     ) -> Bool {
         guard observationGeneration == generation, job?.id == id else { return true }
+        let nextLogs = observedJob.logEntries.map(\.message)
+        let progressChanged = observedJob.progress != progress
+        let logsChanged = nextLogs != logEntries
         progress = observedJob.progress
-        logEntries = observedJob.logEntries.map(\.message)
+        logEntries = nextLogs
+        if progressChanged || logsChanged {
+            stallMonitor?.recordActivity()
+            slowHintVisible = false
+        }
 
         switch observedJob.state {
         case .completed:
             downloadState = .completed
             statusMessage = "Downloaded"
+            endDownloadProgressFeedback()
             addToInbox(job: observedJob, sourceURL: sourceURL)
             return true
         case .failed:
             downloadState = .failed(observedJob.message)
             statusMessage = nil
+            endDownloadProgressFeedback()
             return true
         case .canceled:
             downloadState = .canceled
             statusMessage = DownloaderCopy.downloadCanceledDetail
             errorMessage = nil
+            endDownloadProgressFeedback()
             return true
         case .queued, .running:
             return false
@@ -355,6 +385,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         downloadState = .canceled
         statusMessage = DownloaderCopy.downloadCanceledDetail
         errorMessage = nil
+        endDownloadProgressFeedback()
     }
 
     public func retryAfterFailure() {
@@ -400,6 +431,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         progress = 0
         logEntries = []
         outputURLs = []
+        endDownloadProgressFeedback()
     }
 
     deinit {
@@ -407,6 +439,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         observeTask?.cancel()
         downloadStartTask?.cancel()
         inboxObservationTask?.cancel()
+        progressFeedbackTask?.cancel()
     }
 
     public var outputFolder: URL {
@@ -437,9 +470,41 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         observeTask?.cancel()
         downloadStartTask?.cancel()
         inboxObservationTask?.cancel()
+        progressFeedbackTask?.cancel()
         debounceTask = nil
         observeTask = nil
         downloadStartTask = nil
         inboxObservationTask = nil
+        progressFeedbackTask = nil
+    }
+
+    private func beginDownloadProgressFeedback() {
+        let monitor = DownloadStallMonitor()
+        monitor.recordActivity()
+        stallMonitor = monitor
+        downloadStartedAt = Date()
+        slowHintVisible = false
+        progressFeedbackTask?.cancel()
+        progressFeedbackTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+                guard let self, self.downloadState == .downloading else { return }
+                if self.stallMonitor?.checkSlowHint() == true {
+                    self.slowHintVisible = true
+                }
+            }
+        }
+    }
+
+    private func endDownloadProgressFeedback() {
+        progressFeedbackTask?.cancel()
+        progressFeedbackTask = nil
+        stallMonitor = nil
+        downloadStartedAt = nil
+        slowHintVisible = false
     }
 }

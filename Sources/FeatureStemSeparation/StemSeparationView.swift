@@ -223,15 +223,7 @@ public struct StemSeparationView: View {
     @ViewBuilder
     private var progressSection: some View {
         if viewModel.isRunning {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-                ProgressView(value: viewModel.progress)
-                    .tint(HubDesignSystem.Colors.accent)
-                Text("\(Int(viewModel.progress * 100))% complete")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
+            StemRunningProgressCard(progress: viewModel.progress)
         }
     }
 
@@ -294,4 +286,42 @@ public struct StemSeparationView: View {
             viewModel.startSeparation()
         }
     }
+}
+
+private struct StemRunningProgressCard: View {
+    let progress: Double
+    @State private var startedAt = Date()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            Group {
+                if progress > 0 {
+                    ProgressView(value: progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .progressViewStyle(.linear)
+            .tint(HubDesignSystem.Colors.accent)
+
+            if progress > 0 {
+                Text("\(Int(progress * 100))% complete")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(.secondary)
+            }
+
+            TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                Text(stemElapsedCaption(from: startedAt, now: context.date))
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
+    }
+}
+
+private func stemElapsedCaption(from start: Date, now: Date) -> String {
+    let totalSeconds = max(0, Int(now.timeIntervalSince(start)))
+    return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
 }

@@ -29,6 +29,26 @@ final class DownloadStallMonitorTests: XCTestCase {
         )
     }
 
+    func testSlowHintAfter30Seconds() {
+        let clock = FakeDownloadStallClock(start: Date(timeIntervalSince1970: 0))
+        let monitor = DownloadStallMonitor(clock: clock)
+        monitor.recordActivity()
+        clock.advance(by: 29)
+        XCTAssertFalse(monitor.checkSlowHint())
+        XCTAssertFalse(monitor.checkStalled())
+        clock.advance(by: 1)
+        XCTAssertTrue(monitor.checkSlowHint())
+        XCTAssertFalse(monitor.checkStalled())
+        clock.advance(by: 90)
+        XCTAssertTrue(monitor.checkSlowHint())
+        XCTAssertTrue(monitor.checkStalled())
+        XCTAssertEqual(
+            DownloadStallMonitor.slowHintMessage,
+            "Still working. This download has not reported new data."
+        )
+        XCTAssertEqual(DownloadStallMonitor.slowHintSeconds, 30)
+    }
+
     func testFakeClockAdvancesWithoutSleep() {
         let clock = FakeDownloadStallClock(start: Date())
         let monitor = DownloadStallMonitor(clock: clock)

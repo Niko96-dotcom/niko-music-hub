@@ -317,6 +317,47 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.formatSelection.audioContainer, .wav)
     }
 
+    func testShowsDeterminateProgress() async throws {
+        let runner = JobRunner()
+        let progressGate = DownloadTestGate()
+        let finishGate = DownloadTestGate()
+        let job = runner.enqueue(title: "Download", sourceToolID: "downloader") { progress in
+            await progressGate.wait()
+            progress.update(progress: 0.42, message: nil)
+            await finishGate.wait()
+        }
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore()
+        )
+
+        XCTAssertEqual(viewModel.progress, 0)
+        XCTAssertFalse(viewModel.showsDeterminateProgress)
+        XCTAssertEqual(
+            DownloaderViewModel.formatElapsed(
+                since: Date(timeIntervalSince1970: 0),
+                now: Date(timeIntervalSince1970: 12)
+            ),
+            "Elapsed 0:12"
+        )
+
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.job != nil }
+        XCTAssertEqual(viewModel.progress, 0)
+        XCTAssertFalse(viewModel.showsDeterminateProgress)
+
+        progressGate.signal()
+        try await waitUntil { viewModel.progress > 0 }
+        XCTAssertEqual(viewModel.progress, 0.42, accuracy: 0.0001)
+        XCTAssertTrue(viewModel.showsDeterminateProgress)
+
+        finishGate.signal()
+        runner.cancelJob(id: job.id)
+    }
+
     private func makeViewModel(
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
         useCase: FakeDownloaderUseCase,
@@ -544,4 +585,36 @@ private func waitUntil(
         try await Task.sleep(for: .milliseconds(10))
     }
     XCTFail("Timed out waiting for condition")
+}
+
+private final class DownloadTestGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var signaled = false
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if signaled {
+                signaled = false
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func signal() {
+        lock.lock()
+        if let continuation {
+            self.continuation = nil
+            lock.unlock()
+            continuation.resume()
+        } else {
+            signaled = true
+            lock.unlock()
+        }
+    }
 }

@@ -316,12 +316,34 @@ public struct DownloaderView: View {
 
     private var progressSection: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            ProgressView(value: viewModel.progress)
-                .tint(HubDesignSystem.Colors.accent)
+            Group {
+                if viewModel.showsDeterminateProgress {
+                    ProgressView(value: viewModel.progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .progressViewStyle(.linear)
+            .tint(HubDesignSystem.Colors.accent)
 
-            Text("\(Int(viewModel.progress * 100))% complete")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            if viewModel.showsDeterminateProgress {
+                Text("\(Int(viewModel.progress * 100))% complete")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
+
+            TimelineView(.periodic(from: viewModel.downloadStartedAt ?? .now, by: 1)) { context in
+                Text(viewModel.elapsedCaption(at: context.date))
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
+
+            if viewModel.slowHintVisible {
+                Text(DownloadStallMonitor.slowHintMessage)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             cancelDownloadControl
         }

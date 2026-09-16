@@ -12,7 +12,9 @@ public struct SystemDownloadStallClock: DownloadStallClock {
 
 public final class DownloadStallMonitor: @unchecked Sendable {
     public static let stallWindowSeconds: TimeInterval = 120
+    public static let slowHintSeconds: TimeInterval = 30
     public static let stallErrorMessage = "Download stalled — no progress for 2 minutes"
+    public static let slowHintMessage = "Still working. This download has not reported new data."
 
     private let clock: any DownloadStallClock
     private let lock = NSLock()
@@ -32,6 +34,12 @@ public final class DownloadStallMonitor: @unchecked Sendable {
     public func checkStalled() -> Bool {
         lock.withLock {
             clock.now.timeIntervalSince(lastActivity) >= Self.stallWindowSeconds
+        }
+    }
+
+    public func checkSlowHint() -> Bool {
+        lock.withLock {
+            clock.now.timeIntervalSince(lastActivity) >= Self.slowHintSeconds
         }
     }
 }

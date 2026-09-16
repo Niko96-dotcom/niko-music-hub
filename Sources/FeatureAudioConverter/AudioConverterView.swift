@@ -51,9 +51,16 @@ public struct AudioConverterView: View {
             )
 
             if viewModel.isConverting {
-                ProgressView(value: viewModel.overallProgress)
-                    .frame(maxWidth: 320)
-                    .tint(HubDesignSystem.Colors.accent)
+                Group {
+                    if viewModel.overallProgress > 0 {
+                        ProgressView(value: viewModel.overallProgress)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .progressViewStyle(.linear)
+                .frame(maxWidth: 320)
+                .tint(HubDesignSystem.Colors.accent)
             }
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
