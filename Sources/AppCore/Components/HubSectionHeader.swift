@@ -30,6 +30,7 @@ public struct HubSectionHeader: View {
                 .font(HubDesignSystem.Typography.caption().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer(minLength: 0)
 
@@ -43,13 +44,16 @@ public struct HubSectionHeader: View {
             if let actionSystemImage, let action {
                 Button(action: action) {
                     Image(systemName: actionSystemImage)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(
                             actionHovered
                                 ? HubDesignSystem.Palette.textPrimary
                                 : HubDesignSystem.Palette.textTertiary
                         )
-                        .frame(width: 20, height: 20)
+                        .frame(
+                            width: HubDesignSystem.Size.iconButtonSize,
+                            height: HubDesignSystem.Size.iconButtonSize
+                        )
                         .background {
                             if actionHovered {
                                 RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -66,6 +70,5 @@ public struct HubSectionHeader: View {
         }
         .padding(.top, HubDesignSystem.Spacing.sectionHeaderTop)
         .padding(.bottom, 4)
-        .accessibilityAddTraits(.isHeader)
     }
 }
