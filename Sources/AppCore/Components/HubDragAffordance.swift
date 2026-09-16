@@ -8,7 +8,9 @@ public struct HubDragAffordance: View {
         Image(systemName: "line.3.horizontal")
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(.tertiary)
-            .padding(6)
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
+            .help("Drag to export")
             .accessibilityHidden(true)
     }
 }
