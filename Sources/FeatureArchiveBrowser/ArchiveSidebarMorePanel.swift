@@ -1,4 +1,5 @@
 import AppCore
+import NikoMusicCore
 import SwiftUI
 
 /// Health, collaborators, intelligence, and diagnostics tucked under a collapsible Library section.
@@ -8,6 +9,7 @@ struct ArchiveSidebarMorePanel: View {
     @ObservedObject var sidebarUI: ArchiveSidebarUIState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
+    @State private var showDiagnosticsSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -75,16 +77,44 @@ struct ArchiveSidebarMorePanel: View {
                         systemImage: "stethoscope",
                         isExpanded: $sidebarUI.diagnosticsRowExpanded
                     ) {
-                        ScrollView {
-                            ArchiveDiagnosticsPanelView(
-                                viewModel: viewModel,
-                                diagnostics: diagnostics,
-                                selectedSong: viewModel.selectedSong,
-                                searchContext: viewModel.activeSearchExportContext(),
-                                skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                            )
+                        // NMH-092: the inline row keeps only a 3-line support summary;
+                        // the long warning list lives in the diagnostics sheet.
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(diagnosticsPreviewSummary(for: diagnostics))
+                                .font(HubDesignSystem.Typography.micro())
+                                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                                .lineLimit(3)
+                                .textSelection(.enabled)
+                            HubLabeledButton(
+                                icon: "stethoscope",
+                                label: "Show Diagnostics",
+                                style: .secondary
+                            ) {
+                                showDiagnosticsSheet = true
+                            }
                         }
-                        .frame(maxHeight: 140)
+                        .sheet(isPresented: $showDiagnosticsSheet) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text("Scan diagnostics")
+                                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                                    Spacer()
+                                    Button("Done") { showDiagnosticsSheet = false }
+                                        .keyboardShortcut(.cancelAction)
+                                }
+                                ScrollView {
+                                    ArchiveDiagnosticsPanelView(
+                                        viewModel: viewModel,
+                                        diagnostics: diagnostics,
+                                        selectedSong: viewModel.selectedSong,
+                                        searchContext: viewModel.activeSearchExportContext(),
+                                        skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                                    )
+                                }
+                            }
+                            .padding(20)
+                            .frame(minWidth: 420, minHeight: 360)
+                        }
                     }
                 }
             }
@@ -142,6 +172,14 @@ struct ArchiveSidebarMorePanel: View {
                 updates()
             }
         }
+    }
+
+    /// NMH-092: inline diagnostics preview stays a short support summary.
+    private func diagnosticsPreviewSummary(for diagnostics: ArchiveScanDiagnostics) -> String {
+        ArchiveDiagnosticsPanelContext.from(
+            diagnostics,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+        ).supportSummaryLine
     }
 
     /// NMH-057: deep-link to the Vault Settings pane. The pane notification

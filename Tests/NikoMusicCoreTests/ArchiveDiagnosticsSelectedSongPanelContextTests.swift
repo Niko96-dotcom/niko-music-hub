@@ -14,6 +14,47 @@ final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
         XCTAssertTrue(line.contains("notes only"))
     }
 
+    /// NMH-092: diagnostics notes use the plain "Companion notes" label, not jargon.
+    func testPanelNotesLineUsesCompanionNotesLabel() {
+        let line = ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: "notes only")
+        XCTAssertTrue(line.hasPrefix("Companion notes · "))
+        XCTAssertTrue(line.contains("notes only"))
+        XCTAssertFalse(line.contains("Sidecar"))
+    }
+
+    /// NMH-092: diagnostics panel uses the plain short-preview heading.
+    func testDiagnosticsPanelUsesPlainShortPreviewHeading() throws {
+        let panel = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveDiagnosticsPanelView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(panel.contains("Short preview files (not the main mix)"))
+        XCTAssertFalse(panel.contains("Too short previews (not main)"))
+    }
+
+    /// NMH-092: detail header uses the plain "Companion notes" label.
+    func testDetailHeaderUsesCompanionNotes() throws {
+        let detail = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/SongDetailView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(detail.contains("HubSectionHeader(\"Companion notes\")"))
+        XCTAssertFalse(detail.contains("Sidecar notes"))
+    }
+
+    /// NMH-092: expanded diagnostics live in a 360 pt sheet, not a 140 pt inline box.
+    func testDiagnosticsExpandsInSheetInsteadOfCrampedInline() throws {
+        let more = try String(
+            contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveSidebarMorePanel.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(more.contains("Show Diagnostics"))
+        XCTAssertTrue(more.contains("minHeight: 360"))
+        XCTAssertTrue(more.contains("minWidth: 420"))
+        XCTAssertTrue(more.contains(".keyboardShortcut(.cancelAction)"))
+        XCTAssertFalse(more.contains("maxHeight: 140"))
+    }
+
     func testTitleLineMatchesExport() {
         let export = """
         selected_song

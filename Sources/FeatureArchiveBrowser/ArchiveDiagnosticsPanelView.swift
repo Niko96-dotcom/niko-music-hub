@@ -180,7 +180,7 @@ struct ArchiveDiagnosticsPanelView: View {
 
             let tooShortBreakdowns = diagnostics.previewRankingPanel.tooShortSongBreakdowns
             if !tooShortBreakdowns.isEmpty {
-                Text("Too short previews (not main)")
+                Text("Short preview files (not the main mix)")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ForEach(tooShortBreakdowns, id: \.displayTitle) { breakdown in

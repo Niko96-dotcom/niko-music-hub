@@ -874,7 +874,7 @@ struct SongDetailView: View {
     private var sidecarNotesSection: some View {
         if let notes = liveSong.displaySidecarNotes() {
             VStack(alignment: .leading, spacing: 4) {
-                HubSectionHeader("Sidecar notes")
+                HubSectionHeader("Companion notes")
                 Text(notes)
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)

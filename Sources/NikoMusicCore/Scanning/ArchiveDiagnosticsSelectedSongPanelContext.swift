@@ -7,7 +7,7 @@ public enum ArchiveDiagnosticsSelectedSongPanelContext: Sendable {
     }
 
     public static func panelNotesLine(notes: String) -> String {
-        "Notes · \(notes)"
+        "Companion notes · \(notes)"
     }
 
     public static func titleLineMatchesExport(in exportText: String, displayTitle: String) -> Bool {
