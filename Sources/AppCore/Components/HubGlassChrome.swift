@@ -5,8 +5,12 @@ import SwiftUI
 /// Window shell background — the canonical semantic shell fill (real primitive, not an alias).
 public struct HubShellBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
 
     public init() {}
+
+    /// Inactive (non-key window) chrome is subdued (NMH-069).
+    private var isWindowActive: Bool { controlActiveState == .key }
 
     public var body: some View {
         ZStack {
@@ -16,11 +20,15 @@ public struct HubShellBackground: View {
                     // second window-wide material under opaque content.
                     EmptyView()
                 } else {
-                    HubVisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+                    HubVisualEffectView(
+                        material: .underWindowBackground,
+                        blending: .behindWindow,
+                        isActive: isWindowActive
+                    )
                 }
             }
             HubDesignSystem.Palette.canvas
-                .opacity(reduceTransparency ? 1 : 0.82)
+                .opacity(reduceTransparency ? 1 : (isWindowActive ? 0.82 : 0.94))
             LinearGradient(
                 colors: [
                     Color(HubDynamicColor(light: Color.black.opacity(0.05), dark: Color.white.opacity(0.022))),

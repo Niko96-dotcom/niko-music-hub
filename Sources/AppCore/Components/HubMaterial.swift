@@ -8,20 +8,26 @@ import SwiftUI
 public struct HubVisualEffectView: NSViewRepresentable {
     public let material: NSVisualEffectView.Material
     public let blending: NSVisualEffectView.BlendingMode
+    /// Whether the hosting window is key. Callers feed SwiftUI's `controlActiveState`
+    /// so `updateNSView` re-runs on key-window changes; inactive windows render
+    /// subdued (`.inactive`) vibrancy (NMH-069).
+    public let isActive: Bool
 
     public init(
         material: NSVisualEffectView.Material = .sidebar,
-        blending: NSVisualEffectView.BlendingMode = .withinWindow
+        blending: NSVisualEffectView.BlendingMode = .withinWindow,
+        isActive: Bool = true
     ) {
         self.material = material
         self.blending = blending
+        self.isActive = isActive
     }
 
     public func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blending
-        view.state = .active
+        view.state = isActive ? .active : .inactive
         view.isEmphasized = false
         return view
     }
@@ -29,7 +35,10 @@ public struct HubVisualEffectView: NSViewRepresentable {
     public func updateNSView(_ view: NSVisualEffectView, context: Context) {
         view.material = material
         view.blendingMode = blending
-        view.state = .active
+        let desired: NSVisualEffectView.State = (isActive && (view.window?.isKeyWindow ?? true)) ? .active : .inactive
+        if view.state != desired {
+            view.state = desired
+        }
     }
 }
 
@@ -39,15 +48,22 @@ public struct HubVisualEffectView: NSViewRepresentable {
 /// Older systems fall back to a semantic sidebar veil over `HubShellBackground` vibrancy.
 struct HubGlassBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
 
     let tint: Double
+
+    /// Inactive (non-key window) chrome is subdued (NMH-069).
+    private var isWindowActive: Bool { controlActiveState == .key }
 
     var body: some View {
         ZStack {
             if #available(macOS 26.0, *), !reduceTransparency {
                 Rectangle().glassEffect(.regular, in: .rect)
+                    .opacity(isWindowActive ? 1 : 0.55)
             } else {
-                HubDesignSystem.Palette.sidebar.opacity(reduceTransparency ? 1 : max(tint, 0.72))
+                HubDesignSystem.Palette.sidebar.opacity(
+                    reduceTransparency ? 1 : (isWindowActive ? max(tint, 0.72) : 1)
+                )
             }
             LinearGradient(
                 colors: [
