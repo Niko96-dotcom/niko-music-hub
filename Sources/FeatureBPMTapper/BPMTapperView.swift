@@ -29,14 +29,17 @@ public struct BPMTapperView: View {
             try? viewModel.loadHistory()
             tapSurfaceFocused = true
         }
-        .confirmationDialog(
-            "Clear History: Clear all saved tempos? This keeps the current tap run but removes saved BPM history.",
-            isPresented: $clearHistoryConfirmationVisible,
-            titleVisibility: .visible
+        .alert(
+            "Clear History?",
+            isPresented: $clearHistoryConfirmationVisible
         ) {
+            Button("Cancel", role: .cancel) {}
+                .keyboardShortcut(.defaultAction)
             Button("Clear History", role: .destructive) {
                 viewModel.clearHistory()
             }
+        } message: {
+            Text("Removes saved BPM history. The current tap run is kept.")
         }
     }
 
