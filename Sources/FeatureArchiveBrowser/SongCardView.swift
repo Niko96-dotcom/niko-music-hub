@@ -70,6 +70,7 @@ struct SongCardView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(HubDesignSystem.Palette.warning)
                             .help(song.displayScanWarnings().joined(separator: " "))
+                            .accessibilityHidden(true)
                     }
                 }
                 if let vaultPresentation, vaultPresentation.state != .active || vaultActivityMessage != nil {
@@ -133,7 +134,8 @@ struct SongCardView: View {
             )
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(song.effectiveDisplayTitle)
+        .accessibilityLabel(SongCardAccessibility.summary(song: song))
+        .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Select song") { onSelect?() }
         .onHover { hovering in
