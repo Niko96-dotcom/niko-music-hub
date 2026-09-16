@@ -30,7 +30,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-032 | 3 | implemented-awaiting-runtime | 25ee7c51d9a1f735dd7e54e9c346f3dbfc4ef750 | (see commit) | see nmh-hig-NMH-032-result.md; worker exit 0 | batch-NMH-032-8037b8b9; auto-integrated |
 | NMH-035 | 3 | implemented-awaiting-runtime | af603089eaf263d22030c3e29611f6fc807896db | (see commit) | see nmh-hig-NMH-035-result.md; worker exit 0 | batch-NMH-035-6374470a; auto-integrated |
 | NMH-040 | 3 | fixed | 64ed96b65e0138b1ad0479c3704b6a9680d44934 | (see commit) | gui-unit-promote: swift test --filter SongCardAccessibilityTests PASS | batch-NMH-040-6f1ccead; auto-integrated; gui-unit-promote |
-| NMH-045 | 3 | implemented-awaiting-runtime | 14ab03e14e11a0f055e5f3a6c4867ba066b83780 | (see commit) | see nmh-hig-NMH-045-result.md; worker exit 0 | batch-NMH-045-df546bce; auto-integrated |
+| NMH-045 | 3 | fixed | 14ab03e14e11a0f055e5f3a6c4867ba066b83780 | (see commit) | gui-unit-promote: swift test --filter ArchiveSearchClearTests PASS | batch-NMH-045-df546bce; auto-integrated; gui-unit-promote |
 | NMH-046 | 3 | implemented-awaiting-runtime | 9a1b7edd6b7d3c572e7a6383cee6fe08db500155 | (see commit) | see nmh-hig-NMH-046-result.md; worker exit 0 | batch-NMH-046-c81797d8; auto-integrated |
 | NMH-051 | 3 | implemented-awaiting-runtime | da8c61fffd2d2c2d3ea3dd830eb79f3b34e14d39 | (see commit) | see nmh-hig-NMH-051-result.md; worker exit 0 | batch-NMH-051-7468024d; auto-integrated |
 | NMH-080 | 3 | implemented-awaiting-runtime | bc73dac38c304900145485010419eab9148a0883 | (see commit) | see nmh-hig-NMH-080-result.md; worker exit 0 | batch-NMH-080-3ec306b4; auto-integrated |
