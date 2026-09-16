@@ -1,13 +1,16 @@
-# NMH-028 Accept (2026-09-17 CEST)
+# NMH-028 GUI Accept (2026-09-17 ~00:36 CEST)
 
-Proof: `dist/gui-accept/NMH-sev45-20260917-001333/`
+Shared proof: `dist/gui-accept/NMH-sev5-20260917-002609/`.
+
+## HubChoiceChips platform grouping / height
 
 | Check | Result |
 |-------|--------|
-| Chips wrap + height ≥ 28 | **PASS** — `HubDesignComponentsTests.testChoiceChipsWrapAtNarrowWidthAndMeetDefaultHeight` |
-| Downloader Playlist mode chips visible | **PASS** — `ax-dl.txt` |
-| Selected chip exposes selection | partial — chip AX value sampled in `ax-028-chips-final.txt` |
-| Reduce Motion: hover does not animate | **not proven** unattended |
+| Appearance chips Follow System / Light / Dark | **PASS** (`ax-028-settings.txt`) |
+| Height 28 pt | **PASS** — AX frames h=28.0 (`ax-028-chips.txt`) |
+| Group under Appearance + selected state | **PASS** — group desc=Appearance; sel=[1] on active |
+| Wrap at narrow Settings width | **NOT OBSERVED** — Settings min width still one row; unit wrap test PASS |
 
 ## Verdict
-**fixed** (Reduce Motion caveat noted)
+
+**fixed** (wrap caveat)
