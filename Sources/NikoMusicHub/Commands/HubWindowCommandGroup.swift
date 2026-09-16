@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 /// Explicit Window commands for Close / Minimize / Full Screen (NMH-129).
-/// With `.hiddenTitleBar` + single `Window`, system Close often stays disabled and
-/// still consumes ⌘W. Menu buttons call into `HubWindowChromeActions`, and a
-/// local key monitor ensures ⌘W / ⌘M / ⌃⌘F reach those actions.
+/// With a single `Window`, system Close often stays disabled and still consumes ⌘W.
+/// Menu buttons call into `HubWindowChromeActions`, and a local key monitor ensures
+/// ⌘W / ⌘M / ⌃⌘F reach those actions.
 struct HubWindowCommandGroup: Commands {
     var body: some Commands {
         CommandGroup(after: .windowList) {
@@ -33,7 +33,8 @@ enum HubWindowChromeActions {
     static func installKeyMonitorIfNeeded() {
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            // Ignore capsLock/numericPad/function bits — they break exact flag equality.
+            let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
             let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
             if flags == .command, chars == "w" {
                 closeMainWindow()
@@ -72,14 +73,42 @@ enum HubWindowChromeActions {
         mainWindow()?.miniaturize(nil)
     }
 
+    private static func forceKey(_ window: NSWindow) {
+        // ignoringOtherApps is a no-op on macOS 14+, but activateAllWindows still helps.
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        NSApp.activate(ignoringOtherApps: true)
+        window.orderFrontRegardless()
+        window.makeKeyAndOrderFront(nil)
+        window.makeKey()
+        window.makeMain()
+    }
+
     static func toggleFullScreenMainWindow() {
         guard let window = mainWindow() else { return }
-        if !window.collectionBehavior.contains(.fullScreenPrimary) {
-            window.collectionBehavior.insert(.fullScreenPrimary)
+        // Menu-driven invokes often leave keyWindow nil; AppKit then no-ops
+        // toggleFullScreen. Force activation + key/main, then toggle after settle.
+        forceKey(window)
+
+        let needed: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+        if !needed.isSubset(of: window.styleMask) {
+            window.styleMask.formUnion(needed)
         }
-        if !window.styleMask.contains(.resizable) {
-            window.styleMask.insert(.resizable)
+
+        var behavior = window.collectionBehavior
+        behavior.remove(.fullScreenAuxiliary)
+        behavior.insert(.managed)
+        behavior.insert(.fullScreenPrimary)
+        if window.collectionBehavior != behavior {
+            window.collectionBehavior = behavior
         }
-        window.toggleFullScreen(nil)
+
+        let target = window
+        DispatchQueue.main.async {
+            forceKey(target)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                forceKey(target)
+                target.toggleFullScreen(nil)
+            }
+        }
     }
 }

@@ -49,8 +49,13 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
             window.styleMask.insert(.fullSizeContentView)
         }
         // NMH-129: keep Full Screen available with hidden title bar chrome.
-        if !window.collectionBehavior.contains(.fullScreenPrimary) {
-            window.collectionBehavior.insert(.fullScreenPrimary)
+        // Prefer primary (not auxiliary) + managed so toggleFullScreen can enter a Space.
+        var behavior = window.collectionBehavior
+        behavior.remove(.fullScreenAuxiliary)
+        behavior.insert(.managed)
+        behavior.insert(.fullScreenPrimary)
+        if window.collectionBehavior != behavior {
+            window.collectionBehavior = behavior
         }
         // NMH-129: ensure Full Screen style mask
         // Hidden-title-bar scenes can omit bits toggleFullScreen needs.

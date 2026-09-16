@@ -39,3 +39,17 @@ System Close remained disabled and ate ⌘W until the key monitor called `NSWind
 ## Follow-up (2026-09-16 21:45 CEST)
 Style mask titled/closable/miniaturizable/resizable forced (`913b3c5`). Retest still `AXFullScreen=false` at 1280×820 for ⌃⌘F and Window > Enter Full Screen. Close/Minimize remain PASS.
 
+## Follow-up (2026-09-16 23:08 CEST)
+
+Retest after focused FS fix attempt (`HubWindowChromeActions.forceKey` + deferred `toggleFullScreen`, stronger `collectionBehavior` managed/fullScreenPrimary, key-monitor ignores capsLock bits). Proof: `dist/gui-accept/NMH-129-fs-20260916-230828/`.
+
+| Check | Result |
+|-------|--------|
+| ⌃⌘F | **FAIL** (`AXFullScreen=false`, size 1280×820; key monitor often did not fire in this session) |
+| Window > Enter Full Screen | **FAIL** (menu action ran; debug showed `appActive=true`, `mainWin=hub.main`, but `keyWindow=nil` / `isKey=false` despite `canBecomeKey=true`; `toggleFullScreen` no-op, `fsBit=false`) |
+| AX set `AXFullScreen=true` | **FAIL** (stays false) |
+| Close / Minimize | unchanged **PASS** from earlier Accept |
+
+Also tried `.windowStyle(.titleBar)` temporarily — did **not** fix FS; reverted to `.hiddenTitleBar`.
+
+**Root cause note:** in this unattended fixture GUI session the main window never becomes key (`NSApp.keyWindow` stays nil while app is active). AppKit Full Screen appears to require a key window. Leave **implemented-awaiting-runtime** until FS is proven in an interactive session (or a different key-window ownership fix is found). Undo still not confirmed.

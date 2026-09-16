@@ -34,3 +34,7 @@ Restore-sheet Esc still pending a vault fixture session — keep related follow-
 Ledger: treat New Song half as done; overall status `implemented-awaiting-runtime` until restore Esc is observed, **or** `verified-no-change` if restore is accepted on code parity with already-shipped `.cancelAction`.
 
 Chosen: **implemented-awaiting-runtime** (restore Esc not observed).
+
+## Follow-up (2026-09-16 23:10 CEST)
+
+Restore-sheet Esc still **not run**. Synthetic vault fixtures exist for unit/runtime tests (`ProjectVaultSyntheticFixtures` / `LiveProjectVaultRuntimeTests.Fixture`), but wiring an archived generation + free Active pair into a suite-isolated GUI launch (security-scoped vault folder bookmarks + archive index + board card) was not completed in this unattended pass. No invented PASS. Stay `implemented-awaiting-runtime`.
