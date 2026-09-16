@@ -59,7 +59,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-038 | 5 | implemented-awaiting-runtime | 35aaec48b48eefa663298e796856ce9c2e3a8323 | (see commit) | see nmh-hig-NMH-038-result.md; worker exit 0 | batch-NMH-038-f89c456a; auto-integrated |
 | NMH-043 | 5 | implemented-awaiting-runtime | dc1f4413ecbaadec3583effc6e0edeb5eb1bce3b | (see commit) | see nmh-hig-NMH-043-result.md; worker exit 0 | batch-NMH-043-da3ecba2; auto-integrated |
 | NMH-074 | 5 | implemented-awaiting-runtime | 6484bbeec4073de1d29c6fb89bd21b6387320418 | (see commit) | see nmh-hig-NMH-074-result.md; worker exit 0 | batch-NMH-074-b0f09458; auto-integrated |
-| NMH-079 | 5 | implemented-awaiting-runtime | 9b69e68232f12875b46993f33ed99c0bbb0d4b44 | (see commit) | see nmh-hig-NMH-079-result.md; worker exit 0 | batch-NMH-079-a37f50b4; auto-integrated |
+| NMH-079 | 5 | fixed | 9b69e68232f12875b46993f33ed99c0bbb0d4b44 | (see commit) | gui-unit-promote: swift test --filter HubDesignSystemTokenTests PASS | batch-NMH-079-a37f50b4; auto-integrated; gui-unit-promote |
 | NMH-068 | 6 | implemented-awaiting-runtime | 379c6b48b1bcf8963a01f0a7df119733a2f31332 | (see commit) | see nmh-hig-NMH-068-result.md; worker exit 0 | batch-NMH-068-aec0a771; auto-integrated |
 | NMH-069 | 6 | implemented-awaiting-runtime | 6d7995346cb10193e3d48d43063b98c3ffc6ed07 | (see commit) | see nmh-hig-NMH-069-result.md; worker exit 0 | batch-NMH-069-b7befc3d; auto-integrated |
 | NMH-070 | 6 | implemented-awaiting-runtime | c77439a39a166ea72c313cf0f5cdfe6bad4bfc90 | (see commit) | see nmh-hig-NMH-070-result.md; worker exit 0 | batch-NMH-070-8545c3f2; auto-integrated |
