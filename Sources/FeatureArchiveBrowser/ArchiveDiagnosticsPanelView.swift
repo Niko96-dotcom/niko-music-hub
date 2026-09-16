@@ -9,11 +9,11 @@ public enum ArchiveDiagnosticsPanelAccessibility {
 }
 
 struct ArchiveDiagnosticsPanelView: View {
+    @ObservedObject var viewModel: ArchiveBrowserViewModel
     let diagnostics: ArchiveScanDiagnostics
     let selectedSong: Song?
     let searchContext: ArchiveDiagnosticsSearchContext?
     let skippedSearchContext: ArchiveDiagnosticsSkippedSearchContext?
-    let onExport: () -> Void
 
     private static let scanTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -49,8 +49,22 @@ struct ArchiveDiagnosticsPanelView: View {
                     systemImage: "square.and.arrow.up",
                     accessibilityLabel: "Export diagnostics",
                     help: "Export scan diagnostics bundle",
-                    action: onExport
+                    action: exportDiagnosticsViaSavePanel
                 )
+            }
+
+            if let lastExportPath = viewModel.lastDiagnosticsExportPath {
+                HStack(spacing: 8) {
+                    Text("Last export: \(lastExportPath)")
+                        .font(HubDesignSystem.Typography.micro())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 4)
+                    HubLabeledButton(icon: "folder", label: "Reveal", style: .ghost) {
+                        viewModel.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
+                    }
+                }
             }
 
             Text("Support summary")
@@ -267,8 +281,16 @@ struct ArchiveDiagnosticsPanelView: View {
         .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
-    private func diagnosticRow(_ label: String, value: String) -> some View {
-        HStack {
+    /// NMH-055: user-facing diagnostics export goes through the system Save panel.
+    private func exportDiagnosticsViaSavePanel() {
+        guard let destination = ArchiveExportPaths.runSavePanel(
+            for: .scanDiagnostics,
+            directoryURL: viewModel.exportDefaultDirectory()
+        ) else { return }
+        viewModel.performExport { try viewModel.exportDiagnostics(to: destination) }
+    }
+
+    private func diagnosticRow(_ label: String, value: String) -> some View {        HStack {
             Text(label)
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)

@@ -65,13 +65,12 @@ struct ArchiveSidebarMorePanel: View {
                     ) {
                         ScrollView {
                             ArchiveDiagnosticsPanelView(
+                                viewModel: viewModel,
                                 diagnostics: diagnostics,
                                 selectedSong: viewModel.selectedSong,
                                 searchContext: viewModel.activeSearchExportContext(),
                                 skippedSearchContext: viewModel.activeSkippedSearchExportContext()
-                            ) {
-                                viewModel.performExport { try viewModel.exportDiagnostics() }
-                            }
+                            )
                         }
                         .frame(maxHeight: 140)
                     }

@@ -447,4 +447,34 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         }
         XCTAssertFalse(fm.fileExists(atPath: archiveRoot.appendingPathComponent("scan-diagnostics.txt").path))
     }
+
+    /// NMH-055: the archive index exporter writes valid JSON to a person-chosen URL.
+    /// Export tests use the temporary directory, never the user's real Music folder.
+    func testIndexExportToChosenURLProducesJSON() throws {
+        let exportDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("niko-index-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: exportDir) }
+
+        let destination = exportDir.appendingPathComponent("archive-index-2026-09-15.json")
+        let musicFolder = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Music", isDirectory: true)
+            .standardizedFileURL
+        XCTAssertFalse(
+            destination.standardizedFileURL.path.hasPrefix(musicFolder.path + "/"),
+            "Export tests must not write under the user's real Music folder."
+        )
+
+        let data = try ArchiveIndexExporter.exportJSON(roots: [], songs: [])
+        try data.write(to: destination)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(
+            ArchiveIndexExport.self,
+            from: Data(contentsOf: destination)
+        )
+        XCTAssertEqual(decoded.songCount, 0)
+        XCTAssertTrue(decoded.songs.isEmpty)
+    }
 }

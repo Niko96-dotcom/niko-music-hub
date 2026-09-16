@@ -9,9 +9,25 @@ extension ArchiveBrowserViewModel {
     func performExport(_ operation: () throws -> Void) {
         do {
             try operation()
+        } catch let error as ArchiveDiagnosticsExportError {
+            setStatusMessage("Export failed: \(archiveExportRecoveryMessage(error))")
         } catch {
             setStatusMessage("Export failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Recovery sentence for an archive-root write refusal (NMH-055 accept 3).
+    private func archiveExportRecoveryMessage(_ error: ArchiveDiagnosticsExportError) -> String {
+        switch error {
+        case .destinationInsideArchiveRoot:
+            return "the chosen location is inside an archive root. Choose a folder outside the archive and try again."
+        }
+    }
+
+    /// Save-panel starting folder: the app output folder, else the person's Documents (NMH-055).
+    func exportDefaultDirectory() -> URL {
+        let outputFolder = try? settingsStore.loadSettings().outputFolder.url
+        return ArchiveExportPaths.defaultDirectory(outputFolderURL: outputFolder)
     }
 
     func exportIndexJSON() throws {
@@ -20,6 +36,12 @@ extension ArchiveBrowserViewModel {
             namePrefix: "archive-index",
             nameSuffix: ".json"
         )
+        try exportIndexJSON(to: destination)
+    }
+
+    /// NMH-055: writes the archive index to a person-chosen destination.
+    /// Keeps the read-only archive guard; reveals the file on success.
+    func exportIndexJSON(to destination: URL) throws {
         let policy = ReadOnlyArchivePolicy()
         do {
             try policy.enforceNoWrite(at: destination, archiveRoots: roots)
@@ -35,6 +57,7 @@ extension ArchiveBrowserViewModel {
         lastIndexExportPath = destination.path
         setStatusMessage("Exported index JSON (\(songs.count) songs).")
         diagnostics.log(.info, "Exported archive index to \(destination.path)")
+        fileActions.revealInFinder(destination)
     }
 
     func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
@@ -62,7 +85,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func exportDiagnostics() throws {
-        guard let scanDiagnostics else {
+        guard scanDiagnostics != nil else {
             setStatusMessage("Scan the archive before exporting diagnostics.")
             return
         }
@@ -71,6 +94,16 @@ extension ArchiveBrowserViewModel {
             namePrefix: "scan",
             nameSuffix: "-\(UUID().uuidString.prefix(8)).txt"
         )
+        try exportDiagnostics(to: destination)
+    }
+
+    /// NMH-055: writes scan diagnostics to a person-chosen destination.
+    /// Keeps the read-only archive guard; reveals the file on success.
+    func exportDiagnostics(to destination: URL) throws {
+        guard let scanDiagnostics else {
+            setStatusMessage("Scan the archive before exporting diagnostics.")
+            return
+        }
         try ArchiveDiagnosticsExporter.exportText(
             diagnostics: scanDiagnostics,
             to: destination,
@@ -82,6 +115,7 @@ extension ArchiveBrowserViewModel {
         lastDiagnosticsExportPath = destination.path
         setStatusMessage("Diagnostics exported to \(destination.path)")
         diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
+        fileActions.revealInFinder(destination)
     }
 
     func openProjectVersion(_ version: ProjectVersion, for song: Song) throws {

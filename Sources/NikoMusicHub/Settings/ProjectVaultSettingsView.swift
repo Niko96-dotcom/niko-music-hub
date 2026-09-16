@@ -1,6 +1,8 @@
 import AppCore
+import AppKit
 import NikoMusicCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProjectVaultSettingsView: View {
     let context: ToolContext
@@ -13,6 +15,8 @@ struct ProjectVaultSettingsView: View {
     @State private var showSetup = false
     @State private var message: String?
     @State private var isRunningDrill = false
+    @State private var pendingVaultDiagnosticsDestination: URL?
+    @State private var showReplaceDiagnosticsAlert = false
 
     private var health: ProjectVaultHealth {
         ProjectVaultHealthEvaluator().evaluate(settings: settings)
@@ -97,6 +101,26 @@ struct ProjectVaultSettingsView: View {
                 onChooseRoot: chooseRoot,
                 onEnable: finishSetup,
                 onCancel: { showSetup = false }
+            )
+        }
+        .alert(
+            ProjectVaultDiagnosticsExportCopy.replaceTitle,
+            isPresented: $showReplaceDiagnosticsAlert
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingVaultDiagnosticsDestination = nil
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Replace", role: .destructive) {
+                if let destination = pendingVaultDiagnosticsDestination {
+                    writeVaultDiagnostics(to: destination)
+                }
+            }
+        } message: {
+            Text(
+                ProjectVaultDiagnosticsExportCopy.replaceMessage(
+                    filename: pendingVaultDiagnosticsDestination?.lastPathComponent ?? "this file"
+                )
             )
         }
     }
@@ -271,14 +295,52 @@ struct ProjectVaultSettingsView: View {
         }
     }
 
+    /// NMH-055: vault diagnostics export goes through the system Save panel with a
+    /// dated default name. An existing file is only replaced after confirmation.
     private func exportDiagnostics() {
-        let destination = settings.outputFolder.url.appendingPathComponent("project-vault-diagnostics.txt")
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = ProjectVaultDiagnosticsExportCopy.filename()
+        panel.prompt = ProjectVaultDiagnosticsExportCopy.savePrompt
+        panel.message = ProjectVaultDiagnosticsExportCopy.saveMessage
+        panel.directoryURL = vaultDiagnosticsExportDirectory()
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            pendingVaultDiagnosticsDestination = destination
+            showReplaceDiagnosticsAlert = true
+            return
+        }
+        writeVaultDiagnostics(to: destination)
+    }
+
+    private func vaultDiagnosticsExportDirectory() -> URL {
+        let outputURL = settings.outputFolder.url
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: outputURL.path, isDirectory: &isDirectory),
+           isDirectory.boolValue {
+            return outputURL
+        }
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? outputURL
+    }
+
+    private func writeVaultDiagnostics(to destination: URL) {
+        defer { pendingVaultDiagnosticsDestination = nil }
         do {
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try ProjectVaultDiagnosticsExporter.export(settings: settings, health: health, to: destination)
             context.fileActions.revealInFinder(destination)
             message = "Exported path-free Project Vault diagnostics."
-        } catch { message = "Diagnostics export failed: \(error.localizedDescription)" }
+        } catch let error as ProjectVaultDiagnosticsExportError {
+            switch error {
+            case .destinationInsideMusicRoot:
+                message = ProjectVaultDiagnosticsExportCopy.archiveRootRecoveryMessage
+            }
+        } catch {
+            message = "Diagnostics export failed: \(error.localizedDescription)"
+        }
     }
 
     private func dateLabel(_ date: Date?) -> String {

@@ -70,9 +70,29 @@ struct ArchiveIntelligencePanelView: View {
                 help: "Export read-only archive index",
                 isEnabled: !viewModel.songs.isEmpty
             ) {
-                viewModel.performExport { try viewModel.exportIndexJSON() }
+                exportIndexViaSavePanel()
+            }
+
+            if let lastExportPath = viewModel.lastIndexExportPath {
+                Text("Last export: \(lastExportPath)")
+                    .font(HubDesignSystem.Typography.micro())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                HubLabeledButton(icon: "folder", label: "Reveal", style: .ghost) {
+                    viewModel.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
+                }
             }
         }
         .padding(10)
+    }
+
+    /// NMH-055: user-facing index export goes through the system Save panel.
+    private func exportIndexViaSavePanel() {
+        guard let destination = ArchiveExportPaths.runSavePanel(
+            for: .index,
+            directoryURL: viewModel.exportDefaultDirectory()
+        ) else { return }
+        viewModel.performExport { try viewModel.exportIndexJSON(to: destination) }
     }
 }
