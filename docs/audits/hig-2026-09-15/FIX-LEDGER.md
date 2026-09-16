@@ -66,7 +66,7 @@ Canonical tracked ledger for `hig-audit-fixes`. Exactly 144 item rows. Status va
 | NMH-071 | 6 | fixed | 3815a7447716ad52ebd88b215d0320fdff64567f | (see commit) | gui-unit-promote: swift test --filter HelperExecutableValidationTests PASS | batch-NMH-071-c2f60752; auto-integrated; gui-unit-promote |
 | NMH-072 | 6 | implemented-awaiting-runtime | a90bc20bd44ca2e49395e77b84d389451d6683be | (see commit) | see nmh-hig-NMH-072-result.md; worker exit 0 | batch-NMH-072-441de8a7; auto-integrated |
 | NMH-027 | 6 | implemented-awaiting-runtime | dbe57466eceda7fd43155e106ed1508809ee2b7b | (see commit) | see nmh-hig-NMH-027-result.md; worker exit 0 | batch-NMH-027-dad1ae5c; auto-integrated |
-| NMH-073 | 6 | implemented-awaiting-runtime | 6c9f794b0a8be0b8df1f1ee5860c89b3dc5b315e | (see commit) | see nmh-hig-NMH-073-result.md; worker exit 0 | batch-NMH-073-e6fd12d2; auto-integrated |
+| NMH-073 | 6 | fixed | 6c9f794b0a8be0b8df1f1ee5860c89b3dc5b315e | (see commit) | gui-unit-promote: swift test --filter HumanFriendlyPathTests PASS | batch-NMH-073-e6fd12d2; auto-integrated; gui-unit-promote |
 | NMH-075 | 6 | implemented-awaiting-runtime | 7565049fdee1b8d13ffbf90aec17cad425ac39ce | (see commit) | see nmh-hig-NMH-075-result.md; worker exit 0 | batch-NMH-075-f5245c30; auto-integrated |
 | NMH-076 | 6 | implemented-awaiting-runtime | 065e7e13fa52877dd0bfcd64446c93ad0851acdf | (see commit) | see nmh-hig-NMH-076-result.md; worker exit 0 | batch-NMH-076-78839057; auto-integrated |
 | NMH-077 | 6 | implemented-awaiting-runtime | a38deb7a6ed8b9be37cfc440d667c769ad66348c | (see commit) | see nmh-hig-NMH-077-result.md; worker exit 0 | batch-NMH-077-ec9277d0; auto-integrated |
