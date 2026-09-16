@@ -99,30 +99,32 @@ public struct BPMTapperView: View {
     }
 
     private var tapSurface: some View {
-        VStack(spacing: 8) {
-            Text("Tap Tempo")
-                .font(HubDesignSystem.Typography.sectionTitle())
-
-            Text("Tap or press Space")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-        }
-        .padding(HubDesignSystem.Spacing.cardPadding)
-        .frame(maxWidth: 360, minHeight: 140)
-        .hubCard(
-            state: tapSurfaceFocused ? .selected : .normal,
-            interactive: true
-        )
-        .scaleEffect(tapSurfacePressed ? 0.98 : 1)
-        .contentShape(Rectangle())
-        .focusable()
-        .focusEffectDisabled()
-        .focused($tapSurfaceFocused)
-        .onTapGesture {
+        Button(action: {
             animateTapPress()
             viewModel.recordTap()
             tapSurfaceFocused = true
+        }) {
+            VStack(spacing: 8) {
+                Text("Tap Tempo")
+                    .font(HubDesignSystem.Typography.sectionTitle())
+
+                Text("Tap or press Space")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
+            .padding(HubDesignSystem.Spacing.cardPadding)
+            .frame(maxWidth: 360, minHeight: 140)
+            .hubCard(
+                state: tapSurfaceFocused ? .selected : .normal,
+                interactive: true
+            )
+            .scaleEffect(tapSurfacePressed ? 0.98 : 1)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .focusable()
+        .focusEffectDisabled()
+        .focused($tapSurfaceFocused)
         .onKeyPress(.space) {
             animateTapPress()
             viewModel.recordTap()

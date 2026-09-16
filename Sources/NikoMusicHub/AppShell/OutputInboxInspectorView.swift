@@ -175,11 +175,11 @@ struct OutputInboxInspectorView: View {
         }
     }
 
+    @ViewBuilder
     private func itemCard(_ item: OutputInboxItem) -> some View {
         let isHovered = hoveredItemID == item.id
         let revealable = OutputHandoff.isRevealable(item)
-
-        return HStack(alignment: .center, spacing: 10) {
+        let row = HStack(alignment: .center, spacing: 10) {
             fileIcon(for: item.fileURL)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.fileURL.lastPathComponent)
@@ -207,14 +207,26 @@ struct OutputInboxInspectorView: View {
                 .fill(itemRowFill(for: item, isHovered: isHovered))
         }
         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+
+        Group {
+            if revealable {
+                Button {
+                    context.fileActions.revealInFinder(item.fileURL)
+                } label: {
+                    row
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            } else {
+                row
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.14)) {
                 hoveredItemID = hovering ? item.id : (hoveredItemID == item.id ? nil : hoveredItemID)
             }
-        }
-        .onTapGesture {
-            guard revealable else { return }
-            context.fileActions.revealInFinder(item.fileURL)
         }
         .contextMenu {
             if isAudioItem(item) {
