@@ -421,7 +421,9 @@ public struct AudioConverterView: View {
         case .skipped:
             jobState = .canceled
         }
-        return StatusDot(state: jobState)
+        // Row already exposes statusText via the combined accessibility label/value,
+        // so hide the symbol from VoiceOver to avoid double-speaking (NMH-079).
+        return StatusDot(state: jobState).accessibilityHidden(true)
     }
 
     private func statusText(for row: AudioConverterRow) -> String {

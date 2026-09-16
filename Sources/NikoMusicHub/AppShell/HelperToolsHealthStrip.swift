@@ -48,9 +48,11 @@ struct HelperToolsHealthStrip: View {
     private func helperRow(_ item: HelperToolsHealthItem) -> some View {
         Button(action: onOpenSettingsHelpers) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(color(for: item.state))
+                Image(systemName: symbol(for: item.state))
+                    .foregroundStyle(color(for: item.state))
+                    .font(.system(size: HubDesignSystem.Size.statusDot))
                     .frame(width: HubDesignSystem.Size.statusDot, height: HubDesignSystem.Size.statusDot)
+                    .accessibilityHidden(true)
                 Text(item.label)
                     .font(HubDesignSystem.Typography.micro().weight(.medium))
                 Spacer(minLength: 8)
@@ -75,6 +77,19 @@ struct HelperToolsHealthStrip: View {
             return .warning
         }
         return .normal
+    }
+
+    private func symbol(for state: HelperToolsHealthItem.State) -> String {
+        switch state {
+        case .checking:
+            return "circle"
+        case .available:
+            return "checkmark.circle.fill"
+        case .missing, .unusable:
+            return "xmark.circle.fill"
+        case .outdated:
+            return "exclamationmark.circle"
+        }
     }
 
     private func color(for state: HelperToolsHealthItem.State) -> Color {
