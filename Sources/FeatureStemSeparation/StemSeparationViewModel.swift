@@ -13,6 +13,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     @Published public private(set) var progress = 0.0
     @Published public private(set) var statusMessage = "Drop an audio file to start."
     @Published public private(set) var errorMessage: String?
+    @Published public private(set) var helperNeedsSetup = false
     @Published public private(set) var results: [OutputInboxItem] = []
 
     public let supportedPresets = StemSeparationPreset.allCases
@@ -20,6 +21,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let context: ToolContext
     private let service: StemSeparationService
     private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
+    private let healthChecker: DemucsMLXHealthChecker
     private var jobObservationTask: Task<Void, Never>?
     private var inboxObservationTask: Task<Void, Never>?
     private(set) var currentJobID: Job.ID?
@@ -27,11 +29,13 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public init(
         context: ToolContext,
         service: StemSeparationService,
-        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
+        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil,
+        healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker()
     ) {
         self.context = context
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
+        self.healthChecker = healthChecker
         loadSettings()
     }
 
@@ -161,12 +165,49 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func onAppear() {
         loadResults()
+        refreshHelperHealth()
         guard inboxObservationTask == nil else { return }
         inboxObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
                 guard !Task.isCancelled else { return }
                 self?.loadResults()
             }
+        }
+    }
+
+    public func chooseHelperPath() {
+        guard let url = context.fileActions.chooseExecutable(prompt: "Choose demucs-mlx") else { return }
+        do {
+            try context.settingsStore.updateSettings { settings in
+                settings.helperTools.demucsMlx = url
+            }
+            refreshHelperHealth()
+        } catch {
+            diagnosticsError(error)
+        }
+    }
+
+    public func refreshHelperHealth() {
+        Task { @MainActor [weak self] in
+            await self?.runHelperHealthCheck()
+        }
+    }
+
+    private func runHelperHealthCheck() async {
+        let settings = (try? context.settingsStore.loadSettings()) ?? .default
+        let health = await healthChecker.availability(settings: settings.helperTools)
+        switch health {
+        case .missing:
+            helperNeedsSetup = true
+            errorMessage = StemSeparationHelperCopy.missingBody
+        case .ready:
+            if helperNeedsSetup || errorMessage == StemSeparationHelperCopy.missingBody {
+                errorMessage = nil
+            }
+            helperNeedsSetup = false
+        case .unusable, .modelCacheMissing:
+            helperNeedsSetup = true
+            errorMessage = StemSeparationHelperCopy.missingBody
         }
     }
 
@@ -194,6 +235,9 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             return true
         case .failed:
             finish(message: current.message, error: current.message)
+            if current.message == StemSeparationHelperCopy.missingBody {
+                helperNeedsSetup = true
+            }
             return true
         case .canceled:
             finish(message: "Canceled.")

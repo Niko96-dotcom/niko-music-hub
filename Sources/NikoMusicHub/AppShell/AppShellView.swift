@@ -136,6 +136,10 @@ struct AppShellView: View {
             guard pane != nil else { return }
             openSettings()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hubOpenSettingsHelpers)) { _ in
+            router.openSettingsHelpers()
+            openSettings()
+        }
         .background {
             GeometryReader { proxy in
                 Color.clear

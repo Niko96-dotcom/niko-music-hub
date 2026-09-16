@@ -83,6 +83,11 @@ public final class QuickAccessRouter: ObservableObject {
         NotificationCenter.default.post(name: .hubOpenSettingsPane, object: pane)
     }
 
+    /// Open in-app Settings → Helpers (helper-missing recovery, NMH-010).
+    public func openSettingsHelpers() {
+        requestSettingsPane(.helpers)
+    }
+
     public func clearOpenSettingsPane() {
         openSettingsPane = nil
     }

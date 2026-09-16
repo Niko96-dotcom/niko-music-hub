@@ -30,7 +30,12 @@ public struct StemSeparationFeature: ToolFeature {
         if let viewModel = session.viewModel {
             return viewModel
         }
-        let backend = DemucsMLXBackend(settings: (try? context.settingsStore.loadSettings().helperTools) ?? HelperToolSettings())
+        let settingsStore = context.settingsStore
+        let backend = DemucsMLXBackend(
+            settingsProvider: {
+                (try? settingsStore.loadSettings().helperTools) ?? HelperToolSettings()
+            }
+        )
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: context.outputInboxStore,

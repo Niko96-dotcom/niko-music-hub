@@ -1,8 +1,20 @@
 import AppCore
 import Foundation
 
+public enum StemSeparationHelperCopy {
+    public static let missingLabel = "Stem helper missing"
+    public static let missingBody = "demucs-mlx is not available at the configured path. Stem Separation cannot start until you choose the binary."
+}
+
 public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {
     case missingExecutable
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingExecutable:
+            return StemSeparationHelperCopy.missingBody
+        }
+    }
 }
 
 public struct DemucsMLXCommandBuilder: Sendable {

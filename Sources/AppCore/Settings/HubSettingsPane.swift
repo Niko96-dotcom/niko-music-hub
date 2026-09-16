@@ -30,4 +30,13 @@ public enum HubSettingsPane: String, CaseIterable, Identifiable, Sendable {
 
 public extension Notification.Name {
     static let hubOpenSettingsPane = Notification.Name("NikoMusicHub.hubOpenSettingsPane")
+    /// Request the Settings window Helpers pane from feature views that do not hold a router.
+    static let hubOpenSettingsHelpers = Notification.Name("NikoMusicHub.hubOpenSettingsHelpers")
+}
+
+/// Deep link used by helper-missing recovery (NMH-010) and the health strip.
+public enum HubSettingsHelpersAction {
+    public static func openSettingsHelpers() {
+        NotificationCenter.default.post(name: .hubOpenSettingsHelpers, object: HubSettingsPane.helpers)
+    }
 }

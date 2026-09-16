@@ -41,6 +41,14 @@ final class HubSettingsPaneIDTests: XCTestCase {
         XCTAssertNil(router.openSettingsPane)
     }
 
+    func testOpenSettingsHelpersRequestsHelpersPaneWithoutSelectingATool() {
+        let router = QuickAccessRouter()
+        router.openSettingsHelpers()
+        XCTAssertEqual(router.openSettingsPane, .helpers)
+        XCTAssertNil(router.selectedToolID)
+        XCTAssertFalse(router.revealOutputInbox)
+    }
+
     func testSettingsWindowIsAPaneledSceneNotAMainToolSwap() throws {
         let root = try SourceTestSupport.read("Sources/NikoMusicHub/Settings/HubSettingsRoot.swift")
         XCTAssertTrue(root.contains("TabView(selection:"), "HubSettingsRoot must host the Settings TabView")
@@ -69,6 +77,8 @@ final class HubSettingsPaneIDTests: XCTestCase {
         let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
         XCTAssertTrue(shell.contains("if toolID == Self.settingsToolID"))
         XCTAssertTrue(shell.contains("openSettings()"))
+        XCTAssertTrue(shell.contains("hubOpenSettingsHelpers"))
+        XCTAssertTrue(shell.contains("openSettingsHelpers()"))
         XCTAssertFalse(
             shell.contains("selectedToolID = Self.settingsToolID"),
             "Opening Settings must not replace the main pane"

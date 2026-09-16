@@ -27,11 +27,45 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
     }
 
     func testErrorMessagesAreActionable() {
-        XCTAssertEqual(DownloaderCopy.missingYtDlp, "yt-dlp is required. Choose yt-dlp in Settings.")
+        XCTAssertEqual(
+            DownloaderCopy.missingYtDlp,
+            "yt-dlp is required. Choose yt-dlp in Settings → Helpers."
+        )
         XCTAssertEqual(
             DownloaderCopy.unsupportedURL,
             "This URL is not supported or yt-dlp could not access it."
         )
+    }
+
+    @MainActor
+    func testMissingYtDlpCardOpensSettingsAndChoosePathNotTerminal() {
+        let card = DownloaderView.errorCard(for: DownloaderCopy.missingYtDlp)
+
+        XCTAssertEqual(card.category, .helperTool)
+        XCTAssertEqual(
+            card.recoveryActions.map(\.label),
+            ["Open Settings", "Choose Path", "Try Again"]
+        )
+        XCTAssertEqual(
+            card.recoveryActions.map(\.action),
+            [.openHubSettingsHelpers, .chooseToolPath, .tryAgain]
+        )
+        XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
+        XCTAssertFalse(card.recoveryActions.contains { $0.label == "Open Terminal" })
+        XCTAssertFalse(card.recoveryActions.contains { $0.label == "Retry" })
+    }
+
+    @MainActor
+    func testOutdatedYtDlpCardUsesTheSameSettingsRecovery() {
+        let message = DownloaderCopy.outdatedYtDlp(current: "2023.01.01", minimumExpected: "2024.01.01")
+        let card = DownloaderView.errorCard(for: message)
+
+        XCTAssertEqual(card.category, .helperTool)
+        XCTAssertEqual(
+            card.recoveryActions.map(\.action),
+            [.openHubSettingsHelpers, .chooseToolPath, .tryAgain]
+        )
+        XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
     }
 
     func testRetryableErrorHasGuidance() {

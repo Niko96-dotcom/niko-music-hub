@@ -2,7 +2,7 @@ import AppCore
 import Foundation
 
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
-    private let settings: HelperToolSettings
+    private let settingsProvider: @Sendable () -> HelperToolSettings
     private let healthChecker: DemucsMLXHealthChecker
     private let commandBuilder: DemucsMLXCommandBuilder
     private let runner: any ExternalProcessRunning
@@ -20,9 +20,11 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         commandBuilder: DemucsMLXCommandBuilder = DemucsMLXCommandBuilder(),
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         progressParser: DemucsMLXProgressParser = DemucsMLXProgressParser(),
-        scanner: StemOutputScanner = StemOutputScanner()
+        scanner: StemOutputScanner = StemOutputScanner(),
+        settingsProvider: (@Sendable () -> HelperToolSettings)? = nil
     ) {
-        self.settings = settings
+        let captured = settings
+        self.settingsProvider = settingsProvider ?? { captured }
         self.healthChecker = healthChecker
         self.commandBuilder = commandBuilder
         self.runner = runner
@@ -81,11 +83,16 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
         guard !Task.isCancelled else { return .canceled }
-        guard let processRequest = try? commandBuilder.buildRequest(
-            backendRequest: request,
-            settings: settings
-        ) else {
-            return .failed(message: "Could not build demucs-mlx command. Is the executable configured?")
+        let processRequest: ExternalProcessRequest
+        do {
+            processRequest = try commandBuilder.buildRequest(
+                backendRequest: request,
+                settings: settingsProvider()
+            )
+        } catch DemucsMLXCommandBuilderError.missingExecutable {
+            return .failed(message: StemSeparationHelperCopy.missingBody)
+        } catch {
+            return .failed(message: StemSeparationHelperCopy.missingBody)
         }
 
         let startTime = Date()

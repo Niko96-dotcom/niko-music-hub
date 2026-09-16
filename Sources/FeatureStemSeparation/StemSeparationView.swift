@@ -237,7 +237,20 @@ public struct StemSeparationView: View {
 
     private var errorBanner: some View {
         Group {
-            if let error = viewModel.errorMessage {
+            if viewModel.helperNeedsSetup {
+                StandardErrorCard(card: Self.helperMissingCard()) { action in
+                    switch action {
+                    case .chooseToolPath:
+                        viewModel.chooseHelperPath()
+                    case .openHubSettingsHelpers:
+                        HubSettingsHelpersAction.openSettingsHelpers()
+                    case .tryAgain:
+                        viewModel.refreshHelperHealth()
+                    default:
+                        break
+                    }
+                }
+            } else if let error = viewModel.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Colors.danger)
@@ -247,6 +260,20 @@ public struct StemSeparationView: View {
                     .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
             }
         }
+    }
+
+    static func helperMissingCard() -> AppErrorCard {
+        AppErrorCard(
+            category: .helperTool,
+            label: StemSeparationHelperCopy.missingLabel,
+            icon: "tool.badge.xmark",
+            body: StemSeparationHelperCopy.missingBody,
+            recoveryActions: [
+                AppErrorCard.RecoveryAction(label: "Choose Path", style: .primary, action: .chooseToolPath),
+                AppErrorCard.RecoveryAction(label: "Open Settings", style: .secondary, action: .openHubSettingsHelpers),
+                AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain),
+            ]
+        )
     }
 
     private var resultsList: some View {

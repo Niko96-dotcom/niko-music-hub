@@ -178,7 +178,7 @@ struct DemucsMLXBackendTests {
             Issue.record("Expected failure, got \(result)")
             return
         }
-        #expect(message.contains("executable") || message.contains("command"))
+        #expect(message == StemSeparationHelperCopy.missingBody)
     }
 
     @Test

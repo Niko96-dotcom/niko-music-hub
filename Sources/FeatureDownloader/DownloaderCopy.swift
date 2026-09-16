@@ -20,7 +20,7 @@ public enum DownloaderCopy {
     public static let audioFormatLabel = "Audio format"
     public static let videoQualityLabel = "Video quality"
 
-    public static let missingYtDlp = "yt-dlp is required. Choose yt-dlp in Settings."
+    public static let missingYtDlp = "yt-dlp is required. Choose yt-dlp in Settings → Helpers."
     public static func outdatedYtDlp(current: String, minimumExpected: String) -> String {
         "yt-dlp \(current) is outdated (expected \(minimumExpected) or newer). Open Settings → Helper Tools and update yt-dlp with Homebrew, then verify the path."
     }

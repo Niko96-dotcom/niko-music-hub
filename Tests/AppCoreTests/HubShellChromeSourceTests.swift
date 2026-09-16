@@ -114,9 +114,15 @@ final class HubShellChromeSourceTests: XCTestCase {
             "HubDesignSystem.Colors.warning",
             "HubDesignSystem.Colors.danger",
             "Install missing helpers with Homebrew",
+            "DemucsMLXHealthChecker",
+            "label: \"Open Settings\"",
+            "openSettingsHelpers",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing helper health Liquid source: \(required)")
         }
+
+        let model = try SourceTestSupport.read("Sources/AppCore/Shell/HelperToolsHealthStripModel.swift")
+        XCTAssertTrue(model.contains("demucs-mlx"), "Health strip model must include a demucs-mlx row")
     }
 
     func testOutputInboxKeepsHandoffSafetyWhileUsingLiquidCards() throws {

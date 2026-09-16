@@ -386,8 +386,19 @@ public struct DownloaderView: View {
     private func errorSection(message: String) -> some View {
         let card = Self.errorCard(for: message)
         return StandardErrorCard(card: card) { action in
-            if action == .tryAgain {
-                viewModel.retryAfterFailure()
+            switch action {
+            case .tryAgain:
+                if card.category == .helperTool {
+                    viewModel.retryHelperSetup()
+                } else {
+                    viewModel.retryAfterFailure()
+                }
+            case .openHubSettingsHelpers:
+                HubSettingsHelpersAction.openSettingsHelpers()
+            case .chooseToolPath:
+                viewModel.chooseYtDlpPath()
+            default:
+                break
             }
         }
     }
@@ -411,8 +422,9 @@ public struct DownloaderView: View {
                 icon: "tool.badge.xmark",
                 body: message,
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Open Terminal", style: .primary, action: .openTerminal),
-                    AppErrorCard.RecoveryAction(label: "Retry", style: .secondary, action: .tryAgain)
+                    AppErrorCard.RecoveryAction(label: "Open Settings", style: .primary, action: .openHubSettingsHelpers),
+                    AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain)
                 ]
             )
         }

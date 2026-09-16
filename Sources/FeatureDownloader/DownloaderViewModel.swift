@@ -366,6 +366,27 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         statusMessage = DownloaderCopy.readyToDownload
     }
 
+    public func retryHelperSetup() {
+        guard Self.validatedHTTPURL(urlText) != nil else {
+            downloadState = .idle
+            return
+        }
+        urlTextDidChange()
+    }
+
+    public func chooseYtDlpPath() {
+        guard let url = context.fileActions.chooseExecutable(prompt: "Choose yt-dlp") else { return }
+        do {
+            try context.settingsStore.updateSettings { settings in
+                settings.helperTools.ytDlp = url
+            }
+            retryHelperSetup()
+        } catch {
+            downloadState = .failed(error.localizedDescription)
+            statusMessage = nil
+        }
+    }
+
     public func clearInput() {
         validationGeneration &+= 1
         observationGeneration &+= 1
