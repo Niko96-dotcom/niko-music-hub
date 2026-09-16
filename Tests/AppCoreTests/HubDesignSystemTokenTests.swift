@@ -24,6 +24,7 @@ final class HubDesignSystemTokenTests: XCTestCase {
 
     func testSizeTokensMatchSpec() {
         XCTAssertEqual(HubDesignSystem.Size.iconButtonSize, 30)
+        XCTAssertEqual(HubDesignSystem.Size.chipHeight, 28)
         XCTAssertEqual(HubDesignSystem.Size.statusDot, 7)
     }
 

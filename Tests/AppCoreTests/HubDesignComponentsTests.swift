@@ -53,6 +53,35 @@ final class HubDesignComponentsTests: XCTestCase {
         )
     }
 
+    func testChoiceChipsWrapAtNarrowWidthAndMeetDefaultHeight() throws {
+        XCTAssertEqual(HubDesignSystem.Size.chipHeight, 28)
+
+        let chips = HubChoiceChips(
+            "Appearance",
+            selection: .constant("followSystem"),
+            choices: [
+                .init("followSystem", label: "Follow System"),
+                .init("light", label: "Light"),
+                .init("dark", label: "Dark"),
+            ]
+        )
+
+        let wideHeight = try hostedLaidOutHeight(chips, width: 480)
+        XCTAssertGreaterThanOrEqual(wideHeight, HubDesignSystem.Size.chipHeight)
+        XCTAssertLessThan(
+            wideHeight,
+            HubDesignSystem.Size.chipHeight * 2,
+            "Wide proposal must keep Appearance chips on one row"
+        )
+
+        let narrowHeight = try hostedLaidOutHeight(chips, width: 72)
+        XCTAssertGreaterThan(
+            narrowHeight,
+            HubDesignSystem.Size.chipHeight + 4,
+            "Narrow proposal must wrap chips onto additional rows instead of clipping"
+        )
+    }
+
     func testPressedFillDiffersFromHover() throws {
         XCTAssertEqual(HubPressableButtonStyle.pressedOpacity, 0.92)
 
@@ -165,6 +194,26 @@ final class HubDesignComponentsTests: XCTestCase {
         )
         XCTAssertTrue(chipSource.contains("HubPressableButtonStyle"), "Choice chips must use the shared press style")
         XCTAssertTrue(
+            chipSource.contains("HubChoiceChipFlowLayout"),
+            "Choice chips must wrap with a flow layout when the row does not fit"
+        )
+        XCTAssertTrue(
+            chipSource.contains(".fixedSize()"),
+            "Chips must keep intrinsic width so the row wraps instead of clipping labels"
+        )
+        XCTAssertTrue(
+            chipSource.contains("HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)"),
+            "Choice-chip hover must gate on Reduce Motion"
+        )
+        XCTAssertTrue(
+            chipSource.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"),
+            "Selected chip must keep the isSelected trait"
+        )
+        XCTAssertFalse(
+            chipSource.contains("Picker"),
+            "Do not rewrite HubChoiceChips as Picker(.segmented)"
+        )
+        XCTAssertTrue(
             FileManager.default.fileExists(atPath: "Sources/AppCore/Components/HubPressableButtonStyle.swift"),
             "HubPressableButtonStyle.swift must exist"
         )
@@ -199,4 +248,59 @@ private func hostView<V: View>(_ view: V, size: CGSize) throws {
     )
     window.contentView = controller.view
     controller.view.layoutSubtreeIfNeeded()
+}
+
+private struct ChipHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct ChipHeightProbe<Content: View>: View {
+    let width: CGFloat
+    @Binding var height: CGFloat
+    let content: Content
+
+    var body: some View {
+        content
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: ChipHeightPreferenceKey.self, value: geo.size.height)
+                }
+            }
+            .onPreferenceChange(ChipHeightPreferenceKey.self) { height = $0 }
+            .frame(width: width, alignment: .leading)
+    }
+}
+
+private final class ChipHeightBox {
+    var value: CGFloat = 0
+}
+
+@MainActor
+private func hostedLaidOutHeight<V: View>(_ view: V, width: CGFloat) throws -> CGFloat {
+    let box = ChipHeightBox()
+    let probe = ChipHeightProbe(
+        width: width,
+        height: Binding(
+            get: { box.value },
+            set: { box.value = $0 }
+        ),
+        content: view
+    )
+    let host = NSHostingView(rootView: probe)
+    let window = NSWindow(
+        contentRect: NSRect(origin: .zero, size: NSSize(width: width, height: 400)),
+        styleMask: [.borderless],
+        backing: .buffered,
+        defer: false
+    )
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    window.layoutIfNeeded()
+    host.layoutSubtreeIfNeeded()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    defer { window.close() }
+    return box.value
 }

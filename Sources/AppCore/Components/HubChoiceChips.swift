@@ -39,11 +39,12 @@ public struct HubChoiceChips<Value: Hashable>: View {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
+        HubChoiceChipFlowLayout(spacing: 4) {
             ForEach(choices, id: \.value) { choice in
                 chip(choice)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -61,6 +62,7 @@ public struct HubChoiceChips<Value: Hashable>: View {
             )
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
+        .fixedSize()
         .onHover { hovering in
             updateHover(choice.value, hovering: hovering)
         }
@@ -105,5 +107,67 @@ private struct ChoiceChipLabel: View {
                     .fill(HubChoiceChipFill.color(isSelected: isSelected, isPressed: isPressed, isHovered: isHovered))
             }
             .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.chip, style: .continuous))
+    }
+}
+
+/// Wraps chips onto extra rows when a single HStack is wider than the proposed width.
+private struct HubChoiceChipFlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        flow(proposal: proposal, subviews: subviews).containerSize
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = flow(
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height),
+            subviews: subviews
+        )
+        for index in subviews.indices {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + result.origins[index].x, y: bounds.minY + result.origins[index].y),
+                proposal: ProposedViewSize(result.sizes[index])
+            )
+        }
+    }
+
+    private struct Flow {
+        var containerSize: CGSize
+        var origins: [CGPoint]
+        var sizes: [CGSize]
+    }
+
+    private func flow(proposal: ProposedViewSize, subviews: Subviews) -> Flow {
+        guard !subviews.isEmpty else {
+            return Flow(containerSize: .zero, origins: [], sizes: [])
+        }
+
+        let maxWidth = proposal.width ?? .infinity
+        var origins: [CGPoint] = []
+        var sizes: [CGSize] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var usedWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            sizes.append(size)
+            rowHeight = max(rowHeight, size.height)
+            usedWidth = max(usedWidth, x + size.width)
+            x += size.width + spacing
+        }
+
+        return Flow(
+            containerSize: CGSize(width: usedWidth, height: y + rowHeight),
+            origins: origins,
+            sizes: sizes
+        )
     }
 }
