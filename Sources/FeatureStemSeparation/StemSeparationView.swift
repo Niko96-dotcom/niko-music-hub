@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 public struct StemSeparationView: View {
     @StateObject private var viewModel: StemSeparationViewModel
+    @State private var isTargeted = false
 
     public init(viewModel: StemSeparationViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -44,23 +45,8 @@ public struct StemSeparationView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .hubCard(cornerRadius: HubDesignSystem.Radius.card, interactive: true)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            Task {
-                var urls: [URL] = []
-                for provider in providers {
-                    guard let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) else { continue }
-                    guard let data = item as? Data else { continue }
-                    guard let string = String(data: data, encoding: .utf8) else { continue }
-                    guard let url = URL(string: string) else { continue }
-                    urls.append(url)
-                }
-                await MainActor.run {
-                    _ = viewModel.handleDrop(urls: urls)
-                }
-            }
-            return true
-        }
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card, state: isTargeted ? .selected : .normal, interactive: true)
+        .onDrop(of: [.fileURL, .audio], delegate: StemDropDelegate(isTargeted: $isTargeted, viewModel: viewModel))
     }
 
     private var fileIntakeContent: some View {
@@ -327,4 +313,32 @@ private struct StemRunningProgressCard: View {
 private func stemElapsedCaption(from start: Date, now: Date) -> String {
     let totalSeconds = max(0, Int(now.timeIntervalSince(start)))
     return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
+}
+
+// NMH-061: audio-only targeting. Highlight only when the drag can be accepted;
+// .txt and other non-audio never highlight and are rejected.
+@MainActor
+private struct StemDropDelegate: DropDelegate {
+    @Binding var isTargeted: Bool
+    var viewModel: StemSeparationViewModel
+
+    func validateDrop(info: DropInfo) -> Bool {
+        viewModel.canAcceptDrop(info: info)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        viewModel.performDrop(info: info)
+    }
+
+    func dropEntered(info: DropInfo) {
+        isTargeted = viewModel.canAcceptDrop(info: info)
+    }
+
+    func dropExited(info: DropInfo) {
+        isTargeted = false
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: viewModel.canAcceptDrop(info: info) ? .copy : .forbidden)
+    }
 }

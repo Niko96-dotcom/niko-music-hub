@@ -2,6 +2,7 @@ import AppCore
 import Combine
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 public final class StemSeparationViewModel: ObservableObject, @unchecked Sendable {
@@ -58,7 +59,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func handleDrop(urls: [URL]) -> Bool {
         guard let first = urls.first else { return false }
-        let isAudio = ["wav", "aiff", "aif", "mp3", "m4a", "flac"].contains(first.pathExtension.lowercased())
+        let isAudio = Self.allowedDropExtensions.contains(first.pathExtension.lowercased())
         guard isAudio else {
             errorMessage = "Please drop an audio file."
             return false
@@ -66,6 +67,83 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         droppedFileURL = first
         errorMessage = nil
         statusMessage = "Ready: \(first.lastPathComponent)"
+        return true
+    }
+
+    // NMH-061: shared allow-list for drop targeting and unit tests.
+    nonisolated public static let allowedDropExtensions: Set<String> = ["wav", "aiff", "aif", "mp3", "m4a", "flac"]
+
+    /// NMH-061: URL-based acceptance matching `handleDrop` for unit tests.
+    nonisolated public func canAcceptDrop(urls: [URL]) -> Bool {
+        guard let first = urls.first else { return false }
+        return Self.allowedDropExtensions.contains(first.pathExtension.lowercased())
+    }
+
+    /// NMH-061: synchronous targeting check. True when any provider conforms to
+    /// an audio UTI or vends a fileURL whose extension is in the allow-list.
+    nonisolated public func canAcceptDrop(info: DropInfo) -> Bool {
+        var audioTypes: [UTType] = [.audio, .wav, .aiff, .mp3, .mpeg4Audio]
+        if let flac = UTType(filenameExtension: "flac") {
+            audioTypes.append(flac)
+        }
+        if let aif = UTType(filenameExtension: "aif") {
+            audioTypes.append(aif)
+        }
+        if let m4a = UTType(filenameExtension: "m4a") {
+            audioTypes.append(m4a)
+        }
+        if audioTypes.contains(where: { info.hasItemsConforming(to: [$0]) }) {
+            return true
+        }
+        for provider in info.itemProviders(for: [.fileURL]) {
+            if let name = provider.suggestedName, !name.isEmpty {
+                let ext = (name as NSString).pathExtension.lowercased()
+                if Self.allowedDropExtensions.contains(ext) {
+                    return true
+                }
+            }
+            for identifier in provider.registeredTypeIdentifiers {
+                guard let type = UTType(identifier) else { continue }
+                if audioTypes.contains(where: { type.conforms(to: $0) }) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// NMH-061: delegate drop entry. Rejects non-audio with the existing error copy.
+    public func performDrop(info: DropInfo) -> Bool {
+        guard canAcceptDrop(info: info) else {
+            errorMessage = "Please drop an audio file."
+            return false
+        }
+        let providers = info.itemProviders(for: [.fileURL])
+        guard !providers.isEmpty else {
+            errorMessage = "Please drop an audio file."
+            return false
+        }
+        Task { @MainActor [weak self] in
+            var urls: [URL] = []
+            for provider in providers {
+                guard let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) else { continue }
+                if let url = item as? URL {
+                    urls.append(url)
+                } else if let data = item as? Data {
+                    if let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        urls.append(url)
+                    } else if let string = String(data: data, encoding: .utf8),
+                              let url = URL(string: string) {
+                        urls.append(url)
+                    }
+                }
+            }
+            guard !urls.isEmpty else {
+                self?.errorMessage = "Please drop an audio file."
+                return
+            }
+            _ = self?.handleDrop(urls: urls)
+        }
         return true
     }
 

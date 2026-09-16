@@ -54,6 +54,15 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func canAcceptDrop_isFalseForTxtAndTrueForWav() {
+        let vm = makeViewModel()
+        let txt = URL(fileURLWithPath: "/Users/music/song.txt")
+        let wav = URL(fileURLWithPath: "/Users/music/song.wav")
+        #expect(vm.canAcceptDrop(urls: [txt]) == false)
+        #expect(vm.canAcceptDrop(urls: [wav]) == true)
+    }
+
+    @Test
     func testStartSeparationUsesLatestHelperPath() async throws {
         let settingsStore = FakeSettingsStore()
         #expect(settingsStore.stored.helperTools.demucsMlx == nil)
