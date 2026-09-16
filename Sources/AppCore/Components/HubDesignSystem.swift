@@ -1,47 +1,115 @@
 import SwiftUI
 import AppKit
 
-/// macOS 14.2-compatible dynamic light/dark Color helper.
+/// macOS 14.2-compatible dynamic light/dark Color helper, with Increase Contrast pairs.
 ///
 /// This implements the locked "Color(light:dark:)" intent — see RESEARCH Pitfall 1:
 /// `Color(light:dark:)` does NOT exist in any macOS SDK. Use `NSColor(name:dynamicProvider:)` instead.
-/// The macOS appearance system re-resolves the color on light/dark mode change with no app code.
+/// The macOS appearance system re-resolves the color on light/dark and Increase Contrast
+/// with no app ThemeManager. High-contrast appearances exist for `bestMatch(from:)` on 14.2+;
+/// `NSAppearance(named:)` returns nil for those names, so tests inject the match name.
 @usableFromInline
 struct HubDynamicColor {
     @usableFromInline let light: Color
     @usableFromInline let dark: Color
-    @usableFromInline init(light: Color, dark: Color) {
+    @usableFromInline let lightHigh: Color
+    @usableFromInline let darkHigh: Color
+    @usableFromInline init(light: Color, dark: Color, lightHigh: Color? = nil, darkHigh: Color? = nil) {
         self.light = light
         self.dark = dark
+        self.lightHigh = lightHigh ?? light
+        self.darkHigh = darkHigh ?? dark
     }
 }
 
-/// Returns an `NSColor` that flips between `light` and `dark` based on the current
-/// appearance. Explicitly resolves via `.sRGB` color space (Pitfall 8) so the
-/// appearance flip does not shift hues.
+/// Appearances `bestMatch(from:)` may return. High-contrast names are match keys only.
 @usableFromInline
-func hubDynamicColor(light: Color, dark: Color) -> NSColor {
-    NSColor(name: nil) { appearance in
-        // The three dark appearances available on macOS 14.2 (deployment target).
-        // `.accessibilityVibrantHighContrastDarkAqua` is NOT in the macOS 14.2 SDK
-        // (added later); the high-contrast dark path is covered by `.accessibilityHighContrastDarkAqua`.
-        if appearance.bestMatch(from: [
-            .darkAqua,
-            .vibrantDark,
-            .accessibilityHighContrastDarkAqua,
-        ]) != nil {
-            NSColor(dark).usingColorSpace(.sRGB) ?? NSColor.black
-        } else {
-            NSColor(light).usingColorSpace(.sRGB) ?? NSColor.white
-        }
+func hubAppearanceMatchCandidates() -> [NSAppearance.Name] {
+    [
+        .aqua,
+        .darkAqua,
+        .vibrantLight,
+        .vibrantDark,
+        .accessibilityHighContrastAqua,
+        .accessibilityHighContrastDarkAqua,
+        .accessibilityHighContrastVibrantLight,
+        .accessibilityHighContrastVibrantDark,
+    ]
+}
+
+/// Returns an `NSColor` that flips between light/dark and Increase Contrast pairs.
+/// Explicitly resolves via `.sRGB` color space (Pitfall 8) so the appearance flip does not shift hues.
+///
+/// Pass `matching:` to resolve a `bestMatch` name directly. AppKit cannot instantiate
+/// high-contrast appearances with `NSAppearance(named:)` (those names return nil).
+@usableFromInline
+func hubDynamicColor(
+    light: Color,
+    dark: Color,
+    lightHigh: Color? = nil,
+    darkHigh: Color? = nil,
+    matching appearanceName: NSAppearance.Name? = nil
+) -> NSColor {
+    let resolvedLightHigh = lightHigh ?? light
+    let resolvedDarkHigh = darkHigh ?? dark
+    if let appearanceName {
+        return hubNSColor(
+            matching: appearanceName,
+            light: light,
+            dark: dark,
+            lightHigh: resolvedLightHigh,
+            darkHigh: resolvedDarkHigh
+        )
     }
+    return NSColor(name: nil) { appearance in
+        hubNSColor(
+            matching: appearance.bestMatch(from: hubAppearanceMatchCandidates()),
+            light: light,
+            dark: dark,
+            lightHigh: resolvedLightHigh,
+            darkHigh: resolvedDarkHigh
+        )
+    }
+}
+
+/// Picks the light/dark or Increase Contrast pair for an `NSAppearance.Name` from `bestMatch(from:)`.
+@usableFromInline
+func hubNSColor(
+    matching appearanceName: NSAppearance.Name?,
+    light: Color,
+    dark: Color,
+    lightHigh: Color,
+    darkHigh: Color
+) -> NSColor {
+    let picked: Color
+    let fallback: NSColor
+    switch appearanceName {
+    case .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark:
+        picked = darkHigh
+        fallback = .black
+    case .accessibilityHighContrastAqua, .accessibilityHighContrastVibrantLight:
+        picked = lightHigh
+        fallback = .white
+    case .darkAqua, .vibrantDark:
+        picked = dark
+        fallback = .black
+    default:
+        picked = light
+        fallback = .white
+    }
+    return NSColor(picked).usingColorSpace(.sRGB) ?? fallback
 }
 
 extension Color {
     /// Convenience initializer that wraps a `HubDynamicColor` (the macOS 14.2-compatible
     /// equivalent of the locked "Color(light:dark:)" pattern).
     init(_ hub: HubDynamicColor) {
-        self = Color(nsColor: hubDynamicColor(light: hub.light, dark: hub.dark))
+        self = Color(nsColor: hubDynamicColor(
+            light: hub.light,
+            dark: hub.dark,
+            lightHigh: hub.lightHigh,
+            darkHigh: hub.darkHigh
+        ))
     }
 }
 
@@ -169,18 +237,23 @@ public enum HubDesignSystem {
     //
     // 14+ purpose-named color roles (DS-02/DS-03). Dark-mode RGB values are locked by
     // calm-native.css; light-mode values are coherent low-chroma variants (CONTEXT.md
-    // "the agent's Discretion"). Every token flips automatically on appearance change
+    // "the agent's Discretion"). Increase Contrast pairs live on the same provider
+    // (lightHigh/darkHigh). Every token flips automatically on appearance change
     // via `NSColor(name:dynamicProvider:)` — no mutable global ThemeManager (DS-09).
 
     public enum Palette {
         /// Window background, opaque. calm-native --canvas rgb(17,18,21) — inky near-black, faint cool.
         public static let canvas = Color(HubDynamicColor(
             light: Color(.sRGB, red: 249/255, green: 249/255, blue: 248/255, opacity: 1),
-            dark:  Color(.sRGB, red: 17/255,  green: 18/255,  blue: 21/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 17/255,  green: 18/255,  blue: 21/255,  opacity: 1),
+            lightHigh: Color(.sRGB, red: 255/255, green: 255/255, blue: 255/255, opacity: 1),
+            darkHigh:  Color(.sRGB, red: 12/255,  green: 13/255,  blue: 16/255,  opacity: 1)))
         /// NavigationSplitView sidebar. calm-native --sidebar rgb(23,24,28).
         public static let sidebar = Color(HubDynamicColor(
             light: Color(.sRGB, red: 238/255, green: 239/255, blue: 239/255, opacity: 1),
-            dark:  Color(.sRGB, red: 23/255,  green: 24/255,  blue: 28/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 23/255,  green: 24/255,  blue: 28/255,  opacity: 1),
+            lightHigh: Color(.sRGB, red: 226/255, green: 226/255, blue: 226/255, opacity: 1),
+            darkHigh:  Color(.sRGB, red: 18/255,  green: 19/255,  blue: 23/255,  opacity: 1)))
         /// Grouped content surface. calm-native --surface rgb(28,29,33).
         public static let surface = Color(HubDynamicColor(
             light: Color(.sRGB, red: 246/255, green: 246/255, blue: 245/255, opacity: 1),
@@ -192,19 +265,25 @@ public enum HubDesignSystem {
         /// Divider/stroke between surfaces. calm-native --separator rgb(52,54,60) — crisp hairline on near-black.
         public static let separator = Color(HubDynamicColor(
             light: Color(.sRGB, red: 222/255, green: 222/255, blue: 222/255, opacity: 1),
-            dark:  Color(.sRGB, red: 52/255,  green: 54/255,  blue: 60/255,  opacity: 1)))
-        /// Primary readable text. calm-native --textPrimary rgb(237,238,241).
+            dark:  Color(.sRGB, red: 52/255,  green: 54/255,  blue: 60/255,  opacity: 1),
+            lightHigh: Color(.sRGB, red: 150/255, green: 150/255, blue: 150/255, opacity: 1),
+            darkHigh:  Color(.sRGB, red: 90/255,  green: 92/255,  blue: 100/255, opacity: 1)))
+        /// Primary readable text. calm-native --textPrimary rgb(237,238,241). Dark high-contrast keeps the same RGB.
         public static let textPrimary = Color(HubDynamicColor(
             light: Color(.sRGB, red: 28/255,  green: 28/255,  blue: 30/255,  opacity: 1),
             dark:  Color(.sRGB, red: 237/255, green: 238/255, blue: 241/255, opacity: 1)))
         /// Secondary readable text. calm-native --textSecondary rgb(156,158,167).
         public static let textSecondary = Color(HubDynamicColor(
             light: Color(.sRGB, red: 90/255,  green: 90/255,  blue: 98/255,  opacity: 1),
-            dark:  Color(.sRGB, red: 156/255, green: 158/255, blue: 167/255, opacity: 1)))
+            dark:  Color(.sRGB, red: 156/255, green: 158/255, blue: 167/255, opacity: 1),
+            lightHigh: Color(.sRGB, red: 60/255,  green: 60/255,  blue: 66/255,  opacity: 1),
+            darkHigh:  Color(.sRGB, red: 196/255, green: 198/255, blue: 206/255, opacity: 1)))
         /// Tertiary/muted text. calm-native --textTertiary rgb(108,110,120).
         public static let textTertiary = Color(HubDynamicColor(
             light: Color(.sRGB, red: 132/255, green: 132/255, blue: 136/255, opacity: 1),
-            dark:  Color(.sRGB, red: 108/255, green: 110/255, blue: 120/255, opacity: 1)))
+            dark:  Color(.sRGB, red: 108/255, green: 110/255, blue: 120/255, opacity: 1),
+            lightHigh: Color(.sRGB, red: 80/255,  green: 80/255,  blue: 86/255,  opacity: 1),
+            darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
         /// Subtle neutral selection fill (low-chroma, NOT accent). calm-native --selection rgb(46,48,54).
         public static let selection = Color(HubDynamicColor(
             light: Color(.sRGB, red: 225/255, green: 225/255, blue: 224/255, opacity: 1),

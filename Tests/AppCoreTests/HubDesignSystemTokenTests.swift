@@ -1,4 +1,4 @@
-import AppCore
+@testable import AppCore
 import AppKit
 import SwiftUI
 import XCTest
@@ -101,6 +101,60 @@ final class HubDesignSystemTokenTests: XCTestCase {
         XCTAssertEqual(
             HubDesignSystem.ControlState.allCases,
             [.normal, .hover, .pressed, .selected, .disabled, .warning, .error]
+        )
+    }
+
+    /// Increase Contrast must not share standard dark RGB. AppKit cannot instantiate
+    /// `.accessibilityHighContrastDarkAqua` via `NSAppearance(named:)` (returns nil), so the
+    /// match name is injected through `hubDynamicColor(light:dark:lightHigh:darkHigh:matching:)`.
+    func testHighContrastSecondaryDiffersFromStandard() throws {
+        let light = Color(.sRGB, red: 90 / 255, green: 90 / 255, blue: 98 / 255, opacity: 1)
+        let dark = Color(.sRGB, red: 156 / 255, green: 158 / 255, blue: 167 / 255, opacity: 1)
+        let lightHigh = Color(.sRGB, red: 60 / 255, green: 60 / 255, blue: 66 / 255, opacity: 1)
+        let darkHigh = Color(.sRGB, red: 196 / 255, green: 198 / 255, blue: 206 / 255, opacity: 1)
+
+        let standard = hubDynamicColor(
+            light: light,
+            dark: dark,
+            lightHigh: lightHigh,
+            darkHigh: darkHigh,
+            matching: .darkAqua
+        )
+        let increased = hubDynamicColor(
+            light: light,
+            dark: dark,
+            lightHigh: lightHigh,
+            darkHigh: darkHigh,
+            matching: .accessibilityHighContrastDarkAqua
+        )
+        XCTAssertNotEqual(standard.redComponent, increased.redComponent, accuracy: 0.002)
+        XCTAssertNotEqual(standard.greenComponent, increased.greenComponent, accuracy: 0.002)
+        XCTAssertNotEqual(standard.blueComponent, increased.blueComponent, accuracy: 0.002)
+
+        let aqua = hubDynamicColor(
+            light: light,
+            dark: dark,
+            lightHigh: lightHigh,
+            darkHigh: darkHigh,
+            matching: .aqua
+        )
+        XCTAssertNotEqual(aqua.redComponent, standard.redComponent, accuracy: 0.002)
+
+        let source = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            source.contains("public static let textSecondary"),
+            "Palette.textSecondary must remain the shipping token."
+        )
+        XCTAssertTrue(
+            source.contains("darkHigh:  Color(.sRGB, red: 196/255, green: 198/255, blue: 206/255, opacity: 1)"),
+            "Palette.textSecondary must ship the Increase Contrast dark pair."
+        )
+        XCTAssertTrue(
+            source.contains("bestMatch(from: hubAppearanceMatchCandidates())"),
+            "High-contrast appearances must resolve via bestMatch, not a second ThemeManager."
         )
     }
 

@@ -47,6 +47,8 @@ public enum HubSurfaceLevel: Sendable {
 
 /// Applies a `HubSurfaceLevel` + interactive `ControlState` as a coherent surface.
 public struct HubSurface: ViewModifier {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     private let level: HubSurfaceLevel
     private let state: HubDesignSystem.ControlState
     private let radiusOverride: CGFloat?
@@ -143,6 +145,9 @@ public struct HubSurface: ViewModifier {
     }
 
     private var strokeWidth: CGFloat {
+        if colorSchemeContrast == .increased, level == .card || level == .panel {
+            return 2
+        }
         switch state {
         case .selected: return 0.75
         case .warning, .error: return 0.75
