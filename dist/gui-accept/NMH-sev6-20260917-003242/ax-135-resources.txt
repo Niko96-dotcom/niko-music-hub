@@ -1,0 +1,10 @@
+total 400
+drwxr-xr-x@ 6 niko  staff     192 Sep 16 23:57 .
+drwxr-xr-x@ 8 niko  staff     256 Sep 16 23:57 ..
+-rw-r--r--@ 1 niko  staff  184923 Sep 16 23:57 AppIcon.icns
+-rw-r--r--@ 1 niko  staff    1668 Sep 16 23:57 AppLogo-48.png
+-rw-r--r--@ 1 niko  staff    3279 Sep 16 23:57 AppLogo-96.png
+-rw-r--r--@ 1 niko  staff    6154 Sep 16 23:57 Sparkle-LICENSE.txt
+/Users/niko/Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/worktrees/integration/dist/gui-accept/NMH-sev6-20260917-003242/NikoMusicHub.app/Contents/Resources/AppLogo-48.png
+/Users/niko/Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/worktrees/integration/dist/gui-accept/NMH-sev6-20260917-003242/NikoMusicHub.app/Contents/Resources/AppIcon.icns
+/Users/niko/Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/worktrees/integration/dist/gui-accept/NMH-sev6-20260917-003242/NikoMusicHub.app/Contents/Resources/AppLogo-96.png
