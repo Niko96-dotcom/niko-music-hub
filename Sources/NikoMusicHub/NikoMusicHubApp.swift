@@ -40,6 +40,7 @@ struct NikoMusicHubApp: App {
                 router: composition.router,
                 session: composition.shellSession
             )
+            HubHelpCommands(router: composition.router)
         }
 
         Settings {
@@ -52,6 +53,13 @@ struct NikoMusicHubApp: App {
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }
+
+        Window(HubHelpTopics.windowTitle, id: HubHelpTopics.windowID) {
+            HubHelpWindow()
+                .preferredColorScheme(appearanceController.preferredColorScheme)
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 560, height: 640)
 
         MenuBarExtra {
             MenuBarMenuView(
