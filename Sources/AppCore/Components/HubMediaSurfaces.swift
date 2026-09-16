@@ -14,7 +14,6 @@ public struct HubWaveformSurface: View {
     private let variant: HubWaveformSurfaceVariant
     private let isEnabled: Bool
     private let showsSurface: Bool
-    private let onSeek: ((Double) -> Void)?
 
     public init(
         peaks: [Double],
@@ -22,14 +21,13 @@ public struct HubWaveformSurface: View {
         variant: HubWaveformSurfaceVariant = .archivePreview,
         isEnabled: Bool = true,
         showsSurface: Bool = true,
-        onSeek: ((Double) -> Void)? = nil
+        onSeek _: ((Double) -> Void)? = nil
     ) {
         self.peaks = peaks
         self.progress = progress
         self.variant = variant
         self.isEnabled = isEnabled
         self.showsSurface = showsSurface
-        self.onSeek = onSeek
     }
 
     public var body: some View {
@@ -69,14 +67,6 @@ public struct HubWaveformSurface: View {
                 }
             }
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        guard isEnabled, !(normalizedPeaks.isEmpty || variant == .empty), let onSeek else { return }
-                        let fraction = min(max(0, value.location.x / max(geometry.size.width, 1)), 1)
-                        onSeek(Double(fraction))
-                    }
-            )
         }
         .frame(height: height)
     }

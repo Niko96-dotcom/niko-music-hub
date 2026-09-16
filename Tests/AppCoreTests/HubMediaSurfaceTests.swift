@@ -62,6 +62,15 @@ final class HubMediaSurfaceTests: XCTestCase {
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing media surface source: \(required)")
         }
+
+        XCTAssertFalse(
+            source.contains("DragGesture"),
+            "Waveform is display-only; seek is the persistent Preview position slider."
+        )
+        XCTAssertFalse(
+            source.contains("accessibilityAdjustableAction"),
+            "VoiceOver seek is the persistent player slider, not the waveform."
+        )
     }
 }
 
