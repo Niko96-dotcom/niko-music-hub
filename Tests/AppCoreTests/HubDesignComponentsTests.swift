@@ -158,6 +158,38 @@ final class HubDesignComponentsTests: XCTestCase {
         )
     }
 
+    func testDesignSystemPreviewForcesAppearanceVariants() throws {
+        let source = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDesignSystemPreview.swift",
+            encoding: .utf8
+        )
+        for title in [
+            "Design System · Light",
+            "Design System · Dark",
+            "Design System · Increased Contrast",
+            "Design System · Reduce Transparency",
+        ] {
+            XCTAssertTrue(
+                source.contains("#Preview(\"\(title)\""),
+                "Missing forced preview: \(title)"
+            )
+        }
+        XCTAssertTrue(source.contains(".preferredColorScheme(.light)"), "Missing light forcing")
+        XCTAssertTrue(source.contains(".preferredColorScheme(.dark)"), "Missing dark forcing")
+        // NMH-078 deviation: FIX-SPECS spells the public read-only keys
+        // (`\.colorSchemeContrast`, `\.accessibilityReduceTransparency`), which do not
+        // compile as `.environment` arguments on this SDK. The previews force the settable
+        // backing stores instead (verified at runtime to propagate to the public keys).
+        XCTAssertTrue(
+            source.contains(".environment(\\._colorSchemeContrast, .increased)"),
+            "Missing increased-contrast forcing"
+        )
+        XCTAssertTrue(
+            source.contains(".environment(\\._accessibilityReduceTransparency, true)"),
+            "Missing reduce-transparency forcing"
+        )
+    }
+
     func testHubButtonsUseNativeGlassStylesWhenAvailable() throws {
         let iconSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubIconButton.swift",

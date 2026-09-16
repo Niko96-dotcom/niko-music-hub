@@ -483,4 +483,40 @@ private func rgbString(_ color: Color) -> String {
     return "rgb(\(r),\(g),\(b))"
 }
 
+// MARK: - Forced Appearance / Accessibility Previews (NMH-078)
+
+#Preview("Design System · Light") {
+    DesignSystemPreviewView()
+        .preferredColorScheme(.light)
+        .frame(width: 720, height: 900)
+}
+
+#Preview("Design System · Dark") {
+    DesignSystemPreviewView()
+        .preferredColorScheme(.dark)
+        .frame(width: 720, height: 900)
+}
+
+#Preview("Design System · Increased Contrast") {
+    DesignSystemPreviewView()
+        .preferredColorScheme(.dark)
+        // NMH-078 deviation: FIX-SPECS spells `.environment(\.colorSchemeContrast, .increased)`,
+        // but `colorSchemeContrast` is a get-only EnvironmentValues key on this SDK
+        // (SwiftUICore declares it `{ get }`; only `_colorSchemeContrast` is `{ get set }`),
+        // so the public-key form does not compile. The underscored key is the settable
+        // backing store and verified at runtime to propagate to `\.colorSchemeContrast`.
+        .environment(\._colorSchemeContrast, .increased)
+        .frame(width: 720, height: 900)
+}
+
+#Preview("Design System · Reduce Transparency") {
+    DesignSystemPreviewView()
+        .preferredColorScheme(.dark)
+        // NMH-078 deviation: same as above — `accessibilityReduceTransparency` is get-only;
+        // `_accessibilityReduceTransparency` is the settable backing store, verified at
+        // runtime to propagate to `\.accessibilityReduceTransparency`.
+        .environment(\._accessibilityReduceTransparency, true)
+        .frame(width: 720, height: 900)
+}
+
 #endif
