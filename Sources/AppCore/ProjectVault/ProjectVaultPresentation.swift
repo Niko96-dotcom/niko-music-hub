@@ -309,7 +309,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         } else if record.locations.contains(where: { $0.kind == .archive && $0.availability != .missing }) {
             state = .archived
             primaryAction = .restoreAndOpen
-            explanation = "Restore & Open copies this song into Active Projects, verifies the copy, then opens its newest project in the matching DAW. The archive stays intact."
+            explanation = "Get Local & Open copies this song into Active Projects, verifies the copy, then opens its newest project in the matching DAW. The archive stays intact."
         } else {
             state = .needsAttention
             primaryAction = .review

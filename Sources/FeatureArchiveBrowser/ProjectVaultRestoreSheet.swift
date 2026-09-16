@@ -27,7 +27,7 @@ struct ProjectVaultRestoreSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Get Local & Open").font(.title2)
             Text(request.song.effectiveDisplayTitle).font(.headline)
-            Text("Restore the complete project, then open the version you choose.")
+            Text("Copies the complete project into Active Projects, then opens the version you choose.")
                 .foregroundStyle(.secondary)
             Picker("Version to open", selection: $selectedPath) {
                 Text("Newest available version").tag("")
