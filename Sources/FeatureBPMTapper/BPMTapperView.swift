@@ -65,7 +65,8 @@ public struct BPMTapperView: View {
                 Text(displayedBPMText)
                     .font(HubDesignSystem.Typography.display())
                     .monospacedDigit()
-                    .accessibilityLabel("Current BPM")
+                    .accessibilityLabel(bpmReadoutAnnouncement.label)
+                    .accessibilityValue(bpmReadoutAnnouncement.value)
 
                 Text("BPM")
                     .font(HubDesignSystem.Typography.body())
@@ -308,6 +309,10 @@ public struct BPMTapperView: View {
             return "--"
         }
         return formatBPM(displayedBPM)
+    }
+
+    private var bpmReadoutAnnouncement: BPMReadoutAnnouncement {
+        BPMReadoutAnnouncement(displayedBPMText: displayedBPMText)
     }
 
     private var progressText: String {
