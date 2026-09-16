@@ -20,6 +20,17 @@ public enum AppAppearance: String, CaseIterable, Codable, Identifiable, Sendable
         }
     }
 
+    /// Tooltip help for the Appearance chips (NMH-068). Light/Dark pin the app
+    /// appearance and override the system setting until Follow System is chosen.
+    public var help: String? {
+        switch self {
+        case .followSystem:
+            return nil
+        case .light, .dark:
+            return "Overrides the system appearance until you choose Follow System."
+        }
+    }
+
     public var preferredColorScheme: ColorScheme? {
         switch self {
         case .followSystem:

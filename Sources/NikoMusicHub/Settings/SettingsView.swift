@@ -222,7 +222,7 @@ struct SettingsView: View {
                 HubChoiceChips(
                     "Appearance",
                     selection: session.appearanceBinding,
-                    choices: AppAppearance.allCases.map { .init($0, label: $0.label) }
+                    choices: AppAppearance.allCases.map { .init($0, label: $0.label, help: $0.help) }
                 )
                 .disabled(session.settingsLoadError != nil)
             }
