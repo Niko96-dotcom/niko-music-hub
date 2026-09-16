@@ -212,7 +212,7 @@ struct ArchiveBoardView: View {
             .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             Text(viewModel.isScanning
-                ? "Songs will appear on the board as the scan finds them."
+                ? "Scanning archive. This can take a while on a large folder. Songs already in the cache stay visible."
                 : "Add archive folder to fill the board.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
