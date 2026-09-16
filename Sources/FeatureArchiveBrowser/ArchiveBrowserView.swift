@@ -221,6 +221,8 @@ struct ArchiveBrowserView: View {
         )) {
             ArchiveFirstRunView(onChooseRoot: chooseRoot)
                 .interactiveDismissDisabled(true)
+                // NMH-136: trap VoiceOver in first-run; Esc stays blocked above.
+                .accessibilityAddTraits(.isModal)
         }
         .alert(
             workflowDoneAlertTitle,
