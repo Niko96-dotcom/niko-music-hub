@@ -9,6 +9,7 @@ enum VaultManifestCopier {
         fileManager: FileManager,
         toArchive: Bool = false
     ) throws {
+        try Task.checkCancellation()
         try manifest.validatePersistedContentEnvelope()
         try manifest.archiveStorageManifest.validatePersistedContentEnvelope()
         let sourceRoot = sourceRoot.standardizedFileURL
@@ -26,6 +27,7 @@ enum VaultManifestCopier {
         try fileManager.createDirectory(at: destinationRoot, withIntermediateDirectories: false)
 
         for entry in entries where entry.type == .directory {
+            try Task.checkCancellation()
             let paths = try manifestEntryURLs(
                 relativePath: entry.relativePath,
                 storedPath: manifest.archiveRelativePath(for: entry.relativePath),
@@ -45,6 +47,7 @@ enum VaultManifestCopier {
         }
 
         for entry in entries where entry.type == .regularFile {
+            try Task.checkCancellation()
             let paths = try manifestEntryURLs(
                 relativePath: entry.relativePath,
                 storedPath: manifest.archiveRelativePath(for: entry.relativePath),
@@ -71,6 +74,7 @@ enum VaultManifestCopier {
                 throw VaultManifestError.mismatch
             }
             try fileManager.copyItem(at: paths.source, to: paths.destination)
+            try Task.checkCancellation()
         }
     }
 

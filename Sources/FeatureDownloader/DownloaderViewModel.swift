@@ -9,6 +9,7 @@ public enum DownloadState: Equatable {
     case readyToDownload
     case downloading
     case completed
+    case canceled
     case failed(String)
 
     public static func == (lhs: DownloadState, rhs: DownloadState) -> Bool {
@@ -18,6 +19,7 @@ public enum DownloadState: Equatable {
         case (.readyToDownload, .readyToDownload): return true
         case (.downloading, .downloading): return true
         case (.completed, .completed): return true
+        case (.canceled, .canceled): return true
         case let (.failed(lhsMsg), .failed(rhsMsg)): return lhsMsg == rhsMsg
         default: return false
         }
@@ -162,7 +164,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     }
 
     public func startDownload() {
-        guard case .readyToDownload = downloadState,
+        guard downloadState == .readyToDownload || downloadState == .canceled,
               let sourceURL = Self.validatedHTTPURL(urlText) else {
             return
         }
@@ -213,7 +215,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         downloadStartTask = Task { @MainActor [weak self] in
             do {
                 let observedJob = try await useCase.simulateAndEnqueue(url: sourceURL, options: options)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    self?.context.jobRunner.cancelJob(id: observedJob.id)
+                    return
+                }
                 self?.acceptStartedJob(observedJob, sourceURL: sourceURL, generation: generation)
             } catch is CancellationError {
                 return
@@ -273,8 +278,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             statusMessage = nil
             return true
         case .canceled:
-            downloadState = .failed("Download was cancelled.")
-            statusMessage = nil
+            downloadState = .canceled
+            statusMessage = DownloaderCopy.downloadCanceledDetail
+            errorMessage = nil
             return true
         case .queued, .running:
             return false
@@ -330,6 +336,20 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 .sorted { $0.createdAt > $1.createdAt }
                 .prefix(Self.recentDownloadsLimit)
         )
+    }
+
+    public func cancelDownload() {
+        guard downloadState == .downloading else { return }
+        if let id = job?.id {
+            context.jobRunner.cancelJob(id: id)
+            return
+        }
+        observationGeneration &+= 1
+        downloadStartTask?.cancel()
+        downloadStartTask = nil
+        downloadState = .canceled
+        statusMessage = DownloaderCopy.downloadCanceledDetail
+        errorMessage = nil
     }
 
     public func retryAfterFailure() {

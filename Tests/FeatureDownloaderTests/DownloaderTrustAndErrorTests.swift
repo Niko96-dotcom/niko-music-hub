@@ -64,4 +64,12 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
         XCTAssertFalse(DownloaderCopy.destinationLabel.isEmpty)
         XCTAssertFalse(DownloaderCopy.download.isEmpty)
     }
+
+    func testCanceledCopyIsSecondaryStatusNotFailure() {
+        XCTAssertEqual(DownloaderCopy.downloadCanceled, "Download canceled")
+        XCTAssertEqual(
+            DownloaderCopy.downloadCanceledDetail,
+            "Download canceled. The Output Inbox was not updated."
+        )
+    }
 }

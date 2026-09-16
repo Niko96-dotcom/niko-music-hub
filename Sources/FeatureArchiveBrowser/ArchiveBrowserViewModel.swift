@@ -94,12 +94,14 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
+    @Published var pendingStopTransferConfirmation = false
     @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
     let identityReviewViewModel: ProjectIdentityReviewViewModel
     /// Window undo stack for workflow-status changes. Views bind this from
     /// `@Environment(\.undoManager)`. Undo of Mark Done is status-only.
     weak var workflowUndoManager: UndoManager?
     var projectVaultQueueTask: Task<Void, Never>?
+    var projectVaultStopRequested = false
     var projectVaultQueueFailures: [String] = []
     var projectVaultQueueBatchCount = 0
     /// Per-song Project Vault card state prepared when catalog, snapshot, or

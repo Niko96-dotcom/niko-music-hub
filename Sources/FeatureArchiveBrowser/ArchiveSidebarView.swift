@@ -84,6 +84,17 @@ struct ArchiveSidebarView: View {
                 viewModel.viewMode = .board
             }
 
+            if viewModel.isScanning {
+                HubLabeledButton(
+                    icon: "xmark",
+                    label: CancelCopy.cancelScan,
+                    style: .secondary,
+                    help: CancelCopy.cancelScan
+                ) {
+                    viewModel.cancelScan()
+                }
+            }
+
             Menu {
                 Button(viewModel.isScanning ? "Scanning archive…" : "Scan archive") {
                     Task { await viewModel.scan() }

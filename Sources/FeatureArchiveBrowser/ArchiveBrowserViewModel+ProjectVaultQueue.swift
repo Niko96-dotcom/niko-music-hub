@@ -48,6 +48,24 @@ extension ArchiveBrowserViewModel {
         setProjectVaultStatusMessage("Queued request cancelled for \(song.effectiveDisplayTitle).")
     }
 
+    public var hasActiveProjectVaultTransfer: Bool { projectVaultActiveOperation != nil }
+
+    public func requestStopActiveProjectVaultTransfer() {
+        guard projectVaultActiveOperation != nil else { return }
+        pendingStopTransferConfirmation = true
+    }
+
+    public func keepActiveProjectVaultTransfer() {
+        pendingStopTransferConfirmation = false
+    }
+
+    public func confirmStopActiveProjectVaultTransfer() {
+        pendingStopTransferConfirmation = false
+        guard projectVaultActiveOperation != nil else { return }
+        projectVaultStopRequested = true
+        projectVaultQueueTask?.cancel()
+    }
+
     func cancelPendingProjectVaultOperations() {
         for operation in projectVaultPendingOperations {
             projectVaultBusySongIDs.remove(operation.songID)
@@ -112,6 +130,11 @@ extension ArchiveBrowserViewModel {
                 succeeded = false
             } else {
                 succeeded = await operation.perform(self)
+            }
+            if Task.isCancelled || self.projectVaultStopRequested {
+                self.projectVaultOperationMessages[operation.songID] = CancelCopy.transferStopped
+                self.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                self.projectVaultStopRequested = false
             }
             self.projectVaultOperationMessages[operation.songID] = self.statusBaseMessage
             if !succeeded { self.projectVaultQueueFailures.append(operation.songName) }

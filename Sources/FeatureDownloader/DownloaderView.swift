@@ -28,6 +28,9 @@ public struct DownloaderView: View {
                 progressSection
                 logArea
             }
+            if viewModel.downloadState == .canceled {
+                canceledSection
+            }
             if viewModel.downloadState == .completed, let message = viewModel.errorMessage {
                 handoffWarningSection(message: message)
             }
@@ -79,6 +82,8 @@ public struct DownloaderView: View {
             return viewModel.statusMessage ?? DownloaderCopy.readyToDownload
         case .downloading:
             return viewModel.statusMessage ?? DownloaderCopy.downloading
+        case .canceled:
+            return DownloaderCopy.downloadCanceled
         case .completed:
             return DownloaderCopy.downloadComplete
         case let .failed(message):
@@ -103,7 +108,7 @@ public struct DownloaderView: View {
                 label: DownloaderCopy.download,
                 style: .primary,
                 help: "Download from URL",
-                isEnabled: viewModel.downloadState == .readyToDownload
+                isEnabled: viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled
             ) {
                 viewModel.startDownload()
             }
@@ -305,9 +310,46 @@ public struct DownloaderView: View {
             Text("\(Int(viewModel.progress * 100))% complete")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+
+            cancelDownloadControl
         }
         .padding(12)
         .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
+    }
+
+    private var canceledSection: some View {
+        Text(viewModel.statusMessage ?? DownloaderCopy.downloadCanceledDetail)
+            .font(HubDesignSystem.Typography.bodySmall())
+            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
+    }
+
+    private var cancelDownloadControl: some View {
+        HStack {
+            HubLabeledButton(
+                icon: "xmark",
+                label: CancelCopy.cancelDownload,
+                style: .secondary,
+                help: CancelCopy.cancelDownload
+            ) {
+                viewModel.cancelDownload()
+            }
+            Button(CancelCopy.cancelDownload) {
+                viewModel.cancelDownload()
+            }
+            .keyboardShortcut(.cancelAction)
+            .hidden()
+            .accessibilityHidden(true)
+            Button(CancelCopy.cancelDownload) {
+                viewModel.cancelDownload()
+            }
+            .keyboardShortcut(".", modifiers: .command)
+            .hidden()
+            .accessibilityHidden(true)
+        }
     }
 
     private var logArea: some View {

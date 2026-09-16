@@ -21,6 +21,12 @@ extension ArchiveBrowserViewModel {
         scanOrchestrator.scanSync()
     }
 
+    public func cancelScan() {
+        scanOrchestrator.cancelActiveScan()
+    }
+
+    public var isArchiveScanning: Bool { isScanning }
+
     func invalidateActiveScanForRootChange() {
         rootGeneration &+= 1
         isScanning = false

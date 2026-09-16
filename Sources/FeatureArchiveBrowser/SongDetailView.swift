@@ -331,6 +331,14 @@ struct SongDetailView: View {
                 if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
                     if viewModel.projectVaultActiveOperation?.songID == liveSong.id {
                         ProgressView(message).controlSize(.small)
+                        HubLabeledButton(
+                            icon: "xmark",
+                            label: CancelCopy.cancelTransfer,
+                            style: .secondary,
+                            help: CancelCopy.cancelTransfer
+                        ) {
+                            viewModel.requestStopActiveProjectVaultTransfer()
+                        }
                         if let scope = viewModel.projectVaultRestoreProgress?.scopeDescription {
                             Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                         }

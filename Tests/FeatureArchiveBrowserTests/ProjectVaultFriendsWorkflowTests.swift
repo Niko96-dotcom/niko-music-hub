@@ -308,6 +308,40 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
     }
 
+    func testCancelActiveTransferDoesNotRemoveActive() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let provider = FriendsHoldingWriteProvider(root: fixture.archive)
+        let model = fixture.viewModel(runtime: try fixture.runtime(provider: provider))
+        await model.scan()
+        let song = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let archiveRootBefore = fixture.archive
+
+        model.archiveInProjectVault(song, trigger: .backupCopy)
+        try await waitUntil { provider.didStartWrite }
+        XCTAssertEqual(model.projectVaultActiveOperation?.songID, song.id)
+
+        model.requestStopActiveProjectVaultTransfer()
+        XCTAssertTrue(model.pendingStopTransferConfirmation)
+        model.keepActiveProjectVaultTransfer()
+        XCTAssertFalse(model.pendingStopTransferConfirmation)
+        XCTAssertEqual(model.projectVaultActiveOperation?.songID, song.id)
+
+        model.requestStopActiveProjectVaultTransfer()
+        model.confirmStopActiveProjectVaultTransfer()
+        try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archiveRootBefore.path))
+        XCTAssertFalse(
+            try fixture.transferStore().allTransferRecords().contains {
+                VaultTransferOwnershipPolicy.isVerifiedTerminal($0.state)
+            }
+        )
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+    }
+
     func testQueuedArchiveRechecksEmergencyStopAtDispatch() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -903,6 +937,54 @@ final class FriendsWorkflowFixture {
     func cleanup() {
         UserDefaults.standard.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+private final class FriendsHoldingWriteProvider: ArchiveStorageProvider, @unchecked Sendable {
+    private let local: LocalFolderArchiveStorage
+    private let lock = NSLock()
+    private var started = false
+
+    init(root: URL) {
+        local = LocalFolderArchiveStorage(root: root)
+    }
+
+    var didStartWrite: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return started
+    }
+
+    private func markStarted() {
+        lock.lock()
+        started = true
+        lock.unlock()
+    }
+
+    func capabilities() async throws -> StorageCapabilities {
+        try await local.capabilities()
+    }
+    func currentLocality(at location: URL, manifest: VaultManifest) async throws -> ArchiveStorageLocality {
+        try await local.currentLocality(at: location, manifest: manifest)
+    }
+    func prepareForRead(_ location: URL) async throws {
+        try await local.prepareForRead(location)
+    }
+    func prepareForWrite(at root: URL) async throws {
+        markStarted()
+        while !Task.isCancelled {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw CancellationError()
+    }
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        try await local.waitUntilDurable(location)
+    }
+    func materialize(_ location: URL) async throws {
+        try await local.materialize(location)
+    }
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult {
+        try await local.evictIfSupported(location)
     }
 }
 

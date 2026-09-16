@@ -142,6 +142,14 @@ struct ArchiveBoardView: View {
                     Text("Scanning archive…")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    HubLabeledButton(
+                        icon: "xmark",
+                        label: CancelCopy.cancelScan,
+                        style: .secondary,
+                        help: CancelCopy.cancelScan
+                    ) {
+                        viewModel.cancelScan()
+                    }
                 }
             }
 

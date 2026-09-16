@@ -50,12 +50,24 @@ final class ArchiveScanOrchestrator {
     private var activeFullScanTask: Task<ScanResult, Error>?
     private var pendingIncrementalPaths: Set<String> = []
     private var fullRescanPending = false
+    private var userCancelRequested = false
 
     init(host: any ArchiveScanHost) {
         self.host = host
     }
 
+    func cancelActiveScan() {
+        userCancelRequested = true
+        activeFullScanTask?.cancel()
+        if activeScanGeneration == nil, let host, host.isScanning {
+            host.isScanning = false
+            host.setStatusMessage(CancelCopy.scanCanceled)
+            userCancelRequested = false
+        }
+    }
+
     func invalidateForRootChange() {
+        userCancelRequested = false
         activeFullScanTask?.cancel()
         activeFullScanTask = nil
         activeScanGeneration = nil
@@ -118,6 +130,9 @@ final class ArchiveScanOrchestrator {
                 return try await self.performScanDetached(roots: request.roots)
             }
             activeFullScanTask = scanTask
+            if userCancelRequested {
+                scanTask.cancel()
+            }
             let result = try await withTaskCancellationHandler(operation: {
                 try await scanTask.value
             }, onCancel: {
@@ -126,6 +141,10 @@ final class ArchiveScanOrchestrator {
             try applyFullScanResult(result, request: request, scannedAt: scannedAt)
         } catch is CancellationError {
             guard isCurrentScan(request) else { return }
+            if userCancelRequested {
+                host?.setStatusMessage(CancelCopy.scanCanceled)
+                userCancelRequested = false
+            }
         } catch {
             guard isCurrentScan(request) else { return }
             recordScanFailure(error)
@@ -175,6 +194,7 @@ final class ArchiveScanOrchestrator {
             return nil
         }
         guard !host.isScanning else { return nil }
+        userCancelRequested = false
         host.isScanning = true
         activeScanGeneration = host.rootGeneration
         if isBackground {
@@ -276,6 +296,11 @@ final class ArchiveScanOrchestrator {
 
         if let hold = host.incrementalRescanHold {
             await hold()
+        }
+        if userCancelRequested {
+            host.setStatusMessage(CancelCopy.scanCanceled)
+            userCancelRequested = false
+            return
         }
 
         let rootsSnapshot = host.roots

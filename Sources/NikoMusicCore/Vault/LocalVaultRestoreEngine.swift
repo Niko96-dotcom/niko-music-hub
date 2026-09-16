@@ -266,6 +266,7 @@ public actor LocalVaultRestoreEngine {
                 try requireArchiveTransferBinding(&record)
             }
             while record.completedAt == nil {
+                try Task.checkCancellation()
                 if requiresArchiveTransferBinding {
                     try requireArchiveTransferBinding(&record)
                 }
@@ -460,6 +461,10 @@ public actor LocalVaultRestoreEngine {
             return record
         } catch is VaultTransferInterruption {
             throw VaultTransferInterruption()
+        } catch is CancellationError {
+            record.error = "Transfer stopped. Files already copied stay in the archive. The Active Projects folder is not deleted."
+            try persist(&record)
+            throw CancellationError()
         } catch {
             let reportedError: Error
             switch error {
@@ -564,12 +569,14 @@ public actor LocalVaultRestoreEngine {
                 try linkedValidation(recordForValidation.projectID, location, sourceURL)
             }
             try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Task.checkCancellation()
             try VaultManifestCopier.copy(
                 manifest,
                 from: sourceURL,
                 to: stagingURL,
                 fileManager: fileManager.value
             )
+            try Task.checkCancellation()
 
             // Detect any source mutation that raced the admitted exact-entry copy.
             // Verify retained staging even when source postflight fails, so recovery

@@ -509,6 +509,14 @@ extension ArchiveBrowserViewModel {
                     ? "Backup copy verified. The project remains in Active Projects."
                     : "Archived and verified. Find this song in Show archived projects to restore it.")
                 return true
+            } catch is CancellationError {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
+            } catch is VaultTransferInterruption {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
             } catch let error as ProjectVaultRuntimeError {
                 if case .identityAmbiguous(let title, let reason) = error {
                     await model.beginIdentityReview(
@@ -764,6 +772,14 @@ extension ArchiveBrowserViewModel {
                 await model.scan()
                 model.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
                 return true
+            } catch is CancellationError {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
+            } catch is VaultTransferInterruption {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
             } catch {
                 _ = await model.refreshProjectVaultSnapshots()
                 model.setProjectVaultStatusMessage("Restore stopped safely: \(error.localizedDescription). The archive copy was kept.")
@@ -792,6 +808,14 @@ extension ArchiveBrowserViewModel {
                     model.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
                 }
                 return true
+            } catch is CancellationError {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
+            } catch is VaultTransferInterruption {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
             } catch {
                 _ = await model.refreshProjectVaultSnapshots()
                 model.setProjectVaultStatusMessage("Project Vault retry stopped safely: \(error.localizedDescription). Existing copies were kept.")
@@ -832,6 +856,14 @@ extension ArchiveBrowserViewModel {
                     )
                 }
                 return true
+            } catch is CancellationError {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
+            } catch is VaultTransferInterruption {
+                _ = await model.refreshProjectVaultSnapshots()
+                model.setProjectVaultStatusMessage(CancelCopy.transferStopped)
+                return false
             } catch {
                 _ = await model.refreshProjectVaultSnapshots()
                 model.setProjectVaultStatusMessage(

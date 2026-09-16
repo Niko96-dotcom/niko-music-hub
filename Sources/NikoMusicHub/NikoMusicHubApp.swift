@@ -44,6 +44,11 @@ struct NikoMusicHubApp: App {
                 router: composition.router,
                 session: shellSession
             )
+            HubCancelCommands(
+                jobRunner: composition.context.jobRunner,
+                archiveViewModel: composition.archiveViewModel,
+                session: shellSession
+            )
             HubSongCommands()
             HubFindCommands(router: composition.router)
             HubHelpCommands(router: composition.router)

@@ -177,6 +177,17 @@ struct ArchiveBrowserView: View {
                 }
                 return .handled
             }
+            if viewModel.pendingStopTransferConfirmation {
+                return .ignored
+            }
+            if viewModel.projectVaultActiveOperation != nil {
+                viewModel.requestStopActiveProjectVaultTransfer()
+                return .handled
+            }
+            if viewModel.isScanning {
+                viewModel.cancelScan()
+                return .handled
+            }
             switch viewModel.viewMode {
             case .boardDetail, .analytics:
                 viewModel.viewMode = .board
@@ -220,6 +231,23 @@ struct ArchiveBrowserView: View {
             }
         } message: {
             Text(workflowDoneAlertMessage)
+        }
+        .alert(
+            CancelCopy.stopTransferTitle,
+            isPresented: Binding(
+                get: { viewModel.pendingStopTransferConfirmation },
+                set: { if !$0 { viewModel.keepActiveProjectVaultTransfer() } }
+            )
+        ) {
+            Button(CancelCopy.keepTransferring, role: .cancel) {
+                viewModel.keepActiveProjectVaultTransfer()
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(CancelCopy.stopTransfer, role: .destructive) {
+                viewModel.confirmStopActiveProjectVaultTransfer()
+            }
+        } message: {
+            Text(CancelCopy.stopTransferMessage)
         }
         .onAppear { viewModel.workflowUndoManager = undoManager }
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {

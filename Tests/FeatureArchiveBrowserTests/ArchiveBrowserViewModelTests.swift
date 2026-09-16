@@ -611,6 +611,51 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Replacement Song"])
     }
 
+    func testCanceledScanLeavesIsScanningFalse() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cancel-scan-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let gate = CancellationAwareScanGate()
+        let existingSong = Song(
+            folderPath: root.appendingPathComponent("Kept Song", isDirectory: true),
+            originalFolderName: "Kept Song",
+            displayTitle: "Kept Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in
+                try await gate.wait()
+            }
+        )
+        viewModel.roots = [root]
+        viewModel.mutateCatalog {
+            viewModel.scannedSongs = [existingSong]
+            viewModel.songs = [existingSong]
+        }
+
+        let scanTask = Task { await viewModel.scan() }
+        let startDeadline = Date().addingTimeInterval(2)
+        while !gate.isWaiting, Date() < startDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(gate.isWaiting)
+        XCTAssertTrue(viewModel.isScanning)
+
+        viewModel.cancelScan()
+        try await waitUntil("user cancel cleared isScanning") { !viewModel.isScanning }
+        await scanTask.value
+
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusBaseMessage, CancelCopy.scanCanceled)
+        XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Kept Song"])
+        XCTAssertTrue(gate.wasCancelled)
+    }
+
     func testArchiveRootPersistenceFailureIsVisible() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")

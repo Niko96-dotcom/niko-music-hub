@@ -514,6 +514,7 @@ public actor LocalVaultTransferEngine {
         var removalAdmissionDenied = false
         do {
             while true {
+                try Task.checkCancellation()
                 switch record.state {
                 case .activeLocal:
                     try advance(&record, to: .archiveEligible)
@@ -621,6 +622,18 @@ public actor LocalVaultTransferEngine {
             }
         } catch is VaultTransferInterruption {
             throw VaultTransferInterruption()
+        } catch is CancellationError {
+            let origin = record.state
+            record.error = VaultTransferError(
+                origin: origin,
+                reason: .unknown,
+                message: "Transfer stopped. Files already copied stay in the archive. The Active Projects folder is not deleted."
+            )
+            record.state = .failedRecoverable
+            record.retryCount = recoveryPolicy.maximumAutomaticAttempts
+            record.nextRetryAt = nil
+            try persist(&record)
+            throw CancellationError()
         } catch {
             let origin = record.state
             let reason = failureReason(for: error)
@@ -685,11 +698,13 @@ public actor LocalVaultTransferEngine {
                 try fileManager.value.removeItem(at: stagingURL)
             }
             try fileManager.value.createDirectory(at: stagingURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Task.checkCancellation()
             if sourceBefore.archiveLayout != nil {
                 try VaultManifestCopier.copy(sourceBefore, from: sourceURL, to: stagingURL, fileManager: fileManager.value, toArchive: true)
             } else {
                 try fileManager.value.copyItem(at: sourceURL, to: stagingURL)
             }
+            try Task.checkCancellation()
             try Self.removeIgnoredMetadataFiles(
                 below: stagingURL,
                 fileManager: fileManager.value

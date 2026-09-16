@@ -9,6 +9,8 @@ public enum DownloaderCopy {
     public static let downloading = "Downloading..."
     public static let downloadComplete = "Downloaded"
     public static let downloadFailed = "Download failed"
+    public static let downloadCanceled = "Download canceled"
+    public static let downloadCanceledDetail = "Download canceled. The Output Inbox was not updated."
 
     public static let trustNotice = "Downloads are for material you are allowed to access and save."
     public static let sourceLabel = "Source"
