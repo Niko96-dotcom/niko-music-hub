@@ -102,6 +102,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
     @Published var browseFilter: ArchiveBrowseFilter = []
     @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
+    @Published var pendingCollaboratorRemoval: Collaborator?
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?
     /// Archived Project Vault generations are opt-in in the browse projection so the
@@ -886,6 +887,38 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             diagnostics.log(.error, "Collaborator save failed: \(error)")
             return nil
         }
+    }
+
+    /// NMH-090: stage a confirmed address-book removal. The row stays until
+    /// `confirmRemoveCollaborator()` runs; cancel leaves store and songs alone.
+    func requestRemoveCollaborator(_ collaborator: Collaborator) {
+        pendingCollaboratorRemoval = collaborator
+    }
+
+    func cancelRemoveCollaborator() {
+        pendingCollaboratorRemoval = nil
+    }
+
+    /// NMH-090: delete the address-book row, then unassign it from every song.
+    /// Song metadata besides the id list is kept. Music files are untouched.
+    func confirmRemoveCollaborator() {
+        guard let pending = pendingCollaboratorRemoval else { return }
+        pendingCollaboratorRemoval = nil
+        guard let collaboratorStore else { return }
+        do {
+            try collaboratorStore.delete(id: pending.id)
+        } catch {
+            diagnostics.log(.error, "Collaborator remove failed: \(error)")
+            return
+        }
+        loadCollaborators()
+        for song in songs where song.collaboratorIDs.contains(pending.id) {
+            assignCollaborators(
+                to: song,
+                collaboratorIDs: song.collaboratorIDs.filter { $0 != pending.id }
+            )
+        }
+        refreshIntelligenceNow()
     }
 
     func bpmEstimate(for song: Song) -> MixdownBPMEstimate? {

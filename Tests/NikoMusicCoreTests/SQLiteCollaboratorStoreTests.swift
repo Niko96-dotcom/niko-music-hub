@@ -15,6 +15,21 @@ final class SQLiteCollaboratorStoreTests: XCTestCase {
         XCTAssertEqual(loaded.map(\.displayName), ["Jamie"])
     }
 
+    func testDeleteRemovesRow() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collaborator-\(UUID().uuidString).sqlite")
+        let store = try SQLiteCollaboratorStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        let collaborator = Collaborator(displayName: "Jamie")
+
+        try store.upsert(collaborator)
+        XCTAssertEqual(try store.loadAll().map(\.id), [collaborator.id])
+
+        try store.delete(id: collaborator.id)
+
+        XCTAssertTrue(try store.loadAll().isEmpty)
+    }
+
     func testSQLiteCollaboratorStoreUsesTruthfulStepHandlingAndBusyTimeout() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicCore/Persistence/SQLiteCollaboratorStore.swift",
