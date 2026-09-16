@@ -7,6 +7,9 @@ public struct AudioRecorderView: View {
     @StateObject private var viewModel: AudioRecorderViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastPersistedMaxDurationMinutes: Int?
+    // NMH-142: the Record/Stop capsule is a custom `.plain` Button, so track
+    // keyboard focus explicitly (NMH-133 pattern) for Full Keyboard Access.
+    @FocusState private var recordButtonFocused: Bool
 
     public init(context: ToolContext, viewModel: AudioRecorderViewModel) {
         self.context = context
@@ -137,11 +140,7 @@ public struct AudioRecorderView: View {
     private var controlSection: some View {
         ZStack {
             Button {
-                if viewModel.isCaptureActive {
-                    Task { await viewModel.stopRecording() }
-                } else {
-                    Task { await viewModel.startRecording() }
-                }
+                toggleRecording()
             } label: {
                 HStack(spacing: 8) {
                     if viewModel.isCaptureActive {
@@ -165,9 +164,24 @@ public struct AudioRecorderView: View {
                 .padding(.horizontal, 18)
             }
             .buttonStyle(.plain)
+            // NMH-142 (K11): FKA pattern from the BPM tap pad (NMH-029) — Tab
+            // lands here with a visible ring, Space toggles recording. Returning
+            // `.handled` consumes the key so the Button does not fire twice.
+            .focusable()
+            .focused($recordButtonFocused)
+            .onKeyPress(.space) {
+                toggleRecording()
+                return .handled
+            }
             .background {
                 Capsule()
                     .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
+            }
+            .overlay {
+                if recordButtonFocused {
+                    Capsule()
+                        .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+                }
             }
             .disabled(viewModel.recordingState == .stopping)
             .accessibilityLabel(viewModel.isCaptureActive ? "Stop recording" : "Start recording")
@@ -183,6 +197,16 @@ public struct AudioRecorderView: View {
             }
         }
         .padding(12)
+    }
+
+    /// Shared Record/Stop toggle for the capsule Button action and the FKA
+    /// Space handler (NMH-142) — one path so both stay in sync.
+    private func toggleRecording() {
+        if viewModel.isCaptureActive {
+            Task { await viewModel.stopRecording() }
+        } else {
+            Task { await viewModel.startRecording() }
+        }
     }
 
     // Quiet unboxed preference row — chips are already chips; a card around
