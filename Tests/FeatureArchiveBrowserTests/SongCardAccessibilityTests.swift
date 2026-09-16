@@ -29,4 +29,24 @@ final class SongCardAccessibilityTests: XCTestCase {
         XCTAssertEqual(summary, "Neon Hook, No Status")
         XCTAssertFalse(summary.contains("Warning:"))
     }
+
+    func testWarningValuePrefix() {
+        let warned = Song(
+            folderPath: URL(fileURLWithPath: "/fixture/song"),
+            originalFolderName: "Neon Hook",
+            displayTitle: "Neon Hook",
+            scanWarnings: ["Missing mixdown"]
+        )
+        XCTAssertEqual(
+            SongCardAccessibility.warningValue(song: warned),
+            "Warning: Missing mixdown"
+        )
+
+        let clean = Song(
+            folderPath: URL(fileURLWithPath: "/fixture/song"),
+            originalFolderName: "Neon Hook",
+            displayTitle: "Neon Hook"
+        )
+        XCTAssertEqual(SongCardAccessibility.warningValue(song: clean), "")
+    }
 }

@@ -562,6 +562,8 @@ struct ArchiveBoardCardView: View {
                 if !song.displayScanWarnings().isEmpty {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(HubDesignSystem.Palette.warning)
+                        .help(song.displayScanWarnings().joined(separator: " "))
+                        .accessibilityHidden(true)
                 }
                 if song.mainPreviewURL != nil, onPlay != nil {
                     ArchiveCardPlayButton(
@@ -648,6 +650,7 @@ struct ArchiveBoardCardView: View {
         ))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(song.effectiveDisplayTitle)
+        .accessibilityValue(SongCardAccessibility.warningValue(song: song))
         .accessibilityHint("Press to select. Use Open song detail to view details.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
