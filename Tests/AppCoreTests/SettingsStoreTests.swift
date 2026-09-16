@@ -113,6 +113,24 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(settings.audioPreset.sampleRate, 44100)
         XCTAssertEqual(settings.audioPreset.bitDepth, 24)
         XCTAssertEqual(settings.audioPreset.channelMode, .preserveMonoStereo)
+        XCTAssertTrue(settings.showMenuBarExtra)
+    }
+
+    func testDefaultSettingsEnableMenuBarExtra() throws {
+        let store = makeStore()
+        XCTAssertTrue(try store.loadSettings().showMenuBarExtra)
+        XCTAssertTrue(AppSettings.default.showMenuBarExtra)
+    }
+
+    func testPersistsShowMenuBarExtraOff() throws {
+        let suiteName = uniqueSuiteName()
+        let store = makeStore(suiteName: suiteName, reset: true)
+
+        try store.updateSettings { settings in
+            settings.showMenuBarExtra = false
+        }
+
+        XCTAssertFalse(try makeStore(suiteName: suiteName).loadSettings().showMenuBarExtra)
     }
 
     func testCorruptSettingsDataThrows() throws {
@@ -189,6 +207,16 @@ final class SettingsStoreTests: XCTestCase {
 
         XCTAssertTrue(source.contains("let previous = settings.appearance"))
         XCTAssertTrue(source.contains("appearanceController.apply(previous)"))
+    }
+
+    func testSettingsGeneralPaneOffersMenuBarExtraToggle() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("Show menu bar extra"))
+        XCTAssertTrue(source.contains("Adds a waveform extra to the menu bar for jumping to tools. Niko Music Hub can run without it."))
+        XCTAssertTrue(source.contains("showMenuBarExtraBinding"))
     }
 
     func testSettingsMaxDurationBindingRevertsOnSaveFailure() throws {

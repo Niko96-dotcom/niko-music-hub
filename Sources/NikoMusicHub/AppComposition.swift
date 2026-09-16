@@ -157,7 +157,7 @@ struct AppComposition {
         )
 
         let quickAccessRouter = QuickAccessRouter()
-        let shellSession = HubShellSession(preferences: preferences)
+        let shellSession = HubShellSession(preferences: preferences, settingsStore: settingsStore)
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])
         }

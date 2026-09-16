@@ -9,6 +9,7 @@ final class HubSettingsSession: ObservableObject {
     let context: ToolContext
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
+    let shellSession: HubShellSession
 
     @Published var settings: AppSettings = .default
     @Published var launchAtLogin = false
@@ -22,11 +23,13 @@ final class HubSettingsSession: ObservableObject {
     init(
         context: ToolContext,
         appearanceController: AppAppearanceController,
-        updateController: AppUpdateController
+        updateController: AppUpdateController,
+        shellSession: HubShellSession
     ) {
         self.context = context
         self.appearanceController = appearanceController
         self.updateController = updateController
+        self.shellSession = shellSession
     }
 
     var updatesFooter: String {
@@ -79,6 +82,21 @@ final class HubSettingsSession: ObservableObject {
         )
     }
 
+    var showMenuBarExtraBinding: Binding<Bool> {
+        Binding(
+            get: { self.settings.showMenuBarExtra },
+            set: { newValue in
+                let previous = self.settings.showMenuBarExtra
+                self.settings.showMenuBarExtra = newValue
+                if self.persistSettings({ $0.showMenuBarExtra = newValue }) {
+                    self.shellSession.applyShowMenuBarExtra(newValue)
+                } else {
+                    self.settings.showMenuBarExtra = previous
+                }
+            }
+        )
+    }
+
     func refresh() {
         do {
             settings = try context.settingsStore.loadSettings()
@@ -87,6 +105,7 @@ final class HubSettingsSession: ObservableObject {
             )
             settingsLoadError = nil
             appearanceController.apply(settings.appearance)
+            shellSession.applyShowMenuBarExtra(settings.showMenuBarExtra)
         } catch {
             settings = .default
             settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
@@ -215,6 +234,17 @@ struct SettingsView: View {
             if let launchAtLoginError = session.launchAtLoginError {
                 inlineWarning(launchAtLoginError)
             }
+        }
+
+        SettingsSection(
+            title: "Menu bar extra",
+            importance: .medium,
+            footer: "Adds a waveform extra to the menu bar for jumping to tools. Niko Music Hub can run without it."
+        ) {
+            Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
+                .toggleStyle(.switch)
+                .tint(HubDesignSystem.Palette.accent)
+                .disabled(session.settingsLoadError != nil)
         }
 
         SettingsSection(

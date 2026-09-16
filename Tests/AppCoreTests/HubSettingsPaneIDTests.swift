@@ -56,6 +56,7 @@ final class HubSettingsPaneIDTests: XCTestCase {
         XCTAssertFalse(settings.contains("SettingsSection(title: \"About\""), "About stays in the App menu")
         XCTAssertFalse(settings.contains("label: \"Save\""), "Settings stay immediate-apply with no Save button")
         XCTAssertTrue(settings.contains("persistSettings"))
+        XCTAssertTrue(settings.contains("Show menu bar extra"))
 
         let scene = try SourceTestSupport.read("Sources/NikoMusicHub/Settings/HubSettingsScene.swift")
         XCTAssertTrue(scene.contains("HubSettingsRoot("))

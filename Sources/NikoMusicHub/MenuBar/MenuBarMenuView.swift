@@ -27,11 +27,20 @@ struct MenuBarMenuView: View {
                 Divider()
             }
             Button {
-                router.execute(entry.command)
-                // Re-open the main WindowGroup (id "main") if the user closed it —
-                // activate alone does not restore a closed window.
-                openWindow(id: "main")
-                NSApp.activate()
+                switch entry.command {
+                case .quitApp:
+                    NSApp.terminate(nil)
+                case .openApp:
+                    router.execute(.openApp)
+                    openWindow(id: "main")
+                    NSApp.activate()
+                default:
+                    router.execute(entry.command)
+                    // Re-open the main WindowGroup (id "main") if the user closed it —
+                    // activate alone does not restore a closed window.
+                    openWindow(id: "main")
+                    NSApp.activate()
+                }
             } label: {
                 Label(entry.label, systemImage: entry.systemImage)
             }

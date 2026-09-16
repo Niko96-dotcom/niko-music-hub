@@ -10,6 +10,7 @@ struct HubSettingsScene: View {
     @ObservedObject var appearanceController: AppAppearanceController
     @ObservedObject var updateController: AppUpdateController
     @ObservedObject var router: QuickAccessRouter
+    let shellSession: HubShellSession
 
     var body: some View {
         HubSettingsRoot(
@@ -17,7 +18,8 @@ struct HubSettingsScene: View {
             archiveViewModel: archiveViewModel,
             appearanceController: appearanceController,
             updateController: updateController,
-            router: router
+            router: router,
+            shellSession: shellSession
         )
     }
 }

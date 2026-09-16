@@ -47,6 +47,30 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
     }
 
+    func testShowMenuBarExtraDefaultsOnWithoutSettingsStore() throws {
+        let store = try makeIsolatedStore()
+        let session = HubShellSession(preferences: store)
+        XCTAssertTrue(session.showMenuBarExtra)
+    }
+
+    func testShowMenuBarExtraLoadsFalseFromSettingsStore() throws {
+        let prefs = try makeIsolatedStore()
+        let suiteName = "HubShellSessionExtra.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let settings = UserDefaultsSettingsStore(userDefaults: defaults)
+        try settings.updateSettings { $0.showMenuBarExtra = false }
+        let session = HubShellSession(preferences: prefs, settingsStore: settings)
+        XCTAssertFalse(session.showMenuBarExtra)
+
+        session.setShowMenuBarExtra(true)
+        XCTAssertTrue(session.showMenuBarExtra)
+        XCTAssertTrue(try settings.loadSettings().showMenuBarExtra)
+    }
+
     private func makeIsolatedStore() throws -> UserDefaultsPreferenceStore {
         let suiteName = "HubShellSessionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

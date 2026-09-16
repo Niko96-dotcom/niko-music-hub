@@ -62,6 +62,22 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertFalse(router.revealOutputInbox)
     }
 
+    func testExecuteOpenAppDoesNotSetSelectedToolID() {
+        let router = QuickAccessRouter()
+        router.execute(.openTool("bpm-tapper"))
+        router.execute(.openApp)
+        XCTAssertEqual(router.selectedToolID, "bpm-tapper")
+        XCTAssertFalse(router.revealOutputInbox)
+    }
+
+    func testExecuteQuitAppDoesNotSetSelectedToolID() {
+        let router = QuickAccessRouter()
+        router.execute(.openTool("downloader"))
+        router.execute(.quitApp)
+        XCTAssertEqual(router.selectedToolID, "downloader")
+        XCTAssertFalse(router.revealOutputInbox)
+    }
+
     // MARK: - Initial state
 
     func testInitialSelectedToolIDIsNil() {

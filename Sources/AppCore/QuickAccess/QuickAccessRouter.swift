@@ -34,9 +34,9 @@ public final class QuickAccessRouter: ObservableObject {
         case .openTool(let id):
             // Tools menu (NMH-013) and MenuBarExtra both select content tools here.
             selectedToolID = id
-        case .openApp:
-            // No-op at the model layer in Phase 46.
-            // Phase 47 will call NSApp.activate when consuming this command.
+        case .openApp, .quitApp:
+            // Window activate / terminate live in the menu and Dock targets.
+            // Do not change `selectedToolID`.
             break
         case .revealOutputInbox:
             revealOutputInbox = true

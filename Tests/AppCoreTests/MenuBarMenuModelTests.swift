@@ -25,8 +25,27 @@ final class MenuBarMenuModelTests: XCTestCase {
 
         XCTAssertEqual(
             ids,
-            ["restore-project", "audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox"]
+            ["open-app", "restore-project", "audio-recorder", "wav-converter", "bpm-tapper", "downloader", "stem-separation", "output-inbox", "quit-app"]
         )
+    }
+
+    func testOpenAppIsFirst() throws {
+        let registry = try makeFullRegistry()
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        let first = try XCTUnwrap(entries.first)
+        XCTAssertEqual(first.id, "open-app")
+        XCTAssertEqual(first.label, "Open Niko Music Hub")
+        XCTAssertEqual(first.command, .openApp)
+    }
+
+    func testQuitEntryExists() throws {
+        let registry = try makeFullRegistry()
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        let quit = try XCTUnwrap(entries.last)
+        XCTAssertEqual(quit.id, "quit-app")
+        XCTAssertEqual(quit.label, "Quit Niko Music Hub")
+        XCTAssertEqual(quit.command, .quitApp)
+        XCTAssertTrue(MenuBarMenuModel.shouldShowDivider(before: quit, in: entries))
     }
 
     // MARK: - Row label / symbol / command mapping (ROUT-01..05)
@@ -80,8 +99,8 @@ final class MenuBarMenuModelTests: XCTestCase {
     func testEmptyRegistryYieldsOnlyOutputInbox() throws {
         let registry = try ToolRegistry(features: [])
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
-        XCTAssertEqual(entries.count, 2)
-        XCTAssertEqual(entries.map(\.id), ["restore-project", "output-inbox"])
+        XCTAssertEqual(entries.count, 4)
+        XCTAssertEqual(entries.map(\.id), ["open-app", "restore-project", "output-inbox", "quit-app"])
     }
 
     func testSingleToolRegistryYieldsOneTool() throws {
@@ -93,6 +112,21 @@ final class MenuBarMenuModelTests: XCTestCase {
         // Tools not registered must be absent
         XCTAssertFalse(ids.contains("audio-recorder"))
         XCTAssertFalse(ids.contains("wav-converter"))
+    }
+
+    func testDockEntriesLeadWithOpenThenArchiveWithoutSettingsOrQuit() throws {
+        let registry = try ToolRegistry(features: [
+            StubToolFeature(id: "archive-browser", displayName: "Archive Browser"),
+            StubToolFeature(id: "bpm-tapper", displayName: "BPM Tapper"),
+            StubToolFeature(id: "settings", displayName: "Settings"),
+        ])
+        let entries = MenuBarMenuModel.dockEntries(registry: registry)
+        XCTAssertEqual(entries.first?.command, .openApp)
+        XCTAssertEqual(entries.first?.label, "Open Niko Music Hub")
+        XCTAssertEqual(entries.map(\.id), ["open-app", "archive-browser", "bpm-tapper", "output-inbox"])
+        XCTAssertEqual(entries.last?.command, .revealOutputInbox)
+        XCTAssertFalse(entries.contains { $0.id == "settings" })
+        XCTAssertFalse(entries.contains { $0.command == .quitApp })
     }
 
     // MARK: - Helpers
@@ -117,11 +151,11 @@ final class MenuBarMenuModelTests: XCTestCase {
 
 private struct StubToolFeature: ToolFeature {
     let metadata: ToolMetadata
-    init(id: String) {
+    init(id: String, displayName: String? = nil) {
         metadata = ToolMetadata(
             id: ToolFeatureID(id),
-            displayName: id,
-            shortLabel: id,
+            displayName: displayName ?? id,
+            shortLabel: displayName ?? id,
             systemImage: "gearshape",
             capabilities: []
         )

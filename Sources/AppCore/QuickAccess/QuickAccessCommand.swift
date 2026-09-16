@@ -7,10 +7,11 @@ public enum QuickAccessCommand: Hashable, Sendable {
     /// Bring the app forward and select the named tool in the sidebar.
     case openTool(ToolFeatureID)
     /// Bring the regular app window forward without changing tool selection.
-    /// No-op at the model layer in Phase 46; Phase 47 hooks NSApp.activate.
     case openApp
     /// Show the Output Inbox panel in AppShellView.
     case revealOutputInbox
     /// Open the existing Archive experience and request keyboard focus for search.
     case restoreProject
+    /// Quit the app via `NSApp.terminate` in the menu view so the vault quit alert still runs.
+    case quitApp
 }

@@ -17,7 +17,8 @@ struct HubSettingsRoot: View {
         archiveViewModel: ArchiveBrowserViewModel,
         appearanceController: AppAppearanceController,
         updateController: AppUpdateController,
-        router: QuickAccessRouter
+        router: QuickAccessRouter,
+        shellSession: HubShellSession
     ) {
         self.archiveViewModel = archiveViewModel
         self.router = router
@@ -25,7 +26,8 @@ struct HubSettingsRoot: View {
             wrappedValue: HubSettingsSession(
                 context: context,
                 appearanceController: appearanceController,
-                updateController: updateController
+                updateController: updateController,
+                shellSession: shellSession
             )
         )
     }
@@ -46,6 +48,7 @@ struct HubSettingsRoot: View {
         .navigationTitle(selectedPane.title)
         .modifier(HubSettingsWindowChrome())
         .frame(minWidth: 560, minHeight: 480)
+        .hubOpensMainWindowFromDock()
         .onAppear {
             session.refresh()
             consumePendingSettingsPane()

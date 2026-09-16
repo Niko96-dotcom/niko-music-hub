@@ -32,7 +32,24 @@ final class MenuBarDividerLogicTests: XCTestCase {
         let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
         let toolEntry = try XCTUnwrap(entries.first { $0.id == "bpm-tapper" })
         let showDivider = MenuBarMenuModel.shouldShowDivider(before: toolEntry, in: entries)
-        XCTAssertFalse(showDivider, "Divider must not be placed before a tool row — only before Output Inbox")
+        XCTAssertFalse(showDivider, "Divider must not be placed before a production tool row")
+    }
+
+    func testDividerAfterOpenApp() throws {
+        let registry = try ToolRegistry(features: [])
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        let restore = try XCTUnwrap(entries.first { $0.id == "restore-project" })
+        XCTAssertTrue(
+            MenuBarMenuModel.shouldShowDivider(before: restore, in: entries),
+            "Divider must follow Open Niko Music Hub"
+        )
+    }
+
+    func testDividerBeforeQuit() throws {
+        let registry = try ToolRegistry(features: [])
+        let entries = MenuBarMenuModel.resolvedEntries(registry: registry)
+        let quit = try XCTUnwrap(entries.first { $0.id == "quit-app" })
+        XCTAssertTrue(MenuBarMenuModel.shouldShowDivider(before: quit, in: entries))
     }
 }
 

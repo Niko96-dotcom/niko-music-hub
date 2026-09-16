@@ -13,15 +13,20 @@ public final class HubShellSession: ObservableObject {
     public static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
 
     private let preferences: any PreferenceStore
+    private let settingsStore: (any SettingsStore)?
 
     @Published public private(set) var showToolSidebar: Bool
     @Published public private(set) var showOutputInbox: Bool
     @Published public private(set) var inboxUserWantsVisible: Bool
     /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persistence is NMH-017.
     @Published public private(set) var selectedToolID: ToolFeatureID?
+    /// Live MenuBarExtra insertion. Canonical persistence is `AppSettings.showMenuBarExtra`.
+    @Published public private(set) var showMenuBarExtra: Bool
 
-    public init(preferences: any PreferenceStore) {
+    public init(preferences: any PreferenceStore, settingsStore: (any SettingsStore)? = nil) {
         self.preferences = preferences
+        self.settingsStore = settingsStore
+        self.showMenuBarExtra = (try? settingsStore?.loadSettings().showMenuBarExtra) ?? true
         self.showToolSidebar = preferences.bool(forKey: Self.toolsVisibleKey) ?? true
 
         let migrated = preferences.bool(forKey: Self.inboxMigrationKey) ?? false
@@ -62,5 +67,16 @@ public final class HubShellSession: ObservableObject {
 
     public func toggleOutputInbox() {
         setOutputInboxVisible(!showOutputInbox)
+    }
+
+    /// Persist the extra and update the live `MenuBarExtra(isInserted:)` binding.
+    public func setShowMenuBarExtra(_ visible: Bool) {
+        applyShowMenuBarExtra(visible)
+        try? settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
+    }
+
+    /// Update the live extra without writing settings (Settings already persisted).
+    public func applyShowMenuBarExtra(_ visible: Bool) {
+        showMenuBarExtra = visible
     }
 }

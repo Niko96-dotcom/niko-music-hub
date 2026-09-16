@@ -141,6 +141,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var archiveOnboardingCompleted: Bool
     /// Comma-separated folder-name terms to skip during archive scan (e.g. backup, tmp).
     public var scanExclusionTerms: String
+    /// Menu-bar extra (waveform). Missing keys decode as `true` so 1.5.4 upgraders keep it.
+    public var showMenuBarExtra: Bool
 
     private enum CodingKeys: String, CodingKey {
         case outputFolder
@@ -154,6 +156,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         case appearance
         case archiveOnboardingCompleted
         case scanExclusionTerms
+        case showMenuBarExtra
     }
 
     public init(
@@ -166,7 +169,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
         vault: VaultSettings = VaultSettings(),
         appearance: AppAppearance = .followSystem,
         archiveOnboardingCompleted: Bool = false,
-        scanExclusionTerms: String = ""
+        scanExclusionTerms: String = "",
+        showMenuBarExtra: Bool = true
     ) {
         self.outputFolder = outputFolder
         self.audioPreset = audioPreset
@@ -179,6 +183,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.appearance = appearance
         self.archiveOnboardingCompleted = archiveOnboardingCompleted
         self.scanExclusionTerms = scanExclusionTerms
+        self.showMenuBarExtra = showMenuBarExtra
     }
 
     public init(from decoder: Decoder) throws {
@@ -198,6 +203,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         appearance = (try? container.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? .followSystem
         archiveOnboardingCompleted = (try? container.decodeIfPresent(Bool.self, forKey: .archiveOnboardingCompleted)) ?? false
         scanExclusionTerms = (try? container.decodeIfPresent(String.self, forKey: .scanExclusionTerms)) ?? ""
+        showMenuBarExtra = (try? container.decodeIfPresent(Bool.self, forKey: .showMenuBarExtra)) ?? true
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -211,6 +217,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         try container.encode(appearance, forKey: .appearance)
         try container.encode(archiveOnboardingCompleted, forKey: .archiveOnboardingCompleted)
         try container.encode(scanExclusionTerms, forKey: .scanExclusionTerms)
+        try container.encode(showMenuBarExtra, forKey: .showMenuBarExtra)
     }
 
     /// Compatibility surface for existing archive-browser callers. Root-list edits only

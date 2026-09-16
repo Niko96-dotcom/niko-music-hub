@@ -89,6 +89,7 @@ struct AppShellView: View {
         .ignoresSafeArea(edges: .top)
         .background(HubWindowChromeConfigurator())
         .frame(minWidth: minWindowWidth, minHeight: 720)
+        .hubOpensMainWindowFromDock()
         .onAppear {
             // Drain any pending router state that was set while the window was absent
             // (closed-window case). The menu bar action may fire router.execute() before

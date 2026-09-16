@@ -7,6 +7,7 @@ import SwiftUI
 struct NikoMusicHubApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appearanceController: AppAppearanceController
+    @StateObject private var shellSession: HubShellSession
 
     private let composition: AppComposition
 
@@ -14,7 +15,10 @@ struct NikoMusicHubApp: App {
         let composition = AppComposition.make()
         self.composition = composition
         AppDelegate.pendingVaultOperationCount = composition.pendingVaultOperationCount
+        AppDelegate.registry = composition.registry
+        AppDelegate.router = composition.router
         _appearanceController = StateObject(wrappedValue: composition.appearanceController)
+        _shellSession = StateObject(wrappedValue: composition.shellSession)
     }
 
     var body: some Scene {
@@ -23,7 +27,7 @@ struct NikoMusicHubApp: App {
                 registry: composition.registry,
                 context: composition.context,
                 router: composition.router,
-                shellSession: composition.shellSession
+                shellSession: shellSession
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }
@@ -34,11 +38,11 @@ struct NikoMusicHubApp: App {
         .defaultSize(width: 1_280, height: 820)
         .commands {
             AboutCommand(updateController: composition.updateController)
-            HubViewCommands(session: composition.shellSession)
+            HubViewCommands(session: shellSession)
             HubToolsCommands(
                 registry: composition.registry,
                 router: composition.router,
-                session: composition.shellSession
+                session: shellSession
             )
             HubHelpCommands(router: composition.router)
         }
@@ -49,7 +53,8 @@ struct NikoMusicHubApp: App {
                 archiveViewModel: composition.archiveViewModel,
                 appearanceController: appearanceController,
                 updateController: composition.updateController,
-                router: composition.router
+                router: composition.router,
+                shellSession: shellSession
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
         }
@@ -61,7 +66,7 @@ struct NikoMusicHubApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 560, height: 640)
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: showMenuBarExtraBinding) {
             MenuBarMenuView(
                 entries: MenuBarMenuModel.resolvedEntries(registry: composition.registry),
                 router: composition.router
@@ -73,11 +78,20 @@ struct NikoMusicHubApp: App {
         }
         .menuBarExtraStyle(.menu)
     }
+
+    private var showMenuBarExtraBinding: Binding<Bool> {
+        Binding(
+            get: { shellSession.showMenuBarExtra },
+            set: { shellSession.setShowMenuBarExtra($0) }
+        )
+    }
 }
 
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     static var pendingVaultOperationCount: @MainActor () -> Int = { 0 }
+    static var registry = ToolRegistry()
+    static var router: QuickAccessRouter?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let count = Self.pendingVaultOperationCount()
@@ -89,6 +103,32 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "Keep Music Hub Open")
         alert.addButton(withTitle: "Quit and Cancel Waiting Requests")
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        HubDockMenu.make(
+            registry: Self.registry,
+            target: self,
+            openApp: #selector(hubDockOpenApp(_:)),
+            openTool: #selector(hubDockOpenTool(_:)),
+            revealInbox: #selector(hubDockRevealInbox(_:))
+        )
+    }
+
+    @objc func hubDockOpenApp(_ sender: Any?) {
+        Self.router?.execute(.openApp)
+        HubMainWindow.reveal()
+    }
+
+    @objc func hubDockOpenTool(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        Self.router?.execute(.openTool(ToolFeatureID(raw)))
+        HubMainWindow.reveal()
+    }
+
+    @objc func hubDockRevealInbox(_ sender: Any?) {
+        Self.router?.execute(.revealOutputInbox)
+        HubMainWindow.reveal()
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {

@@ -20,6 +20,11 @@ final class QuickAccessCommandTests: XCTestCase {
         if case .openApp = cmd { } else { XCTFail("Expected .openApp case") }
     }
 
+    func testQuitAppHasNoAssociatedValue() {
+        let cmd = QuickAccessCommand.quitApp
+        if case .quitApp = cmd { } else { XCTFail("Expected .quitApp case") }
+    }
+
     func testRevealOutputInboxHasNoAssociatedValue() {
         let cmd = QuickAccessCommand.revealOutputInbox
         if case .revealOutputInbox = cmd { } else { XCTFail("Expected .revealOutputInbox case") }

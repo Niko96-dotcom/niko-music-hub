@@ -44,6 +44,16 @@ final class MenuBarSourceTests: XCTestCase {
         )
     }
 
+    func testMenuBarMenuViewQuitsViaTerminate() throws {
+        let source = try menuBarMenuViewSource()
+        XCTAssertTrue(
+            source.contains("NSApp.terminate(nil)"),
+            "Quit must call NSApp.terminate so the vault quit alert still runs"
+        )
+        XCTAssertFalse(source.contains("NSApp.stop"))
+        XCTAssertFalse(source.contains("exit("))
+    }
+
     func testMenuBarMenuViewUsesDividerConditionally() throws {
         let source = try menuBarMenuViewSource()
         XCTAssertTrue(
@@ -105,6 +115,10 @@ final class MenuBarSourceTests: XCTestCase {
             source.contains("accessibilityLabel(\"Niko Music Hub\")"),
             "Menu bar icon must have accessibility label 'Niko Music Hub'"
         )
+        XCTAssertTrue(
+            source.contains("MenuBarExtra(isInserted:"),
+            "MenuBarExtra must use isInserted so the extra can hide without relaunch"
+        )
     }
 
     func testNikoMusicHubAppUsesLabelClosureInitNotPrimarySceneForm() throws {
@@ -128,6 +142,16 @@ final class MenuBarSourceTests: XCTestCase {
             source.contains("setActivationPolicy(.regular)"),
             "NikoMusicHubApp.swift must keep setActivationPolicy(.regular) — MBAR-03: app remains a regular windowed app"
         )
+        XCTAssertTrue(source.contains("applicationDockMenu"))
+        XCTAssertTrue(source.contains("HubDockMenu.make"))
+    }
+
+    func testDockMenuOmitsSettingsAndQuit() throws {
+        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
+        XCTAssertTrue(dock.contains("MenuBarMenuModel.dockEntries"))
+        XCTAssertTrue(dock.contains("No Settings, no Quit"))
+        XCTAssertFalse(dock.contains("NSApp.terminate"))
+        XCTAssertFalse(dock.contains("Quit Niko Music Hub"))
     }
 
     // MARK: - Private helpers
