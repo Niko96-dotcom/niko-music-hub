@@ -122,7 +122,7 @@ struct ArchiveBrowserView: View {
             }
             }
         }
-        .focusable(true)
+        .focusable(interactions: .edit)
         .focused($keyboardFocus, equals: .archive)
         .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
         .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
@@ -159,16 +159,6 @@ struct ArchiveBrowserView: View {
         .onKeyPress(.downArrow) {
             guard allowsSongShortcuts else { return .ignored }
             handleArchiveMoveCommand(.down)
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
-            guard allowsSongShortcuts else { return .ignored }
-            handleArchiveMoveCommand(.left)
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            guard allowsSongShortcuts else { return .ignored }
-            handleArchiveMoveCommand(.right)
             return .handled
         }
         .onKeyPress(.return) {
