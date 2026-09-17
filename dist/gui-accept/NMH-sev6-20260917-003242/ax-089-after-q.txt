@@ -1,3 +1,0 @@
-AXMenuButton title=[] desc=[Filters and shelves] value=[Quiet Songs] help=[Filters and shelves]
-AXMenuButton title=[] desc=[Archive actions] value=[] help=[Archive actions]
-AXTextField title=[] desc=[] value=[] help=[Filters the song list as you type.]

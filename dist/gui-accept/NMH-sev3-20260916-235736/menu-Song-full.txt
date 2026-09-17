@@ -1,1 +1,0 @@
-115:120: execution error: „System Events“ hat einen Fehler erhalten: „every item of process "NikoMusicHub"“ kann nicht als „name of every menu item of menu "Song" of menu bar item "Song" of menu bar 1 of process "NikoMusicHub"“ gesetzt werden. (-10006)

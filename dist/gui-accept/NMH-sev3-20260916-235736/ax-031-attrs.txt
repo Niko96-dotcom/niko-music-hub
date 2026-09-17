@@ -1,2 +1,0 @@
-FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[] placeholder=[Paste a supported URL…]
-FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]

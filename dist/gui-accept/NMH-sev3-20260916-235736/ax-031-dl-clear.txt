@@ -1,3 +1,0 @@
-FIELD role=AXTextField title=[] desc=[] value=[https://youtube.com/watch?v=clearlabel] help=[] id=[] placeholder=[Paste a supported URL…]
-CLEAR title=[] desc=[Clear]
-FIELD role=AXTextField title=[] desc=[] value=[] help=[] id=[_SC_SEARCH_FIELD] placeholder=[]

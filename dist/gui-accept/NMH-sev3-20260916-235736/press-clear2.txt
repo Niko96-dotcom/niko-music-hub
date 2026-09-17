@@ -1,1 +1,0 @@
-press id=xmark.circle.fill => 0

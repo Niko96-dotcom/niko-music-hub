@@ -1,1 +1,0 @@
-Undo, Redo, missing value, Cut, Copy, Paste, Delete, Select All, Find, Jump to Search Field, missing value, Cancel, Cancel, missing value, Writing Tools, AutoFill, Start Dictation, Emoji & Symbols
