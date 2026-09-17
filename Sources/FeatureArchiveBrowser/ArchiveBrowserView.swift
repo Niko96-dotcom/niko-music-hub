@@ -122,7 +122,9 @@ struct ArchiveBrowserView: View {
             }
             }
         }
-        .focusable(interactions: .edit)
+        // NMH-006 Accept: full keyboard focus (Space/arrows). Option-arrows pass through
+        // the arrow monitor (modifier filter) to Song menu skip (NMH-034).
+        .focusable(true)
         .focused($keyboardFocus, equals: .archive)
         .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
         .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
@@ -532,15 +534,22 @@ struct ArchiveBrowserView: View {
 
     @discardableResult
     private func performPlayPausePreview() -> Bool {
-        if ArchivePreviewSession.shared.preview != nil {
-            ArchivePreviewSession.shared.toggle()
-            return true
-        }
-        if let song = viewModel.selectedSong {
+        let session = ArchivePreviewSession.shared
+        switch ArchiveSpacePreviewAction.resolve(
+            selectedSongID: viewModel.selectedSong?.id,
+            loadedSongID: session.songID,
+            hasLoadedPreview: session.preview != nil
+        ) {
+        case .auditionSelected:
+            guard let song = viewModel.selectedSong else { return false }
             viewModel.audition(song)
             return true
+        case .toggleLoaded:
+            session.toggle()
+            return true
+        case .none:
+            return false
         }
-        return false
     }
 
     private func chooseRoot() {

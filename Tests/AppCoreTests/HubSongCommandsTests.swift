@@ -38,7 +38,10 @@ final class HubSongCommandsTests: XCTestCase {
 
         let browser = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift")
         XCTAssertFalse(browser.contains(".focusEffectDisabled()"))
-        XCTAssertTrue(browser.contains(".focusable(interactions: .edit)"))
+        // Full keyboard focus for NMH-006 Space/arrows; Option-arrows pass the
+        // archive arrow monitor (modifier filter) through to Song skip (NMH-034).
+        XCTAssertTrue(browser.contains(".focusable(true)"))
+        XCTAssertFalse(browser.contains(".focusable(interactions: .edit)"))
         XCTAssertTrue(browser.contains("HubDesignSystem.Palette.focus"))
         XCTAssertTrue(browser.contains("onKeyPress(\"o\")"))
         XCTAssertTrue(browser.contains("onKeyPress(\"p\")"))
@@ -47,6 +50,10 @@ final class HubSongCommandsTests: XCTestCase {
         XCTAssertTrue(browser.contains("onKeyPress(.space)"))
         XCTAssertTrue(browser.contains(".focusedValue(\\."))
         XCTAssertTrue(browser.contains("archiveShowSongVersions"))
+
+
+        let policy = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveShortcutFocusPolicy.swift")
+        XCTAssertTrue(policy.contains(".option, .command, .control"))
 
         let detail = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/SongDetailView.swift")
         XCTAssertTrue(detail.contains("archiveShowSongVersions"))

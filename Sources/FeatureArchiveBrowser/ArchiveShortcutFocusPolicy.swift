@@ -44,6 +44,11 @@ enum ArchiveShortcutFocusPolicy {
     static func installArchiveArrowKeyMonitor(move: @escaping (ArchiveSongMoveDirection) -> Void) {
         removeArchiveArrowKeyMonitor()
         arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Option/Command/Control arrows belong to Song menu (skip) and system chords —
+            // never consume them here (NMH-034 / daytime Accept coexistence).
+            if !event.modifierFlags.intersection([.option, .command, .control]).isEmpty {
+                return event
+            }
             let direction: ArchiveSongMoveDirection?
             switch event.keyCode {
             case 126: direction = .up
@@ -118,4 +123,22 @@ extension FocusedValues {
 extension Notification.Name {
     /// Song menu / letter `d`: select the Versions workspace tab (NMH-034).
     static let archiveShowSongVersions = Notification.Name("FeatureArchiveBrowser.archiveShowSongVersions")
+}
+
+
+/// NMH-006: Space must follow keyboard selection, not a stale loaded preview.
+enum ArchiveSpacePreviewAction: Equatable {
+    case toggleLoaded
+    case auditionSelected
+    case none
+
+    static func resolve(selectedSongID: String?, loadedSongID: String?, hasLoadedPreview: Bool) -> ArchiveSpacePreviewAction {
+        guard let selectedSongID else {
+            return hasLoadedPreview ? .toggleLoaded : .none
+        }
+        if !hasLoadedPreview || loadedSongID != selectedSongID {
+            return .auditionSelected
+        }
+        return .toggleLoaded
+    }
 }
