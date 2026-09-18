@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 import SwiftUI
 
 /// One tool-open request. `sequence` is monotonic so two consecutive requests
@@ -39,6 +40,7 @@ public final class QuickAccessRouter: ObservableObject {
     @Published public private(set) var openSettingsPane: HubSettingsPane?
 
     private var toolRequestSequence: UInt64 = 0
+    private let commandsLogger = HubLogging.logger(category: .commands)
 
     /// Nonisolated so `ToolContext` (a plain `Sendable` value) can default it.
     nonisolated public init() {}
@@ -51,14 +53,17 @@ public final class QuickAccessRouter: ObservableObject {
         switch command {
         case .openTool(let id):
             // Tools menu (NMH-013) and MenuBarExtra both select content tools here.
+            commandsLogger.info("Menu command: open tool \(id.rawValue, privacy: .public)")
             requestTool(id)
         case .openApp, .quitApp:
             // Window activate / terminate live in the menu and Dock targets.
             // Do not request a tool.
             break
         case .revealOutputInbox:
+            commandsLogger.info("Menu command: reveal output inbox")
             revealOutputInbox = true
         case .focusArchiveSearch:
+            commandsLogger.info("Menu command: focus archive search")
             requestTool(ToolFeatureID("archive-browser"))
             archiveSearchFocusRequest &+= 1
         }

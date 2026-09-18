@@ -168,6 +168,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         files: [BatchAudioConversionFile],
         controller: StopAfterCurrentController
     ) async -> [BatchAudioConversionOutcome] {
+        context.diagnostics.scoped(to: .converter).log(.info, "Conversion started (files=\(files.count))")
         do {
             let outcomes = try await batchUseCase.convert(
                 files: files,
@@ -185,6 +186,8 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             refreshQueuedOutputNames()
             refreshStatusText()
             publishShellJobStatus()
+            let failedCount = outcomes.filter { if case .failed = $0.status { true } else { false } }.count
+            context.diagnostics.scoped(to: .converter).log(.info, "Conversion finished (files=\(outcomes.count), failed=\(failedCount))")
             return outcomes
         } catch {
             rows = rows.map { row in
@@ -201,6 +204,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             stopController = nil
             statusText = error.localizedDescription
             publishShellJobStatus()
+            context.diagnostics.scoped(to: .converter).log(.error, "Conversion failed: \(error.localizedDescription)")
             return []
         }
     }

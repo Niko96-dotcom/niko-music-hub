@@ -2,6 +2,7 @@
 import AppCore
 import FeatureArchiveBrowser
 import Foundation
+import OSLog
 
 enum ArchiveSmokeCommands {
     static func runIfRequested() -> Bool {
@@ -24,9 +25,12 @@ enum ArchiveSmokeCommands {
                 let recorderLog = try await RecorderOutputInboxSmoke.run()
                 for key in recorderLog.keys.sorted() {
                     guard let value = recorderLog[key] else { continue }
+                    // Stdout lines are the E2E contract (script/e2e_user_smoke.sh greps them);
+                    // they stay. The unified-log line below is the telemetry.
                     print("[niko-music-hub-smoke] \(key)=\(value)")
                 }
                 print("[niko-music-hub-smoke] ok")
+                HubLogging.logger(category: .general).info("E2E smoke completed")
                 exit(0)
             } catch {
                 fputs("smoke failed: \(error)\n", stderr)
@@ -59,15 +63,20 @@ enum ArchiveSmokeCommands {
 
         for key in result.smokeLog.keys.sorted() {
             guard let value = result.smokeLog[key] else { continue }
+            // Stdout contract for E2E; unified-log telemetry is emitted via diagnostics.
             print("[niko-music-hub-smoke] \(key)=\(value)")
         }
+        HubLogging.logger(category: .archive).info("Archive smoke flow completed")
+        // Accessibility IDs are stable test constants (public); stdout stays for E2E parsing.
         print("[niko-music-hub-smoke] diagnostics_panel_preview_tiebreak_id=\(ArchiveDiagnosticsPanelAccessibility.selectedPreviewTiebreakCallout)")
         print("[niko-music-hub-smoke] diagnostics_panel_root_health_badge_id=\(ArchiveDiagnosticsPanelAccessibility.rootHealthBadge)")
 
         try result.validateForE2ESmoke(dryRunOpen: runtime.dryRunOpen)
 
         if runtime.dryRunOpen {
+            // Stdout contract ([dry-run] open CPR:) plus unified-log telemetry.
             print(result.core.dryRunLogDisplayLine)
+            HubLogging.logger(category: .archive).info("Archive smoke dry-run open completed")
         }
 
     }

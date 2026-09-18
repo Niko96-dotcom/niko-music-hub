@@ -393,6 +393,6 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     private func diagnosticsError(_ error: Error) {
         statusMessage = error.localizedDescription
-        context.diagnostics.log(.error, "StemSeparationViewModel: \(error.localizedDescription)")
+        context.diagnostics.scoped(to: .stemSeparation).log(.error, "Stem separation failed: \(error.localizedDescription)")
     }
 }

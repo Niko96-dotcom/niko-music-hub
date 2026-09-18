@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 
 /// Shared shell state: panel visibility for the View menu / title-bar toggles /
 /// router reveals, and the single owner of the selected main-pane tool.
@@ -46,6 +47,8 @@ public final class HubShellSession: ObservableObject {
     /// is `AppSettings.showMenuBarExtra`.
     public let menuBarExtra: MenuBarExtraState
     public var showMenuBarExtra: Bool { menuBarExtra.isInserted }
+    private let windowingLogger = HubLogging.logger(category: .windowing)
+    private let commandsLogger = HubLogging.logger(category: .commands)
 
     public init(
         preferences: any PreferenceStore,
@@ -86,6 +89,11 @@ public final class HubShellSession: ObservableObject {
     public func setSelectedToolID(_ id: ToolFeatureID?) {
         if id != selectedToolID {
             selectedToolID = id
+            if let id {
+                windowingLogger.info("Selected tool changed to \(id.rawValue, privacy: .public)")
+            } else {
+                windowingLogger.info("Selected tool cleared")
+            }
         }
         if let id {
             persistSelectedToolID(id)
@@ -96,10 +104,12 @@ public final class HubShellSession: ObservableObject {
     /// Back one history entry: activate its tool without recording, then let the
     /// tool restore its inner page.
     public func goBack() {
+        commandsLogger.info("Menu command: Back")
         navigate(to: navigationHistory?.goBack())
     }
 
     public func goForward() {
+        commandsLogger.info("Menu command: Forward")
         navigate(to: navigationHistory?.goForward())
     }
 
@@ -153,6 +163,7 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func toggleToolSidebar() {
+        commandsLogger.info("Menu command: Toggle tools sidebar")
         setToolSidebarVisible(!showToolSidebar)
     }
 
@@ -168,6 +179,7 @@ public final class HubShellSession: ObservableObject {
     public func toggleOutputInbox() {
         // Toggle the user's intent, not the width-derived state — otherwise a
         // press while compact re-asserts "visible" and nothing changes.
+        commandsLogger.info("Menu command: Toggle output inbox")
         setOutputInboxVisible(!inboxUserWantsVisible)
     }
 

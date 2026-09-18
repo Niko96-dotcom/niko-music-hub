@@ -1,5 +1,6 @@
 import AppCore
 import FeatureArchiveBrowser
+import OSLog
 import SwiftUI
 
 struct AppShellView: View {
@@ -103,6 +104,7 @@ struct AppShellView: View {
         // Edit-menu items only act while this window is the key scene.
         .focusedSceneValue(\.hubShellCancelContext, HubShellCancelContext(selectedToolID: selectedToolID))
         .onAppear {
+            HubLogging.logger(category: .windowing).info("Main window opened tool=\(selectedToolID?.rawValue ?? "none", privacy: .public)")
             // Drain any pending router state that was set while the window was absent
             // (closed-window case). The menu bar action may fire router.execute() before
             // openWindow() recreates this view; onChange only fires on transitions AFTER

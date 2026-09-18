@@ -77,6 +77,7 @@ extension ArchiveBrowserViewModel {
                     self.enqueueProjectVaultRestore(song)
                 }
             } catch {
+                self?.diagnostics.scoped(to: .vault).log(.error, "Restore options load failed: \(error.localizedDescription)")
                 self?.setProjectVaultStatusMessage("Restore options could not be loaded: \(error.localizedDescription)")
             }
         }

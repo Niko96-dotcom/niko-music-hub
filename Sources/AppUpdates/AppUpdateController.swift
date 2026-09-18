@@ -1,4 +1,6 @@
+import AppCore
 import Foundation
+import OSLog
 @preconcurrency import Sparkle
 
 /// Owns the Sparkle updater and mirrors its session into `AppUpdateStatus`.
@@ -20,6 +22,7 @@ public final class AppUpdateController: NSObject, ObservableObject {
     /// at the end of every cycle so a finished install cannot leave a stale
     /// "update available" banner behind.
     private var sessionVersion: String?
+    private let updatesLogger = HubLogging.logger(category: .updates)
 
     public convenience override init() {
         self.init(configuration: AppUpdateConfiguration.resolve())
@@ -95,8 +98,12 @@ public final class AppUpdateController: NSObject, ObservableObject {
 
     /// A user-initiated check. Refuses to stack a second session on the first.
     public func checkForUpdates() {
-        guard let controller else { return }
+        guard let controller else {
+            updatesLogger.info("Update check skipped: updater unavailable")
+            return
+        }
         guard controller.updater.canCheckForUpdates, !status.isBusy else { return }
+        updatesLogger.info("Update check started")
         status = .checking
         controller.updater.checkForUpdates()
     }
@@ -105,6 +112,7 @@ public final class AppUpdateController: NSObject, ObservableObject {
         sessionVersion = nil
 
         guard let error = error as NSError? else {
+            updatesLogger.info("Update check result: up to date")
             status = .upToDate(checkedAt: lastUpdateCheckDate ?? Date())
             return
         }
@@ -112,6 +120,7 @@ public final class AppUpdateController: NSObject, ObservableObject {
         // "Nothing newer in the feed" arrives as an error. It is the healthy
         // outcome of a successful check and must never render as a failure.
         if error.domain == SUSparkleErrorDomain, error.code == SUError.noUpdateError.rawValue {
+            updatesLogger.info("Update check result: up to date")
             status = .upToDate(checkedAt: lastUpdateCheckDate ?? Date())
             return
         }
@@ -120,6 +129,7 @@ public final class AppUpdateController: NSObject, ObservableObject {
         // cancellation-shaped error; keep the relaunch prompt in that case.
         if case .readyToRelaunch = status { return }
 
+        updatesLogger.error("Update check result: failed error=\(error.localizedDescription, privacy: .private)")
         status = .failed(message: error.localizedDescription)
     }
 }
@@ -127,6 +137,7 @@ public final class AppUpdateController: NSObject, ObservableObject {
 extension AppUpdateController: SPUUpdaterDelegate {
     public nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         let version = item.displayVersionString
+        HubLogging.logger(category: .updates).info("Update check result: available version=\(version, privacy: .public)")
         MainActor.assumeIsolated {
             sessionVersion = version
             status = .updateAvailable(version: version)
@@ -165,6 +176,7 @@ extension AppUpdateController: SPUUpdaterDelegate {
         error: Error
     ) {
         let message = (error as NSError).localizedDescription
+        HubLogging.logger(category: .updates).error("Update download failed error=\(message, privacy: .private)")
         MainActor.assumeIsolated {
             status = .failed(message: message)
         }

@@ -63,6 +63,12 @@ extension ArchiveBrowserViewModel {
     }
 
     private func applySongSelection(_ song: Song) {
+        // High-signal selection telemetry: shelf is a fixed enum (safe), song
+        // identity is a filesystem path (Song.id == folder path) so it is
+        // never logged — only the event itself.
+        if selectedSong?.id != song.id {
+            diagnostics.scoped(to: .archive).log(.info, "Archive song selection changed (shelf=\(selectedShelf.rawValue))")
+        }
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
         if songDetailsExpanded {

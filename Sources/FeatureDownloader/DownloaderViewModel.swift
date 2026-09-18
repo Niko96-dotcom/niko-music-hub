@@ -196,6 +196,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         do {
             settings = try context.settingsStore.loadSettings()
         } catch {
+            context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
             downloadState = .failed(error.localizedDescription)
             statusMessage = nil
             return
@@ -207,10 +208,12 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 archiveRoots: settings.archiveRoots.map(\.url)
             )
         } catch {
+            context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
             downloadState = .failed(error.localizedDescription)
             statusMessage = nil
             return
         }
+        context.diagnostics.scoped(to: .downloader).log(.info, "Download started")
 
         let capturedFormatSelection = formatSelection
         let capturedPlaylistMode = playlistMode
@@ -261,6 +264,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     private func applyStartError(_ error: any Error, generation: UInt64) {
         guard observationGeneration == generation else { return }
+        context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
         downloadState = .failed(error.localizedDescription)
         statusMessage = nil
         endDownloadProgressFeedback()
@@ -357,6 +361,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
 
         if let firstFailure = handoffFailures.first {
+            context.diagnostics.scoped(to: .downloader).log(.error, "Download inbox handoff failed: \(firstFailure)")
             errorMessage = DownloaderCopy.outputInboxHandoffWarning(firstFailure)
         } else {
             errorMessage = nil

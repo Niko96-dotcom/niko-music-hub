@@ -527,7 +527,7 @@ public struct AudioRecorderView: View {
             }
             lastPersistedMaxDurationMinutes = normalized
         } catch {
-            context.diagnostics.log(.error, "Failed to persist max recording duration: \(error)")
+            context.diagnostics.scoped(to: .recorder).log(.error, "Failed to persist max recording duration: \(error)")
             viewModel.maxDurationMinutes = previous
         }
     }

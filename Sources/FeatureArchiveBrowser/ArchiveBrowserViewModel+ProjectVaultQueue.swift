@@ -109,6 +109,9 @@ extension ArchiveBrowserViewModel {
         let operation = projectVaultPendingOperations.removeFirst()
         projectVaultActiveOperation = operation
         setProjectVaultStatusMessage(operation.startMessage)
+        // High-signal vault boundary: label is a fixed string (public); song
+        // names/paths are never logged.
+        self.diagnostics.scoped(to: .vault).log(.info, "Vault operation started (label=\(operation.label))")
         projectVaultQueueTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let progressTask = Task { @MainActor [weak self] in
@@ -138,6 +141,7 @@ extension ArchiveBrowserViewModel {
                 self.projectVaultStopRequested = false
             }
             self.projectVaultOperationMessages[operation.songID] = self.statusBaseMessage
+            self.diagnostics.scoped(to: .vault).log(succeeded ? .info : .error, "Vault operation finished (label=\(operation.label), succeeded=\(succeeded))")
             if !succeeded { self.projectVaultQueueFailures.append(operation.songName) }
             self.projectVaultBusySongIDs.remove(operation.songID)
             progressTask.cancel()

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 public struct JobProgress: Sendable {
     private let updateHandler: @Sendable (Double, String?) -> Void
@@ -41,6 +42,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     private var observers: [Job.ID: [UUID: AsyncStream<Job>.Continuation]] = [:]
     private var snapshotObservers: [UUID: AsyncStream<[Job]>.Continuation] = [:]
     private var retainedLogBytes: [Job.ID: Int] = [:]
+    private let jobsLogger = HubLogging.logger(category: .jobs)
 
     public init(
         maximumRetainedJobs: Int = 500,
@@ -126,6 +128,9 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             jobs[job.id] = job
             order.append(job.id)
         }
+        // High-signal job boundary: source + job ID are stable IDs (public);
+        // the title can carry song names/URLs so it stays private.
+        jobsLogger.info("Job started source=\(job.sourceToolID.rawValue, privacy: .public) id=\(job.id.uuidString, privacy: .public) title=\(job.title, privacy: .private)")
         emitSnapshot()
 
         let progress = JobProgress(
@@ -189,6 +194,9 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         }
         outcome.0?.cancel()
         publish(outcome.1, to: outcome.2, finish: true)
+        if outcome.1 != nil {
+            jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("canceled", privacy: .public)")
+        }
         emitSnapshot()
     }
 
@@ -215,6 +223,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             job.finishedAt = Date()
             return true
         }
+        jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("completed", privacy: .public)")
     }
 
     private func markFailed(id: Job.ID, message: String) {
@@ -226,6 +235,8 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             job.finishedAt = Date()
             return true
         }
+        // Error text can embed paths/URLs; keep it private.
+        jobsLogger.error("Job failed id=\(id.uuidString, privacy: .public) error=\(boundedMessage, privacy: .private)")
     }
 
     private func markCanceled(id: Job.ID) {
@@ -236,6 +247,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             job.finishedAt = Date()
             return true
         }
+        jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("canceled", privacy: .public)")
     }
 
     private func mutateActiveJob(id: Job.ID, update: (inout Job) -> Void) {

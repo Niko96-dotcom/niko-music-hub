@@ -11,8 +11,10 @@ extension ArchiveBrowserViewModel {
             try operation()
         } catch let error as ArchiveDiagnosticsExportError {
             setStatusMessage("Export failed: \(archiveExportRecoveryMessage(error))")
+            diagnostics.scoped(to: .archive).log(.error, "Export failed: \(archiveExportRecoveryMessage(error))")
         } catch {
             setStatusMessage("Export failed: \(error.localizedDescription)")
+            diagnostics.scoped(to: .archive).log(.error, "Export failed: \(error.localizedDescription)")
         }
     }
 
@@ -56,7 +58,7 @@ extension ArchiveBrowserViewModel {
         try data.write(to: destination)
         lastIndexExportPath = destination.path
         setStatusMessage("Exported index JSON (\(songs.count) songs).")
-        diagnostics.log(.info, "Exported archive index to \(destination.path)")
+        diagnostics.scoped(to: .archive).log(.info, "Exported archive index (\(songs.count) songs)")
         fileActions.revealInFinder(destination)
     }
 
@@ -114,7 +116,7 @@ extension ArchiveBrowserViewModel {
         )
         lastDiagnosticsExportPath = destination.path
         setStatusMessage("Diagnostics exported to \(destination.path)")
-        diagnostics.log(.info, "Exported diagnostics to \(destination.path)")
+        diagnostics.scoped(to: .archive).log(.info, "Exported scan diagnostics")
         fileActions.revealInFinder(destination)
     }
 
@@ -141,7 +143,12 @@ extension ArchiveBrowserViewModel {
                 lastDryRunLog = result.path
                 if runtime.dryRunOpen {
                     let displayPath = Song.displayDryRunPath(result.path)
+                    // Stdout line is the E2E contract (script/e2e_user_smoke.sh greps it);
+                    // the diagnostics line is the unified-log telemetry.
                     print("[niko-music-hub-smoke] dry-run open: \(displayPath)")
+                    diagnostics.scoped(to: .archive).log(.info, "Dry-run open project (redacted path: \(displayPath))")
+                } else {
+                    diagnostics.scoped(to: .archive).log(.info, "Opened project")
                 }
                 // NMH-049: a successful open dismisses the nearby open error.
                 openError = nil
@@ -150,6 +157,7 @@ extension ArchiveBrowserViewModel {
                 openError = nil
             }
         } catch let error as MusicItemOpenerError {
+            diagnostics.scoped(to: .archive).log(.error, "Open project failed: \(error.localizedDescription)")
             setStatusMessage(musicItemOpenerStatusMessage(error))
             // NMH-049: nearby recovery keeps the footer as the technical log.
             if case .pathDoesNotExist = error {
@@ -168,7 +176,9 @@ extension ArchiveBrowserViewModel {
         if runtime.dryRunOpen {
             let path = resolved.path
             lastDryRunLog = path
+            // Stdout line is the E2E contract; diagnostics line is unified-log telemetry.
             print("[niko-music-hub-smoke] dry-run open preview: \(Song.displayDryRunPath(path))")
+            diagnostics.scoped(to: .archive).log(.info, "Dry-run open preview")
             return
         }
         fileActions.revealInFinder(resolved)
@@ -188,9 +198,11 @@ extension ArchiveBrowserViewModel {
             let resolved = try resolveRevealURL(url)
             fileActions.revealInFinder(resolved)
         } catch let error as MusicItemOpenerError {
+            diagnostics.scoped(to: .archive).log(.error, "Open project failed: \(error.localizedDescription)")
             setStatusMessage(musicItemOpenerStatusMessage(error))
             diagnostics.log(.warning, "Reveal refused: \(error)")
         } catch {
+            diagnostics.scoped(to: .archive).log(.error, "Reveal failed: \(error.localizedDescription)")
             setStatusMessage("Cannot reveal path: \(error.localizedDescription)")
         }
     }

@@ -2,6 +2,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import OSLog
 
 enum BookmarkRelaunchProofCommands {
     static func runIfRequested() -> Bool {
@@ -36,11 +37,15 @@ enum BookmarkRelaunchProofCommands {
                     settings.archiveOnboardingCompleted = true
                 }
                 try store.saveSettings(settings)
+                // Stdout is the proof contract (script/prove-bookmark-relaunch.sh greps it); keep it.
                 print(mode == "seed-vault-gui" ? "[bookmark-relaunch-proof] seeded-vault-gui" : "[bookmark-relaunch-proof] seeded")
+                HubLogging.logger(category: .vault).info("Bookmark proof seeded")
             case "verify":
                 let settings = try store.loadSettings()
                 try verify(settings: settings, activeURL: activeURL, archiveURL: archiveURL)
+                // Stdout is the proof contract; keep it.
                 print("[bookmark-relaunch-proof] verified")
+                HubLogging.logger(category: .vault).info("Bookmark proof verified")
             default:
                 throw ProofError.unsupportedMode(mode)
             }

@@ -35,7 +35,8 @@ struct AppComposition {
         let jobRunner = JobRunner()
         let jobStatusCenter = ShellJobStatusCenter(jobRunner: jobRunner)
         let fileActions = AppKitFileActions()
-        let diagnostics = ConsoleDiagnostics()
+        // Shipped app uses unified logging; tests/CLI keep ConsoleDiagnostics.
+        let diagnostics = OSLogDiagnostics(category: .general)
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
         if let vaultSettings = try? settingsStore.loadSettings().vault {
             do {
