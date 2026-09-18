@@ -13,12 +13,13 @@ struct HubShellTitleBarControls: View {
 
     var body: some View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            // Panel toggles are momentary (no persistent selected card): the panel
+            // itself shows the state. A stuck "selected" chip here reads as a bug
+            // since the sidebar is visible almost all the time.
             HubIconButton(
                 systemImage: "sidebar.leading",
                 accessibilityLabel: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
                 help: session.showToolSidebar ? "Hides the tools column" : "Shows the tools column",
-                isSelected: session.showToolSidebar,
-                isToggle: true,
                 action: { session.toggleToolSidebar() }
             )
 
@@ -51,8 +52,6 @@ struct HubShellTitleBarControls: View {
                 systemImage: "sidebar.trailing",
                 accessibilityLabel: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
                 help: session.showOutputInbox ? "Hides the Output Inbox" : "Shows the Output Inbox",
-                isSelected: session.showOutputInbox,
-                isToggle: true,
                 action: { session.toggleOutputInbox() }
             )
         }
