@@ -112,9 +112,9 @@ struct NikoMusicHubApp: App {
 /// App can hand it anything directly).
 @MainActor
 struct HubAppDelegateServices {
-    var registry: ToolRegistry
-    var router: QuickAccessRouter
-    var pendingVaultOperationCount: @MainActor () -> Int
+    let registry: ToolRegistry
+    let router: QuickAccessRouter
+    let pendingVaultOperationCount: @MainActor () -> Int
 }
 
 @MainActor

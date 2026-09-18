@@ -5,6 +5,10 @@ import SwiftUI
 ///
 /// `HubGlassBackdrop` uses this `.sidebar` material (what the Codex sidebar is
 /// built from) as the rail on every macOS version.
+///
+/// Bridge contract: SwiftUI owns every input (`material`, `blending`,
+/// `isActive`); the `NSVisualEffectView` never reads window state itself, so a
+/// recreated representable renders identically from the same values.
 public struct HubVisualEffectView: NSViewRepresentable {
     public let material: NSVisualEffectView.Material
     public let blending: NSVisualEffectView.BlendingMode
@@ -25,20 +29,21 @@ public struct HubVisualEffectView: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blending
-        view.state = isActive ? .active : .inactive
         view.isEmphasized = false
+        apply(to: view)
         return view
     }
 
     public func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
-        view.blendingMode = blending
-        let desired: NSVisualEffectView.State = (isActive && (view.window?.isKeyWindow ?? true)) ? .active : .inactive
-        if view.state != desired {
-            view.state = desired
-        }
+        apply(to: view)
+    }
+
+    /// Guarded so an unchanged update never re-triggers AppKit layout.
+    func apply(to view: NSVisualEffectView) {
+        if view.material != material { view.material = material }
+        if view.blendingMode != blending { view.blendingMode = blending }
+        let desired: NSVisualEffectView.State = isActive ? .active : .inactive
+        if view.state != desired { view.state = desired }
     }
 }
 
@@ -57,9 +62,6 @@ public struct HubVisualEffectView: NSViewRepresentable {
 public struct HubGlassBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
-
-    /// Kept for call-site compatibility; the system material carries the tone.
-    let tint: Double
 
     /// Inactive (non-key window) chrome is subdued by the system material (NMH-069).
     private var isWindowActive: Bool { controlActiveState == .key }
@@ -80,12 +82,12 @@ public struct HubGlassBackdrop: View {
 public extension View {
     /// Frosted chrome for the sidebar / inspector / inbox rails: one bare system
     /// `.sidebar` vibrancy sheet per column (the Codex material); Reduce
-    /// Transparency on: opaque sidebar fill. `tint` is accepted but unused.
-    /// `extendAboveBy` grows the sheet upward past the view's own top (a nested
-    /// rail reaching through the shell's title row to the window edge).
-    func hubChromeMaterial(tint: Double = 0.5, extendAboveBy: CGFloat = 0) -> some View {
+    /// Transparency on: opaque sidebar fill. `extendAboveBy` grows the sheet
+    /// upward past the view's own top (a nested rail reaching through the
+    /// shell's title row to the window edge).
+    func hubChromeMaterial(extendAboveBy: CGFloat = 0) -> some View {
         background {
-            HubGlassBackdrop(tint: tint)
+            HubGlassBackdrop()
                 .padding(.top, -extendAboveBy)
                 .allowsHitTesting(false)
                 .ignoresSafeArea()

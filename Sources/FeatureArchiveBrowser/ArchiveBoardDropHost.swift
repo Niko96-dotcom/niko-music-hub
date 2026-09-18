@@ -52,7 +52,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     var reduceMotion = false
     /// NMH-141: tracks whether this view pushed the not-allowed cursor for a
     /// rejected drag, so the push/pop stays balanced per view.
-    private var didPushNotAllowedCursor = false
+    private(set) var isShowingNotAllowedCursor = false
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
@@ -64,6 +64,14 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
+    /// A drag can outlive this view (SwiftUI recreates the representable, the
+    /// column collapses): AppKit then never sends draggingExited/Ended, so
+    /// balance the cursor stack here instead of leaving the not-allowed
+    /// pointer stuck process-wide.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { popNotAllowedCursorIfNeeded() }
+        super.viewWillMove(toWindow: newWindow)
+    }
 
     private func acceptedID(_ sender: any NSDraggingInfo) -> String? {
         guard let id = sender.draggingPasteboard.string(forType: .string), accepts(id) else { return nil }
@@ -125,14 +133,14 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     }
 
     private func pushNotAllowedCursor() {
-        guard !didPushNotAllowedCursor else { return }
-        didPushNotAllowedCursor = true
+        guard !isShowingNotAllowedCursor else { return }
+        isShowingNotAllowedCursor = true
         NSCursor.operationNotAllowed.push()
     }
 
     private func popNotAllowedCursorIfNeeded() {
-        guard didPushNotAllowedCursor else { return }
-        didPushNotAllowedCursor = false
+        guard isShowingNotAllowedCursor else { return }
+        isShowingNotAllowedCursor = false
         NSCursor.pop()
     }
 }

@@ -7,19 +7,24 @@ import SwiftUI
 struct HubWindowChromeConfigurator: NSViewRepresentable {
     var windowTitle: String
 
-    /// Windows whose launch first responder has been cleared (see applyChrome).
-    @MainActor private static var clearedInitialFocus = Set<ObjectIdentifier>()
+    /// Per-window-content glue: remembers whether the launch first responder
+    /// has been cleared (see applyChrome). Lives exactly as long as this
+    /// representable's identity — the shell root — so a reopened window gets
+    /// a fresh clear and a stale window identity can never be confused with a
+    /// new window (which a process-wide set of `ObjectIdentifier`s could).
+    final class Coordinator {
+        var didClearInitialFocus = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        if view.window != nil {
-            configure(windowFor: view)
-        } else {
-            // Window attaches after makeNSView; apply once it exists instead of
-            // re-applying on every update.
-            DispatchQueue.main.async {
-                self.applyChrome(to: view.window)
-            }
+        // The window attaches after makeNSView returns; apply once it exists
+        // instead of re-applying on every update.
+        let coordinator = context.coordinator
+        DispatchQueue.main.async {
+            self.applyChrome(to: view.window, coordinator: coordinator)
         }
         return view
     }
@@ -29,14 +34,10 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         // work here. Every mutation risks another updateNSView pass; the old
         // always-set + always-dispatch-async pair kept invalidating the view
         // hierarchy. applyChrome is now guarded (no-op when already correct).
-        applyChrome(to: nsView.window)
+        applyChrome(to: nsView.window, coordinator: context.coordinator)
     }
 
-    private func configure(windowFor view: NSView) {
-        applyChrome(to: view.window)
-    }
-
-    private func applyChrome(to window: NSWindow?) {
+    private func applyChrome(to window: NSWindow?, coordinator: Coordinator) {
         guard let window else { return }
         // Guarded: setting title/style triggers Window-menu / layout work, so
         // only touch the window when a value actually differs.
@@ -73,11 +74,12 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         if window.isRestorable != true {
             window.isRestorable = true
         }
-        if window.identifier != NSUserInterfaceItemIdentifier("hub.main") {
-            window.identifier = NSUserInterfaceItemIdentifier("hub.main")
+        let identifier = NSUserInterfaceItemIdentifier(HubMainWindowIdentity.identifierRawValue)
+        if window.identifier != identifier {
+            window.identifier = identifier
         }
-        if window.frameAutosaveName != "hub.main" {
-            window.setFrameAutosaveName("hub.main")
+        if window.frameAutosaveName != identifier.rawValue {
+            window.setFrameAutosaveName(identifier.rawValue)
         }
         // TRAFFIC-AXIS: one vertical axis for traffic lights + sidebar icons.
         // Delta-based (preserves Apple's internal light spacing on any OS) and
@@ -111,10 +113,10 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         // No launch focus ring: SwiftUI hands initial key focus to the first
         // `.focusable()` control (the sidebar toggle), which draws our focus ring
         // on a window nobody has tabbed into yet. Clear it once; Tab still enters
-        // the key-view loop from the top. Guarded by the window identifier so the
-        // Settings window (system controls) is untouched.
-        if !Self.clearedInitialFocus.contains(ObjectIdentifier(window)) {
-            Self.clearedInitialFocus.insert(ObjectIdentifier(window))
+        // the key-view loop from the top. Only the shell hosts this configurator,
+        // so the Settings window (system controls) is untouched.
+        if !coordinator.didClearInitialFocus {
+            coordinator.didClearInitialFocus = true
             DispatchQueue.main.async {
                 window.makeFirstResponder(nil)
             }

@@ -60,6 +60,26 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         XCTAssertEqual(info.item.draggingFrame, frame)
         XCTAssertTrue(info.enumerationView === view)
     }
+
+    func testRejectedDragCursorIsPoppedWhenViewLeavesWindow() {
+        let view = ArchiveBoardDropHostingView(rootView: Text("Fixture"))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 600), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = view
+        let info = FixtureDraggingInfo(id: "fixture-song")
+        defer { info.draggingPasteboard.releaseGlobally() }
+        view.accepts = { _ in false }
+
+        XCTAssertEqual(view.draggingUpdated(info), [])
+        XCTAssertTrue(view.isShowingNotAllowedCursor)
+        // Repeated rejected updates never push twice.
+        XCTAssertEqual(view.draggingUpdated(info), [])
+        XCTAssertTrue(view.isShowingNotAllowedCursor)
+
+        // SwiftUI recreates the representable / the column collapses mid-drag:
+        // AppKit sends no draggingExited, so leaving the window must balance the stack.
+        window.contentView = nil
+        XCTAssertFalse(view.isShowingNotAllowedCursor)
+    }
 }
 
 @MainActor
