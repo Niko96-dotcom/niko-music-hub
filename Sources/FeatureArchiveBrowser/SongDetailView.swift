@@ -949,7 +949,7 @@ struct SongDetailView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(history.enumerated()), id: \.offset) { _, change in
+                    ForEach(history, id: \.changedAt) { change in
                         Text("\(change.toStatus?.displayTitle ?? "No Status") · \(HubRelativeTime.string(for: change.changedAt))")
                             .font(HubDesignSystem.Typography.caption())
                             .foregroundStyle(HubDesignSystem.Palette.textSecondary)

@@ -35,7 +35,7 @@ public struct HubSegmentedChoice<Value: Hashable>: View {
         VStack(spacing: 2) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 2) {
-                    ForEach(Array(row.enumerated()), id: \.offset) { _, option in
+                    ForEach(row, id: \.value) { option in
                         cell(option)
                     }
                     // Keep cells equal width on a short last row.
