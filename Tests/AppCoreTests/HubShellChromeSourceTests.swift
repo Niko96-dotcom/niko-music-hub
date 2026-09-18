@@ -69,7 +69,8 @@ final class HubShellChromeSourceTests: XCTestCase {
             HubMainWindowTitle.resolved(selectedToolID: ToolFeatureID("missing-tool"), registry: registry),
             "Niko Music Hub"
         )
-        XCTAssertEqual(HubShellLayout.titleBarLeadingInset, 78)
+        // Codex rhythm (2026-09-18, measured lights-to-icon gap + optical margin).
+        XCTAssertEqual(HubShellLayout.titleBarLeadingInset, 84)
 
         let chrome = try shellSource("HubWindowChromeConfigurator.swift")
         XCTAssertTrue(chrome.contains("window.title = windowTitle"))

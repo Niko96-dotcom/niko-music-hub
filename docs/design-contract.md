@@ -25,6 +25,10 @@ across pages. Do not eyeball alignment — measure it (see §7).
   `.hubChromeMaterial()`. Never a second width or a flat colour for a rail.
 - Title-bar trailing inset == page side inset (16) so title-bar icons sit in the
   same x columns as page-header icons (`HubShellLayout.titleBarTrailingInset`).
+- Title-bar rhythm is Codex-compact, NOT the page-header 30pt toolbar: 26pt
+  buttons / 13pt glyphs (`HubShellTitleBarControls.buttonSize/glyphSize`), even
+  8pt groups, and leading inset 84 (traffic-light breathing room, measured
+  against Codex 2026-09-18). Page-header actions keep 30pt / 14pt.
 - Back/forward = `HubNavigationHistory` (AppCore), created once in
   `AppComposition` and shared by BOTH `ToolContext`s. Tools with inner pages
   register a restorer (see `ArchiveBrowserViewModel+Navigation.swift`).

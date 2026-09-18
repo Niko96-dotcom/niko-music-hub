@@ -28,9 +28,10 @@ public enum HubToolLayout {
 public enum HubShellLayout {
     /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
     public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
-    /// Leading inset so toggles sit immediately after the traffic lights.
+    /// Leading inset: breathing room between the traffic lights and the first
+    /// title-bar button (measured against the Codex title bar, 2026-09-18).
     /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.
-    public static let titleBarLeadingInset: CGFloat = 78
+    public static let titleBarLeadingInset: CGFloat = 84
     /// Matches the page side inset so title-bar icons sit directly above header actions.
     public static let titleBarTrailingInset: CGFloat = HubToolLayout.horizontalPadding
 }

@@ -61,6 +61,10 @@ public struct HubIconButton: View {
     var chipColors: HubCompactChipColors = .default
     var role: ButtonRole?
     var isEnabled: Bool = true
+    /// Compact metrics for the window title bar (Codex rhythm: smaller buttons and
+    /// glyphs than page-header actions). Defaults keep the 30pt / 14pt toolbar look.
+    var controlSize: CGFloat = HubDesignSystem.Size.iconButtonSize
+    var glyphSize: CGFloat = 14
     let action: () -> Void
 
     @State private var isHovered = false
@@ -79,6 +83,8 @@ public struct HubIconButton: View {
         chipColors: HubCompactChipColors = .default,
         role: ButtonRole? = nil,
         isEnabled: Bool = true,
+        controlSize: CGFloat = HubDesignSystem.Size.iconButtonSize,
+        glyphSize: CGFloat = 14,
         action: @escaping () -> Void
     ) {
         self.systemImage = systemImage
@@ -91,6 +97,8 @@ public struct HubIconButton: View {
         self.chipColors = chipColors
         self.role = role
         self.isEnabled = isEnabled
+        self.controlSize = controlSize
+        self.glyphSize = glyphSize
         self.action = action
     }
 
@@ -133,7 +141,9 @@ public struct HubIconButton: View {
                 systemImage: systemImage,
                 prominent: prominent,
                 isSelected: isSelected,
-                isHovered: isHovered
+                isHovered: isHovered,
+                controlSize: controlSize,
+                glyphSize: glyphSize
             )
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
@@ -170,14 +180,16 @@ private struct ToolbarIconLabel: View {
     let prominent: Bool
     let isSelected: Bool
     let isHovered: Bool
+    let controlSize: CGFloat
+    let glyphSize: CGFloat
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: glyphSize, weight: .semibold))
             .foregroundStyle(toolbarForeground)
             .frame(
-                width: HubDesignSystem.Size.iconButtonSize,
-                height: HubDesignSystem.Size.iconButtonSize
+                width: controlSize,
+                height: controlSize
             )
             .background {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
