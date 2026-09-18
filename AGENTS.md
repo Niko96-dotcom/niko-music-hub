@@ -46,6 +46,9 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 
 - One header (`HubPageHeader` / `ToolHeaderBlock`), one tool-page scaffold (`HubInspectorPage`),
   one rail width + material for sidebar / inspector / inbox (`Size.chromeRailWidth`, `hubChromeMaterial`).
+- Chrome material is the bare system `.sidebar` vibrancy (the Codex sidebar material, red-sheet verified —
+  `docs/decisions/018-codex-chrome-material.md`): never `glassEffect`, never a veil/gradient over it.
+  No full-width title strip: each column reserves the 44pt title row inside its own material.
 - Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=120), 30pt controls on
   the nav-row keyline (y=144). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
   paths use `.hubInspectorRow()`. Nothing in an inspector changes height with state.

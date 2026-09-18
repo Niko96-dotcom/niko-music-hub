@@ -10,6 +10,8 @@
 - Remove idle status lines, repeated helper text, and unused explanation throughout, so each page shows the object you work with and what changed.
 - Keyboard focus, Full Keyboard Access, VoiceOver order, Full Screen, window restoration, and menu commands across the shell, Song menu, and tools now follow Apple's Human Interface Guidelines, with the system's blue focus ring replaced by the app's own quiet ring.
 - Move the board's empty-stage option into Settings, next to the other archive preferences.
+- Give the window the Codex-style shell: the sidebar, tool panel, and Output Inbox use the system sidebar material (a hint of the desktop shows through, nothing behind the window stays readable), the separate title strip is gone so each column runs to the window edge, and the window controls sit lower with more air.
+- Retune dark mode to a warm neutral gray instead of blue-black, tighten sidebar rows and captions to the Codex rhythm, lighten the row icons, and stop showing a focus ring on the sidebar toggle at launch.
 
 ## 1.5.4 - 2026-09-15
 

@@ -6,6 +6,10 @@
 > produce the exact intended outcome. Every decision is justified, every pixel placement
 > is specified, and every file that needs changing is listed.
 >
+> **Historical.** Superseded by `docs/design-contract.md` (binding) and
+> `docs/decisions/018-codex-chrome-material.md`: the shipped chrome is the
+> system sidebar material, not Liquid Glass.
+>
 > **Design direction**: Clean, friendly, modern IDE-style shell with Apple Liquid Glass
 > native aesthetics. Think Xcode meets Apple Music meets Linear -- warm, confident, quiet.
 
