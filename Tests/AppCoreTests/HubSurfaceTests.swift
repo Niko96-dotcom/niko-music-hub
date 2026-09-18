@@ -98,8 +98,8 @@ final class HubSurfaceTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(
-            materialSource.contains(".glassEffect(.regular.tint(chromeGlassTint), in: .rect)"),
-            "Chrome must use tinted regular Liquid Glass in a rect sheet."
+            materialSource.contains(".glassEffect(.regular, in: .rect)"),
+            "Chrome must use the regular Liquid Glass variant in a rect sheet."
         )
         XCTAssertFalse(
             materialSource.contains("func hubTopSheen"),

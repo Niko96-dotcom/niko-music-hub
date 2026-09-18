@@ -25,12 +25,12 @@ struct ToolSidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             appMark
 
-            HubSidebarDivider(section: "Library")
+            HubSectionHeader("Library")
             ForEach(registry.metadata.filter { $0.id.rawValue == "archive-browser" }, id: \.id) { metadata in
                 toolRow(metadata)
             }
 
-            HubSidebarDivider(section: "Production")
+            HubSectionHeader("Production")
                 .padding(.top, 16)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(registry.metadata.filter {
@@ -47,7 +47,7 @@ struct ToolSidebarView: View {
             }
 
             if context != nil {
-                HubSidebarDivider(section: "Status")
+                HubSectionHeader("Status")
                 if !jobStatusCenter.jobs.isEmpty {
                     HubJobsStatusView(center: jobStatusCenter)
                         .padding(.bottom, 8)
@@ -202,22 +202,5 @@ struct ToolSidebarView: View {
                 hoveredToolID = nextID
             }
         }
-    }
-}
-
-/// Section divider for the tools sidebar (Codex-like hairlines instead of caption
-/// headers): a 1pt separator inset exactly to the nav-row bounds (x=12, row width),
-/// so dividers and rows share one alignment. The section name survives as the
-/// divider's accessibility label.
-private struct HubSidebarDivider: View {
-    let section: String
-
-    var body: some View {
-        Rectangle()
-            .fill(HubDesignSystem.Palette.separator)
-            .frame(maxWidth: .infinity)
-            .frame(height: 1)
-            .padding(.vertical, 8)
-            .accessibilityLabel("\(section) section")
     }
 }

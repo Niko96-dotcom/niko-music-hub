@@ -14,13 +14,6 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     public static var primaryHeight: CGFloat { 168 }
     /// Matches the tools sidebar (`ToolSidebarView`): 12pt inset, 16pt between groups.
     public static var inspectorInset: CGFloat { 12 }
-    /// First-group lead compensation: a divider + label stack is 31pt
-    /// (1pt rule + 8 pad + 4 stack + 14 label + 4 stack) against the sidebar's
-    /// 17pt divider slot (8 + 1 + 8), so the writing top pulls up 14pt — first
-    /// controls land exactly on the sidebar's nav-row keyline (verified live).
-    fileprivate static var inspectorTopLead: CGFloat {
-        HubToolLayout.topPadding + HubToolLayout.headerHeight - 14
-    }
     public static var groupSpacing: CGFloat { 16 }
 
     private let header: Header
@@ -76,15 +69,15 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
 
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
-                    // Same rhythm as the tools sidebar: an empty band beside the
-                    // page title, then group labels with 32pt controls landing on
-                    // the nav-row keyline (via inspectorTopLead), 12pt side inset.
+                    // Same rhythm as the tools sidebar: an empty 56pt band beside the
+                    // page title, then caption labels on the "Library" keyline with
+                    // 34pt controls on the nav-row keyline, 12pt side inset.
                     VStack(alignment: .leading, spacing: Self.groupSpacing) {
                         inspector
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Self.inspectorInset)
-                    .padding(.top, Self.inspectorTopLead)
+                    .padding(.top, HubToolLayout.topPadding + HubToolLayout.headerHeight)
                     .padding(.bottom, HubToolLayout.bottomPadding)
                 }
                 Spacer(minLength: 0)
@@ -119,16 +112,9 @@ public struct HubInspectorGroup<Content: View>: View {
     }
 
     public var body: some View {
-        // Hairline above each group echoes the sidebar dividers (same rail
-        // language, mirrored geometry); the label stays — form controls need
-        // visible names. Label → control gap keeps the 32pt control on the
-        // sidebar's nav-row keyline.
+        // Label → control gap = HubSectionHeader's bottom padding (4), so a
+        // 34pt control lands exactly on the sidebar's nav-row keyline.
         VStack(alignment: .leading, spacing: 4) {
-            Rectangle()
-                .fill(HubDesignSystem.Palette.separator)
-                .frame(maxWidth: .infinity)
-                .frame(height: 1)
-                .padding(.bottom, 8)
             Text(label)
                 .font(HubDesignSystem.Typography.caption().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)

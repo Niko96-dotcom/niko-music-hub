@@ -21,7 +21,7 @@ across pages. Do not eyeball alignment — measure it (see §7).
 └───────────┴──────────────────────────────────────────┴───────────┴───────────┘
 ```
 
-- Every chrome rail is `HubDesignSystem.Size.chromeRailWidth` (216) and uses
+- Every chrome rail is `HubDesignSystem.Size.chromeRailWidth` (240) and uses
   `.hubChromeMaterial()`. Never a second width or a flat colour for a rail.
 - Title-bar trailing inset == page side inset (16) so title-bar icons sit in the
   same x columns as page-header icons (`HubShellLayout.titleBarTrailingInset`).
@@ -55,10 +55,8 @@ guarded by `HubSurfaceTests` / `HubLiquidDesignSystemTests`).
   default `Capsule` is for pill controls). Passive backdrop: no `.tint()`, no
   `.interactive()`, no `GlassEffectContainer` (single static sheet, nothing to
   merge/morph — a container would only cost rendering time).
-- Nothing is painted OVER the system glass: no gradient, veil, or
-  light-catching rim on the macOS 26 path. The glass is *configured* (not
-  covered) with a neutral `chromeGlassTint` that calibrates the frost toward
-  Codex chrome — tint is part of the system effect and skews no hue. Custom backgrounds overlay and
+- Nothing is painted OVER the system glass: no gradient, veil, tint, or
+  light-catching rim on the macOS 26 path. Custom backgrounds overlay and
   interfere with Liquid Glass and the scroll-edge effect, so the depth gradient
   lives ONLY on the legacy fallback (macOS 14/15 `NSVisualEffectView.sidebar` /
   `.underWindowBackground` vibrancy, or Reduce Transparency opaque fill).
@@ -87,21 +85,17 @@ guarded by `HubSurfaceTests` / `HubLiquidDesignSystemTests`).
 
 | element | x | y | size |
 |---|---|---|---|
-| app mark text (sidebar) | 16 | 58 | 26 tall, `sectionTitle` |
-| page title (any page) | 233 (= rail 216 + 16 + 1 seam) | 58 | 26 tall, `screenTitle` |
-| sidebar section divider | 12 | 120 | 192 × 1 (`HubSidebarDivider`, AX-labelled) |
-| sidebar nav row | 12 | 129 | 192 × 32 |
-| inspector group divider | 12 from rail edge | 98 | 192 × 1 (doubles as header rule) |
-| inspector group label | 12 from rail edge | 111 | 14 tall |
-| inspector control | 12 from rail edge | 129 | 192 × 32 (frame; segmented grids inset 2) |
-| primary object (tool card / board columns) | 233 | 132 | height 168 |
-| pinned primary action | 12 from rail edge | window − 16 − 32 | 192 × 32 |
+| app mark text (sidebar) | 16 | 52 | 26 tall, `sectionTitle` |
+| page title (any page) | 257 (= rail + 16 + 1 seam) | 52 | 26 tall, `screenTitle` |
+| sidebar section header ("Library") | 12 | 106 | 14 tall |
+| sidebar nav row | 12 | 124 | 216 × 34 |
+| inspector group label | rail-inset 12 | 106 | 14 tall |
+| inspector control | 12 from rail edge | 124 | 216 × 34 |
+| primary object (tool card / board columns) | 257 | 126 | height 168 |
+| pinned primary action | 12 from rail edge | window − 16 − 32 | 216 × 32 |
 
 The sidebar and the inspector are mirror images: same inset, same row height,
-same first-control keyline (129 — the inspector's divider + label stack is
-compensated by `inspectorTopLead`), same group spacing (16). If one changes,
-the other changes. Dividers replace captions on both rails (Codex-like
-hairlines); form labels stay because controls need names.
+same label keyline, same group spacing (16). If one changes, the other changes.
 
 ## 3. One header, everywhere
 
@@ -126,7 +120,7 @@ Stem Separation) renders through `HubInspectorPage`:
   that is the page's content: Queue, Recent Tempos, Recordings, Details, Results.
   Produced files go through the shared `ToolOutputShelf` (keeps the drag-to-DAW
   handoff, HAND-03).
-- `inspector` — `HubInspectorGroup(label) { control }` per option, in a fixed order, hairline divider above each group (same rail language as the sidebar).
+- `inspector` — `HubInspectorGroup(label) { control }` per option, in a fixed order.
 - `action` — the primary `HubLabeledButton(style: .primary, expands: true)` FIRST;
   secondaries (Stop/Cancel/Retry/Reset/Copy) after it as `.ghost, expands: true`.
   `HubPrimaryLastStack` pins the first child to the bottom, so the primary lands on
@@ -144,7 +138,7 @@ never moves under the cursor. Same pattern as the board⇄list title-bar flip (�
   chosen cell filled like a selected sidebar row). Use `columns:` for grids
   (Format 2×2, Sample rate 2×2). `HubChoiceChips` only where wrapping tag-style
   chips are genuinely better (currently nowhere in inspectors).
-- Text fields, sliders, path readouts, popup rows → `.hubInspectorRow()` (32pt,
+- Text fields, sliders, path readouts, popup rows → `.hubInspectorRow()` (34pt,
   flat like a sidebar row — no raised fill). Focus adds the ring.
 - Nothing in an inspector may change height with state. Conditional info
   (e.g. playlist cap) goes in a tooltip or the left list, never as a line that

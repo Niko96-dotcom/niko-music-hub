@@ -87,15 +87,10 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
            let zoom = window.standardWindowButton(.zoomButton)
         {
             let delta = HubShellLayout.trafficAxisX - close.frame.midX
-            // Vertical: center the lights in the 36pt strip the same stateless way.
-            let deltaY = HubShellLayout.titleBarHeight / 2 - close.frame.midY
-            if abs(delta) > 0.5 || abs(deltaY) > 0.5 {
+            if abs(delta) > 0.5 {
                 for button in [close, mini, zoom] {
                     button.setFrameOrigin(
-                        NSPoint(
-                            x: button.frame.origin.x + (abs(delta) > 0.5 ? delta : 0),
-                            y: button.frame.origin.y + (abs(deltaY) > 0.5 ? deltaY : 0)
-                        )
+                        NSPoint(x: button.frame.origin.x + delta, y: button.frame.origin.y)
                     )
                 }
             }

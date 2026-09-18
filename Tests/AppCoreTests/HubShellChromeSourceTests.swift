@@ -50,23 +50,6 @@ final class HubShellChromeSourceTests: XCTestCase {
         XCTAssertFalse(source.contains("@AppStorage"))
     }
 
-    // Codex-convergence geometry (2026-09-18, measured live at 1364x892):
-    // 36pt title strip, 216 rails, 32 rows, divider-led sidebar mirrored right.
-    func testCodexConvergenceGeometry() throws {
-        XCTAssertEqual(HubShellLayout.titleBarHeight, 36)
-        XCTAssertEqual(HubDesignSystem.Size.chromeRailWidth, 216)
-        XCTAssertEqual(HubDesignSystem.Spacing.navRowHeight, 32)
-
-        let sidebar = try shellSource("ToolSidebarView.swift")
-        XCTAssertTrue(sidebar.contains("HubSidebarDivider(section:"), "Sidebar sections need dividers")
-        XCTAssertFalse(sidebar.contains("HubSectionHeader(\"Library\")"), "Sidebar captions are dividers now")
-        XCTAssertFalse(sidebar.contains("HubSectionHeader(\"Production\")"), "Sidebar captions are dividers now")
-        XCTAssertFalse(sidebar.contains("HubSectionHeader(\"Status\")"), "Sidebar captions are dividers now")
-
-        let page = try SourceTestSupport.read("Sources/AppCore/Components/HubInspectorPage.swift")
-        XCTAssertTrue(page.contains("inspectorTopLead"), "First inspector control needs the keyline compensation")
-    }
-
     func testMainWindowTitleUsesToolDisplayNameOrAppFallback() throws {
         let registry = try ToolRegistry(features: [
             StubChromeFeature(id: "archive-browser", displayName: "Archive Browser"),
@@ -114,7 +97,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             "registry.metadata",
             "hoveredToolID",
             "hubSidebarNavRow",
-            "HubSidebarDivider(section:",
+            "HubSectionHeader",
             "metadata.displayName",
             "HubDesignSystem.Motion.duration",
             "accessibilityIdentifier(\"hub_tool_\\(metadata.id.rawValue)\")",
