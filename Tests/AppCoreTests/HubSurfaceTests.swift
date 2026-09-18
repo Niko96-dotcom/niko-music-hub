@@ -85,12 +85,10 @@ final class HubSurfaceTests: XCTestCase {
             materialSource.contains("material: .sidebar") && materialSource.contains("blending: .behindWindow"),
             "HubMaterial hosts one system .sidebar vibrancy sheet per chrome column (the Codex rail material)."
         )
-        XCTAssertTrue(
-            materialSource.contains("Rectangle().glassEffect(.regular, in: .rect)")
-                && materialSource.contains("Palette.sidebar.opacity(Self.glassVeilOpacity)"),
-            "macOS 26 rails are one glass sheet under the sidebar-tone veil (contract 1.1 middle ground)."
+        XCTAssertFalse(
+            materialSource.contains(".glassEffect("),
+            "Rails are bare sidebar vibrancy, never Liquid Glass (red-sheet verified, contract 1.1)."
         )
-        XCTAssertEqual(HubGlassBackdrop.glassVeilOpacity, 0.6, "Owner-chosen veil (probed 0.4/0.6/0.75, 2026-09-18).")
         XCTAssertTrue(
             materialSource.contains("accessibilityReduceTransparency"),
             "Chrome glass must skip when Reduce Transparency is on."
@@ -106,19 +104,15 @@ final class HubSurfaceTests: XCTestCase {
         )
         XCTAssertTrue(
             materialSource.contains("material: .sidebar"),
-            "Pre-26 chrome must use the system .sidebar material (what the Codex sidebar is built from)."
+            "Chrome must use the system .sidebar material (what the Codex sidebar is built from)."
         )
         XCTAssertFalse(
             materialSource.contains("func hubTopSheen"),
             "Dead fake-glass hubTopSheen helper must stay deleted (zero call sites)."
         )
         XCTAssertFalse(
-            materialSource.contains("LinearGradient"),
-            "No depth gradient over the chrome material (contract 1.1): one flat veil only."
-        )
-        XCTAssertTrue(
-            materialSource.contains("Color.white.opacity(0.30)") && materialSource.contains("Color.white.opacity(0.05)"),
-            "Rail veil is pinned to the measured Codex tones (light 205→220, dark 41→51)."
+            materialSource.contains("LinearGradient") || materialSource.contains("Color.white.opacity("),
+            "Nothing over the chrome material (contract 1.1): a veil kills the colour bleed Codex has."
         )
         XCTAssertTrue(
             materialSource.contains("extendAboveBy"),
@@ -132,14 +126,14 @@ final class HubSurfaceTests: XCTestCase {
         XCTAssertFalse(systemSource.contains("var glassInnerHighlight"))
         XCTAssertFalse(systemSource.contains("var glassStroke"))
         XCTAssertTrue(systemSource.contains("selectedRowFill"))
-        // Transparent window so the veiled glass can refract what is behind it.
+        // Standard opaque window; behind-window vibrancy needs no transparency.
         let chromeSource = try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/HubWindowChromeConfigurator.swift",
             encoding: .utf8
         )
         XCTAssertTrue(
-            chromeSource.contains("window.isOpaque = false") && chromeSource.contains("window.backgroundColor = .clear"),
-            "Main window must be non-opaque so the chrome glass refracts the desktop (guarded sets)."
+            chromeSource.contains("window.isOpaque = true"),
+            "Main window stays a standard opaque window."
         )
         XCTAssertTrue(
             chromeSource.contains("HubShellLayout.titleBarAxisY") && chromeSource.contains("bar.isFlipped"),

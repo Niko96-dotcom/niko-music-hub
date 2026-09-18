@@ -49,30 +49,25 @@ across pages. Do not eyeball alignment — measure it (see §7).
 - Output Inbox collapse threshold is derived: `540 + 2 × chromeRailWidth`.
   `toggleOutputInbox()` toggles the user's intent, not the width-derived state.
 
-## 1.1 Chrome material — veiled glass, Codex tones, chrome-only (binding, 2026-09-18)
+## 1.1 Chrome material — the Codex sidebar material, nothing over it (binding, 2026-09-18)
 
-Measured live against the Codex app (same desktop, both appearances): its
-sidebar is the standard AppKit `.sidebar` vibrancy behind the window (rail 51
-over a dark backdrop, 77 over a light one — frosted, nothing behind it legible)
-with a flat colour over it; its content column is opaque (dark rgb(45,45,43),
-light rgb(249,250,247)). The owner wants a *hint* of the desktop through the
-rail, which Codex does not have, so the rail is Codex's tone on a softer sheet:
+Verified with a red sheet behind both apps: Codex's rail went 220 →
+rgb(249,218,215) light and 51 → rgb(82,48,46) dark — the standard AppKit
+`.sidebar` vibrancy blended behind the window, which passes the colour behind
+it through (boosted saturation) while blurring away every shape. Its content
+column is opaque (dark rgb(45,45,43), light rgb(249,250,247)).
 
-- Each chrome rail paints ONE `HubGlassBackdrop`. macOS 26: one
-  `Rectangle().glassEffect(.regular, in: .rect)` under a flat
-  `Palette.sidebar` veil at `HubGlassBackdrop.glassVeilOpacity` = 0.6 — shapes
-  behind the window refract through softly, text does not; tone lands ~213
-  light / ~50–60 dark (Codex 220 / 51). Probed at 0.4 / 0.6 / 0.75 over a
-  text-heavy window; 0.6 is the owner's middle ground between opaque Codex
-  chrome (1.0) and the bare lens (0.0, which left windows behind the rail
-  readable — the "see-through sidebar" bug). macOS 14/15: `.sidebar` vibrancy
-  behind the window + a thin veil (`white .30` light / `.05` dark, measured
-  205→220 and 41→51). Nothing else over it: no gradient, rim or sheen. Column
-  separation is the 1pt `Palette.separator` `shellDivider`.
-- The window is non-opaque with a clear background (guarded sets in
-  `HubWindowChromeConfigurator`) so the glass has something to refract; every
-  column paints its own material, so nothing actually shows through. Reduce
-  Transparency → opaque `Palette.sidebar`.
+- Each chrome rail paints ONE bare `HubGlassBackdrop` =
+  `HubVisualEffectView(.sidebar, .behindWindow)` on every macOS version.
+  Nothing over it: any veil kills the bleed (a 0.30 white veil left
+  rgb(213,213,211) over the same red), and `glassEffect` is a lens that keeps
+  shapes readable (the "see-through sidebar" bug). Same red sheet behind ours
+  now: rgb(222,201,197) light, rgb(80,35,35) dark. The rail tone therefore
+  tracks the backdrop exactly like Codex's does (≈220 / ≈50 over neutral
+  desktops). Column separation is the 1pt `Palette.separator` `shellDivider`.
+- The window is a standard opaque window; inactive (non-key) rails go flat via
+  the material's `.inactive` state, same as Codex. Reduce Transparency →
+  opaque `Palette.sidebar`.
 - The neutral dark scale is Codex's warm neutral, not inky blue-black: canvas
   45/45/43, sidebar 51/52/49, surface 55/55/53, raised 70/70/68, separator
   66/66/64. Light stays 249 / 224 / 246 / 250 / 222.

@@ -119,15 +119,11 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
                 window.makeFirstResponder(nil)
             }
         }
-        // Transparent window so the veiled chrome glass can refract what is
-        // behind the window (the owner's "hint of the desktop"); every column
-        // paints its own material, so nothing actually shows through. Guarded:
-        // unconditional sets re-trigger layout passes (see LAUNCH-HANG).
-        if window.isOpaque != false {
-            window.isOpaque = false
-        }
-        if window.backgroundColor != .clear {
-            window.backgroundColor = .clear
+        // Standard opaque window: the rails are `.sidebar` vibrancy blended behind
+        // the window, which AppKit composites for opaque windows exactly like a
+        // NavigationSplitView sidebar. Guarded (see LAUNCH-HANG).
+        if window.isOpaque != true {
+            window.isOpaque = true
         }
     }
 }
