@@ -47,8 +47,16 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
                 primary
                     .frame(maxWidth: .infinity)
                     .frame(height: Self.primaryHeight)
-                list
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // The list is the only part that grows, so it is the only part that
+                // scrolls: header, live strip and the bounded object stay on their
+                // keylines no matter how many rows exist (a queue or a stem run can
+                // be dozens of rows, which otherwise pushes the whole window open).
+                ScrollView {
+                    list
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .scrollBounceBehavior(.basedOnSize)
             }
             .padding(.horizontal, HubToolLayout.horizontalPadding)
             .padding(.top, HubToolLayout.topPadding)

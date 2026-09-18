@@ -67,7 +67,8 @@ Stem Separation) renders through `HubInspectorPage`:
   errors). Idle pages have no live strip.
 - `primary` — the page's ONE bounded object at 168pt: drop zone, tap pad (with
   the 44pt `Typography.readout()` BPM), capture readout (timer), URL entry card.
-- `list` — a flat `HubListSection` (`HubListRow`, hairlines, `HubListEmpty` one-liner)
+- `list` — **scrolls** (the scaffold wraps it; header, live strip and the bounded
+  object stay pinned). A flat `HubListSection` (`HubListRow`, hairlines, `HubListEmpty` one-liner)
   that is the page's content: Queue, Recent Tempos, Recordings, Details, Results.
   Produced files go through the shared `ToolOutputShelf` (keeps the drag-to-DAW
   handoff, HAND-03).
@@ -116,6 +117,13 @@ components above, then run the measurement loop (§7) and compare against §2.
 - Big live numbers use `Typography.readout()` (44pt rounded, tabular).
 
 ## 7. Verification loop (do this, every time)
+
+**Verify every page with a FULL list, not an empty one.** An empty fixture hid a
+content-column overflow that shipped to a local install: 28 stem results grew the
+column past the window and clipped the sidebar. Seed the isolated suite's
+`output-inbox.json` (`~/Library/Application Support/Niko Music Hub/Isolated/<suite>/`)
+with real-looking rows, and check light appearance too — both were blind spots.
+
 
 1. `swift build && swift test` (source guards live in `Tests/AppCoreTests/*Source*Tests`).
 2. Launch the dev bundle with the fixture archive (`script/lib/app_lifecycle.sh`

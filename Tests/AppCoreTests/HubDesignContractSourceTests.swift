@@ -55,6 +55,16 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §4 — the growing list scrolls inside the content column. Without this a long
+    // queue or stem run (28 rows shipped broken in 1.6.0 prep) pushes the whole
+    // window open and clips the sidebar.
+    func testContentListScrolls() throws {
+        let scaffold = try read("Sources/AppCore/Components/HubInspectorPage.swift")
+        let contentColumn = scaffold.components(separatedBy: "HubDesignSystem.Palette.separator").first ?? ""
+        XCTAssertTrue(contentColumn.contains("ScrollView {"),
+                      "HubInspectorPage content column must scroll its list")
+    }
+
     // §3 — one header component; no hand-rolled titles.
     func testHeaderSurfacesUseHubPageHeader() throws {
         for path in headerSurfaces {
