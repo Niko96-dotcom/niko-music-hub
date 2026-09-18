@@ -106,7 +106,7 @@ final class HubSurfaceTests: XCTestCase {
             "Dead fake-glass hubTopSheen helper must stay deleted (zero call sites)."
         )
         if let glassRange = materialSource.range(of: "System glass path"),
-           let fallbackRange = materialSource.range(of: "Legacy / accessible fallback")
+           let fallbackRange = materialSource.range(of: "Opaque when inactive")
         {
             let glassSection = String(materialSource[glassRange.lowerBound..<fallbackRange.lowerBound])
             XCTAssertFalse(
@@ -124,6 +124,28 @@ final class HubSurfaceTests: XCTestCase {
         XCTAssertFalse(systemSource.contains("var glassInnerHighlight"))
         XCTAssertFalse(systemSource.contains("var glassStroke"))
         XCTAssertTrue(systemSource.contains("selectedRowFill"))
+        // LIQUID-KEY: transparent window for desktop shine-through (guarded sets).
+        let chromeSource = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppShell/HubWindowChromeConfigurator.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            chromeSource.contains("window.isOpaque = false"),
+            "Main window must be non-opaque so chrome glass refracts the desktop."
+        )
+        XCTAssertTrue(
+            chromeSource.contains("window.backgroundColor = .clear"),
+            "Main window background must be clear so chrome glass refracts the desktop."
+        )
+        // LIQUID-KEY: glass only while key; inactive chrome is opaque, never dimmed glass.
+        XCTAssertTrue(
+            materialSource.contains("isWindowActive"),
+            "Chrome backdrop must gate glass on key-window state."
+        )
+        XCTAssertFalse(
+            materialSource.contains(".opacity(isWindowActive ? 1 : 0.55)"),
+            "Inactive chrome must be opaque, not dimmed glass (LIQUID-KEY)."
+        )
         XCTAssertTrue(
             systemSource.contains("92/255"),
             "Dark Palette.selection is pinned to the measured live-glass floor (rgb 92,92,96): "

@@ -72,17 +72,18 @@ struct HubGlassBackdrop: View {
     private var isWindowActive: Bool { controlActiveState == .key }
 
     var body: some View {
-        if #available(macOS 26.0, *), !reduceTransparency {
+        // LIQUID-KEY: glass only while key (desktop shines through); unfocused
+        // chrome is opaque sidebar, like the Codex sidebar.
+        if #available(macOS 26.0, *), !reduceTransparency, isWindowActive {
             // System glass path — nothing painted over it.
             Rectangle().glassEffect(.regular, in: .rect)
-                .opacity(isWindowActive ? 1 : 0.55)
         } else {
-            // Legacy / accessible fallback: semantic sidebar veil + static depth.
-            // (Real AppKit vibrancy underneath via HubShellBackground on macOS <26;
-            // opaque sidebar fill when Reduce Transparency is on.)
+            // Opaque when inactive (LIQUID-KEY) or Reduce Transparency is on;
+            // legacy semantic veil over AppKit vibrancy on macOS 14/15.
+            // (Real AppKit vibrancy underneath via HubShellBackground on macOS <26.)
             ZStack {
                 HubDesignSystem.Palette.sidebar.opacity(
-                    reduceTransparency ? 1 : (isWindowActive ? max(tint, 0.72) : 1)
+                    reduceTransparency || !isWindowActive ? 1 : max(tint, 0.72)
                 )
                 LinearGradient(
                     colors: [

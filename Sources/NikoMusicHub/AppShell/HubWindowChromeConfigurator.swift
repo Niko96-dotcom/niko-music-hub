@@ -75,5 +75,17 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         if window.frameAutosaveName != "hub.main" {
             window.setFrameAutosaveName("hub.main")
         }
+        // LIQUID-KEY: desktop shine-through for the chrome glass (Codex-like).
+        // The chrome rails are system glass over the window base — with an opaque
+        // window they would only refract our own canvas fill. A transparent window
+        // lets them refract the desktop when key; the content column paints its own
+        // opaque canvas so only chrome + title strip are affected. Guarded: setting
+        // these unconditionally re-triggers display/layout passes (see LAUNCH-HANG).
+        if window.isOpaque != false {
+            window.isOpaque = false
+        }
+        if window.backgroundColor != .clear {
+            window.backgroundColor = .clear
+        }
     }
 }

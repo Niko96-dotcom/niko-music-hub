@@ -57,11 +57,18 @@ guarded by `HubSurfaceTests` / `HubLiquidDesignSystemTests`).
   styles are intentionally NOT adopted: they paint system boxes that fight the
   flat selection pill (DS-12/DS-13) and the zero-blue rule. Revisit only as a
   contract amendment with new measurement.
-- Accessibility is part of the material: Reduce Transparency → opaque sidebar
-  fill (never glass); Increase Contrast widens card strokes to 2pt; inactive
-  windows subdue chrome (NMH-069); every token flips light/dark/high-contrast
-  via `HubDynamicColor`. No `.clear` glass (no media backdrop to float over),
-  no `backgroundExtensionEffect` (flush opaque split is intentional, not a hero
+- Key-state glass (LIQUID-KEY, Codex-like): the window is transparent
+  (`isOpaque = false`, `backgroundColor = .clear`, guarded in
+  `HubWindowChromeConfigurator`) and the shell base veil is low (0.28) while
+  key, so chrome glass refracts the desktop; the content column stays opaque on
+  its own canvas. When the window resigns key, chrome goes fully opaque
+  (`Palette.sidebar`, no glass) and the shell veil goes 1.0 — unfocused chrome
+  never pretends translucency. Reduce Transparency → opaque sidebar fill (never
+  glass), same as inactive.
+- Accessibility is part of the material: Increase Contrast widens card strokes
+  to 2pt; every token flips light/dark/high-contrast via `HubDynamicColor`.
+  No `.clear` glass (no media backdrop to float over), no
+  `backgroundExtensionEffect` (flush opaque split is intentional, not a hero
   image), no custom scroll-edge registration (no content scrolls beneath the
   rails — re-verify if that layout ever changes).
 
