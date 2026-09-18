@@ -4,39 +4,18 @@ import SwiftUI
 
 /// Window shell background — the canonical semantic shell fill (real primitive, not an alias).
 ///
-/// Content base, deliberately NOT glass (HIG Materials: content layer stays opaque /
-/// standard materials; Liquid Glass is the functional chrome layer only). On macOS 26
-/// the single glass sheet lives in `HubGlassBackdrop` per chrome column — this view
-/// contributes no second window-wide material under the opaque content (the `EmptyView`
-/// branch). On macOS 14/15 it contributes real AppKit vibrancy
-/// (`.underWindowBackground` / `.behindWindow`, a pre-Tahoe system material, not Liquid
-/// Glass). The canvas veil + static gradient below are the opaque content base, in a
-/// different column from the chrome glass, so they never overlay or dull it.
+/// Content base, deliberately opaque (HIG Materials: the content layer stays
+/// opaque; the frosted material is per chrome column in `HubGlassBackdrop`). The
+/// canvas veil + static gradient below are the opaque content base under the
+/// column seams; they never overlay the chrome material.
 public struct HubShellBackground: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.controlActiveState) private var controlActiveState
-
     public init() {}
-
-    /// Inactive (non-key window) chrome is subdued (NMH-069).
-    private var isWindowActive: Bool { controlActiveState == .key }
 
     public var body: some View {
         ZStack {
-            if !reduceTransparency {
-                if #available(macOS 26.0, *) {
-                    // Liquid Glass is one chrome-column sheet (`HubGlassBackdrop`), not a
-                    // second window-wide material under opaque content. Base stays
-                    // transparent so key-window chrome refracts the desktop (LIQUID-KEY).
-                    EmptyView()
-                } else {
-                    HubVisualEffectView(
-                        material: .underWindowBackground,
-                        blending: .behindWindow,
-                        isActive: isWindowActive
-                    )
-                }
-            }
+            // The chrome columns paint their own `.sidebar` vibrancy and the content
+            // column its own opaque canvas, so this base only shows at the column
+            // seams: keep it a plain opaque canvas (no second window-wide material).
             HubDesignSystem.Palette.canvas
                 .opacity(shellOpacity)
             LinearGradient(
@@ -52,18 +31,9 @@ public struct HubShellBackground: View {
         .ignoresSafeArea()
     }
 
-    /// Window-base veil. macOS 26 + key: low — the content column is opaque on its
-    /// own, so this only dims the title strip (legibility over busy wallpaper) and
-    /// tints what the chrome glass refracts. Inactive / Reduce Transparency: fully
-    /// opaque — unfocused chrome goes solid like the Codex sidebar (LIQUID-KEY).
-    private var shellOpacity: Double {
-        if reduceTransparency { return 1 }
-        if #available(macOS 26.0, *) {
-            return isWindowActive ? 0.28 : 1.0
-        } else {
-            return isWindowActive ? 0.82 : 0.94
-        }
-    }
+    /// Window-base veil: opaque. Since the title row lives inside the columns
+    /// (no full-width strip), nothing refracts through this base any more.
+    private var shellOpacity: Double { 1 }
 }
 
 /// Sidebar / nav row selection — the sidebar selection primitive (restyled, NOT deprecated).

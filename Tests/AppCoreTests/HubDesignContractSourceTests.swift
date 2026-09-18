@@ -104,7 +104,8 @@ final class HubDesignContractSourceTests: XCTestCase {
         XCTAssertFalse(shell.contains("minWidth: 232"), "no literal inbox width")
         let inspector = try read("Sources/AppCore/Components/HubInspectorPage.swift")
         XCTAssertTrue(inspector.contains("HubDesignSystem.Size.chromeRailWidth"), "inspector rail must use chromeRailWidth")
-        XCTAssertTrue(inspector.contains(".hubChromeMaterial()"), "inspector uses the sidebar chrome material")
+        XCTAssertTrue(inspector.contains(".hubChromeMaterial(extendAboveBy: titleRowInset)"),
+                      "inspector uses the sidebar chrome material and reaches through the title row")
         XCTAssertEqual(HubDesignSystem.Size.navWidth, HubDesignSystem.Size.chromeRailWidth)
         XCTAssertEqual(HubShellLayout.titleBarTrailingInset, HubToolLayout.horizontalPadding,
                        "title-bar icons must sit in the page-header icon columns")

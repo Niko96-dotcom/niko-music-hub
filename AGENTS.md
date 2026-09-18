@@ -46,8 +46,8 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 
 - One header (`HubPageHeader` / `ToolHeaderBlock`), one tool-page scaffold (`HubInspectorPage`),
   one rail width + material for sidebar / inspector / inbox (`Size.chromeRailWidth`, `hubChromeMaterial`).
-- Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=106), 34pt controls on
-  the nav-row keyline (y=124). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
+- Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=120), 34pt controls on
+  the nav-row keyline (y=138). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
   paths use `.hubInspectorRow()`. Nothing in an inspector changes height with state.
 - The primary action is `HubLabeledButton(.primary, expands: true)`, FIRST in the `action` slot; it is
   pinned to the bottom on every tool (`HubPrimaryLastStack`).

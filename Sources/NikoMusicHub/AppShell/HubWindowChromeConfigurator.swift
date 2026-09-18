@@ -7,6 +7,9 @@ import SwiftUI
 struct HubWindowChromeConfigurator: NSViewRepresentable {
     var windowTitle: String
 
+    /// Windows whose launch first responder has been cleared (see applyChrome).
+    @MainActor private static var clearedInitialFocus = Set<ObjectIdentifier>()
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
         if view.window != nil {
@@ -86,26 +89,41 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
            let mini = window.standardWindowButton(.miniaturizeButton),
            let zoom = window.standardWindowButton(.zoomButton)
         {
+            // Vertical: centre the lights on the 44pt title row. The buttons live in
+            // AppKit's titlebar view (NOT flipped, ~28pt tall), so measure their
+            // distance from the window top through that view's bounds instead of
+            // assuming a flipped theme frame (that assumption pushed them UP).
             let delta = HubShellLayout.trafficAxisX - close.frame.midX
-            if abs(delta) > 0.5 {
+            var deltaY: CGFloat = 0
+            if let bar = close.superview {
+                let fromTop = bar.isFlipped ? close.frame.midY : bar.bounds.height - close.frame.midY
+                let wanted = HubShellLayout.titleBarAxisY - fromTop
+                deltaY = bar.isFlipped ? wanted : -wanted
+            }
+            if abs(delta) > 0.5 || abs(deltaY) > 0.5 {
                 for button in [close, mini, zoom] {
                     button.setFrameOrigin(
-                        NSPoint(x: button.frame.origin.x + delta, y: button.frame.origin.y)
+                        NSPoint(x: button.frame.origin.x + delta, y: button.frame.origin.y + deltaY)
                     )
                 }
             }
         }
-        // LIQUID-KEY: desktop shine-through for the chrome glass (Codex-like).
-        // The chrome rails are system glass over the window base — with an opaque
-        // window they would only refract our own canvas fill. A transparent window
-        // lets them refract the desktop when key; the content column paints its own
-        // opaque canvas so only chrome + title strip are affected. Guarded: setting
-        // these unconditionally re-triggers display/layout passes (see LAUNCH-HANG).
-        if window.isOpaque != false {
-            window.isOpaque = false
+        // No launch focus ring: SwiftUI hands initial key focus to the first
+        // `.focusable()` control (the sidebar toggle), which draws our focus ring
+        // on a window nobody has tabbed into yet. Clear it once; Tab still enters
+        // the key-view loop from the top. Guarded by the window identifier so the
+        // Settings window (system controls) is untouched.
+        if !Self.clearedInitialFocus.contains(ObjectIdentifier(window)) {
+            Self.clearedInitialFocus.insert(ObjectIdentifier(window))
+            DispatchQueue.main.async {
+                window.makeFirstResponder(nil)
+            }
         }
-        if window.backgroundColor != .clear {
-            window.backgroundColor = .clear
+        // Standard opaque window: the chrome rails use `.sidebar` vibrancy blended
+        // behind the window, which AppKit composites without a transparent window
+        // (same as any NavigationSplitView sidebar). No shine-through needed.
+        if window.isOpaque != true {
+            window.isOpaque = true
         }
     }
 }

@@ -82,8 +82,12 @@ final class HubSurfaceTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(
-            materialSource.contains("#available(macOS 26.0") && materialSource.contains(".glassEffect("),
-            "HubMaterial hosts one Liquid Glass sheet for chrome on macOS 26."
+            materialSource.contains("material: .sidebar") && materialSource.contains("blending: .behindWindow"),
+            "HubMaterial hosts one system .sidebar vibrancy sheet per chrome column (the Codex rail material)."
+        )
+        XCTAssertFalse(
+            materialSource.contains(".glassEffect(.regular"),
+            "Chrome rails are frosted sidebar vibrancy, never lens-like Liquid Glass (contract 1.1)."
         )
         XCTAssertTrue(
             materialSource.contains("accessibilityReduceTransparency"),
@@ -91,31 +95,33 @@ final class HubSurfaceTests: XCTestCase {
         )
     }
 
-    // Contract 1.1 (2026-09-18): the macOS 26 chrome glass path is system-owned.
-    func testChromeGlassPathIsSystemOwned() throws {
+    // Contract 1.1 (2026-09-18, measured against Codex): chrome = system sidebar
+    // vibrancy + one flat neutral veil; no gradient, rim or Liquid Glass.
+    func testChromeMaterialIsSidebarVibrancyPlusFlatVeil() throws {
         let materialSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
             encoding: .utf8
         )
         XCTAssertTrue(
-            materialSource.contains(".glassEffect(.regular, in: .rect)"),
-            "Chrome must use the regular Liquid Glass variant in a rect sheet."
+            materialSource.contains("material: .sidebar"),
+            "Chrome must use the system .sidebar material (what the Codex sidebar is built from)."
         )
         XCTAssertFalse(
             materialSource.contains("func hubTopSheen"),
             "Dead fake-glass hubTopSheen helper must stay deleted (zero call sites)."
         )
-        if let glassRange = materialSource.range(of: "System glass path"),
-           let fallbackRange = materialSource.range(of: "Opaque when inactive")
-        {
-            let glassSection = String(materialSource[glassRange.lowerBound..<fallbackRange.lowerBound])
-            XCTAssertFalse(
-                glassSection.contains("LinearGradient"),
-                "No custom gradient over native glassEffect (contract 1.1)."
-            )
-        } else {
-            XCTFail("HubMaterial must keep the glass/fallback section markers for 1.1.")
-        }
+        XCTAssertFalse(
+            materialSource.contains("LinearGradient"),
+            "No depth gradient over the chrome material (contract 1.1): one flat veil only."
+        )
+        XCTAssertTrue(
+            materialSource.contains("Color.white.opacity(0.30)") && materialSource.contains("Color.white.opacity(0.05)"),
+            "Rail veil is pinned to the measured Codex tones (light 205→220, dark 41→51)."
+        )
+        XCTAssertTrue(
+            materialSource.contains("extendAboveBy"),
+            "Nested rails must be able to extend through the shell title row."
+        )
 
         let systemSource = try String(
             contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
@@ -124,32 +130,37 @@ final class HubSurfaceTests: XCTestCase {
         XCTAssertFalse(systemSource.contains("var glassInnerHighlight"))
         XCTAssertFalse(systemSource.contains("var glassStroke"))
         XCTAssertTrue(systemSource.contains("selectedRowFill"))
-        // LIQUID-KEY: transparent window for desktop shine-through (guarded sets).
+        // Opaque standard window; sidebar vibrancy needs no transparent window.
         let chromeSource = try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/HubWindowChromeConfigurator.swift",
             encoding: .utf8
         )
         XCTAssertTrue(
-            chromeSource.contains("window.isOpaque = false"),
-            "Main window must be non-opaque so chrome glass refracts the desktop."
-        )
-        XCTAssertTrue(
-            chromeSource.contains("window.backgroundColor = .clear"),
-            "Main window background must be clear so chrome glass refracts the desktop."
-        )
-        // LIQUID-KEY: glass only while key; inactive chrome is opaque, never dimmed glass.
-        XCTAssertTrue(
-            materialSource.contains("isWindowActive"),
-            "Chrome backdrop must gate glass on key-window state."
+            chromeSource.contains("window.isOpaque = true"),
+            "Main window stays opaque (no LIQUID-KEY shine-through)."
         )
         XCTAssertFalse(
-            materialSource.contains(".opacity(isWindowActive ? 1 : 0.55)"),
-            "Inactive chrome must be opaque, not dimmed glass (LIQUID-KEY)."
+            chromeSource.contains("window.backgroundColor = .clear"),
+            "Main window background must not be cleared (nothing refracts the desktop any more)."
         )
         XCTAssertTrue(
-            systemSource.contains("92/255"),
-            "Dark Palette.selection is pinned to the measured live-glass floor (rgb 92,92,96): "
-                + "the active glass rail renders ~63 over a dark desktop, the old 64-fill was invisible."
+            chromeSource.contains("HubShellLayout.titleBarAxisY") && chromeSource.contains("bar.isFlipped"),
+            "Traffic lights centre on the title row via their titlebar view's own coordinates."
+        )
+        XCTAssertTrue(
+            chromeSource.contains("window.makeFirstResponder(nil)"),
+            "Launch must not leave keyboard focus (and our focus ring) on the sidebar toggle."
+        )
+        // Selection pill: translucent neutral step that survives any rail tone
+        // (Codex measured: light −10 on 220, dark +15 on 51).
+        XCTAssertTrue(
+            systemSource.contains("light: Color.black.opacity(0.055)") && systemSource.contains("dark:  Color.white.opacity(0.09)"),
+            "Palette.selection is a translucent neutral pill calibrated to the Codex sidebar step."
+        )
+        // Dark neutral scale = Codex content column (warm neutral 45/45/43), not inky blue-black.
+        XCTAssertTrue(
+            systemSource.contains("red: 45/255,  green: 45/255,  blue: 43/255"),
+            "Dark canvas is pinned to the measured Codex content tone."
         )
     }
 }

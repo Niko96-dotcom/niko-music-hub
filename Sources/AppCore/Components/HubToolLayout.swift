@@ -26,8 +26,14 @@ public enum HubToolLayout {
 
 /// Shared shell chrome insets for the unified title bar row.
 public enum HubShellLayout {
-    /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
-    public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
+    /// Title row reserved at the top of every column (Codex: lights + sidebar
+    /// toggle centred ~23pt below the window edge, sidebar header at ~62pt).
+    /// 44pt gives that air; the traffic lights are re-centred on it by
+    /// `HubWindowChromeConfigurator`. Decoupled from `iconButtonSize`.
+    public static let titleBarHeight: CGFloat = 44
+    /// Vertical centre of the title row — the shared axis for traffic lights and
+    /// title controls.
+    public static var titleBarAxisY: CGFloat { titleBarHeight / 2 }
     /// Leading inset: breathing room between the traffic lights and the first
     /// title-bar button. Clears the repositioned lights (zoom ends ~85) + 14pt gap.
     /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.
@@ -43,6 +49,20 @@ public enum HubShellLayout {
         12 + 10 + HubDesignSystem.Size.sidebarIconFrame / 2 // 31
     /// Matches the page side inset so title-bar icons sit directly above header actions.
     public static let titleBarTrailingInset: CGFloat = HubToolLayout.horizontalPadding
+}
+
+/// Title-row reservation the shell applies at the top of every column. Rails that
+/// are nested INSIDE the content column (the tool inspector) read it to extend
+/// their material and seam up through the row, so every rail meets the window top.
+private struct HubTitleRowInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    var hubTitleRowInset: CGFloat {
+        get { self[HubTitleRowInsetKey.self] }
+        set { self[HubTitleRowInsetKey.self] = newValue }
+    }
 }
 
 /// `NSWindow.title` for the hidden-title-bar shell (Window menu / Mission Control).

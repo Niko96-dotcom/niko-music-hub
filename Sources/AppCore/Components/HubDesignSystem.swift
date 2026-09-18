@@ -250,32 +250,34 @@ public enum HubDesignSystem {
     // via `NSColor(name:dynamicProvider:)` — no mutable global ThemeManager (DS-09).
 
     public enum Palette {
-        /// Window background, opaque. calm-native --canvas rgb(17,18,21) — inky near-black, faint cool.
+        /// Window background, opaque. Dark = Codex content column measured rgb(45,45,43)
+        /// (2026-09-18): neutral warm-gray, NOT inky blue-black; light = rgb(249).
         public static let canvas = Color(HubDynamicColor(
             light: Color(.sRGB, red: 249/255, green: 249/255, blue: 248/255, opacity: 1),
-            dark:  Color(.sRGB, red: 17/255,  green: 18/255,  blue: 21/255,  opacity: 1),
+            dark:  Color(.sRGB, red: 45/255,  green: 45/255,  blue: 43/255,  opacity: 1),
             lightHigh: Color(.sRGB, red: 255/255, green: 255/255, blue: 255/255, opacity: 1),
-            darkHigh:  Color(.sRGB, red: 12/255,  green: 13/255,  blue: 16/255,  opacity: 1)))
-        /// NavigationSplitView sidebar. calm-native --sidebar rgb(23,24,28).
+            darkHigh:  Color(.sRGB, red: 30/255,  green: 30/255,  blue: 29/255,  opacity: 1)))
+        /// Chrome rail fallback fill (Reduce Transparency) + pressed fill. Matches the
+        /// live `.sidebar` vibrancy tone of the Codex rail: dark rgb(51,52,49), light rgb(224).
         public static let sidebar = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 238/255, green: 239/255, blue: 239/255, opacity: 1),
-            dark:  Color(.sRGB, red: 23/255,  green: 24/255,  blue: 28/255,  opacity: 1),
-            lightHigh: Color(.sRGB, red: 226/255, green: 226/255, blue: 226/255, opacity: 1),
-            darkHigh:  Color(.sRGB, red: 18/255,  green: 19/255,  blue: 23/255,  opacity: 1)))
-        /// Grouped content surface. calm-native --surface rgb(28,29,33).
+            light: Color(.sRGB, red: 224/255, green: 224/255, blue: 222/255, opacity: 1),
+            dark:  Color(.sRGB, red: 51/255,  green: 52/255,  blue: 49/255,  opacity: 1),
+            lightHigh: Color(.sRGB, red: 214/255, green: 214/255, blue: 212/255, opacity: 1),
+            darkHigh:  Color(.sRGB, red: 40/255,  green: 40/255,  blue: 38/255,  opacity: 1)))
+        /// Grouped content surface: one step over the canvas (dark 55 on 45).
         public static let surface = Color(HubDynamicColor(
             light: Color(.sRGB, red: 246/255, green: 246/255, blue: 245/255, opacity: 1),
-            dark:  Color(.sRGB, red: 28/255,  green: 29/255,  blue: 33/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 55/255,  green: 55/255,  blue: 53/255,  opacity: 1)))
         /// Popover / raised group. calm-native --surfaceRaised rgb(37,39,44).
         public static let surfaceRaised = Color(HubDynamicColor(
             light: Color(.sRGB, red: 250/255, green: 250/255, blue: 249/255, opacity: 1),
-            dark:  Color(.sRGB, red: 37/255,  green: 39/255,  blue: 44/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 70/255,  green: 70/255,  blue: 68/255,  opacity: 1)))
         /// Divider/stroke between surfaces. calm-native --separator rgb(52,54,60) — crisp hairline on near-black.
         public static let separator = Color(HubDynamicColor(
             light: Color(.sRGB, red: 222/255, green: 222/255, blue: 222/255, opacity: 1),
-            dark:  Color(.sRGB, red: 52/255,  green: 54/255,  blue: 60/255,  opacity: 1),
+            dark:  Color(.sRGB, red: 66/255,  green: 66/255,  blue: 64/255,  opacity: 1),
             lightHigh: Color(.sRGB, red: 150/255, green: 150/255, blue: 150/255, opacity: 1),
-            darkHigh:  Color(.sRGB, red: 90/255,  green: 92/255,  blue: 100/255, opacity: 1)))
+            darkHigh:  Color(.sRGB, red: 110/255, green: 110/255, blue: 108/255, opacity: 1)))
         /// Primary readable text. calm-native --textPrimary rgb(237,238,241). Dark high-contrast keeps the same RGB.
         public static let textPrimary = Color(HubDynamicColor(
             light: Color(.sRGB, red: 28/255,  green: 28/255,  blue: 30/255,  opacity: 1),
@@ -299,24 +301,24 @@ public enum HubDesignSystem {
             dark:  Color(.sRGB, red: 140/255, green: 142/255, blue: 152/255, opacity: 1),
             lightHigh: Color(.sRGB, red: 80/255,  green: 80/255,  blue: 86/255,  opacity: 1),
             darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
-        /// Codex-quiet neutral selection fill (low-chroma, NOT accent): a flat gray pill
-        /// darker than the rail in light mode, like the ChatGPT/Codex sidebar.
-        /// Dark value measured against LIVE Liquid Glass (2026-09-18, dev bundle PID run):
-        /// the active glass rail renders ~rgb(63) over a dark desktop while the old
-        /// rgb(64,64,66) pill rendered ~rgb(63) too — selected rows were indistinguishable
-        /// (only the 0.55 inactive dim made the pill reappear). rgb(92,92,96) restores a
-        /// quiet but measurable step over active glass; still neutral (R≈G≈B, DS-12/DS-13).
+        /// Codex-quiet neutral selection fill (low-chroma, NOT accent): a flat gray
+        /// pill, darker than the rail in light mode and a small step lighter in dark,
+        /// like the ChatGPT/Codex sidebar. Measured Codex (2026-09-18): light pill
+        /// rgb(210) on a rgb(220) rail (-10), dark rgb(66) on rgb(51) (+15). The
+        /// rail is a `.sidebar` vibrancy whose tone drifts with the desktop, so the
+        /// pill is a translucent neutral that keeps that step over ANY rail tone
+        /// instead of an opaque gray that only matched one backdrop (DS-12/DS-13).
         public static let selection = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 216/255, green: 214/255, blue: 211/255, opacity: 1),
-            dark:  Color(.sRGB, red: 92/255,  green: 92/255,  blue: 96/255,  opacity: 1)))
+            light: Color.black.opacity(0.055),
+            dark:  Color.white.opacity(0.09)))
         /// Selection stroke. calm-native --selectionStroke rgb(64,66,74).
         public static let selectionStroke = Color(HubDynamicColor(
             light: Color(.sRGB, red: 208/255, green: 208/255, blue: 208/255, opacity: 1),
-            dark:  Color(.sRGB, red: 64/255,  green: 66/255,  blue: 74/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 82/255,  green: 82/255,  blue: 80/255,  opacity: 1)))
         /// Generic focus ring (low-chroma, NOT accent per DS-13). calm-native --focus rgb(80,82,90).
         public static let focus = Color(HubDynamicColor(
             light: Color(.sRGB, red: 198/255, green: 198/255, blue: 198/255, opacity: 1),
-            dark:  Color(.sRGB, red: 80/255,  green: 82/255,  blue: 90/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 98/255,  green: 98/255,  blue: 96/255,  opacity: 1)))
         /// Monochrome emphasis (the references are neutral — Knowledge Base / Analog / Finder
         /// chrome carry NO brand tint; color comes from content). "Accent" is now a bright cool
         /// neutral: near-white on dark, near-black on light. Used for primary action / active
@@ -389,8 +391,8 @@ public enum HubDesignSystem {
 
     // MARK: - Selection (legacy "Glass" facade removed 2026-09-18: glassStroke /
     // glassInnerHighlight were uncalled fake-glass vocabulary — hand-painted strokes,
-    // not system Liquid Glass. Real glass lives only in HubMaterial.HubGlassBackdrop
-    // (.glassEffect(.regular, in: .rect), chrome rails, macOS 26). Kept tokens below
+    // not a system material. The chrome material lives only in
+    // HubMaterial.HubGlassBackdrop (.sidebar vibrancy + flat veil). Kept tokens below
     // are the neutral selection fills pinned by HubDesignSystemTokenTests.)
 
     public static var selectedRowFill: Color { Color.primary.opacity(0.06) }

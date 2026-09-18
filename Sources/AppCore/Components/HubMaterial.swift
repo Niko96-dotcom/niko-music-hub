@@ -3,10 +3,10 @@ import SwiftUI
 
 /// Translucent system vibrancy backing (`NSVisualEffectView`) for chrome surfaces.
 ///
-/// Legacy macOS 14/15 path: AppKit's native sidebar material inside the
-/// window. On macOS 26, `HubGlassBackdrop` is native SwiftUI Liquid Glass instead
-/// (see below). These are real Apple materials — `NSVisualEffectView` vibrancy is
-/// the pre-Tahoe system, not Liquid Glass, and is kept as the correct fallback.
+/// `HubGlassBackdrop` wraps this with the `.sidebar` material on every macOS
+/// version: it is the material the Codex sidebar is built from, and it stays the
+/// frosted sidebar look on macOS 26 too (Liquid Glass is reserved by Apple for
+/// floating controls, not full-height rails).
 public struct HubVisualEffectView: NSViewRepresentable {
     public let material: NSVisualEffectView.Material
     public let blending: NSVisualEffectView.BlendingMode
@@ -46,67 +46,62 @@ public struct HubVisualEffectView: NSViewRepresentable {
 
 /// Frosted chrome backdrop for the sidebar / inspector / inbox rails.
 ///
-/// Native Liquid Glass, chrome-only, per Apple HIG Materials + "Adopting Liquid Glass":
-/// one `.regular` sheet in `.rect` behind each chrome column (not per-row, not on
-/// content cards). `.regular` is the text-legible variant for sidebars/inspectors;
-/// `.rect` fits a large flush sheet (the default `Capsule` suits pill controls).
-/// The backdrop is passive (not `.interactive()`, no `.tint()`, no
-/// `GlassEffectContainer`): a single static sheet with nothing to merge or morph,
-/// so a container would only cost rendering time. Chrome carries no brand tint
-/// (contract §4c).
-///
-/// System owns the glass path: no custom gradient, veil, or rim is composited over
-/// `glassEffect` — custom backgrounds overlay and interfere with Liquid Glass and
-/// the scroll-edge effect ("Adopting Liquid Glass" → Visual refresh). The depth
-/// gradient below lives ONLY on the legacy fallback path (macOS 14/15, or Reduce
-/// Transparency on), where there is no system glass to interfere with.
+/// The Codex/ChatGPT sidebar material, measured live (2026-09-18): the standard
+/// AppKit `.sidebar` vibrancy blended `.behindWindow` — heavily frosted, so the
+/// desktop only lifts or lowers the rail tone (dark rail ~rgb(51) over a dark
+/// backdrop, ~rgb(77) over a light one) and nothing behind it stays readable.
+/// This is deliberately NOT Liquid Glass (`glassEffect`): that material is a lens
+/// (windows behind the rail stayed legible through it), which reads as a bug in a
+/// tools sidebar. One sheet per chrome column plus ONE flat neutral veil, the
+/// way Codex lays its sidebar colour over the vibrancy: the veil lifts the rail
+/// to Codex's measured tone (dark ~rgb(51) over a rgb(45) canvas, light ~rgb(220)
+/// over rgb(249)) so the rail always reads a hair lighter than the content in
+/// dark and darker in light, whatever the desktop. No gradient, no rim; the
+/// system owns the frost and the key-window dimming (`.inactive` state).
+/// Reduce Transparency → opaque `Palette.sidebar`.
 struct HubGlassBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
-    /// Fallback-only veil strength (macOS 14/15, or Reduce Transparency).
-    /// Ignored on the macOS 26 system glass path.
+    /// Kept for call-site compatibility; the system sidebar material carries its
+    /// own tone, so nothing is tinted with it any more.
     let tint: Double
 
-    /// Inactive (non-key window) chrome is subdued (NMH-069).
+    /// Inactive (non-key window) chrome is subdued by the system material (NMH-069).
     private var isWindowActive: Bool { controlActiveState == .key }
 
     var body: some View {
-        // LIQUID-KEY: glass only while key (desktop shines through); unfocused
-        // chrome is opaque sidebar, like the Codex sidebar.
-        if #available(macOS 26.0, *), !reduceTransparency, isWindowActive {
-            // System glass path — nothing painted over it.
-            Rectangle().glassEffect(.regular, in: .rect)
+        if reduceTransparency {
+            HubDesignSystem.Palette.sidebar
         } else {
-            // Opaque when inactive (LIQUID-KEY) or Reduce Transparency is on;
-            // legacy semantic veil over AppKit vibrancy on macOS 14/15.
-            // (Real AppKit vibrancy underneath via HubShellBackground on macOS <26.)
             ZStack {
-                HubDesignSystem.Palette.sidebar.opacity(
-                    reduceTransparency || !isWindowActive ? 1 : max(tint, 0.72)
+                // System sidebar material — the same sheet the Codex sidebar uses.
+                HubVisualEffectView(
+                    material: .sidebar,
+                    blending: .behindWindow,
+                    isActive: isWindowActive
                 )
-                LinearGradient(
-                    colors: [
-                        Color(HubDynamicColor(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.07))),
-                        Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
-                        Color.black.opacity(0.12),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                // Codex rail veil (measured 2026-09-18 over the live material:
+                // dark 41 → 51, light 205 → 220).
+                Color(HubDynamicColor(
+                    light: Color.white.opacity(0.30),
+                    dark: Color.white.opacity(0.05)
+                ))
             }
         }
     }
 }
 
 public extension View {
-    /// Frosted-glass chrome for the sidebar / inspector / inbox rails.
-    /// macOS 26: one system-owned Liquid Glass sheet (`.regular` in `.rect`);
-    /// Reduce Transparency on: opaque sidebar fill; macOS 14/15: semantic veil over
-    /// AppKit vibrancy. `tint` tunes ONLY the fallback veil.
-    func hubChromeMaterial(tint: Double = 0.5) -> some View {
+    /// Frosted chrome for the sidebar / inspector / inbox rails: one system
+    /// `.sidebar` vibrancy sheet per column (Codex material); Reduce
+    /// Transparency on: opaque sidebar fill. `tint` is accepted but unused.
+    /// `extendAboveBy` grows the sheet upward past the view's own top (a nested
+    /// rail reaching through the shell's title row to the window edge).
+    func hubChromeMaterial(tint: Double = 0.5, extendAboveBy: CGFloat = 0) -> some View {
         background {
             HubGlassBackdrop(tint: tint)
+                .padding(.top, -extendAboveBy)
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
         }

@@ -49,8 +49,13 @@ struct AppShellView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // Codex anatomy: there is NO full-width title strip. Each column runs to
+            // the window top in its own material (sidebar vibrancy / opaque canvas)
+            // and reserves the title row inside itself, so the traffic lights and
+            // title controls float on the column tones.
             VStack(spacing: 0) {
                 persistenceIssueBanner
+                    .padding(.top, columnTopInset)
 
                 // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
                 // inky canvas, separated by hairline dividers (no floating panels / gaps).
@@ -62,6 +67,7 @@ struct AppShellView: View {
                             selectedToolID: sidebarSelectedToolID,
                             jobStatusCenter: context.jobStatusCenter
                         )
+                        .padding(.top, columnTopInset)
                         .frame(width: HubDesignSystem.Size.navWidth)
                         .hubChromeMaterial()
                         shellDivider
@@ -73,6 +79,7 @@ struct AppShellView: View {
                             selectTool(ToolFeatureID("archive-browser"))
                         }
                     }
+                        .padding(.top, columnTopInset)
                         .frame(minWidth: Self.activeToolMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .layoutPriority(1)
                         .background(HubDesignSystem.Palette.canvas)
@@ -80,12 +87,13 @@ struct AppShellView: View {
                     if shellSession.inboxEffectiveVisible {
                         shellDivider
                         OutputInboxInspectorView(context: context)
+                            .padding(.top, columnTopInset)
                             .frame(width: HubDesignSystem.Size.chromeRailWidth)
                             .hubChromeMaterial()
                     }
                 }
+                .environment(\.hubTitleRowInset, columnTopInset)
             }
-            .padding(.top, HubShellLayout.titleBarHeight)
 
             HubShellTitleBarControls(
                 session: shellSession,
@@ -184,6 +192,12 @@ struct AppShellView: View {
     /// Window menu / Mission Control title from the selected tool. Fallback when unknown.
     private var mainWindowTitle: String {
         HubMainWindowTitle.resolved(selectedToolID: shellSession.selectedToolID, registry: registry)
+    }
+
+    /// Title-row reservation inside each column. When the persistence banner is
+    /// up it takes the row instead, so the columns start flush below it.
+    private var columnTopInset: CGFloat {
+        context.persistenceIssues.isEmpty ? HubShellLayout.titleBarHeight : 0
     }
 
     /// Full-height hairline that separates flush columns (the reference split-view seam).

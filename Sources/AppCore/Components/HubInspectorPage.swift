@@ -16,6 +16,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     public static var inspectorInset: CGFloat { 12 }
     public static var groupSpacing: CGFloat { 16 }
 
+    @Environment(\.hubTitleRowInset) private var titleRowInset
+
     private let header: Header
     private let live: Live
     private let primary: Primary
@@ -63,9 +65,11 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
             .padding(.bottom, HubToolLayout.bottomPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
+            // Seam runs through the title row to the window top like the shell's.
             HubDesignSystem.Palette.separator
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
+                .padding(.top, -titleRowInset)
 
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
@@ -94,8 +98,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
             .frame(width: Self.inspectorWidth)
             .frame(maxHeight: .infinity, alignment: .top)
             // Same chrome material as the tools sidebar: content sits between two
-            // matching rails.
-            .hubChromeMaterial()
+            // matching rails, and this one reaches up through the title row too.
+            .hubChromeMaterial(extendAboveBy: titleRowInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

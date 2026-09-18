@@ -242,9 +242,15 @@ final class HubSemanticTokenTests: XCTestCase {
             contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
             encoding: .utf8
         )
+        // Chrome material is centralized in HubMaterial.swift as the system
+        // `.sidebar` vibrancy (contract §1.1, Codex-measured); no Liquid Glass anywhere.
         XCTAssertTrue(
-            materialSource.contains("#available(macOS 26.0") && materialSource.contains(".glassEffect("),
-            "HubMaterial.swift must centralize native Liquid Glass for chrome on macOS 26."
+            materialSource.contains("material: .sidebar"),
+            "HubMaterial.swift must centralize the chrome sidebar material."
+        )
+        XCTAssertFalse(
+            materialSource.contains(".glassEffect(.regular"),
+            "Chrome rails must not use lens-like Liquid Glass (contract §1.1)."
         )
     }
 
