@@ -52,7 +52,7 @@ public struct StatusDot: View {
         case .queued:
             return .secondary
         case .running:
-            return HubDesignSystem.Colors.accent
+            return HubDesignSystem.Colors.indicator
         case .completed:
             return HubDesignSystem.Colors.success
         case .failed:

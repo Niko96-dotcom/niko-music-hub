@@ -23,7 +23,8 @@ struct ArchiveAnalyticsView: View {
                 }
             }
         }
-        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
+        // Charts use the full content column — the 680pt form cap would strand
+        // a wide window's right half empty.
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { viewModel.refreshAnalytics() }
@@ -31,11 +32,13 @@ struct ArchiveAnalyticsView: View {
 
     private var header: some View {
         HubPageHeader("Analytics", statusText: "From project file dates and status changes", statusColor: HubDesignSystem.Palette.textTertiary) {
-            HubLabeledButton(
-                icon: "chevron.backward",
-                label: "Board",
-                style: .ghost,
-                help: "Back to the board (Esc)"
+            // ONE flipping icon, same last-trailing slot as the board's chart.bar
+            // entry — going there and back never moves under the cursor (Esc too).
+            HubIconButton(
+                systemImage: "chart.bar",
+                accessibilityLabel: "Back to the board",
+                help: "Back to the board (Esc)",
+                isSelected: true
             ) {
                 viewModel.viewMode = .board
             }

@@ -68,7 +68,7 @@ public struct AudioConverterView: View {
             }
             .progressViewStyle(.linear)
             .frame(maxWidth: 320)
-            .tint(HubDesignSystem.Colors.accent)
+            .tint(HubDesignSystem.Colors.indicator)
             Text(viewModel.statusText)
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
@@ -192,7 +192,7 @@ public struct AudioConverterView: View {
                 if row.state == .converting {
                     ProgressView(value: row.progress)
                         .frame(maxWidth: 220)
-                        .tint(HubDesignSystem.Colors.accent)
+                        .tint(HubDesignSystem.Colors.indicator)
                 }
             }
         } trailing: {

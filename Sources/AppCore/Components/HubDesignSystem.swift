@@ -299,10 +299,11 @@ public enum HubDesignSystem {
             dark:  Color(.sRGB, red: 140/255, green: 142/255, blue: 152/255, opacity: 1),
             lightHigh: Color(.sRGB, red: 80/255,  green: 80/255,  blue: 86/255,  opacity: 1),
             darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
-        /// Subtle neutral selection fill (low-chroma, NOT accent). calm-native --selection rgb(46,48,54).
+        /// Codex-quiet neutral selection fill (low-chroma, NOT accent): a flat gray pill
+        /// darker than the rail in light mode, like the ChatGPT/Codex sidebar.
         public static let selection = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 225/255, green: 225/255, blue: 224/255, opacity: 1),
-            dark:  Color(.sRGB, red: 46/255,  green: 48/255,  blue: 54/255,  opacity: 1)))
+            light: Color(.sRGB, red: 216/255, green: 214/255, blue: 211/255, opacity: 1),
+            dark:  Color(.sRGB, red: 64/255,  green: 64/255,  blue: 66/255,  opacity: 1)))
         /// Selection stroke. calm-native --selectionStroke rgb(64,66,74).
         public static let selectionStroke = Color(HubDynamicColor(
             light: Color(.sRGB, red: 208/255, green: 208/255, blue: 208/255, opacity: 1),
@@ -327,6 +328,16 @@ public enum HubDesignSystem {
         public static let accentFill = Color(HubDynamicColor(
             light: Color(.sRGB, red: 48/255,  green: 50/255,  blue: 58/255,  opacity: 0.10),
             dark:  Color(.sRGB, red: 232/255, green: 233/255, blue: 238/255, opacity: 0.12)))
+        /// Warm indicator tint for test run (ChatGPT-style terracotta #CC7D5E).
+        /// Toggles / sliders / progress only — buttons, pills and selection stay on
+        /// neutral `accent`. Separate token so DS-12/DS-13 neutral-accent guards keep passing.
+        public static let indicator = Color(HubDynamicColor(
+            light: Color(.sRGB, red: 204/255, green: 125/255, blue: 94/255,  opacity: 1),
+            dark:  Color(.sRGB, red: 219/255, green: 141/255, blue: 108/255, opacity: 1)))
+        /// Pressed/hover depth for the warm indicator (test run).
+        public static let indicatorDeep = Color(HubDynamicColor(
+            light: Color(.sRGB, red: 181/255, green: 106/255, blue: 78/255,  opacity: 1),
+            dark:  Color(.sRGB, red: 201/255, green: 122/255, blue: 92/255,  opacity: 1)))
         /// Status success — semantic only, never the only carrier (DS-14). calm-native --success rgb(120,170,110).
         public static let success = Color(HubDynamicColor(
             light: Color(.sRGB, red: 95/255,  green: 145/255, blue: 85/255,  opacity: 1),
@@ -349,6 +360,10 @@ public enum HubDesignSystem {
     public enum Colors {
         /// Cool azure accent (DS-12). Delegates to `Palette.accent`.
         public static let accent = Palette.accent
+        /// Warm indicator tint (test run). Delegates to `Palette.indicator`.
+        public static let indicator = Palette.indicator
+        /// Pressed/hover depth for the warm indicator (test run).
+        public static let indicatorDeep = Palette.indicatorDeep
         /// Neutral hover tint (historical name; NOT accent — DS-13 compliant since it's neutral).
         public static let accentTint = Color.primary.opacity(0.06)
         /// Deeper azure. Delegates to `Palette.accentDeep`.

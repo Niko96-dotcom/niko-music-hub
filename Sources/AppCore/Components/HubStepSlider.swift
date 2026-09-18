@@ -36,7 +36,7 @@ public struct HubStepSlider<Value: Hashable>: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Slider(value: index, in: 0...Double(max(steps.count - 1, 1)), step: 1)
-                .tint(HubDesignSystem.Palette.accent)
+                .tint(HubDesignSystem.Palette.indicator)
                 .controlSize(.small)
                 .hubInspectorRow()
                 .accessibilityLabel(accessibilityLabel)

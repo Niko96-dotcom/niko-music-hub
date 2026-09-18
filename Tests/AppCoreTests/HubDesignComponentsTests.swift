@@ -98,8 +98,8 @@ final class HubDesignComponentsTests: XCTestCase {
         let primaryPressed = HubLabeledButtonFill.color(style: .primary, isPressed: true, isHovered: true)
         XCTAssertEqual(
             rgbaKey(primaryPressed),
-            rgbaKey(HubDesignSystem.Palette.accentDeep),
-            "Primary press fill uses Palette.accentDeep"
+            rgbaKey(HubDesignSystem.Palette.indicatorDeep),
+            "Primary press fill uses Palette.indicatorDeep (warm-accent test run)"
         )
 
         let toolbarHover = HubIconButtonFill.toolbar(
@@ -217,6 +217,12 @@ final class HubDesignComponentsTests: XCTestCase {
             "HubPressableButtonStyle",
         ].forEach { required in
             XCTAssertTrue(iconSource.contains(required), "Missing icon button reference-style source: \(required)")
+        }
+        // Warm-accent test run: primary labeled buttons wear Palette.indicator.
+        [
+            "HubDesignSystem.Palette.indicator",
+            "HubPressableButtonStyle",
+        ].forEach { required in
             XCTAssertTrue(labeledSource.contains(required), "Missing labeled button reference-style source: \(required)")
         }
 

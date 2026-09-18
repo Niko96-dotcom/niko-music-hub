@@ -48,7 +48,8 @@ struct HubSettingsRoot: View {
         .tabViewStyle(.automatic)
         .navigationTitle(selectedPane.title)
         .modifier(HubSettingsWindowChrome())
-        .frame(minWidth: 560, minHeight: 480)
+        // Fixed width hugs the 680pt form column — no dead space on the right.
+        .frame(minWidth: 744, maxWidth: 744, minHeight: 480)
         .hubOpensMainWindowFromDock()
         .onAppear {
             session.refresh()

@@ -204,7 +204,7 @@ public struct AudioRecorderView: View {
             }
             .background {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
-                    .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
+                    .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.indicator)
             }
             .overlay {
                 if recordButtonFocused {

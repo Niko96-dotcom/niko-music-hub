@@ -286,7 +286,7 @@ public struct DownloaderView: View {
                 }
             }
             .progressViewStyle(.linear)
-            .tint(HubDesignSystem.Colors.accent)
+            .tint(HubDesignSystem.Colors.indicator)
 
             if viewModel.showsDeterminateProgress {
                 Text("\(Int(viewModel.progress * 100))% complete")
@@ -503,10 +503,6 @@ private struct DownloaderChipLabel: View {
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
         .frame(height: HubDesignSystem.Spacing.navRowHeight)
-        .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(HubDesignSystem.Palette.surfaceRaised)
-        }
         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
     }
 }

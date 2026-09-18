@@ -17,7 +17,7 @@ public struct AppUpdateSettingsContent: View {
             if !controller.status.isUnavailable {
                 Toggle("Check for updates automatically", isOn: automaticBinding)
                     .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
+                    .tint(HubDesignSystem.Palette.indicator)
             }
 
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {

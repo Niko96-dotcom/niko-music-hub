@@ -47,10 +47,6 @@ public struct HubSegmentedChoice<Value: Hashable>: View {
         }
         .padding(2)
         .frame(height: CGFloat(rows.count) * (HubDesignSystem.Spacing.navRowHeight - 4) + CGFloat(rows.count - 1) * 2 + 4)
-        .background(
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(HubDesignSystem.Palette.surfaceRaised)
-        )
         .opacity(isEnabled ? 1 : 0.45)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
@@ -63,46 +59,18 @@ public struct HubSegmentedChoice<Value: Hashable>: View {
                     if !selected { selection = option.value }
                 } label: {
                     Text(option.label)
-                        .font(HubDesignSystem.Typography.bodySmall().weight(selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity)
                         .frame(height: HubDesignSystem.Spacing.navRowHeight - 4)
                         .background {
                             if selected {
-                                // Mirrors the sidebar's selected row (design contract §2).
+                                // Mirrors the sidebar's selected row: flat Codex-quiet
+                                // pill (design contract §2/§4b).
                                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
                                     .fill(HubDesignSystem.Palette.selection)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [HubDesignSystem.Highlight.sheen, .clear],
-                                                    startPoint: .top,
-                                                    endPoint: .bottom
-                                                )
-                                            )
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
-                                            .strokeBorder(
-                                                LinearGradient(
-                                                    colors: [
-                                                        HubDesignSystem.Highlight.rimStrong,
-                                                        HubDesignSystem.Highlight.rim,
-                                                    ],
-                                                    startPoint: .top,
-                                                    endPoint: .bottom
-                                                ),
-                                                lineWidth: 1
-                                            )
-                                    )
-                                    .shadow(
-                                        color: HubDesignSystem.Elevation.low.color,
-                                        radius: HubDesignSystem.Elevation.low.radius,
-                                        y: HubDesignSystem.Elevation.low.y
-                                    )
                             }
                         }
                         .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous))
@@ -116,16 +84,14 @@ public struct HubSegmentedChoice<Value: Hashable>: View {
 }
 
 public extension View {
-    /// Inspector row chrome: nav-row height, raised fill, row radius — the
-    /// same silhouette as a segmented cell block, for fields, sliders, paths.
+    /// Inspector row chrome: nav-row height and padding, flat like a sidebar
+    /// row — for fields, sliders, paths.
     func hubInspectorRow() -> some View {
+        // Codex-flat: same 34pt silhouette as a sidebar row, no raised fill —
+        // controls sit directly on the inspector background. Focus adds the ring.
         self
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: HubDesignSystem.Spacing.navRowHeight)
-            .background(
-                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                    .fill(HubDesignSystem.Palette.surfaceRaised)
-            )
     }
 }

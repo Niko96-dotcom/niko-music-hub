@@ -29,7 +29,7 @@ struct ProjectVaultSettingsView: View {
                 SettingsRow("Enable Project Vault") {
                     Toggle("Enable Project Vault", isOn: masterBinding)
                         .toggleStyle(.switch)
-                        .tint(HubDesignSystem.Palette.accent)
+                        .tint(HubDesignSystem.Palette.indicator)
                         .labelsHidden()
                         .disabled(!settingsAvailable)
                 }
@@ -43,7 +43,7 @@ struct ProjectVaultSettingsView: View {
                     SettingsRow("Automatic archiving") {
                         Toggle("Automatic archiving", isOn: vaultBinding(\.automaticArchiving))
                             .toggleStyle(.switch)
-                            .tint(HubDesignSystem.Palette.accent)
+                            .tint(HubDesignSystem.Palette.indicator)
                             .labelsHidden()
                     }
                     SettingsRowDivider()
@@ -260,7 +260,7 @@ struct ProjectVaultSettingsView: View {
                 isOn: vaultBinding(\.independentBackupConfirmed)
             )
             .toggleStyle(.switch)
-            .tint(HubDesignSystem.Palette.accent)
+            .tint(HubDesignSystem.Palette.indicator)
             .labelsHidden()
         }
     }

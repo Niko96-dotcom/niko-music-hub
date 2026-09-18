@@ -162,20 +162,21 @@ struct ArchiveBoardView: View {
             }
 
             HubIconButton(
+                systemImage: "folder.badge.plus",
+                accessibilityLabel: "Add archive root",
+                help: "Add archive folder"
+            ) {
+                onChooseRoot()
+            }
+
+            // Last trailing slot, mirroring analytics' flip icon — same x both ways.
+            HubIconButton(
                 systemImage: "chart.bar",
                 accessibilityLabel: "Show analytics",
                 help: "Analytics",
                 isEnabled: !viewModel.songs.isEmpty
             ) {
                 viewModel.showAnalytics()
-            }
-
-            HubIconButton(
-                systemImage: "folder.badge.plus",
-                accessibilityLabel: "Add archive root",
-                help: "Add archive folder"
-            ) {
-                onChooseRoot()
             }
         }
     }

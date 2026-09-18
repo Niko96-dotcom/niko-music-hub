@@ -71,7 +71,7 @@ public struct StemSeparationView: View {
                 }
             }
             .progressViewStyle(.linear)
-            .tint(HubDesignSystem.Colors.accent)
+            .tint(HubDesignSystem.Colors.indicator)
             Text(viewModel.statusMessage)
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
@@ -233,10 +233,7 @@ public struct StemSeparationView: View {
                     .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: HubDesignSystem.Spacing.navRowHeight)
-                    .background(
-                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                            .fill(HubDesignSystem.Palette.surfaceRaised)
-                    )
+
                 HubLabeledButton(
                     icon: "folder",
                     label: "Choose Output Folder",

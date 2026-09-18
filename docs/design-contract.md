@@ -84,7 +84,7 @@ Stem Separation) renders through `HubInspectorPage`:
   (Format 2×2, Sample rate 2×2). `HubChoiceChips` only where wrapping tag-style
   chips are genuinely better (currently nowhere in inspectors).
 - Text fields, sliders, path readouts, popup rows → `.hubInspectorRow()` (34pt,
-  raised fill, row radius). Fields get the raised row at REST, focus adds the ring.
+  flat like a sidebar row — no raised fill). Focus adds the ring.
 - Nothing in an inspector may change height with state. Conditional info
   (e.g. playlist cap) goes in a tooltip or the left list, never as a line that
   appears below a control.
@@ -103,12 +103,11 @@ flush right), `SettingsRowDivider` hairlines inset to the label's leading edge,
 an optional footer caption under the card. Few cards, many rows — never one card
 per setting, and never a field surface nested inside the card.
 
-A selected row (sidebar nav row, segmented cell) is a small **raised surface**,
-not a flat swatch: `Palette.selection` fill, a vertical `Highlight.sheen`, a
-stroke that runs `Highlight.rimStrong` (top) → `rim` (bottom) so the top edge
-catches light, and `Elevation.low`. The label keeps its normal weight — fill,
-rim and text colour carry the state. Sidebar rows and inspector cells use the
-same treatment.
+A selected row (sidebar nav row, segmented cell) is a flat Codex-quiet pill:
+`Palette.selection` fill (gray, darker than the rail in light mode), no sheen,
+no rim, no shadow. Every row label renders at full strength — the pill alone
+carries the state, exactly like the ChatGPT/Codex sidebar. Sidebar rows and
+inspector cells use the same treatment.
 
 ## 5. Copy (omitting-ui-chrome)
 

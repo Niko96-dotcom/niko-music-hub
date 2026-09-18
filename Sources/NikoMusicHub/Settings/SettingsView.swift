@@ -185,11 +185,17 @@ struct SettingsView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        // Fixed 680pt column, centered: hubToolContentColumn's 680 cap already
+        // includes its own horizontal padding (real content is 648), so an outer
+        // 712 box would pool 32pt of slack on the right. 680 fits the padded
+        // column exactly — zero slack, symmetric gaps by construction.
         HubToolPage {
             settingsLoadErrorBanner
             paneContent
             saveErrorBanner
         }
+        .frame(width: HubToolLayout.maxContentWidth)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -236,7 +242,7 @@ struct SettingsView: View {
             ) {
                 Toggle("Open at login", isOn: $session.launchAtLogin)
                     .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
+                    .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
                     .onChange(of: session.launchAtLogin) { _, enabled in
                         session.setLaunchAtLogin(enabled)
@@ -252,7 +258,7 @@ struct SettingsView: View {
             SettingsRow("Show menu bar extra") {
                 Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
                     .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
+                    .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
                     .disabled(session.settingsLoadError != nil)
             }
@@ -374,7 +380,7 @@ struct SettingsView: View {
             SettingsRow("Compact empty board stages") {
                 Toggle("Compact empty board stages", isOn: $compactEmptyStages)
                     .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
+                    .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
             }
             SettingsRowDivider()

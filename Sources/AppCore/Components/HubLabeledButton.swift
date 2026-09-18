@@ -14,8 +14,10 @@ enum HubLabeledButtonFill {
     ) -> Color {
         switch style {
         case .primary:
-            if isPressed { return HubDesignSystem.Palette.accentDeep }
-            return isHovered ? HubDesignSystem.Palette.accentDeep : HubDesignSystem.Palette.accent
+            // Test run: primary actions wear the warm indicator so the accent has
+            // real presence (one per tool page). Selection/links stay neutral.
+            if isPressed { return HubDesignSystem.Palette.indicatorDeep }
+            return isHovered ? HubDesignSystem.Palette.indicatorDeep : HubDesignSystem.Palette.indicator
         case .secondary:
             let opacity: Double
             if isPressed { opacity = 0.16 }

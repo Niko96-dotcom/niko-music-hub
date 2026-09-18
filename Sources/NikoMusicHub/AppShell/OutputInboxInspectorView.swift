@@ -87,9 +87,10 @@ struct OutputInboxInspectorView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .multilineTextAlignment(.center)
             }
+            // Codex-flat: no card — the empty state is bare content on the
+            // inspector background, like the sidebar rows around it.
             .padding(14)
             .frame(maxWidth: .infinity)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -80,6 +80,8 @@ public struct DesignSystemPreviewView: View {
             paletteRow(name: "accent",        color: HubDesignSystem.Palette.accent)
             paletteRow(name: "accentDeep",    color: HubDesignSystem.Palette.accentDeep)
             paletteRow(name: "accentFill",    color: HubDesignSystem.Palette.accentFill)
+            paletteRow(name: "indicator",     color: HubDesignSystem.Palette.indicator)
+            paletteRow(name: "indicatorDeep", color: HubDesignSystem.Palette.indicatorDeep)
             paletteRow(name: "success",       color: HubDesignSystem.Palette.success)
             paletteRow(name: "warning",       color: HubDesignSystem.Palette.warning)
             paletteRow(name: "danger",        color: HubDesignSystem.Palette.danger)
