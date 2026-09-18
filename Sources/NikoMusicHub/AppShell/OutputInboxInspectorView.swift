@@ -184,48 +184,56 @@ struct OutputInboxInspectorView: View {
         let isHovered = hoveredItemID == item.id
         let revealable = OutputHandoff.isRevealable(item)
         let openable = OutputHandoff.isOpenable(item)
-        HStack(alignment: .center, spacing: 10) {
-            fileIcon(for: item.fileURL)
-            VStack(alignment: .leading, spacing: 2) {
+        // The inbox is a narrow rail: the file identity owns the first line and the
+        // actions sit on their own line beneath it. Squeezing name + Reveal + Open
+        // onto one line collapsed the filename to zero width at rail width.
+        // Rail-width row: the filename owns the full first line, everything else
+        // shares the second. A leading icon, a drag handle and a "Ready" line on the
+        // name's line left it ~109pt and truncated every file to "Nina Ch…cals.wav".
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: HubDesignSystem.Spacing.inlineGap) {
+                fileIcon(for: item.fileURL)
                 Text(item.fileURL.lastPathComponent)
                     .font(HubDesignSystem.Typography.body())
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     .lineLimit(1)
-                statusLine(for: item)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
                 guard revealable else { return }
                 context.fileActions.revealInFinder(item.fileURL)
             }
 
-            if OutputHandoff.dragFileURL(for: item) != nil {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .help("Drag to your DAW or Finder")
-                    .accessibilityHidden(true)
-            }
-
-            if revealable {
-                HubLabeledButton(
-                    icon: "folder",
-                    label: "Reveal",
-                    style: .ghost,
-                    help: "Show this file in Finder"
-                ) {
-                    context.fileActions.revealInFinder(item.fileURL)
+            HStack(alignment: .center, spacing: HubDesignSystem.Spacing.inlineGap) {
+                statusLine(for: item)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if OutputHandoff.dragFileURL(for: item) != nil {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .help("Drag to your DAW or Finder")
+                        .accessibilityHidden(true)
                 }
-            }
-            if openable {
-                HubLabeledButton(
-                    icon: "arrow.up.forward.app",
-                    label: "Open",
-                    style: .ghost,
-                    help: "Open this file"
-                ) {
-                    NSWorkspace.shared.open(item.fileURL)
+                if revealable {
+                    HubIconButton(
+                        systemImage: "folder",
+                        accessibilityLabel: "Reveal in Finder",
+                        help: "Reveal in Finder"
+                    ) {
+                        context.fileActions.revealInFinder(item.fileURL)
+                    }
+                }
+                if openable {
+                    HubIconButton(
+                        systemImage: "arrow.up.forward.app",
+                        accessibilityLabel: "Open",
+                        help: "Open this file"
+                    ) {
+                        NSWorkspace.shared.open(item.fileURL)
+                    }
                 }
             }
         }
@@ -298,8 +306,10 @@ struct OutputInboxInspectorView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
                 .lineLimit(2)
-        } else {
-            Text(item.status == .available ? "Ready" : "Pending")
+        } else if item.status != .available {
+            // Steady state says nothing a row already shows; only a state the file is
+            // not yet in earns a line (design contract §5, no idle status).
+            Text("Pending")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         }

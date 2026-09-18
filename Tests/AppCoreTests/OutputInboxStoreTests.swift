@@ -248,9 +248,9 @@ final class OutputInboxStoreTests: XCTestCase {
             ".onDrag",
             "contentShape",
             "Double-click or use Reveal to show this file in Finder.",
-            "HubLabeledButton(",
-            "label: \"Reveal\"",
-            "label: \"Open\"",
+            "HubIconButton(",
+            "accessibilityLabel: \"Reveal in Finder\"",
+            "accessibilityLabel: \"Open\"",
             "accessibilityAction(named: \"Reveal in Finder\")",
             ".font(.system(size: 14, weight: .semibold))",
         ].forEach {

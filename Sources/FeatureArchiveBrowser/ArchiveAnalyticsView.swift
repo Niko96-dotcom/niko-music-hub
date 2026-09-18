@@ -24,8 +24,8 @@ struct ArchiveAnalyticsView: View {
             }
         }
         .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { viewModel.refreshAnalytics() }
     }
 

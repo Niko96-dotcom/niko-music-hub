@@ -320,11 +320,11 @@ struct ArchiveBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: 1150, alignment: .topLeading)
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, HubToolLayout.horizontalPadding)
             .padding(.top, HubToolLayout.topPadding)
             .padding(.bottom, HubToolLayout.bottomPadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             // Selection vanished (rescan/filter) — fall back to the board.
             ArchiveBoardView(

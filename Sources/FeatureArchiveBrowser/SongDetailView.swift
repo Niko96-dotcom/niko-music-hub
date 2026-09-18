@@ -55,7 +55,7 @@ struct SongDetailView: View {
                     if vaultNeedsAttention { vaultSection }
                 }
                 .frame(maxWidth: 1060, alignment: .topLeading)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.bottom, 24)
             }
         }
