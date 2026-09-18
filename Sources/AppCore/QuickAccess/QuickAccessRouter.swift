@@ -2,16 +2,27 @@ import Combine
 import Foundation
 import SwiftUI
 
+/// One tool-open request. `sequence` is monotonic so two consecutive requests
+/// for the same tool are still distinct values for `onChange`.
+public struct QuickAccessToolRequest: Equatable, Sendable {
+    public let sequence: UInt64
+    public let toolID: ToolFeatureID
+}
+
 /// Observable routing store for quick-access menu commands.
 ///
-/// Phase 47 (MenuBarExtra) sends commands here; `AppShellView` observes
-/// `selectedToolID` and `revealOutputInbox` via `.onChange` to drive its
-/// existing `@State` (ROUT-07). The router never constructs tool views
-/// directly and never touches the output-inbox allowlist layer (HAND-04).
+/// Phase 47 (MenuBarExtra) sends commands here; `AppShellView` observes the
+/// pending requests via `.onChange` and applies them to the shell session,
+/// which owns the selected tool (ROUT-07). The router never constructs tool
+/// views directly and never touches the output-inbox allowlist layer (HAND-04).
+///
+/// Requests are one-shot values with a sequence number, not "pending state the
+/// consumer must clear": repeating the same request produces a new value.
 @MainActor
 public final class QuickAccessRouter: ObservableObject {
-    /// The tool the shell should select. `nil` means no pending selection.
-    @Published public private(set) var selectedToolID: ToolFeatureID?
+    /// The most recent tool-open request. The shell reacts to changes; there is
+    /// nothing to clear.
+    @Published public private(set) var toolRequest: QuickAccessToolRequest?
 
     /// When `true`, `AppShellView` should make the Output Inbox panel visible
     /// and then call `clearRevealOutputInbox()` to reset this flag.
@@ -23,27 +34,39 @@ public final class QuickAccessRouter: ObservableObject {
     /// Monotonic request counter so repeated Find (⌘F / ⌥⌘F) and Search Archive… commands are observable.
     @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
 
-    /// Pending Settings pane. Does not change `selectedToolID`.
+    /// Pending Settings pane. Does not request a tool. `HubSettingsRoot` consumes
+    /// it (`clearOpenSettingsPane()`); the shell opens the Settings window on change.
     @Published public private(set) var openSettingsPane: HubSettingsPane?
 
-    public init() {}
+    private var toolRequestSequence: UInt64 = 0
+
+    /// Nonisolated so `ToolContext` (a plain `Sendable` value) can default it.
+    nonisolated public init() {}
+
+    /// Tool named by the latest request, if any.
+    public var requestedToolID: ToolFeatureID? { toolRequest?.toolID }
 
     /// Process a quick-access command.
     public func execute(_ command: QuickAccessCommand) {
         switch command {
         case .openTool(let id):
             // Tools menu (NMH-013) and MenuBarExtra both select content tools here.
-            selectedToolID = id
+            requestTool(id)
         case .openApp, .quitApp:
             // Window activate / terminate live in the menu and Dock targets.
-            // Do not change `selectedToolID`.
+            // Do not request a tool.
             break
         case .revealOutputInbox:
             revealOutputInbox = true
         case .focusArchiveSearch:
-            selectedToolID = ToolFeatureID("archive-browser")
+            requestTool(ToolFeatureID("archive-browser"))
             archiveSearchFocusRequest &+= 1
         }
+    }
+
+    private func requestTool(_ id: ToolFeatureID) {
+        toolRequestSequence &+= 1
+        toolRequest = QuickAccessToolRequest(sequence: toolRequestSequence, toolID: id)
     }
 
     public func consumeArchiveSearchFocusRequest() {
@@ -57,18 +80,9 @@ public final class QuickAccessRouter: ObservableObject {
         revealOutputInbox = false
     }
 
-    /// Reset the selected tool ID to `nil` after it has been consumed by the view.
-    /// `AppShellView` calls this inside `.onChange(of: router.selectedToolID)` so
-    /// that a repeated `openTool` command for the same ID transitions
-    /// `selectedToolID` from the ID → `nil` → the ID again, ensuring `.onChange`
-    /// fires on every command even when consecutive commands name the same tool.
-    public func clearSelectedToolID() {
-        selectedToolID = nil
-    }
-
     public func openConverter(with urls: [URL]) {
         prefilledConverterURLs = urls
-        selectedToolID = ToolFeatureID("wav-converter")
+        requestTool(ToolFeatureID("wav-converter"))
     }
 
     public func consumePrefilledConverterURLs() -> [URL] {
@@ -77,10 +91,11 @@ public final class QuickAccessRouter: ObservableObject {
         return urls
     }
 
-    /// Open a Settings pane without selecting the Settings sidebar tool.
+    /// Open a Settings pane without requesting a tool. The single path for
+    /// every "open Settings → pane" deep link (feature views reach it through
+    /// `ToolContext.router`).
     public func requestSettingsPane(_ pane: HubSettingsPane) {
         openSettingsPane = pane
-        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: pane)
     }
 
     /// Open in-app Settings → Helpers (helper-missing recovery, NMH-010).

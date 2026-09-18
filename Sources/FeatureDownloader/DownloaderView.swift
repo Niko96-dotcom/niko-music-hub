@@ -5,14 +5,14 @@ import SwiftUI
 public struct DownloaderView: View {
     let context: ToolContext
 
-    @StateObject private var viewModel: DownloaderViewModel
+    @ObservedObject private var viewModel: DownloaderViewModel
 
     public init(
         context: ToolContext,
         viewModel: DownloaderViewModel
     ) {
         self.context = context
-        _viewModel = StateObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -360,29 +360,18 @@ public struct DownloaderView: View {
             .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
+    /// Esc / ⌘. reach this cancel through the Edit-menu commands
+    /// (`HubCancelCommands`), which route by the active tool and running jobs —
+    /// no hidden shortcut buttons here, so one owner per key.
     private var cancelDownloadControl: some View {
-        Group {
-            HubLabeledButton(
-                icon: "xmark",
-                label: CancelCopy.cancelDownload,
-                style: .ghost,
-                help: CancelCopy.cancelDownload,
-                expands: true
-            ) {
-                viewModel.cancelDownload()
-            }
-            Button(CancelCopy.cancelDownload) {
-                viewModel.cancelDownload()
-            }
-            .keyboardShortcut(.cancelAction)
-            .hidden()
-            .accessibilityHidden(true)
-            Button(CancelCopy.cancelDownload) {
-                viewModel.cancelDownload()
-            }
-            .keyboardShortcut(".", modifiers: .command)
-            .hidden()
-            .accessibilityHidden(true)
+        HubLabeledButton(
+            icon: "xmark",
+            label: CancelCopy.cancelDownload,
+            style: .ghost,
+            help: CancelCopy.cancelDownload,
+            expands: true
+        ) {
+            viewModel.cancelDownload()
         }
     }
 
@@ -416,7 +405,7 @@ public struct DownloaderView: View {
                     viewModel.retryAfterFailure()
                 }
             case .openHubSettingsHelpers:
-                HubSettingsHelpersAction.openSettingsHelpers()
+                context.router.openSettingsHelpers()
             case .chooseToolPath:
                 viewModel.chooseYtDlpPath()
             default:

@@ -13,6 +13,8 @@ import Foundation
 
 struct AppComposition {
     let registry: ToolRegistry
+    /// Defaults suite behind every preference; scenes pass it to `defaultAppStorage`.
+    let userDefaults: UserDefaults
     let context: ToolContext
     let router: QuickAccessRouter
     let shellSession: HubShellSession
@@ -133,6 +135,8 @@ struct AppComposition {
         }()
 
         let navigationHistory = HubNavigationHistory()
+        let quickAccessRouter = QuickAccessRouter()
+        let appSettings = AppSettingsObserver(store: settingsStore)
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
@@ -144,7 +148,9 @@ struct AppComposition {
             diagnostics: diagnostics,
             persistenceIssues: persistenceIssues,
             jobStatusCenter: jobStatusCenter,
-            navigationHistory: navigationHistory
+            navigationHistory: navigationHistory,
+            appSettings: appSettings,
+            router: quickAccessRouter
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -161,8 +167,11 @@ struct AppComposition {
             runtime: runtime
         )
 
-        let quickAccessRouter = QuickAccessRouter()
-        let shellSession = HubShellSession(preferences: preferences, settingsStore: settingsStore)
+        let shellSession = HubShellSession(
+            preferences: preferences,
+            settingsStore: settingsStore,
+            navigationHistory: navigationHistory
+        )
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])
         }
@@ -203,6 +212,9 @@ struct AppComposition {
             )
             registry = ToolRegistry()
         }
+        // Resolve the launch tool here, before SwiftUI builds any scene: the
+        // shell then only reads `selectedToolID`, never mutates it during init.
+        shellSession.restoreSelectedToolID(registry: registry)
         let finalContext = ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
@@ -214,11 +226,14 @@ struct AppComposition {
             diagnostics: diagnostics,
             persistenceIssues: persistenceIssues,
             jobStatusCenter: jobStatusCenter,
-            navigationHistory: navigationHistory
+            navigationHistory: navigationHistory,
+            appSettings: appSettings,
+            router: quickAccessRouter
         )
 
         return AppComposition(
             registry: registry,
+            userDefaults: userDefaults,
             context: finalContext,
             router: quickAccessRouter,
             shellSession: shellSession,

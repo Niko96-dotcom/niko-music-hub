@@ -30,7 +30,7 @@ final class HubSettingsPaneIDTests: XCTestCase {
         let router = QuickAccessRouter()
         router.requestSettingsPane(.helpers)
         XCTAssertEqual(router.openSettingsPane, .helpers)
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
         XCTAssertFalse(router.revealOutputInbox)
     }
 
@@ -45,7 +45,7 @@ final class HubSettingsPaneIDTests: XCTestCase {
         let router = QuickAccessRouter()
         router.openSettingsHelpers()
         XCTAssertEqual(router.openSettingsPane, .helpers)
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
         XCTAssertFalse(router.revealOutputInbox)
     }
 
@@ -53,7 +53,8 @@ final class HubSettingsPaneIDTests: XCTestCase {
         let root = try SourceTestSupport.read("Sources/NikoMusicHub/Settings/HubSettingsRoot.swift")
         XCTAssertTrue(root.contains("TabView(selection:"), "HubSettingsRoot must host the Settings TabView")
         XCTAssertTrue(root.contains(".tabViewStyle(.automatic)"))
-        XCTAssertTrue(root.contains("hubOpenSettingsPane"))
+        XCTAssertTrue(root.contains("router.openSettingsPane"))
+        XCTAssertTrue(root.contains("clearOpenSettingsPane"))
         XCTAssertTrue(root.contains("navigationTitle(selectedPane.title)"))
 
         let panes = try SourceTestSupport.read("Sources/NikoMusicHub/Settings/HubSettingsPanes.swift")
@@ -77,8 +78,8 @@ final class HubSettingsPaneIDTests: XCTestCase {
         let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
         XCTAssertTrue(shell.contains("if toolID == Self.settingsToolID"))
         XCTAssertTrue(shell.contains("openSettings()"))
-        XCTAssertTrue(shell.contains("hubOpenSettingsHelpers"))
-        XCTAssertTrue(shell.contains("openSettingsHelpers()"))
+        XCTAssertTrue(shell.contains("router.openSettingsPane"))
+        XCTAssertFalse(shell.contains("hubOpenSettingsHelpers"))
         XCTAssertFalse(
             shell.contains("selectedToolID = Self.settingsToolID"),
             "Opening Settings must not replace the main pane"

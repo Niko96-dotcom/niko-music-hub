@@ -6,23 +6,30 @@ import SwiftUI
 @main
 struct NikoMusicHubApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    // The App observes only what changes scene structure: the colour scheme
+    // and whether the menu bar extra is inserted. Shell state (selected tool,
+    // panels) lives on `composition.shellSession`, observed by the shell view
+    // and command groups — publishing there must not re-evaluate every scene.
     @StateObject private var appearanceController: AppAppearanceController
-    @StateObject private var shellSession: HubShellSession
+    @StateObject private var menuBarExtra: MenuBarExtraState
 
     private let composition: AppComposition
+    private var shellSession: HubShellSession { composition.shellSession }
 
     init() {
         let composition = AppComposition.make()
         self.composition = composition
-        AppDelegate.pendingVaultOperationCount = composition.pendingVaultOperationCount
-        AppDelegate.registry = composition.registry
-        AppDelegate.router = composition.router
         _appearanceController = StateObject(wrappedValue: composition.appearanceController)
-        _shellSession = StateObject(wrappedValue: composition.shellSession)
+        _menuBarExtra = StateObject(wrappedValue: composition.shellSession.menuBarExtra)
+        appDelegate.services = HubAppDelegateServices(
+            registry: composition.registry,
+            router: composition.router,
+            pendingVaultOperationCount: composition.pendingVaultOperationCount
+        )
     }
 
     var body: some Scene {
-        Window("Niko Music Hub", id: "main") {
+        Window("Niko Music Hub", id: HubMainWindowIdentity.sceneID) {
             AppShellView(
                 registry: composition.registry,
                 context: composition.context,
@@ -30,6 +37,8 @@ struct NikoMusicHubApp: App {
                 shellSession: shellSession
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
+            // `@AppStorage` reads must hit the same suite as every other preference.
+            .defaultAppStorage(composition.userDefaults)
         }
         // Hidden title bar: no titlebar band; traffic lights float over the nav column.
         // `NSWindow.title` is still the selected tool (Window menu / Mission Control).
@@ -39,17 +48,13 @@ struct NikoMusicHubApp: App {
         .commands {
             AboutCommand(updateController: composition.updateController)
             HubWindowCommandGroup()
-            HubViewCommands(session: shellSession)
+            HubViewCommands(session: shellSession, history: composition.context.navigationHistory)
             HubToolsCommands(
                 registry: composition.registry,
                 router: composition.router,
                 session: shellSession
             )
-            HubCancelCommands(
-                jobRunner: composition.context.jobRunner,
-                archiveViewModel: composition.archiveViewModel,
-                session: shellSession
-            )
+            HubCancelCommands(jobStatusCenter: composition.context.jobStatusCenter)
             HubSongCommands()
             HubFindCommands(router: composition.router)
             HubHelpCommands(router: composition.router)
@@ -65,6 +70,7 @@ struct NikoMusicHubApp: App {
                 shellSession: shellSession
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
+            .defaultAppStorage(composition.userDefaults)
         }
 
         Window(HubHelpTopics.windowTitle, id: HubHelpTopics.windowID) {
@@ -90,20 +96,28 @@ struct NikoMusicHubApp: App {
 
     private var showMenuBarExtraBinding: Binding<Bool> {
         Binding(
-            get: { shellSession.showMenuBarExtra },
+            get: { menuBarExtra.isInserted },
             set: { shellSession.setShowMenuBarExtra($0) }
         )
     }
 }
 
+/// What the AppKit delegate needs from the composition. Set once from
+/// `NikoMusicHubApp.init` (the adaptor instantiates the delegate before the
+/// App can hand it anything directly).
+@MainActor
+struct HubAppDelegateServices {
+    var registry: ToolRegistry
+    var router: QuickAccessRouter
+    var pendingVaultOperationCount: @MainActor () -> Int
+}
+
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
-    static var pendingVaultOperationCount: @MainActor () -> Int = { 0 }
-    static var registry = ToolRegistry()
-    static var router: QuickAccessRouter?
+    var services: HubAppDelegateServices?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let count = Self.pendingVaultOperationCount()
+        let count = services?.pendingVaultOperationCount() ?? 0
         guard count > 0 else { return .terminateNow }
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -116,7 +130,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         HubDockMenu.make(
-            registry: Self.registry,
+            registry: services?.registry ?? ToolRegistry(),
             target: self,
             openApp: #selector(hubDockOpenApp(_:)),
             openTool: #selector(hubDockOpenTool(_:)),
@@ -125,18 +139,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func hubDockOpenApp(_ sender: Any?) {
-        Self.router?.execute(.openApp)
+        services?.router.execute(.openApp)
         HubMainWindow.reveal()
     }
 
     @objc func hubDockOpenTool(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String else { return }
-        Self.router?.execute(.openTool(ToolFeatureID(raw)))
+        services?.router.execute(.openTool(ToolFeatureID(raw)))
         HubMainWindow.reveal()
     }
 
     @objc func hubDockRevealInbox(_ sender: Any?) {
-        Self.router?.execute(.revealOutputInbox)
+        services?.router.execute(.revealOutputInbox)
         HubMainWindow.reveal()
     }
 
@@ -153,6 +167,5 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
-        HubWindowChromeActions.installKeyMonitorIfNeeded()
     }
 }

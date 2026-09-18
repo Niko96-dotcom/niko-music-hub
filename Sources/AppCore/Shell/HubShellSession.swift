@@ -1,12 +1,17 @@
 import Combine
 import Foundation
 
-/// Shared shell panel visibility for the View menu, title-bar toggles, and router reveals.
+/// Shared shell state: panel visibility for the View menu / title-bar toggles /
+/// router reveals, and the single owner of the selected main-pane tool.
 ///
 /// Persistence keys: `hub.shell.panels.toolsVisible`, `hub.shell.panels.inboxVisible`,
 /// and `hub.shell.selectedToolID`. `inboxUserWantsVisible` is the user-owned inbox
 /// preference. Compact width below `compactInboxCollapseWidth` hides the column via
 /// `inboxEffectiveVisible` without writing that preference (NMH-020).
+///
+/// Observed by the shell view and command groups only — never by the `App`
+/// (see `MenuBarExtraState`), so publishing here re-renders the shell, not
+/// every scene.
 @MainActor
 public final class HubShellSession: ObservableObject {
     public static let toolsVisibleKey = "hub.shell.panels.toolsVisible"
@@ -21,6 +26,9 @@ public final class HubShellSession: ObservableObject {
 
     private let preferences: any PreferenceStore
     private let settingsStore: (any SettingsStore)?
+    /// Browser-style back/forward over tool switches; `nil` in unit tests that
+    /// only exercise panel persistence.
+    public let navigationHistory: HubNavigationHistory?
     /// Default is above the compact threshold until the shell reports a real width.
     private var windowWidth: CGFloat = 1400
 
@@ -29,15 +37,27 @@ public final class HubShellSession: ObservableObject {
     @Published public private(set) var inboxUserWantsVisible: Bool
     /// Derived display flag: false under 1180 pt, otherwise `inboxUserWantsVisible`.
     public var inboxEffectiveVisible: Bool { showOutputInbox }
-    /// Current main-pane tool for Tools-menu checkmarks (NMH-013). Persisted as `selectedToolIDKey`.
+    /// The main-pane tool: drives the cached pane ZStack, the window title,
+    /// Tools-menu checkmarks (NMH-013) and Esc cancel routing. Persisted as
+    /// `selectedToolIDKey`. Resolved once at composition time
+    /// (`restoreSelectedToolID`), before any scene exists.
     @Published public private(set) var selectedToolID: ToolFeatureID?
-    /// Live MenuBarExtra insertion. Canonical persistence is `AppSettings.showMenuBarExtra`.
-    @Published public private(set) var showMenuBarExtra: Bool
+    /// Live MenuBarExtra insertion, observed by the `App`. Canonical persistence
+    /// is `AppSettings.showMenuBarExtra`.
+    public let menuBarExtra: MenuBarExtraState
+    public var showMenuBarExtra: Bool { menuBarExtra.isInserted }
 
-    public init(preferences: any PreferenceStore, settingsStore: (any SettingsStore)? = nil) {
+    public init(
+        preferences: any PreferenceStore,
+        settingsStore: (any SettingsStore)? = nil,
+        navigationHistory: HubNavigationHistory? = nil
+    ) {
         self.preferences = preferences
         self.settingsStore = settingsStore
-        self.showMenuBarExtra = (try? settingsStore?.loadSettings().showMenuBarExtra) ?? true
+        self.navigationHistory = navigationHistory
+        self.menuBarExtra = MenuBarExtraState(
+            isInserted: (try? settingsStore?.loadSettings().showMenuBarExtra) ?? true
+        )
         self.showToolSidebar = preferences.bool(forKey: Self.toolsVisibleKey) ?? true
 
         let migrated = preferences.bool(forKey: Self.inboxMigrationKey) ?? false
@@ -58,19 +78,35 @@ public final class HubShellSession: ObservableObject {
         refreshEffectiveInboxVisibility()
     }
 
+    /// Select a main-pane tool. Publishes only on change (@Published emits even
+    /// for equal values); persistence always writes so a same-value select
+    /// overwrites a previously persisted id (e.g. Settings -> tool). Records
+    /// the switch in `navigationHistory` synchronously, so back/forward steps
+    /// wrapped in `withoutRecording` are not re-recorded.
     public func setSelectedToolID(_ id: ToolFeatureID?) {
-        // LAUNCH-HANG: @Published always emits objectWillChange even for an
-        // equal value. The App Scene re-creates AppShellView on every publish,
-        // so an unconditional assign here (via restore in view init) looped
-        // graphDidChange/scenesDidChange before any window appeared.
-        // Publish only on change; persistence still writes (same-value sets must
-        // overwrite a previously persisted id, e.g. Settings -> tool).
         if id != selectedToolID {
             selectedToolID = id
         }
         if let id {
             persistSelectedToolID(id)
+            navigationHistory?.record(toolID: id)
         }
+    }
+
+    /// Back one history entry: activate its tool without recording, then let the
+    /// tool restore its inner page.
+    public func goBack() {
+        navigate(to: navigationHistory?.goBack())
+    }
+
+    public func goForward() {
+        navigate(to: navigationHistory?.goForward())
+    }
+
+    private func navigate(to entry: HubNavigationEntry?) {
+        guard let entry, let navigationHistory else { return }
+        navigationHistory.withoutRecording { setSelectedToolID(entry.toolID) }
+        navigationHistory.restore(entry)
     }
 
     /// Persist a tool id without changing the live main pane (Settings opener).
@@ -78,9 +114,10 @@ public final class HubShellSession: ObservableObject {
         preferences.set(id.rawValue, forKey: Self.selectedToolIDKey)
     }
 
-    /// Apply `-ui-tool` or the stored id. Does not write preferences.
-    /// Idempotent: no publish when the resolved id already matches, so calling
-    /// this during Scene evaluation cannot loop the App graph.
+    /// Apply `-ui-tool` or the stored id and record it as the first history
+    /// entry. Does not write preferences. Idempotent: no publish when the
+    /// resolved id already matches. Called once from the composition root,
+    /// before SwiftUI builds any scene.
     @discardableResult
     public func restoreSelectedToolID(
         registry: ToolRegistry,
@@ -90,11 +127,13 @@ public final class HubShellSession: ObservableObject {
         if resolved != selectedToolID {
             selectedToolID = resolved
         }
+        if let resolved {
+            navigationHistory?.record(toolID: resolved)
+        }
         return resolved
     }
 
-    /// Non-mutating launch resolution for use during Scene/View init.
-    /// Use `restoreSelectedToolID` (onAppear/task) when the live value must update.
+    /// Non-mutating launch resolution.
     public func peekInitialToolID(
         registry: ToolRegistry,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -162,7 +201,6 @@ public final class HubShellSession: ObservableObject {
 
     /// Update the live extra without writing settings (Settings already persisted).
     public func applyShowMenuBarExtra(_ visible: Bool) {
-        guard visible != showMenuBarExtra else { return }
-        showMenuBarExtra = visible
+        menuBarExtra.apply(visible)
     }
 }

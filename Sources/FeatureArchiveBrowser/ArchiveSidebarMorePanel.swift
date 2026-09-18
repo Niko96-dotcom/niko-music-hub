@@ -182,16 +182,12 @@ struct ArchiveSidebarMorePanel: View {
         ).supportSummaryLine
     }
 
-    /// NMH-057: deep-link to the Vault Settings pane. The pane notification
-    /// selects Vault when Settings is already open; `openSettings()` opens it
-    /// otherwise, and the deferred repost selects Vault once the fresh
-    /// Settings window has mounted its pane observer.
+    /// NMH-057: deep-link to the Vault Settings pane. The router holds the
+    /// pending pane, so a freshly opened Settings window consumes it on appear
+    /// and an already-open one switches on change.
     private func openVaultSettings() {
-        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.vault)
+        viewModel.router.requestSettingsPane(.vault)
         openSettings()
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.vault)
-        }
     }
 }
 

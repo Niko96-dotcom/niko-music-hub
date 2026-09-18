@@ -84,8 +84,8 @@ final class VaultLaunchAtLoginTests: XCTestCase {
         XCTAssertFalse(vault.contains("$0.vault.launchAtLogin = true"))
         XCTAssertTrue(vault.contains("Open Login Setting"))
         XCTAssertTrue(vault.contains("VaultLaunchAtLoginPolicy.warning"))
-        XCTAssertTrue(general.contains("hubOpenSettingsPane"))
-        XCTAssertTrue(general.contains("HubSettingsPane.general"))
+        XCTAssertTrue(general.contains("router.requestSettingsPane(.general)"))
+        XCTAssertFalse(general.contains("NotificationCenter.default.post"), "pane deep links go through the router only")
     }
 
     private func settings(

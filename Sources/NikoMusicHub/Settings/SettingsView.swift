@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import AppUpdates
+import Combine
 import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
@@ -19,6 +20,8 @@ final class HubSettingsSession: ObservableObject {
     @Published var saveError: String?
     @Published var helperPathError: String?
 
+    private var settingsObserverCancellable: AnyCancellable?
+
     let recordingDurationChoices = RecordingDurationOptions.supportedMinutes
 
     init(
@@ -31,6 +34,14 @@ final class HubSettingsSession: ObservableObject {
         self.appearanceController = appearanceController
         self.updateController = updateController
         self.shellSession = shellSession
+        self.settings = context.appSettings.settings
+        settingsObserverCancellable = context.appSettings.$settings
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] settings in
+                guard let self else { return }
+                self.settings = settings
+            }
     }
 
     var updatesFooter: String {
@@ -320,7 +331,7 @@ struct SettingsView: View {
     }
 
     private func openLoginSetting() {
-        NotificationCenter.default.post(name: .hubOpenSettingsPane, object: HubSettingsPane.general)
+        router.requestSettingsPane(.general)
     }
 
     private func openWAVConverter() {

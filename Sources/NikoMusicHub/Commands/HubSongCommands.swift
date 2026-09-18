@@ -5,11 +5,12 @@ import SwiftUI
 
 /// Song menu: labeled archive letter shortcuts (NMH-034).
 /// Unmodified keys stay archive-focused; Find keeps ⌘F (NMH-033).
+///
+/// `archiveSongActions` is a focused scene value the archive pane publishes
+/// only while it is the visible tool in the key window, so the items are
+/// disabled on other tools and in the Settings / Help windows.
 struct HubSongCommands: Commands {
-    @FocusedValue(\.archiveSongActions) private var focusedActions
-    @ObservedObject private var commandContext = ArchiveSongCommandContext.shared
-
-    private var songActions: ArchiveSongFocusedActions? { focusedActions ?? commandContext.actions }
+    @FocusedValue(\.archiveSongActions) private var songActions
 
     var body: some Commands {
         CommandMenu("Song") {

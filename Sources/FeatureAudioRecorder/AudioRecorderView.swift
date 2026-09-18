@@ -4,7 +4,11 @@ import SwiftUI
 
 public struct AudioRecorderView: View {
     let context: ToolContext
-    @StateObject private var viewModel: AudioRecorderViewModel
+    /// Owned by the feature session (`viewModel(for:)`), not by this view.
+    @ObservedObject private var viewModel: AudioRecorderViewModel
+    /// Persisted settings, observed so a max-duration change made in Settings
+    /// reaches this (cached, never re-appearing) pane.
+    @ObservedObject private var appSettings: AppSettingsObserver
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastPersistedMaxDurationMinutes: Int?
     // NMH-142: the Record/Stop capsule is a custom `.plain` Button, so track
@@ -14,7 +18,8 @@ public struct AudioRecorderView: View {
 
     public init(context: ToolContext, viewModel: AudioRecorderViewModel) {
         self.context = context
-        _viewModel = StateObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
+        self.appSettings = context.appSettings
         _lastPersistedMaxDurationMinutes = State(initialValue: viewModel.maxDurationMinutes)
     }
 
@@ -30,6 +35,9 @@ public struct AudioRecorderView: View {
         .onAppear {
             syncMaxDurationFromSettings()
             viewModel.onAppear()
+        }
+        .onChange(of: appSettings.settings.maxRecordingDurationMinutes) { _, _ in
+            syncMaxDurationFromSettings()
         }
         .onChange(of: viewModel.maxDurationMinutes) { _, newValue in
             let normalized = RecordingDurationOptions.normalized(newValue)
@@ -525,8 +533,7 @@ public struct AudioRecorderView: View {
     }
 
     private func syncMaxDurationFromSettings() {
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        let normalized = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
+        let normalized = RecordingDurationOptions.normalized(appSettings.settings.maxRecordingDurationMinutes)
         guard viewModel.maxDurationMinutes != normalized else { return }
         viewModel.maxDurationMinutes = normalized
         lastPersistedMaxDurationMinutes = normalized

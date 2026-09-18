@@ -19,9 +19,9 @@ enum QuickAccessRoutingSmoke {
 
         // Assert openTool routing
         router.execute(.openTool("wav-converter"))
-        guard router.selectedToolID?.rawValue == "wav-converter" else {
+        guard router.requestedToolID?.rawValue == "wav-converter" else {
             throw QuickAccessRoutingSmokeError(
-                "expected selectedToolID=wav-converter, got \(String(describing: router.selectedToolID))"
+                "expected requestedToolID=wav-converter, got \(String(describing: router.requestedToolID))"
             )
         }
 
@@ -34,7 +34,7 @@ enum QuickAccessRoutingSmoke {
         return [
             "quick_access_reveal_inbox": "\(router.revealOutputInbox)",
             "quick_access_routing": "select_tool_reveal_inbox",
-            "quick_access_selected_tool": router.selectedToolID?.rawValue ?? "nil"
+            "quick_access_selected_tool": router.requestedToolID?.rawValue ?? "nil"
         ]
     }
 }

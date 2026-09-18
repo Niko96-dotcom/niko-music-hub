@@ -4,7 +4,8 @@ import SwiftUI
 
 struct ArchiveSidebarView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
-    @StateObject private var sidebarUI = ArchiveSidebarUIState()
+    /// Owned by `ArchiveBrowserView`: disclosure state survives list ⇄ board switches.
+    @ObservedObject var sidebarUI: ArchiveSidebarUIState
     let compactList: Bool
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void

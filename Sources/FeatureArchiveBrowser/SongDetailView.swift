@@ -22,7 +22,7 @@ struct SongDetailView: View {
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
     private var liveSong: Song {
-        viewModel.songs.first(where: { $0.id == song.id }) ?? song
+        viewModel.liveSong(id: song.id, fallback: song)
     }
 
     private var metadataFingerprint: String {
@@ -127,12 +127,17 @@ struct SongDetailView: View {
                 viewModel.pluginsSectionExpanded = true
             }
         }
+        // Identity is per song (`.id(song.id)` at the call sites), so a song
+        // change is a fresh view: per-song `@State` starts clean here instead of
+        // being reset by hand, and the outgoing view flushes its drafts below.
         .onAppear {
             viewModel.workflowUndoManager = undoManager
             syncDrafts(from: liveSong)
+            viewModel.songDetailsExpanded = false
+            viewModel.pluginsSectionExpanded = false
         }
-        .onChange(of: liveSong.id) { oldID, _ in
-            handleSongChange(previousSongID: oldID)
+        .onDisappear {
+            flushMetadataDraftsIfEdited()
         }
         .onChange(of: previewFilter) { _, _ in previewCandidatePage = 0 }
         .onChange(of: metadataFingerprint) { _, _ in
@@ -681,17 +686,6 @@ struct SongDetailView: View {
     /// NMH-048: autosave unsaved title/aliases/note drafts for the previous
     /// song before replacing the fields with the next song, then reset the
     /// per-song workspace state.
-    private func handleSongChange(previousSongID: String) {
-        flushMetadataDraftsForSongChange(previousSongID: previousSongID)
-        syncDrafts(from: liveSong)
-        workspaceTab = .versions
-        storageExpanded = false
-        previewFilter = ""
-        previewCandidatePage = 0
-        viewModel.songDetailsExpanded = false
-        viewModel.pluginsSectionExpanded = false
-    }
-
     private func setCollaborator(_ collaborator: Collaborator, isOn: Bool) {
         var ids = liveSong.collaboratorIDs
         if isOn {
@@ -728,9 +722,15 @@ struct SongDetailView: View {
         }
     }
 
-    /// NMH-048: flush the previous song's drafts before the fields are
-    /// replaced. Undo restores the previous SQLite values (Edit Song Notes).
-    private func flushMetadataDraftsForSongChange(previousSongID: String) {
+    /// NMH-048: flush unsaved drafts when this song's detail goes away (another
+    /// song selected, back to the board). Undo restores the previous SQLite
+    /// values (Edit Song Notes). No-op when nothing was edited.
+    private func flushMetadataDraftsIfEdited() {
+        guard virtualTitleDraft != syncedVirtualTitle
+            || appNoteDraft != syncedAppNote
+            || aliasesDraft != syncedAliases
+        else { return }
+        let previousSongID = song.id
         guard let previousSong = viewModel.songs.first(where: { $0.id == previousSongID }) else {
             return
         }

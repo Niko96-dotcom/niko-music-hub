@@ -3,11 +3,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct StemSeparationView: View {
-    @StateObject private var viewModel: StemSeparationViewModel
+    /// Owned by the feature session (`viewModel(for:)`), not by this view.
+    @ObservedObject private var viewModel: StemSeparationViewModel
     @State private var isTargeted = false
 
     public init(viewModel: StemSeparationViewModel) {
-        _viewModel = StateObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -43,7 +44,7 @@ public struct StemSeparationView: View {
                 case .chooseToolPath:
                     viewModel.chooseHelperPath()
                 case .openHubSettingsHelpers:
-                    HubSettingsHelpersAction.openSettingsHelpers()
+                    viewModel.openHubSettingsHelpers()
                 case .tryAgain:
                     viewModel.refreshHelperHealth()
                 default:

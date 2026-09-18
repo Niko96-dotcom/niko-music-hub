@@ -1,12 +1,15 @@
 import AppCore
-import FeatureArchiveBrowser
 import SwiftUI
 
 /// Esc / ⌘. cancel the foremost in-app download, vault transfer, or archive scan (NMH-009).
+///
+/// State comes from `ShellJobStatusCenter` (the one observable job list —
+/// downloads, archive scan, vault transfer) and the selected tool from the main
+/// window's focused scene value, so the items refresh when a job starts or
+/// ends and Esc only routes while the main window is key.
 struct HubCancelCommands: Commands {
-    let jobRunner: any JobRunning
-    @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
-    @ObservedObject var session: HubShellSession
+    @ObservedObject var jobStatusCenter: ShellJobStatusCenter
+    @FocusedValue(\.hubShellCancelContext) private var cancelContext
 
     var body: some Commands {
         CommandGroup(after: .textEditing) {
@@ -24,62 +27,37 @@ struct HubCancelCommands: Commands {
         }
     }
 
+    private var activity: InAppJobActivity {
+        InAppJobActivity(jobs: jobStatusCenter.jobs)
+    }
+
     private var canCancelEscape: Bool {
-        InAppJobCancelRouting.escapeTarget(
-            selectedToolID: session.selectedToolID,
-            hasDownload: hasDownload,
-            hasActiveVaultTransfer: archiveViewModel.hasActiveProjectVaultTransfer,
-            isScanning: archiveViewModel.isArchiveScanning
-        ) != nil
+        escapeTarget != nil
     }
 
     private var canCancelForemost: Bool {
-        InAppJobCancelRouting.foremost(
-            hasDownload: hasDownload,
-            hasActiveVaultTransfer: archiveViewModel.hasActiveProjectVaultTransfer,
-            isScanning: archiveViewModel.isArchiveScanning
-        ) != nil
+        cancelContext != nil && InAppJobCancelRouting.foremost(activity) != nil
     }
 
-    private var hasDownload: Bool {
-        jobRunner.listJobs().contains {
-            $0.sourceToolID == ToolFeatureID("downloader") && !$0.state.isTerminal
-        }
+    /// `nil` when the main window is not the key scene.
+    private var escapeTarget: InAppJobCancelTarget? {
+        guard let cancelContext else { return nil }
+        return InAppJobCancelRouting.escapeTarget(selectedToolID: cancelContext.selectedToolID, activity)
     }
 
     func cancelEscapeTarget() {
-        perform(
-            InAppJobCancelRouting.escapeTarget(
-                selectedToolID: session.selectedToolID,
-                hasDownload: hasDownload,
-                hasActiveVaultTransfer: archiveViewModel.hasActiveProjectVaultTransfer,
-                isScanning: archiveViewModel.isArchiveScanning
-            )
-        )
+        perform(escapeTarget)
     }
 
     func cancelForemostJob() {
-        perform(
-            InAppJobCancelRouting.foremost(
-                hasDownload: hasDownload,
-                hasActiveVaultTransfer: archiveViewModel.hasActiveProjectVaultTransfer,
-                isScanning: archiveViewModel.isArchiveScanning
-            )
-        )
+        guard cancelContext != nil else { return }
+        perform(InAppJobCancelRouting.foremost(activity))
     }
 
     private func perform(_ target: InAppJobCancelTarget?) {
-        switch target {
-        case .download:
-            for job in jobRunner.listJobs() where job.sourceToolID == ToolFeatureID("downloader") && !job.state.isTerminal {
-                jobRunner.cancelJob(id: job.id)
-            }
-        case .vaultTransfer:
-            archiveViewModel.requestStopActiveProjectVaultTransfer()
-        case .scan:
-            archiveViewModel.cancelScan()
-        case nil:
-            break
+        guard let target else { return }
+        for job in activity.jobs(for: target) {
+            jobStatusCenter.cancel(id: job.cancelActionID ?? job.id)
         }
     }
 }
@@ -90,14 +68,53 @@ enum InAppJobCancelTarget: Equatable {
     case scan
 }
 
+/// Which cancellable activities the shell job list currently holds.
+struct InAppJobActivity: Equatable {
+    static let downloaderToolID = ToolFeatureID("downloader")
+
+    let jobs: [ShellJobStatus]
+
+    var hasDownload: Bool { !jobs(for: .download).isEmpty }
+    var hasActiveVaultTransfer: Bool { !jobs(for: .vaultTransfer).isEmpty }
+    var isScanning: Bool { !jobs(for: .scan).isEmpty }
+
+    func jobs(for target: InAppJobCancelTarget) -> [ShellJobStatus] {
+        switch target {
+        case .download:
+            jobs.filter { $0.sourceToolID == Self.downloaderToolID }
+        case .vaultTransfer:
+            jobs.filter { $0.id == ShellJobExtraSourceID.vaultTransfer }
+        case .scan:
+            jobs.filter { $0.id == ShellJobExtraSourceID.archiveScan }
+        }
+    }
+}
+
 enum InAppJobCancelRouting {
+    static func escapeTarget(selectedToolID: ToolFeatureID?, _ activity: InAppJobActivity) -> InAppJobCancelTarget? {
+        escapeTarget(
+            selectedToolID: selectedToolID,
+            hasDownload: activity.hasDownload,
+            hasActiveVaultTransfer: activity.hasActiveVaultTransfer,
+            isScanning: activity.isScanning
+        )
+    }
+
+    static func foremost(_ activity: InAppJobActivity) -> InAppJobCancelTarget? {
+        foremost(
+            hasDownload: activity.hasDownload,
+            hasActiveVaultTransfer: activity.hasActiveVaultTransfer,
+            isScanning: activity.isScanning
+        )
+    }
+
     static func escapeTarget(
         selectedToolID: ToolFeatureID?,
         hasDownload: Bool,
         hasActiveVaultTransfer: Bool,
         isScanning: Bool
     ) -> InAppJobCancelTarget? {
-        if selectedToolID == ToolFeatureID("downloader") {
+        if selectedToolID == InAppJobActivity.downloaderToolID {
             return hasDownload ? .download : nil
         }
         if selectedToolID == ToolFeatureID("archive-browser") {

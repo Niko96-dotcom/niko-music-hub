@@ -1,7 +1,19 @@
 import AppCore
+import Combine
 import XCTest
 
 final class SettingsStoreTests: XCTestCase {
+    func testUpdatePublishesPersistedSettings() throws {
+        let store = makeStore(reset: true)
+        var received: AppSettings?
+        let subscription = store.settingsChanges.sink { received = $0 }
+
+        try store.updateSettings { $0.maxRecordingDurationMinutes = 45 }
+
+        XCTAssertEqual(received?.maxRecordingDurationMinutes, 45)
+        withExtendedLifetime(subscription) {}
+    }
+
     func testDefaultSettingsUseCubaseReadyOutputFolderAndAudioPreset() throws {
         let store = makeStore()
         let settings = try store.loadSettings()

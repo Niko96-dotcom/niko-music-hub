@@ -55,16 +55,11 @@ struct HubSettingsRoot: View {
             session.refresh()
             consumePendingSettingsPane()
         }
+        // Pane deep links arrive only through `router.requestSettingsPane` —
+        // pending until this window consumes them, so a request made while the
+        // window was closed still lands on the right pane.
         .onChange(of: router.openSettingsPane) { _, _ in
             consumePendingSettingsPane()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .hubOpenSettingsPane)) { note in
-            if let pane = note.object as? HubSettingsPane {
-                selectedPane = pane
-            } else if let raw = note.userInfo?["pane"] as? String,
-                      let pane = HubSettingsPane(rawValue: raw) {
-                selectedPane = pane
-            }
         }
     }
 

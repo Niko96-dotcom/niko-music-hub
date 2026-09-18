@@ -31,6 +31,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let pathSafety = PathSafety()
     let fileActions: any FileActions
     let settingsStore: SettingsStore
+    /// Settings-pane deep links (Vault status row → Settings → Vault).
+    let router: QuickAccessRouter
     let diagnostics: Diagnostics
     let jobStatusCenter: ShellJobStatusCenter
     let collaboratorStore: (any CollaboratorStoring)?
@@ -57,8 +59,19 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             // new catalog so card rendering never needs to decode settings or
             // canonicalize filesystem paths.
             guard newValue != songs else { return }
+            songsByID = Dictionary(
+                newValue.map { ($0.id, $0) },
+                uniquingKeysWith: { _, latest in latest }
+            )
             rebuildProjectVaultPresentationCache(for: newValue, notifyWhenChanged: false)
         }
+    }
+    /// O(1) live catalog lookup for detail views. Rebuilt before `songs`
+    /// publishes so every body pass sees a cache matching the new snapshot.
+    private var songsByID: [String: Song] = [:]
+
+    func liveSong(id: String, fallback: Song) -> Song {
+        songsByID[id] ?? fallback
     }
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
@@ -289,6 +302,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         incrementalRescanHold: (() async -> Void)? = nil
     ) {
         self.settingsStore = context.settingsStore
+        self.router = context.router
         self.diagnostics = context.diagnostics
         self.fileActions = context.fileActions
         self.jobStatusCenter = context.jobStatusCenter

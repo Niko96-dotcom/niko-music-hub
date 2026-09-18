@@ -55,6 +55,11 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         !isRunning && droppedFileURL != nil
     }
 
+    /// Helper-missing recovery: open Settings → Helpers (NMH-010).
+    public func openHubSettingsHelpers() {
+        context.router.openSettingsHelpers()
+    }
+
     public var canStartYouTube: Bool {
         !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil
     }

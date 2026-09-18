@@ -8,19 +8,23 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     public var cancelActionID: String?
     /// When set, `displayLine` wraps `title` as `{verb} “{title}”`.
     public var activityVerb: String?
+    /// Tool that started a `JobRunner` job; `nil` for extra (archive) sources.
+    public var sourceToolID: ToolFeatureID?
 
     public init(
         id: String,
         title: String,
         percent: Double? = nil,
         cancelActionID: String? = nil,
-        activityVerb: String? = nil
+        activityVerb: String? = nil,
+        sourceToolID: ToolFeatureID? = nil
     ) {
         self.id = id
         self.title = title
         self.percent = percent
         self.cancelActionID = cancelActionID
         self.activityVerb = activityVerb
+        self.sourceToolID = sourceToolID
     }
 
     public var displayLine: String {
@@ -40,7 +44,8 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
             title: job.title,
             percent: job.progress > 0 ? job.progress : nil,
             cancelActionID: job.id.uuidString,
-            activityVerb: activityVerb(for: job.sourceToolID)
+            activityVerb: activityVerb(for: job.sourceToolID),
+            sourceToolID: job.sourceToolID
         )
     }
 

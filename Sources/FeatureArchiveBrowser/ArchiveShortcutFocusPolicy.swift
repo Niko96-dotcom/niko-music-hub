@@ -1,3 +1,4 @@
+import AppCore
 import AppKit
 import NikoMusicCore
 import SwiftUI
@@ -35,37 +36,23 @@ enum ArchiveShortcutFocusPolicy {
         }
     }
     /// NMH-006: NSScrollView eats arrow keyDowns before SwiftUI `onMoveCommand` /
-    /// `onKeyPress` see them. While archive song shortcuts are allowed, convert
-    /// arrows into `moveSongSelection` and consume the event.
+    /// `onKeyPress` see them. While the archive is the active tool, convert
+    /// plain arrows into `moveSongSelection` and consume the event.
+    ///
+    /// Scope: only events aimed at the main window (the archive lives there),
+    /// and only while no text editor is first responder — arrows inside the
+    /// search field or a note must move the caret, not the song highlight.
+    /// The pane installs this when it becomes the active tool and removes it
+    /// when another tool is shown (`hubToolIsActive`), not on appear/disappear:
+    /// cached panes never disappear.
     @MainActor
     private static var arrowKeyMonitor: Any?
 
     @MainActor
-    static func installArchiveArrowKeyMonitor(move: @escaping (ArchiveSongMoveDirection) -> Void) {
+    static func installArchiveArrowKeyMonitor(move: @escaping @MainActor (ArchiveSongMoveDirection) -> Void) {
         removeArchiveArrowKeyMonitor()
         arrowKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Option/Command/Control arrows belong to Song menu (skip) and system chords —
-            // never consume them here (NMH-034 / daytime Accept coexistence).
-            if !event.modifierFlags.intersection([.option, .command, .control]).isEmpty {
-                return event
-            }
-            let direction: ArchiveSongMoveDirection?
-            switch event.keyCode {
-            case 126: direction = .up
-            case 125: direction = .down
-            case 123: direction = .left
-            case 124: direction = .right
-            default: direction = nil
-            }
-            guard let direction else { return event }
-            // Prefer claiming away from field editors; then ignore only active text editing.
-            claimArchiveKeyFocus()
-            let first = NSApp?.keyWindow?.firstResponder
-            if first is NSTextView || first is NSTextField || first is NSSearchField {
-                return event
-            }
-            move(direction)
-            return nil
+            handleArrowKeyEvent(event, move: move)
         }
     }
 
@@ -77,6 +64,41 @@ enum ArchiveShortcutFocusPolicy {
         }
     }
 
+    /// Returns `nil` when the event was consumed as a song move.
+    @MainActor
+    static func handleArrowKeyEvent(_ event: NSEvent, move: (ArchiveSongMoveDirection) -> Void) -> NSEvent? {
+        // Option/Command/Control arrows belong to Song menu (skip) and system chords —
+        // never consume them here (NMH-034 / daytime Accept coexistence).
+        if !event.modifierFlags.intersection([.option, .command, .control]).isEmpty {
+            return event
+        }
+        guard let direction = arrowDirection(keyCode: event.keyCode) else { return event }
+        guard let window = event.window, isMainWindow(window), window.isKeyWindow else { return event }
+        if isTextEditing(window.firstResponder) {
+            return event
+        }
+        move(direction)
+        return nil
+    }
+
+    static func arrowDirection(keyCode: UInt16) -> ArchiveSongMoveDirection? {
+        switch keyCode {
+        case 126: .up
+        case 125: .down
+        case 123: .left
+        case 124: .right
+        default: nil
+        }
+    }
+
+    static func isTextEditing(_ responder: NSResponder?) -> Bool {
+        responder is NSTextView || responder is NSTextField || responder is NSSearchField
+    }
+
+    @MainActor
+    static func isMainWindow(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue == HubMainWindowIdentity.identifierRawValue
+    }
 }
 
 /// Actions the Song menu runs while the archive group is focused (NMH-034).
@@ -96,17 +118,6 @@ public struct ArchiveSongFocusedActions {
     public let applyWorkflowStatus: (ProjectWorkflowStatus?) -> Void
     public let skipPreviewBack: () -> Void
     public let skipPreviewForward: () -> Void
-}
-
-/// Commands read this when `FocusedValue` does not publish into the menu bar (macOS 14.2).
-@MainActor
-public final class ArchiveSongCommandContext: ObservableObject {
-    public static let shared = ArchiveSongCommandContext()
-    @Published public private(set) var actions: ArchiveSongFocusedActions?
-
-    public func update(_ actions: ArchiveSongFocusedActions?) {
-        self.actions = actions
-    }
 }
 
 private struct ArchiveSongFocusedActionsKey: FocusedValueKey {

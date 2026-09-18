@@ -4,7 +4,8 @@ import SwiftUI
 public struct BPMTapperView: View {
     let context: ToolContext
 
-    @StateObject private var viewModel: BPMTapperViewModel
+    /// Owned by the feature session (`viewModel(for:)`), not by this view.
+    @ObservedObject private var viewModel: BPMTapperViewModel
     @FocusState private var tapSurfaceFocused: Bool
     @State private var clearHistoryConfirmationVisible = false
     @State private var copiedHistoryEntryID: UUID?
@@ -16,7 +17,7 @@ public struct BPMTapperView: View {
         viewModel: BPMTapperViewModel = BPMTapperViewModel()
     ) {
         self.context = context
-        _viewModel = StateObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
     }
 
     public var body: some View {

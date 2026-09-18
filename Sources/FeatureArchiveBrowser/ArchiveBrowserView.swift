@@ -8,13 +8,23 @@ struct ArchiveBrowserView: View {
     @ObservedObject private var previewSession = ArchivePreviewSession.shared
     @ObservedObject private var previewPlayer = ArchivePreviewSession.shared.player
     @Environment(\.undoManager) private var undoManager
+    /// False while another tool is shown; the shell keeps this pane mounted.
+    @Environment(\.hubToolIsActive) private var isActiveTool
     @State private var showNewSongSheet = false
     @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
+    /// Page-level state that must survive board ⇄ list ⇄ detail mode switches,
+    /// which rebuild the mode's subtree: sidebar disclosure flags and the board
+    /// column projection.
+    @StateObject private var sidebarUI = ArchiveSidebarUIState()
+    @StateObject private var boardProjectionCache: ArchiveBoardProjectionCache
 
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
         self._previewSession = ObservedObject(wrappedValue: ArchivePreviewSession.shared)
         self._previewPlayer = ObservedObject(wrappedValue: ArchivePreviewSession.shared.player)
+        _boardProjectionCache = StateObject(
+            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
+        )
     }
 
     var body: some View {
@@ -31,6 +41,7 @@ struct ArchiveBrowserView: View {
                 case .board:
                     ArchiveBoardView(
                         viewModel: viewModel,
+                        projectionCache: boardProjectionCache,
                         onChooseRoot: chooseRoot,
                         keyboardFocus: $keyboardFocus
                     )
@@ -54,6 +65,7 @@ struct ArchiveBrowserView: View {
                         if splitView || !compactListShowsDetail {
                             ArchiveSidebarView(
                                 viewModel: viewModel,
+                                sidebarUI: sidebarUI,
                                 compactList: compactList,
                                 showNewSongSheet: $showNewSongSheet,
                                 onChooseRoot: chooseRoot,
@@ -129,8 +141,11 @@ struct ArchiveBrowserView: View {
         // the whole tool is not wanted; the quiet ring below is the HIG affordance.
         .focusEffectDisabled()
         .focused($keyboardFocus, equals: .archive)
-        .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
-        .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
+        // Song menu state is a scene value scoped to this pane being the
+        // visible tool: with another tool showing (pane mounted but hidden) the
+        // menu must not act on the archive selection. Unmodified letter
+        // shortcuts stay gated by `allowsUnmodifiedShortcuts` inside.
+        .focusedSceneValue(\.archiveSongActions, isActiveTool ? archiveSongFocusedActions : nil)
         .overlay {
             // Keyboard-navigation users get the ring (NMH-006/035); a mouse click
             // that lands focus on the pane must not frame the entire board.
@@ -145,17 +160,16 @@ struct ArchiveBrowserView: View {
         .onAppear {
             ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             keyboardFocus = .archive
-            ArchiveShortcutFocusPolicy.installArchiveArrowKeyMonitor { direction in
-                viewModel.moveSongSelection(direction)
-            }
-            ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
+            updateArrowKeyMonitor(active: isActiveTool)
             viewModel.presentPendingIdentityReviewsIfNeeded()
         }
         .onDisappear {
             ArchiveShortcutFocusPolicy.removeArchiveArrowKeyMonitor()
         }
-        .onChange(of: songCommandSyncToken) { _, _ in
-            ArchiveSongCommandContext.shared.update(archiveSongFocusedActions)
+        // The pane stays mounted across tool switches, so the app-wide arrow
+        // monitor follows the active-tool flag, not appear/disappear.
+        .onChange(of: isActiveTool) { _, active in
+            updateArrowKeyMonitor(active: active)
         }
         .onMoveCommand(perform: handleArchiveMoveCommand)
         .onKeyPress(.upArrow) {
@@ -317,6 +331,7 @@ struct ArchiveBrowserView: View {
                 }
 
                 SongDetailView(song: song, viewModel: viewModel)
+                    .id(song.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: 1150, alignment: .topLeading)
@@ -329,6 +344,7 @@ struct ArchiveBrowserView: View {
             // Selection vanished (rescan/filter) — fall back to the board.
             ArchiveBoardView(
                 viewModel: viewModel,
+                projectionCache: boardProjectionCache,
                 onChooseRoot: chooseRoot,
                 keyboardFocus: $keyboardFocus
             )
@@ -345,6 +361,7 @@ struct ArchiveBrowserView: View {
             // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
+                .id(song.id)
                 .padding(.horizontal, HubToolLayout.horizontalPadding)
                 .padding(.top, HubToolLayout.topPadding)
                 .padding(.bottom, HubToolLayout.bottomPadding)
@@ -414,8 +431,14 @@ struct ArchiveBrowserView: View {
         return viewModel.canMutateWorkflowStatus(for: song)
     }
 
-    private var songCommandSyncToken: String {
-        "\(keyboardFocus == .archive)-\(allowsSongShortcuts)-\(viewModel.selectedSong?.id ?? "")-\(selectedSongAllowsWorkflowMutation)-\(previewSession.isPlaying)-\(previewSession.songID ?? "")-\(previewSession.preview != nil)-\(previewPlayer.duration)"
+    private func updateArrowKeyMonitor(active: Bool) {
+        if active {
+            ArchiveShortcutFocusPolicy.installArchiveArrowKeyMonitor { direction in
+                viewModel.moveSongSelection(direction)
+            }
+        } else {
+            ArchiveShortcutFocusPolicy.removeArchiveArrowKeyMonitor()
+        }
     }
 
     private var archiveSongFocusedActions: ArchiveSongFocusedActions {

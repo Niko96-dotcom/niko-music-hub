@@ -52,7 +52,8 @@ final class HubSongCommandsTests: XCTestCase {
         XCTAssertTrue(browser.contains("onKeyPress(\"f\")"))
         XCTAssertTrue(browser.contains("onKeyPress(\"d\")"))
         XCTAssertTrue(browser.contains("onKeyPress(.space)"))
-        XCTAssertTrue(browser.contains(".focusedValue(\\."))
+        XCTAssertTrue(browser.contains(".focusedSceneValue(\\.archiveSongActions"))
+        XCTAssertFalse(commands.contains("ArchiveSongCommandContext"))
         XCTAssertTrue(browser.contains("archiveShowSongVersions"))
 
 

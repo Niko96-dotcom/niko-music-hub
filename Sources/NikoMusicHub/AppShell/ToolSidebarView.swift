@@ -195,7 +195,7 @@ struct ToolSidebarView: View {
             if let context {
                 HelperToolsHealthStrip(context: context) {
                     showHelperHealth = false
-                    HubSettingsHelpersAction.openSettingsHelpers()
+                    context.router.openSettingsHelpers()
                 }
                 .frame(width: 240)
                 .padding(12)

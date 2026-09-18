@@ -31,10 +31,10 @@ final class QuickAccessRoutingSmokeTests: XCTestCase {
 
     // MARK: - Router command execution
 
-    func testOpenToolSetsSelectedToolID() throws {
+    func testOpenToolPublishesRequest() throws {
         let router = QuickAccessRouter()
         router.execute(.openTool("wav-converter"))
-        XCTAssertEqual(router.selectedToolID?.rawValue, "wav-converter")
+        XCTAssertEqual(router.requestedToolID?.rawValue, "wav-converter")
     }
 
     func testRevealOutputInboxSetsFlag() throws {
@@ -47,7 +47,7 @@ final class QuickAccessRoutingSmokeTests: XCTestCase {
         let router = QuickAccessRouter()
         router.execute(.openTool("wav-converter"))
         router.execute(.revealOutputInbox)
-        XCTAssertEqual(router.selectedToolID?.rawValue, "wav-converter")
+        XCTAssertEqual(router.requestedToolID?.rawValue, "wav-converter")
         XCTAssertTrue(router.revealOutputInbox)
     }
 }

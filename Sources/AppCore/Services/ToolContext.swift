@@ -24,6 +24,10 @@ public struct ToolContext: Sendable {
     public let persistenceIssues: [PersistenceIssue]
     public let jobStatusCenter: ShellJobStatusCenter
     public let navigationHistory: HubNavigationHistory
+    /// Observable mirror of the persisted settings (see `AppSettingsObserver`).
+    public let appSettings: AppSettingsObserver
+    /// App routing store: tool-open and Settings-pane requests from features.
+    public let router: QuickAccessRouter
 
     public init(
         registeredToolCount: Int,
@@ -36,7 +40,9 @@ public struct ToolContext: Sendable {
         diagnostics: any Diagnostics,
         persistenceIssues: [PersistenceIssue] = [],
         jobStatusCenter: ShellJobStatusCenter? = nil,
-        navigationHistory: HubNavigationHistory = HubNavigationHistory()
+        navigationHistory: HubNavigationHistory = HubNavigationHistory(),
+        appSettings: AppSettingsObserver? = nil,
+        router: QuickAccessRouter? = nil
     ) {
         self.registeredToolCount = registeredToolCount
         self.settingsStore = settingsStore
@@ -49,5 +55,7 @@ public struct ToolContext: Sendable {
         self.persistenceIssues = persistenceIssues
         self.jobStatusCenter = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         self.navigationHistory = navigationHistory
+        self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)
+        self.router = router ?? QuickAccessRouter()
     }
 }

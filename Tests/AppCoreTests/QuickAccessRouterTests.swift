@@ -6,17 +6,20 @@ final class QuickAccessRouterTests: XCTestCase {
 
     // MARK: - .openTool routing
 
-    func testExecuteOpenToolSetsSelectedToolID() {
+    func testExecuteOpenToolPublishesToolRequest() {
         let router = QuickAccessRouter()
         router.execute(.openTool("stem-separation"))
-        XCTAssertEqual(router.selectedToolID, "stem-separation")
+        XCTAssertEqual(router.requestedToolID, "stem-separation")
+        XCTAssertEqual(router.toolRequest?.sequence, 1)
     }
 
-    func testExecuteOpenToolOverwritesPreviousSelection() {
+    func testExecuteOpenToolPublishesNewRequest() {
         let router = QuickAccessRouter()
         router.execute(.openTool("bpm-tapper"))
+        let first = router.toolRequest
         router.execute(.openTool("wav-converter"))
-        XCTAssertEqual(router.selectedToolID, "wav-converter")
+        XCTAssertEqual(router.requestedToolID, "wav-converter")
+        XCTAssertNotEqual(router.toolRequest?.sequence, first?.sequence)
     }
 
     func testExecuteOpenToolDoesNotAffectRevealFlag() {
@@ -33,10 +36,10 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertTrue(router.revealOutputInbox)
     }
 
-    func testExecuteRevealOutputInboxDoesNotChangeSelectedToolID() {
+    func testExecuteRevealOutputInboxDoesNotRequestATool() {
         let router = QuickAccessRouter()
         router.execute(.revealOutputInbox)
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
     }
 
     func testClearRevealOutputInboxResetsFlag() {
@@ -58,31 +61,31 @@ final class QuickAccessRouterTests: XCTestCase {
     func testExecuteOpenAppIsNoOp() {
         let router = QuickAccessRouter()
         router.execute(.openApp)
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
         XCTAssertFalse(router.revealOutputInbox)
     }
 
-    func testExecuteOpenAppDoesNotSetSelectedToolID() {
+    func testExecuteOpenAppDoesNotReplaceToolRequest() {
         let router = QuickAccessRouter()
         router.execute(.openTool("bpm-tapper"))
         router.execute(.openApp)
-        XCTAssertEqual(router.selectedToolID, "bpm-tapper")
+        XCTAssertEqual(router.requestedToolID, "bpm-tapper")
         XCTAssertFalse(router.revealOutputInbox)
     }
 
-    func testExecuteQuitAppDoesNotSetSelectedToolID() {
+    func testExecuteQuitAppDoesNotReplaceToolRequest() {
         let router = QuickAccessRouter()
         router.execute(.openTool("downloader"))
         router.execute(.quitApp)
-        XCTAssertEqual(router.selectedToolID, "downloader")
+        XCTAssertEqual(router.requestedToolID, "downloader")
         XCTAssertFalse(router.revealOutputInbox)
     }
 
     // MARK: - Initial state
 
-    func testInitialSelectedToolIDIsNil() {
+    func testInitialToolRequestIsNil() {
         let router = QuickAccessRouter()
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
     }
 
     func testInitialRevealOutputInboxIsFalse() {
@@ -93,7 +96,7 @@ final class QuickAccessRouterTests: XCTestCase {
     func testFocusArchiveSearchSelectsExistingArchiveAndEmitsRepeatableFocusRequests() {
         let router = QuickAccessRouter()
         router.execute(.focusArchiveSearch)
-        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.requestedToolID, "archive-browser")
         XCTAssertEqual(router.archiveSearchFocusRequest, 1)
         router.execute(.focusArchiveSearch)
         XCTAssertEqual(router.archiveSearchFocusRequest, 2)
@@ -104,38 +107,26 @@ final class QuickAccessRouterTests: XCTestCase {
     func testExecuteFindIncrementsArchiveSearchFocusRequestAndSelectsArchiveBrowser() {
         let router = QuickAccessRouter()
         XCTAssertEqual(router.archiveSearchFocusRequest, 0)
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertNil(router.toolRequest)
         router.execute(.focusArchiveSearch)
-        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.requestedToolID, "archive-browser")
         XCTAssertEqual(router.archiveSearchFocusRequest, 1)
+        let firstSequence = router.toolRequest?.sequence
         router.execute(.focusArchiveSearch)
-        XCTAssertEqual(router.selectedToolID, "archive-browser")
+        XCTAssertEqual(router.requestedToolID, "archive-browser")
+        XCTAssertNotEqual(router.toolRequest?.sequence, firstSequence)
         XCTAssertEqual(router.archiveSearchFocusRequest, 2)
     }
 
-    // MARK: - clearSelectedToolID
+    // MARK: - repeated one-shot requests
 
-    func testSelectedToolIDIsNilAfterClear() {
+    func testExecuteSameToolIDTwicePublishesDistinctRequests() {
         let router = QuickAccessRouter()
         router.execute(.openTool("wav-converter"))
-        XCTAssertEqual(router.selectedToolID, "wav-converter")
-        router.clearSelectedToolID()
-        XCTAssertNil(router.selectedToolID)
-    }
-
-    func testExecuteSameToolIDTwiceAfterClearBothFire() {
-        let router = QuickAccessRouter()
+        let first = router.toolRequest
         router.execute(.openTool("wav-converter"))
-        router.clearSelectedToolID()
-        router.execute(.openTool("wav-converter"))
-        XCTAssertEqual(router.selectedToolID, "wav-converter")
-    }
-
-    func testClearSelectedToolIDIsIdempotentWhenAlreadyNil() {
-        let router = QuickAccessRouter()
-        // selectedToolID is already nil — calling clear must not crash
-        router.clearSelectedToolID()
-        XCTAssertNil(router.selectedToolID)
+        XCTAssertEqual(router.requestedToolID, "wav-converter")
+        XCTAssertNotEqual(router.toolRequest?.sequence, first?.sequence)
     }
 
     // MARK: - HAND-04: router does not call OutputHandoff

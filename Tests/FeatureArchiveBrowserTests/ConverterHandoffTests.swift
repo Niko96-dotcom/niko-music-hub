@@ -33,7 +33,7 @@ final class ConverterHandoffTests: XCTestCase {
         )
 
         viewModel.convertMainPreview(for: song)
-        XCTAssertEqual(router.selectedToolID, ToolFeatureID("wav-converter"))
+        XCTAssertEqual(router.requestedToolID, ToolFeatureID("wav-converter"))
         XCTAssertEqual(router.prefilledConverterURLs, [preview])
     }
 }

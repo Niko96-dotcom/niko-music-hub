@@ -6,8 +6,14 @@ import SwiftUI
 
 struct HelperToolsHealthStrip: View {
     let context: ToolContext
-    var onOpenSettingsHelpers: () -> Void = {
-        HubSettingsHelpersAction.openSettingsHelpers()
+    var onOpenSettingsHelpers: (() -> Void)? = nil
+
+    private func openSettingsHelpers() {
+        if let onOpenSettingsHelpers {
+            onOpenSettingsHelpers()
+        } else {
+            context.router.openSettingsHelpers()
+        }
     }
 
     @State private var snapshot = HelperToolsHealthStripModel.checking
@@ -33,7 +39,7 @@ struct HelperToolsHealthStrip: View {
                     label: "Open Settings",
                     style: .secondary
                 ) {
-                    onOpenSettingsHelpers()
+                    openSettingsHelpers()
                 }
             }
         }
@@ -46,7 +52,7 @@ struct HelperToolsHealthStrip: View {
     }
 
     private func helperRow(_ item: HelperToolsHealthItem) -> some View {
-        Button(action: onOpenSettingsHelpers) {
+        Button(action: openSettingsHelpers) {
             HStack(spacing: 8) {
                 Image(systemName: symbol(for: item.state))
                     .foregroundStyle(color(for: item.state))

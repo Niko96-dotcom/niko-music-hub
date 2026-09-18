@@ -41,7 +41,6 @@ struct HubShellTitleBarControls: View {
                     glyphSize: Self.glyphSize,
                     action: onGoBack
                 )
-                .keyboardShortcut("[", modifiers: .command)
                 HubIconButton(
                     systemImage: "chevron.forward",
                     accessibilityLabel: "Forward",
@@ -51,7 +50,6 @@ struct HubShellTitleBarControls: View {
                     glyphSize: Self.glyphSize,
                     action: onGoForward
                 )
-                .keyboardShortcut("]", modifiers: .command)
             }
 
             Spacer(minLength: 0)

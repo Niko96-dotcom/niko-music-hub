@@ -13,7 +13,9 @@ struct ArchiveBoardView: View {
     let onChooseRoot: () -> Void
 
     @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
-    @StateObject private var projectionCache: ArchiveBoardProjectionCache
+    /// Owned by `ArchiveBrowserView` so a board → detail → board round trip
+    /// does not re-project every column.
+    @ObservedObject var projectionCache: ArchiveBoardProjectionCache
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
 
     /// Reading the cache is constant-time; `ArchiveBoardProjection.columns`
@@ -24,15 +26,14 @@ struct ArchiveBoardView: View {
 
     init(
         viewModel: ArchiveBrowserViewModel,
+        projectionCache: ArchiveBoardProjectionCache,
         onChooseRoot: @escaping () -> Void,
         keyboardFocus: FocusState<ArchiveKeyboardFocus?>.Binding
     ) {
         self.viewModel = viewModel
+        self.projectionCache = projectionCache
         self.onChooseRoot = onChooseRoot
         self._keyboardFocus = keyboardFocus
-        _projectionCache = StateObject(
-            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
-        )
     }
 
     var body: some View {

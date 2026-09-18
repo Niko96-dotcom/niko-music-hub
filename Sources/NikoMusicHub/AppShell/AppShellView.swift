@@ -9,12 +9,15 @@ struct AppShellView: View {
     let registry: ToolRegistry
     let context: ToolContext
     @ObservedObject var router: QuickAccessRouter
+    /// Single owner of the selected tool and panel visibility.
     @ObservedObject var shellSession: HubShellSession
     @ObservedObject private var history: HubNavigationHistory
     @Environment(\.openSettings) private var openSettings
-    @StateObject private var toolPaneCache: ToolPaneCache
-
-    @State private var selectedToolID: ToolFeatureID?
+    /// Non-observable pane cache; the session's `selectedToolID` drives rendering.
+    @State private var toolPaneCache: ToolPaneCache
+    /// Router tool requests are one-shot: remember the last one applied so a
+    /// window re-appear does not replay it.
+    @State private var appliedToolRequestSequence: UInt64 = 0
 
     @MainActor
     init(
@@ -28,24 +31,12 @@ struct AppShellView: View {
         self.router = router
         self.shellSession = shellSession
         self.history = context.navigationHistory
-        // LAUNCH-HANG: never mutate HubShellSession (@Published) during Scene
-        // evaluation. The previous restoreSelectedToolID(registry:) call here
-        // published on every App graph pass, looping scenesDidChange /
-        // preferencesDidChange before any window appeared. Resolve without
-        // publishing; the authoritative restore runs in onAppear below.
-        let initialToolID = shellSession.peekInitialToolID(registry: registry)
-        _toolPaneCache = StateObject(
-            wrappedValue: ToolPaneCache(
-                registry: registry,
-                context: context,
-                initialToolID: initialToolID
-            )
-        )
-        _selectedToolID = State(initialValue: initialToolID)
-        if let initialToolID {
-            context.navigationHistory.record(toolID: initialToolID)
-        }
+        // No side effects here: the launch tool is resolved (and recorded in
+        // history) once by the composition root, before any scene exists.
+        _toolPaneCache = State(initialValue: ToolPaneCache(registry: registry, context: context))
     }
+
+    private var selectedToolID: ToolFeatureID? { shellSession.selectedToolID }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -100,33 +91,23 @@ struct AppShellView: View {
                 canGoBack: history.canGoBack,
                 canGoForward: history.canGoForward,
                 toolAccessory: selectedToolID.flatMap { registry.feature(for: $0)?.makeTitleBarAccessory(context: context) },
-                onGoBack: { navigate(to: history.goBack()) },
-                onGoForward: { navigate(to: history.goForward()) }
+                onGoBack: { shellSession.goBack() },
+                onGoForward: { shellSession.goForward() }
             )
         }
         .ignoresSafeArea(edges: .top)
         .background(HubWindowChromeConfigurator(windowTitle: mainWindowTitle))
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .hubOpensMainWindowFromDock()
+        // Esc/⌘. cancel routing reads the selected tool as a scene value, so the
+        // Edit-menu items only act while this window is the key scene.
+        .focusedSceneValue(\.hubShellCancelContext, HubShellCancelContext(selectedToolID: selectedToolID))
         .onAppear {
-            // LAUNCH-HANG: authoritative launch-tool restore happens here, not in
-            // init. Mutating the shared session during Scene evaluation looped the
-            // App graph before a window existed; onAppear runs once the Window is
-            // committed. restoreSelectedToolID(registry:) is idempotent (no-op
-            // when already resolved).
-            let restored = shellSession.restoreSelectedToolID(registry: registry)
-            if let restored, restored != selectedToolID {
-                toolPaneCache.ensureMounted(restored)
-                selectedToolID = restored
-            }
             // Drain any pending router state that was set while the window was absent
             // (closed-window case). The menu bar action may fire router.execute() before
             // openWindow() recreates this view; onChange only fires on transitions AFTER
             // subscription, so state set before appearance would be silently dropped.
-            if let toolID = router.selectedToolID {
-                selectTool(toolID)
-                router.clearSelectedToolID()
-            }
+            applyToolRequest(router.toolRequest)
             if router.revealOutputInbox {
                 setOutputInboxVisible(true)
                 router.clearRevealOutputInbox()
@@ -140,16 +121,8 @@ struct AppShellView: View {
                 openSettings()
             }
         }
-        .onChange(of: selectedToolID) { _, newID in
-            guard let newID else { return }
-            toolPaneCache.ensureMounted(newID)
-            history.record(toolID: newID)
-        }
-        .onChange(of: router.selectedToolID) { _, newID in
-            if let newID {
-                selectTool(newID)
-                router.clearSelectedToolID()  // reset so the same ID fires again next time
-            }
+        .onChange(of: router.toolRequest) { _, request in
+            applyToolRequest(request)
         }
         .onChange(of: router.revealOutputInbox) { _, reveal in
             if reveal {
@@ -173,10 +146,6 @@ struct AppShellView: View {
             guard pane != nil else { return }
             openSettings()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .hubOpenSettingsHelpers)) { _ in
-            router.openSettingsHelpers()
-            openSettings()
-        }
         .background {
             GeometryReader { proxy in
                 Color.clear
@@ -191,7 +160,7 @@ struct AppShellView: View {
 
     /// Window menu / Mission Control title from the selected tool. Fallback when unknown.
     private var mainWindowTitle: String {
-        HubMainWindowTitle.resolved(selectedToolID: shellSession.selectedToolID, registry: registry)
+        HubMainWindowTitle.resolved(selectedToolID: selectedToolID, registry: registry)
     }
 
     /// Title-row reservation inside each column. When the persistence banner is
@@ -240,6 +209,12 @@ struct AppShellView: View {
         shellSession.setOutputInboxVisible(visible)
     }
 
+    private func applyToolRequest(_ request: QuickAccessToolRequest?) {
+        guard let request, request.sequence > appliedToolRequestSequence else { return }
+        appliedToolRequestSequence = request.sequence
+        selectTool(request.toolID)
+    }
+
     /// Sidebar writes go through `selectTool` so Settings opens the Settings
     /// window instead of replacing the main pane.
     private var sidebarSelectedToolID: Binding<ToolFeatureID?> {
@@ -247,7 +222,7 @@ struct AppShellView: View {
             get: { selectedToolID },
             set: { newValue in
                 guard let newValue else {
-                    selectedToolID = nil
+                    shellSession.setSelectedToolID(nil)
                     return
                 }
                 selectTool(newValue)
@@ -261,17 +236,7 @@ struct AppShellView: View {
             openSettings()
             return
         }
-        toolPaneCache.ensureMounted(toolID)
-        selectedToolID = toolID
         shellSession.setSelectedToolID(toolID)
-    }
-
-    /// Back/forward step: activate the entry's tool without recording, then let
-    /// the tool restore its inner page.
-    private func navigate(to entry: HubNavigationEntry?) {
-        guard let entry else { return }
-        history.withoutRecording { selectTool(entry.toolID) }
-        history.restore(entry)
     }
 
     @ViewBuilder
@@ -290,13 +255,17 @@ struct AppShellView: View {
                 // Keep visited tools alive so switching tabs is a visibility flip, not a
                 // full view/view-model rebuild (Stem Separation / Downloader / Archive).
                 ZStack {
-                    ForEach(toolPaneCache.mountedIDs, id: \.self) { toolID in
-                        if let toolView = toolPaneCache.view(for: toolID) {
+                    ForEach(toolPaneCache.mountOrder(selecting: selectedToolID), id: \.self) { toolID in
+                        if let toolView = toolPaneCache.ensureMounted(toolID) {
+                            let isActive = selectedToolID == toolID
                             toolView
-                                .opacity(selectedToolID == toolID ? 1 : 0)
-                                .allowsHitTesting(selectedToolID == toolID)
-                                .accessibilityHidden(selectedToolID != toolID)
-                                .zIndex(selectedToolID == toolID ? 1 : 0)
+                                .opacity(isActive ? 1 : 0)
+                                .allowsHitTesting(isActive)
+                                .accessibilityHidden(!isActive)
+                                .zIndex(isActive ? 1 : 0)
+                                // Hidden panes stay mounted; tell them so app-wide
+                                // effects (menu values, key monitors) follow visibility.
+                                .environment(\.hubToolIsActive, isActive)
                         }
                     }
                 }

@@ -33,8 +33,10 @@ final class HubCancelCommandsTests: XCTestCase {
         let downloader = try SourceTestSupport.read("Sources/FeatureDownloader/DownloaderView.swift")
         XCTAssertTrue(downloader.contains("CancelCopy.cancelDownload"))
         XCTAssertTrue(downloader.contains("cancelDownload()"))
-        XCTAssertTrue(downloader.contains("keyboardShortcut(.cancelAction)"))
-        XCTAssertTrue(downloader.contains("keyboardShortcut(\".\", modifiers: .command)"))
+        XCTAssertFalse(downloader.contains("keyboardShortcut(.cancelAction)"))
+        XCTAssertFalse(downloader.contains("keyboardShortcut(\".\", modifiers: .command)"))
+        XCTAssertTrue(commands.contains("@FocusedValue(\\.hubShellCancelContext)"))
+        XCTAssertTrue(commands.contains("@ObservedObject var jobStatusCenter"))
 
         let sidebar = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveSidebarView.swift")
         XCTAssertTrue(sidebar.contains("CancelCopy.cancelScan"))

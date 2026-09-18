@@ -6,14 +6,15 @@ import UniformTypeIdentifiers
 public struct AudioConverterView: View {
     let context: ToolContext
 
-    @StateObject private var viewModel: AudioConverterViewModel
+    /// Owned by the feature session (`viewModel(for:)`), not by this view.
+    @ObservedObject private var viewModel: AudioConverterViewModel
     @State private var fileImporterVisible = false
     @State private var dropTargeted = false
     @State private var presetEditorVisible = false
 
     public init(context: ToolContext, viewModel: AudioConverterViewModel) {
         self.context = context
-        _viewModel = StateObject(wrappedValue: viewModel)
+        self.viewModel = viewModel
     }
 
     public var body: some View {

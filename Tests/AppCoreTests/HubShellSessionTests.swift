@@ -188,8 +188,10 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertNotEqual(HubShellSession.selectedToolIDKey, HubShellSession.inboxVisibleKey)
 
         let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
-        XCTAssertTrue(shell.contains("restoreSelectedToolID(registry:"))
-        XCTAssertTrue(shell.contains("initialToolID: initialToolID"))
+        let composition = try SourceTestSupport.read("Sources/NikoMusicHub/AppComposition.swift")
+        XCTAssertTrue(composition.contains("shellSession.restoreSelectedToolID(registry:"))
+        XCTAssertTrue(shell.contains("shellSession.selectedToolID"))
+        XCTAssertTrue(shell.contains("QuickAccessToolRequest"))
         XCTAssertTrue(shell.contains("persistSelectedToolID"))
         XCTAssertTrue(shell.contains("applyWindowWidth"))
         XCTAssertTrue(shell.contains("inboxEffectiveVisible"))

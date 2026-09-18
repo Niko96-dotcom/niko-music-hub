@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
@@ -6,6 +7,13 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
 
     private let userDefaults: UserDefaults
     private let key: String
+    /// Shared by every copy of this store value, so all consumers of the same
+    /// defaults suite see the same change stream.
+    private let changeSubject = PassthroughSubject<AppSettings, Never>()
+
+    public var settingsChanges: AnyPublisher<AppSettings, Never> {
+        changeSubject.eraseToAnyPublisher()
+    }
 
     public init(
         userDefaults: UserDefaults = .standard,
@@ -37,6 +45,8 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
         try Self.serializationLock.withLock {
             try saveSettingsLocked(settings)
         }
+        // Outside the lock: a synchronous subscriber may call back into the store.
+        changeSubject.send(settings)
     }
 
     private func saveSettingsLocked(_ settings: AppSettings) throws {
@@ -46,11 +56,13 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
     }
 
     public func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
-        try Self.serializationLock.withLock {
+        let saved = try Self.serializationLock.withLock {
             var settings = try loadSettingsLocked()
             update(&settings)
             try saveSettingsLocked(settings)
+            return settings
         }
+        changeSubject.send(saved)
     }
 
     private static func needsTypedRootMigration(_ data: Data) -> Bool {
