@@ -42,3 +42,5 @@ goal-agents/
 .codex/
 .cursor/
 .claude/
+.ultracode/
+.audit/
