@@ -47,6 +47,27 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    func testConfirmResetsBoundedDoneRetryBudget() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let staleRetry = Task<Void, Never> { try? await Task.sleep(for: .seconds(60)) }
+        defer { staleRetry.cancel() }
+        viewModel.projectVaultRetryTasks[song.id] = staleRetry
+        viewModel.projectVaultRetryAttemptCounts[song.id] = 3
+
+        viewModel.requestArchiveNow(for: song)
+        viewModel.confirmPendingArchive()
+
+        XCTAssertNil(viewModel.projectVaultRetryTasks[song.id])
+        XCTAssertNil(viewModel.projectVaultRetryAttemptCounts[song.id])
+        XCTAssertTrue(staleRetry.isCancelled)
+
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(5),
         condition: @escaping @MainActor () -> Bool
