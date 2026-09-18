@@ -80,6 +80,105 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: preserved.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
     }
 
+    func testInterruptedRemovalRecoveryReportsUncertainActivityAsUncertainty() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(
+            activityProbe: UncertainActivityProbe(reason: "activity probe timed out"),
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        var record = try XCTUnwrap(snapshot.transfer)
+        record.state = .recoveryRequired
+        record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try fixture.transferStore().save(record)
+
+        do {
+            _ = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
+            XCTFail("expected an uncertain activity probe to postpone recovery")
+        } catch {
+            // The DAW was never observed running; the message must say the check
+            // was inconclusive rather than tell the user to close Cubase.
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .activityPostponed(.uncertainActivity("activity probe timed out"))
+            )
+        }
+        try VaultManifestBuilder().verify(before, at: fixture.project)
+        XCTAssertEqual(try fixture.transferStore().record(id: record.id)?.state, .recoveryRequired)
+    }
+
+    func testExplicitRetryProjectsVerifiedTransferOntoCurrentCatalogEntry() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let failed = try fixture.failedDurabilityRecord()
+        try fixture.transferStore().save(failed)
+        try fixture.saveCatalogEntry(projectID: failed.projectID)
+        let runtime = try fixture.runtime()
+        // The browser hands back whatever it last cached; that record may be stale.
+        let stale = ProjectVaultRuntimeSnapshot(
+            record: ProjectRecord(id: failed.projectID, canonicalTitle: "Stale Title", locations: []),
+            transfer: failed
+        )
+
+        let retried = try await runtime.retry(snapshot: stale)
+
+        XCTAssertEqual(retried.transfer?.state, .archiveVerified)
+        XCTAssertEqual(retried.record.canonicalTitle, "Synthetic Song")
+        XCTAssertEqual(retried.record.latestManifestID, retried.transfer?.manifestID)
+        XCTAssertEqual(retried.record.lastVerifiedAt, retried.transfer?.updatedAt)
+        XCTAssertTrue(retried.record.locations.contains { $0.kind == .active && $0.rootID == fixture.activeID })
+        XCTAssertTrue(retried.record.locations.contains { $0.kind == .archive && $0.rootID == fixture.archiveID })
+        // `ProjectLocation` stamps `lastSeenAt` per construction, so compare the
+        // fields the browser renders rather than whole-record equality.
+        let snapshots = try await runtime.snapshots()
+        let listed = try XCTUnwrap(snapshots.first { $0.record.id == failed.projectID })
+        XCTAssertEqual(listed.record.canonicalTitle, retried.record.canonicalTitle)
+        XCTAssertEqual(listed.record.latestManifestID, retried.record.latestManifestID)
+        XCTAssertEqual(listed.record.lastVerifiedAt, retried.record.lastVerifiedAt)
+        XCTAssertEqual(
+            listed.record.locations.map { "\($0.kind.rawValue):\($0.rootID):\($0.relativePath):\($0.availability)" },
+            retried.record.locations.map { "\($0.kind.rawValue):\($0.rootID):\($0.relativePath):\($0.availability)" },
+            "retry must return what snapshots() reports"
+        )
+    }
+
+    func testSnapshotPinnedHonorsEveryKeepLocalKeyTheRuntimeEnforces() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime()
+        let archived = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let transfer = try XCTUnwrap(archived.transfer)
+        let keys: [(String, String)] = [
+            ("song ID", fixture.song.id),
+            ("transfer source path", transfer.sourceURL.path),
+            ("project ID", archived.record.id.description),
+            ("resolved source path", transfer.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path),
+        ]
+        for (label, key) in keys {
+            try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [key] }
+            let snapshot = try await runtime.snapshots().first { $0.record.id == archived.record.id }
+            XCTAssertEqual(snapshot?.record.pinned, true, "Keep Local stored by \(label) must show as pinned")
+        }
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = ["/nowhere/Other Song"] }
+        let unpinned = try await runtime.snapshots().first { $0.record.id == archived.record.id }
+        XCTAssertEqual(unpinned?.record.pinned, false)
+
+        // Without any transfer the browser keys Keep Local by song ID; the catalog's
+        // Active location is enough to recognise it.
+        let pinnedID = ProjectID()
+        let songID = fixture.song.id
+        try fixture.saveCatalogEntry(projectID: pinnedID)
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [songID] }
+        let byLocation = try await runtime.snapshots().first { $0.record.id == pinnedID }
+        XCTAssertNil(byLocation?.transfer)
+        XCTAssertEqual(byLocation?.record.pinned, true)
+    }
+
     func testManualArchiveRemovesActiveAndCanRearchiveRestoredGeneration() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -2157,6 +2256,13 @@ private extension LiveProjectVaultRuntimeTests {
     }
     struct ClearProbe: VaultAutomationActivityProbing {
         func cubaseStatus() async -> VaultActivityStatus { .clear }
+        func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
+        func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
+    }
+    /// The DAW check itself fails (timeout, missing tool); nothing was observed running.
+    struct UncertainActivityProbe: VaultAutomationActivityProbing {
+        let reason: String
+        func cubaseStatus() async -> VaultActivityStatus { .uncertain(reason) }
         func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
         func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
     }
