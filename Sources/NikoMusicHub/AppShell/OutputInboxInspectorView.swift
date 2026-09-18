@@ -35,7 +35,9 @@ struct OutputInboxInspectorView: View {
 
             Spacer(minLength: 0)
         }
-        .padding(HubDesignSystem.Spacing.panel)
+        .padding(.horizontal, HubToolLayout.horizontalPadding)
+        .padding(.top, HubToolLayout.topPadding)
+        .padding(.bottom, HubToolLayout.bottomPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             refreshSettings()
@@ -49,18 +51,9 @@ struct OutputInboxInspectorView: View {
 
     private var headerBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Output Inbox")
-                    .font(HubDesignSystem.Typography.sectionTitle())
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                Spacer(minLength: 8)
+            HubPageHeader("Output Inbox", statusText: displayPath(outputFolder), statusColor: HubDesignSystem.Palette.textTertiary) {
                 borderlessFolderButton
             }
-            Text(displayPath(outputFolder))
-                .font(HubDesignSystem.Typography.caption())
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             if let settingsError {
                 Text(settingsError)
                     .font(HubDesignSystem.Typography.caption())

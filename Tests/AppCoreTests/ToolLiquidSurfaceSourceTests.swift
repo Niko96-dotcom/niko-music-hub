@@ -28,7 +28,7 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
             "ToolHeaderBlock",
             "viewModel.startRecording()",
             "viewModel.stopRecording()",
-            "HubChoiceChips(\"Max Duration\"",
+            "HubStepSlider(",
             "SystemPrivacySettings.openSystemAudioRecordingSettings()",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing recorder Liquid source: \(required)")
@@ -66,7 +66,7 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
             "DownloaderCopy.trustNotice",
             "viewModel.startDownload()",
             "viewModel.retryAfterFailure()",
-            "Download as:",
+            "Download as",
             "ProgressView(value: viewModel.progress)",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing downloader Liquid source: \(required)")

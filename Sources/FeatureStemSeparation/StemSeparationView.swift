@@ -11,14 +11,14 @@ public struct StemSeparationView: View {
     }
 
     public var body: some View {
-        HubToolPage {
-            header
-            intakeWell
-            controls
-            progressSection
-            errorBanner
-            resultsList
-        }
+        HubInspectorPage(
+            header: { header },
+            live: { liveSection },
+            primary: { intakeCard },
+            list: { resultsSection },
+            inspector: { inspectorGroups },
+            action: { separationActions }
+        )
         .onAppear { viewModel.onAppear() }
     }
 
@@ -30,21 +30,64 @@ public struct StemSeparationView: View {
                 ? HubDesignSystem.Palette.textSecondary
                 : HubDesignSystem.Colors.danger
         )
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// One intake object: drop/choose a local file, or paste a YouTube URL —
-    /// two routes into the same separation, so they share one card.
-    private var intakeWell: some View {
-        VStack(spacing: 12) {
+    @ViewBuilder
+    private var liveSection: some View {
+        if viewModel.isRunning {
+            progressRow
+        }
+        if viewModel.helperNeedsSetup {
+            StandardErrorCard(card: Self.helperMissingCard()) { action in
+                switch action {
+                case .chooseToolPath:
+                    viewModel.chooseHelperPath()
+                case .openHubSettingsHelpers:
+                    HubSettingsHelpersAction.openSettingsHelpers()
+                case .tryAgain:
+                    viewModel.refreshHelperHealth()
+                default:
+                    break
+                }
+            }
+        } else if let error = viewModel.errorMessage {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Colors.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(HubDesignSystem.Spacing.section)
+                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
+        }
+    }
+
+    private var progressRow: some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            Group {
+                if viewModel.progress > 0 {
+                    ProgressView(value: viewModel.progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .progressViewStyle(.linear)
+            .tint(HubDesignSystem.Colors.accent)
+            Text(viewModel.statusMessage)
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+        }
+    }
+
+    /// Intake card: the drop zone on top, the YouTube route below the divider.
+    /// Compact spacing and caption sizes so both routes fit the 168pt slot.
+    private var intakeCard: some View {
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
             fileIntakeContent
-
-            Divider().opacity(0.35)
-
+            Divider()
             youtubeRow
         }
-        .frame(maxWidth: .infinity)
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(HubDesignSystem.Spacing.cardPadding)
         .hubCard(cornerRadius: HubDesignSystem.Radius.card, state: isTargeted ? .selected : .normal, interactive: true)
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             // HAND-03: explicit fileURL intake via NSItemProvider.loadItem + handleDrop.
@@ -68,66 +111,67 @@ public struct StemSeparationView: View {
     }
 
     private var fileIntakeContent: some View {
-        VStack(spacing: 12) {
+        HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
             if let fileURL = viewModel.droppedFileURL {
-                VStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 32))
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                Image(systemName: "waveform")
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(fileURL.lastPathComponent)
-                        .font(HubDesignSystem.Typography.sectionTitle())
+                        .font(HubDesignSystem.Typography.body())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Text(fileURL.path)
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Image(systemName: "arrow.down.document")
-                    .font(.system(size: 32))
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                Text("Drop an audio file here")
-                    .font(HubDesignSystem.Typography.sectionTitle())
-                Text("WAV, AIFF, MP3, M4A, FLAC")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Drop an audio file here")
+                        .font(HubDesignSystem.Typography.body())
+                    Text("WAV, AIFF, MP3, M4A, FLAC")
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack(spacing: 12) {
+            HubLabeledButton(
+                icon: "folder",
+                label: "Choose File",
+                style: .secondary,
+                isEnabled: !viewModel.isRunning
+            ) {
+                viewModel.selectFile()
+            }
+            if viewModel.droppedFileURL != nil {
                 HubLabeledButton(
-                    icon: "folder",
-                    label: "Choose File",
-                    style: .secondary,
+                    icon: "xmark",
+                    label: "Clear",
+                    style: .ghost,
                     isEnabled: !viewModel.isRunning
                 ) {
-                    viewModel.selectFile()
-                }
-                if viewModel.droppedFileURL != nil {
-                    HubLabeledButton(
-                        icon: "xmark",
-                        label: "Clear",
-                        style: .ghost,
-                        isEnabled: !viewModel.isRunning
-                    ) {
-                        viewModel.clearSelection()
-                    }
+                    viewModel.clearSelection()
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 108)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Drop an audio file or choose a file to separate")
         .accessibilityHint("Accepts WAV, AIFF, MP3, M4A, or FLAC.")
     }
 
     private var youtubeRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Image(systemName: "play.rectangle")
-                .font(.system(size: 13, weight: .medium))
+                .font(HubDesignSystem.Typography.body().weight(.medium))
                 .foregroundStyle(.tertiary)
 
-            TextField("Paste YouTube URL…", text: $viewModel.youtubeURLText)
-                .textFieldStyle(.plain)
-                .font(HubDesignSystem.Typography.body())
+            HubQuietTextField("Paste YouTube URL…", text: $viewModel.youtubeURLText)
                 .disabled(viewModel.isRunning)
                 .onSubmit {
                     submitPrimaryStemJob()
@@ -153,110 +197,94 @@ public struct StemSeparationView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
-        .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
         .opacity(viewModel.isRunning ? 0.6 : 1)
         .disabled(viewModel.isRunning)
     }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HubChoiceChips(
-                "Preset",
+    private var resultsSection: some View {
+        ToolOutputShelf(
+            title: "Results",
+            items: viewModel.results,
+            emptyText: "No stems yet",
+            subtitle: { $0.metadata["displayName"] },
+            onReveal: { viewModel.reveal(item: $0) }
+        )
+    }
+
+    @ViewBuilder
+    private var inspectorGroups: some View {
+        HubInspectorGroup("Model") {
+            HubSegmentedChoice(
+                "Model",
                 selection: $viewModel.selectedPreset,
-                choices: viewModel.supportedPresets.map {
-                    .init($0, label: $0.displayName, help: $0.shortDescription)
+                // Experimental 6-stem is hidden for now (owner decision 2026-09-17).
+                options: viewModel.supportedPresets.filter { $0 != .experimental6 }.map {
+                    .init($0, label: $0.displayName)
                 }
             )
-
-            HStack {
-                Text("Output: \(viewModel.outputFolderURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(.secondary)
+        }
+        HubInspectorGroup("Output folder") {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+                Text(viewModel.outputFolderURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer()
-
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: HubDesignSystem.Spacing.navRowHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                            .fill(HubDesignSystem.Palette.surfaceRaised)
+                    )
                 HubLabeledButton(
                     icon: "folder",
                     label: "Choose Output Folder",
-                    style: .secondary,
+                    style: .ghost,
                     isEnabled: !viewModel.isRunning
                 ) {
                     viewModel.pickOutputFolder()
                 }
             }
+        }
+    }
 
-            HStack(spacing: 12) {
-                HubLabeledButton(
-                    icon: "waveform.path.ecg",
-                    label: "Start Separation",
-                    style: viewModel.primaryIntake == .youtube ? .secondary : .primary,
-                    isEnabled: viewModel.canStart
-                ) {
-                    viewModel.startSeparation()
-                }
-
-                if viewModel.canStart || viewModel.canStartYouTube {
-                    Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
-                        submitPrimaryStemJob()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .hidden()
-                    .accessibilityHidden(true)
-                }
-
-                if viewModel.canCancel {
-                    HubLabeledButton(
-                        icon: "xmark",
-                        label: "Cancel",
-                        style: .secondary
-                    ) {
-                        viewModel.cancelSeparation()
-                    }
-                    Button("Cancel") {
-                        viewModel.cancelSeparation()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    .hidden()
-                    .accessibilityHidden(true)
-                }
+    private var separationActions: some View {
+        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            HubLabeledButton(
+                icon: "waveform.path.ecg",
+                label: "Start Separation",
+                style: .primary,
+                isEnabled: viewModel.canStart,
+                expands: true
+            ) {
+                viewModel.startSeparation()
             }
-        }
-    }
 
-    @ViewBuilder
-    private var progressSection: some View {
-        if viewModel.isRunning {
-            StemRunningProgressCard(progress: viewModel.progress)
-        }
-    }
-
-    private var errorBanner: some View {
-        Group {
-            if viewModel.helperNeedsSetup {
-                StandardErrorCard(card: Self.helperMissingCard()) { action in
-                    switch action {
-                    case .chooseToolPath:
-                        viewModel.chooseHelperPath()
-                    case .openHubSettingsHelpers:
-                        HubSettingsHelpersAction.openSettingsHelpers()
-                    case .tryAgain:
-                        viewModel.refreshHelperHealth()
-                    default:
-                        break
-                    }
+            if viewModel.canStart || viewModel.canStartYouTube {
+                Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
+                    submitPrimaryStemJob()
                 }
-            } else if let error = viewModel.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Colors.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
+                .keyboardShortcut(.defaultAction)
+                .hidden()
+                .accessibilityHidden(true)
+            }
+
+            if viewModel.canCancel {
+                HubLabeledButton(
+                    icon: "xmark",
+                    label: "Cancel",
+                    style: .ghost,
+                    expands: true
+                ) {
+                    viewModel.cancelSeparation()
+                }
+                Button("Cancel") {
+                    viewModel.cancelSeparation()
+                }
+                .keyboardShortcut(.cancelAction)
+                .hidden()
+                .accessibilityHidden(true)
             }
         }
     }
@@ -275,15 +303,6 @@ public struct StemSeparationView: View {
         )
     }
 
-    private var resultsList: some View {
-        ToolOutputShelf(
-            title: "Separated Stems",
-            items: viewModel.results,
-            subtitle: { $0.metadata["displayName"] },
-            onReveal: { viewModel.reveal(item: $0) }
-        )
-    }
-
     /// Return starts the one enabled primary: YouTube if a URL is present, else a dropped file.
     private func submitPrimaryStemJob() {
         let hasURL = !viewModel.youtubeURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -294,42 +313,3 @@ public struct StemSeparationView: View {
         }
     }
 }
-
-private struct StemRunningProgressCard: View {
-    let progress: Double
-    @State private var startedAt = Date()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Group {
-                if progress > 0 {
-                    ProgressView(value: progress)
-                } else {
-                    ProgressView()
-                }
-            }
-            .progressViewStyle(.linear)
-            .tint(HubDesignSystem.Colors.accent)
-
-            if progress > 0 {
-                Text("\(Int(progress * 100))% complete")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
-            }
-
-            TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                Text(stemElapsedCaption(from: startedAt, now: context.date))
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
-    }
-}
-
-private func stemElapsedCaption(from start: Date, now: Date) -> String {
-    let totalSeconds = max(0, Int(now.timeIntervalSince(start)))
-    return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
-}
-

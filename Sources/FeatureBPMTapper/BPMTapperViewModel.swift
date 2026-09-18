@@ -41,7 +41,7 @@ public final class BPMTapperViewModel: ObservableObject {
         self.clipboard = clipboard
         rawBPM = nil
         tapCount = 0
-        statusText = "Tap the pad or press Space"
+        statusText = ""
         statusKind = .idle
         hasStartedRun = false
     }
@@ -59,7 +59,7 @@ public final class BPMTapperViewModel: ObservableObject {
         estimator.reset()
         rawBPM = nil
         tapCount = 0
-        statusText = "Tap the pad or press Space"
+        statusText = ""
         statusKind = .idle
         hasStartedRun = false
         clearTransientMessages()
@@ -139,23 +139,25 @@ public final class BPMTapperViewModel: ObservableObject {
 
     private func applyStatus(from status: TempoEstimatorStatus) {
         switch status {
+        // Idle/stable carry no fact the readout does not already show (empty
+        // status hides the header line); only transitions earn a line.
         case .idle:
-            statusText = "Tap the pad or press Space"
+            statusText = ""
             statusKind = .idle
         case .waitingForSecondTap:
-            statusText = "Tap the pad or press Space"
+            statusText = ""
             statusKind = .waitingForSecondTap
         case .firstEstimate:
-            statusText = "First estimate ready. Keep tapping to steady it."
+            statusText = "First estimate — keep tapping"
             statusKind = .firstEstimate
         case .stableEstimate:
-            statusText = "Stable average from recent taps."
+            statusText = ""
             statusKind = .stableEstimate
         case .longPauseReset:
-            statusText = "New tap run started."
+            statusText = "New tap run started"
             statusKind = .longPauseReset
         case .outlierIgnored:
-            statusText = "Ignored one uneven tap. Keep tapping."
+            statusText = "Uneven tap ignored"
             statusKind = .outlierIgnored
         }
     }

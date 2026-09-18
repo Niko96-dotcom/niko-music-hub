@@ -7,7 +7,18 @@ public enum HubToolLayout {
     public static let topPadding: CGFloat = 20
     public static let sectionSpacing: CGFloat = 20
     public static let maxContentWidth: CGFloat = 680
-    public static let headerMinHeight: CGFloat = 56
+    /// Every page header band (tool pages, Board, Archive list, Analytics, Inbox)
+    /// is exactly this tall so titles and header actions share one keyline.
+    public static let headerHeight: CGFloat = 56
+    public static let headerMinHeight: CGFloat = headerHeight
+
+    // Tool-page slot grid. Pages fill the slots in this order and skip the ones
+    // they do not have, so equal roles land on equal keylines across tools:
+    // header → primary card → field/summary row → chip row → action row.
+    /// Drop zones, the tap pad, the capture readout, the URL entry card.
+    public static let primaryCardHeight: CGFloat = 168
+    /// Preset summary, output-folder row, secondary URL field.
+    public static let fieldRowHeight: CGFloat = 44
     /// Gap from a header band to the secondary content row (tool item, search, preview card).
     public static let secondaryRowGap: CGFloat =
         HubDesignSystem.Spacing.sectionHeaderTop + HubDesignSystem.Spacing.sectionHeaderBandHeight
@@ -20,7 +31,8 @@ public enum HubShellLayout {
     /// Leading inset so toggles sit immediately after the traffic lights.
     /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.
     public static let titleBarLeadingInset: CGFloat = 78
-    public static let titleBarTrailingInset: CGFloat = 12
+    /// Matches the page side inset so title-bar icons sit directly above header actions.
+    public static let titleBarTrailingInset: CGFloat = HubToolLayout.horizontalPadding
 }
 
 /// `NSWindow.title` for the hidden-title-bar shell (Window menu / Mission Control).
@@ -40,11 +52,14 @@ public extension View {
             .padding(.top, HubToolLayout.topPadding)
     }
 
-    /// Centers tool content in a max-width column with shared shell padding (spec §4.2).
+    /// Leading-anchored max-width column with shared shell padding, so tool
+    /// titles sit on the same keyline as the Board/Archive headers at every
+    /// window width (sidebar-driven panes anchor left; centring is for
+    /// standalone preference windows).
     func hubToolContentColumn() -> some View {
         hubToolContentPadding()
             .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .topLeading)
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 

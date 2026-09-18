@@ -1,49 +1,49 @@
 import SwiftUI
 
-/// Recent tool outputs as draggable cards — grab one and drop it straight into a DAW.
-/// Shared by Stem Separation ("Separated Stems"), Audio Recorder ("Recordings"), and
-/// Downloader ("Downloads") so all three tools hand files off the same way.
+/// Shared list of files a tool produced (stems, recordings, …). One flat
+/// `HubListSection`: filename + subtitle, Reveal (and optional Open), and the
+/// HAND-03 drag handoff so a row can be dragged straight into a DAW.
 public struct ToolOutputShelf: View {
     private let title: String
     private let items: [OutputInboxItem]
+    private let emptyText: String
     private let subtitle: (OutputInboxItem) -> String?
     private let onReveal: (OutputInboxItem) -> Void
+    private let onOpen: ((OutputInboxItem) -> Void)?
 
     public init(
         title: String,
         items: [OutputInboxItem],
+        emptyText: String = "Nothing yet",
         subtitle: @escaping (OutputInboxItem) -> String? = { _ in nil },
-        onReveal: @escaping (OutputInboxItem) -> Void
+        onReveal: @escaping (OutputInboxItem) -> Void,
+        onOpen: ((OutputInboxItem) -> Void)? = nil
     ) {
         self.title = title
         self.items = items
+        self.emptyText = emptyText
         self.subtitle = subtitle
         self.onReveal = onReveal
+        self.onOpen = onOpen
     }
 
     public var body: some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.cardGap) {
-                HubSectionHeader(title, count: items.count)
-
+        HubListSection(title, count: items.count) {
+            if items.isEmpty {
+                HubListEmpty(emptyText)
+            } else {
                 ForEach(items) { item in
                     row(item)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private func row(_ item: OutputInboxItem) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-
+        HubListRow {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.fileURL.lastPathComponent)
-                    .font(HubDesignSystem.Typography.body().weight(.medium))
+                    .font(HubDesignSystem.Typography.body())
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let subtitleText = subtitle(item) {
@@ -52,19 +52,16 @@ public struct ToolOutputShelf: View {
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HubLabeledButton(
-                icon: "folder",
-                label: "Reveal",
-                style: .ghost
-            ) {
+        } trailing: {
+            HubLabeledButton(icon: "folder", label: "Reveal", style: .ghost) {
                 onReveal(item)
             }
+            if let onOpen {
+                HubLabeledButton(icon: "arrow.up.forward.app", label: "Open", style: .ghost) {
+                    onOpen(item)
+                }
+            }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row, interactive: true)
         .onDrag {
             guard let url = OutputHandoff.dragFileURL(for: item) else {
                 return NSItemProvider()

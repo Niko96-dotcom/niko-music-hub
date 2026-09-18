@@ -225,3 +225,14 @@ Use mechanical rename + test run; avoid drive-by refactors in feature modules.
 - Single god-module `AppCore+Archive`
 - Writing scan caches into music folders
 - Hermes parallel workers or Locus env dependencies
+
+
+## Shell navigation and tool-page scaffold (2026-09)
+
+- `HubNavigationHistory` (AppCore) gives the shell browser-style back/forward. It is created once in
+  `AppComposition` and passed to both `ToolContext` values (the archive VM and the shell must share
+  the same instance). Tools with inner pages record an opaque route and register a restorer.
+- `ToolFeature.makeTitleBarAccessory(context:)` lets a tool place a control in the window title bar
+  (the archive's board⇄list flip icon).
+- Production tools render through `HubInspectorPage` (content column + fixed inspector rail). Layout
+  rules and keylines: `docs/design-contract.md`.

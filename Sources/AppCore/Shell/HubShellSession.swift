@@ -13,7 +13,11 @@ public final class HubShellSession: ObservableObject {
     public static let inboxVisibleKey = "hub.shell.panels.inboxVisible"
     public static let inboxMigrationKey = "hub.shell.migratedInboxDefault.v2"
     public static let selectedToolIDKey = "hub.shell.selectedToolID"
-    public static let compactInboxCollapseWidth: CGFloat = 1180
+    /// Narrowest window that fits nav + tool + inbox columns (224 + 540 + 232).
+    /// Below this the inbox column is hidden without touching the preference;
+    /// at or above it the user's choice wins. Was 1180, which hid the inbox on
+    /// ordinary ~1000pt windows and made the toggle look dead.
+    public static let compactInboxCollapseWidth: CGFloat = 540 + 2 * HubDesignSystem.Size.chromeRailWidth
 
     private let preferences: any PreferenceStore
     private let settingsStore: (any SettingsStore)?
@@ -123,7 +127,9 @@ public final class HubShellSession: ObservableObject {
     }
 
     public func toggleOutputInbox() {
-        setOutputInboxVisible(!showOutputInbox)
+        // Toggle the user's intent, not the width-derived state — otherwise a
+        // press while compact re-asserts "visible" and nothing changes.
+        setOutputInboxVisible(!inboxUserWantsVisible)
     }
 
     /// Update derived inbox visibility from the live window width. Does not persist.

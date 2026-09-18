@@ -28,7 +28,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
             "hubCard",
             "state: .warning",
             "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge",
-            "Welcome to your music archive",
+            "Music archive",
         ].forEach { required in
             XCTAssertTrue(combined.contains(required), "Missing archive Liquid surface source: \(required)")
         }

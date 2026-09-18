@@ -172,7 +172,12 @@ public enum HubDesignSystem {
         /// Icon-rail width (collapsed nav mode).
         public static let railWidth: CGFloat = 64
         /// Labeled navigation sidebar width (references: ~230-260px web ≈ 224pt native).
-        public static let navWidth: CGFloat = 224
+        /// One width for every chrome rail flanking the content: tools sidebar,
+        /// tool inspector, Output Inbox. 240 fits nav labels and 2-column
+        /// inspector blocks; equal rails keep the content column centred and
+        /// the title-bar icons mirrored.
+        public static let chromeRailWidth: CGFloat = 240
+        public static let navWidth: CGFloat = chromeRailWidth
     }
 
     // MARK: - Elevation (DEPTH-01)
@@ -382,6 +387,12 @@ public enum HubDesignSystem {
     public enum Typography {
         public static func display() -> Font {
             .system(.largeTitle).weight(.bold)
+        }
+
+        /// Big live readouts (BPM, recording timer): one size on every tool,
+        /// tabular so digits do not jitter.
+        public static func readout() -> Font {
+            .system(size: 44, weight: .semibold, design: .rounded).monospacedDigit()
         }
 
         public static func screenTitle() -> Font {

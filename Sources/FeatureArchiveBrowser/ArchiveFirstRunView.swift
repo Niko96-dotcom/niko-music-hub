@@ -16,12 +16,12 @@ struct ArchiveFirstRunView: View {
                     )
                 )
 
-            Text("Welcome to your music archive")
+            Text("Music archive")
                 .font(HubDesignSystem.Typography.screenTitle())
                 .multilineTextAlignment(.center)
 
             Text(
-                "Choose the folder that contains your song projects. The hub scans read-only — your files on disk are never renamed or moved."
+                "Choose the folder that holds your song projects. The hub scans read-only — files are never renamed or moved"
             )
             .font(HubDesignSystem.Typography.body())
             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
@@ -30,7 +30,7 @@ struct ArchiveFirstRunView: View {
 
             HubLabeledButton(
                 icon: "folder.badge.plus",
-                label: "Choose Folder",
+                label: "Choose archive folder",
                 style: .primary,
                 help: "Choose your Cubase or Ableton projects folder"
             ) {

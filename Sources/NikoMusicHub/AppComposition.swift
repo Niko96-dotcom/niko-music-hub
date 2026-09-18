@@ -132,6 +132,7 @@ struct AppComposition {
             )
         }()
 
+        let navigationHistory = HubNavigationHistory()
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
@@ -142,7 +143,8 @@ struct AppComposition {
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
             persistenceIssues: persistenceIssues,
-            jobStatusCenter: jobStatusCenter
+            jobStatusCenter: jobStatusCenter,
+            navigationHistory: navigationHistory
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -211,7 +213,8 @@ struct AppComposition {
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
             persistenceIssues: persistenceIssues,
-            jobStatusCenter: jobStatusCenter
+            jobStatusCenter: jobStatusCenter,
+            navigationHistory: navigationHistory
         )
 
         return AppComposition(

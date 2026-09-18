@@ -590,7 +590,7 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
 }
 
 public enum AudioConverterCopy {
-    public static let ready = "Ready for WAV conversion"
+    public static let ready = "Queued"
     public static let converting = "Converting to Cubase-ready WAV"
     public static let verified = "Verified WAV ready"
     public static let verifiedWithHandoffWarning = "Verified WAV ready, but Output Inbox could not save the handoff."

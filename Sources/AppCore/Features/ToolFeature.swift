@@ -55,4 +55,14 @@ public protocol ToolFeature: Sendable {
 
     @MainActor
     func makeView(context: ToolContext) -> AnyView
+
+    /// Optional control the shell shows in the window title bar (next to the
+    /// panel toggles) while this tool is active. Default: none.
+    @MainActor
+    func makeTitleBarAccessory(context: ToolContext) -> AnyView?
+}
+
+public extension ToolFeature {
+    @MainActor
+    func makeTitleBarAccessory(context _: ToolContext) -> AnyView? { nil }
 }

@@ -9,15 +9,6 @@ struct ArchiveAnalyticsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
-            HubLabeledButton(
-                icon: "chevron.backward",
-                label: "Board",
-                style: .ghost,
-                help: "Back to the board (Esc)"
-            ) {
-                viewModel.viewMode = .board
-            }
-
             header
 
             if let snapshot = viewModel.analyticsSnapshot {
@@ -39,13 +30,15 @@ struct ArchiveAnalyticsView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Analytics")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text("Built from your project file dates and status changes.")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        HubPageHeader("Analytics", statusText: "From project file dates and status changes", statusColor: HubDesignSystem.Palette.textTertiary) {
+            HubLabeledButton(
+                icon: "chevron.backward",
+                label: "Board",
+                style: .ghost,
+                help: "Back to the board (Esc)"
+            ) {
+                viewModel.viewMode = .board
+            }
         }
     }
 

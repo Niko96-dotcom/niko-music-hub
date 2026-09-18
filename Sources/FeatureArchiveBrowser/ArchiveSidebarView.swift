@@ -17,11 +17,6 @@ struct ArchiveSidebarView: View {
             searchField
                 .padding(.top, HubToolLayout.secondaryRowGap)
 
-            if viewModel.roots.isEmpty {
-                emptyRootsHint
-                    .padding(.top, 14)
-            }
-
             collaboratorShelfPicker
                 .padding(.top, viewModel.selectedShelf == .byCollaborator ? 14 : 0)
 
@@ -38,7 +33,7 @@ struct ArchiveSidebarView: View {
                 )
             }
         }
-        .padding(.horizontal, compactList ? 14 : 18)
+        .padding(.horizontal, HubToolLayout.horizontalPadding)
         .padding(.top, HubToolLayout.topPadding)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -47,18 +42,9 @@ struct ArchiveSidebarView: View {
         }
     }
 
-    /// Header band (reference: 17pt semibold title, borderless icon actions — no boxed chip).
+    /// Header band: shared `HubPageHeader` so "Archive" sits on the Board keyline.
     private var archiveToolbar: some View {
-        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Text("Archive")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .layoutPriority(1)
-
-            Spacer(minLength: 4)
-
+        HubPageHeader("Archive") {
             if viewModel.canBrowseArchivedProjects && !compactList {
                 HubIconButton(
                     systemImage: "archivebox",
@@ -74,17 +60,6 @@ struct ArchiveSidebarView: View {
             }
 
             browseFilterMenu
-
-            HubIconButton(
-                systemImage: "rectangle.split.3x1",
-                accessibilityLabel: "Show board",
-                help: "Board",
-                isEnabled: !viewModel.songs.isEmpty
-            ) {
-                viewModel.viewMode = .board
-                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
-                keyboardFocus = .archive
-            }
 
             if viewModel.isScanning {
                 HubLabeledButton(
@@ -142,17 +117,6 @@ struct ArchiveSidebarView: View {
             .menuStyle(.borderlessButton)
             .help("Archive actions")
             .accessibilityLabel("Archive actions")
-        }
-        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
-    }
-
-    @ViewBuilder
-    private var emptyRootsHint: some View {
-        if viewModel.roots.isEmpty {
-            Text("Add an archive root to begin.")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -311,14 +275,14 @@ struct ArchiveSidebarView: View {
     private var songList: some View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
-                title: "Start with an archive root",
-                body: "Choose the folder that contains your Cubase or Ableton song folders.",
+                title: "No archive root",
+                body: "Choose the folder that holds your song projects",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
             archiveEmptyState(
-                title: "Ready to scan",
-                body: "Scan loads songs from your roots.",
+                title: "No songs scanned",
+                body: "Run Scan archive",
                 systemImage: "music.note.list"
             )
         } else if viewModel.songs.isEmpty && viewModel.isScanning {
@@ -380,6 +344,7 @@ struct ArchiveSidebarView: View {
                 .padding(.vertical, 2)
             }
             .focusable(true)
+            .focusEffectDisabled()
             .onMoveCommand { direction in
                 viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
             }
@@ -402,15 +367,17 @@ struct ArchiveSidebarView: View {
         }
     }
 
-    private func archiveEmptyState(title: String, body: String, systemImage: String) -> some View {
+    private func archiveEmptyState(title: String, body: String? = nil, systemImage: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: systemImage)
                 .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text(body)
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if let body {
+                Text(body)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

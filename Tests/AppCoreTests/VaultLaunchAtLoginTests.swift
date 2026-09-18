@@ -73,7 +73,7 @@ final class VaultLaunchAtLoginTests: XCTestCase {
         XCTAssertTrue(general.contains("Toggle(\"Open at login\""))
         XCTAssertTrue(
             general.contains(
-                "Opens Niko Music Hub when you log in to this Mac. Project Vault automatic archiving needs this so copies can run while you are away."
+                "Project Vault automatic archiving needs this to run while you are away"
             )
         )
 

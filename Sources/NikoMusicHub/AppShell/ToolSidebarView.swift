@@ -85,12 +85,19 @@ struct ToolSidebarView: View {
                     )
                     .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
             }
+            // Brand mark, one step below the page titles (optically a 22pt word next
+            // to the logo in a narrow rail reads heavier than a title on the canvas);
+            // centred in the same 30pt row, so the baselines still coincide.
             Text("Niko Music Hub")
-                .font(HubDesignSystem.Typography.body().weight(.semibold))
+                .font(HubDesignSystem.Typography.sectionTitle())
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 4)
+        // Same 30pt title row inside the 56pt band as HubPageHeader, so the
+        // app name and the page title share one keyline.
+        .frame(height: HubDesignSystem.Size.iconButtonSize)
         .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Niko Music Hub \(appVersionLabel)")

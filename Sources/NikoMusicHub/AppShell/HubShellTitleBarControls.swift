@@ -1,12 +1,18 @@
 import AppCore
 import SwiftUI
 
-/// Window-level sidebar toggles aligned with the traffic-light row (Cursor-style).
+/// Window-level controls aligned with the traffic-light row (Cursor-style):
+/// panel toggles, browser-style back/forward, and the active tool's accessory.
 struct HubShellTitleBarControls: View {
     @ObservedObject var session: HubShellSession
+    var canGoBack = false
+    var canGoForward = false
+    var toolAccessory: AnyView? = nil
+    var onGoBack: () -> Void = {}
+    var onGoForward: () -> Void = {}
 
     var body: some View {
-        HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             HubIconButton(
                 systemImage: "sidebar.leading",
                 accessibilityLabel: session.showToolSidebar ? "Hide tools sidebar" : "Show tools sidebar",
@@ -16,7 +22,30 @@ struct HubShellTitleBarControls: View {
                 action: { session.toggleToolSidebar() }
             )
 
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                HubIconButton(
+                    systemImage: "chevron.backward",
+                    accessibilityLabel: "Back",
+                    help: "Back (⌘[)",
+                    isEnabled: canGoBack,
+                    action: onGoBack
+                )
+                .keyboardShortcut("[", modifiers: .command)
+                HubIconButton(
+                    systemImage: "chevron.forward",
+                    accessibilityLabel: "Forward",
+                    help: "Forward (⌘])",
+                    isEnabled: canGoForward,
+                    action: onGoForward
+                )
+                .keyboardShortcut("]", modifiers: .command)
+            }
+
             Spacer(minLength: 0)
+
+            if let toolAccessory {
+                toolAccessory
+            }
 
             HubIconButton(
                 systemImage: "sidebar.trailing",

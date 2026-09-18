@@ -37,12 +37,16 @@ final class HubSongCommandsTests: XCTestCase {
         XCTAssertTrue(find.contains(".keyboardShortcut(\"f\", modifiers: .command)"))
 
         let browser = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift")
-        XCTAssertFalse(browser.contains(".focusEffectDisabled()"))
-        // Full keyboard focus for NMH-006 Space/arrows; Option-arrows pass the
-        // archive arrow monitor (modifier filter) through to Song skip (NMH-034).
+        // The pane keeps real focus (NMH-006 Space/arrows; Option-arrows pass the
+        // archive arrow monitor through to Song skip, NMH-034) but must not draw
+        // AppKit's system-blue ring around the whole tool. The quiet
+        // Palette.focus ring stays as the affordance for keyboard-navigation
+        // users only (owner decision 2026-09-17).
+        XCTAssertTrue(browser.contains(".focusEffectDisabled()"))
         XCTAssertTrue(browser.contains(".focusable(true)"))
         XCTAssertFalse(browser.contains(".focusable(interactions: .edit)"))
         XCTAssertTrue(browser.contains("HubDesignSystem.Palette.focus"))
+        XCTAssertTrue(browser.contains("NSApp.isFullKeyboardAccessEnabled"))
         XCTAssertTrue(browser.contains("onKeyPress(\"o\")"))
         XCTAssertTrue(browser.contains("onKeyPress(\"p\")"))
         XCTAssertTrue(browser.contains("onKeyPress(\"f\")"))

@@ -15,7 +15,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         viewModel.addFileURLs([audio, text])
 
         XCTAssertEqual(viewModel.rows.map(\.state), [.queued, .unsupported])
-        XCTAssertEqual(viewModel.rows[0].statusText, "Ready for WAV conversion")
+        XCTAssertEqual(viewModel.rows[0].statusText, "Queued")
         XCTAssertEqual(
             viewModel.rows[1].statusText,
             "This file type is not supported. Add M4A, MP3, WAV, AIFF, or FLAC instead."
@@ -454,7 +454,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             "Convert",
             "AudioConverterCopy.stopAfterThisFile",
             "viewModel.presetSummaryText",
-            "Ready for WAV conversion",
+            "AudioConverterCopy.ready",
             "Verified WAV ready",
             "Choose FFmpeg",
             "Reveal in Finder"
@@ -471,9 +471,9 @@ final class AudioConverterViewModelTests: XCTestCase {
 
         [
             "Edit Preset",
-            "Picker(\"Sample rate\"",
-            "Picker(\"Bit depth\"",
-            "Picker(\"Channel handling\"",
+            "HubSegmentedChoice(\"Sample rate\"",
+            "HubSegmentedChoice(\"Bit depth\"",
+            "HubSegmentedChoice(\"Channel handling\"",
             "viewModel.presetSummaryText",
             "updateWAVPreset(sampleRate:"
         ].forEach {

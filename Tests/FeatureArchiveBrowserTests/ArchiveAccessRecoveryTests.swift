@@ -137,10 +137,10 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         XCTAssertTrue(recovery.contains("Archive access needs attention"))
         XCTAssertTrue(recovery.contains("Choose Folder"))
         XCTAssertTrue(recovery.contains("Grant Access"))
-        XCTAssertFalse(recovery.contains("No songs yet"))
+        XCTAssertFalse(recovery.contains("No songs on the board"))
         XCTAssertTrue(board.contains("showsArchiveAccessRecovery"))
         XCTAssertTrue(board.contains("EmptyView()"))
-        let emptyBoardIndex = try XCTUnwrap(board.range(of: "No songs yet"))
+        let emptyBoardIndex = try XCTUnwrap(board.range(of: "No songs on the board"))
         let recoveryGateIndex = try XCTUnwrap(board.range(of: "showsArchiveAccessRecovery"))
         XCTAssertTrue(recoveryGateIndex.lowerBound < emptyBoardIndex.lowerBound)
     }

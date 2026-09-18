@@ -1,4 +1,5 @@
 import AppCore
+import Combine
 import Foundation
 import NikoMusicCore
 
@@ -179,6 +180,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
     /// Compact list shows the detail page only after an explicit open (double-click / Return).
     @Published var listShowsDetail = false
+    var navigationCancellable: AnyCancellable?
     @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?
 
     let catalog: ArchiveCatalogCoordinator
@@ -309,6 +311,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
         )
         loadRootsFromSettings()
+        attachNavigationHistory(context.navigationHistory)
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         loadCollaborators()
         refreshFirstRunState()

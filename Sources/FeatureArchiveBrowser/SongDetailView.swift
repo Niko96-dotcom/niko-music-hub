@@ -228,9 +228,10 @@ struct SongDetailView: View {
                     }
                 }
             }
-            if workspaceTab != .previews {
+            // Always present so the tab strip below keeps one vertical position.
+            do {
                 HStack(spacing: 10) {
-                    Text(mainPreviewLabel ?? "No preview found")
+                    Text(mainPreviewLabel ?? "No preview")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .lineLimit(1).truncationMode(.middle)
@@ -275,9 +276,11 @@ struct SongDetailView: View {
             Text(liveSong.effectiveLatestCPR?.fileName ?? "No project found")
                 .font(HubDesignSystem.Typography.body().weight(.semibold))
                 .lineLimit(2).textSelection(.enabled)
-            Text(liveSong.effectiveLatestCPR?.applicationName ?? "Choose a project version below")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            if let applicationName = liveSong.effectiveLatestCPR?.applicationName {
+                Text(applicationName)
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            }
         }
     }
 
@@ -313,7 +316,7 @@ struct SongDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("NOTES").font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                Text(liveSong.appNote?.isEmpty == false ? (liveSong.appNote ?? "") : "No notes yet.")
+                Text(liveSong.appNote?.isEmpty == false ? (liveSong.appNote ?? "") : "No notes")
                     .font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                     .lineLimit(5)
                 Button("Edit song info") { workspaceTab = .info }.buttonStyle(.plain)
@@ -594,7 +597,7 @@ struct SongDetailView: View {
                 }
 
                 metadataField(label: "Display title") {
-                    HubQuietTextField("Virtual title (app only)", text: $virtualTitleDraft)
+                    HubQuietTextField("Display title", text: $virtualTitleDraft)
                         .onSubmit { commitVirtualTitle() }
                 }
 
@@ -604,7 +607,7 @@ struct SongDetailView: View {
                 }
 
                 metadataField(label: "Song note") {
-                    HubQuietTextField("Your note", text: $appNoteDraft, axis: .vertical, lineLimit: 2...4)
+                    HubQuietTextField("", text: $appNoteDraft, axis: .vertical, lineLimit: 2...4)
                         .onSubmit { commitAppNote() }
                 }
 
@@ -719,7 +722,7 @@ struct SongDetailView: View {
                 if liveSong.cprSelectionMode == .manual {
                     HubLabeledButton(
                         icon: "arrow.uturn.backward",
-                        label: "Auto project",
+                        label: "Revert to auto project",
                         style: .secondary,
                         help: "Revert to automatic project selection"
                     ) {
@@ -805,7 +808,7 @@ struct SongDetailView: View {
             requestedIndex: previewCandidatePage
         )
         if rankedPreviews.isEmpty {
-            Text("No previews found.").foregroundStyle(.secondary)
+            Text("No previews").foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                 HStack(alignment: .firstTextBaseline, spacing: HubDesignSystem.Spacing.inlineGap) {
@@ -831,7 +834,7 @@ struct SongDetailView: View {
                         .font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
                     Spacer()
                     if liveSong.previewSelectionMode == .manual {
-                        Button("Revert to Auto") { viewModel.revertPreviewToAuto(for: liveSong) }
+                        Button("Revert to auto preview") { viewModel.revertPreviewToAuto(for: liveSong) }
                             .buttonStyle(.plain).foregroundStyle(HubDesignSystem.Palette.accent)
                     }
                 }

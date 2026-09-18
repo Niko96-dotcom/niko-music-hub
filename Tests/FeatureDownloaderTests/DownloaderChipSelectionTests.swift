@@ -12,9 +12,11 @@ final class DownloaderChipSelectionTests: XCTestCase {
             contentsOfFile: "Sources/FeatureDownloader/DownloaderView.swift",
             encoding: .utf8
         )
+        // Two-option settings use the shared HubSegmentedChoice (exposes .isSelected
+        // per segment); three-or-more still use HubChoiceChips.
         XCTAssertTrue(
-            source.contains("HubChoiceChips("),
-            "Playlist and media-kind chips must use HubChoiceChips so .isSelected is exposed"
+            source.contains("HubSegmentedChoice("),
+            "Playlist and media-kind selectors must use HubSegmentedChoice so .isSelected is exposed"
         )
         XCTAssertFalse(
             source.contains("struct DownloaderTextChip"),

@@ -215,7 +215,6 @@ final class SettingsStoreTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(source.contains("Show menu bar extra"))
-        XCTAssertTrue(source.contains("Adds a waveform extra to the menu bar for jumping to tools. Niko Music Hub can run without it."))
         XCTAssertTrue(source.contains("showMenuBarExtraBinding"))
     }
 

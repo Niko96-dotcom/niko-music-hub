@@ -9,7 +9,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.rawBPM)
         XCTAssertNil(viewModel.displayedBPM)
         XCTAssertEqual(viewModel.tapCount, 0)
-        XCTAssertEqual(viewModel.statusText, "Tap the pad or press Space")
+        XCTAssertEqual(viewModel.statusText, "")
         XCTAssertEqual(viewModel.statusKind, .idle)
         XCTAssertFalse(viewModel.hasStartedRun)
     }
@@ -25,7 +25,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(viewModel.rawBPM), 120.0, accuracy: 0.001)
         XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), 120.0, accuracy: 0.001)
         XCTAssertEqual(viewModel.tapCount, 2)
-        XCTAssertEqual(viewModel.statusText, "First estimate ready. Keep tapping to steady it.")
+        XCTAssertEqual(viewModel.statusText, "First estimate — keep tapping")
         XCTAssertEqual(viewModel.statusKind, .firstEstimate)
     }
 
@@ -39,7 +39,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.rawBPM)
         XCTAssertNil(viewModel.displayedBPM)
         XCTAssertEqual(viewModel.tapCount, 0)
-        XCTAssertEqual(viewModel.statusText, "Tap the pad or press Space")
+        XCTAssertEqual(viewModel.statusText, "")
         XCTAssertFalse(viewModel.hasStartedRun)
     }
 
@@ -53,7 +53,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.rawBPM)
         XCTAssertNil(viewModel.displayedBPM)
         XCTAssertEqual(viewModel.tapCount, 1)
-        XCTAssertEqual(viewModel.statusText, "New tap run started.")
+        XCTAssertEqual(viewModel.statusText, "New tap run started")
         XCTAssertEqual(viewModel.statusKind, .longPauseReset)
         XCTAssertTrue(viewModel.hasStartedRun)
     }
@@ -69,7 +69,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         viewModel.recordTap(at: 1.58)
 
         XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), previousBPM, accuracy: 0.001)
-        XCTAssertEqual(viewModel.statusText, "Ignored one uneven tap. Keep tapping.")
+        XCTAssertEqual(viewModel.statusText, "Uneven tap ignored")
         XCTAssertEqual(viewModel.statusKind, .outlierIgnored)
     }
 }

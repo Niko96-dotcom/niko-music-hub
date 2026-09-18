@@ -39,6 +39,8 @@ public struct HubLabeledButton: View {
     var help: String?
     var role: ButtonRole?
     var isEnabled: Bool
+    /// Fill the available width (inspector-pinned primary actions).
+    var expands: Bool = false
     let action: () -> Void
 
     @State private var isHovered = false
@@ -53,11 +55,13 @@ public struct HubLabeledButton: View {
         help: String? = nil,
         role: ButtonRole? = nil,
         isEnabled: Bool = true,
+        expands: Bool = false,
         action: @escaping () -> Void
     ) {
         self.icon = icon
         self.label = label
         self.style = style
+        self.expands = expands
         self.help = help
         self.role = role
         self.isEnabled = isEnabled
@@ -75,11 +79,13 @@ public struct HubLabeledButton: View {
                 label: label,
                 style: style,
                 role: role,
-                isHovered: isHovered
+                isHovered: isHovered,
+                expands: expands
             )
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
         .focusable()
+        .focusEffectDisabled()
         .focused($isFocused)
         .overlay {
             if isFocused {
@@ -113,12 +119,14 @@ private struct HubLabeledButtonLabel: View {
     let style: HubLabeledButtonStyle
     let role: ButtonRole?
     let isHovered: Bool
+    var expands: Bool = false
 
     var body: some View {
         Label(label, systemImage: icon)
             .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
             .foregroundStyle(foreground)
             .padding(.horizontal, 12)
+            .frame(maxWidth: expands ? .infinity : nil)
             .frame(minHeight: HubDesignSystem.Size.buttonMinHeight)
             .background {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)

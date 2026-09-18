@@ -1,13 +1,17 @@
 import SwiftUI
 
+/// Tool-page header: thin wrapper over the shared `HubPageHeader` so every
+/// tool title lands on the same keyline as the Board / Archive headers.
 public struct ToolHeaderBlock: View {
     public let title: String
-    public let statusText: String
+    /// Live status under the title. Nil/empty hides the line — idle "Ready…"
+    /// chrome belongs nowhere; only state that changes earns the second line.
+    public let statusText: String?
     public let statusColor: Color
 
     public init(
         title: String,
-        statusText: String,
+        statusText: String? = nil,
         statusColor: Color = .secondary
     ) {
         self.title = title
@@ -16,16 +20,7 @@ public struct ToolHeaderBlock: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text(title)
-                .font(HubDesignSystem.Typography.screenTitle())
-                .lineLimit(1)
-            Text(statusText)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(statusColor)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
-        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .topLeading)
+        HubPageHeader(title, statusText: statusText, statusColor: statusColor)
+            .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
     }
 }

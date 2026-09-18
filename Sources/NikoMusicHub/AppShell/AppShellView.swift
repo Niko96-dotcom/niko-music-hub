@@ -10,6 +10,7 @@ struct AppShellView: View {
     let context: ToolContext
     @ObservedObject var router: QuickAccessRouter
     @ObservedObject var shellSession: HubShellSession
+    @ObservedObject private var history: HubNavigationHistory
     @Environment(\.openSettings) private var openSettings
     @StateObject private var toolPaneCache: ToolPaneCache
 
@@ -26,6 +27,7 @@ struct AppShellView: View {
         self.context = context
         self.router = router
         self.shellSession = shellSession
+        self.history = context.navigationHistory
         // LAUNCH-HANG: never mutate HubShellSession (@Published) during Scene
         // evaluation. The previous restoreSelectedToolID(registry:) call here
         // published on every App graph pass, looping scenesDidChange /
@@ -40,6 +42,9 @@ struct AppShellView: View {
             )
         )
         _selectedToolID = State(initialValue: initialToolID)
+        if let initialToolID {
+            context.navigationHistory.record(toolID: initialToolID)
+        }
     }
 
     var body: some View {
@@ -75,14 +80,21 @@ struct AppShellView: View {
                     if shellSession.inboxEffectiveVisible {
                         shellDivider
                         OutputInboxInspectorView(context: context)
-                            .frame(minWidth: 232, idealWidth: 268, maxWidth: 308)
+                            .frame(width: HubDesignSystem.Size.chromeRailWidth)
                             .hubChromeMaterial()
                     }
                 }
             }
             .padding(.top, HubShellLayout.titleBarHeight)
 
-            HubShellTitleBarControls(session: shellSession)
+            HubShellTitleBarControls(
+                session: shellSession,
+                canGoBack: history.canGoBack,
+                canGoForward: history.canGoForward,
+                toolAccessory: selectedToolID.flatMap { registry.feature(for: $0)?.makeTitleBarAccessory(context: context) },
+                onGoBack: { navigate(to: history.goBack()) },
+                onGoForward: { navigate(to: history.goForward()) }
+            )
         }
         .ignoresSafeArea(edges: .top)
         .background(HubWindowChromeConfigurator(windowTitle: mainWindowTitle))
@@ -123,6 +135,7 @@ struct AppShellView: View {
         .onChange(of: selectedToolID) { _, newID in
             guard let newID else { return }
             toolPaneCache.ensureMounted(newID)
+            history.record(toolID: newID)
         }
         .onChange(of: router.selectedToolID) { _, newID in
             if let newID {
@@ -183,7 +196,7 @@ struct AppShellView: View {
     private var minWindowWidth: CGFloat {
         var width: CGFloat = Self.activeToolMinWidth
         if shellSession.showToolSidebar { width += HubDesignSystem.Size.navWidth }
-        if shellSession.inboxEffectiveVisible { width += 232 }
+        if shellSession.inboxUserWantsVisible { width += HubDesignSystem.Size.chromeRailWidth }
         return width
     }
 
@@ -237,6 +250,14 @@ struct AppShellView: View {
         toolPaneCache.ensureMounted(toolID)
         selectedToolID = toolID
         shellSession.setSelectedToolID(toolID)
+    }
+
+    /// Back/forward step: activate the entry's tool without recording, then let
+    /// the tool restore its inner page.
+    private func navigate(to entry: HubNavigationEntry?) {
+        guard let entry else { return }
+        history.withoutRecording { selectTool(entry.toolID) }
+        history.restore(entry)
     }
 
     @ViewBuilder

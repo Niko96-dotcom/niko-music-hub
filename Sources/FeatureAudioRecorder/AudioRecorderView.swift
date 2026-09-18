@@ -9,6 +9,7 @@ public struct AudioRecorderView: View {
     @State private var lastPersistedMaxDurationMinutes: Int?
     // NMH-142: the Record/Stop capsule is a custom `.plain` Button, so track
     // keyboard focus explicitly (NMH-133 pattern) for Full Keyboard Access.
+    @FocusState private var filenameFocused: Bool
     @FocusState private var recordButtonFocused: Bool
 
     public init(context: ToolContext, viewModel: AudioRecorderViewModel) {
@@ -18,23 +19,14 @@ public struct AudioRecorderView: View {
     }
 
     public var body: some View {
-        HubToolPage {
-            saveConfirmationBanner
-            header
-            filenameDisplay
-            timeDisplay
-            // Reference rule: live surfaces are hidden at rest — the level
-            // meter only appears while a recording is actually running.
-            if viewModel.isRecording {
-                meterSection
-            }
-            controlSection
-            settingsSection
-            recordingsSection
-            errorSection
-            permissionSection
-            incompatibleSection
-        }
+        HubInspectorPage(
+            header: { header },
+            live: { liveSection },
+            primary: { captureCard },
+            list: { recordingsList },
+            inspector: { inspectorGroups },
+            action: { controlSection }
+        )
         .onAppear {
             syncMaxDurationFromSettings()
             viewModel.onAppear()
@@ -44,6 +36,14 @@ public struct AudioRecorderView: View {
             guard normalized != lastPersistedMaxDurationMinutes else { return }
             persistMaxDuration(minutes: newValue)
         }
+    }
+
+    @ViewBuilder
+    private var liveSection: some View {
+        saveConfirmationBanner
+        permissionSection
+        incompatibleSection
+        errorSection
     }
 
     @ViewBuilder
@@ -102,16 +102,43 @@ public struct AudioRecorderView: View {
             statusText: statusText,
             statusColor: statusColor
         )
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
+    }
+
+    private var captureCard: some View {
+        VStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
+            timeDisplay
+            // Reference rule: live surfaces are hidden at rest — the level
+            // meter only appears while a recording is actually running.
+            if viewModel.isRecording {
+                meterSection
+            }
+            Text(viewModel.proposedFilename)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(HubDesignSystem.Spacing.cardPadding)
+        .hubCard(cornerRadius: HubDesignSystem.Radius.card)
     }
 
     private var filenameDisplay: some View {
         TextField(viewModel.proposedFilename, text: $viewModel.filenameOverride)
-            .quietFieldStyle()
+            .textFieldStyle(.plain)
+            .font(HubDesignSystem.Typography.bodySmall())
+            .focused($filenameFocused)
+            .hubInspectorRow()
+            .overlay {
+                if filenameFocused {
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                        .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
+                }
+            }
             .accessibilityLabel("Recording filename")
             .disabled(viewModel.isCaptureActive)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
     }
 
     private var meterSection: some View {
@@ -121,7 +148,7 @@ public struct AudioRecorderView: View {
             variant: .meter,
             isEnabled: viewModel.isRecording
         )
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
+        .frame(maxWidth: .infinity)
         .opacity(viewModel.isRecording ? 1 : 0.35)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: viewModel.currentLevel?.peak)
     }
@@ -130,11 +157,11 @@ public struct AudioRecorderView: View {
     // "cards only for bounded objects").
     private var timeDisplay: some View {
         Text(formatElapsedTime(viewModel.elapsedTime))
-            .font(HubDesignSystem.Typography.display())
+            .font(HubDesignSystem.Typography.readout())
             .monospacedDigit()
             .foregroundStyle(viewModel.isRecording ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textTertiary)
             .padding(.vertical, 10)
-            .frame(maxWidth: HubToolLayout.maxContentWidth)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var controlSection: some View {
@@ -160,26 +187,28 @@ public struct AudioRecorderView: View {
                     .fontWeight(.semibold)
                 }
                 .foregroundStyle(HubDesignSystem.Palette.canvas)
-                .frame(height: 34)
-                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity)
+                .frame(height: HubDesignSystem.Size.buttonMinHeight)
+                .padding(.horizontal, 12)
             }
             .buttonStyle(.plain)
             // NMH-142 (K11): FKA pattern from the BPM tap pad (NMH-029) — Tab
             // lands here with a visible ring, Space toggles recording. Returning
             // `.handled` consumes the key so the Button does not fire twice.
             .focusable()
+            .focusEffectDisabled()
             .focused($recordButtonFocused)
             .onKeyPress(.space) {
                 toggleRecording()
                 return .handled
             }
             .background {
-                Capsule()
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
                     .fill(viewModel.isCaptureActive ? HubDesignSystem.Palette.danger : HubDesignSystem.Palette.accent)
             }
             .overlay {
                 if recordButtonFocused {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)
                         .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
                 }
             }
@@ -196,7 +225,6 @@ public struct AudioRecorderView: View {
                 .accessibilityHidden(true)
             }
         }
-        .padding(12)
     }
 
     /// Shared Record/Stop toggle for the capsule Button action and the FKA
@@ -209,39 +237,33 @@ public struct AudioRecorderView: View {
         }
     }
 
-    // Quiet unboxed preference row — chips are already chips; a card around
-    // them is box-in-box.
-    private var settingsSection: some View {
-        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Text("Max duration")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-            HubChoiceChips("Max Duration", selection: $viewModel.maxDurationMinutes, choices:
-                RecordingDurationOptions.supportedMinutes.map { minutes in
-                    .init(
-                        minutes,
-                        label: RecordingDurationOptions.chipLabel(for: minutes),
-                        help: RecordingDurationOptions.label(for: minutes)
-                    )
-                }
+    @ViewBuilder
+    private var inspectorGroups: some View {
+        HubInspectorGroup("Filename") {
+            filenameDisplay
+        }
+        HubInspectorGroup("Max duration") {
+            HubStepSlider(
+                "Max duration",
+                selection: $viewModel.maxDurationMinutes,
+                steps: RecordingDurationOptions.supportedMinutes,
+                label: RecordingDurationOptions.chipLabel(for:),
+                help: RecordingDurationOptions.label(for:)
             )
             .disabled(viewModel.isCaptureActive)
             .opacity(viewModel.isCaptureActive ? 0.45 : 1)
         }
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
-    /// Latest finished recordings, each a draggable card — drop one straight into a DAW.
-    private var recordingsSection: some View {
+    private var recordingsList: some View {
         ToolOutputShelf(
             title: "Recordings",
             items: viewModel.recentRecordings,
-            subtitle: recordingSubtitle,
-            onReveal: { item in
-                context.fileActions.revealInFinder(item.fileURL)
-            }
+            emptyText: "No recordings yet",
+            subtitle: { recordingSubtitle(for: $0) },
+            onReveal: { context.fileActions.revealInFinder($0.fileURL) },
+            onOpen: { NSWorkspace.shared.open($0.fileURL) }
         )
-        .frame(maxWidth: HubToolLayout.maxContentWidth)
     }
 
     private func recordingSubtitle(for item: OutputInboxItem) -> String? {
@@ -437,7 +459,7 @@ public struct AudioRecorderView: View {
     private var statusText: String {
         switch viewModel.recordingState {
         case .idle:
-            return "Ready to record"
+            return ""
         case .permissionNeeded:
             return "Permission required"
         case .incompatibleMacOS(let version):

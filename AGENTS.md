@@ -36,7 +36,27 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 - Cubase archive/file-organization reference: `docs/reference/cubase-file-orga/`
 - Stem separation contract: `docs/reference/stem-separation-contract.md`
 - Architecture decisions: `docs/decisions/`
-- Superseded design history (do **not** implement from it): `docs/UI-REDESIGN-PLAN.md`
+- **Current UI design contract (binding): `docs/design-contract.md`** — read it before touching any
+  SwiftUI view. Superseded design history (do **not** implement from it): `docs/UI-REDESIGN-PLAN.md`
+
+## UI design contract (do not regress)
+
+`docs/design-contract.md` is binding and guarded by `Tests/AppCoreTests/HubDesignContractSourceTests.swift`
+(plus the other `*SourceTests`). The short version:
+
+- One header (`HubPageHeader` / `ToolHeaderBlock`), one tool-page scaffold (`HubInspectorPage`),
+  one rail width + material for sidebar / inspector / inbox (`Size.chromeRailWidth`, `hubChromeMaterial`).
+- Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=106), 34pt controls on
+  the nav-row keyline (y=124). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
+  paths use `.hubInspectorRow()`. Nothing in an inspector changes height with state.
+- The primary action is `HubLabeledButton(.primary, expands: true)`, FIRST in the `action` slot; it is
+  pinned to the bottom on every tool (`HubPrimaryLastStack`).
+- Every `.focusable()` pairs with `.focusEffectDisabled()` — the system focus ring is blue and blue is
+  banned. Cards only for bounded objects. Buttons share `Radius.button` (no `Capsule()`).
+- Copy: title = object, no idle status lines, empty states are one line, no "Welcome to / Manage your".
+- Verify by measurement, not by eye: dump accessibility frames of the running dev bundle (resolved by
+  PID, window title = tool name) and compare to the keyline table in the contract, then screenshot.
+- If a rule must change, change the contract doc and the guard test in the same commit.
 
 ## Working approach
 

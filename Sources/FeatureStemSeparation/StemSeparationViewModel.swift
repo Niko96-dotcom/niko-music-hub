@@ -18,7 +18,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     @Published public var youtubeURLText = ""
     @Published public private(set) var isRunning = false
     @Published public private(set) var progress = 0.0
-    @Published public private(set) var statusMessage = "Drop an audio file to start."
+    @Published public private(set) var statusMessage = ""
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var helperNeedsSetup = false
     @Published public private(set) var results: [OutputInboxItem] = []
@@ -229,13 +229,13 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func clearSelection() {
         droppedFileURL = nil
-        statusMessage = "Drop an audio file to start."
+        statusMessage = ""
     }
 
     public func clearYouTubeURL() {
         youtubeURLText = ""
         if droppedFileURL == nil {
-            statusMessage = "Drop an audio file to start."
+            statusMessage = ""
         }
     }
 

@@ -107,6 +107,7 @@ public struct HubIconButton: View {
         .modifier(ToggleAccessibilityModifier(isToggle: isToggle, isSelected: isSelected))
         .hubDistinctHelp(help, comparedTo: accessibilityLabel)
         .focusable()
+        .focusEffectDisabled()
         .focused($isFocused)
         .overlay {
             if isFocused {

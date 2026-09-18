@@ -178,6 +178,8 @@ struct SettingsView: View {
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var router: QuickAccessRouter
     let pane: HubSettingsPane
+    /// Board preference (read by ArchiveBoardView via the same key).
+    @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
 
     @Environment(\.openWindow) private var openWindow
 
@@ -216,8 +218,7 @@ struct SettingsView: View {
     private var generalPane: some View {
         SettingsSection(
             title: "General",
-            importance: .high,
-            footer: "Choose whether the hub follows macOS or stays in a fixed light or dark appearance."
+            importance: .high
         ) {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 Text("Appearance")
@@ -235,7 +236,7 @@ struct SettingsView: View {
         SettingsSection(
             title: "Open at login",
             importance: .high,
-            footer: "Opens Niko Music Hub when you log in to this Mac. Project Vault automatic archiving needs this so copies can run while you are away."
+            footer: "Project Vault automatic archiving needs this to run while you are away"
         ) {
             Toggle("Open at login", isOn: $session.launchAtLogin)
                 .toggleStyle(.switch)
@@ -250,8 +251,7 @@ struct SettingsView: View {
 
         SettingsSection(
             title: "Menu bar extra",
-            importance: .medium,
-            footer: "Adds a waveform extra to the menu bar for jumping to tools. Niko Music Hub can run without it."
+            importance: .medium
         ) {
             Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
                 .toggleStyle(.switch)
@@ -262,7 +262,7 @@ struct SettingsView: View {
         SettingsSection(
             title: "Output",
             importance: .high,
-            footer: "Converted audio, recordings, and downloads land here and appear in the Output Inbox."
+            footer: "Also listed in the Output Inbox"
         ) {
             pathRow(
                 label: "Output folder",
@@ -271,7 +271,7 @@ struct SettingsView: View {
             HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                 HubLabeledButton(
                     icon: "folder.badge.gearshape",
-                    label: "Choose Folder",
+                    label: "Choose output folder",
                     style: .secondary,
                     help: "Pick where exports and recordings are saved",
                     isEnabled: session.settingsLoadError == nil
@@ -292,7 +292,7 @@ struct SettingsView: View {
         SettingsSection(
             title: "Audio conversion",
             importance: .medium,
-            footer: "Default WAV preset for the converter and recorder. You can override per batch in the WAV Converter."
+            footer: "Default for the converter and recorder; each batch can override it"
         ) {
             LabeledContent("Sample rate") {
                 Text("\(session.settings.audioPreset.sampleRate) Hz")
@@ -315,8 +315,7 @@ struct SettingsView: View {
 
         SettingsSection(
             title: "Recording",
-            importance: .medium,
-            footer: "Maximum length for system-audio capture sessions."
+            importance: .medium
         ) {
             Picker("Max duration", selection: session.maxRecordingBinding) {
                 ForEach(session.recordingDurationChoices, id: \.self) { minutes in
@@ -331,7 +330,7 @@ struct SettingsView: View {
         SettingsSection(
             title: "Privacy & recording",
             importance: .low,
-            footer: "Only the Audio Recorder needs this. Other tools do not use your microphone. After a local rebuild, macOS may ask again until you allow the new app signature."
+            footer: "Only Audio Recorder needs this; a rebuilt app may ask again"
         ) {
             Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
                 .font(HubDesignSystem.Typography.bodySmall())
@@ -353,9 +352,12 @@ struct SettingsView: View {
         SettingsSection(
             title: "Music archive",
             importance: .high,
-            footer: "Read-only scan roots. The hub never renames, moves, or deletes files under these folders."
+            footer: "Read-only scan roots — files are never renamed, moved, or deleted"
         ) {
             archiveRootsSection
+            Toggle("Compact empty board stages", isOn: $compactEmptyStages)
+                .toggleStyle(.switch)
+                .tint(HubDesignSystem.Palette.accent)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Scan exclusions")
                     .font(HubDesignSystem.Typography.caption().weight(.semibold))
@@ -373,9 +375,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 32)
                 .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
-                Text("Comma-separated folder-name terms to skip during scan.")
-                    .font(HubDesignSystem.Typography.micro())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }
         }
     }
@@ -385,7 +384,7 @@ struct SettingsView: View {
         SettingsSection(
             title: "Helper tools",
             importance: .low,
-            footer: "Optional paths when Homebrew installs are not on PATH. Status also appears in the tools sidebar."
+            footer: "Only needed when Homebrew installs are not on PATH"
         ) {
             helperPathRow(label: "FFmpeg", url: session.settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
                 session.settings.helperTools.ffmpeg = url
@@ -420,7 +419,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var archiveRootsSection: some View {
         if archiveViewModel.roots.isEmpty {
-            Text("No archive roots yet. Add the folder that contains your Cubase or Ableton song folders.")
+            Text("No archive roots — add the folder that holds your song projects")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -431,7 +430,7 @@ struct SettingsView: View {
         }
         HubLabeledButton(
             icon: "folder.badge.plus",
-            label: "Add Root",
+            label: "Add archive root",
             style: .secondary,
             help: "Choose a Cubase or Ableton projects folder to scan",
             action: addArchiveRoot
@@ -529,7 +528,7 @@ struct SettingsView: View {
 
                     HubLabeledButton(
                         icon: "ellipsis",
-                        label: "Choose…",
+                        label: prompt,
                         style: .ghost,
                         isEnabled: session.settingsLoadError == nil
                     ) {

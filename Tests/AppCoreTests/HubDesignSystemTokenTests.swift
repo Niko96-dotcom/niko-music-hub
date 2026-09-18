@@ -69,7 +69,7 @@ final class HubDesignSystemTokenTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertFalse(downloader.contains(".font(.system(size: 9"))
-        XCTAssertTrue(downloader.contains("Image(systemName: \"chevron.down\")"))
+        XCTAssertTrue(downloader.contains("Image(systemName: \"chevron.up.chevron.down\")"))
         XCTAssertTrue(downloader.contains(".font(.system(size: 10, weight: .semibold))"))
 
         let grip = try String(

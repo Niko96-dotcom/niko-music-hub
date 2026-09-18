@@ -66,6 +66,7 @@ public struct HubChoiceChips<Value: Hashable>: View {
         }
         .buttonStyle(HubPressableButtonStyle(reduceMotion: reduceMotion))
         .focusable()
+        .focusEffectDisabled()
         .focused($focusedValue, equals: choice.value)
         .fixedSize()
         .onHover { hovering in

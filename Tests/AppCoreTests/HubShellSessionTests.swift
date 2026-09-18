@@ -58,7 +58,7 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(session.showToolSidebar)
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), true)
 
-        session.applyWindowWidth(1000)
+        session.applyWindowWidth(900)
         XCTAssertFalse(session.inboxEffectiveVisible)
         XCTAssertTrue(session.inboxUserWantsVisible)
         XCTAssertTrue(session.showToolSidebar)
@@ -93,7 +93,7 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertFalse(session.inboxEffectiveVisible)
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
 
-        session.applyWindowWidth(1000)
+        session.applyWindowWidth(900)
         XCTAssertFalse(session.inboxEffectiveVisible)
         XCTAssertFalse(session.inboxUserWantsVisible)
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)

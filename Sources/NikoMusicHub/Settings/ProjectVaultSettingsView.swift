@@ -358,7 +358,7 @@ private struct ProjectVaultSetupSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Set up Project Vault").font(.title2.weight(.semibold))
-            Text("Active Projects is where you work. Archive / Vault holds verified generations. Start with copies only; this is not a complete backup strategy.")
+            Text("Copies only — not a complete backup")
                 .foregroundStyle(.secondary)
             setupRow("1", "Active Projects", settings.vault.activeRootID != nil, .active)
             setupRow("2", "Archive / Vault", settings.vault.archiveRootID != nil, .archive)

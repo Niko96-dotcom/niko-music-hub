@@ -42,19 +42,12 @@ struct ArchiveBoardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if !viewModel.songs.isEmpty {
-                Toggle("Compact empty stages", isOn: $compactEmptyStages)
-                    .toggleStyle(.checkbox)
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .padding(.top, 12)
-            }
 
             if viewModel.showsArchiveAccessRecovery {
                 EmptyView()
             } else if viewModel.songs.isEmpty {
                 emptyArchiveState
-                    .padding(.top, 14)
+                    .padding(.top, HubToolLayout.sectionSpacing)
             } else {
                 ScrollViewReader { scrollProxy in
                     ScrollView(.horizontal) {
@@ -109,7 +102,7 @@ struct ArchiveBoardView: View {
                         columnOrigins = origins
                     }
                 }
-                .padding(.top, 14)
+                .padding(.top, HubToolLayout.sectionSpacing)
                 .simultaneousGesture(TapGesture().onEnded {
                     // Clicking a card returns keyboard control to the board;
                     // otherwise the AppKit search editor can keep Space as text.
@@ -132,14 +125,7 @@ struct ArchiveBoardView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Board")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            }
-            .layoutPriority(1)
-
+        HubPageHeader("Board") {
             if viewModel.isScanning {
                 HStack(spacing: 5) {
                     ProgressView()
@@ -157,9 +143,7 @@ struct ArchiveBoardView: View {
                     }
                 }
             }
-
-            Spacer(minLength: 8)
-
+        } trailing: {
             searchField
                 .frame(maxWidth: 240)
 
@@ -193,18 +177,7 @@ struct ArchiveBoardView: View {
             ) {
                 onChooseRoot()
             }
-
-            HubIconButton(
-                systemImage: "sidebar.leading",
-                accessibilityLabel: "Open list view",
-                help: "Browse"
-            ) {
-                viewModel.viewMode = .list
-                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
-                keyboardFocus = .archive
-            }
         }
-        .frame(minHeight: HubToolLayout.headerMinHeight, alignment: .top)
     }
 
     /// Roots and scanning live in the list layout's sidebar, so an empty
@@ -212,17 +185,17 @@ struct ArchiveBoardView: View {
     private var emptyArchiveState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(
-                viewModel.isScanning ? "Scanning archive" : "No songs yet",
+                viewModel.isScanning ? "Scanning archive" : "No songs on the board",
                 systemImage: viewModel.isScanning ? "arrow.triangle.2.circlepath" : "music.note.list"
             )
             .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text(viewModel.isScanning
-                ? "Scanning archive. This can take a while on a large folder. Songs already in the cache stay visible."
-                : "Add archive folder to fill the board.")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if viewModel.isScanning {
+                Text("Scanning archive. This can take a while on a large folder. Songs already in the cache stay visible.")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !viewModel.isScanning {
                 HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                     HubLabeledButton(
@@ -233,7 +206,7 @@ struct ArchiveBoardView: View {
                         onChooseRoot()
                     }
                     HubLabeledButton(
-                        icon: "sidebar.leading",
+                        icon: "list.bullet",
                         label: "Open list view",
                         style: .ghost
                     ) {

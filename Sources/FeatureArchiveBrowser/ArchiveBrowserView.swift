@@ -125,11 +125,16 @@ struct ArchiveBrowserView: View {
         // NMH-006 Accept: full keyboard focus (Space/arrows). Option-arrows pass through
         // the arrow monitor (modifier filter) to Song menu skip (NMH-034).
         .focusable(true)
+        // The pane owns focus for shortcuts, but AppKit's system-blue ring around
+        // the whole tool is not wanted; the quiet ring below is the HIG affordance.
+        .focusEffectDisabled()
         .focused($keyboardFocus, equals: .archive)
         .focusedValue(\.archiveSongActions, archiveSongFocusedActions)
         .focusedSceneValue(\.archiveSongActions, keyboardFocus == .archive ? archiveSongFocusedActions : nil)
         .overlay {
-            if keyboardFocus == .archive {
+            // Keyboard-navigation users get the ring (NMH-006/035); a mouse click
+            // that lands focus on the pane must not frame the entire board.
+            if keyboardFocus == .archive, NSApp.isFullKeyboardAccessEnabled {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.panel, style: .continuous)
                     .strokeBorder(HubDesignSystem.Palette.focus, lineWidth: 2)
                     .padding(2)
@@ -309,9 +314,6 @@ struct ArchiveBrowserView: View {
                     HubLabeledButton(icon: "chevron.backward", label: "Board", style: .ghost,
                         help: "Back to the board (Esc)") { viewModel.viewMode = .board }
                     Spacer()
-                    HubLabeledButton(icon: "sidebar.leading", label: "Browse", style: .ghost) {
-                        viewModel.viewMode = .list
-                    }
                 }
 
                 SongDetailView(song: song, viewModel: viewModel)
