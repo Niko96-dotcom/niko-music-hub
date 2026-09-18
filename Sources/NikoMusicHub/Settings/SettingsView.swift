@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import AppUpdates
+import FeatureAudioConverter
 import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
@@ -220,10 +221,7 @@ struct SettingsView: View {
             title: "General",
             importance: .high
         ) {
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                Text("Appearance")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            SettingsRow("Appearance") {
                 HubChoiceChips(
                     "Appearance",
                     selection: session.appearanceBinding,
@@ -231,32 +229,33 @@ struct SettingsView: View {
                 )
                 .disabled(session.settingsLoadError != nil)
             }
-        }
-
-        SettingsSection(
-            title: "Open at login",
-            importance: .high,
-            footer: "Project Vault automatic archiving needs this to run while you are away"
-        ) {
-            Toggle("Open at login", isOn: $session.launchAtLogin)
-                .toggleStyle(.switch)
-                .tint(HubDesignSystem.Palette.accent)
-                .onChange(of: session.launchAtLogin) { _, enabled in
-                    session.setLaunchAtLogin(enabled)
-                }
-            if let launchAtLoginError = session.launchAtLoginError {
-                inlineWarning(launchAtLoginError)
+            SettingsRowDivider()
+            SettingsRow(
+                "Open at login",
+                description: "Project Vault automatic archiving needs this to run while you are away"
+            ) {
+                Toggle("Open at login", isOn: $session.launchAtLogin)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.accent)
+                    .labelsHidden()
+                    .onChange(of: session.launchAtLogin) { _, enabled in
+                        session.setLaunchAtLogin(enabled)
+                    }
             }
-        }
-
-        SettingsSection(
-            title: "Menu bar extra",
-            importance: .medium
-        ) {
-            Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
-                .toggleStyle(.switch)
-                .tint(HubDesignSystem.Palette.accent)
-                .disabled(session.settingsLoadError != nil)
+            if let launchAtLoginError = session.launchAtLoginError {
+                SettingsRowDivider()
+                inlineWarning(launchAtLoginError)
+                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                    .padding(.vertical, 10)
+            }
+            SettingsRowDivider()
+            SettingsRow("Show menu bar extra") {
+                Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.accent)
+                    .labelsHidden()
+                    .disabled(session.settingsLoadError != nil)
+            }
         }
 
         SettingsSection(
@@ -264,23 +263,25 @@ struct SettingsView: View {
             importance: .high,
             footer: "Also listed in the Output Inbox"
         ) {
-            pathRow(
-                label: "Output folder",
-                path: session.settings.outputFolder.url.path
-            )
-            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            SettingsRow(
+                "Output folder",
+                description: session.settings.outputFolder.url.path
+            ) {
                 HubLabeledButton(
                     icon: "folder.badge.gearshape",
-                    label: "Choose output folder",
+                    label: "Choose",
                     style: .secondary,
                     help: "Pick where exports and recordings are saved",
                     isEnabled: session.settingsLoadError == nil
                 ) {
                     session.chooseOutputFolder()
                 }
+            }
+            SettingsRowDivider()
+            SettingsRow("Reveal in Finder") {
                 HubLabeledButton(
                     icon: "folder",
-                    label: "Reveal in Finder",
+                    label: "Reveal",
                     style: .ghost,
                     help: "Show output folder in Finder"
                 ) {
@@ -294,22 +295,33 @@ struct SettingsView: View {
             importance: .medium,
             footer: "Default for the converter and recorder; each batch can override it"
         ) {
-            LabeledContent("Sample rate") {
-                Text("\(session.settings.audioPreset.sampleRate) Hz")
+            SettingsRow("Sample rate") {
+                Text(AudioConverterViewModel.sampleRateLabel(for: session.settings.audioPreset.sampleRate))
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
-            LabeledContent("Bit depth") {
+            SettingsRowDivider()
+            SettingsRow("Bit depth") {
                 Text("\(session.settings.audioPreset.bitDepth)-bit")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
-            LabeledContent("Channels") {
+            SettingsRowDivider()
+            SettingsRow("Channels") {
                 Text(channelModeLabel(session.settings.audioPreset.channelMode))
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             }
-            HubLabeledButton(
-                icon: "waveform",
-                label: "Edit in WAV Converter",
-                style: .secondary,
-                help: "Opens WAV Converter to change the default preset"
-            ) {
-                openWAVConverter()
+            SettingsRowDivider()
+            SettingsRow("Edit in WAV Converter") {
+                HubLabeledButton(
+                    icon: "waveform",
+                    label: "Edit",
+                    style: .secondary,
+                    help: "Opens WAV Converter to change the default preset"
+                ) {
+                    openWAVConverter()
+                }
             }
         }
 
@@ -317,14 +329,16 @@ struct SettingsView: View {
             title: "Recording",
             importance: .medium
         ) {
-            Picker("Max duration", selection: session.maxRecordingBinding) {
-                ForEach(session.recordingDurationChoices, id: \.self) { minutes in
-                    Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
+            SettingsRow("Max duration") {
+                Picker("Max duration", selection: session.maxRecordingBinding) {
+                    ForEach(session.recordingDurationChoices, id: \.self) { minutes in
+                        Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .disabled(session.settingsLoadError != nil)
             }
-            .pickerStyle(.menu)
-            .disabled(session.settingsLoadError != nil)
-            .frame(maxWidth: 280, alignment: .leading)
         }
 
         SettingsSection(
@@ -332,17 +346,18 @@ struct SettingsView: View {
             importance: .low,
             footer: "Only Audio Recorder needs this; a rebuilt app may ask again"
         ) {
-            Text("Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder.")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HubLabeledButton(
-                icon: "lock.shield",
-                label: "Open System Settings",
-                style: .primary,
-                help: "Open Screen & System Audio Recording in System Settings"
+            SettingsRow(
+                "Open System Settings",
+                description: "Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder."
             ) {
-                SystemPrivacySettings.openSystemAudioRecordingSettings()
+                HubLabeledButton(
+                    icon: "lock.shield",
+                    label: "Open",
+                    style: .primary,
+                    help: "Open Screen & System Audio Recording in System Settings"
+                ) {
+                    SystemPrivacySettings.openSystemAudioRecordingSettings()
+                }
             }
         }
     }
@@ -355,13 +370,18 @@ struct SettingsView: View {
             footer: "Read-only scan roots — files are never renamed, moved, or deleted"
         ) {
             archiveRootsSection
-            Toggle("Compact empty board stages", isOn: $compactEmptyStages)
-                .toggleStyle(.switch)
-                .tint(HubDesignSystem.Palette.accent)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Scan exclusions")
-                    .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            SettingsRowDivider()
+            SettingsRow("Compact empty board stages") {
+                Toggle("Compact empty board stages", isOn: $compactEmptyStages)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.accent)
+                    .labelsHidden()
+            }
+            SettingsRowDivider()
+            SettingsRow(
+                "Scan exclusions",
+                description: "Comma-separated folder-name terms to skip during scan."
+            ) {
                 TextField(
                     "Scan exclusions",
                     text: session.scanExclusionBinding,
@@ -375,6 +395,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 32)
                 .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
+                .frame(minWidth: 140, maxWidth: 260)
             }
         }
     }
@@ -390,14 +411,17 @@ struct SettingsView: View {
                 session.settings.helperTools.ffmpeg = url
                 session.persistSettings { $0.helperTools.ffmpeg = url }
             }
+            SettingsRowDivider()
             helperPathRow(label: "ffprobe", url: session.settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
                 session.settings.helperTools.ffprobe = url
                 session.persistSettings { $0.helperTools.ffprobe = url }
             }
+            SettingsRowDivider()
             helperPathRow(label: "yt-dlp", url: session.settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
                 session.settings.helperTools.ytDlp = url
                 session.persistSettings { $0.helperTools.ytDlp = url }
             }
+            SettingsRowDivider()
             helperPathRow(label: "demucs-mlx", url: session.settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
                 session.settings.helperTools.demucsMlx = url
                 session.persistSettings { $0.helperTools.demucsMlx = url }
@@ -413,6 +437,9 @@ struct SettingsView: View {
             footer: session.updatesFooter
         ) {
             AppUpdateSettingsContent(controller: session.updateController)
+                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -423,18 +450,27 @@ struct SettingsView: View {
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            ForEach(archiveViewModel.roots, id: \.path) { root in
+            ForEach(Array(archiveViewModel.roots.enumerated()), id: \.element) { index, root in
+                if index > 0 {
+                    SettingsRowDivider()
+                }
                 archiveRootRow(root)
             }
         }
-        HubLabeledButton(
-            icon: "folder.badge.plus",
-            label: "Add archive root",
-            style: .secondary,
-            help: "Choose a Cubase or Ableton projects folder to scan",
-            action: addArchiveRoot
-        )
+        SettingsRowDivider()
+        SettingsRow("Add archive root") {
+            HubLabeledButton(
+                icon: "folder.badge.plus",
+                label: "Add",
+                style: .secondary,
+                help: "Choose a Cubase or Ableton projects folder to scan",
+                action: addArchiveRoot
+            )
+        }
     }
 
     @ViewBuilder
@@ -463,39 +499,11 @@ struct SettingsView: View {
         }
     }
 
-    private func pathRow(label: String, path: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(HubDesignSystem.Typography.caption().weight(.medium))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text(path)
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .lineLimit(2)
-                .truncationMode(.middle)
-        }
-        .padding(HubDesignSystem.Spacing.controlGap)
-        .hubSurface(.field)
-        .frame(minHeight: 48)
-    }
-
     private func archiveRootRow(_ root: URL) -> some View {
-        HStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(HubDesignSystem.Colors.accent)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent)
-                    .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                Text(root.path)
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer(minLength: 8)
+        SettingsRow(
+            root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent,
+            description: root.path
+        ) {
             HubIconButton(
                 systemImage: "trash",
                 accessibilityLabel: "Remove archive root",
@@ -505,9 +513,6 @@ struct SettingsView: View {
                 archiveViewModel.removeRoot(root)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row)
     }
 
     private func helperPathRow(
@@ -516,16 +521,12 @@ struct SettingsView: View {
         prompt: String,
         onSet: @escaping (URL?) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            LabeledContent(label) {
+        Group {
+            SettingsRow(
+                label,
+                description: url?.path ?? "Auto-detect"
+            ) {
                 HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                    Text(url?.path ?? "Auto-detect")
-                        .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-
                     HubLabeledButton(
                         icon: "ellipsis",
                         label: prompt,
@@ -552,16 +553,17 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .padding(8)
-                .hubSurface(.field)
-                .frame(minHeight: 40)
             }
             if let helperPathError = session.helperPathError,
                helperPathError.hasPrefix("\(label): ") {
+                SettingsRowDivider()
                 Text(helperPathError)
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Colors.warning)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -608,6 +610,55 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Settings rows
+
+/// One grouped-form row: label (+ optional one-line description) on the left,
+/// control flush right. Rows bring their own padding; the section card has none.
+private struct SettingsRow<Control: View>: View {
+    private let label: String
+    private let description: String?
+    private let control: Control
+
+    init(_ label: String, description: String? = nil, @ViewBuilder control: () -> Control) {
+        self.label = label
+        self.description = description
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                if let description {
+                    Text(description)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: HubDesignSystem.Spacing.controlGap)
+            control
+        }
+        .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Hairline between rows: inset on the left to the label's leading edge,
+/// running to the card's right edge. No separator after the last row.
+private struct SettingsRowDivider: View {
+    var body: some View {
+        HubDesignSystem.Palette.separator
+            .frame(height: 1)
+            .padding(.leading, HubDesignSystem.Spacing.cardPadding)
+    }
+}
+
 // MARK: - Settings section
 
 private enum SettingsSectionImportance {
@@ -638,12 +689,11 @@ private struct SettingsSection<Content: View>: View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HubSectionHeader(title)
 
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            VStack(alignment: .leading, spacing: 0) {
                 content
             }
-            .padding(HubDesignSystem.Spacing.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubSurface(.panel, state: sectionIntent, cornerRadius: HubDesignSystem.Radius.panel)
+            .hubSurface(.panel, state: sectionIntent, cornerRadius: HubDesignSystem.Radius.popover)
 
             if let footer {
                 Text(footer)

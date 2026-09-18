@@ -472,7 +472,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
-    static func sampleRateLabel(for sampleRate: Int) -> String {
+    public static func sampleRateLabel(for sampleRate: Int) -> String {
         switch sampleRate {
         case 44100:
             return "44.1 kHz"

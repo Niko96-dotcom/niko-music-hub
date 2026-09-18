@@ -95,6 +95,21 @@ Stem Separation) renders through `HubInspectorPage`:
 Copy `StemSeparationView.swift` as the template. Fill the six slots, use only the
 components above, then run the measurement loop (§7) and compare against §2.
 
+## 4b. Settings and selection
+
+Settings panes are grouped forms: a caption header above a card, rows inside the
+card (`SettingsRow` label + optional one-line description on the left, control
+flush right), `SettingsRowDivider` hairlines inset to the label's leading edge,
+an optional footer caption under the card. Few cards, many rows — never one card
+per setting, and never a field surface nested inside the card.
+
+A selected row (sidebar nav row, segmented cell) is a small **raised surface**,
+not a flat swatch: `Palette.selection` fill, a vertical `Highlight.sheen`, a
+stroke that runs `Highlight.rimStrong` (top) → `rim` (bottom) so the top edge
+catches light, and `Elevation.low`. The label keeps its normal weight — fill,
+rim and text colour carry the state. Sidebar rows and inspector cells use the
+same treatment.
+
 ## 5. Copy (omitting-ui-chrome)
 
 - Title = the object. No subtitle unless it carries a constraint/scope/status.

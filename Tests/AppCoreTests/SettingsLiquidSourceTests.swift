@@ -6,7 +6,10 @@ final class SettingsLiquidSourceTests: XCTestCase {
 
         [
             "hubCard",
-            "hubSurface(.field)",
+            // Grouped form: rows live directly in the section card, so a row no longer
+            // nests its own field surface (no cards inside cards).
+            "SettingsRow(",
+            "SettingsRowDivider",
             "HubSectionHeader",
             "sectionIntent",
             "settingsLoadErrorBanner",

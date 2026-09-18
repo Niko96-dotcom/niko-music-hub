@@ -23,54 +23,106 @@ struct ProjectVaultSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
+            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
             HubSectionHeader("Project Vault")
-            VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-                Toggle("Enable Project Vault", isOn: masterBinding)
-                    .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.accent)
-                    .disabled(!settingsAvailable)
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsRow("Enable Project Vault") {
+                    Toggle("Enable Project Vault", isOn: masterBinding)
+                        .toggleStyle(.switch)
+                        .tint(HubDesignSystem.Palette.accent)
+                        .labelsHidden()
+                        .disabled(!settingsAvailable)
+                }
 
                 if settings.vault.isEnabled {
+                    SettingsRowDivider()
                     folderRow(role: .active, title: "Active Projects")
+                    SettingsRowDivider()
                     folderRow(role: .archive, title: "Archive / Vault")
-
-                    Toggle("Automatic archiving", isOn: vaultBinding(\.automaticArchiving))
-                        .toggleStyle(.switch)
-                    Stepper("Eligible after \(settings.vault.inactivityDays) inactive days", value: intBinding(\.inactivityDays, range: 7...365))
-                    Stepper("Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free", value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000), step: 10)
-                    Stepper("Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB", value: intBinding(\.transferFreeSpaceReserveGiB, range: 1...1000))
-                    Text("Before copying, allow room for the project plus this reserve. Marking Done skips the inactivity wait.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Stepper("Keep previous generation \(settings.vault.keepPreviousGenerationDays) days", value: intBinding(\.keepPreviousGenerationDays, range: 7...365))
-                    loginItemStatusRow
-
-                    Picker("Rollout", selection: rolloutBinding) {
-                        ForEach(VaultSettings.RolloutStage.allCases, id: \.self) { stage in
-                            Text(stage.label).tag(stage)
-                        }
+                    SettingsRowDivider()
+                    SettingsRow("Automatic archiving") {
+                        Toggle("Automatic archiving", isOn: vaultBinding(\.automaticArchiving))
+                            .toggleStyle(.switch)
+                            .tint(HubDesignSystem.Palette.accent)
+                            .labelsHidden()
                     }
-                    .pickerStyle(.menu)
-
+                    SettingsRowDivider()
+                    SettingsRow("Eligible after \(settings.vault.inactivityDays) inactive days") {
+                        Stepper(
+                            "Eligible after \(settings.vault.inactivityDays) inactive days",
+                            value: intBinding(\.inactivityDays, range: 7...365)
+                        )
+                        .labelsHidden()
+                    }
+                    SettingsRowDivider()
+                    SettingsRow("Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free") {
+                        Stepper(
+                            "Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free",
+                            value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000),
+                            step: 10
+                        )
+                        .labelsHidden()
+                    }
+                    SettingsRowDivider()
+                    SettingsRow(
+                        "Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB",
+                        description: "Before copying, allow room for the project plus this reserve. Marking Done skips the inactivity wait."
+                    ) {
+                        Stepper(
+                            "Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB",
+                            value: intBinding(\.transferFreeSpaceReserveGiB, range: 1...1000)
+                        )
+                        .labelsHidden()
+                    }
+                    SettingsRowDivider()
+                    SettingsRow("Keep previous generation \(settings.vault.keepPreviousGenerationDays) days") {
+                        Stepper(
+                            "Keep previous generation \(settings.vault.keepPreviousGenerationDays) days",
+                            value: intBinding(\.keepPreviousGenerationDays, range: 7...365)
+                        )
+                        .labelsHidden()
+                    }
+                    SettingsRowDivider()
+                    loginItemStatusRow
+                    SettingsRowDivider()
+                    SettingsRow("Rollout") {
+                        HubSegmentedChoice(
+                            "Rollout",
+                            selection: rolloutBinding,
+                            options: VaultSettings.RolloutStage.allCases.map { .init($0, label: $0.label) }
+                        )
+                    }
+                    SettingsRowDivider()
                     healthRows
+                        .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     backupWarning
-
-                    Toggle("Emergency stop — pause all automation", isOn: vaultBinding(\.automationEmergencyStop))
+                    SettingsRowDivider()
+                    SettingsRow("Emergency stop — pause all automation") {
+                        Toggle(
+                            "Emergency stop — pause all automation",
+                            isOn: vaultBinding(\.automationEmergencyStop)
+                        )
                         .toggleStyle(.switch)
                         .tint(HubDesignSystem.Colors.danger)
-
-                    HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                        .labelsHidden()
+                    }
+                    SettingsRowDivider()
+                    SettingsRow("Test Restore") {
                         HubLabeledButton(
                             icon: "checkmark.shield",
-                            label: isRunningDrill ? "Testing…" : "Test Restore",
+                            label: isRunningDrill ? "Testing…" : "Test",
                             style: .secondary,
                             help: "Run a restore using only an app-created temporary fixture",
                             isEnabled: !isRunningDrill
                         ) { runRestoreDrill() }
+                    }
+                    SettingsRowDivider()
+                    SettingsRow("Export Diagnostics") {
                         HubLabeledButton(
                             icon: "doc.text",
-                            label: "Export Diagnostics",
+                            label: "Export",
                             style: .ghost,
                             help: "Export path-free Project Vault settings and health"
                         ) { exportDiagnostics() }
@@ -78,15 +130,18 @@ struct ProjectVaultSettingsView: View {
                 }
 
                 if let message {
+                    SettingsRowDivider()
                     Text(message)
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(HubDesignSystem.Spacing.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
+            .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.popover)
 
             Text(settings.vault.isEnabled
                 ? "Turning Project Vault off only stops scheduling. It never moves or deletes a project."
@@ -163,20 +218,11 @@ struct ProjectVaultSettingsView: View {
     @ViewBuilder
     private func folderRow(role: MusicRootRole, title: String) -> some View {
         let root = selectedRoot(role)
-        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                Text(root?.displayName ?? "Not selected")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
-            Spacer()
+        SettingsRow(title, description: root?.displayName ?? "Not selected") {
             HubLabeledButton(icon: "folder", label: "Choose…", style: .ghost) {
                 chooseRoot(role)
             }
         }
-        .padding(8)
-        .hubSurface(.field)
     }
 
     private var healthRows: some View {
@@ -191,6 +237,7 @@ struct ProjectVaultSettingsView: View {
 
     @ViewBuilder
     private var backupWarning: some View {
+        SettingsRowDivider()
         if let warning = health.backupWarning {
             VStack(alignment: .leading, spacing: 6) {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
@@ -199,14 +246,23 @@ struct ProjectVaultSettingsView: View {
             .font(HubDesignSystem.Typography.caption())
             .padding(8)
             .hubSurface(.card, state: .warning, cornerRadius: HubDesignSystem.Radius.row)
+            .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsRowDivider()
         }
-        Toggle(ProjectVaultConfirmationCopy.independentBackupToggleTitle, isOn: vaultBinding(\.independentBackupConfirmed))
-            .toggleStyle(.checkbox)
-            .font(HubDesignSystem.Typography.caption())
-        Text(ProjectVaultConfirmationCopy.independentBackupToggleFooter)
-            .font(HubDesignSystem.Typography.caption())
-            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-            .fixedSize(horizontal: false, vertical: true)
+        SettingsRow(
+            ProjectVaultConfirmationCopy.independentBackupToggleTitle,
+            description: ProjectVaultConfirmationCopy.independentBackupToggleFooter
+        ) {
+            Toggle(
+                ProjectVaultConfirmationCopy.independentBackupToggleTitle,
+                isOn: vaultBinding(\.independentBackupConfirmed)
+            )
+            .toggleStyle(.switch)
+            .tint(HubDesignSystem.Palette.accent)
+            .labelsHidden()
+        }
     }
 
     private var rolloutBinding: Binding<VaultSettings.RolloutStage> {
@@ -225,11 +281,7 @@ struct ProjectVaultSettingsView: View {
 
     @ViewBuilder
     private var loginItemStatusRow: some View {
-        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Text(VaultLaunchAtLoginPolicy.loginItemLabel(isEnabled: loginItemEnabled))
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Spacer(minLength: 8)
+        SettingsRow(VaultLaunchAtLoginPolicy.loginItemLabel(isEnabled: loginItemEnabled)) {
             HubLabeledButton(
                 icon: "gearshape",
                 label: "Open Login Setting",
@@ -243,10 +295,14 @@ struct ProjectVaultSettingsView: View {
             for: settings.vault,
             loginItemEnabled: loginItemEnabled
         ) {
+            SettingsRowDivider()
             Label(warning, systemImage: "exclamationmark.triangle.fill")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -349,6 +405,56 @@ struct ProjectVaultSettingsView: View {
     }
 }
 
+// MARK: - Settings rows (mirrors SettingsView.swift; kept file-private so the
+// Settings surface stays within its two owned files).
+
+/// One grouped-form row: label (+ optional one-line description) on the left,
+/// control flush right. Rows bring their own padding; the section card has none.
+private struct SettingsRow<Control: View>: View {
+    private let label: String
+    private let description: String?
+    private let control: Control
+
+    init(_ label: String, description: String? = nil, @ViewBuilder control: () -> Control) {
+        self.label = label
+        self.description = description
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                if let description {
+                    Text(description)
+                        .font(HubDesignSystem.Typography.caption())
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: HubDesignSystem.Spacing.controlGap)
+            control
+        }
+        .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Hairline between rows: inset on the left to the label's leading edge,
+/// running to the card's right edge. No separator after the last row.
+private struct SettingsRowDivider: View {
+    var body: some View {
+        HubDesignSystem.Palette.separator
+            .frame(height: 1)
+            .padding(.leading, HubDesignSystem.Spacing.cardPadding)
+    }
+}
+
 private struct ProjectVaultSetupSheet: View {
     @Binding var settings: AppSettings
     let onChooseRoot: (MusicRootRole) -> Void
@@ -366,11 +472,15 @@ private struct ProjectVaultSetupSheet: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             HStack {
-                Button("Cancel", action: onCancel)
+                HubLabeledButton(icon: "xmark", label: "Cancel", style: .ghost, action: onCancel)
                 Spacer()
-                Button("Enable Project Vault", action: onEnable)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(settings.vault.activeRootID == nil || settings.vault.archiveRootID == nil)
+                HubLabeledButton(
+                    icon: "checkmark",
+                    label: "Enable Project Vault",
+                    style: .primary,
+                    isEnabled: settings.vault.activeRootID != nil && settings.vault.archiveRootID != nil,
+                    action: onEnable
+                )
             }
         }
         .padding(24)
@@ -385,7 +495,7 @@ private struct ProjectVaultSetupSheet: View {
                 Text(selected ? "Folder selected" : "Choose a folder").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Choose…") { onChooseRoot(role) }
+            HubLabeledButton(icon: "folder", label: "Choose…", style: .ghost) { onChooseRoot(role) }
         }
     }
 }

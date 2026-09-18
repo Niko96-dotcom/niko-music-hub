@@ -56,15 +56,42 @@ public struct HubSidebarNavRow: ViewModifier {
             .foregroundStyle(isSelected ? HubDesignSystem.Palette.textPrimary : HubDesignSystem.Palette.textSecondary)
             .background {
                 if isSelected {
+                    // A selected row reads as a small raised surface, not a flat swatch:
+                    // the fill carries a soft vertical sheen, the stroke is brighter along
+                    // the top edge (the edge that catches light) and fades toward the
+                    // bottom, and a low shadow lifts it off the rail. This is what makes
+                    // the state legible without bolding the label.
                     RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
                         .fill(HubDesignSystem.Palette.selection)
                         .overlay {
                             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                                .strokeBorder(
-                                    HubDesignSystem.Palette.selectionStroke.opacity(0.45),
-                                    lineWidth: 0.5
+                                .fill(
+                                    LinearGradient(
+                                        colors: [HubDesignSystem.Highlight.sheen, .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
                         }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            HubDesignSystem.Highlight.rimStrong,
+                                            HubDesignSystem.Highlight.rim,
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                        .shadow(
+                            color: HubDesignSystem.Elevation.low.color,
+                            radius: HubDesignSystem.Elevation.low.radius,
+                            y: HubDesignSystem.Elevation.low.y
+                        )
                 }
             }
     }

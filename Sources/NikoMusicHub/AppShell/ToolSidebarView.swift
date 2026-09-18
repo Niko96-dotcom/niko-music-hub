@@ -110,11 +110,11 @@ struct ToolSidebarView: View {
             HStack(spacing: 10) {
                 Image(systemName: metadata.systemImage)
                     .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 14, weight: isSelected(metadata) ? .semibold : .regular))
+                    .font(.system(size: 14, weight: .regular))
                     .frame(width: HubDesignSystem.Size.sidebarIconFrame)
 
                 Text(metadata.displayName)
-                    .font(HubDesignSystem.Typography.body().weight(isSelected(metadata) ? .medium : .regular))
+                    .font(HubDesignSystem.Typography.body())
                     .lineLimit(1)
 
                 Spacer(minLength: 0)

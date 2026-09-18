@@ -71,11 +71,37 @@ public struct HubSegmentedChoice<Value: Hashable>: View {
                         .frame(height: HubDesignSystem.Spacing.navRowHeight - 4)
                         .background {
                             if selected {
+                                // Mirrors the sidebar's selected row (design contract §2).
                                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
                                     .fill(HubDesignSystem.Palette.selection)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
-                                            .strokeBorder(HubDesignSystem.Palette.selectionStroke.opacity(0.45), lineWidth: 0.5)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [HubDesignSystem.Highlight.sheen, .clear],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                )
+                                            )
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row - 2, style: .continuous)
+                                            .strokeBorder(
+                                                LinearGradient(
+                                                    colors: [
+                                                        HubDesignSystem.Highlight.rimStrong,
+                                                        HubDesignSystem.Highlight.rim,
+                                                    ],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                    .shadow(
+                                        color: HubDesignSystem.Elevation.low.color,
+                                        radius: HubDesignSystem.Elevation.low.radius,
+                                        y: HubDesignSystem.Elevation.low.y
                                     )
                             }
                         }
