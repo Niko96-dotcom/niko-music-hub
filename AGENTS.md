@@ -61,6 +61,31 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
   PID, window title = tool name) and compare to the keyline table in the contract, then screenshot.
 - If a rule must change, change the contract doc and the guard test in the same commit.
 
+## SwiftUI state ownership (do not regress)
+
+Guarded by `Tests/AppCoreTests/SwiftUIStateOwnershipSourceTests.swift`. The short version:
+
+- The `App` observes only scene-structural state: `MenuBarExtraState` (is the extra inserted) and
+  `AppAppearanceController`. It never observes `HubShellSession` — any publish there would re-evaluate
+  every scene and re-init the shell (the old "LAUNCH-HANG" loops).
+- `HubShellSession` is the single owner of the selected tool and panel visibility, and records
+  `HubNavigationHistory` itself. The launch tool is resolved once in `AppComposition` before any scene
+  exists; `AppShellView.init` has no side effects and holds no copy of the selection.
+- `QuickAccessRouter` requests are one-shot values (`QuickAccessToolRequest` with a sequence,
+  `openSettingsPane` consumed by `HubSettingsRoot`). Settings-pane deep links go through
+  `router.requestSettingsPane` only — no `NotificationCenter` routing; feature views use
+  `ToolContext.router`.
+- Durable settings are observed through `ToolContext.appSettings` (`AppSettingsObserver`, fed by
+  `SettingsStore.settingsChanges`) — never snapshotted in `onAppear` (cached panes never re-appear).
+- Tool panes stay mounted; `@Environment(\.hubToolIsActive)` tells a pane when it is the visible one.
+  App-wide effects (Song menu `focusedSceneValue`, the archive arrow-key monitor) follow that flag, never
+  `onAppear`/`onDisappear`. Esc/⌘. cancel routing reads `HubShellCancelContext` as a focused scene value
+  and `ShellJobStatusCenter` for jobs.
+- Feature views `@ObservedObject` their session-owned view models; `@StateObject` is only for state a
+  view creates itself. `@AppStorage` reads the composition's defaults suite (`defaultAppStorage`).
+- Window shortcuts: ⌘W/⌘M are the system items (key-window aware); ⌃⌘F is the one custom item
+  (`HubWindowCommandGroup`, key window). No process-wide `NSEvent` monitors.
+
 ## Working approach
 
 Work directly from the user request, current source, Git state and validation evidence. `.planning/`, `.ai/`, `.codex/` and `.cursor/` are local-only working state on the maintainer's machine — gitignored, never part of the public tree; treat `.planning/` as historical reference only and do not require or recreate GSD workflows. Preserve unrelated work and complete the relevant checks.

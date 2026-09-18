@@ -40,9 +40,7 @@ final class SwiftUIStateOwnershipSourceTests: XCTestCase {
     }
 
     func testWindowAndArchiveShortcutsAreScopedToVisibleContext() throws {
-        let windowCommands = try SourceTestSupport.read(
-            "Sources/NikoMusicHub/Commands/HubWindowCommandGroup.swift"
-        )
+        let app = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
         let cancelCommands = try SourceTestSupport.read(
             "Sources/NikoMusicHub/Commands/HubCancelCommands.swift"
         )
@@ -53,8 +51,15 @@ final class SwiftUIStateOwnershipSourceTests: XCTestCase {
             "Sources/FeatureArchiveBrowser/ArchiveShortcutFocusPolicy.swift"
         )
 
-        XCTAssertTrue(windowCommands.contains("NSApp.keyWindow"))
+        // Close / Minimize are the system items (key-window aware); the one
+        // custom window command (⌃⌘F) acts on the key window and the
+        // process-wide key monitor is gone.
+        let windowCommands = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubWindowCommandGroup.swift")
+        XCTAssertTrue(windowCommands.contains("NSApp.keyWindow?.toggleFullScreen"))
+        XCTAssertFalse(windowCommands.contains("keyboardShortcut(\"w\")"))
         XCTAssertFalse(windowCommands.contains("addLocalMonitorForEvents"))
+        XCTAssertTrue(app.contains("NSFullScreenMenuItemEverywhere"))
+        XCTAssertFalse(app.contains("addLocalMonitorForEvents"))
         XCTAssertTrue(cancelCommands.contains("@FocusedValue(\\.hubShellCancelContext)"))
         XCTAssertTrue(archive.contains("@Environment(\\.hubToolIsActive)"))
         XCTAssertTrue(archive.contains(".focusedSceneValue(\\.archiveSongActions"))

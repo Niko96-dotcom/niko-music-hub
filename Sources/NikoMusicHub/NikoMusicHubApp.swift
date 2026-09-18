@@ -12,11 +12,16 @@ struct NikoMusicHubApp: App {
     // and command groups — publishing there must not re-evaluate every scene.
     @StateObject private var appearanceController: AppAppearanceController
     @StateObject private var menuBarExtra: MenuBarExtraState
+    @StateObject private var fullScreenState = HubFullScreenState()
 
     private let composition: AppComposition
     private var shellSession: HubShellSession { composition.shellSession }
 
     init() {
+        // `HubWindowCommandGroup` provides Enter Full Screen with ⌃⌘F; keep
+        // AppKit from adding its 🌐F-only duplicate to the View menu. Must be
+        // registered before NSApplication builds the menu bar.
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
         let composition = AppComposition.make()
         self.composition = composition
         _appearanceController = StateObject(wrappedValue: composition.appearanceController)
@@ -47,8 +52,8 @@ struct NikoMusicHubApp: App {
         .defaultSize(width: 1_280, height: 820)
         .commands {
             AboutCommand(updateController: composition.updateController)
-            HubWindowCommandGroup()
             HubViewCommands(session: shellSession, history: composition.context.navigationHistory)
+            HubWindowCommandGroup(fullScreenState: fullScreenState)
             HubToolsCommands(
                 registry: composition.registry,
                 router: composition.router,

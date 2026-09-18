@@ -34,14 +34,25 @@ final class HubSettingsSession: ObservableObject {
         self.appearanceController = appearanceController
         self.updateController = updateController
         self.shellSession = shellSession
-        self.settings = context.appSettings.settings
+        self.settings = Self.normalized(context.appSettings.settings)
+        // Follow external writers (Recorder slider, vault runtime) while the
+        // window is open; own persists round-trip through here as no-ops.
         settingsObserverCancellable = context.appSettings.$settings
             .dropFirst()
             .removeDuplicates()
             .sink { [weak self] settings in
                 guard let self else { return }
-                self.settings = settings
+                let normalized = Self.normalized(settings)
+                guard normalized != self.settings else { return }
+                self.settings = normalized
             }
+    }
+
+    /// The form only offers the supported recording caps.
+    private static func normalized(_ settings: AppSettings) -> AppSettings {
+        var settings = settings
+        settings.maxRecordingDurationMinutes = RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
+        return settings
     }
 
     var updatesFooter: String {
@@ -111,10 +122,7 @@ final class HubSettingsSession: ObservableObject {
 
     func refresh() {
         do {
-            settings = try context.settingsStore.loadSettings()
-            settings.maxRecordingDurationMinutes = RecordingDurationOptions.normalized(
-                settings.maxRecordingDurationMinutes
-            )
+            settings = Self.normalized(try context.settingsStore.loadSettings())
             settingsLoadError = nil
             appearanceController.apply(settings.appearance)
             shellSession.applyShowMenuBarExtra(settings.showMenuBarExtra)
