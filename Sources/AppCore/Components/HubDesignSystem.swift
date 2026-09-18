@@ -358,7 +358,7 @@ public enum HubDesignSystem {
     // rename. Plan 02 may restyle individual consumers to read Palette directly.
 
     public enum Colors {
-        /// Cool azure accent (DS-12). Delegates to `Palette.accent`.
+        /// Monochrome neutral accent (DS-12). Delegates to `Palette.accent`.
         public static let accent = Palette.accent
         /// Warm indicator tint (test run). Delegates to `Palette.indicator`.
         public static let indicator = Palette.indicator

@@ -70,8 +70,8 @@ public struct HubLabeledButton: View {
         self.action = action
     }
 
-    // Reference button language: primary = solid contrast pill (near-white fill, dark
-    // label — the "Create agent" pattern); secondary = quiet neutral fill; ghost = text
+    // Button language: primary = warm indicator pill (contract §4c); secondary = quiet
+    // neutral fill; ghost = text
     // with hover fill. No system bordered/glass styles — those paint boxes and the
     // system accent (blue), which the references' chrome never shows.
     public var body: some View {

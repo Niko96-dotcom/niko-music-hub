@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Slider over a fixed list of discrete values (e.g. recording lengths) with the
-/// current value read out beside the label. Neutral tint — never system blue.
+/// current value read out beside the label. Warm indicator tint (§4c) — never system blue.
 public struct HubStepSlider<Value: Hashable>: View {
     private let accessibilityLabel: String
     @Binding private var selection: Value

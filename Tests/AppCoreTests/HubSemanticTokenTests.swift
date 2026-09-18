@@ -102,7 +102,8 @@ final class HubSemanticTokenTests: XCTestCase {
 
     /// DS-12: the references carry no brand tint in their chrome — color comes from content.
     /// So `accent` is a bright cool NEUTRAL (near-white on dark, near-black on light): achromatic
-    /// (R ≈ G ≈ B), which rules out both the old gold and any blue.
+    /// (R ≈ G ≈ B), which rules out both the old gold and any blue. Warmth lives only in
+    /// the separate `indicator` token (contract §4c) — this test does not cover it.
     func testAccentIsNeutralNotTinted() {
         guard let components = rgbaComponents(HubDesignSystem.Palette.accent) else {
             XCTFail("Could not resolve Palette.accent to sRGB components")

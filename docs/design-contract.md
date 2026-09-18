@@ -1,4 +1,4 @@
-# Niko Music Hub — UI design contract (binding, 2026-09-17)
+# Niko Music Hub — UI design contract (binding, 2026-09-18)
 
 This is the current design direction. It supersedes `docs/UI-REDESIGN-PLAN.md`
 (historical) and is enforced by `Tests/AppCoreTests/HubDesignContractSourceTests.swift`
@@ -78,6 +78,13 @@ Stem Separation) renders through `HubInspectorPage`:
   `HubPrimaryLastStack` pins the first child to the bottom, so the primary lands on
   the same pixel on every tool regardless of how many secondaries exist.
 
+### Wide pages (exception)
+Archive Analytics is not a form — its charts use the FULL content column, never
+the 680pt form cap (a capped chart strands half the window empty). Board ⇄
+Analytics is ONE flipping `chart.bar` icon in the last header-trailing slot on
+both pages (selected while in Analytics, Esc works too) — going there and back
+never moves under the cursor. Same pattern as the board⇄list title-bar flip (§1).
+
 ### Inspector controls — one silhouette
 - Two or more fixed options → `HubSegmentedChoice` (one control, nav-row height,
   chosen cell filled like a selected sidebar row). Use `columns:` for grids
@@ -103,11 +110,31 @@ flush right), `SettingsRowDivider` hairlines inset to the label's leading edge,
 an optional footer caption under the card. Few cards, many rows — never one card
 per setting, and never a field surface nested inside the card.
 
+The Settings window is fixed 744pt wide with the form column centered, so leftover
+width splits evenly left/right (measured 96px/96px). Quirk to preserve:
+`hubToolContentColumn`'s 680 cap *includes* its own horizontal padding, so the
+real content is 648 wide — size any centering box to exactly 680, never 680+32,
+or the phantom slack pools on the right again (leading-anchored).
+
 A selected row (sidebar nav row, segmented cell) is a flat Codex-quiet pill:
 `Palette.selection` fill (gray, darker than the rail in light mode), no sheen,
 no rim, no shadow. Every row label renders at full strength — the pill alone
 carries the state, exactly like the ChatGPT/Codex sidebar. Sidebar rows and
 inspector cells use the same treatment.
+
+## 4c. Accent: warm indicator, neutral everything else
+
+One warm colour exists: `Palette.indicator` (terracotta `#CC7D5E` light /
+`#DB8D6C` dark) with `Palette.indicatorDeep` for hover/press. It goes ONLY on:
+toggles, sliders, progress bars, primary `HubLabeledButton`s (one per tool page),
+and running `StatusDot`s. Everything else stays neutral like the Codex sidebar:
+selection pill, links, secondary/ghost buttons, chips, text.
+
+Why two tokens: DS-12/DS-13 guards pin `Palette.accent` achromatic (R≈G≈B) and
+forbid accent-tinted selection. The warm colour is a SEPARATE token, so the
+guards keep passing and no test needs weakening to see colour. If a new surface
+wants warmth, add it to the allowlist above AND this section in the same commit —
+never point a new consumer at `accent` expecting warmth.
 
 ## 5. Copy (omitting-ui-chrome)
 
@@ -115,6 +142,8 @@ inspector cells use the same treatment.
   `ToolHeaderBlock.statusText` is optional; idle "Ready…" strings are `""`.
 - Helper text only for a constraint or format ("M4A, MP3, WAV, AIFF, or FLAC").
 - Empty state = one line naming the missing object ("No files queued").
+- Empty states are bare content on the background — icon + text, never a card.
+  (A white card screams once everything around it goes flat.)
 - Buttons = verb + noun. Banned: "Welcome to", "Manage your", "This page lets you",
   "Use this to", "Easily", "Simply".
 
