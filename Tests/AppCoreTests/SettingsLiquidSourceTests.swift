@@ -11,7 +11,6 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "SettingsRow(",
             "SettingsRowDivider",
             "HubSectionHeader",
-            "sectionIntent",
             "settingsLoadErrorBanner",
             "saveErrorBanner",
             "inlineWarning",
@@ -32,9 +31,28 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "Color.primary.opacity(0.02)",
             "Color.primary.opacity(0.03)",
             "RoundedRectangle(cornerRadius: HubDesignSystem.Radius.card",
+            "SettingsSectionImportance",
+            "sectionIntent",
         ].forEach { forbidden in
             XCTAssertFalse(source.contains(forbidden), "Settings still defines local card formula: \(forbidden)")
         }
+    }
+
+    func testSettingsRowsHaveOneSharedDefinition() throws {
+        let settings = try settingsSource()
+        let vault = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/ProjectVaultSettingsView.swift",
+            encoding: .utf8
+        )
+        let rows = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsRow.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(settings.contains("struct SettingsRow<"))
+        XCTAssertFalse(vault.contains("struct SettingsRow<"))
+        XCTAssertTrue(rows.contains("struct SettingsRow<Control: View>: View"))
+        XCTAssertTrue(rows.contains("struct SettingsRowDivider: View"))
     }
 
     func testSettingsKeepsSafetyAndAccessibilityHooks() throws {

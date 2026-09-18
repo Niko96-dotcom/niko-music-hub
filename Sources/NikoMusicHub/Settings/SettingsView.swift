@@ -1,7 +1,6 @@
 import AppCore
 import AppKit
 import AppUpdates
-import FeatureAudioConverter
 import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
@@ -138,6 +137,10 @@ final class HubSettingsSession: ObservableObject {
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
+        // A failed toggle reverts `launchAtLogin` to the real state, which fires
+        // onChange again with that state; bail out so the retry cannot clear the
+        // error just shown (or unregister a login item awaiting user approval).
+        guard enabled != context.launchAtLogin.isEnabled() else { return }
         do {
             try context.launchAtLogin.setEnabled(enabled)
             launchAtLogin = context.launchAtLogin.isEnabled()
@@ -169,20 +172,34 @@ final class HubSettingsSession: ObservableObject {
             saveError = error.localizedDescription
             return
         }
+        let previous = settings.outputFolder
         settings.outputFolder = StoredFolderLocation(url: folder)
-        persistSettings { $0.outputFolder = StoredFolderLocation(url: folder) }
+        if !persistSettings({ $0.outputFolder = StoredFolderLocation(url: folder) }) {
+            settings.outputFolder = previous
+        }
     }
 }
 
 struct SettingsView: View {
+    @Environment(\.openWindow) private var openWindow
+
+    let pane: HubSettingsPane
+
     @ObservedObject var session: HubSettingsSession
     @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var router: QuickAccessRouter
-    let pane: HubSettingsPane
-    /// Board preference (read by ArchiveBoardView via the same key).
-    @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
 
-    @Environment(\.openWindow) private var openWindow
+    init(
+        session: HubSettingsSession,
+        archiveViewModel: ArchiveBrowserViewModel,
+        router: QuickAccessRouter,
+        pane: HubSettingsPane
+    ) {
+        self.session = session
+        self.archiveViewModel = archiveViewModel
+        self.router = router
+        self.pane = pane
+    }
 
     var body: some View {
         // Fixed 680pt column, centered: hubToolContentColumn's 680 cap already
@@ -202,9 +219,39 @@ struct SettingsView: View {
     private var paneContent: some View {
         switch pane {
         case .general:
-            generalPane
+            SettingsGeneralSection(
+                settingsAvailable: session.settingsLoadError == nil,
+                appearance: session.appearanceBinding,
+                launchAtLogin: $session.launchAtLogin,
+                launchAtLoginError: session.launchAtLoginError,
+                showMenuBarExtra: session.showMenuBarExtraBinding,
+                onLaunchAtLoginChange: session.setLaunchAtLogin
+            )
+            SettingsOutputSection(
+                outputFolderPath: session.settings.outputFolder.url.path,
+                settingsAvailable: session.settingsLoadError == nil,
+                onChooseFolder: session.chooseOutputFolder,
+                onRevealFolder: revealOutputFolder
+            )
+            SettingsAudioConversionSection(
+                preset: session.settings.audioPreset,
+                onEditInConverter: openWAVConverter
+            )
+            SettingsRecordingSection(
+                maxDurationMinutes: session.maxRecordingBinding,
+                durationChoices: session.recordingDurationChoices,
+                settingsAvailable: session.settingsLoadError == nil
+            )
+            SettingsPrivacySection {
+                SystemPrivacySettings.openSystemAudioRecordingSettings()
+            }
         case .archive:
-            archivePane
+            SettingsArchivePane(
+                roots: archiveViewModel.roots,
+                scanExclusions: session.scanExclusionBinding,
+                onAddRoot: addArchiveRoot,
+                onRemoveRoot: removeArchiveRoot
+            )
         case .vault:
             ProjectVaultSettingsView(
                 context: session.context,
@@ -215,266 +262,19 @@ struct SettingsView: View {
                 onOpenLoginSetting: openLoginSetting
             )
         case .helpers:
-            helpersPane
+            SettingsHelpersPane(
+                helperTools: session.settings.helperTools,
+                settingsAvailable: session.settingsLoadError == nil,
+                helperPathError: $session.helperPathError,
+                chooseExecutable: { prompt in
+                    session.context.fileActions.chooseExecutable(prompt: prompt)
+                },
+                onSetPath: setHelperToolPath
+            )
         case .updates:
-            updatesPane
-        }
-    }
-
-    @ViewBuilder
-    private var generalPane: some View {
-        SettingsSection(
-            title: "General",
-            importance: .high
-        ) {
-            SettingsRow("Appearance") {
-                HubChoiceChips(
-                    "Appearance",
-                    selection: session.appearanceBinding,
-                    choices: AppAppearance.allCases.map { .init($0, label: $0.label, help: $0.help) }
-                )
-                .disabled(session.settingsLoadError != nil)
-            }
-            SettingsRowDivider()
-            SettingsRow(
-                "Open at login",
-                description: "Project Vault automatic archiving needs this to run while you are away"
-            ) {
-                Toggle("Open at login", isOn: $session.launchAtLogin)
-                    .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.indicator)
-                    .labelsHidden()
-                    .onChange(of: session.launchAtLogin) { _, enabled in
-                        session.setLaunchAtLogin(enabled)
-                    }
-            }
-            if let launchAtLoginError = session.launchAtLoginError {
-                SettingsRowDivider()
-                inlineWarning(launchAtLoginError)
-                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-                    .padding(.vertical, 10)
-            }
-            SettingsRowDivider()
-            SettingsRow("Show menu bar extra") {
-                Toggle("Show menu bar extra", isOn: session.showMenuBarExtraBinding)
-                    .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.indicator)
-                    .labelsHidden()
-                    .disabled(session.settingsLoadError != nil)
-            }
-        }
-
-        SettingsSection(
-            title: "Output",
-            importance: .high,
-            footer: "Also listed in the Output Inbox"
-        ) {
-            SettingsRow(
-                "Output folder",
-                description: session.settings.outputFolder.url.path
-            ) {
-                HubLabeledButton(
-                    icon: "folder.badge.gearshape",
-                    label: "Choose",
-                    style: .secondary,
-                    help: "Pick where exports and recordings are saved",
-                    isEnabled: session.settingsLoadError == nil
-                ) {
-                    session.chooseOutputFolder()
-                }
-            }
-            SettingsRowDivider()
-            SettingsRow("Reveal in Finder") {
-                HubLabeledButton(
-                    icon: "folder",
-                    label: "Reveal",
-                    style: .ghost,
-                    help: "Show output folder in Finder"
-                ) {
-                    session.context.fileActions.revealInFinder(session.settings.outputFolder.url)
-                }
-            }
-        }
-
-        SettingsSection(
-            title: "Audio conversion",
-            importance: .medium,
-            footer: "Default for the converter and recorder; each batch can override it"
-        ) {
-            SettingsRow("Sample rate") {
-                Text(AudioConverterViewModel.sampleRateLabel(for: session.settings.audioPreset.sampleRate))
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
-            SettingsRowDivider()
-            SettingsRow("Bit depth") {
-                Text("\(session.settings.audioPreset.bitDepth)-bit")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
-            SettingsRowDivider()
-            SettingsRow("Channels") {
-                Text(channelModeLabel(session.settings.audioPreset.channelMode))
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
-            SettingsRowDivider()
-            SettingsRow("Edit in WAV Converter") {
-                HubLabeledButton(
-                    icon: "waveform",
-                    label: "Edit",
-                    style: .secondary,
-                    help: "Opens WAV Converter to change the default preset"
-                ) {
-                    openWAVConverter()
-                }
-            }
-        }
-
-        SettingsSection(
-            title: "Recording",
-            importance: .medium
-        ) {
-            SettingsRow("Max duration") {
-                Picker("Max duration", selection: session.maxRecordingBinding) {
-                    ForEach(session.recordingDurationChoices, id: \.self) { minutes in
-                        Text(RecordingDurationOptions.label(for: minutes)).tag(minutes)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .disabled(session.settingsLoadError != nil)
-            }
-        }
-
-        SettingsSection(
-            title: "Privacy & recording",
-            importance: .low,
-            footer: "Only Audio Recorder needs this; a rebuilt app may ask again"
-        ) {
-            SettingsRow(
-                "Open System Settings",
-                description: "Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder."
-            ) {
-                HubLabeledButton(
-                    icon: "lock.shield",
-                    label: "Open",
-                    style: .primary,
-                    help: "Open Screen & System Audio Recording in System Settings"
-                ) {
-                    SystemPrivacySettings.openSystemAudioRecordingSettings()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var archivePane: some View {
-        SettingsSection(
-            title: "Music archive",
-            importance: .high,
-            footer: "Read-only scan roots — files are never renamed, moved, or deleted"
-        ) {
-            archiveRootsSection
-            SettingsRowDivider()
-            SettingsRow("Compact empty board stages") {
-                Toggle("Compact empty board stages", isOn: $compactEmptyStages)
-                    .toggleStyle(.switch)
-                    .tint(HubDesignSystem.Palette.indicator)
-                    .labelsHidden()
-            }
-            SettingsRowDivider()
-            SettingsRow(
-                "Scan exclusions",
-                description: "Comma-separated folder-name terms to skip during scan."
-            ) {
-                TextField(
-                    "Scan exclusions",
-                    text: session.scanExclusionBinding,
-                    prompt: Text("backup, tmp, archive")
-                        .foregroundColor(HubDesignSystem.Palette.textTertiary)
-                )
-                .accessibilityHint("Comma-separated folder-name terms to skip during scan.")
-                .textFieldStyle(.plain)
-                .font(HubDesignSystem.Typography.body())
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                .padding(.horizontal, 10)
-                .frame(height: 32)
-                .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
-                .frame(minWidth: 140, maxWidth: 260)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var helpersPane: some View {
-        SettingsSection(
-            title: "Helper tools",
-            importance: .low,
-            footer: "Only needed when Homebrew installs are not on PATH"
-        ) {
-            helperPathRow(label: "FFmpeg", url: session.settings.helperTools.ffmpeg, prompt: "Choose FFmpeg") { url in
-                session.settings.helperTools.ffmpeg = url
-                session.persistSettings { $0.helperTools.ffmpeg = url }
-            }
-            SettingsRowDivider()
-            helperPathRow(label: "ffprobe", url: session.settings.helperTools.ffprobe, prompt: "Choose ffprobe") { url in
-                session.settings.helperTools.ffprobe = url
-                session.persistSettings { $0.helperTools.ffprobe = url }
-            }
-            SettingsRowDivider()
-            helperPathRow(label: "yt-dlp", url: session.settings.helperTools.ytDlp, prompt: "Choose yt-dlp") { url in
-                session.settings.helperTools.ytDlp = url
-                session.persistSettings { $0.helperTools.ytDlp = url }
-            }
-            SettingsRowDivider()
-            helperPathRow(label: "demucs-mlx", url: session.settings.helperTools.demucsMlx, prompt: "Choose demucs-mlx") { url in
-                session.settings.helperTools.demucsMlx = url
-                session.persistSettings { $0.helperTools.demucsMlx = url }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var updatesPane: some View {
-        SettingsSection(
-            title: "Updates",
-            importance: .medium,
-            footer: session.updatesFooter
-        ) {
-            AppUpdateSettingsContent(controller: session.updateController)
-                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder
-    private var archiveRootsSection: some View {
-        if archiveViewModel.roots.isEmpty {
-            Text("No archive roots — add the folder that holds your song projects")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            ForEach(Array(archiveViewModel.roots.enumerated()), id: \.element) { index, root in
-                if index > 0 {
-                    SettingsRowDivider()
-                }
-                archiveRootRow(root)
-            }
-        }
-        SettingsRowDivider()
-        SettingsRow("Add archive root") {
-            HubLabeledButton(
-                icon: "folder.badge.plus",
-                label: "Add",
-                style: .secondary,
-                help: "Choose a Cubase or Ableton projects folder to scan",
-                action: addArchiveRoot
+            SettingsUpdatesPane(
+                controller: session.updateController,
+                footer: session.updatesFooter
             )
         }
     }
@@ -482,119 +282,33 @@ struct SettingsView: View {
     @ViewBuilder
     private var settingsLoadErrorBanner: some View {
         if let settingsLoadError = session.settingsLoadError {
-            Label(settingsLoadError, systemImage: "exclamationmark.triangle.fill")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Colors.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(HubDesignSystem.Spacing.section)
-                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
+            SettingsErrorBanner(message: settingsLoadError, tone: .warning)
         }
     }
 
     @ViewBuilder
     private var saveErrorBanner: some View {
         if let saveError = session.saveError {
-            Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Colors.danger)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(HubDesignSystem.Spacing.section)
-                .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .error)
+            SettingsErrorBanner(message: saveError, tone: .error)
         }
     }
 
-    private func archiveRootRow(_ root: URL) -> some View {
-        SettingsRow(
-            root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent,
-            description: root.path
-        ) {
-            HubIconButton(
-                systemImage: "trash",
-                accessibilityLabel: "Remove archive root",
-                help: "Remove \(root.lastPathComponent) from scan list",
-                role: .destructive
-            ) {
-                archiveViewModel.removeRoot(root)
-            }
-        }
-    }
-
-    private func helperPathRow(
-        label: String,
-        url: URL?,
-        prompt: String,
-        onSet: @escaping (URL?) -> Void
-    ) -> some View {
-        Group {
-            SettingsRow(
-                label,
-                description: url?.path ?? "Auto-detect"
-            ) {
-                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                    HubLabeledButton(
-                        icon: "ellipsis",
-                        label: prompt,
-                        style: .ghost,
-                        isEnabled: session.settingsLoadError == nil
-                    ) {
-                        guard let chosen = session.context.fileActions.chooseExecutable(prompt: prompt) else { return }
-                        if let validationError = HelperExecutableValidation.validate(url: chosen) {
-                            session.helperPathError = "\(label): \(validationError)"
-                            return
-                        }
-                        session.helperPathError = nil
-                        onSet(chosen)
-                    }
-
-                    if url != nil {
-                        HubIconButton(
-                            systemImage: "xmark",
-                            accessibilityLabel: "Use auto-detect for \(label)",
-                            help: "Use auto-detect for \(label)",
-                            isEnabled: session.settingsLoadError == nil
-                        ) {
-                            onSet(nil)
-                        }
-                    }
-                }
-            }
-            if let helperPathError = session.helperPathError,
-               helperPathError.hasPrefix("\(label): ") {
-                SettingsRowDivider()
-                Text(helperPathError)
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Colors.warning)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private func inlineWarning(_ message: String) -> some View {
-        Label(message, systemImage: "exclamationmark.triangle.fill")
-            .font(HubDesignSystem.Typography.bodySmall())
-            .foregroundStyle(HubDesignSystem.Colors.warning)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(HubDesignSystem.Spacing.controlGap)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
-    }
-
-    private func channelModeLabel(_ mode: AudioChannelMode) -> String {
-        switch mode {
-        case .preserveMonoStereo: return "Preserve mono / stereo"
-        case .mono: return "Mono"
-        case .stereo: return "Stereo"
-        }
+    private func revealOutputFolder() {
+        session.context.fileActions.revealInFinder(session.settings.outputFolder.url)
     }
 
     private func addArchiveRoot() {
         guard let folder = session.context.fileActions.chooseDirectory(prompt: "Choose Archive Root") else { return }
         archiveViewModel.addRoot(folder)
+    }
+
+    private func removeArchiveRoot(_ root: URL) {
+        archiveViewModel.removeRoot(root)
+    }
+
+    private func setHelperToolPath(_ tool: SettingsHelperTool, to url: URL?) {
+        session.settings.helperTools[keyPath: tool.keyPath] = url
+        session.persistSettings { $0.helperTools[keyPath: tool.keyPath] = url }
     }
 
     private func saveProjectVaultSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
@@ -616,77 +330,290 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Settings rows
+// MARK: - General section
 
-/// One grouped-form row: label (+ optional one-line description) on the left,
-/// control flush right. Rows bring their own padding; the section card has none.
-private struct SettingsRow<Control: View>: View {
-    private let label: String
-    private let description: String?
-    private let control: Control
-
-    init(_ label: String, description: String? = nil, @ViewBuilder control: () -> Control) {
-        self.label = label
-        self.description = description
-        self.control = control()
-    }
+/// "General" section: appearance chips, the single Open-at-login writer and the
+/// menu bar extra toggle. Kept in this file with the session — the source-pinned
+/// AppCore tests read the login toggle and menu bar copy from here.
+private struct SettingsGeneralSection: View {
+    let settingsAvailable: Bool
+    @Binding var appearance: AppAppearance
+    @Binding var launchAtLogin: Bool
+    let launchAtLoginError: String?
+    @Binding var showMenuBarExtra: Bool
+    let onLaunchAtLoginChange: (Bool) -> Void
 
     var body: some View {
-        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(HubDesignSystem.Typography.body().weight(.medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                if let description {
-                    Text(description)
-                        .font(HubDesignSystem.Typography.caption())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        SettingsSection(title: "General") {
+            SettingsRow("Appearance") {
+                HubChoiceChips(
+                    "Appearance",
+                    selection: $appearance,
+                    choices: AppAppearance.allCases.map { .init($0, label: $0.label, help: $0.help) }
+                )
+                .disabled(!settingsAvailable)
             }
-            Spacer(minLength: HubDesignSystem.Spacing.controlGap)
-            control
+            SettingsRowDivider()
+            SettingsRow(
+                "Open at login",
+                description: "Project Vault automatic archiving needs this to run while you are away"
+            ) {
+                Toggle("Open at login", isOn: $launchAtLogin)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.indicator)
+                    .labelsHidden()
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        onLaunchAtLoginChange(enabled)
+                    }
+            }
+            if let launchAtLoginError {
+                SettingsRowDivider()
+                inlineWarning(launchAtLoginError)
+                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                    .padding(.vertical, 10)
+            }
+            SettingsRowDivider()
+            SettingsRow("Show menu bar extra") {
+                Toggle("Show menu bar extra", isOn: $showMenuBarExtra)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.indicator)
+                    .labelsHidden()
+                    .disabled(!settingsAvailable)
+            }
         }
-        .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func inlineWarning(_ message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(HubDesignSystem.Typography.bodySmall())
+            .foregroundStyle(HubDesignSystem.Colors.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(HubDesignSystem.Spacing.controlGap)
+            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 }
 
-/// Hairline between rows: inset on the left to the label's leading edge,
-/// running to the card's right edge. No separator after the last row.
-private struct SettingsRowDivider: View {
+// MARK: - Archive pane
+
+/// Music archive pane: scan roots (read-only), board compaction, scan exclusions.
+private struct SettingsArchivePane: View {
+    let roots: [URL]
+    @Binding var scanExclusions: String
+    let onAddRoot: () -> Void
+    let onRemoveRoot: (URL) -> Void
+    /// Board preference (read by ArchiveBoardView via the same key).
+    @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
+
     var body: some View {
-        HubDesignSystem.Palette.separator
-            .frame(height: 1)
-            .padding(.leading, HubDesignSystem.Spacing.cardPadding)
+        SettingsSection(
+            title: "Music archive",
+            footer: "Read-only scan roots — files are never renamed, moved, or deleted"
+        ) {
+            archiveRootsSection
+            SettingsRowDivider()
+            SettingsRow("Compact empty board stages") {
+                Toggle("Compact empty board stages", isOn: $compactEmptyStages)
+                    .toggleStyle(.switch)
+                    .tint(HubDesignSystem.Palette.indicator)
+                    .labelsHidden()
+            }
+            SettingsRowDivider()
+            SettingsRow(
+                "Scan exclusions",
+                description: "Comma-separated folder-name terms to skip during scan."
+            ) {
+                TextField(
+                    "Scan exclusions",
+                    text: $scanExclusions,
+                    prompt: Text("backup, tmp, archive")
+                        .foregroundColor(HubDesignSystem.Palette.textTertiary)
+                )
+                .accessibilityHint("Comma-separated folder-name terms to skip during scan.")
+                .textFieldStyle(.plain)
+                .font(HubDesignSystem.Typography.body())
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .hubSurface(.field, cornerRadius: HubDesignSystem.Radius.row)
+                .frame(minWidth: 140, maxWidth: 260)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var archiveRootsSection: some View {
+        if roots.isEmpty {
+            Text("No archive roots — add the folder that holds your song projects")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            ForEach(Array(roots.enumerated()), id: \.element) { index, root in
+                if index > 0 {
+                    SettingsRowDivider()
+                }
+                archiveRootRow(root)
+            }
+        }
+        SettingsRowDivider()
+        SettingsRow("Add archive root") {
+            HubLabeledButton(
+                icon: "folder.badge.plus",
+                label: "Add",
+                style: .secondary,
+                help: "Choose a Cubase or Ableton projects folder to scan",
+                action: onAddRoot
+            )
+        }
+    }
+
+    private func archiveRootRow(_ root: URL) -> some View {
+        SettingsRow(
+            root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent,
+            description: root.path
+        ) {
+            HubIconButton(
+                systemImage: "trash",
+                accessibilityLabel: "Remove archive root",
+                help: "Remove \(root.lastPathComponent) from scan list",
+                role: .destructive
+            ) {
+                onRemoveRoot(root)
+            }
+        }
+    }
+}
+
+// MARK: - Helpers pane
+
+/// The four overridable helper executables, in pane order.
+private enum SettingsHelperTool {
+    case ffmpeg
+    case ffprobe
+    case ytDlp
+    case demucsMlx
+
+    var label: String {
+        switch self {
+        case .ffmpeg: return "FFmpeg"
+        case .ffprobe: return "ffprobe"
+        case .ytDlp: return "yt-dlp"
+        case .demucsMlx: return "demucs-mlx"
+        }
+    }
+
+    var prompt: String {
+        "Choose \(label)"
+    }
+
+    var keyPath: WritableKeyPath<HelperToolSettings, URL?> {
+        switch self {
+        case .ffmpeg: return \.ffmpeg
+        case .ffprobe: return \.ffprobe
+        case .ytDlp: return \.ytDlp
+        case .demucsMlx: return \.demucsMlx
+        }
+    }
+}
+
+/// Helper tools pane: one row per executable with choose / auto-detect and an
+/// inline validation warning under the offending row.
+private struct SettingsHelpersPane: View {
+    let helperTools: HelperToolSettings
+    let settingsAvailable: Bool
+    @Binding var helperPathError: String?
+    let chooseExecutable: (String) -> URL?
+    let onSetPath: (SettingsHelperTool, URL?) -> Void
+
+    var body: some View {
+        SettingsSection(
+            title: "Helper tools",
+            footer: "Only needed when Homebrew installs are not on PATH"
+        ) {
+            helperPathRow(.ffmpeg)
+            SettingsRowDivider()
+            helperPathRow(.ffprobe)
+            SettingsRowDivider()
+            helperPathRow(.ytDlp)
+            SettingsRowDivider()
+            helperPathRow(.demucsMlx)
+        }
+    }
+
+    private func helperPathRow(_ tool: SettingsHelperTool) -> some View {
+        let label = tool.label
+        let url = helperTools[keyPath: tool.keyPath]
+        return Group {
+            SettingsRow(
+                label,
+                description: url?.path ?? "Auto-detect"
+            ) {
+                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                    HubLabeledButton(
+                        icon: "ellipsis",
+                        label: tool.prompt,
+                        style: .ghost,
+                        isEnabled: settingsAvailable
+                    ) {
+                        choosePath(for: tool)
+                    }
+
+                    if url != nil {
+                        HubIconButton(
+                            systemImage: "xmark",
+                            accessibilityLabel: "Use auto-detect for \(label)",
+                            help: "Use auto-detect for \(label)",
+                            isEnabled: settingsAvailable
+                        ) {
+                            onSetPath(tool, nil)
+                        }
+                    }
+                }
+            }
+            if let helperPathError,
+               helperPathError.hasPrefix("\(label): ") {
+                SettingsRowDivider()
+                Text(helperPathError)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func choosePath(for tool: SettingsHelperTool) {
+        guard let chosen = chooseExecutable(tool.prompt) else { return }
+        if let validationError = HelperExecutableValidation.validate(url: chosen) {
+            helperPathError = "\(tool.label): \(validationError)"
+            return
+        }
+        helperPathError = nil
+        onSetPath(tool, chosen)
     }
 }
 
 // MARK: - Settings section
 
-private enum SettingsSectionImportance {
-    case high
-    case medium
-    case low
-}
-
-private struct SettingsSection<Content: View>: View {
+/// Titled group card. Rows go directly inside (no cards inside cards); the
+/// optional footer sits under the card in caption type.
+struct SettingsSection<Content: View>: View {
     let title: String
-    var importance: SettingsSectionImportance = .high
     var footer: String?
     @ViewBuilder let content: Content
 
     init(
         title: String,
-        importance: SettingsSectionImportance = .high,
         footer: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
-        self.importance = importance
         self.footer = footer
         self.content = content()
     }
@@ -699,7 +626,7 @@ private struct SettingsSection<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .hubSurface(.panel, state: sectionIntent, cornerRadius: HubDesignSystem.Radius.popover)
+            .hubSurface(.panel, state: .normal, cornerRadius: HubDesignSystem.Radius.popover)
 
             if let footer {
                 Text(footer)
@@ -707,13 +634,6 @@ private struct SettingsSection<Content: View>: View {
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
-
-    private var sectionIntent: HubDesignSystem.ControlState {
-        switch importance {
-        case .high, .medium, .low:
-            return .normal
         }
     }
 }

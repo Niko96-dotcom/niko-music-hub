@@ -228,6 +228,27 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(source.contains("settings.maxRecordingDurationMinutes = previous"))
     }
 
+    func testSettingsOutputFolderRevertsOnSaveFailure() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("let previous = settings.outputFolder"))
+        XCTAssertTrue(source.contains("settings.outputFolder = previous"))
+    }
+
+    func testSettingsLaunchAtLoginRollbackKeepsFailureVisible() throws {
+        let source = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(
+            source.contains("guard enabled != context.launchAtLogin.isEnabled() else { return }")
+        )
+    }
+
     func testSettingsNormalizesRecordingDurationOnLoad() throws {
         let source = try String(
             contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
