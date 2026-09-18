@@ -33,7 +33,8 @@ if [[ -z "${NMH_BUILD_ID:-}" ]]; then
 fi
 NMH_MIN_SYSTEM_VERSION="${NMH_MIN_SYSTEM_VERSION:-$(nmh_release_min_macos_version)}"
 NMH_LAUNCH_WAIT_SEC="${NMH_LAUNCH_WAIT_SEC:-8}"
-NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-Niko Music Hub}"
+# Empty = any titled main window: NSWindow.title follows the selected tool.
+NMH_WINDOW_TITLE="${NMH_WINDOW_TITLE:-}"
 NMH_WINDOW_MIN_WIDTH="${NMH_WINDOW_MIN_WIDTH:-400}"
 NMH_WINDOW_MIN_HEIGHT="${NMH_WINDOW_MIN_HEIGHT:-300}"
 NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"
@@ -414,9 +415,13 @@ nmh_focus_app() {
 }
 
 nmh_ui_probe() {
+  local title_args=()
+  if [[ -n "$NMH_WINDOW_TITLE" ]]; then
+    title_args=(--window-title "$NMH_WINDOW_TITLE")
+  fi
   swift "$NMH_UI_PROBE" \
     --app-name "$NMH_APP_NAME" \
-    --window-title "$NMH_WINDOW_TITLE" \
+    ${title_args[@]+"${title_args[@]}"} \
     --min-width "$NMH_WINDOW_MIN_WIDTH" \
     --min-height "$NMH_WINDOW_MIN_HEIGHT" \
     "$@"

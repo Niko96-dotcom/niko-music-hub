@@ -13,7 +13,10 @@ struct Options {
     var appName = "NikoMusicHub"
     var pid: pid_t?
     var binaryPath: String?
-    var windowTitle = "Niko Music Hub"
+    /// The shell titles `NSWindow` after the selected tool (Window menu /
+    /// Mission Control), so by default any titled main-layer window of the
+    /// process that meets the minimum size counts; pass --window-title to pin one.
+    var windowTitle: String?
     var minWidth = 400
     var minHeight = 300
     var mode: ProbeMode = .checkVisible
@@ -26,7 +29,7 @@ func usage() {
           --app-name NAME              process name when --pid is omitted (default: NikoMusicHub)
           --pid N                      target process (overrides --app-name; also reads NIKO_MUSIC_HUB_AX_PID)
           --binary-path PATH           require ps command to start with PATH
-          --window-title TITLE         required window name (default: Niko Music Hub)
+          --window-title TITLE         require this exact window name (default: any titled window)
           --min-width N                minimum window width in points (default: 400)
           --min-height N               minimum window height in points (default: 300)
           --check-visible              exit 0 when a matching window exists
@@ -210,7 +213,13 @@ func findMatchingWindow(
     for window in windows {
         guard intValue(window[kCGWindowOwnerPID as String]) == Int(pid) else { continue }
         let name = window[kCGWindowName as String] as? String ?? ""
-        guard name == options.windowTitle else { continue }
+        if let title = options.windowTitle {
+            guard name == title else { continue }
+        } else {
+            // Untitled layer-0 windows are AppKit helpers (menu bar / status
+            // strips), never the shell.
+            guard !name.isEmpty, intValue(window[kCGWindowLayer as String]) == 0 else { continue }
+        }
         guard let size = bounds(from: window) else { continue }
         guard size.width >= Double(options.minWidth), size.height >= Double(options.minHeight) else {
             continue
@@ -352,7 +361,7 @@ do {
 
         guard let match = findMatchingWindow(pid: pid, options: options, windows: windows) else {
             fputs(
-                "matching window not found for pid \(pid) title=\(options.windowTitle) min=\(options.minWidth)x\(options.minHeight)\n",
+                "matching window not found for pid \(pid) title=\(options.windowTitle ?? "<any>") min=\(options.minWidth)x\(options.minHeight)\n",
                 stderr
             )
             exit(1)
