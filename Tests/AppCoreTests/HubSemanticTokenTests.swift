@@ -248,9 +248,9 @@ final class HubSemanticTokenTests: XCTestCase {
             materialSource.contains("material: .sidebar"),
             "HubMaterial.swift must centralize the chrome sidebar material."
         )
-        XCTAssertFalse(
-            materialSource.contains(".glassEffect(.regular"),
-            "Chrome rails must not use lens-like Liquid Glass (contract §1.1)."
+        XCTAssertTrue(
+            materialSource.contains("#available(macOS 26.0") && materialSource.contains(".glassEffect(.regular, in: .rect)"),
+            "HubMaterial.swift centralizes the one veiled Liquid Glass sheet for chrome on macOS 26."
         )
     }
 

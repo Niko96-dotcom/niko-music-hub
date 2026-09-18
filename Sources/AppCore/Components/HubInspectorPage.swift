@@ -14,7 +14,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     public static var primaryHeight: CGFloat { 168 }
     /// Matches the tools sidebar (`ToolSidebarView`): 12pt inset, 16pt between groups.
     public static var inspectorInset: CGFloat { 12 }
-    public static var groupSpacing: CGFloat { 16 }
+    /// Mirrors the sidebar: row bottom → next caption top is 6 + 14 = 20.
+    public static var groupSpacing: CGFloat { 20 }
 
     @Environment(\.hubTitleRowInset) private var titleRowInset
 
@@ -81,6 +82,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Self.inspectorInset)
+                    // Label keyline 120 (under the 56pt title band), first control at
+                    // 144 — mirrors the sidebar's first caption + row (measured).
                     .padding(.top, HubToolLayout.topPadding + HubToolLayout.headerHeight)
                     .padding(.bottom, HubToolLayout.bottomPadding)
                 }
@@ -116,13 +119,14 @@ public struct HubInspectorGroup<Content: View>: View {
     }
 
     public var body: some View {
-        // Label → control gap = HubSectionHeader's bottom padding (4), so a
-        // 34pt control lands exactly on the sidebar's nav-row keyline.
-        VStack(alignment: .leading, spacing: 4) {
+        // Same caption language as the sidebar sections (body-size, regular,
+        // tertiary grey); label → control gap 8 lands the control on the
+        // sidebar's nav-row keyline.
+        VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(HubDesignSystem.Typography.caption().weight(.semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .frame(height: 14)
+                .font(HubDesignSystem.Typography.body())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .frame(height: 16)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)

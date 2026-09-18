@@ -153,8 +153,10 @@ public enum HubDesignSystem {
         public static let sectionHeaderTop: CGFloat = 0
         /// Caption line + bottom padding in a section header band (pairs with `sectionHeaderTop`).
         public static let sectionHeaderBandHeight: CGFloat = 12 + 4
-        /// Standard nav/sidebar row height (references: 36-44px web ≈ 34pt native).
-        public static let navRowHeight: CGFloat = 34
+        /// Standard nav/sidebar row height. Codex rows pitch at 31pt (measured
+        /// 2026-09-18); 30pt rows + 2pt gap give a 32pt pitch, mirrored by the
+        /// inspector controls.
+        public static let navRowHeight: CGFloat = 30
         /// Tall page-title header band (references: ~52-56px).
         public static let headerBandHeight: CGFloat = 52
     }

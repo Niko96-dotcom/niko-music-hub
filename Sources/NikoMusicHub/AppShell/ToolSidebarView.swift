@@ -25,13 +25,12 @@ struct ToolSidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             appMark
 
-            HubSectionHeader("Library")
+            sidebarCaption("Library", first: true)
             ForEach(registry.metadata.filter { $0.id.rawValue == "archive-browser" }, id: \.id) { metadata in
                 toolRow(metadata)
             }
 
-            HubSectionHeader("Production")
-                .padding(.top, 16)
+            sidebarCaption("Production")
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(registry.metadata.filter {
                     $0.id.rawValue != "archive-browser" && $0.id.rawValue != "settings"
@@ -47,7 +46,7 @@ struct ToolSidebarView: View {
             }
 
             if context != nil {
-                HubSectionHeader("Status")
+                sidebarCaption("Status")
                 if !jobStatusCenter.jobs.isEmpty {
                     HubJobsStatusView(center: jobStatusCenter)
                         .padding(.bottom, 8)
@@ -108,9 +107,11 @@ struct ToolSidebarView: View {
             selectedToolID = metadata.id
         } label: {
             HStack(spacing: 10) {
+                // Codex glyphs: thin outline symbols at ~16pt, one flat tone — no
+                // hierarchical fills, which read heavier than the row text.
                 Image(systemName: metadata.systemImage)
-                    .symbolRenderingMode(.hierarchical)
-                    .font(.system(size: 14, weight: .regular))
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: 15, weight: .light))
                     .frame(width: HubDesignSystem.Size.sidebarIconFrame)
 
                 Text(metadata.displayName)
@@ -138,6 +139,23 @@ struct ToolSidebarView: View {
         .accessibilityValue(ToolSidebarSelection.accessibilityValue(isSelected: isSelected(metadata)))
         .accessibilityAddTraits(ToolSidebarSelection.accessibilityTraits(isSelected: isSelected(metadata)))
         .accessibilityIdentifier("hub_tool_\(metadata.id.rawValue)")
+    }
+
+    /// Codex section caption (measured 2026-09-18): body-size regular grey text
+    /// with the row's inner inset. Between groups it takes a full row pitch with
+    /// air above ("Projekte" sits 43pt below the previous row centre and 31pt
+    /// above the next: 6 + 30 bottom-aligned + 8). The first caption sits
+    /// directly under the 56pt title band on the inspector's label keyline
+    /// (120), so the first control on both rails lands at 144.
+    private func sidebarCaption(_ title: String, first: Bool = false) -> some View {
+        Text(title)
+            .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            .padding(.horizontal, 10)
+            .frame(height: first ? 16 : HubDesignSystem.Spacing.navRowHeight, alignment: .bottomLeading)
+            .padding(.top, first ? 0 : 6)
+            .padding(.bottom, 8)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private var helperHealthRow: some View {

@@ -97,7 +97,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             "registry.metadata",
             "hoveredToolID",
             "hubSidebarNavRow",
-            "HubSectionHeader",
+            "sidebarCaption(\"Library\"",
             "metadata.displayName",
             "HubDesignSystem.Motion.duration",
             "accessibilityIdentifier(\"hub_tool_\\(metadata.id.rawValue)\")",

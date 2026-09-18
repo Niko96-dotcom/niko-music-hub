@@ -49,35 +49,36 @@ across pages. Do not eyeball alignment — measure it (see §7).
 - Output Inbox collapse threshold is derived: `540 + 2 × chromeRailWidth`.
   `toggleOutputInbox()` toggles the user's intent, not the width-derived state.
 
-## 1.1 Chrome material — Codex sidebar vibrancy, chrome-only (binding, 2026-09-18)
+## 1.1 Chrome material — veiled glass, Codex tones, chrome-only (binding, 2026-09-18)
 
 Measured live against the Codex app (same desktop, both appearances): its
-sidebar is the standard AppKit `.sidebar` vibrancy blended behind the window
-(rail 51 over a dark backdrop, 77 over a light one — frosted, nothing behind it
-legible) with a flat colour laid over it; its content column is opaque
-(dark rgb(45,45,43), light rgb(249,250,247)). We do exactly that:
+sidebar is the standard AppKit `.sidebar` vibrancy behind the window (rail 51
+over a dark backdrop, 77 over a light one — frosted, nothing behind it legible)
+with a flat colour over it; its content column is opaque (dark rgb(45,45,43),
+light rgb(249,250,247)). The owner wants a *hint* of the desktop through the
+rail, which Codex does not have, so the rail is Codex's tone on a softer sheet:
 
-- Each chrome rail paints ONE `HubGlassBackdrop`: `HubVisualEffectView(.sidebar,
-  .behindWindow)` + one flat neutral veil (`white 0.30` light, `white 0.05`
-  dark) that lands the rail on the Codex tone — light 220 on a 249 canvas,
-  dark 51–52 on a 45 canvas (rail a hair lighter than content in dark, darker
-  in light). Nothing else over it: no gradient, rim or sheen. Column
+- Each chrome rail paints ONE `HubGlassBackdrop`. macOS 26: one
+  `Rectangle().glassEffect(.regular, in: .rect)` under a flat
+  `Palette.sidebar` veil at `HubGlassBackdrop.glassVeilOpacity` = 0.6 — shapes
+  behind the window refract through softly, text does not; tone lands ~213
+  light / ~50–60 dark (Codex 220 / 51). Probed at 0.4 / 0.6 / 0.75 over a
+  text-heavy window; 0.6 is the owner's middle ground between opaque Codex
+  chrome (1.0) and the bare lens (0.0, which left windows behind the rail
+  readable — the "see-through sidebar" bug). macOS 14/15: `.sidebar` vibrancy
+  behind the window + a thin veil (`white .30` light / `.05` dark, measured
+  205→220 and 41→51). Nothing else over it: no gradient, rim or sheen. Column
   separation is the 1pt `Palette.separator` `shellDivider`.
-- NOT Liquid Glass. `glassEffect(.regular)` is a lens: the windows behind the
-  rail stayed readable through it ("see-through sidebar"), which is a bug in a
-  tools sidebar, and its tone swung 63→82 with the wallpaper. Apple reserves
-  Liquid Glass for floating controls; full-height rails keep the sidebar
-  material on macOS 26 as well. `HubSurfaceTests` guards this.
-- The window is a standard opaque window (`isOpaque = true`); sidebar vibrancy
-  needs no transparent window. Inactive (non-key) rails go flat via the
-  material's `.inactive` state — the system look, same as Codex. Reduce
+- The window is non-opaque with a clear background (guarded sets in
+  `HubWindowChromeConfigurator`) so the glass has something to refract; every
+  column paints its own material, so nothing actually shows through. Reduce
   Transparency → opaque `Palette.sidebar`.
 - The neutral dark scale is Codex's warm neutral, not inky blue-black: canvas
-  45/45/43, sidebar fallback 51/52/49, surface 55/55/53, raised 70/70/68,
-  separator 66/66/64. Light stays 249 / 224 / 246 / 250 / 222.
+  45/45/43, sidebar 51/52/49, surface 55/55/53, raised 70/70/68, separator
+  66/66/64. Light stays 249 / 224 / 246 / 250 / 222.
 - Selection pill (`Palette.selection`) is a translucent neutral —
   `black 0.055` light, `white 0.09` dark — so it keeps Codex's step (−10 light,
-  +15 dark, measured 208 on 220 and 71 on 52) over whatever the rail renders.
+  +15 dark) over whatever the rail renders.
 - Launch leaves no keyboard focus on the sidebar toggle (the configurator clears
   the initial first responder once), so no focus ring shows before the user tabs.
 - Title-bar and buttons stay flat and Codex-quiet per §6 (custom
@@ -86,21 +87,39 @@ legible) with a flat colour laid over it; its content column is opaque
 - Accessibility is part of the material: Increase Contrast widens card strokes
   to 2pt; every token flips light/dark/high-contrast via `HubDynamicColor`.
 
+## 1.2 Sidebar rhythm — Codex rows and captions (binding, 2026-09-18)
+
+Measured from the Codex sidebar at 2×: rows pitch at 31pt, glyphs are thin
+16pt outlines in the text tone, section captions ("Projekte") are body-size
+regular grey text 43pt below the previous row centre and 31pt above the next.
+
+- Rows are `Spacing.navRowHeight` = 30 with a 2pt gap (32 pitch), mirrored by
+  every inspector control (`hubInspectorRow`, `HubSegmentedChoice`).
+- Row glyphs: `.monochrome`, `.system(size: 15, weight: .light)` in an 18pt
+  frame — never `.hierarchical` (reads heavier than the label).
+- Sidebar captions are `ToolSidebarView.sidebarCaption`: `Typography.body()` in
+  `Palette.textTertiary`, 10pt inner inset. Between groups: 6 top + a 30pt
+  bottom-aligned frame + 8 bottom. The first caption ("Library") sits directly
+  under the 56pt title band (16pt frame, 0 top, 8 bottom) so it shares the
+  inspector's label keyline. `HubInspectorGroup` labels use the same
+  body/tertiary style with an 8pt gap to the control and 20pt between groups.
+
 ## 2. Keylines (measured at the 1364×892 reference window, window-relative pt; title row 44 → all column keylines sit 14pt lower than the old 30pt strip)
 
 | element | x | y | size |
 |---|---|---|---|
 | app mark text (sidebar) | 16 | 66 | 26 tall, `sectionTitle` |
 | page title (any page) | 257 (= rail + 16 + 1 seam) | 66 | 26 tall, `screenTitle` |
-| sidebar section header ("Library") | 12 | 120 | 14 tall |
-| sidebar nav row | 12 | 138 | 216 × 34 |
-| inspector group label | rail-inset 12 | 120 | 14 tall |
-| inspector control | 12 from rail edge | 138 | 216 × 34 |
+| sidebar section header ("Library") | 22 | 120 | 16 tall, `body` tertiary |
+| sidebar nav row | 12 | 144 | 216 × 30 |
+| inspector group label | rail-inset 12 | 120 | 16 tall, `body` tertiary |
+| inspector control | 12 from rail edge | 144 | 216 × 30 |
 | primary object (tool card / board columns) | 257 | 140 | height 168 |
 | pinned primary action | 12 from rail edge | window − 16 − 32 | 216 × 32 |
 
 The sidebar and the inspector are mirror images: same inset, same row height,
-same label keyline, same group spacing (16). If one changes, the other changes.
+same label keyline, same group spacing (second caption 194, second control 218
+on both rails — measured). If one changes, the other changes.
 
 ## 3. One header, everywhere
 
@@ -143,7 +162,7 @@ never moves under the cursor. Same pattern as the board⇄list title-bar flip (�
   chosen cell filled like a selected sidebar row). Use `columns:` for grids
   (Format 2×2, Sample rate 2×2). `HubChoiceChips` only where wrapping tag-style
   chips are genuinely better (currently nowhere in inspectors).
-- Text fields, sliders, path readouts, popup rows → `.hubInspectorRow()` (34pt,
+- Text fields, sliders, path readouts, popup rows → `.hubInspectorRow()` (30pt,
   flat like a sidebar row — no raised fill). Focus adds the ring.
 - Nothing in an inspector may change height with state. Conditional info
   (e.g. playlist cap) goes in a tooltip or the left list, never as a line that

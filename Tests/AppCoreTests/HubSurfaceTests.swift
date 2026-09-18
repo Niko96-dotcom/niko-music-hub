@@ -85,10 +85,12 @@ final class HubSurfaceTests: XCTestCase {
             materialSource.contains("material: .sidebar") && materialSource.contains("blending: .behindWindow"),
             "HubMaterial hosts one system .sidebar vibrancy sheet per chrome column (the Codex rail material)."
         )
-        XCTAssertFalse(
-            materialSource.contains(".glassEffect(.regular"),
-            "Chrome rails are frosted sidebar vibrancy, never lens-like Liquid Glass (contract 1.1)."
+        XCTAssertTrue(
+            materialSource.contains("Rectangle().glassEffect(.regular, in: .rect)")
+                && materialSource.contains("Palette.sidebar.opacity(Self.glassVeilOpacity)"),
+            "macOS 26 rails are one glass sheet under the sidebar-tone veil (contract 1.1 middle ground)."
         )
+        XCTAssertEqual(HubGlassBackdrop.glassVeilOpacity, 0.6, "Owner-chosen veil (probed 0.4/0.6/0.75, 2026-09-18).")
         XCTAssertTrue(
             materialSource.contains("accessibilityReduceTransparency"),
             "Chrome glass must skip when Reduce Transparency is on."
@@ -104,7 +106,7 @@ final class HubSurfaceTests: XCTestCase {
         )
         XCTAssertTrue(
             materialSource.contains("material: .sidebar"),
-            "Chrome must use the system .sidebar material (what the Codex sidebar is built from)."
+            "Pre-26 chrome must use the system .sidebar material (what the Codex sidebar is built from)."
         )
         XCTAssertFalse(
             materialSource.contains("func hubTopSheen"),
@@ -130,18 +132,14 @@ final class HubSurfaceTests: XCTestCase {
         XCTAssertFalse(systemSource.contains("var glassInnerHighlight"))
         XCTAssertFalse(systemSource.contains("var glassStroke"))
         XCTAssertTrue(systemSource.contains("selectedRowFill"))
-        // Opaque standard window; sidebar vibrancy needs no transparent window.
+        // Transparent window so the veiled glass can refract what is behind it.
         let chromeSource = try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/HubWindowChromeConfigurator.swift",
             encoding: .utf8
         )
         XCTAssertTrue(
-            chromeSource.contains("window.isOpaque = true"),
-            "Main window stays opaque (no LIQUID-KEY shine-through)."
-        )
-        XCTAssertFalse(
-            chromeSource.contains("window.backgroundColor = .clear"),
-            "Main window background must not be cleared (nothing refracts the desktop any more)."
+            chromeSource.contains("window.isOpaque = false") && chromeSource.contains("window.backgroundColor = .clear"),
+            "Main window must be non-opaque so the chrome glass refracts the desktop (guarded sets)."
         )
         XCTAssertTrue(
             chromeSource.contains("HubShellLayout.titleBarAxisY") && chromeSource.contains("bar.isFlipped"),

@@ -3,10 +3,8 @@ import SwiftUI
 
 /// Translucent system vibrancy backing (`NSVisualEffectView`) for chrome surfaces.
 ///
-/// `HubGlassBackdrop` wraps this with the `.sidebar` material on every macOS
-/// version: it is the material the Codex sidebar is built from, and it stays the
-/// frosted sidebar look on macOS 26 too (Liquid Glass is reserved by Apple for
-/// floating controls, not full-height rails).
+/// `HubGlassBackdrop` uses this `.sidebar` material (what the Codex sidebar is
+/// built from) as the macOS 14/15 rail; macOS 26 rails are veiled Liquid Glass.
 public struct HubVisualEffectView: NSViewRepresentable {
     public let material: NSVisualEffectView.Material
     public let blending: NSVisualEffectView.BlendingMode
@@ -46,43 +44,47 @@ public struct HubVisualEffectView: NSViewRepresentable {
 
 /// Frosted chrome backdrop for the sidebar / inspector / inbox rails.
 ///
-/// The Codex/ChatGPT sidebar material, measured live (2026-09-18): the standard
-/// AppKit `.sidebar` vibrancy blended `.behindWindow` — heavily frosted, so the
-/// desktop only lifts or lowers the rail tone (dark rail ~rgb(51) over a dark
-/// backdrop, ~rgb(77) over a light one) and nothing behind it stays readable.
-/// This is deliberately NOT Liquid Glass (`glassEffect`): that material is a lens
-/// (windows behind the rail stayed legible through it), which reads as a bug in a
-/// tools sidebar. One sheet per chrome column plus ONE flat neutral veil, the
-/// way Codex lays its sidebar colour over the vibrancy: the veil lifts the rail
-/// to Codex's measured tone (dark ~rgb(51) over a rgb(45) canvas, light ~rgb(220)
-/// over rgb(249)) so the rail always reads a hair lighter than the content in
-/// dark and darker in light, whatever the desktop. No gradient, no rim; the
-/// system owns the frost and the key-window dimming (`.inactive` state).
-/// Reduce Transparency → opaque `Palette.sidebar`.
-struct HubGlassBackdrop: View {
+/// Measured against the Codex sidebar (2026-09-18): AppKit `.sidebar` vibrancy
+/// behind the window (rail 51 over a dark backdrop, 77 over a light one) with a
+/// flat colour over it — fully frosted, nothing behind it legible. The owner
+/// wants a *hint* of the desktop through the rail (the bare Liquid Glass lens
+/// was too much: windows behind it stayed readable), so on macOS 26 the rail is
+/// one `glassEffect(.regular)` sheet under a 0.6 veil of `Palette.sidebar`:
+/// shapes behind the window refract through softly, text does not, and the
+/// tone lands ~213 light / ~50 dark (Codex 220 / 51). Probed at veil 0.4 / 0.6
+/// / 0.75 over a text-heavy window; 0.6 is the chosen middle ground.
+/// macOS 14/15 keep the sidebar vibrancy + a thin veil (white .30 light /
+/// .05 dark — measured 205→220, 41→51). Reduce Transparency → opaque
+/// `Palette.sidebar`. No gradient, no rim, no second material.
+public struct HubGlassBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
-    /// Kept for call-site compatibility; the system sidebar material carries its
-    /// own tone, so nothing is tinted with it any more.
+    /// Kept for call-site compatibility; the veils above carry the tone now.
     let tint: Double
+
+    /// Veil over the macOS 26 glass: the owner's middle ground between opaque
+    /// Codex chrome (1.0) and the bare lens (0.0).
+    public static let glassVeilOpacity: Double = 0.6
 
     /// Inactive (non-key window) chrome is subdued by the system material (NMH-069).
     private var isWindowActive: Bool { controlActiveState == .key }
 
-    var body: some View {
+    public var body: some View {
         if reduceTransparency {
             HubDesignSystem.Palette.sidebar
+        } else if #available(macOS 26.0, *) {
+            ZStack {
+                Rectangle().glassEffect(.regular, in: .rect)
+                HubDesignSystem.Palette.sidebar.opacity(Self.glassVeilOpacity)
+            }
         } else {
             ZStack {
-                // System sidebar material — the same sheet the Codex sidebar uses.
                 HubVisualEffectView(
                     material: .sidebar,
                     blending: .behindWindow,
                     isActive: isWindowActive
                 )
-                // Codex rail veil (measured 2026-09-18 over the live material:
-                // dark 41 → 51, light 205 → 220).
                 Color(HubDynamicColor(
                     light: Color.white.opacity(0.30),
                     dark: Color.white.opacity(0.05)
@@ -93,9 +95,10 @@ struct HubGlassBackdrop: View {
 }
 
 public extension View {
-    /// Frosted chrome for the sidebar / inspector / inbox rails: one system
-    /// `.sidebar` vibrancy sheet per column (Codex material); Reduce
-    /// Transparency on: opaque sidebar fill. `tint` is accepted but unused.
+    /// Frosted chrome for the sidebar / inspector / inbox rails: one glass sheet
+    /// + sidebar-tone veil per column (macOS 26), sidebar vibrancy + thin veil
+    /// before that; Reduce Transparency on: opaque sidebar fill. `tint` is
+    /// accepted but unused.
     /// `extendAboveBy` grows the sheet upward past the view's own top (a nested
     /// rail reaching through the shell's title row to the window edge).
     func hubChromeMaterial(tint: Double = 0.5, extendAboveBy: CGFloat = 0) -> some View {

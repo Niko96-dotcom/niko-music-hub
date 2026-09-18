@@ -71,7 +71,7 @@ final class ToolSidebarSelectionTests: XCTestCase {
                 "accessibilityHint(\"Shows whether yt-dlp, FFmpeg, and demucs-mlx are ready.\")"
             )
         )
-        XCTAssertTrue(source.contains("HubSectionHeader(\"Status\")"))
+        XCTAssertTrue(source.contains("sidebarCaption(\"Status\")"))
 
         let helperBlock = helperHealthRowSource(source)
         XCTAssertFalse(
