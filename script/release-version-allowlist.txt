@@ -4,3 +4,5 @@
 ^CHANGELOG\.md$ | Historical changelog entries preserve prior release labels.
 ^Tests/ | Test fixtures may contain version-looking strings for domain behavior.
 ^Fixtures/ | Fixture names and README examples are compatibility material, not app release metadata.
+^docs/audits/ | HIG audit evidence records the exact build under test; rewriting it would falsify the record.
+^Sources/AppCore/Settings/AppSettings\.swift$ | Documents the upgrade path from the release that introduced the default.

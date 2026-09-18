@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0 - 2026-09-18
+
+- Rebuild BPM Tapper, WAV Converter, Audio Recorder, Downloader, and Stem Separation on one layout: the work area on the left, the tool's settings and its main action in a fixed panel on the right. Titles, cards, option controls, and buttons now sit in the same place on every page.
+- Move between tools and archive pages with Back and Forward in the window bar (Command-[ and Command-]), and switch the archive between board and list with a single button that stays in one place.
+- Show the Output Inbox reliably: the toggle now follows your choice instead of a window-width rule that could hide the panel with no way back.
+- Match the tools sidebar, the tool settings panel, and the Output Inbox in width and material, so the window reads as one workspace.
+- Replace the multi-step recording length picker with a slider, and group related options into single controls instead of loose chips.
+- Remove idle status lines, repeated helper text, and unused explanation throughout, so each page shows the object you work with and what changed.
+- Keyboard focus, Full Keyboard Access, VoiceOver order, Full Screen, window restoration, and menu commands across the shell, Song menu, and tools now follow Apple's Human Interface Guidelines, with the system's blue focus ring replaced by the app's own quiet ring.
+- Move the board's empty-stage option into Settings, next to the other archive preferences.
+
 ## 1.5.4 - 2026-09-15
 
 - Restore linked historical archives into Active Projects while preserving project identity, metadata, and the original archive.
