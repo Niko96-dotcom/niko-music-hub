@@ -26,8 +26,10 @@ public enum HubToolLayout {
 
 /// Shared shell chrome insets for the unified title bar row.
 public enum HubShellLayout {
-    /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
-    public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
+    /// Title-strip height: 36pt of air for the traffic lights + compact 26pt title
+    /// controls (Codex strips read ~10pt taller than our old 30pt packing).
+    /// Decoupled from `iconButtonSize` (page-header actions stay 30pt).
+    public static let titleBarHeight: CGFloat = 36
     /// Leading inset: breathing room between the traffic lights and the first
     /// title-bar button. Clears the repositioned lights (zoom ends ~85) + 14pt gap.
     /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.

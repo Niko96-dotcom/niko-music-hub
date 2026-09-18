@@ -15,6 +15,7 @@ import SwiftUI
 public struct HubShellBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.colorScheme) private var colorScheme
 
     public init() {}
 
@@ -59,7 +60,9 @@ public struct HubShellBackground: View {
     private var shellOpacity: Double {
         if reduceTransparency { return 1 }
         if #available(macOS 26.0, *) {
-            return isWindowActive ? 0.28 : 1.0
+            guard isWindowActive else { return 1.0 }
+            // Calibration start values; verified against live glass (see §1.1).
+            return colorScheme == .light ? 0.55 : 0.22
         } else {
             return isWindowActive ? 0.82 : 0.94
         }

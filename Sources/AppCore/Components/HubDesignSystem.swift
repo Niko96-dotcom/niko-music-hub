@@ -154,7 +154,7 @@ public enum HubDesignSystem {
         /// Caption line + bottom padding in a section header band (pairs with `sectionHeaderTop`).
         public static let sectionHeaderBandHeight: CGFloat = 12 + 4
         /// Standard nav/sidebar row height (references: 36-44px web ≈ 34pt native).
-        public static let navRowHeight: CGFloat = 34
+        public static let navRowHeight: CGFloat = 32
         /// Tall page-title header band (references: ~52-56px).
         public static let headerBandHeight: CGFloat = 52
     }
@@ -173,10 +173,10 @@ public enum HubDesignSystem {
         public static let railWidth: CGFloat = 64
         /// Labeled navigation sidebar width (references: ~230-260px web ≈ 224pt native).
         /// One width for every chrome rail flanking the content: tools sidebar,
-        /// tool inspector, Output Inbox. 240 fits nav labels and 2-column
+        /// tool inspector, Output Inbox. 216 fits nav labels (Codex rail: 207)
         /// inspector blocks; equal rails keep the content column centred and
         /// the title-bar icons mirrored.
-        public static let chromeRailWidth: CGFloat = 240
+        public static let chromeRailWidth: CGFloat = 216
         public static let navWidth: CGFloat = chromeRailWidth
     }
 
@@ -256,10 +256,11 @@ public enum HubDesignSystem {
             dark:  Color(.sRGB, red: 17/255,  green: 18/255,  blue: 21/255,  opacity: 1),
             lightHigh: Color(.sRGB, red: 255/255, green: 255/255, blue: 255/255, opacity: 1),
             darkHigh:  Color(.sRGB, red: 12/255,  green: 13/255,  blue: 16/255,  opacity: 1)))
-        /// NavigationSplitView sidebar. calm-native --sidebar rgb(23,24,28).
+        /// NavigationSplitView sidebar. Fallback veil + pressed fill; live glass rails
+        /// calibrate darker than this token (glass frost lifts). See chrome note §1.1.
         public static let sidebar = Color(HubDynamicColor(
             light: Color(.sRGB, red: 238/255, green: 239/255, blue: 239/255, opacity: 1),
-            dark:  Color(.sRGB, red: 23/255,  green: 24/255,  blue: 28/255,  opacity: 1),
+            dark:  Color(.sRGB, red: 30/255,  green: 31/255,  blue: 35/255,  opacity: 1),
             lightHigh: Color(.sRGB, red: 226/255, green: 226/255, blue: 226/255, opacity: 1),
             darkHigh:  Color(.sRGB, red: 18/255,  green: 19/255,  blue: 23/255,  opacity: 1)))
         /// Grouped content surface. calm-native --surface rgb(28,29,33).
@@ -300,14 +301,13 @@ public enum HubDesignSystem {
             lightHigh: Color(.sRGB, red: 80/255,  green: 80/255,  blue: 86/255,  opacity: 1),
             darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
         /// Codex-quiet neutral selection fill (low-chroma, NOT accent): a flat gray pill
-        /// darker than the rail in light mode, like the ChatGPT/Codex sidebar.
-        /// Dark value measured against LIVE Liquid Glass (2026-09-18, dev bundle PID run):
-        /// the active glass rail renders ~rgb(63) over a dark desktop while the old
-        /// rgb(64,64,66) pill rendered ~rgb(63) too — selected rows were indistinguishable
-        /// (only the 0.55 inactive dim made the pill reappear). rgb(92,92,96) restores a
-        /// quiet but measurable step over active glass; still neutral (R≈G≈B, DS-12/DS-13).
+        /// like the ChatGPT/Codex sidebar. Calibrated against LIVE Liquid Glass
+        /// (2026-09-18, running bundle + screen composites): the dark rail renders
+        /// ~63-82 depending on backdrop, so the pill holds a Codex-like ~+30 step
+        /// that survives the range; light pill sits darker than every live rail
+        /// rendering (Codex pills are darker than the rail). Still neutral (DS-12/DS-13).
         public static let selection = Color(HubDynamicColor(
-            light: Color(.sRGB, red: 216/255, green: 214/255, blue: 211/255, opacity: 1),
+            light: Color(.sRGB, red: 168/255, green: 166/255, blue: 163/255, opacity: 1),
             dark:  Color(.sRGB, red: 92/255,  green: 92/255,  blue: 96/255,  opacity: 1)))
         /// Selection stroke. calm-native --selectionStroke rgb(64,66,74).
         public static let selectionStroke = Color(HubDynamicColor(

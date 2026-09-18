@@ -87,7 +87,7 @@ public extension View {
     /// Inspector row chrome: nav-row height and padding, flat like a sidebar
     /// row — for fields, sliders, paths.
     func hubInspectorRow() -> some View {
-        // Codex-flat: same 34pt silhouette as a sidebar row, no raised fill —
+        // Codex-flat: same 32pt silhouette as a sidebar row, no raised fill —
         // controls sit directly on the inspector background. Focus adds the ring.
         self
             .padding(.horizontal, 10)

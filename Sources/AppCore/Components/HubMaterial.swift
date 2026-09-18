@@ -68,6 +68,16 @@ struct HubGlassBackdrop: View {
     /// Ignored on the macOS 26 system glass path.
     let tint: Double
 
+    /// Neutral glass calibration tint (Codex chrome convergence): deepens the
+    /// frost in dark mode, lifts it in light mode. Tint is part of the system
+    /// effect (configured, not painted over) and skews no hue.
+    private var chromeGlassTint: Color {
+        Color(HubDynamicColor(
+            light: Color.white.opacity(0.10),
+            dark: Color.black.opacity(0.24)
+        ))
+    }
+
     /// Inactive (non-key window) chrome is subdued (NMH-069).
     private var isWindowActive: Bool { controlActiveState == .key }
 
@@ -75,8 +85,10 @@ struct HubGlassBackdrop: View {
         // LIQUID-KEY: glass only while key (desktop shines through); unfocused
         // chrome is opaque sidebar, like the Codex sidebar.
         if #available(macOS 26.0, *), !reduceTransparency, isWindowActive {
-            // System glass path — nothing painted over it.
-            Rectangle().glassEffect(.regular, in: .rect)
+            // System glass path — configured (tinted), never painted over. The
+            // neutral tint calibrates the frost toward Codex chrome (~50 dark);
+            // see the chrome note in the design contract.
+            Rectangle().glassEffect(.regular.tint(chromeGlassTint), in: .rect)
         } else {
             // Opaque when inactive (LIQUID-KEY) or Reduce Transparency is on;
             // legacy semantic veil over AppKit vibrancy on macOS 14/15.
