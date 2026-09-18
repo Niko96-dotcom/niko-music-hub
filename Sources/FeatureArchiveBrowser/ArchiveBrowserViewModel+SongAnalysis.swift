@@ -23,8 +23,7 @@ extension ArchiveBrowserViewModel {
             bpmCache: mixdownBPMBySongID,
             keyCache: mixdownKeyBySongID,
             isStillSelected: { [weak self] songID, cacheKey in
-                guard let self, self.selectedSong?.id == songID else { return false }
-                guard let currentSong = self.selectedSong,
+                guard let self, let currentSong = self.selectedSong,
                       currentSong.id == songID,
                       self.mixdownAnalysisCacheKey(for: currentSong) == cacheKey else { return false }
                 return true

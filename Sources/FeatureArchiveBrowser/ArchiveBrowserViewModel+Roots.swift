@@ -9,6 +9,18 @@ extension ArchiveBrowserViewModel {
         roots.isEmpty && archiveAccessFailure != nil
     }
 
+    /// Resolves persisted bookmarks with the injected provider when it can, so a
+    /// test double sees the resolve path too; Foundation is the fallback.
+    private var bookmarkResolver: any SecurityScopedBookmarkResolving {
+        (bookmarkProvider as? any SecurityScopedBookmarkResolving) ?? FoundationSecurityScopedBookmarks()
+    }
+
+    /// `roots` holds canonical (symlink-resolved) URLs, so bookmark lookups must
+    /// use the same form or `persistRoots()` drops them on paths like `/var` → `/private/var`.
+    nonisolated static func bookmarkKey(for url: URL) -> String {
+        ArchiveRootDisplayPolicy.storedRoots(from: [url]).first?.path ?? url.standardizedFileURL.path
+    }
+
     var newSongDraftRoot: URL {
         let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
             ?? StoredFolderLocation.defaultOutputFolder
@@ -24,7 +36,7 @@ extension ArchiveBrowserViewModel {
         archiveAccessFailure = nil
         do {
             let settings = try settingsStore.loadSettings()
-            let resolver = FoundationSecurityScopedBookmarks()
+            let resolver = bookmarkResolver
             securityScopedRootAccesses.removeAll()
             scanRootBookmarks.removeAll()
             let loadedRoots = settings.effectiveScanRoots
@@ -36,7 +48,7 @@ extension ArchiveBrowserViewModel {
                     let resolved = try root.resolvedURL(using: resolver)
                     if let bookmark = root.securityScopedBookmark {
                         securityScopedRootAccesses.append(SecurityScopedRootAccess(url: resolved))
-                        scanRootBookmarks[resolved.standardizedFileURL.path] = bookmark
+                        scanRootBookmarks[Self.bookmarkKey(for: resolved)] = bookmark
                     }
                     return resolved
                 } catch {
@@ -141,7 +153,7 @@ extension ArchiveBrowserViewModel {
                 settings.archiveRoots = snapshot.map { url in
                     StoredArchiveRoot(
                         path: url.path,
-                        securityScopedBookmark: bookmarks[url.standardizedFileURL.path]
+                        securityScopedBookmark: bookmarks[Self.bookmarkKey(for: url)]
                     )
                 }
             }
@@ -162,7 +174,7 @@ extension ArchiveBrowserViewModel {
             guard !roots.contains(where: { $0.path == standardized.path }) else { continue }
             let bookmark = bookmarkData(for: url, standardized: standardized, provided: bookmarksByURL)
             if let bookmark {
-                scanRootBookmarks[standardized.path] = bookmark
+                scanRootBookmarks[Self.bookmarkKey(for: standardized)] = bookmark
                 securityScopedRootAccesses.append(SecurityScopedRootAccess(url: standardized))
             }
             roots.append(standardized)
@@ -202,12 +214,13 @@ extension ArchiveBrowserViewModel {
             guard let root = settings.effectiveScanRoots.first(where: { $0.id == failure.storedRootID }) else {
                 return false
             }
-            let resolver = FoundationSecurityScopedBookmarks()
-            let resolved = try root.resolvedURL(using: resolver)
-            if root.securityScopedBookmark != nil {
+            let resolved = try root.resolvedURL(using: bookmarkResolver)
+            if let bookmark = root.securityScopedBookmark {
                 securityScopedRootAccesses.append(SecurityScopedRootAccess(url: resolved))
+                scanRootBookmarks[Self.bookmarkKey(for: resolved)] = bookmark
             }
-            roots = ArchiveRootDisplayPolicy.storedRoots(from: [resolved])
+            // Other stored roots resolved fine at load; keep them alongside the recovered one.
+            roots = ArchiveRootDisplayPolicy.storedRoots(from: roots + [resolved])
             archiveAccessFailure = nil
             refreshFirstRunState()
             restartArchiveRootWatching()
@@ -256,7 +269,7 @@ extension ArchiveBrowserViewModel {
         let standardizedPath = url.standardizedFileURL.path
         roots.removeAll { $0.standardizedFileURL.path == standardizedPath }
         guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
-        scanRootBookmarks.removeValue(forKey: standardizedPath)
+        scanRootBookmarks.removeValue(forKey: Self.bookmarkKey(for: url))
         clearRootBoundArchiveState(
             statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
         )

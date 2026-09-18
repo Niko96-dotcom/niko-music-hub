@@ -195,8 +195,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
     /// reflecting live metadata (titles/aliases) after catalog edits.
     var cachedSearchIndex = MusicSearchIndex()
-    /// Security-scoped bookmark data keyed by standardized root path; persisted
-    /// with the roots and re-resolved in `loadRootsFromSettings()`.
+    /// Security-scoped bookmark data keyed by `bookmarkKey(for:)` (canonical root
+    /// path); persisted with the roots and re-resolved in `loadRootsFromSettings()`.
     var scanRootBookmarks: [String: Data] = [:]
     /// Keeps security-scoped access alive for bookmarked roots while the model lives.
     var securityScopedRootAccesses: [SecurityScopedRootAccess] = []

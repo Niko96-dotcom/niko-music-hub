@@ -45,6 +45,52 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         XCTAssertEqual(viewModel.storedArchiveAccessDirectory()?.path, fixture.nonMusicVaultPath)
     }
 
+    func testRetryKeepsHealthyRootsAndBookmarkForRecoveredRoot() throws {
+        let fixture = try IsolatedArchiveSettingsFixture()
+        defer { fixture.tearDown() }
+
+        let healthyPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-004-healthy-\(UUID().uuidString)", isDirectory: true).path
+        let recoveredPath = fixture.nonMusicVaultPath
+        let recoveredURL = URL(fileURLWithPath: recoveredPath, isDirectory: true)
+        let recoveredID = UUID()
+        try fixture.store.updateSettings { settings in
+            settings.musicRoots = [
+                StoredMusicRoot(id: UUID(), role: .scanOnly, displayName: "Healthy", pathFallback: healthyPath, securityScopedBookmark: nil),
+                StoredMusicRoot(id: recoveredID, role: .scanOnly, displayName: "Recovered", pathFallback: recoveredPath, securityScopedBookmark: Data([9])),
+            ]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let provider = SwitchableBookmarkProvider()
+        let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
+        XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveBrowserViewModel.bookmarkKey(for: URL(fileURLWithPath: healthyPath))])
+        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, recoveredID)
+
+        provider.resolvesTo = recoveredURL
+        XCTAssertTrue(viewModel.retryStoredArchiveAccess())
+
+        XCTAssertNil(viewModel.archiveAccessFailure)
+        XCTAssertEqual(
+            viewModel.roots.map(\.path),
+            [URL(fileURLWithPath: healthyPath), recoveredURL].map { ArchiveBrowserViewModel.bookmarkKey(for: $0) }
+        )
+
+        viewModel.persistRoots()
+        let reloaded = try fixture.store.loadSettings()
+        let recovered = try XCTUnwrap(reloaded.archiveRoots.first { $0.securityScopedBookmark != nil })
+        XCTAssertEqual(recovered.securityScopedBookmark, Data([9]))
+        XCTAssertEqual(reloaded.archiveRoots.count, 2)
+    }
+
+    func testBookmarkKeyMatchesCanonicalRootForSymlinkedTemporaryPath() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("nmh-004-symlink", isDirectory: true)
+        XCTAssertEqual(
+            ArchiveBrowserViewModel.bookmarkKey(for: url),
+            ArchiveRootDisplayPolicy.storedRoots(from: [url]).first?.path
+        )
+    }
+
     func testCompletedOnboardingWithoutStoredRootIsEmptyLibraryNotRecovery() throws {
         let fixture = try IsolatedArchiveSettingsFixture()
         defer { fixture.tearDown() }
@@ -169,16 +215,32 @@ private struct IsolatedArchiveSettingsFixture {
     }
 
     @MainActor
-    func makeViewModel() -> ArchiveBrowserViewModel {
+    func makeViewModel(
+        bookmarkProvider: any SecurityScopedBookmarkProviding = FoundationSecurityScopedBookmarks()
+    ) -> ArchiveBrowserViewModel {
         ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: store),
             archiveRootWatcher: NoopArchiveRootWatcher(),
             runtime: runtime,
+            bookmarkProvider: bookmarkProvider,
             scanOverride: { _ in ScanResult() }
         )
     }
 
     func tearDown() {
         userDefaults.removePersistentDomain(forName: suiteName)
+    }
+}
+
+/// Resolves every bookmark to `resolvesTo` once set; throws stale before that,
+/// so a test can flip "access denied" into "access granted" between load and retry.
+private final class SwitchableBookmarkProvider: SecurityScopedBookmarkProviding, SecurityScopedBookmarkResolving, @unchecked Sendable {
+    var resolvesTo: URL?
+
+    func makeBookmark(for url: URL) throws -> Data { Data([9]) }
+
+    func resolveBookmark(_ data: Data) throws -> URL {
+        guard let resolvesTo else { throw SecurityScopedBookmarkError.staleBookmark }
+        return resolvesTo
     }
 }
