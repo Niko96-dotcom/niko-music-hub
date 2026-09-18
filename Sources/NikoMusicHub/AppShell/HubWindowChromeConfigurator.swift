@@ -1,3 +1,4 @@
+import AppCore
 import AppKit
 import SwiftUI
 
@@ -74,6 +75,25 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         }
         if window.frameAutosaveName != "hub.main" {
             window.setFrameAutosaveName("hub.main")
+        }
+        // TRAFFIC-AXIS: one vertical axis for traffic lights + sidebar icons.
+        // Delta-based (preserves Apple's internal light spacing on any OS) and
+        // stateless: when already on-axis the delta is ~0 and this is a no-op,
+        // so it cannot drive an updateNSView loop. Skipped in Full Screen, where
+        // the system owns the window controls.
+        if !window.styleMask.contains(.fullScreen),
+           let close = window.standardWindowButton(.closeButton),
+           let mini = window.standardWindowButton(.miniaturizeButton),
+           let zoom = window.standardWindowButton(.zoomButton)
+        {
+            let delta = HubShellLayout.trafficAxisX - close.frame.midX
+            if abs(delta) > 0.5 {
+                for button in [close, mini, zoom] {
+                    button.setFrameOrigin(
+                        NSPoint(x: button.frame.origin.x + delta, y: button.frame.origin.y)
+                    )
+                }
+            }
         }
         // LIQUID-KEY: desktop shine-through for the chrome glass (Codex-like).
         // The chrome rails are system glass over the window base — with an opaque

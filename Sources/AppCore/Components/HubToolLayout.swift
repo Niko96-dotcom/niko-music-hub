@@ -29,9 +29,18 @@ public enum HubShellLayout {
     /// Height reserved for traffic lights + sidebar toggle row (matches toolbar icon buttons).
     public static let titleBarHeight: CGFloat = HubDesignSystem.Size.iconButtonSize
     /// Leading inset: breathing room between the traffic lights and the first
-    /// title-bar button (measured against the Codex title bar, 2026-09-18).
+    /// title-bar button. Clears the repositioned lights (zoom ends ~85) + 14pt gap.
     /// Keep until NMH-128 overlap proof; then migrate toggles to `ToolbarItem(placement: .navigation)`.
-    public static let titleBarLeadingInset: CGFloat = 84
+    public static let titleBarLeadingInset: CGFloat = 99
+    /// Shared vertical axis for the traffic lights and the sidebar row icons
+    /// (Codex-like single axis, measured 2026-09-18): sidebar row at x=12 with
+    /// 10pt inner padding and an 18pt icon frame centers glyphs at 31pt, so the
+    /// window controls are shifted until the close button centers there too.
+    /// The system lights sit at ~16pt and cannot take the icons to them (an 18pt
+    /// frame inside a 12-inset row bottoms out at a 21pt center), hence this
+    /// direction. Not applied in Full Screen (system owns the lights there).
+    public static let trafficAxisX: CGFloat =
+        12 + 10 + HubDesignSystem.Size.sidebarIconFrame / 2 // 31
     /// Matches the page side inset so title-bar icons sit directly above header actions.
     public static let titleBarTrailingInset: CGFloat = HubToolLayout.horizontalPadding
 }

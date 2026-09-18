@@ -27,8 +27,13 @@ across pages. Do not eyeball alignment — measure it (see §7).
   same x columns as page-header icons (`HubShellLayout.titleBarTrailingInset`).
 - Title-bar rhythm is Codex-compact, NOT the page-header 30pt toolbar: 26pt
   buttons / 13pt glyphs (`HubShellTitleBarControls.buttonSize/glyphSize`), even
-  8pt groups, and leading inset 84 (traffic-light breathing room, measured
-  against Codex 2026-09-18). Page-header actions keep 30pt / 14pt.
+  8pt groups, and leading inset 99 (clears the repositioned lights + 14pt gap).
+  Page-header actions keep 30pt / 14pt.
+- One axis for lights + sidebar icons (`HubShellLayout.trafficAxisX` = 31):
+  the configurator shifts the standard traffic lights (delta-based, preserving
+  Apple spacing; skipped in Full Screen) until the close button centers over
+  the row-icon column. The reverse is geometrically impossible (system lights
+  at ~16pt; an 18pt icon frame in a 12-inset row bottoms out at a 21pt center).
 - Back/forward = `HubNavigationHistory` (AppCore), created once in
   `AppComposition` and shared by BOTH `ToolContext`s. Tools with inner pages
   register a restorer (see `ArchiveBrowserViewModel+Navigation.swift`).
