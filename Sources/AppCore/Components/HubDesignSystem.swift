@@ -301,9 +301,14 @@ public enum HubDesignSystem {
             darkHigh:  Color(.sRGB, red: 176/255, green: 178/255, blue: 186/255, opacity: 1)))
         /// Codex-quiet neutral selection fill (low-chroma, NOT accent): a flat gray pill
         /// darker than the rail in light mode, like the ChatGPT/Codex sidebar.
+        /// Dark value measured against LIVE Liquid Glass (2026-09-18, dev bundle PID run):
+        /// the active glass rail renders ~rgb(63) over a dark desktop while the old
+        /// rgb(64,64,66) pill rendered ~rgb(63) too — selected rows were indistinguishable
+        /// (only the 0.55 inactive dim made the pill reappear). rgb(92,92,96) restores a
+        /// quiet but measurable step over active glass; still neutral (R≈G≈B, DS-12/DS-13).
         public static let selection = Color(HubDynamicColor(
             light: Color(.sRGB, red: 216/255, green: 214/255, blue: 211/255, opacity: 1),
-            dark:  Color(.sRGB, red: 64/255,  green: 64/255,  blue: 66/255,  opacity: 1)))
+            dark:  Color(.sRGB, red: 92/255,  green: 92/255,  blue: 96/255,  opacity: 1)))
         /// Selection stroke. calm-native --selectionStroke rgb(64,66,74).
         public static let selectionStroke = Color(HubDynamicColor(
             light: Color(.sRGB, red: 208/255, green: 208/255, blue: 208/255, opacity: 1),
@@ -382,11 +387,11 @@ public enum HubDesignSystem {
         public static let selectedStroke = Color.primary.opacity(0.12)
     }
 
-    // MARK: - Glass (computed compatibility facade — kept as-is this plan)
-
-    public static var glassStroke: Color { Colors.cardStroke }
-
-    public static var glassInnerHighlight: Color { Color.white.opacity(0.05) }
+    // MARK: - Selection (legacy "Glass" facade removed 2026-09-18: glassStroke /
+    // glassInnerHighlight were uncalled fake-glass vocabulary — hand-painted strokes,
+    // not system Liquid Glass. Real glass lives only in HubMaterial.HubGlassBackdrop
+    // (.glassEffect(.regular, in: .rect), chrome rails, macOS 26). Kept tokens below
+    // are the neutral selection fills pinned by HubDesignSystemTokenTests.)
 
     public static var selectedRowFill: Color { Color.primary.opacity(0.06) }
 

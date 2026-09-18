@@ -3,8 +3,10 @@ import SwiftUI
 
 /// Translucent system vibrancy backing (`NSVisualEffectView`) for chrome surfaces.
 ///
-/// On the macOS 14.2 fallback path this uses AppKit's native sidebar material inside the
-/// window. On macOS 26, `HubGlassBackdrop` is native SwiftUI Liquid Glass instead.
+/// Legacy macOS 14/15 path: AppKit's native sidebar material inside the
+/// window. On macOS 26, `HubGlassBackdrop` is native SwiftUI Liquid Glass instead
+/// (see below). These are real Apple materials — `NSVisualEffectView` vibrancy is
+/// the pre-Tahoe system, not Liquid Glass, and is kept as the correct fallback.
 public struct HubVisualEffectView: NSViewRepresentable {
     public let material: NSVisualEffectView.Material
     public let blending: NSVisualEffectView.BlendingMode
@@ -42,71 +44,70 @@ public struct HubVisualEffectView: NSViewRepresentable {
     }
 }
 
-/// Frosted chrome backdrop for the icon rail / inspector columns.
+/// Frosted chrome backdrop for the sidebar / inspector / inbox rails.
 ///
-/// On macOS 26 this is one Liquid Glass sheet behind the column (not per-row, not on cards).
-/// Older systems fall back to a semantic sidebar veil over `HubShellBackground` vibrancy.
+/// Native Liquid Glass, chrome-only, per Apple HIG Materials + "Adopting Liquid Glass":
+/// one `.regular` sheet in `.rect` behind each chrome column (not per-row, not on
+/// content cards). `.regular` is the text-legible variant for sidebars/inspectors;
+/// `.rect` fits a large flush sheet (the default `Capsule` suits pill controls).
+/// The backdrop is passive (not `.interactive()`, no `.tint()`, no
+/// `GlassEffectContainer`): a single static sheet with nothing to merge or morph,
+/// so a container would only cost rendering time. Chrome carries no brand tint
+/// (contract §4c).
+///
+/// System owns the glass path: no custom gradient, veil, or rim is composited over
+/// `glassEffect` — custom backgrounds overlay and interfere with Liquid Glass and
+/// the scroll-edge effect ("Adopting Liquid Glass" → Visual refresh). The depth
+/// gradient below lives ONLY on the legacy fallback path (macOS 14/15, or Reduce
+/// Transparency on), where there is no system glass to interfere with.
 struct HubGlassBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
+    /// Fallback-only veil strength (macOS 14/15, or Reduce Transparency).
+    /// Ignored on the macOS 26 system glass path.
     let tint: Double
 
     /// Inactive (non-key window) chrome is subdued (NMH-069).
     private var isWindowActive: Bool { controlActiveState == .key }
 
     var body: some View {
-        ZStack {
-            if #available(macOS 26.0, *), !reduceTransparency {
-                Rectangle().glassEffect(.regular, in: .rect)
-                    .opacity(isWindowActive ? 1 : 0.55)
-            } else {
+        if #available(macOS 26.0, *), !reduceTransparency {
+            // System glass path — nothing painted over it.
+            Rectangle().glassEffect(.regular, in: .rect)
+                .opacity(isWindowActive ? 1 : 0.55)
+        } else {
+            // Legacy / accessible fallback: semantic sidebar veil + static depth.
+            // (Real AppKit vibrancy underneath via HubShellBackground on macOS <26;
+            // opaque sidebar fill when Reduce Transparency is on.)
+            ZStack {
                 HubDesignSystem.Palette.sidebar.opacity(
                     reduceTransparency ? 1 : (isWindowActive ? max(tint, 0.72) : 1)
                 )
+                LinearGradient(
+                    colors: [
+                        Color(HubDynamicColor(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.07))),
+                        Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
+                        Color.black.opacity(0.12),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
-            LinearGradient(
-                colors: [
-                    Color(HubDynamicColor(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.07))),
-                    Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
-                    Color.black.opacity(0.12),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
         }
     }
 }
 
 public extension View {
-    /// Frosted-glass chrome for the icon rail / inspector columns. Real Liquid Glass on macOS 26,
-    /// opaque sidebar fill when Reduce Transparency is on, semantic veil on 14/15. `tint` is how
-    /// strongly the sidebar color veils the fallback path.
+    /// Frosted-glass chrome for the sidebar / inspector / inbox rails.
+    /// macOS 26: one system-owned Liquid Glass sheet (`.regular` in `.rect`);
+    /// Reduce Transparency on: opaque sidebar fill; macOS 14/15: semantic veil over
+    /// AppKit vibrancy. `tint` tunes ONLY the fallback veil.
     func hubChromeMaterial(tint: Double = 0.5) -> some View {
         background {
             HubGlassBackdrop(tint: tint)
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
-        }
-    }
-
-    /// A hairline that reads as a light-catching edge (top highlight → transparent) — used to
-    /// give flush surfaces the glassy top rim the references have.
-    func hubTopSheen(_ radius: CGFloat) -> some View {
-        overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color(HubDynamicColor(light: Color.black.opacity(0.12), dark: Color.white.opacity(0.10))),
-                            Color(HubDynamicColor(light: Color.black.opacity(0), dark: Color.white.opacity(0))),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-                .allowsHitTesting(false)
         }
     }
 }

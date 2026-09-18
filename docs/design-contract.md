@@ -33,6 +33,38 @@ across pages. Do not eyeball alignment — measure it (see §7).
 - Output Inbox collapse threshold is derived: `540 + 2 × chromeRailWidth`.
   `toggleOutputInbox()` toggles the user's intent, not the width-derived state.
 
+## 1.1 Liquid Glass — native, chrome-only (binding, 2026-09-18)
+
+Apple HIG `Materials` + `Adopting Liquid Glass`: Liquid Glass is the functional
+chrome layer (sidebars, inspectors, bars), never content backgrounds. Content
+cards/rows stay opaque via `HubSurface` (no `.glassEffect` outside chrome —
+guarded by `HubSurfaceTests` / `HubLiquidDesignSystemTests`).
+
+- Each chrome rail paints ONE system-owned sheet: `HubGlassBackdrop` =
+  `Rectangle().glassEffect(.regular, in: .rect)` on macOS 26 (`.regular` = the
+  text-legible variant for sidebars/inspectors; `.rect` fits a flush sheet; the
+  default `Capsule` is for pill controls). Passive backdrop: no `.tint()`, no
+  `.interactive()`, no `GlassEffectContainer` (single static sheet, nothing to
+  merge/morph — a container would only cost rendering time).
+- Nothing is painted OVER the system glass: no gradient, veil, tint, or
+  light-catching rim on the macOS 26 path. Custom backgrounds overlay and
+  interfere with Liquid Glass and the scroll-edge effect, so the depth gradient
+  lives ONLY on the legacy fallback (macOS 14/15 `NSVisualEffectView.sidebar` /
+  `.underWindowBackground` vibrancy, or Reduce Transparency opaque fill).
+  Column separation is the 1pt `Palette.separator` `shellDivider`, not a veil.
+- Title-bar and buttons stay flat and Codex-quiet per §6 (custom
+  `HubPressableButtonStyle`, `.plain`, neutral fills). Apple's `.glass` button
+  styles are intentionally NOT adopted: they paint system boxes that fight the
+  flat selection pill (DS-12/DS-13) and the zero-blue rule. Revisit only as a
+  contract amendment with new measurement.
+- Accessibility is part of the material: Reduce Transparency → opaque sidebar
+  fill (never glass); Increase Contrast widens card strokes to 2pt; inactive
+  windows subdue chrome (NMH-069); every token flips light/dark/high-contrast
+  via `HubDynamicColor`. No `.clear` glass (no media backdrop to float over),
+  no `backgroundExtensionEffect` (flush opaque split is intentional, not a hero
+  image), no custom scroll-edge registration (no content scrolls beneath the
+  rails — re-verify if that layout ever changes).
+
 ## 2. Keylines (measured at the 1364×892 reference window, window-relative pt)
 
 | element | x | y | size |
@@ -117,9 +149,11 @@ real content is 648 wide — size any centering box to exactly 680, never 680+32
 or the phantom slack pools on the right again (leading-anchored).
 
 A selected row (sidebar nav row, segmented cell) is a flat Codex-quiet pill:
-`Palette.selection` fill (gray, darker than the rail in light mode), no sheen,
-no rim, no shadow. Every row label renders at full strength — the pill alone
-carries the state, exactly like the ChatGPT/Codex sidebar. Sidebar rows and
+`Palette.selection` fill (gray, darker than the rail in light mode; in dark mode
+a measured step LIGHTER than the live glass rail — the rail renders ~rgb(63) over
+a dark desktop, so the pill sits at rgb(92,92,96)), no sheen, no rim, no shadow.
+Every row label renders at full strength — the pill alone carries the state,
+exactly like the ChatGPT/Codex sidebar. Sidebar rows and
 inspector cells use the same treatment.
 
 ## 4c. Accent: warm indicator, neutral everything else

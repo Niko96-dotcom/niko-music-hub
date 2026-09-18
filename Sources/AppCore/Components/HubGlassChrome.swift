@@ -3,6 +3,15 @@ import SwiftUI
 // MARK: - Shell & panels
 
 /// Window shell background — the canonical semantic shell fill (real primitive, not an alias).
+///
+/// Content base, deliberately NOT glass (HIG Materials: content layer stays opaque /
+/// standard materials; Liquid Glass is the functional chrome layer only). On macOS 26
+/// the single glass sheet lives in `HubGlassBackdrop` per chrome column — this view
+/// contributes no second window-wide material under the opaque content (the `EmptyView`
+/// branch). On macOS 14/15 it contributes real AppKit vibrancy
+/// (`.underWindowBackground` / `.behindWindow`, a pre-Tahoe system material, not Liquid
+/// Glass). The canvas veil + static gradient below are the opaque content base, in a
+/// different column from the chrome glass, so they never overlay or dull it.
 public struct HubShellBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState

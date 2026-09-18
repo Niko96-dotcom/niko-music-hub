@@ -90,4 +90,44 @@ final class HubSurfaceTests: XCTestCase {
             "Chrome glass must skip when Reduce Transparency is on."
         )
     }
+
+    // Contract 1.1 (2026-09-18): the macOS 26 chrome glass path is system-owned.
+    func testChromeGlassPathIsSystemOwned() throws {
+        let materialSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubMaterial.swift",
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            materialSource.contains(".glassEffect(.regular, in: .rect)"),
+            "Chrome must use the regular Liquid Glass variant in a rect sheet."
+        )
+        XCTAssertFalse(
+            materialSource.contains("func hubTopSheen"),
+            "Dead fake-glass hubTopSheen helper must stay deleted (zero call sites)."
+        )
+        if let glassRange = materialSource.range(of: "System glass path"),
+           let fallbackRange = materialSource.range(of: "Legacy / accessible fallback")
+        {
+            let glassSection = String(materialSource[glassRange.lowerBound..<fallbackRange.lowerBound])
+            XCTAssertFalse(
+                glassSection.contains("LinearGradient"),
+                "No custom gradient over native glassEffect (contract 1.1)."
+            )
+        } else {
+            XCTFail("HubMaterial must keep the glass/fallback section markers for 1.1.")
+        }
+
+        let systemSource = try String(
+            contentsOfFile: "Sources/AppCore/Components/HubDesignSystem.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(systemSource.contains("var glassInnerHighlight"))
+        XCTAssertFalse(systemSource.contains("var glassStroke"))
+        XCTAssertTrue(systemSource.contains("selectedRowFill"))
+        XCTAssertTrue(
+            systemSource.contains("92/255"),
+            "Dark Palette.selection is pinned to the measured live-glass floor (rgb 92,92,96): "
+                + "the active glass rail renders ~63 over a dark desktop, the old 64-fill was invisible."
+        )
+    }
 }
