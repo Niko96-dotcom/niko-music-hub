@@ -1,7 +1,7 @@
 # NMH daytime final5 Accept — 20260917-072103
 
 Base tip: `861f6b6` on `hig-audit-fixes` **plus uncommitted daytime patches** (see below).
-Proof: `/Users/niko/Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/evidence/daytime-final5-accept-20260917-065402`
+Proof: `~/Library/Application Support/NikoMusicHub-HIG-Overnight/run-20260915-224527/evidence/daytime-final5-accept-20260917-065402`
 Fixture-only; no ~/Music. No push.
 
 ## Summary — all five PASS

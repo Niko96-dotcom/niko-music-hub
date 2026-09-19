@@ -4,8 +4,8 @@ AGENTS.md still governs safety, boundaries, and mandatory gates. Product accepta
 
 ## Verified environment
 
-- Host: MBP-von-Niko / macOS 26.5.2 / user `niko`
-- Repo checkout (original, untouched except pre-existing `.gitignore`): `/Users/niko/Documents/Niko-Music-Hub`
+- Host: MacBook Pro / macOS 26.5.2
+- Repo checkout (original, untouched except pre-existing `.gitignore`): `~/Documents/Niko-Music-Hub`
 - Starting `main` SHA: `55e8cf8f98fe8e4a46d0ac7066c1643070a2f62c`
 - Integration worktree/branch: `hig-audit-fixes` (from local main; no fetch/pull/push)
 - Durable run directory (outside repo): see `RUN_ROOT` file beside this worktree's parent
@@ -14,7 +14,7 @@ AGENTS.md still governs safety, boundaries, and mandatory gates. Product accepta
 
 | Role | CLI | Model ID | Notes |
 |---|---|---|---|
-| Primary coder | `agent` (`/Users/niko/.local/bin/agent`) | `cursor-grok-4.6-xhigh` | Included Cursor account; do not use Codex |
+| Primary coder | `agent` (`~/.local/bin/agent`) | `cursor-grok-4.6-xhigh` | Included Cursor account; do not use Codex |
 | Reviewer / fallback coder | `opencode` 1.18.31 | `opencode-go/muse-spark-1.3-contributor` | OpenCode Go subscription; try `--variant xhigh` then `high` if rejected |
 | Gates | `./script/ci.sh`, `./script/e2e_user_smoke.sh` | — | Must use `NIKO_MUSIC_HUB_SETTINGS_SUITE` isolation |
 
