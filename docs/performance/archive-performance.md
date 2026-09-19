@@ -194,3 +194,9 @@ this dirty working tree.
 include the extended reconnaissance. The [first-pass search report](archive-search.md)
 and its raw data are historical, superseded by this combined comparison.
 Local final gate logs are `.build/performance-search/final/ci.log` and `e2e.log`.
+
+## Historical note (2026-09-19)
+
+This 2026-09-05 report body is retained with a new cross-reference to newer bounded synthetic
+evidence in [Commercial readiness performance evidence — 2026-09-19](commercial-readiness-2026-09-19.md)
+with curated data in [commercial-readiness-2026-09-19.json](commercial-readiness-2026-09-19.json).

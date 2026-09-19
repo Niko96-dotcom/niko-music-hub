@@ -1,0 +1,655 @@
+{
+  "proposed_thresholds_local_only": [
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "inbox 10000-row total work",
+      "budget": "p50 <= 80 ms",
+      "comparison": "optimized 61.958 ms within proposed budget; baseline 98.247 ms (benchmark-corrected.json baseline_ms) outside",
+      "origin": "newly defined post-measurement local regression threshold, not pre-existing acceptance",
+      "rationale": "~30% headroom over optimized 61.958 ms"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "scan 10000-project CLI",
+      "budget": "background-only, no interaction budget",
+      "comparison": "background-only (3.965-3.992 s)",
+      "origin": "newly defined post-measurement; background-only by design",
+      "rationale": "batch CLI, no interaction path"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "search 1000-song per-query (typing fast path)",
+      "budget": "median <= 60 ms max",
+      "comparison": "candidate 10.675-19.149 ms within proposed budget; baseline 30.456-59.859 ms within at margin",
+      "origin": "carries forward pre-existing guidance (~60 ms / 1000 typing); threshold itself newly defined post-measurement, not independent qualification",
+      "rationale": "pre-existing typing guidance"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "search 10000-song per-query",
+      "budget": "off typing fast path; debounced only",
+      "comparison": "exceeds typing budget if synchronous on keystroke (candidate 113.994-194.694 ms; baseline 318.704-630.995 ms)",
+      "origin": "carries forward pre-existing guidance (10k off keystroke); newly defined post-measurement, not independent qualification",
+      "rationale": "pre-existing 10k off-keystroke guidance"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "search cold index rebuild (one-time, never per-keystroke)",
+      "budget": "1000-song <= 80 ms; 10000-song <= 600 ms",
+      "comparison": "within proposed budget as one-time cost (41.633 ms / 409.424 ms); exceeds if used per keystroke",
+      "origin": "newly defined post-measurement local regression threshold, not pre-existing acceptance",
+      "rationale": "~2x headroom over measured 41.633 ms / 409.424 ms plus invalidation 38.624 ms / 394.524 ms"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "ui board/list typing layout (synchronous main-thread)",
+      "budget": "p50 <= 8 ms",
+      "comparison": "after 3.088 ms / 4.155 ms within proposed budget",
+      "origin": "newly defined post-measurement local regression threshold, not pre-existing acceptance",
+      "rationale": "~2x headroom over measured ~3-4 ms"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "ui debounced search latency (elapsed including wait; layout itself synchronous main-thread)",
+      "budget": "board <= 400 ms; list <= 350 ms p50",
+      "comparison": "after 334.252 ms / 305.984 ms within proposed budget; before 473.624 ms / 445.419 ms outside",
+      "origin": "newly defined post-measurement local regression threshold, not pre-existing acceptance",
+      "rationale": "headroom over measured after; debounce wait is not off-main compute"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "ui main-loop gaps vs 60fps",
+      "budget": "aspirational 16.667 ms",
+      "comparison": "limitation after (68.026 ms board / 39.363 ms list); no 60fps claim",
+      "origin": "aspirational target, not acceptance",
+      "rationale": "frame budget reference"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "ui selection layout (synchronous main-thread)",
+      "budget": "board <= 50 ms; list <= 100 ms p50",
+      "comparison": "after 31.150 ms / 73.642 ms within proposed budget (list near margin)",
+      "origin": "newly defined post-measurement local regression threshold, not pre-existing acceptance",
+      "rationale": "headroom over measured 31.150 ms / 73.642 ms"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "vault 100-record launch (must not block first frame/input)",
+      "budget": "reconcile/save/load each well under 1 s; single-project verify in ms as guidance",
+      "comparison": "measured reconcile 0.297 ms, save 1.690 ms, load 1.209 ms, transfer save 2.650 ms, transfer load 1.341 ms, manifest build 8.389 ms, manifest verify 6.620 ms; smallest measured verify is 100-record / 125-entry manifest, no 4-file verify run",
+      "origin": "carries forward pre-existing guidance (well under 1 s; verify in ms); not independent qualification",
+      "rationale": "pre-existing launch guidance"
+    },
+    {
+      "applies": "evidence host/config only, not universal SLA",
+      "area": "vault 1000/10000-record catalog/transfer",
+      "budget": "background maintenance, off typing/scroll; no interaction budget",
+      "comparison": "background-only",
+      "origin": "carries forward pre-existing guidance (1k/10k background); not independent qualification",
+      "rationale": "background maintenance by design"
+    }
+  ],
+  "aspirational_not_acceptance": [
+    "universal cross-machine SLA",
+    "60 fps landing/search-result animation",
+    "large-audio multi-MB/GB throughput",
+    "power-cut recovery proof",
+    "installed-app UAT and whole-app startup/RSS"
+  ],
+  "candidate_status": {
+    "catalog_index": "already accepted as local evidence",
+    "inbox_total_work": "accepted as local evidence for refreshAvailability+listItems total work only; main-thread responsiveness covered by OutputInboxRefreshTests, not claimed here",
+    "runtime_scan_workflows": "CANDIDATE until final review; not accepted into main",
+    "search_integration": "CANDIDATE until final review; adds normalized per-index cache, incremental invalidation, lazy empty-query skip; not yet accepted/integrated into main",
+    "ui_fixture_runtime": "CANDIDATE until final review; synchronous main-thread layout; not accepted into main"
+  },
+  "date": "2026-09-19",
+  "evidence_host_sanitized": {
+    "build_config": "release",
+    "cpu_count": 18,
+    "os": "Version 26.5.2 (Build 25F84)",
+    "physical_memory_bytes": 51539607552
+  },
+  "fixture_sizes": {
+    "inbox": {
+      "distinct_files": [
+        100,
+        1000,
+        10000
+      ],
+      "file_bytes": 64,
+      "items": [
+        100,
+        1000,
+        10000
+      ]
+    },
+    "scan_cli_synthetic": {
+      "distinct_files": [
+        200,
+        2000,
+        20000
+      ],
+      "export_bytes": [
+        250245,
+        2511847,
+        25217849
+      ],
+      "projects": [
+        100,
+        1000,
+        10000
+      ]
+    },
+    "search": {
+      "queries": 11,
+      "songs": [
+        1000,
+        10000
+      ]
+    },
+    "ui_fixture_window": {
+      "song_count": 10000,
+      "versions_per_song": 4,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "vault": {
+      "distinct_files": [
+        100,
+        1000,
+        10000
+      ],
+      "file_bytes_cpr": 64,
+      "file_bytes_wav": 256,
+      "manifest_entries": [
+        125,
+        1250,
+        12500
+      ],
+      "manifest_total_bytes": [
+        16000,
+        160000,
+        1600000
+      ],
+      "records": [
+        100,
+        1000,
+        10000
+      ]
+    }
+  },
+  "inbox_refreshAvailability_listItems": {
+    "baseline_source_key": "benchmark-corrected.json baseline_ms (5 rounds); digests only in benchmark-corrected.json",
+    "before_txt_note": "inbox-before.txt is a separate 4-iteration run, not used for this pairing",
+    "driver": "benchmark_output_inbox.sh",
+    "peak_rss_bytes": 66076672,
+    "rounds": 5,
+    "scope": "refreshAvailability+listItems total work only; save skipped",
+    "tool": "output-inbox-refresh",
+    "sizes": [
+      {
+        "baseline_median_ms": 0.93625,
+        "digest": "207a01c202b1a02c",
+        "items": 100,
+        "optimized_median_ms": 0.608083
+      },
+      {
+        "baseline_median_ms": 10.485542,
+        "digest": "adc9c769df177e1d",
+        "items": 1000,
+        "optimized_median_ms": 6.523625
+      },
+      {
+        "baseline_median_ms": 98.246583,
+        "digest": "ec40eff28f9aebe7",
+        "items": 10000,
+        "optimized_median_ms": 61.958
+      }
+    ]
+  },
+  "method": {
+    "drivers": [
+      "benchmark_archive_search.sh",
+      "benchmark_vault_recovery.sh",
+      "benchmark_output_inbox.sh",
+      "benchmark_archive_ui.sh",
+      "benchmark_archive_workflows.sh"
+    ],
+    "order": "frozen fixtures; generation/compilation/digest verification outside timing; no concurrent builds/tests/profiling",
+    "rounds": {
+      "inbox": 5,
+      "scan": "3 iterations per scale (iter0 cold noted)",
+      "search": "2 warmup + 7 measured, rotated order",
+      "ui": "3 warmup + 15 measured (search probes 3+7)",
+      "vault": "3 warmup + 7 measured"
+    }
+  },
+  "privacy": "synthetic evidence only; no personal paths, hostnames, source logs, or real music data; temp paths replaced with fixture-relative descriptors; curated JSON retains medians plus key digests, full samples not in compact JSON; full originals retained locally in .codex/performance-evidence/",
+  "provenance": {
+    "curated_file": "docs/performance/commercial-readiness-2026-09-19.json",
+    "drivers": [
+      "benchmark_archive_search.sh",
+      "benchmark_vault_recovery.sh",
+      "benchmark_output_inbox.sh",
+      "benchmark_archive_ui.sh",
+      "benchmark_archive_workflows.sh"
+    ],
+    "full_originals_retained_locally": ".codex/performance-evidence/ (search-1000.json, search-10000.json, search-before.json, search-10000-before.json, vault-after.json, vault-before-stable-ids.json, vault-after-stable-ids.json, vault-scaling.json, ui-after.json, ui-10000-before.json, scan-before.json, inbox-before.txt, benchmark-corrected.json, workflows-before.json)",
+    "history_preserved": "2026-09-05 report bodies retained with new cross-reference to 2026-09-19 evidence"
+  },
+  "report": "docs/performance/commercial-readiness-2026-09-19.md",
+  "scan_cli": {
+    "driver": "NikoMusicHubCLI export-index via one-off synthetic fixture harness",
+    "results": [
+      {
+        "distinct_files": 200,
+        "export_bytes": 250245,
+        "projects": 100,
+        "seconds": [
+          0.413608375005424,
+          0.05150975001743063,
+          0.047976541973184794
+        ]
+      },
+      {
+        "distinct_files": 2000,
+        "export_bytes": 2511847,
+        "projects": 1000,
+        "seconds": [
+          0.3928413750254549,
+          0.41066566697554663,
+          0.3953442079946399
+        ]
+      },
+      {
+        "distinct_files": 20000,
+        "export_bytes": 25217849,
+        "projects": 10000,
+        "seconds": [
+          3.96529762505088,
+          3.9922047079890035,
+          3.971262375009246
+        ]
+      }
+    ],
+    "command": "NikoMusicHubCLI export-index --roots <generated-root> --output <temporary-export.json>"
+  },
+  "scope": "bounded synthetic-fixture evidence; no record caps; proposed thresholds are latency thresholds, every song scored, no discard",
+  "search": {
+    "1000": {
+      "baseline": {
+        "index_rebuild_ms": 0.000667,
+        "peak_rss_bytes": 22413312
+      },
+      "candidate": {
+        "index_rebuild_ms": 41.632833,
+        "invalidation_rebuild_ms": 38.624166,
+        "peak_rss_bytes": 24002560,
+        "unrebuilt_stable": true
+      },
+      "queries": [
+        {
+          "after_median_ms": 12.678834,
+          "before_median_ms": 30.456417,
+          "digest": "d8216bdca13abc6d",
+          "q": "neon",
+          "results": 1000
+        },
+        {
+          "after_median_ms": 18.915792,
+          "before_median_ms": 58.872166,
+          "digest": "7087e43f1eabbf07",
+          "q": "neon hook",
+          "results": 200
+        },
+        {
+          "after_median_ms": 15.254375,
+          "before_median_ms": 55.926958,
+          "digest": "ca3fcaccce52e14",
+          "q": "maria final",
+          "results": 84
+        },
+        {
+          "after_median_ms": 12.20775,
+          "before_median_ms": 52.022417,
+          "digest": "456f1bef5eda3bb7",
+          "q": "gravity v3 mix",
+          "results": 100
+        },
+        {
+          "after_median_ms": 19.148708,
+          "before_median_ms": 59.858584,
+          "digest": "598a413195d255cb",
+          "q": "noen hook",
+          "results": 200
+        },
+        {
+          "after_median_ms": 10.675458,
+          "before_median_ms": 48.80575,
+          "digest": "99fb81b0ecb07257",
+          "q": "gluhwurm",
+          "results": 100
+        },
+        {
+          "after_median_ms": 13.552167,
+          "before_median_ms": 55.637042,
+          "digest": "cbf29ce484222325",
+          "q": "zzzz absent",
+          "results": 0
+        },
+        {
+          "after_median_ms": 13.417416,
+          "before_median_ms": 50.20975,
+          "digest": "e7ab5e76c1d080e7",
+          "q": "hook neon",
+          "results": 200
+        },
+        {
+          "after_median_ms": 11.30125,
+          "before_median_ms": 51.336167,
+          "digest": "3090e479e1cc6fd9",
+          "q": "gluhwurm maria",
+          "results": 50
+        },
+        {
+          "after_median_ms": 13.083666,
+          "before_median_ms": 51.763583,
+          "digest": "23e7f7eb2e92f8d7",
+          "q": "silver lining",
+          "results": 100
+        },
+        {
+          "after_median_ms": 12.809666,
+          "before_median_ms": 51.024208,
+          "digest": "9ddfae23f513fa23",
+          "q": "summer rain",
+          "results": 100
+        }
+      ]
+    },
+    "10000": {
+      "baseline": {
+        "index_rebuild_ms": 0.00075,
+        "peak_rss_bytes": 125779968
+      },
+      "candidate": {
+        "index_rebuild_ms": 409.423666,
+        "invalidation_rebuild_ms": 394.523542,
+        "peak_rss_bytes": 147193856,
+        "unrebuilt_stable": true
+      },
+      "queries": [
+        {
+          "after_median_ms": 126.357333,
+          "before_median_ms": 318.703625,
+          "digest": "3afe8345c3a35a1",
+          "q": "neon",
+          "results": 10000
+        },
+        {
+          "after_median_ms": 192.743833,
+          "before_median_ms": 611.880167,
+          "digest": "28361a338abaebbf",
+          "q": "neon hook",
+          "results": 2000
+        },
+        {
+          "after_median_ms": 155.812375,
+          "before_median_ms": 585.730083,
+          "digest": "38bc1a1fe81d4370",
+          "q": "maria final",
+          "results": 834
+        },
+        {
+          "after_median_ms": 124.407417,
+          "before_median_ms": 539.60725,
+          "digest": "8e56f3f5d4b3683f",
+          "q": "gravity v3 mix",
+          "results": 1000
+        },
+        {
+          "after_median_ms": 194.693542,
+          "before_median_ms": 630.995333,
+          "digest": "cb14485c2b8c836f",
+          "q": "noen hook",
+          "results": 2000
+        },
+        {
+          "after_median_ms": 113.993542,
+          "before_median_ms": 509.237125,
+          "digest": "eca951751cb66e03",
+          "q": "gluhwurm",
+          "results": 1000
+        },
+        {
+          "after_median_ms": 138.585333,
+          "before_median_ms": 584.051167,
+          "digest": "cbf29ce484222325",
+          "q": "zzzz absent",
+          "results": 0
+        },
+        {
+          "after_median_ms": 138.483667,
+          "before_median_ms": 527.68925,
+          "digest": "cd5317a1ddbfdf3f",
+          "q": "hook neon",
+          "results": 2000
+        },
+        {
+          "after_median_ms": 119.65775,
+          "before_median_ms": 541.806458,
+          "digest": "e8602718736c2081",
+          "q": "gluhwurm maria",
+          "results": 500
+        },
+        {
+          "after_median_ms": 146.187208,
+          "before_median_ms": 552.238125,
+          "digest": "24c963747851244f",
+          "q": "silver lining",
+          "results": 1000
+        },
+        {
+          "after_median_ms": 143.287208,
+          "before_median_ms": 540.67775,
+          "digest": "2acf36c4b678ee73",
+          "q": "summer rain",
+          "results": 1000
+        }
+      ]
+    },
+    "digest_equivalence": "all 11 query digests match baseline at each size",
+    "driver": "benchmark_archive_search.sh",
+    "scope_detail": "in-memory MusicSearchIndex.searchResults only; no caps/discard"
+  },
+  "ui_nshosting_fixture": {
+    "driver": "benchmark_archive_ui.sh",
+    "heartbeat_interval_ms": 2,
+    "hosting_sizing": "none; fixture window owns size",
+    "scope": "sync main-thread mutation + NSHostingView layout + display + CATransaction flush; not GPU/input-to-photon/audio; not installed-app UAT",
+    "workflows": [
+      {
+        "after_median_ms": 31.149833,
+        "before_median_ms": 36.688792,
+        "name": "board_selection_layout"
+      },
+      {
+        "after_median_ms": 3.088292,
+        "before_median_ms": 4.299875,
+        "name": "board_typing_layout"
+      },
+      {
+        "after_median_ms": 152.44075,
+        "before_median_ms": 281.800292,
+        "name": "board_search_results_layout"
+      },
+      {
+        "after_median_ms": 30.433375,
+        "before_median_ms": 38.464292,
+        "name": "board_status_update_layout"
+      },
+      {
+        "after_median_ms": 13.226333,
+        "before_median_ms": 16.151167,
+        "name": "board_resize_layout"
+      },
+      {
+        "after_median_ms": 73.642375,
+        "before_median_ms": 73.44325,
+        "name": "list_selection_layout"
+      },
+      {
+        "after_median_ms": 4.15525,
+        "before_median_ms": 4.649042,
+        "name": "list_typing_layout"
+      },
+      {
+        "after_median_ms": 98.871583,
+        "before_median_ms": 235.311708,
+        "name": "list_search_results_layout"
+      },
+      {
+        "after_median_ms": 20.149125,
+        "before_median_ms": 26.1985,
+        "name": "list_status_update_layout"
+      },
+      {
+        "after_median_ms": 25.52625,
+        "before_median_ms": 28.72425,
+        "name": "list_scroll_layout"
+      },
+      {
+        "after_median_ms": 16.140417,
+        "before_median_ms": 18.135458,
+        "name": "list_resize_layout"
+      },
+      {
+        "after_median_ms": 68.025875,
+        "before_median_ms": 63.141083,
+        "name": "board_maximum_main_runloop_gap"
+      },
+      {
+        "after_median_ms": 65.821959,
+        "before_median_ms": 61.442292,
+        "name": "board_maximum_main_runloop_cpu_work"
+      },
+      {
+        "after_median_ms": 334.251667,
+        "before_median_ms": 473.62425,
+        "name": "board_debounced_search_latency"
+      },
+      {
+        "after_median_ms": 39.36325,
+        "before_median_ms": 37.101333,
+        "name": "list_maximum_main_runloop_gap"
+      },
+      {
+        "after_median_ms": 37.929,
+        "before_median_ms": 36.176334,
+        "name": "list_maximum_main_runloop_cpu_work"
+      },
+      {
+        "after_median_ms": 305.983583,
+        "before_median_ms": 445.419083,
+        "name": "list_debounced_search_latency"
+      }
+    ]
+  },
+  "vault": {
+    "driver": "benchmark_vault_recovery.sh",
+    "tool": "vault-recovery-reconciliation",
+    "correctness_each_scale": {
+      "catalog_reviews": [
+        50,
+        500,
+        5000
+      ],
+      "corrupt_throws": true,
+      "missing_throws": true,
+      "recoverable_match": true,
+      "verified_ok": true
+    },
+    "isolated_primary": {
+      "after_peak_rss_bytes": 546471936,
+      "before_peak_rss_bytes": 512229376,
+      "scales": [
+        {
+          "catalog_load_median_ms": 1.20925,
+          "catalog_reconcile_median_ms": 0.297208,
+          "catalog_save_median_ms": 1.690083,
+          "manifest_build_median_ms": 8.388958,
+          "manifest_verify_median_ms": 6.620125,
+          "records": 100,
+          "restore_median_ms": 4.643875,
+          "transfer_load_median_ms": 1.340834,
+          "transfer_save_median_ms": 2.65025,
+          "restore_records_measured": 100
+        },
+        {
+          "catalog_load_median_ms": 12.426084,
+          "catalog_reconcile_median_ms": 3.21975,
+          "catalog_save_median_ms": 19.088708,
+          "manifest_build_median_ms": 105.66925,
+          "manifest_verify_median_ms": 78.725459,
+          "records": 1000,
+          "restore_median_ms": 4.557042,
+          "transfer_load_median_ms": 13.614667,
+          "transfer_save_median_ms": 27.032125,
+          "restore_records_measured": 200
+        },
+        {
+          "catalog_load_median_ms": 140.140458,
+          "catalog_reconcile_median_ms": 38.365417,
+          "catalog_save_median_ms": 173.651875,
+          "manifest_build_median_ms": 838.824166,
+          "manifest_verify_median_ms": 694.281,
+          "records": 10000,
+          "restore_median_ms": 4.813334,
+          "transfer_load_median_ms": 166.439,
+          "transfer_save_median_ms": 275.859875,
+          "restore_records_measured": 200
+        }
+      ]
+    },
+    "manifest_digests_unchanged": {
+      "100": "29ffac301f2fa1b7",
+      "1000": "5eb9a8b3208cea1d",
+      "10000": "275a5b1323e42af7"
+    },
+    "note": "largest scale is 12.5k tiny files (64/256 B payload); not large-audio throughput or power-cut proof; smallest measured verify is 100-record / 125-entry manifest, no 4-file verify run Restore reconciliation harness measures at most 200 records per scale; this is a benchmark fixture limit, not a product history cap.",
+    "stable_id_semantic": {
+      "after_peak_rss_bytes": 548978688,
+      "before_peak_rss_bytes": 531775488,
+      "catalog_reconcile_digests_match_all3_sizes": {
+        "100": "b625c29c21c5303a",
+        "1000": "f86c9621274658aa",
+        "10000": "dab988e92d11883f"
+      },
+      "timing_caveat": "stable-ID reruns were concurrent; original isolated timings above are primary; stable-ID establishes digest match only"
+    }
+  },
+  "workflows_context": {
+    "driver": "benchmark_archive_workflows.sh",
+    "source": "workflows-before.json (1000 songs, peak 305119232 B)",
+    "scope": "context only, not acceptance",
+    "medians_ms": {
+      "analytics_1000": 16.467,
+      "board_1000": 4.928,
+      "bpm": 0.049,
+      "hook": 0.144,
+      "key": 40.605,
+      "metadata_load_1000": 23.762,
+      "rank_1200": 66.535,
+      "rank_36": 2.029,
+      "scan_50": 104.925,
+      "sorts_1000": "~5-7",
+      "sqlite_load_1000": 256.46,
+      "sqlite_save_unchanged_1000": 177.876,
+      "vault_manifest_800": 56.896,
+      "vault_verify": 48.192
+    }
+  }
+}
