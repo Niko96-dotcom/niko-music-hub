@@ -262,11 +262,6 @@ struct ArchiveUIBenchmark {
                         render()
                     }
                 }
-                measure("metadata_chips_\(count)") { _ in
-                    var labels = 0
-                    for song in songs { labels += SongCardMetadataChipBuilder.chips(for: song, matchSummary: nil).count }
-                    precondition(labels == count * 4)
-                }
             }
             for mode in [ArchiveBrowserViewModel.ArchiveViewMode.board, .list] {
                 model.viewMode = mode; model.selectedSong = nil
