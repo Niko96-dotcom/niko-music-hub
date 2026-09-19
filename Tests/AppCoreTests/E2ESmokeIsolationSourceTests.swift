@@ -71,7 +71,15 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
     func testPublicUIAccessibilityReadinessIsBoundedAndFailClosed() throws {
         let script = try smokeScriptSource()
         XCTAssertTrue(script.contains("PUBLIC_UI_DEADLINE=$((SECONDS + 20))"))
-        XCTAssertTrue(script.contains(#"grep -Fq "Welcome to your music archive""#))
+        // The readiness marker must be copy the first-run view really renders: the
+        // 1.6.0 rewording turned the strict release gate red for a stale string.
+        let readinessMarker = "Choose the folder that holds your song projects"
+        XCTAssertTrue(script.contains("grep -Fq \"\(readinessMarker)\""))
+        let firstRunView = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveFirstRunView.swift")
+        XCTAssertTrue(
+            firstRunView.contains(readinessMarker),
+            "e2e_user_smoke.sh waits for first-run copy that ArchiveFirstRunView no longer renders"
+        )
         XCTAssertTrue(script.contains("strict UI mode requires AX-visible first-run content"))
     }
 
