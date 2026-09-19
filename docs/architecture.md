@@ -26,6 +26,23 @@ NikoMusicHub (executable)
     └── NikoMusicCoreSelfTest    # NEW — CLI fixture + real-root smoke
 ```
 
+## Existing feature dependency: Stem Separation → Downloader
+
+Verified 2026-09-19: `Package.swift` explicitly makes `FeatureStemSeparation`
+depend on `FeatureDownloader`. This is a narrow exception to feature independence:
+the YouTube input adapter in
+[`YouTubeStemSeparationWorkflow.swift`](../Sources/FeatureStemSeparation/YouTubeStemSeparationWorkflow.swift)
+uses `DownloaderUseCase` and its request types to obtain an audio file. The
+composition in `StemSeparationFeature` supplies the existing yt-dlp implementation
+and health checker. The separation workflow itself depends on
+`YouTubeAudioDownloading`; it does not depend on the downloader view or view model.
+
+Keep this dependency explicit while both features share the download behavior,
+including retries, output containment and no-overwrite handling. Changes to that
+behavior must also run the Stem Separation workflow tests. Extracting a shared
+service module is deferred until another consumer or an actual boundary problem
+justifies the migration; duplicating the downloader would create two safety paths.
+
 ## Layer responsibilities
 
 ### `NikoMusicCore` (pure Swift)
