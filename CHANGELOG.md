@@ -12,6 +12,8 @@
 - Move the board's empty-stage option into Settings, next to the other archive preferences.
 - Give the window the Codex-style shell: the sidebar, tool panel, and Output Inbox use the system sidebar material (a hint of the desktop shows through, nothing behind the window stays readable), the separate title strip is gone so each column runs to the window edge, and the window controls sit lower with more air.
 - Retune dark mode to a warm neutral gray instead of blue-black, tighten sidebar rows and captions to the Codex rhythm, lighten the row icons, and stop showing a focus ring on the sidebar toggle at launch.
+- Explain why the app asks for access to Documents, Desktop, Downloads, external and network drives in the macOS permission prompts.
+- Harden the release pipeline: prove hardened runtime, Team ID and the exact entitlement set on every component before upload, refuse a build number the update feed would never offer, refuse stray local release tags and test-feed overrides, and require acceptance testing on a Developer ID build.
 
 ## 1.5.4 - 2026-09-15
 

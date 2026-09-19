@@ -36,6 +36,9 @@ This validates:
 - supported `arm64` architecture and `LSMinimumSystemVersion` derived from the package contract
 - Developer ID signing
 - hardened runtime, accepting either `Runtime Version` or runtime flags in `codesign`
+- secure timestamp, hardened runtime, and the app's own Team ID on every nested Sparkle component, with no entitlements on the helpers
+- exactly `com.apple.security.device.audio-input` as the app's entitlement set
+- `CFBundleVersion` above the highest `sparkle:version` on the live update feed
 - app notarization and stapling
 - DMG creation after app finalization
 - DMG signing, notarization, stapling, and Gatekeeper assessment

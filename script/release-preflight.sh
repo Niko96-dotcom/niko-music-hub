@@ -33,6 +33,24 @@ if [[ -n "$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)" ]]; the
   exit 1
 fi
 
+# Every local release tag except the one being cut must already exist on origin
+# at the same object. A stray local v* tag anchors history that never went
+# through the public filter; `git push --tags` would publish it, and the
+# protect-release-tags ruleset then forbids deleting it again.
+if ! REMOTE_TAGS="$(git -C "$ROOT" ls-remote --tags origin 'refs/tags/v*')"; then
+  echo "public release preflight could not list release tags on origin" >&2
+  exit 1
+fi
+while read -r sha ref; do
+  tag="${ref#refs/tags/}"
+  [[ "$tag" == "$TAG" ]] && continue
+  remote_sha="$(awk -v ref="$ref" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+  if [[ "$remote_sha" != "$sha" ]]; then
+    echo "local tag $tag ($sha) does not match origin (${remote_sha:-missing}); delete it with 'git tag -d $tag' or push it deliberately before releasing" >&2
+    exit 1
+  fi
+done < <(git -C "$ROOT" for-each-ref --format='%(objectname) %(refname)' 'refs/tags/v*')
+
 TAG_COMMIT="$(git -C "$ROOT" rev-list -n 1 "$TAG" 2>/dev/null || true)"
 if [[ -z "$TAG_COMMIT" && "$ALLOW_MISSING_TAG" == true ]]; then
   echo "public release preflight ok: clean=true tag=$TAG (not created yet; rehearsal) commit=$COMMIT"

@@ -122,11 +122,19 @@ notarize() {
   return 1
 }
 
-# Notarization rejects any Developer ID signature without a secure timestamp,
-# and it checks every nested binary, not just the app wrapper (the first public
-# release was refused for Sparkle's helpers). Prove it locally before uploading.
+# Notarization rejects any Developer ID signature without a secure timestamp or
+# hardened runtime, and it checks every nested binary, not just the app wrapper
+# (the first public release was refused for Sparkle's helpers). dyld additionally
+# refuses to load a framework signed by another team under library validation,
+# and the app's entitlements must not leak onto Sparkle's helpers. Prove all of
+# it locally before uploading instead of after eight minutes of gates.
 require_secure_timestamps() {
-  local app="$1" nested signature
+  local app="$1" nested signature entitlements team
+  team="$(codesign -dvv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p' || true)"
+  if [[ -z "$team" || "$team" == "not set" ]]; then
+    echo "app signature has no TeamIdentifier (not a Developer ID signature): $app" >&2
+    return 1
+  fi
   for nested in \
     "$app" \
     "$app/Contents/Frameworks/Sparkle.framework/Versions/B" \
@@ -142,7 +150,33 @@ require_secure_timestamps() {
       echo "signature without a secure timestamp (notarization would reject it): $nested" >&2
       return 1
     fi
+    if ! grep -Eq '^CodeDirectory .*flags=0x[0-9a-f]+\([^)]*runtime' <<<"$signature"; then
+      echo "signature without hardened runtime (notarization would reject it): $nested" >&2
+      return 1
+    fi
+    if ! grep -q "^TeamIdentifier=$team\$" <<<"$signature"; then
+      echo "nested code signed by another team (library validation would refuse to load it): $nested" >&2
+      return 1
+    fi
+    entitlements="$(codesign -d --entitlements - --xml "$nested" 2>/dev/null || true)"
+    if [[ "$nested" != "$app" && "$entitlements" == *'<key>'* ]]; then
+      echo "Sparkle helper carries entitlements; nmh_sign_bundle must sign helpers without --entitlements: $nested" >&2
+      return 1
+    fi
   done
+}
+
+# The entitlement set is part of the release contract: audio-input is what the
+# recorder's Core Audio tap needs under hardened runtime, and nothing else
+# (get-task-allow, disable-library-validation, ...) may ride along.
+NMH_EXPECTED_APP_ENTITLEMENTS='{"com.apple.security.device.audio-input":true}'
+require_expected_entitlements() {
+  local app="$1" actual
+  actual="$(codesign -d --entitlements - --xml "$app" 2>/dev/null | plutil -convert json -o - - 2>/dev/null || true)"
+  if [[ "$actual" != "$NMH_EXPECTED_APP_ENTITLEMENTS" ]]; then
+    echo "app entitlements drifted: got '$actual', expected '$NMH_EXPECTED_APP_ENTITLEMENTS'" >&2
+    return 1
+  fi
 }
 
 verify_remote_release_tag() {
@@ -479,6 +513,12 @@ if [[ "$MODE" == "public" ]]; then
     echo "public release requires SPARKLE_PUBLIC_ED_KEY so the published feed matches the shipped app" >&2
     exit 1
   fi
+  # The feed URL is compiled into the bundle for good; a test feed must never
+  # reach a public build.
+  if [[ -n "${NMH_UPDATE_FEED_URL:-}" ]]; then
+    echo "public release refuses NMH_UPDATE_FEED_URL; every public build must poll the canonical feed" >&2
+    exit 1
+  fi
   if [[ "$PUBLISH" == true ]]; then
     "$ROOT/script/release-preflight.sh"
   else
@@ -503,6 +543,19 @@ if [[ "$MODE" == "public" ]]; then
     echo "notary credentials for keychain profile $NMH_NOTARY_PROFILE do not work" >&2
     exit 1
   }
+  # Sparkle offers an update only when sparkle:version (CFBundleVersion, the
+  # commit count of HEAD) grows. Compare against the feed installed apps
+  # actually poll, not against git: a release cut from another clone or a
+  # side branch would otherwise ship a build number nobody is ever offered.
+  if ! LIVE_BUILD_NUMBER="$(nmh_live_feed_max_build_number)"; then
+    echo "could not read the live update feed to prove the build number advances" >&2
+    exit 1
+  fi
+  if (( BUILD_NUMBER <= LIVE_BUILD_NUMBER )); then
+    echo "CFBundleVersion $BUILD_NUMBER does not exceed the published sparkle:version $LIVE_BUILD_NUMBER; installed apps would never be offered this release (build from the public history, see docs/release.md)" >&2
+    exit 1
+  fi
+  printf 'build number %s advances the live feed (%s)\n' "$BUILD_NUMBER" "$LIVE_BUILD_NUMBER"
 fi
 
 # A release artifact records an exact source commit. Never package a dirty
@@ -597,6 +650,7 @@ if [[ "$MODE" == "public" ]]; then
   fi
 
   run secure-timestamps require_secure_timestamps "$APP"
+  run app-entitlements require_expected_entitlements "$APP"
 
   APP_ZIP="$RELEASE_DIR/NikoMusicHub-$VERSION-app-notary.zip"
   run ditto ditto -c -k --keepParent "$APP" "$APP_ZIP"
@@ -615,7 +669,9 @@ DMG="$RELEASE_DIR/$ARTIFACT_NAME"
 run hdiutil-create hdiutil create -volname "Niko Music Hub $VERSION" -srcfolder "$APP" -ov -format UDZO "$DMG"
 
 if [[ "$MODE" == "public" ]]; then
-  run sign-dmg codesign --force --timestamp --sign "$NMH_DEVELOPER_ID_APPLICATION" "$DMG"
+  # Without an explicit identifier codesign derives one from the file name and
+  # truncates it at the first dot ("NikoMusicHub-1").
+  run sign-dmg codesign --force --timestamp --identifier "$BUNDLE_ID.dmg" --sign "$NMH_DEVELOPER_ID_APPLICATION" "$DMG"
   log "notarize and staple dmg"
   notarize dmg "$DMG"
   run staple-dmg xcrun stapler staple "$DMG"

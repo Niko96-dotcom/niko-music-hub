@@ -290,12 +290,41 @@ git -C "$PREFLIGHT_REPO" config user.email "release-test@example.invalid"
 printf '%s\n' "$(cat "$ROOT/VERSION")" >"$PREFLIGHT_REPO/VERSION"
 git -C "$PREFLIGHT_REPO" add VERSION
 git -C "$PREFLIGHT_REPO" commit -qm initial
+# The preflight compares local release tags against origin; give the fixture a
+# bare origin that already carries an older release tag at the same object.
+PREFLIGHT_ORIGIN="$TMP/preflight-origin.git"
+git init -q --bare "$PREFLIGHT_ORIGIN"
+git -C "$PREFLIGHT_REPO" remote add origin "$PREFLIGHT_ORIGIN"
+git -C "$PREFLIGHT_REPO" tag v0.0.1
+git -C "$PREFLIGHT_REPO" push -q origin v0.0.1
 git -C "$PREFLIGHT_REPO" tag "v$(cat "$ROOT/VERSION")"
 assert_pass preflight-clean "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
 printf 'dirty\n' >"$PREFLIGHT_REPO/untracked.txt"
 assert_fail preflight-dirty "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
 assert_contains "$TMP/preflight-dirty.err" "completely clean working tree"
 rm -f "$PREFLIGHT_REPO/untracked.txt"
+
+echo "== local release tags must mirror origin =="
+# A local-only tag anchors history that never went through the public filter.
+git -C "$PREFLIGHT_REPO" tag v0.0.2
+assert_fail preflight-stray-tag "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+assert_contains "$TMP/preflight-stray-tag.err" "local tag v0.0.2"
+assert_contains "$TMP/preflight-stray-tag.err" "does not match origin (missing)"
+git -C "$PREFLIGHT_REPO" tag -d v0.0.2 >/dev/null
+# A tag that exists on both sides but at different objects is just as wrong.
+git -C "$PREFLIGHT_REPO" commit -q --allow-empty -m "moves v0.0.1 locally"
+git -C "$PREFLIGHT_REPO" tag -f v0.0.1 >/dev/null
+assert_fail preflight-moved-tag "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+assert_contains "$TMP/preflight-moved-tag.err" "local tag v0.0.1"
+git -C "$PREFLIGHT_REPO" tag -f v0.0.1 HEAD~1 >/dev/null
+git -C "$PREFLIGHT_REPO" reset -q --hard HEAD~1
+git -C "$PREFLIGHT_REPO" tag -f "v$(cat "$ROOT/VERSION")" >/dev/null
+assert_pass preflight-mirrored-tags "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+# Without an origin nothing can be mirrored, so the preflight must not guess.
+git -C "$PREFLIGHT_REPO" remote remove origin
+assert_fail preflight-no-origin "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+assert_contains "$TMP/preflight-no-origin.err" "could not list release tags on origin"
+git -C "$PREFLIGHT_REPO" remote add origin "$PREFLIGHT_ORIGIN"
 
 echo "== publish rehearsal may run before the tag exists, publishing may not =="
 git -C "$PREFLIGHT_REPO" tag -d "v$(cat "$ROOT/VERSION")" >/dev/null
@@ -347,10 +376,70 @@ grep -Fq 'nmh_notary_upload_endpoint_reachable' "$ROOT/script/release-all.sh" ||
   exit 1
 }
 
+echo "== nested code is proven hardened, same-team and entitlement-free before upload =="
+SIGNATURE_GATE="$(awk '/^require_secure_timestamps\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/release-all.sh")"
+for needle in 'runtime' 'TeamIdentifier=' '<key>'; do
+  grep -Fq -- "$needle" <<<"$SIGNATURE_GATE" || {
+    echo "require_secure_timestamps must check '$needle' on every nested component" >&2
+    exit 1
+  }
+done
+assert_contains "$ROOT/script/release-all.sh" 'NMH_EXPECTED_APP_ENTITLEMENTS='"'"'{"com.apple.security.device.audio-input":true}'"'"
+assert_contains "$ROOT/script/release-all.sh" 'run app-entitlements require_expected_entitlements "$APP"'
+assert_order 'run secure-timestamps require_secure_timestamps' 'run app-entitlements require_expected_entitlements' "$ROOT/script/release-all.sh"
+assert_order 'run app-entitlements require_expected_entitlements' 'notarize app "$APP_ZIP"' "$ROOT/script/release-all.sh"
+assert_contains "$ROOT/script/release-all.sh" 'codesign --force --timestamp --identifier "$BUNDLE_ID.dmg" --sign "$NMH_DEVELOPER_ID_APPLICATION" "$DMG"'
+# The recorder's Core Audio tap is the only entitlement the app carries; the
+# helpers are signed without --entitlements and without preserved metadata.
+if [[ "$(grep -c -- '--entitlements "$NMH_ENTITLEMENTS_PLIST"' "$LIFECYCLE")" != "1" ]]; then
+  echo "exactly one codesign call (the app wrapper) may pass --entitlements" >&2
+  exit 1
+fi
+if grep -v '^ *#' "$LIFECYCLE" | grep -Fq -- '--preserve-metadata'; then
+  echo "nmh_sign_bundle must not preserve upstream Sparkle metadata (its ad-hoc application-identifier fails notarization)" >&2
+  exit 1
+fi
+for key in com.apple.security.cs.disable-library-validation com.apple.security.cs.allow-unsigned-executable-memory com.apple.security.cs.allow-jit com.apple.security.get-task-allow com.apple.security.app-sandbox; do
+  assert_not_contains "$LIFECYCLE" "$key"
+done
+for key in NSDocumentsFolderUsageDescription NSDesktopFolderUsageDescription NSDownloadsFolderUsageDescription NSRemovableVolumesUsageDescription NSNetworkVolumesUsageDescription NSAudioCaptureUsageDescription NSMicrophoneUsageDescription; do
+  assert_contains "$LIFECYCLE" "<key>$key</key>"
+done
+
+echo "== the build number must advance the live update feed =="
+assert_contains "$ROOT/script/release-all.sh" 'LIVE_BUILD_NUMBER="$(nmh_live_feed_max_build_number)"'
+assert_contains "$ROOT/script/release-all.sh" 'if (( BUILD_NUMBER <= LIVE_BUILD_NUMBER )); then'
+assert_order 'LIVE_BUILD_NUMBER="$(nmh_live_feed_max_build_number)"' 'log "release identity"' "$ROOT/script/release-all.sh"
+CURL_STUB="$TMP/curl-stub"
+mkdir -p "$CURL_STUB"
+cat >"$CURL_STUB/curl" <<'STUB'
+#!/usr/bin/env bash
+[[ "${CURL_STUB_FAIL:-}" == 1 ]] && exit 22
+cat <<'FEED'
+<?xml version="1.0" standalone="yes"?><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+<channel><title>NikoMusicHub</title>
+<item><title>0.0.2</title><sparkle:version>368</sparkle:version><sparkle:shortVersionString>0.0.2</sparkle:shortVersionString></item>
+<item><title>0.0.1</title><sparkle:version>1201</sparkle:version><sparkle:shortVersionString>0.0.1</sparkle:shortVersionString></item>
+</channel></rss>
+FEED
+STUB
+chmod +x "$CURL_STUB/curl"
+LIVE_MAX="$(PATH="$CURL_STUB:$PATH" bash -c "source '$ROOT/script/release-env.sh'; nmh_live_feed_max_build_number")"
+[[ "$LIVE_MAX" == "1201" ]] || {
+  echo "nmh_live_feed_max_build_number must return the highest sparkle:version, got '$LIVE_MAX'" >&2
+  exit 1
+}
+if CURL_STUB_FAIL=1 PATH="$CURL_STUB:$PATH" bash -c "set -o pipefail; source '$ROOT/script/release-env.sh'; nmh_live_feed_max_build_number" >/dev/null 2>&1; then
+  echo "nmh_live_feed_max_build_number must fail when the feed cannot be fetched" >&2
+  exit 1
+fi
+assert_fail public-test-feed env NMH_DEVELOPER_ID_APPLICATION=test NMH_NOTARY_PROFILE=test NMH_RELEASE_UAT_EVIDENCE=/dev/null NMH_UPDATE_FEED_URL=https://example.invalid/appcast.xml "$ROOT/script/release-all.sh" --public --dry-run-publish
+assert_contains "$TMP/public-test-feed.err" "public release refuses NMH_UPDATE_FEED_URL"
+
 echo "== notary verdicts are read without pipe races =="
 # A `writer | grep -q` pipeline under pipefail can fail with SIGPIPE when grep exits
 # early; that turned an Accepted verdict into a failed rehearsal once.
-for fn in notarize require_secure_timestamps; do
+for fn in notarize require_secure_timestamps require_expected_entitlements; do
   if awk "/^$fn\\(\\) \\{/{p=1} p{print} p&&/^}/{exit}" "$ROOT/script/release-all.sh" | grep -v '^ *#' | grep -Eq '\| *grep +-[a-zA-Z]*q'; then
     echo "$fn must not pipe into grep -q (pipefail + SIGPIPE race)" >&2
     exit 1
@@ -398,6 +487,12 @@ cat >"$UAT" <<JSON
   "approved_by": "Release Test",
   "approved_at_utc": "2026-07-13T12:00:00Z",
   "machine": "arm64 macOS test machine",
+  "tested_build": {
+    "build_id": "$(cat "$ROOT/VERSION")+test",
+    "build_configuration": "release",
+    "signing_identity": "Developer ID Application: Release Test (TEAM)",
+    "hardened_runtime": true
+  },
   "checks": {
     "clean_install": "passed",
     "upgrade_preserves_settings": "passed",
@@ -422,6 +517,53 @@ path.write_text(json.dumps(payload))
 PY
 assert_fail uat-pending "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-pending.err" "privacy_permissions"
+
+echo "== UAT must be run on the build shape that ships =="
+# An ad-hoc debug install has a per-build TCC identity and no hardened runtime;
+# its privacy and recorder results say nothing about the Developer ID artifact.
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["checks"]["privacy_permissions"] = "passed"
+payload["tested_build"]["signing_identity"] = "ad-hoc"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-adhoc-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-adhoc-build.err" "Developer ID signed build"
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["signing_identity"] = "Developer ID Application: Release Test (TEAM)"
+payload["tested_build"]["build_configuration"] = "debug"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-debug-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-debug-build.err" "release-configuration build"
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["build_configuration"] = "release"
+del payload["tested_build"]
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-untracked-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-untracked-build.err" "tested_build.build_id"
+/usr/bin/python3 - "$UAT" "$(cat "$ROOT/VERSION")" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"] = {
+    "build_id": f"{sys.argv[2]}+test",
+    "build_configuration": "release",
+    "signing_identity": "Developer ID Application: Release Test (TEAM)",
+    "hardened_runtime": True,
+}
+path.write_text(json.dumps(payload))
+PY
+assert_pass uat-valid-again "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 
 echo "== approval record binds exact artifact, manifest, UAT, and gates =="
 /usr/bin/python3 - "$UAT" <<'PY'

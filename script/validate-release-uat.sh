@@ -44,6 +44,19 @@ MACHINE="$(read_json machine)"
 [[ "$APPROVED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || { echo "release UAT approved_at_utc must be an ISO-8601 UTC timestamp" >&2; exit 1; }
 [[ -n "$MACHINE" && "$MACHINE" != "TODO" ]] || { echo "release UAT evidence needs the tested machine description" >&2; exit 1; }
 
+# The tested build must have the shape that ships. An ad-hoc debug build has a
+# per-build TCC identity (permissions reset on every rebuild), no hardened
+# runtime and no library validation, so its privacy, recorder and login-item
+# results say nothing about the Developer ID artifact.
+TESTED_BUILD_ID="$(read_json tested_build.build_id)"
+TESTED_CONFIGURATION="$(read_json tested_build.build_configuration)"
+TESTED_SIGNING="$(read_json tested_build.signing_identity)"
+TESTED_HARDENED="$(read_json tested_build.hardened_runtime)"
+[[ "$TESTED_BUILD_ID" == "$VERSION+"* ]] || { echo "release UAT tested_build.build_id must be the installed app's NMHBuildID and start with $VERSION+ (was '${TESTED_BUILD_ID:-missing}')" >&2; exit 1; }
+[[ "$TESTED_CONFIGURATION" == "release" ]] || { echo "release UAT must be run on a release-configuration build (tested_build.build_configuration was '${TESTED_CONFIGURATION:-missing}')" >&2; exit 1; }
+[[ "$TESTED_SIGNING" == "Developer ID Application:"* ]] || { echo "release UAT must be run on a Developer ID signed build; ad-hoc builds change TCC identity on every rebuild and skip hardened runtime (tested_build.signing_identity was '${TESTED_SIGNING:-missing}')" >&2; exit 1; }
+[[ "$TESTED_HARDENED" == "true" ]] || { echo "release UAT must be run on a hardened-runtime build (tested_build.hardened_runtime was '${TESTED_HARDENED:-missing}')" >&2; exit 1; }
+
 REQUIRED_CHECKS=(
   clean_install
   upgrade_preserves_settings

@@ -141,6 +141,26 @@ nmh_update_feed_url() {
   printf '%s\n' "$url"
 }
 
+# Highest sparkle:version currently published on the live feed: the number a
+# candidate's CFBundleVersion must beat before Sparkle offers it to anyone.
+# Fails on any transport or parse error; the feed has existed since 1.5.0 and
+# a release that cannot see it must not guess.
+nmh_live_feed_max_build_number() {
+  local url
+  url="$(nmh_update_feed_url)" || return 1
+  curl -4 -fsSL --max-time 30 "$url" | /usr/bin/python3 -c '
+import sys
+import xml.etree.ElementTree as ElementTree
+
+namespaces = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
+root = ElementTree.fromstring(sys.stdin.read())
+versions = [int(node.text.strip()) for node in root.iterfind(".//sparkle:version", namespaces)]
+if not versions:
+    raise SystemExit("live update feed has no sparkle:version entries")
+print(max(versions))
+'
+}
+
 # Public half of the EdDSA key pair that signs update enclosures.
 #
 # The private half lives only in the release owner's Keychain. Prints nothing

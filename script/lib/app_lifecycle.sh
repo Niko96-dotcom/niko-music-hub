@@ -273,6 +273,9 @@ nmh_sign_bundle() {
     sign_options+=(--timestamp=none)
   fi
 
+  # No --preserve-metadata=entitlements on the helpers: upstream Sparkle ships
+  # Autoupdate with an ad-hoc com.apple.application-identifier that notarization
+  # rejects under our team, and the helpers need no entitlements of their own.
   if [[ -d "$NMH_SPARKLE_FRAMEWORK" ]]; then
     for nested in "$NMH_SPARKLE_FRAMEWORK/Versions/B/XPCServices/"*.xpc; do
       [[ -e "$nested" ]] || continue
@@ -368,6 +371,16 @@ nmh_build_bundle() {
   <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Niko Music Hub does not record your microphone. Recorder uses system audio capture; allow it under Screen &amp; System Audio Recording in System Settings.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Niko Music Hub scans your Cubase project archive and saves recordings, downloads and converted files where you choose.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Niko Music Hub reads and writes project files where you choose.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Niko Music Hub saves downloads and converted audio where you choose.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>Niko Music Hub reads archived Cubase projects on external drives.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>Niko Music Hub reads archived Cubase projects on network drives.</string>
 $NMH_SPARKLE_PLIST_FRAGMENT
 </dict>
 </plist>

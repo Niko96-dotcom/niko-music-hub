@@ -7,6 +7,12 @@
   "approved_by": "TODO",
   "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP",
   "machine": "TODO",
+  "tested_build": {
+    "build_id": "REPLACE_WITH_NMHBuildID_OF_THE_INSTALLED_APP",
+    "build_configuration": "release",
+    "signing_identity": "REPLACE_WITH_THE_Developer_ID_Application_IDENTITY",
+    "hardened_runtime": true
+  },
   "checks": {
     "clean_install": "pending",
     "upgrade_preserves_settings": "pending",

@@ -7,6 +7,8 @@
 - [ ] `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh` passed.
 - [ ] `CHANGELOG.md` matches `VERSION`.
 - [ ] `SPARKLE_PUBLIC_ED_KEY` holds the public key whose private half is in the release keychain.
+- [ ] `CFBundleVersion` (`git rev-list --count HEAD`) exceeds the `sparkle:version` on the live feed: the release commit descends from the previous release tag on the public history (`release-all.sh --public` refuses otherwise).
+- [ ] Every local `v*` tag exists on `origin` at the same object; no stray local tag anchors unfiltered history (`release-preflight.sh` refuses otherwise).
 - [ ] `./script/public-tree-hygiene.sh` passed.
 - [ ] `./script/ci.sh` passed.
 - [ ] `./script/e2e_user_smoke.sh` passed.
@@ -15,6 +17,7 @@
 - [ ] `./script/ci-tsan.sh` passed.
 - [ ] `./script/release-all.sh --public --dry-run-publish` rehearsed on the exact commit (before tagging; it accepts a missing tag).
 - [ ] Public tag `v<VERSION>` points at the intended commit.
+- [ ] UAT ran on a Developer ID, hardened-runtime, release-configuration install of the exact commit (`NMH_BUILD_CONFIGURATION=release NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" ./script/install-local.sh`), and the JSON's `tested_build` records it.
 - [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
