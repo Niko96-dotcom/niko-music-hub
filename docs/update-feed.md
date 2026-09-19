@@ -84,6 +84,17 @@ Sparkle will not accept a plain `http://` feed, and neither will this project's 
 ## Known limits
 
 - Sparkle's own window owns the download progress bar. The standard user driver exposes no byte counts, so the in-app status line names the version being downloaded but not a percentage.
-- `generate_appcast` reads the private key from the Keychain by default and will prompt for access on first use. `NMH_SPARKLE_KEY_ACCOUNT` selects a non-default Keychain account; `NMH_SPARKLE_PRIVATE_KEY_FILE` is for test feeds only.
+- `generate_appcast` reads the private key from the Keychain account `ed25519`
+  by default and may prompt for access on first use.
+  `NMH_SPARKLE_KEY_ACCOUNT` selects a different stored account.
+  `NMH_SPARKLE_PRIVATE_KEY_FILE` is for local test feeds only and is rejected by
+  public release mode.
 - `script/validate-update-feed.py` needs the `cryptography` module for `/usr/bin/python3`. If it is missing the release fails rather than skipping signature verification.
-- Feed generation requires resolved SPM artifacts (`swift package resolve`), since `generate_appcast` ships inside the Sparkle package.
+- Feed generation requires resolved SPM artifacts because `generate_appcast`
+  ships inside the exactly pinned Sparkle package. A normal release run's Swift
+  build resolves them; run `swift package resolve` first only when invoking the
+  feed tooling independently.
+- The feed contract is one full update enclosure for the single supported
+  `arm64` architecture. Delta, extra, zero-architecture, and multi-architecture
+  feeds fail closed until those formats are deliberately implemented and
+  revalidated.

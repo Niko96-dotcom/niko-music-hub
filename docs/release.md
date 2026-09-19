@@ -21,12 +21,28 @@ The supported release platform is Apple silicon (`arm64`) on macOS 14.2 or newer
 ## Prerequisites
 
 - macOS 14.2 or newer on Apple silicon (`arm64`).
-- Xcode with Swift 6.x.
+- Xcode with Swift 6.x. Exact Xcode and Swift patch versions are not pinned; use
+  a currently supported Xcode whose `swift build` accepts this package's
+  `// swift-tools-version: 6.0` declaration.
+- Xcode/macOS command-line tools used by the pipeline: `git`, `swift`, `xcrun`
+  (`notarytool` and `stapler`), `codesign`, `spctl`, `hdiutil`, `ditto`,
+  `plutil`, `PlistBuddy`, `lipo`, `curl`, and `shasum`.
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) for the source and
+  checksum gates.
+- `/usr/bin/python3` with the `cryptography` module. The release fails closed if
+  Ed25519 verification cannot import it.
 - A completely clean Git working tree, including untracked files, for every `release-all.sh` artifact. Use `./script/dev.sh run` for dirty local development builds.
 - Developer ID Application certificate in the keychain for public releases.
 - Notary profile created with `xcrun notarytool store-credentials`.
-- EdDSA update signing key in the login keychain, with its public half committed to `SPARKLE_PUBLIC_ED_KEY`. Public mode fails without it, because a release that cannot be described in the feed strands every installed build.
-- GitHub CLI authenticated for `--publish`.
+- EdDSA update signing key in the login keychain, with its public half committed
+  to `SPARKLE_PUBLIC_ED_KEY`. Sparkle's default Keychain account is `ed25519`;
+  set `NMH_SPARKLE_KEY_ACCOUNT` when the stored account differs. Public mode
+  rejects `NMH_SPARKLE_PRIVATE_KEY_FILE`, which is reserved for local test feeds.
+- GitHub CLI (`gh`) authenticated for `--publish`; dry-run publication does not
+  require it.
+- IPv4 access to GitHub, the live appcast, Apple's notary upload endpoint, and
+  Swift Package Manager dependencies. The release build resolves the pinned
+  Sparkle 2.9.6 artifact from `Package.resolved` before feed generation.
 
 Required environment for public mode:
 
@@ -59,6 +75,15 @@ git push origin "v$(cat VERSION)"
 ```
 
 Public mode generates and validates `appcast.xml` after the DMG is signed, notarized and stapled, so the enclosure signature covers the exact published bytes. Both the enclosure signature and the feed signature are re-verified against the `SUPublicEDKey` embedded in the candidate bundle: a feed signed by a key the app does not trust fails the release instead of silently disabling updates for every user. Publishing uploads a complete six-asset set and re-validates the hosted feed after download.
+
+The update-feed validator also binds `sparkle:shortVersionString` and
+`sparkle:version` directly to the candidate bundle's
+`CFBundleShortVersionString` and `CFBundleVersion`, requires the declared
+single-`arm64` hardware contract, and rejects extra or delta enclosures. The
+release version gate validates `SBOM.spdx.json`, `THIRD_PARTY_NOTICES.md`, and
+`SOURCE_PROVENANCE.md` against every exact pin in `Package.resolved`; dependency
+or provenance drift therefore fails before packaging without changing the
+six-asset publication contract.
 
 `release-all.sh` fails if the tree has any tracked or untracked changes: an artifact must never claim an exact source commit for uncommitted code. Public mode additionally fails if signing/notary credentials or approved UAT evidence are missing, the exact version tag does not resolve to `HEAD` both locally and on `origin` (publishing only), an identity differs from `BUNDLE_ID`, or any gate fails. Before spending minutes on gates it also refuses a locked console (the strict E2E gate reads the app's window through accessibility, which macOS withholds while locked), an unreachable notary upload endpoint (`notarytool` uploads to an S3 bucket over IPv4 and gives up after about 100 seconds), notary credentials that do not answer, a `NMH_UPDATE_FEED_URL` override (public builds poll the canonical feed only), a stray local `v*` tag that is not on `origin` (it would publish unfiltered history on the next `git push --tags`), and a `CFBundleVersion` that does not exceed the highest `sparkle:version` on the live feed (Sparkle would never offer the release). Every Developer ID signature, including Sparkle's nested helpers, is checked before upload for a secure timestamp and hardened runtime (the notary service rejects the whole app otherwise) and for the app's own Team ID (library validation refuses foreign teams at launch); the helpers must carry no entitlements, and the app must carry exactly `com.apple.security.device.audio-input`, which the recorder's Core Audio tap needs. Notary uploads are retried up to three times on transport failures; a rejection is final and Apple's log is saved as `notary-<app|dmg>-<submission id>.json` in the release directory. Publishing creates one new Release with its complete six-asset set; it refuses pre-existing releases and never overwrites assets. Local-only artifacts are ad-hoc signed, unnotarized, labeled `LOCAL-ONLY-UNSIGNED`, and cannot publish.
 

@@ -85,9 +85,21 @@ def read_bundle_update_keys(app: Path) -> dict:
         raise FeedValidationError(f"candidate bundle SUFeedURL is not HTTPS: {feed_url}")
     if not public_key:
         raise FeedValidationError("candidate bundle has no SUPublicEDKey; updates would be unverified")
+    bundle_short_version = (info.get("CFBundleShortVersionString") or "").strip()
+    bundle_version = (info.get("CFBundleVersion") or "").strip()
+    if not bundle_short_version:
+        raise FeedValidationError(
+            "candidate bundle has no CFBundleShortVersionString; the feed cannot prove the update matches the shipped version"
+        )
+    if not bundle_version:
+        raise FeedValidationError(
+            "candidate bundle has no CFBundleVersion; the feed cannot prove the build number advances"
+        )
     return {
         "feed_url": feed_url,
         "public_key": public_key,
+        "bundle_short_version": bundle_short_version,
+        "bundle_version": bundle_version,
         "require_signed_feed": bool(info.get("SURequireSignedFeed")),
         "verify_before_extraction": bool(info.get("SUVerifyUpdateBeforeExtraction")),
     }
@@ -137,22 +149,62 @@ def validate(args: argparse.Namespace) -> None:
         )
     item = items[0]
 
+    expect(bundle["bundle_short_version"], args.version, "candidate bundle CFBundleShortVersionString")
+    expect(bundle["bundle_version"], args.build_number, "candidate bundle CFBundleVersion")
     expect(sparkle_text(item, "shortVersionString"), args.version, "sparkle:shortVersionString")
     expect(sparkle_text(item, "version"), args.build_number, "sparkle:version")
+    expect(
+        sparkle_text(item, "shortVersionString"),
+        bundle["bundle_short_version"],
+        "sparkle:shortVersionString vs candidate bundle CFBundleShortVersionString",
+    )
+    expect(
+        sparkle_text(item, "version"),
+        bundle["bundle_version"],
+        "sparkle:version vs candidate bundle CFBundleVersion (a stale bundle build number means installed apps would never be offered this release)",
+    )
     expect(sparkle_text(item, "minimumSystemVersion"), args.minimum_macos, "sparkle:minimumSystemVersion")
 
-    hardware = sparkle_text(item, "hardwareRequirements")
+    # The current product contract is exactly one arm64 architecture. Zero or
+    # multiple architectures must fail closed here instead of silently skipping
+    # the hardwareRequirements check (the old code validated only when exactly
+    # one architecture was requested).
     expected_architectures = args.architectures.split()
-    if len(expected_architectures) == 1:
-        expect(hardware, expected_architectures[0], "sparkle:hardwareRequirements")
+    if expected_architectures != ["arm64"]:
+        raise FeedValidationError(
+            f"release architecture contract is {expected_architectures!r}; feed validation "
+            "requires exactly one arm64 architecture and refuses zero, multiple, or "
+            "non-arm64 instead of skipping hardwareRequirements validation"
+        )
+    hardware = sparkle_text(item, "hardwareRequirements")
+    expect(hardware, expected_architectures[0], "sparkle:hardwareRequirements")
 
     description = item.find("description")
     if description is None or not (description.text or "").strip():
         raise FeedValidationError("appcast item has no release notes description")
 
-    enclosure = item.find("enclosure")
-    if enclosure is None:
-        raise FeedValidationError("appcast item has no enclosure")
+    # The release contract is exactly one full enclosure. Delta updates (extra
+    # enclosures or sparkle:deltaFrom) are not published, so any of them fails
+    # closed instead of shipping an update path the validators never proved.
+    def _local_name(tag: str) -> str:
+        return tag.split("}", 1)[-1] if "}" in tag else tag
+
+    enclosures = [child for child in item if _local_name(child.tag) == "enclosure"]
+    if len(enclosures) != 1:
+        raise FeedValidationError(
+            f"appcast item must carry exactly one full enclosure, found {len(enclosures)}"
+        )
+    enclosure = enclosures[0]
+    if enclosure.tag != "enclosure":
+        raise FeedValidationError(
+            f"appcast enclosure must be a plain RSS enclosure, found tag {enclosure.tag!r}"
+        )
+    for key in enclosure.attrib:
+        if _local_name(key) == "deltaFrom":
+            raise FeedValidationError(
+                "appcast enclosure carries sparkle:deltaFrom; delta enclosures are not "
+                "part of the release contract"
+            )
 
     expect(enclosure.get("url"), args.expected_enclosure_url, "enclosure url")
 

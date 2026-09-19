@@ -519,6 +519,13 @@ if [[ "$MODE" == "public" ]]; then
     echo "public release refuses NMH_UPDATE_FEED_URL; every public build must poll the canonical feed" >&2
     exit 1
   fi
+  # The private-key file override exists only for local test feeds (see
+  # docs/update-feed.md); public releases sign through the Keychain account so
+  # the key never travels on a command line or in the environment.
+  if [[ -n "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+    echo "public release refuses NMH_SPARKLE_PRIVATE_KEY_FILE; it is for test feeds only and public releases use the Keychain account" >&2
+    exit 1
+  fi
   if [[ "$PUBLISH" == true ]]; then
     "$ROOT/script/release-preflight.sh"
   else

@@ -5,8 +5,10 @@
 - [ ] `BUNDLE_ID` is the permanent `com.niko96.NikoMusicHub` identity.
 - [ ] `RELEASE_ARCHITECTURES` and the package minimum macOS contract match the intended release machine and artifact.
 - [ ] `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh` passed.
+- [ ] Release metadata validation proved `SBOM.spdx.json`, `THIRD_PARTY_NOTICES.md`, and `SOURCE_PROVENANCE.md` match every exact `Package.resolved` pin.
 - [ ] `CHANGELOG.md` matches `VERSION`.
 - [ ] `SPARKLE_PUBLIC_ED_KEY` holds the public key whose private half is in the release keychain.
+- [ ] Public release uses the Keychain Sparkle key; `NMH_SPARKLE_PRIVATE_KEY_FILE` is unset.
 - [ ] `CFBundleVersion` (`git rev-list --count HEAD`) exceeds the `sparkle:version` on the live feed: the release commit descends from the previous release tag on the public history (`release-all.sh --public` refuses otherwise).
 - [ ] Every local `v*` tag exists on `origin` at the same object; no stray local tag anchors unfiltered history (`release-preflight.sh` refuses otherwise).
 - [ ] `./script/public-tree-hygiene.sh` passed.
@@ -21,7 +23,7 @@
 - [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
-- [ ] `appcast.xml` was generated after stapling and validated against the key embedded in the candidate app.
+- [ ] `appcast.xml` was generated after stapling and validated against the key and exact `CFBundleShortVersionString`/`CFBundleVersion` embedded in the candidate app; it contains one full `arm64` enclosure and no delta.
 - [ ] `./script/release-all.sh --public --publish` uploaded exactly the expected GitHub assets, including `appcast.xml`.
 - [ ] Hosted assets were downloaded and revalidated, including the hosted update feed.
 - [ ] Installed `/Applications/NikoMusicHub.app` matches `VERSION`, `BUNDLE_ID`, and `NMHBuildID`.

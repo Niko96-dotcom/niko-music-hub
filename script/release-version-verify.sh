@@ -52,6 +52,10 @@ for commercial_file in LICENSE THIRD_PARTY_NOTICES.md SOURCE_PROVENANCE.md SBOM.
     exit 1
   fi
 done
+# Structural dependency metadata: SBOM, notices, and provenance must describe
+# exactly the Package.resolved pins at this VERSION. Read-only; never
+# regenerates tracked files here.
+"/usr/bin/python3" "$ROOT/script/validate-release-metadata.py" --root "$ROOT"
 SBOM_VERSION="$(nmh_json_value "$ROOT/SBOM.spdx.json" packages.0.versionInfo 2>/dev/null || true)"
 if [[ "$SBOM_VERSION" != "$VERSION" ]]; then
   echo "release version violation: SBOM package version '$SBOM_VERSION' does not match VERSION=$VERSION" >&2

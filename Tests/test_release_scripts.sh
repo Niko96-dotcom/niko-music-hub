@@ -667,4 +667,371 @@ if grep -Fq '# Changelog' "$NOTES"; then
   exit 1
 fi
 
+echo "== update feed binds the candidate bundle =="
+assert_contains "$ROOT/script/validate-update-feed.py" "CFBundleShortVersionString"
+assert_contains "$ROOT/script/validate-update-feed.py" "CFBundleVersion"
+assert_contains "$ROOT/script/validate-update-feed.py" "exactly one arm64"
+assert_contains "$ROOT/script/validate-update-feed.py" "exactly one full enclosure"
+assert_contains "$ROOT/script/validate-update-feed.py" "deltaFrom"
+assert_not_contains "$ROOT/script/validate-update-feed.py" 'if len(expected_architectures) == 1:'
+FEED_DIR="$TMP/feed"
+FEED_GOOD="$TMP/feed-good"
+FEED_VERSION="9.9.9"
+FEED_BUILD="4242"
+FEED_MIN_MACOS="14.2"
+FEED_URL="https://example.invalid/NikoMusicHub-$FEED_VERSION.dmg"
+/usr/bin/python3 - "$FEED_DIR" "$FEED_VERSION" "$FEED_BUILD" "$FEED_MIN_MACOS" "$FEED_URL" <<'PY'
+import base64
+import plistlib
+import sys
+import xml.etree.ElementTree as ElementTree
+from pathlib import Path
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
+
+feed_dir, version, build, minimum_macos, enclosure_url = sys.argv[1:6]
+root = Path(feed_dir)
+root.mkdir(parents=True, exist_ok=True)
+
+private_key = ed25519.Ed25519PrivateKey.generate()
+public_key = base64.b64encode(
+    private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+).decode("ascii")
+
+artifact = root / "update.bin"
+artifact.write_bytes(b"feed-fixture-artifact-bytes")
+signature = base64.b64encode(private_key.sign(artifact.read_bytes())).decode("ascii")
+
+app = root / "Fixture.app"
+(app / "Contents").mkdir(parents=True, exist_ok=True)
+with (app / "Contents" / "Info.plist").open("wb") as handle:
+    plistlib.dump(
+        {
+            "CFBundleShortVersionString": version,
+            "CFBundleVersion": build,
+            "SUFeedURL": "https://example.invalid/appcast.xml",
+            "SUPublicEDKey": public_key,
+        },
+        handle,
+    )
+
+ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ElementTree.register_namespace("sparkle", ns)
+rss = ElementTree.Element("rss", {"version": "2.0"})
+channel = ElementTree.SubElement(rss, "channel")
+ElementTree.SubElement(channel, "title").text = "Fixture"
+item = ElementTree.SubElement(channel, "item")
+ElementTree.SubElement(item, "title").text = version
+ElementTree.SubElement(item, "description").text = "Fixture notes."
+ElementTree.SubElement(item, f"{{{ns}}}shortVersionString").text = version
+ElementTree.SubElement(item, f"{{{ns}}}version").text = build
+ElementTree.SubElement(item, f"{{{ns}}}minimumSystemVersion").text = minimum_macos
+ElementTree.SubElement(item, f"{{{ns}}}hardwareRequirements").text = "arm64"
+enclosure = ElementTree.SubElement(item, "enclosure")
+enclosure.set("url", enclosure_url)
+enclosure.set("length", str(len(artifact.read_bytes())))
+enclosure.set(f"{{{ns}}}edSignature", signature)
+ElementTree.ElementTree(rss).write(root / "appcast.xml", xml_declaration=True)
+PY
+rm -rf "$FEED_GOOD"
+cp -r "$FEED_DIR" "$FEED_GOOD"
+restore_feed() {
+  rm -rf "$FEED_DIR"
+  cp -r "$FEED_GOOD" "$FEED_DIR"
+}
+feed_args() {
+  printf '%s\n' "$ROOT/script/validate-update-feed.py" \
+    --appcast "$FEED_DIR/appcast.xml" \
+    --artifact "$FEED_DIR/update.bin" \
+    --app "$FEED_DIR/Fixture.app" \
+    --version "$FEED_VERSION" \
+    --build-number "$FEED_BUILD" \
+    --minimum-macos "$FEED_MIN_MACOS" \
+    --architectures "arm64" \
+    --expected-enclosure-url "$FEED_URL"
+}
+assert_pass feed-valid /usr/bin/python3 $(feed_args)
+/usr/bin/python3 - "$FEED_DIR/Fixture.app/Contents/Info.plist" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+with path.open("rb") as handle:
+    info = plistlib.load(handle)
+info["CFBundleVersion"] = "4241"
+with path.open("wb") as handle:
+    plistlib.dump(info, handle)
+PY
+assert_fail feed-stale-bundle-build /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-stale-bundle-build.err" "CFBundleVersion"
+restore_feed
+/usr/bin/python3 - "$FEED_DIR/Fixture.app/Contents/Info.plist" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+with path.open("rb") as handle:
+    info = plistlib.load(handle)
+info["CFBundleShortVersionString"] = "9.9.8"
+with path.open("wb") as handle:
+    plistlib.dump(info, handle)
+PY
+assert_fail feed-bundle-short-mismatch /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-bundle-short-mismatch.err" "CFBundleShortVersionString"
+restore_feed
+/usr/bin/python3 - "$FEED_DIR/appcast.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ElementTree
+from pathlib import Path
+path = Path(sys.argv[1])
+ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ElementTree.register_namespace("sparkle", ns)
+tree = ElementTree.parse(path)
+item = tree.getroot().find("./channel/item")
+item.find(f"{{{ns}}}version").text = "4241"
+tree.write(path, xml_declaration=True)
+PY
+assert_fail feed-stale-sparkle-version /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-stale-sparkle-version.err" "sparkle:version"
+restore_feed
+assert_fail feed-zero-architectures /usr/bin/python3 "$ROOT/script/validate-update-feed.py" \
+  --appcast "$FEED_DIR/appcast.xml" \
+  --artifact "$FEED_DIR/update.bin" \
+  --app "$FEED_DIR/Fixture.app" \
+  --version "$FEED_VERSION" \
+  --build-number "$FEED_BUILD" \
+  --minimum-macos "$FEED_MIN_MACOS" \
+  --architectures "" \
+  --expected-enclosure-url "$FEED_URL"
+assert_contains "$TMP/feed-zero-architectures.err" "exactly one arm64"
+assert_fail feed-multiple-architectures /usr/bin/python3 "$ROOT/script/validate-update-feed.py" \
+  --appcast "$FEED_DIR/appcast.xml" \
+  --artifact "$FEED_DIR/update.bin" \
+  --app "$FEED_DIR/Fixture.app" \
+  --version "$FEED_VERSION" \
+  --build-number "$FEED_BUILD" \
+  --minimum-macos "$FEED_MIN_MACOS" \
+  --architectures "arm64 x86_64" \
+  --expected-enclosure-url "$FEED_URL"
+assert_contains "$TMP/feed-multiple-architectures.err" "exactly one arm64"
+/usr/bin/python3 - "$FEED_DIR/appcast.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ElementTree
+from pathlib import Path
+path = Path(sys.argv[1])
+ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ElementTree.register_namespace("sparkle", ns)
+tree = ElementTree.parse(path)
+item = tree.getroot().find("./channel/item")
+item.find(f"{{{ns}}}hardwareRequirements").text = "x86_64"
+tree.write(path, xml_declaration=True)
+PY
+assert_fail feed-wrong-hardware /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-wrong-hardware.err" "hardwareRequirements"
+restore_feed
+/usr/bin/python3 - "$FEED_DIR/appcast.xml" <<'PY'
+import copy
+import sys
+import xml.etree.ElementTree as ElementTree
+from pathlib import Path
+path = Path(sys.argv[1])
+ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ElementTree.register_namespace("sparkle", ns)
+tree = ElementTree.parse(path)
+item = tree.getroot().find("./channel/item")
+item.append(copy.deepcopy(item.find("enclosure")))
+tree.write(path, xml_declaration=True)
+PY
+assert_fail feed-extra-enclosure /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-extra-enclosure.err" "exactly one full enclosure"
+restore_feed
+/usr/bin/python3 - "$FEED_DIR/appcast.xml" <<'PY'
+import sys
+import xml.etree.ElementTree as ElementTree
+from pathlib import Path
+path = Path(sys.argv[1])
+ns = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+ElementTree.register_namespace("sparkle", ns)
+tree = ElementTree.parse(path)
+item = tree.getroot().find("./channel/item")
+item.find("enclosure").set(f"{{{ns}}}deltaFrom", "4241")
+tree.write(path, xml_declaration=True)
+PY
+assert_fail feed-delta-enclosure /usr/bin/python3 $(feed_args)
+assert_contains "$TMP/feed-delta-enclosure.err" "deltaFrom"
+restore_feed
+
+echo "== release metadata validator =="
+assert_contains "$ROOT/script/release-version-verify.sh" "validate-release-metadata.py"
+assert_pass metadata-valid /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$ROOT"
+META="$TMP/metadata"
+mkdir -p "$META"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+cp "$ROOT/Package.resolved" "$META/Package.resolved"
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$META/THIRD_PARTY_NOTICES.md"
+cp "$ROOT/SOURCE_PROVENANCE.md" "$META/SOURCE_PROVENANCE.md"
+cp "$ROOT/VERSION" "$META/VERSION"
+assert_pass metadata-fixture-valid /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+/usr/bin/python3 - "$META/SBOM.spdx.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+for package in payload["packages"]:
+    if str(package.get("name", "")).lower() == "sparkle":
+        package["versionInfo"] = "2.9.5"
+path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-stale-sbom-version /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-stale-sbom-version.err" "versionInfo"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+/usr/bin/python3 - "$META/SBOM.spdx.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+for package in payload["packages"]:
+    if str(package.get("name", "")).lower() == "sparkle":
+        package["downloadLocation"] = package["downloadLocation"].split("@")[0] + "@" + "0" * 40
+path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-stale-sbom-revision /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-stale-sbom-revision.err" "resolved revision"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+/usr/bin/python3 - "$META/SBOM.spdx.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+kept = []
+removed_id = None
+for package in payload["packages"]:
+    if str(package.get("name", "")).lower() == "sparkle":
+        removed_id = package.get("SPDXID")
+        continue
+    kept.append(package)
+payload["packages"] = kept
+payload["relationships"] = [
+    relationship for relationship in payload.get("relationships", [])
+    if relationship.get("relatedSpdxElement") != removed_id
+]
+path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-missing-package /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-missing-package.err" "missing a package"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+/usr/bin/python3 - "$META/SBOM.spdx.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["packages"].append(
+    {
+        "SPDXID": "SPDXRef-Package-Evil",
+        "name": "EvilLib",
+        "versionInfo": "1.0",
+        "downloadLocation": "https://example.invalid/evil",
+        "filesAnalyzed": False,
+        "licenseConcluded": "NOASSERTION",
+        "licenseDeclared": "NOASSERTION",
+        "copyrightText": "NOASSERTION",
+    }
+)
+path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-extra-package /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-extra-package.err" "extra package"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+/usr/bin/python3 - "$META/SBOM.spdx.json" <<'PY'
+import copy
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+for package in list(payload["packages"]):
+    if str(package.get("name", "")).lower() == "sparkle":
+        duplicate = copy.deepcopy(package)
+        duplicate["SPDXID"] = "SPDXRef-Package-Sparkle-Duplicate"
+        payload["packages"].append(duplicate)
+        break
+path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-duplicate-package /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-duplicate-package.err" "duplicate"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+sed 's/2\.9\.6/2.9.5/g' "$ROOT/THIRD_PARTY_NOTICES.md" >"$META/THIRD_PARTY_NOTICES.md"
+assert_fail metadata-notices-stale /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-notices-stale.err" "resolved version"
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$META/THIRD_PARTY_NOTICES.md"
+sed 's/Sparkle/Redacted/g' "$ROOT/SOURCE_PROVENANCE.md" >"$META/SOURCE_PROVENANCE.md"
+assert_fail metadata-provenance-missing /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-provenance-missing.err" "no coverage"
+cp "$ROOT/SOURCE_PROVENANCE.md" "$META/SOURCE_PROVENANCE.md"
+assert_pass metadata-fixture-restored /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+
+echo "== public preflight proves its tools before lengthy gates =="
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool rg"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool swift"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool xcrun"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool codesign"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool hdiutil"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool plutil"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool spctl"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool ditto"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool curl"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool shasum"
+assert_contains "$ROOT/script/release-preflight.sh" "require_public_tool lipo"
+assert_contains "$ROOT/script/release-preflight.sh" "/usr/libexec/PlistBuddy"
+assert_contains "$ROOT/script/release-preflight.sh" "xcrun --find notarytool"
+assert_contains "$ROOT/script/release-preflight.sh" "xcrun --find stapler"
+assert_contains "$ROOT/script/release-preflight.sh" "swift --version"
+assert_contains "$ROOT/script/release-preflight.sh" "Swift 6"
+assert_contains "$ROOT/script/release-preflight.sh" 'if [[ -n "${DEVELOPER_DIR:-}" ]]'
+assert_contains "$ROOT/script/release-preflight.sh" 'DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift --version'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'DEVELOPER_DIR="$DEVELOPER_DIR" swift "$@"'
+assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift "$@"'
+assert_contains "$ROOT/script/release-preflight.sh" "cryptography"
+assert_not_contains "$ROOT/script/release-preflight.sh" "command -v gh"
+assert_not_contains "$ROOT/script/release-preflight.sh" "generate_appcast"
+assert_not_contains "$ROOT/script/release-preflight.sh" ".build/artifacts"
+SWIFT_SELECT_FN="$(awk '/^release_swift_version\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/release-preflight.sh")"
+SWIFT_STUB_BIN="$TMP/preflight-swift-bin"
+SWIFT_STUB_RECORD="$TMP/preflight-swift-developer-dir"
+mkdir -p "$SWIFT_STUB_BIN"
+cat >"$SWIFT_STUB_BIN/swift" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${DEVELOPER_DIR:-}" >"$NMH_SWIFT_STUB_RECORD"
+echo "Swift version 6.99.0"
+STUB
+chmod +x "$SWIFT_STUB_BIN/swift"
+PATH="$SWIFT_STUB_BIN:$PATH" DEVELOPER_DIR="$TMP/SelectedDeveloper" NMH_SWIFT_STUB_RECORD="$SWIFT_STUB_RECORD" \
+  bash -c "set -euo pipefail; $SWIFT_SELECT_FN; release_swift_version" >"$TMP/preflight-swift.out"
+[[ "$(cat "$SWIFT_STUB_RECORD")" == "$TMP/SelectedDeveloper" ]] || {
+  echo "release preflight did not propagate DEVELOPER_DIR to the selected Swift compiler" >&2
+  exit 1
+}
+assert_contains "$TMP/preflight-swift.out" "Swift version 6.99.0"
+NO_RG_BIN="$TMP/preflight-no-rg-bin"
+mkdir -p "$NO_RG_BIN"
+ln -sf "$(command -v git)" "$NO_RG_BIN/git"
+ln -sf "$(command -v awk)" "$NO_RG_BIN/awk"
+ln -sf "$(command -v bash)" "$NO_RG_BIN/bash"
+assert_fail preflight-missing-rg env PATH="$NO_RG_BIN" "$ROOT/script/release-preflight.sh" --root "$PREFLIGHT_REPO"
+assert_contains "$TMP/preflight-missing-rg.err" "missing required tool 'rg'"
+
+echo "== public release refuses test-feed key files =="
+assert_contains "$ROOT/script/release-all.sh" "NMH_SPARKLE_PRIVATE_KEY_FILE"
+assert_contains "$ROOT/script/release-all.sh" "test feeds only"
+assert_contains "$ROOT/script/release-all.sh" '--ed-key-file "$NMH_SPARKLE_PRIVATE_KEY_FILE"'
+assert_fail public-private-key-file env NMH_DEVELOPER_ID_APPLICATION=test NMH_NOTARY_PROFILE=test NMH_RELEASE_UAT_EVIDENCE=/dev/null NMH_SPARKLE_PRIVATE_KEY_FILE=/tmp/nmh-test-key-file "$ROOT/script/release-all.sh" --public --dry-run-publish
+assert_contains "$TMP/public-private-key-file.err" "NMH_SPARKLE_PRIVATE_KEY_FILE"
+
 echo "release script regression tests passed."

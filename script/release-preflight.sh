@@ -23,6 +23,72 @@ done
 
 [[ -d "$ROOT/.git" ]] || { echo "public release preflight requires a Git checkout: $ROOT" >&2; exit 1; }
 
+# Fail on environment problems before any lengthy gate. rg and the
+# cryptography module for /usr/bin/python3 are not stock assumptions on every
+# Mac, and the Apple/Swift tools below are required by the signing,
+# notarization, and packaging path. Only presence is checked here, never exact
+# host versions, so supported Xcode/Swift patch updates keep passing. gh stays
+# conditional on --publish in release-all.sh and is intentionally not required
+# here; resolved .build artifacts are likewise not demanded because swift build
+# resolves them before feed generation.
+require_public_tool() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "public release preflight missing required tool '$1': $2" >&2
+    exit 1
+  }
+}
+
+require_public_tool git "install Xcode command line tools before releasing (release identity and tagging)"
+require_public_tool rg "install ripgrep before releasing (version and packaging gates search tracked sources)"
+require_public_tool swift "install Xcode with Swift 6.x before releasing (the release build step)"
+require_public_tool xcrun "install Xcode command line tools before releasing (notarization and stapling run through xcrun)"
+require_public_tool codesign "install Xcode command line tools before releasing (Developer ID signing)"
+require_public_tool hdiutil "hdiutil packages the release DMG and is required before releasing"
+require_public_tool plutil "plutil reads candidate bundle metadata and is required before releasing"
+require_public_tool spctl "install Xcode command line tools before releasing (Gatekeeper assessment of the signed app and DMG)"
+require_public_tool ditto "ditto stages and archives the release app bundle and is required before releasing"
+require_public_tool curl "curl fetches the live update feed to prove the build number advances"
+require_public_tool shasum "shasum writes and verifies release checksums and manifests"
+require_public_tool lipo "install Xcode command line tools before releasing (release architecture verification runs through lipo)"
+[[ -x /usr/libexec/PlistBuddy ]] || {
+  echo "public release preflight missing required tool '/usr/libexec/PlistBuddy': PlistBuddy reads candidate bundle metadata and is required before releasing" >&2
+  exit 1
+}
+xcrun --find notarytool >/dev/null 2>&1 || {
+  echo "public release preflight requires notarytool via xcrun: install Xcode command line tools before releasing (notarization runs through xcrun notarytool)" >&2
+  exit 1
+}
+xcrun --find stapler >/dev/null 2>&1 || {
+  echo "public release preflight requires stapler via xcrun: install Xcode command line tools before releasing (stapling runs through xcrun stapler)" >&2
+  exit 1
+}
+# Match the compiler selection used by script/lib/app_lifecycle.sh:nmh_swift
+# and script/ci.sh. A PATH-only probe can inspect a Homebrew/swiftly compiler
+# even though the release build will use Xcode through DEVELOPER_DIR.
+release_swift_version() {
+  if [[ -n "${DEVELOPER_DIR:-}" ]]; then
+    DEVELOPER_DIR="$DEVELOPER_DIR" swift --version
+  elif [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+    DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift --version
+  else
+    swift --version
+  fi
+}
+
+SWIFT_VERSION_OUTPUT="$(release_swift_version 2>&1 || true)"
+if ! printf '%s\n' "$SWIFT_VERSION_OUTPUT" | grep -Eq 'Swift version 6(\.| |$)'; then
+  echo "public release preflight requires Swift 6.x: swift --version reported '${SWIFT_VERSION_OUTPUT:-unknown}'; install Xcode with Swift 6.x before releasing" >&2
+  exit 1
+fi
+[[ -x /usr/bin/python3 ]] || {
+  echo "public release preflight missing required tool '/usr/bin/python3': macOS system Python validates the update feed and release metadata" >&2
+  exit 1
+}
+/usr/bin/python3 -c "import cryptography" 2>/dev/null || {
+  echo "public release preflight requires the 'cryptography' module for /usr/bin/python3: update-feed signature verification cannot run without it" >&2
+  exit 1
+}
+
 VERSION="$(tr -d '[:space:]' <"$ROOT/VERSION")"
 TAG="v$VERSION"
 COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
