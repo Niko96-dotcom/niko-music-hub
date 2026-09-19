@@ -227,32 +227,59 @@ public actor LocalVaultTransferEngine {
         }, by: \.projectID).compactMapValues { records in
             records.max(by: Self.isEarlierVerifiedSurvivor)
         }
-        var usableVerifiedSurvivors: [ProjectID: VaultTransferRecord] = [:]
-        for (projectID, survivor) in verifiedSurvivors {
+        // Survivor retirement requires fresh durability reproof over the exact
+        // survivor destination generation, plus a synchronous final
+        // manifest/path binding after the last await, plus journal proof
+        // before any older record is marked superseded. A historical
+        // `.verifiedLocal` boolean plus readable bytes is never sufficient:
+        // the barrier is re-run, capabilities are revalidated honestly, and
+        // the final binding happens synchronously with no await between it,
+        // the journal proof, and the supersession persist. Any failure leaves
+        // older records recoverable. Retirement never deletes staging or
+        // generations and never replays a copy; it only marks the older
+        // record superseded. Cloud online-only never infers durability from a
+        // placeholder and never materializes: it requires fresh
+        // `.syncedToProvider` plus live locality (fullyLocalCurrent or
+        // materializationRequired) without any materialize call.
+        var retiredIDs = Set<UUID>()
+        for (_, survivor) in verifiedSurvivors {
             // Verification can read gigabytes. It is needed here only if this
             // generation could retire an older incomplete transfer for its song.
             guard records.contains(where: {
-                $0.projectID == projectID && Self.isCausallyOlder($0, than: survivor)
+                $0.projectID == survivor.projectID
+                    && Self.isCausallyOlder($0, than: survivor)
+                    && !retiredIDs.contains($0.id)
             }) else { continue }
-            if await hasUsableVerifiedArchiveGeneration(survivor) {
-                usableVerifiedSurvivors[projectID] = survivor
-            }
-        }
-        for var record in records {
-            guard let survivor = usableVerifiedSurvivors[record.projectID],
-                  Self.isCausallyOlder(record, than: survivor) else { continue }
-            record.state = .superseded
-            record.supersededBy = survivor.id
-            record.error = nil
-            record.nextRetryAt = nil
+            guard let fresh = await freshSurvivorDurabilityForRetirement(survivor) else { continue }
+            // Final binding is synchronous. No awaits occur between this
+            // check, the journal proof, and the supersession persist below.
+            guard survivorRetirementBindingHolds(survivor, freshDurability: fresh) else { continue }
             do {
-                try persist(&record)
+                try store.proveRecoveryPersistence()
             } catch {
                 continue
             }
+            for var record in records where record.projectID == survivor.projectID
+                && Self.isCausallyOlder(record, than: survivor)
+                && !retiredIDs.contains(record.id) {
+                guard let current = try? store.record(id: record.id),
+                      current.state == record.state,
+                      current.supersededBy == nil else { continue }
+                record.state = .superseded
+                record.supersededBy = survivor.id
+                record.error = nil
+                record.nextRetryAt = nil
+                do {
+                    try persist(&record)
+                    retiredIDs.insert(record.id)
+                } catch {
+                    continue
+                }
+            }
         }
         records.removeAll { record in
-            (try? store.record(id: record.id)?.state) == .superseded
+            retiredIDs.contains(record.id)
+                || (try? store.record(id: record.id)?.state) == .superseded
         }
         // A failed automatic attempt used to create a fresh transfer every minute.
         // Resume only the newest record for each project so launch recovery cannot
@@ -501,9 +528,32 @@ public actor LocalVaultTransferEngine {
         try fileManager.moveItem(at: record.sourceURL, to: preserved)
     }
 
-    /// Removes the Active copy only after independently reloading the terminal
-    /// archive record and re-verifying its manifest. Automatic callers should
-    /// perform their final activity/open-file probe immediately before calling.
+    /// Removes the Active copy only after re-proving durability for the exact
+    /// generation and persisting fresh recovery evidence with a journal barrier.
+    /// A completed copy/rename plus a historical `.verifiedLocal` boolean is
+    /// never sufficient: legacy readable-only `.verifiedLocal` (copy-completion
+    /// alone) must not authorize deletion. Automatic callers should perform
+    /// their final activity/open-file probe immediately before calling.
+    ///
+    /// Ordering (fail-closed, keep every copy):
+    /// 1. Reload the terminal record and verify its manifest bytes.
+    /// 2. Re-run `provider.waitUntilDurable` over the exact destination.
+    ///    For local folders this re-establishes the flush barrier; for File
+    ///    Provider this re-proves upload sync. Any throw blocks removal.
+    /// 3. Revalidate provider capabilities honestly (`waitsForDurability`
+    ///    must match the fresh claim: local requires `.verifiedLocal`,
+    ///    cloud requires `.syncedToProvider`). Never infer remote backup
+    ///    from filesystem presence; `.independentlyBackedUp` never authorizes
+    ///    here because no provider returns it as fresh proof.
+    /// 4. After both awaits, synchronously revalidate containment plus exact
+    ///    manifest bytes at the destination before persisting any fresh claim.
+    ///    This avoids an endless await race: the final destructive binding to
+    ///    the exact verified bytes happens again after the last removal-admission
+    ///    await in `validateRemovalEvidence`, synchronously before `removeItem`.
+    /// 5. Persist the terminal record with fresh durability, then enforce the
+    ///    journal barrier via `store.proveRecoveryPersistence()` before
+    ///    authorizing deletion. Journal failure blocks removal while leaving
+    ///    read-only catalog/recovery access available.
     @discardableResult
     public func removeActiveCopy(after archivedRecord: VaultTransferRecord) async throws -> VaultTransferRecord {
         guard
@@ -514,19 +564,71 @@ public actor LocalVaultTransferEngine {
             persisted.destinationURL == archivedRecord.destinationURL,
             persisted.manifestID == archivedRecord.manifestID,
             let manifest = persisted.manifest,
-            let durability = persisted.durability
+            persisted.durability != nil
         else {
             throw LocalVaultTransferError.missingPersistedArchiveEvidence
         }
+        try validatePaths(persisted)
+        try manifest.validatePersistedContentEnvelope()
         try manifestBuilder.verifyArchive(manifest, at: persisted.destinationURL)
-        var record = persisted
+        // Re-run provider persistence for the exact generation. Legacy
+        // persisted durability is not trusted.
+        let freshDurability: VaultDurability
+        do {
+            freshDurability = try await provider.waitUntilDurable(persisted.destinationURL)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw error
+        }
+        let capabilities: StorageCapabilities
+        do {
+            capabilities = try await provider.capabilities()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw LocalVaultTransferError.missingPersistedArchiveEvidence
+        }
+        switch (capabilities.waitsForDurability, freshDurability) {
+        case (false, .verifiedLocal):
+            break
+        case (true, .syncedToProvider):
+            break
+        default:
+            throw LocalVaultTransferError.missingPersistedArchiveEvidence
+        }
+        // After awaits, revalidate containment plus exact bytes synchronously
+        // before persisting any fresh claim. Source-object binding is finally
+        // enforced after the last removal-admission await in
+        // `validateRemovalEvidence`, synchronously before the destructive call.
+        try validatePaths(persisted)
+        guard let revalidatedManifest = persisted.manifest,
+              persisted.manifestID == revalidatedManifest.id else {
+            throw LocalVaultTransferError.missingPersistedArchiveEvidence
+        }
+        try revalidatedManifest.validatePersistedContentEnvelope()
+        try manifestBuilder.verifyArchive(revalidatedManifest, at: persisted.destinationURL)
+        var terminal = persisted
         // A restored project can reuse an earlier archived generation. Fresh
-        // manifest verification above re-establishes its removal evidence.
-        record.state = .archiveVerified
+        // barrier plus manifest verification above re-establishes its removal
+        // evidence; the old persisted durability value is discarded.
+        terminal.state = .archiveVerified
+        terminal.durability = freshDurability
+        terminal.error = nil
+        terminal.nextRetryAt = nil
+        try persist(&terminal)
+        do {
+            try store.proveRecoveryPersistence()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw error
+        }
+        var record = terminal
         record.state = try ProjectVaultStateMachine().applying(
             .beginRemovingActiveCopy(VaultRemovalEvidence(
                 manifestVerified: true,
-                archiveDurability: durability,
+                archiveDurability: freshDurability,
                 metadataPersisted: true
             )),
             to: record.state
@@ -972,7 +1074,8 @@ public actor LocalVaultTransferEngine {
         guard
             let persisted = try store.record(id: record.id),
             persisted.state == .removingActiveCopy,
-            persisted.durability != nil,
+            let persistedDurability = persisted.durability,
+            persistedDurability == .verifiedLocal || persistedDurability == .syncedToProvider,
             let manifest = persisted.manifest,
             persisted.manifestID == manifest.id,
             persisted.destinationURL == record.destinationURL,
@@ -1016,21 +1119,42 @@ public actor LocalVaultTransferEngine {
 
     private func failureReason(for error: Error) -> VaultFailureReason {
         switch error {
-        case LocalVaultTransferError.sourceMutated: .sourceMutated
-        case LocalVaultTransferError.occupiedDestination: .occupiedDestination
+        case LocalVaultTransferError.sourceMutated: return .sourceMutated
+        case LocalVaultTransferError.occupiedDestination: return .occupiedDestination
         case VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity),
              VaultWriteAdmissionError.postponed(.archiveCapacityUnavailable),
-             VaultWriteAdmissionError.postponed(.invalidPolicy): .insufficientSpace
-        case VaultManifestError.mismatch: .integrityMismatch
-        case LocalFolderStorageError.unreadable, LocalFolderStorageError.unwritable: .permissionLost
-        case FileProviderArchiveStorageError.durabilityUnavailable: .providerUnsynced
-        case FileProviderArchiveStorageError.operationTimedOut: .slowProviderSync
+             VaultWriteAdmissionError.postponed(.invalidPolicy): return .insufficientSpace
+        case VaultManifestError.mismatch: return .integrityMismatch
+        case LocalFolderStorageError.unreadable, LocalFolderStorageError.unwritable: return .permissionLost
+        case FileProviderArchiveStorageError.durabilityUnavailable: return .providerUnsynced
+        case FileProviderArchiveStorageError.operationTimedOut: return .slowProviderSync
         case FileProviderArchiveStorageError.lookupUnavailable,
              FileProviderArchiveStorageError.domainUnavailable,
              FileProviderArchiveStorageError.domainDisabled,
              FileProviderArchiveStorageError.domainDisconnected,
-             FileProviderArchiveStorageError.managerUnavailable: .providerOffline
-        default: .unknown
+             FileProviderArchiveStorageError.managerUnavailable: return .providerOffline
+        case let barrier as LocalVaultDurabilityBarrierError:
+            switch barrier {
+            case .fileFlushFailed(_, let errno),
+                 .directoryFlushFailed(_, let errno),
+                 .fullSyncFailed(_, let errno):
+                return errno == ENOSPC ? .insufficientSpace : .unknown
+            default: return .unknown
+            }
+        default:
+            // Deterministic POSIX ENOSPC injected mid-copy (or from a real
+            // exhausted volume) must report as insufficient space so the
+            // retry presentation (free space and retry) stays truthful.
+            // Anything else stays unknown and keeps every copy.
+            let nsError = error as NSError
+            if nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ENOSPC) {
+                return .insufficientSpace
+            } else if nsError.domain == NSCocoaErrorDomain
+                && nsError.code == NSFileWriteOutOfSpaceError {
+                return .insufficientSpace
+            } else {
+                return .unknown
+            }
         }
     }
 
@@ -1085,29 +1209,104 @@ public actor LocalVaultTransferEngine {
         candidate.createdAt < verifiedSuccessor.createdAt
     }
 
-    private func hasUsableVerifiedArchiveGeneration(_ record: VaultTransferRecord) async -> Bool {
+    /// Fresh provider reproof for retiring older records. Fail-closed, never
+    /// deletes, never materializes, never replays a copy. Returns the fresh
+    /// durability only when the provider freshly proved it over the exact
+    /// survivor destination; any throw (including cancellation) returns nil
+    /// and leaves older records recoverable. Capabilities are revalidated
+    /// honestly: local requires `waitsForDurability == false` with fresh
+    /// `.verifiedLocal`; cloud requires `waitsForDurability == true` with
+    /// fresh `.syncedToProvider`. `.independentlyBackedUp` never authorizes
+    /// retirement because no provider returns it as fresh proof. Cloud
+    /// online-only additionally requires live locality
+    /// (`.fullyLocalCurrent` or `.materializationRequired`) without any
+    /// materialize call, so placeholder presence alone never retires.
+    private func freshSurvivorDurabilityForRetirement(
+        _ record: VaultTransferRecord
+    ) async -> VaultDurability? {
         guard VaultTransferOwnershipPolicy.isVerifiedTerminal(record.state),
               let manifestID = record.manifestID,
               let manifest = record.manifest,
               manifest.id == manifestID,
               (try? manifest.validatePersistedContentEnvelope()) != nil,
-              hasPersistedGenerationPath(record) else { return false }
+              hasPersistedGenerationPath(record) else { return nil }
         if record.state == .archivedOnlineOnly {
-            guard record.durability == .syncedToProvider
-                    || record.durability == .independentlyBackedUp else { return false }
+            guard record.durability == .syncedToProvider else { return nil }
             do {
+                let capabilities = try await provider.capabilities()
+                guard capabilities.waitsForDurability else { return nil }
+                let fresh = try await provider.waitUntilDurable(record.destinationURL)
+                guard fresh == .syncedToProvider else { return nil }
                 switch try await provider.currentLocality(
                     at: record.destinationURL,
                     manifest: manifest
                 ) {
                 case .fullyLocalCurrent, .materializationRequired:
-                    return true
+                    return fresh
                 case .unknown:
-                    return false
+                    return nil
                 }
             } catch {
-                return false
+                return nil
             }
+        }
+        // Local generations (`.archiveVerified` / `.archivedLocal`), including
+        // a cloud-backed `.archiveVerified` that still holds local bytes:
+        // the persisted durability must match the fresh claim, and the fresh
+        // claim must match honest capabilities.
+        guard record.durability == .verifiedLocal
+                || record.durability == .syncedToProvider else { return nil }
+        do {
+            let capabilities = try await provider.capabilities()
+            let fresh = try await provider.waitUntilDurable(record.destinationURL)
+            switch (capabilities.waitsForDurability, record.durability, fresh) {
+            case (false, .verifiedLocal, .verifiedLocal):
+                return fresh
+            case (true, .syncedToProvider, .syncedToProvider):
+                // A cloud-backed verified generation that still holds local
+                // bytes: fresh sync is proven, and byte binding is rechecked
+                // synchronously by the caller. Locality is not required here
+                // because bytes are verified directly; online-only stays
+                // byte-neutral in its own branch above.
+                return fresh
+            default:
+                return nil
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    /// Synchronous final binding after the last reproof await. Must be called
+    /// with no awaits between it, the journal proof, and the supersession
+    /// persist. Revalidates the persisted survivor identity (same state,
+    /// project, destination, manifest), the generation-leaf path binding, the
+    /// content envelope, and — for locally held generations — existence plus
+    /// exact manifest bytes. Online-only stays byte-neutral (envelope plus
+    /// path; locality was already proven fresh without materializing).
+    private func survivorRetirementBindingHolds(
+        _ record: VaultTransferRecord,
+        freshDurability: VaultDurability
+    ) -> Bool {
+        guard VaultTransferOwnershipPolicy.isVerifiedTerminal(record.state),
+              let manifest = record.manifest,
+              record.manifestID == manifest.id,
+              (try? manifest.validatePersistedContentEnvelope()) != nil,
+              hasPersistedGenerationPath(record),
+              let persisted = try? store.record(id: record.id),
+              persisted.state == record.state,
+              persisted.projectID == record.projectID,
+              persisted.destinationURL == record.destinationURL,
+              persisted.manifestID == record.manifestID,
+              persisted.durability == record.durability else { return false }
+        if record.state == .archivedOnlineOnly {
+            guard record.durability == .syncedToProvider,
+                  freshDurability == .syncedToProvider else { return false }
+            return true
+        }
+        guard (record.durability == .verifiedLocal && freshDurability == .verifiedLocal)
+                || (record.durability == .syncedToProvider && freshDurability == .syncedToProvider) else {
+            return false
         }
         guard fileManager.fileExists(atPath: record.destinationURL.path) else { return false }
         do {

@@ -50,6 +50,15 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
         }
     }
 
+    /// Production enforcement of the recovery-evidence barrier. Delegates to
+    /// `SQLiteArchiveDatabase.proveRecoveryPersistence()` (strict checkpoint +
+    /// file/dir syncs with connection-file binding). Throws fail-closed on any
+    /// journal/file/dir failure while leaving read-only catalog/recovery
+    /// access available. Never silently claims success.
+    public func proveRecoveryPersistence() throws {
+        try database.proveRecoveryPersistence()
+    }
+
     public func claimTransfer(_ record: VaultTransferRecord) throws -> VaultTransferClaimResult {
         let data = try encoded(record)
         return try database.withConnection { db in

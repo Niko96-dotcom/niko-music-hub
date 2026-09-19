@@ -187,12 +187,33 @@ public struct VaultTransferRecoveryPolicy: Equatable, Sendable {
     }
 }
 
+public enum VaultTransferPersistenceProofError: Error, Equatable, Sendable {
+    case unproven(String)
+}
+
+extension VaultTransferPersistenceProofError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .unproven(let message):
+            message
+        }
+    }
+}
+
 public protocol VaultTransferStoring: Sendable {
     func save(_ record: VaultTransferRecord) throws
     func claimTransfer(_ record: VaultTransferRecord) throws -> VaultTransferClaimResult
     func record(id: UUID) throws -> VaultTransferRecord?
     func recoverableRecords() throws -> [VaultTransferRecord]
     func allTransferRecords() throws -> [VaultTransferRecord]
+    /// Strict explicit barrier for recovery evidence before destructive removal.
+    /// Production SQLite enforces the journal/file/dir barrier and throws on
+    /// any failure. The default is fail-closed for stores that cannot prove
+    /// persistence: it throws instead of silently claiming success. Fixture
+    /// fakes must opt into explicit deterministic semantics (succeed or throw).
+    /// Failure must block destructive admission while leaving read-only
+    /// catalog/recovery access available.
+    func proveRecoveryPersistence() throws
 }
 
 public protocol VaultProjectionSupplementStoring: Sendable {
@@ -215,5 +236,11 @@ public extension VaultTransferStoring {
 
     func allTransferRecords() throws -> [VaultTransferRecord] {
         try recoverableRecords()
+    }
+
+    func proveRecoveryPersistence() throws {
+        throw VaultTransferPersistenceProofError.unproven(
+            "This store cannot prove recovery persistence. Existing copies were kept."
+        )
     }
 }

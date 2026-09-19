@@ -3029,7 +3029,7 @@ private actor RuntimePolicyChangingProvider: ArchiveStorageProvider {
     }
 
     func capabilities() async throws -> StorageCapabilities {
-        .init(waitsForDurability: true, supportsMaterialization: true, supportsEviction: false)
+        .init(waitsForDurability: false, supportsMaterialization: true, supportsEviction: false)
     }
 
     func prepareForRead(_ location: URL) async throws {}

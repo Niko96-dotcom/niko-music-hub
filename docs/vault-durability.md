@@ -216,42 +216,120 @@ Focused faults: `Tests/NikoMusicCoreTests/LocalVaultDurabilityTests.swift`
   checkpoint frame-count refusal, journal-sync seam failure) + transfer
   round-trip.
 
+Engine boundary faults: `Tests/NikoMusicCoreTests/LocalVaultDurabilityFaultTests.swift`
+(fresh barrier re-run, capabilities honesty, journal fail-closed including
+journal save/write failures, legacy corrupt/mutation, survivor fresh reproof
+plus final binding plus journal proof (missing/corrupt/unproven/fresh-throw/
+journal-throw all preserve), online-only retirement without materializing,
+cancellation during fresh barrier, intermediate-phase restart without
+auto-delete, concurrent claim single-owner, admission postponement plus
+deterministic mid-copy POSIX ENOSPC plus flush-seam ENOSPC, destination
+disappears after copy/barrier and before removal, live temp syscall
+acceptance).
+
 Covered elsewhere (not re-proven here, do not claim as new proof):
 
 - interrupted/relaunch recovery: `LocalVaultTransferEngineTests`
-  (`recoverAtLaunch`, legacy destructive-origin normalization,
-  `recoverInterruptedRemoval` paths);
+  (`recoverAtLaunch` with fresh survivor reproof per project, causal
+  supersession without replayed copies or deletions, legacy
+  destructive-origin normalization, `recoverInterruptedRemoval` paths);
 - provider unavailable/unsynced/slow-sync: `FailingDurabilityProvider`,
   `PromotionDurabilityProvider`, `FinalDurabilityMutatingProvider`
   (post-barrier mutation never publishes a verified generation);
 - corrupt archives and unsafe preservation paths: explicit recovery
-  rejection tests; capacity postponements (`insufficientSpace` paths).
+  rejection tests; capacity postponements (`insufficientSpace` paths,
+  including POSIX ENOSPC mapped to `insufficientSpace` for copy and flush
+  failures).
 
-Gaps (honest, not tested): real power-loss survival, ENOSPC injected during
-the flush sequence, drive disconnect/volume replacement under load, exFAT
-flush-contract qualification, catalog write-throughput numbers.
+Gaps (honest, external only): real hardware power-cut survival, exFAT
+flush-contract qualification against primary vendor evidence, and physical
+disconnect of a real drive under load. Feasible deterministic faults —
+mid-copy ENOSPC, flush-seam ENOSPC, destination disappearance, journal
+save/proof failures, survivor fresh reproof with final binding and journal
+proof, online-only proof without materializing — are implemented and gated,
+not listed as gaps.
 
-## Unimplemented engine obligations (no engine edits in this pass)
+## Engine destructive-admission barriers (implemented)
 
 1. **Re-barrier before destructive admission.** `removeActiveCopy`
-   (`LocalVaultTransferEngine.swift`) re-verifies manifest bytes and requires
-   persisted durability, but does not re-run `LocalVaultDurabilityBarrier`
-   over the destination; `hasUsableVerifiedArchiveGeneration` likewise
-   byte-verifies only and can retire older transfers on a survivor whose
-   durability was never barrier-proven. Engine must re-run the barrier over
-   the destination inside `removeActiveCopy` and before a survivor retires
-   older records (fail closed, keep copies), plus a provenance marker for
-   pre-barrier records. Legacy generations may carry `.verifiedLocal` from
-   copy-completion alone.
+   (`LocalVaultTransferEngine.swift`) reloads the terminal record, verifies
+   manifest bytes, then re-runs `provider.waitUntilDurable` over the exact
+   destination generation. Historical `.verifiedLocal` alone never authorizes
+   deletion: legacy generations may carry `.verifiedLocal` from
+   copy-completion alone, so the old persisted value is discarded and only
+   the fresh barrier result is persisted. Capabilities are revalidated
+   honestly (`waitsForDurability` must match the fresh claim: local requires
+   `.verifiedLocal`, cloud requires `.syncedToProvider`; `.independentlyBackedUp`
+   never authorizes here and remote backup is never inferred from filesystem
+   presence). After both awaits, containment plus exact manifest bytes are
+   revalidated synchronously before persisting any fresh claim. The final
+   binding to the exact verified bytes happens after the last
+   removal-admission await in `validateRemovalEvidence` (containment, manifest
+   at destination, source device+inode binding before/after source manifest
+   verification), synchronously before `removeItem` — this avoids an endless
+   await race while never trusting a stale claim. Any barrier, capabilities,
+   or revalidation throw blocks removal, keeps every copy, and leaves the
+   record `archiveVerified`/retryable. Cancellation during the fresh barrier
+   or capabilities await propagates as `CancellationError` without
+   transitioning to removal, preserving V1 exact-boundary semantics
+   (pre-`removeItem` cancellation stays verified/source-retained; at/after
+   removal goes `recoveryRequired`).
 2. **Prove recovery persistence before destructive admission.** After
-   persisting the terminal record and before `removeActiveCopy` authorizes
-   deletion, the engine must call
-   `SQLiteArchiveDatabase.proveRecoveryPersistence()`; on throw, block
-   destructive admission and keep every copy while leaving read-only
-   catalog/recovery access available. `needsLegacyMetadataMigration` staging
-   resurrections need the same barrier qualification.
-3. **Catalog perf numbers:** capture before/after transfer-path timings when
-   touching the SQLite pragma set.
+   persisting the terminal record with fresh durability and before
+   authorizing deletion, the engine calls
+   `VaultTransferStoring.proveRecoveryPersistence()` (production SQLite
+   delegates to `SQLiteArchiveDatabase.proveRecoveryPersistence()`:
+   strict checkpoint plus file/dir syncs with connection-file binding). On
+   throw, destructive admission is blocked, every copy is kept, and read-only
+   catalog/recovery access stays available. The default `VaultTransferStoring`
+   implementation is fail-closed (`VaultTransferPersistenceProofError.unproven`);
+   fixture fakes must opt into explicit deterministic success/failure, and
+   production SQLite enforces the real barrier error. `needsLegacyMetadataMigration`
+   staging resurrections clear durability (`nil`) and re-enter the normal
+   barrier/promotion path, so they cannot inherit a stale proof.
+3. **Survivor retirement safety.** `freshSurvivorDurabilityForRetirement` plus
+   `survivorRetirementBindingHolds` never delete, never replay a copy, and
+   never materialize. Each survivor that could retire an older record must
+   freshly re-prove provider durability over its exact destination
+   generation (`waitUntilDurable`), with honest capabilities
+   (`waitsForDurability == false` with fresh `.verifiedLocal` for local;
+   `waitsForDurability == true` with fresh `.syncedToProvider` for cloud;
+   `.independentlyBackedUp` never authorizes). After the last await, the
+   engine synchronously revalidates the persisted survivor identity, the
+   generation-leaf path binding, the content envelope, and — for locally
+   held generations — existence plus exact manifest bytes; online-only stays
+   byte-neutral (envelope plus path; locality already proven fresh). Then
+   `proveRecoveryPersistence()` must succeed before any older record for
+   that project is marked `superseded`. Missing, corrupt, unproven (`nil`),
+   fresh-barrier-throw, binding-mismatch, or journal-throw all leave older
+   records recoverable with staging preserved. No `COPY` is replayed (gated
+   by zero write-admission assertions on the retirement path) and no
+   replayed deletion occurs. Cloud online-only requires fresh
+   `.syncedToProvider` plus live locality (`.fullyLocalCurrent` or
+   `.materializationRequired`) without any `materialize` call, so placeholder
+   presence alone never retires.
+4. **Catalog perf numbers:** capture before/after transfer-path timings when
+   touching the SQLite pragma set (still open; no numbers asserted here).
+
+Focused faults: `Tests/NikoMusicCoreTests/LocalVaultDurabilityFaultTests.swift`
+(fresh barrier re-run + capabilities mismatch, journal fail-closed including
+SQLite seam failure, journal save/write failures, and default fail-closed,
+corrupt/mutated legacy generation, survivor fresh reproof with final binding
+and journal proof including missing/corrupt/unproven/fresh-throw/
+journal-throw preservation plus online-only no-materialize proof,
+destination disappears after copy/barrier and before removal, cancellation
+during fresh barrier, restart from intermediate phases without auto-delete,
+concurrent claim single-owner, admission postponement plus mid-copy POSIX
+ENOSPC plus flush-seam ENOSPC, live temp `waitUntilDurable` syscall
+acceptance separate from simulated faults). `LocalVaultTransferEngineTests`
+pins causal supersession with fresh reproof (no zero-barrier-call
+assertions; instead no replayed `COPY`/no deletion) and V1 post-removal
+cancellation classification (`removingActiveCopy`/`evictingProviderCache`
+stay `recoveryRequired`).
+
+Gaps (honest, external only): real hardware power-cut survival, exFAT
+flush-contract qualification against primary vendor evidence, and physical
+disconnect of a real drive under load. No power-cut claim anywhere.
 
 ## Primary sources
 

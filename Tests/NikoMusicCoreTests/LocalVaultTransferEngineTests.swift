@@ -1798,30 +1798,43 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         survivor.manifest = survivorManifest
         survivor.durability = .verifiedLocal
         try store.save(survivor)
-        let provider = FailingDurabilityProvider()
+        let provider = CountingRemovalProvider()
+        let writeAdmissions = VaultFaultPointRecorder()
         let relaunched = try LocalVaultTransferEngine(
             activeRoot: fixture.active,
             archiveRoot: fixture.archive,
             store: store,
             provider: provider,
             now: { oldDate.addingTimeInterval(20) },
-            writeAdmission: allowVaultWrites
+            writeAdmission: { request, operation in
+                writeAdmissions.increment()
+                try await operation()
+            }
         )
 
-        _ = await relaunched.recoverAtLaunch()
+        let relaunchedResults = await relaunched.recoverAtLaunch()
 
         let providerCalls = await provider.barrierCount()
         let retired = try XCTUnwrap(store.record(id: oldFailed.id))
         let retiredJSON = try XCTUnwrap(
             JSONSerialization.jsonObject(with: JSONEncoder().encode(retired)) as? [String: Any]
         )
-        XCTAssertEqual(providerCalls, 0)
+        XCTAssertGreaterThanOrEqual(
+            providerCalls, 1,
+            "retirement must run fresh provider reproof over the exact survivor generation"
+        )
         XCTAssertEqual(retired.state.rawValue, "superseded")
         XCTAssertEqual(retiredJSON["supersededBy"] as? String, survivor.id.uuidString)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: oldFailed.stagingURL.path),
             "supersession alone must not delete staging before containment/content proof exists"
         )
+        XCTAssertFalse(
+            relaunchedResults.contains(where: { $0.id == oldFailed.id }),
+            "a superseded older transfer must not replay a copy"
+        )
+        XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFailed.destinationURL.path))
         XCTAssertEqual(try store.verifiedArchiveGeneration(projectID: oldFailed.projectID)?.id, survivor.id)
     }
 
@@ -1897,23 +1910,35 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         survivor.durability = .verifiedLocal
         try store.save(survivor)
 
-        let provider = FailingDurabilityProvider()
+        let provider = CountingRemovalProvider()
+        let writeAdmissions = VaultFaultPointRecorder()
         let engine = try LocalVaultTransferEngine(
             activeRoot: fixture.active,
             archiveRoot: fixture.archive,
             store: store,
             provider: provider,
             now: { retriedOld.addingTimeInterval(10) },
-            writeAdmission: allowVaultWrites
+            writeAdmission: { request, operation in
+                writeAdmissions.increment()
+                try await operation()
+            }
         )
 
-        _ = await engine.recoverAtLaunch()
+        let relaunchedResults = await engine.recoverAtLaunch()
 
         let persistedFailed = try XCTUnwrap(store.record(id: failedID))
         let providerCalls = await provider.barrierCount()
         XCTAssertEqual(persistedFailed.state, .superseded)
         XCTAssertEqual(persistedFailed.supersededBy, survivorID)
-        XCTAssertEqual(providerCalls, 0)
+        XCTAssertGreaterThanOrEqual(
+            providerCalls, 1,
+            "causal retirement must run fresh provider reproof, not trust persisted durability"
+        )
+        XCTAssertFalse(
+            relaunchedResults.contains(where: { $0.id == failedID }),
+            "a causally older retry must not outrank the verified successor"
+        )
+        XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
         XCTAssertTrue(FileManager.default.fileExists(atPath: failedStaging.path))
         XCTAssertEqual(try store.verifiedArchiveGeneration(projectID: projectID)?.id, survivorID)
     }
@@ -1988,33 +2013,66 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             try store.save(survivor)
 
             let validationProbe = SurvivorValidationProbe()
-            let provider = OnlineSurvivorMetadataProvider(mode: .materializationRequired)
-            let engine = try LocalVaultTransferEngine(
-                activeRoot: fixture.active,
-                archiveRoot: fixture.archive,
-                store: store,
-                provider: provider,
-                fileManager: SurvivorValidationFileManager(
-                    monitoredRoot: survivorURL,
-                    probe: validationProbe
-                ),
-                writeAdmission: allowVaultWrites
-            )
-
-            _ = await engine.recoverAtLaunch()
-
-            let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
-            XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
-            XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
-            if locality == .onlineOnly {
-                XCTAssertEqual(validationProbe.totalProbeCount, 0, "online-only evidence must remain byte-neutral")
-            } else {
-                XCTAssertEqual(validationProbe.verificationRootCount, 1, "one local survivor verify per project")
+            let writeAdmissions = VaultFaultPointRecorder()
+            let writeAdmission: LocalVaultTransferEngine.WriteAdmission = { _, operation in
+                writeAdmissions.increment()
+                try await operation()
             }
-            let localityCallCount = await provider.localityCallCount()
-            let sideEffectCallCount = await provider.sideEffectCallCount()
-            XCTAssertEqual(localityCallCount, locality == .onlineOnly ? 1 : 0)
-            XCTAssertEqual(sideEffectCallCount, 0)
+            if locality == .onlineOnly {
+                let provider = OnlineSurvivorMetadataProvider(mode: .materializationRequired)
+                let engine = try LocalVaultTransferEngine(
+                    activeRoot: fixture.active,
+                    archiveRoot: fixture.archive,
+                    store: store,
+                    provider: provider,
+                    fileManager: SurvivorValidationFileManager(
+                        monitoredRoot: survivorURL,
+                        probe: validationProbe
+                    ),
+                    writeAdmission: writeAdmission
+                )
+
+                let results = await engine.recoverAtLaunch()
+
+                let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
+                XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
+                XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
+                XCTAssertEqual(validationProbe.totalProbeCount, 0, "online-only evidence must remain byte-neutral")
+                let localityCallCount = await provider.localityCallCount()
+                let sideEffectCallCount = await provider.sideEffectCallCount()
+                let barrierCallCount = await provider.barrierCallCount()
+                XCTAssertEqual(localityCallCount, 1, "online-only retirement requires live locality")
+                XCTAssertEqual(barrierCallCount, 1, "online-only retirement requires fresh sync proof")
+                XCTAssertEqual(sideEffectCallCount, 0, "online-only retirement must not materialize")
+                XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
+                XCTAssertTrue(results.allSatisfy { retired.map(\.id).contains($0.id) == false })
+            } else {
+                let provider = CountingRemovalProvider()
+                let engine = try LocalVaultTransferEngine(
+                    activeRoot: fixture.active,
+                    archiveRoot: fixture.archive,
+                    store: store,
+                    provider: provider,
+                    fileManager: SurvivorValidationFileManager(
+                        monitoredRoot: survivorURL,
+                        probe: validationProbe
+                    ),
+                    writeAdmission: writeAdmission
+                )
+
+                let results = await engine.recoverAtLaunch()
+
+                let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
+                XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
+                XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
+                XCTAssertEqual(validationProbe.verificationRootCount, 1, "one local survivor verify per project")
+                let barrierCallCount = await provider.barrierCount()
+                let evictionCallCount = await provider.evictionCount()
+                XCTAssertGreaterThanOrEqual(barrierCallCount, 1, "local retirement requires fresh barrier reproof")
+                XCTAssertEqual(evictionCallCount, 0)
+                XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
+                XCTAssertTrue(results.allSatisfy { retired.map(\.id).contains($0.id) == false })
+            }
             XCTAssertTrue(obsoleteIDs.allSatisfy { id in
                 FileManager.default.fileExists(
                     atPath: fixture.archive
@@ -2231,10 +2289,16 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             ].contains(evidenceCase)
             let localityCallCount = await provider.localityCallCount()
             let sideEffectCallCount = await provider.sideEffectCallCount()
+            let barrierCallCount = await provider.barrierCallCount()
             XCTAssertEqual(
                 localityCallCount,
                 shouldQueryProvider ? 1 : 0,
                 "\(evidenceCase)"
+            )
+            XCTAssertEqual(
+                barrierCallCount,
+                shouldQueryProvider ? 1 : 0,
+                "\(evidenceCase): retirement requires fresh sync proof without materializing"
             )
             XCTAssertEqual(sideEffectCallCount, 0, "\(evidenceCase)")
             XCTAssertEqual(fileProbe.totalProbeCount, 0, "\(evidenceCase)")
@@ -2405,6 +2469,7 @@ private actor RemovalAdmissionGate {
 
 private actor CountingRemovalProvider: ArchiveStorageProvider {
     private var evictions = 0
+    private var barriers = 0
 
     func capabilities() async throws -> StorageCapabilities {
         .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
@@ -2412,7 +2477,10 @@ private actor CountingRemovalProvider: ArchiveStorageProvider {
 
     func prepareForRead(_ location: URL) async throws {}
     func prepareForWrite(at root: URL) async throws {}
-    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        barriers += 1
+        return .verifiedLocal
+    }
     func materialize(_ location: URL) async throws {}
 
     func evictIfSupported(_ location: URL) async throws -> EvictionResult {
@@ -2421,6 +2489,7 @@ private actor CountingRemovalProvider: ArchiveStorageProvider {
     }
 
     func evictionCount() -> Int { evictions }
+    func barrierCount() -> Int { barriers }
 }
 
 private actor CancellingEvictionProvider: ArchiveStorageProvider {
@@ -2622,6 +2691,7 @@ private actor OnlineSurvivorMetadataProvider: ArchiveStorageProvider {
     private let mode: Mode
     private var localityCalls = 0
     private var sideEffectCalls = 0
+    private var barrierCalls = 0
 
     init(mode: Mode) {
         self.mode = mode
@@ -2659,7 +2729,7 @@ private actor OnlineSurvivorMetadataProvider: ArchiveStorageProvider {
     }
 
     func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
-        sideEffectCalls += 1
+        barrierCalls += 1
         return .syncedToProvider
     }
 
@@ -2678,6 +2748,7 @@ private actor OnlineSurvivorMetadataProvider: ArchiveStorageProvider {
 
     func localityCallCount() -> Int { localityCalls }
     func sideEffectCallCount() -> Int { sideEffectCalls }
+    func barrierCallCount() -> Int { barrierCalls }
 }
 
 private final class RecoveryAdmissionRecorder: @unchecked Sendable {
