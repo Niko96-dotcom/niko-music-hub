@@ -4,7 +4,8 @@ import XCTest
 
 /// Opt-in live downloader verification (UAT-02). Skipped unless `NIKO_MUSIC_HUB_LIVE_DOWNLOADER=1`.
 final class DownloaderLiveIntegrationTests: XCTestCase {
-    private static let liveTestVideoURL = "https://www.youtube.com/watch?v=BaW_jenozKc"
+    // Same maintained public fixture as script/downloader_live_smoke.sh.
+    private static let liveTestVideoURL = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
     private static let minimumDurationSeconds = 18.0
 
     func testLiveDownloadEmitsProgressAndProducesOutput() async throws {
