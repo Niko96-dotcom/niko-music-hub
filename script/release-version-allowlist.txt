@@ -6,3 +6,4 @@
 ^Fixtures/ | Fixture names and README examples are compatibility material, not app release metadata.
 ^docs/audits/ | HIG audit evidence records the exact build under test; rewriting it would falsify the record.
 ^Sources/AppCore/Settings/AppSettings\.swift$ | Documents the upgrade path from the release that introduced the default.
+^docs/decisions/018-codex-chrome-material\.md$ | Accepted historical decision records the release that introduced this chrome.

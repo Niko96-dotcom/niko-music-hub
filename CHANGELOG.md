@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.1 - 2026-09-19
+
+- Keep Project Vault approval bound to the intended project and source through confirmation, queueing and retries. Settings changes cannot turn a copy-only operation into removal.
+- Preserve truthful cancellation and recovery states, recheck durable archive and recovery-journal evidence before removing Active, and revoke queued Done actions when undone.
+- Recover inaccessible library folders independently while preserving root identities and disabled folders.
+- Return verified existing downloads to the Output Inbox and report actual download failures accurately.
+- Refresh large output histories off the main thread and improve archive search and Vault catalog reconciliation without trimming history.
+- Build releases from isolated pinned source, freeze exact acceptance evidence, and enforce complete release gates and production update-key continuity.
+- Refresh the public product overview with screenshots of the current native interface.
+
 ## 1.6.0 - 2026-09-18
 
 - Rebuild BPM Tapper, WAV Converter, Audio Recorder, Downloader, and Stem Separation on one layout: the work area on the left, the tool's settings and its main action in a fixed panel on the right. Titles, cards, option controls, and buttons now sit in the same place on every page.

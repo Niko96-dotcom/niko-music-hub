@@ -1,82 +1,91 @@
 <p align="center">
-  <img src="Resources/Brand/AppLogo-96.png" width="88" alt="Niko Music Hub icon">
+  <img src="Resources/Brand/AppLogo-96.png" width="80" alt="Niko Music Hub">
 </p>
 
-<h1 align="center">Niko Music Hub</h1>
+<h1 align="center">Your songs. Back in reach.</h1>
 
 <p align="center">
-  The production desk beside your DAW.<br>
-  Recall any song in your Cubase or Ableton archive, audition it instantly, and handle the chores around it — in one native macOS app.
-</p>
-
-<p align="center">
-  <a href="https://github.com/Niko96-dotcom/niko-music-hub/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Niko96-dotcom/niko-music-hub?display_name=tag&color=1f6feb"></a>
-  <img alt="macOS 14.2+" src="https://img.shields.io/badge/macOS-14.2%2B-000000?logo=apple&logoColor=white">
-  <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-arm64-333333">
-  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
-  <img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-0A84FF">
-  <img alt="License" src="https://img.shields.io/badge/license-proprietary%2C%20source--available-6f42c1">
+  <strong>Niko Music Hub</strong><br>
+  A native Mac workspace for your music between sessions.<br>
+  Find the project. Hear the bounce. Keep creating.
 </p>
 
 <p align="center">
-  <img src="docs/assets/board.png" width="920" alt="The archive board: songs as cards in workflow stages, with the persistent preview player docked at the bottom">
+  <a href="https://github.com/Niko96-dotcom/niko-music-hub/releases/latest"><strong>Download for Mac ↗</strong></a>
+  &nbsp; · &nbsp; <a href="#a-place-for-every-stage">Explore the app</a>
+  &nbsp; · &nbsp; <a href="CHANGELOG.md">What’s new</a>
 </p>
 
-## Why
+<p align="center">
+  <img alt="Latest release" src="https://img.shields.io/github/v/release/Niko96-dotcom/niko-music-hub?color=CC7D5E&label=release">
+  <img alt="macOS 14.2 or later" src="https://img.shields.io/badge/macOS-14.2%2B-333431?logo=apple&logoColor=white">
+  <img alt="Apple silicon" src="https://img.shields.io/badge/Apple_silicon-arm64-333431">
+</p>
 
-Producers accumulate hundreds of song folders, each with a handful of project versions and a pile of bounces. Finding the right one, hearing it, and opening the latest project should take seconds — without ever risking the files themselves. Niko Music Hub is built around that: **everything it does to your archive is read-only**, and everything it *creates* lands in one place.
+![Niko Music Hub’s native project board, with twelve demo songs organised across writing and production stages](docs/assets/board.png)
 
-## What it does
+<p align="center"><sub>Real app screenshots with a synthetic demo library. Your music stays yours.</sub></p>
 
-**Archive Browser** — scans your song folders once, then keeps a fast local index. Browse as a board (songs as cards moving through Songstarter → Song → Session → Prod → Feedback → Done) or as a searchable list. Search is diacritic- and typo-tolerant across titles, aliases, notes and collaborators.
+## A place for every stage
 
-**Persistent preview player** — press play on any card or row and the mixdown keeps playing while you switch tools, songs or views. **Compare** swaps between bounces of the same song at the same elapsed moment, so you hear the difference, not the restart.
+That idea from last month. The mix you sent for feedback. The project called “final” four times. Keep them within reach, without rearranging the folders your DAW depends on.
 
-**Song detail** — the main project with one-click *Open in Cubase* / *Open in Ableton*, every project version, every preview candidate (with automatic main-preview ranking you can override), song info, notes, and the plugins the main project uses.
+| Find your next session | Keep the work moving | Make room with care |
+| --- | --- | --- |
+| Browse Cubase and Ableton projects as a board or searchable library. Search titles, aliases, notes and collaborators. | Track songs from an early idea through production and feedback. Open the project version you need. | Optional Project Vault verifies archive copies, retains recovery records and restores projects when you need them. |
 
-**Project Vault** — optional, off by default: safely archive finished projects to a second location and restore them on demand, with verified copies, recovery records and a read-only view of what lives where.
+## Hear where you left off
 
-**Production tools** — a **WAV Converter** with DAW-ready presets, a **system-audio Recorder**, a **Downloader** (via `yt-dlp`), local **Stem Separation** (via `demucs-mlx`), and a **BPM Tapper**. Everything they produce appears in the **Output Inbox**, ready to reveal or drag into a session.
+Audition a bounce before opening a session. The persistent player follows you between pages. Compare two previews at the same elapsed position, choose a main preview, and keep project versions together.
 
-**Always at hand** — a menu-bar quick-access menu routes to every tool, and the app keeps itself current with **in-app updates** from a signed release feed.
+![Song detail with its main Cubase project, version history and song information](docs/assets/song-detail.png)
+
+<details>
+<summary><strong>See preview comparison</strong></summary>
+
+![Preview candidates and comparison controls](docs/assets/previews.png)
+
+</details>
+
+## The useful things around your DAW
+
+Convert a bounce, capture system audio, download a reference, separate stems locally, or tap out a tempo. A shared Output Inbox keeps the resulting files ready to reveal or drag into your session.
 
 <table>
-  <tr>
-    <td><img src="docs/assets/song-detail.png" alt="Song detail: main project, versions, and the details rail"></td>
-    <td><img src="docs/assets/previews.png" alt="Preview candidates with Compare and main-preview selection"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Song detail — versions, previews, song info, plugins</sub></td>
-    <td align="center"><sub>Preview candidates — compare bounces at the same moment</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/converter.png" alt="WAV Converter"></td>
-    <td><img src="docs/assets/recorder.png" alt="Audio Recorder"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>WAV Converter — drop files, pick a preset, hand off to the inbox</sub></td>
-    <td align="center"><sub>Audio Recorder — capture system audio, previews pause automatically</sub></td>
-  </tr>
+<tr>
+<td width="50%"><img src="docs/assets/converter.png" alt="WAV Converter with an audio file ready for conversion"><br><strong>WAV Converter</strong><br>DAW-ready formats, sample rates and bit depths.</td>
+<td width="50%"><img src="docs/assets/bpm-tapper.png" alt="BPM Tapper ready for tapping a tempo"><br><strong>BPM Tapper</strong><br>Find the pulse without leaving your workspace.</td>
+</tr>
+<tr>
+<td><img src="docs/assets/downloader.png" alt="Downloader with format and destination controls"><br><strong>Downloader</strong><br>Bring references into a consistent output workflow.</td>
+<td><img src="docs/assets/recorder.png" alt="Audio Recorder with duration and output controls"><br><strong>Audio Recorder</strong><br>Capture system audio directly into your output folder.</td>
+</tr>
 </table>
 
-## Install
+**Stem Separation** uses `demucs-mlx` locally. **Menu-bar access** opens your tools quickly. **Signed in-app updates** keep the installed app current.
 
-Requires **macOS 14.2 or newer on Apple silicon**.
+## Built to respect your library
 
-1. Download `NikoMusicHub-<version>.dmg` and its `.sha256` from the [latest release](https://github.com/Niko96-dotcom/niko-music-hub/releases/latest).
-2. Optionally verify it: `shasum -a 256 -c NikoMusicHub-<version>.dmg.sha256`
-3. Open the DMG and drag **Niko Music Hub** into `/Applications`.
+- **Read-only browsing.** Scanning, previews and project opening do not reorganise or rewrite music files.
+- **Optional archival.** Project Vault is off by default. Archival follows explicit authorization, verified-copy and recovery requirements; configured automation follows its own bounded approval contract. See [Vault durability](docs/vault-durability.md).
+- **Local workspace.** The index and settings live on your Mac. Downloads and optional helper installation use their respective network services.
+- **One output destination.** Choose where produced files go; the default is `~/Music/Niko Music Hub/Inbox`.
 
-The app is signed with a Developer ID and notarized. After the first install it checks for updates once a day and installs them for you; **Niko Music Hub ▸ Check for Updates…** checks immediately, and **Settings ▸ Updates** turns automatic checks off. Updates are downloaded from a signed feed and verified before anything is unpacked.
+## Install in a minute
 
-Optional helpers, each detected automatically if present: [`ffmpeg`](https://ffmpeg.org) for conversion and downloads, [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) for the Downloader, [`demucs-mlx`](docs/user-guide-stem-separation.md) for stem separation.
+**Apple silicon · macOS 14.2 or newer**
 
-## Safety guarantees
+1. Get the DMG from the [latest public release](https://github.com/Niko96-dotcom/niko-music-hub/releases/latest).
+2. Open it and drag **Niko Music Hub** into **Applications**.
+3. Add your music folders and start browsing.
 
-- Archive scanning, previews and project opening are **read-only** toward your music folders. The app never renames, moves, deletes or rewrites a file there — the only exception is a Project Vault transfer you explicitly confirm.
-- Everything the app creates goes to the output folder you choose (default `~/Music/Niko Music Hub/Inbox`).
-- App state lives in `~/Library/Application Support/Niko Music Hub/`. Uninstall by removing the app; remove that folder only if you want to clear the local index and settings.
-- Automation runs use `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`, which logs what it would open instead of launching your DAW.
+Public releases are Developer ID signed and notarized. The release includes a SHA-256 checksum if you want to verify the download. Use **Niko Music Hub → Check for Updates…** for updates; automatic checks are configurable in **Settings → Updates**.
+
+Optional helpers: [FFmpeg](https://ffmpeg.org) for conversion and downloads, [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading, and [demucs-mlx](docs/user-guide-stem-separation.md) for stem separation. Their availability is shown in the app.
+
+[Installation guide](docs/install.md) · [Stem separation guide](docs/user-guide-stem-separation.md) · [Report an issue](https://github.com/Niko96-dotcom/niko-music-hub/issues)
+
+---
 
 ## Build from source
 
