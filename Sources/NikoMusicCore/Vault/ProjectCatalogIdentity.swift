@@ -237,17 +237,36 @@ public struct ProjectCatalogReconciler: Sendable {
         }
         var reviews = existingReviews
         var migrations: [String: ProjectID] = [:]
+        var indexes = LookupIndexes()
+        indexes.reviewPairs = Set(reviews.map { Set([$0.existingProjectID, $0.candidateProjectID]) })
+        for (index, entry) in entries.enumerated() {
+            indexes.register(entry, at: index)
+        }
 
         for observation in observations {
-            let sameLocation = entries.indices.filter { index in
-                entries[index].record.locations.contains {
-                    $0.rootID == observation.location.rootID
-                        && $0.relativePath == observation.location.relativePath
+            // Indexed candidate lookup preserving EXACT identity policy.
+            // Location: identical (rootID, relativePath). Evidence: shared content
+            // hash OR exact file-identity set (never title). Results are sorted by
+            // entries order so ambiguity payloads and order-dependent merges match
+            // the original full scans exactly.
+            let locationKey = LocationKey(rootID: observation.location.rootID, relativePath: observation.location.relativePath)
+            let sameLocation: [Int] = {
+                guard let ids = indexes.locationToIDs[locationKey] else { return [] }
+                return ids.compactMap { indexes.idToIndex[$0] }.sorted()
+            }()
+            let strongMatches: [Int] = {
+                var ids = Set<ProjectID>()
+                for hash in observation.evidence.selectedContentHashes {
+                    if let hit = indexes.hashToIDs[hash] {
+                        ids.formUnion(hit)
+                    }
                 }
-            }
-            let strongMatches = entries.indices.filter {
-                entries[$0].evidence.isHighConfidenceMatch(with: observation.evidence)
-            }
+                if !observation.evidence.cubaseFiles.isEmpty,
+                   let hit = indexes.filesToIDs[observation.evidence.cubaseFiles] {
+                    ids.formUnion(hit)
+                }
+                return ids.compactMap { indexes.idToIndex[$0] }.sorted()
+            }()
 
             if sameLocation.count > 1 {
                 let conflictingIDs = sameLocation.map { entries[$0].record.id }
@@ -256,6 +275,7 @@ public struct ProjectCatalogReconciler: Sendable {
                         decision,
                         observation: observation,
                         entries: &entries,
+                        indexes: &indexes,
                         migrations: &migrations,
                         observedAt: observedAt
                     )
@@ -275,6 +295,7 @@ public struct ProjectCatalogReconciler: Sendable {
                             observation: observation,
                             existingIndex: index,
                             entries: &entries,
+                            indexes: &indexes,
                             migrations: &migrations,
                             observedAt: observedAt
                         )
@@ -291,6 +312,7 @@ public struct ProjectCatalogReconciler: Sendable {
                             locationIndex: index,
                             matchIDs: conflictingIDs,
                             entries: &entries,
+                            indexes: &indexes,
                             migrations: &migrations,
                             observedAt: observedAt
                         )
@@ -298,13 +320,13 @@ public struct ProjectCatalogReconciler: Sendable {
                     }
                     throw Ambiguity.multipleStrongMatches(conflictingIDs)
                 }
-                merge(observation, into: &entries[index], observedAt: observedAt)
+                mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = entries[index].record.id
                 continue
             }
 
             if strongMatches.count == 1, let index = strongMatches.first {
-                merge(observation, into: &entries[index], observedAt: observedAt)
+                mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = entries[index].record.id
                 continue
             }
@@ -317,6 +339,7 @@ public struct ProjectCatalogReconciler: Sendable {
                         locationIndex: nil,
                         matchIDs: conflictingIDs,
                         entries: &entries,
+                        indexes: &indexes,
                         migrations: &migrations,
                         observedAt: observedAt
                     )
@@ -332,27 +355,186 @@ public struct ProjectCatalogReconciler: Sendable {
             entries.append(newEntry)
             migrations[legacyPath(for: observation.location)] = newEntry.record.id
 
-            let weakMatches = entries.dropLast().filter {
-                !$0.evidence.normalizedFolderName.isEmpty
-                    && $0.evidence.normalizedFolderName == observation.evidence.normalizedFolderName
+            // Weak name lookup is indexed but exact: normalized folder-name
+            // equality only, in entries order, excluding the just-appended entry
+            // (which is not yet registered, matching the original dropLast()).
+            // Same-batch previously merged/created entries ARE registered, so
+            // same-batch newly merged evidence stays visible.
+            if !observation.evidence.normalizedFolderName.isEmpty,
+               let folderIDs = indexes.folderNameToIDs[observation.evidence.normalizedFolderName] {
+                let weakIndices = folderIDs.compactMap { indexes.idToIndex[$0] }.sorted()
+                for weakIndex in weakIndices {
+                    let weak = entries[weakIndex]
+                    appendReviewIfNeeded(ProjectIdentityReview(
+                        existingProjectID: weak.record.id,
+                        candidateProjectID: newEntry.record.id,
+                        reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+                    ), to: &reviews, pairs: &indexes.reviewPairs)
+                }
             }
-            for weak in weakMatches {
-                appendReviewIfNeeded(ProjectIdentityReview(
-                    existingProjectID: weak.record.id,
-                    candidateProjectID: newEntry.record.id,
-                    reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
-                ), to: &reviews)
-            }
+            indexes.register(newEntry, at: entries.count - 1)
         }
 
         return ProjectCatalogReconciliation(entries: entries, reviews: reviews, metadataMigrations: migrations)
     }
 
-    private func appendReviewIfNeeded(_ review: ProjectIdentityReview, to reviews: inout [ProjectIdentityReview]) {
+    // MARK: - Indexed lookup state
+
+    /// Exact-match indexes only. No approximate matching, no caps, no global cache:
+    /// every map key uses the same equality the original scans used, and every
+    /// mutation path below keeps the maps synchronized (correctness over speed).
+    private struct LocationKey: Hashable, Sendable {
+        let rootID: UUID
+        let relativePath: String
+    }
+
+    private struct LookupIndexes: Sendable {
+        var idToIndex: [ProjectID: Int] = [:]
+        var locationToIDs: [LocationKey: Set<ProjectID>] = [:]
+        var hashToIDs: [String: Set<ProjectID>] = [:]
+        var filesToIDs: [Set<ProjectFileIdentity>: Set<ProjectID>] = [:]
+        var folderNameToIDs: [String: Set<ProjectID>] = [:]
+        var reviewPairs: Set<Set<ProjectID>> = []
+
+        mutating func register(_ entry: ProjectCatalogEntry, at index: Int) {
+            let id = entry.record.id
+            idToIndex[id] = index
+            for location in entry.record.locations {
+                let key = LocationKey(rootID: location.rootID, relativePath: location.relativePath)
+                locationToIDs[key, default: []].insert(id)
+            }
+            for hash in entry.evidence.selectedContentHashes {
+                hashToIDs[hash, default: []].insert(id)
+            }
+            if !entry.evidence.cubaseFiles.isEmpty {
+                filesToIDs[entry.evidence.cubaseFiles, default: []].insert(id)
+            }
+            if !entry.evidence.normalizedFolderName.isEmpty {
+                folderNameToIDs[entry.evidence.normalizedFolderName, default: []].insert(id)
+            }
+        }
+
+        mutating func unregister(id: ProjectID, evidence: ProjectIdentityEvidence, locations: [ProjectLocation]) {
+            idToIndex.removeValue(forKey: id)
+            for location in locations {
+                let key = LocationKey(rootID: location.rootID, relativePath: location.relativePath)
+                if var set = locationToIDs[key] {
+                    set.remove(id)
+                    if set.isEmpty {
+                        locationToIDs.removeValue(forKey: key)
+                    } else {
+                        locationToIDs[key] = set
+                    }
+                }
+            }
+            for hash in evidence.selectedContentHashes {
+                if var set = hashToIDs[hash] {
+                    set.remove(id)
+                    if set.isEmpty {
+                        hashToIDs.removeValue(forKey: hash)
+                    } else {
+                        hashToIDs[hash] = set
+                    }
+                }
+            }
+            if !evidence.cubaseFiles.isEmpty {
+                if var set = filesToIDs[evidence.cubaseFiles] {
+                    set.remove(id)
+                    if set.isEmpty {
+                        filesToIDs.removeValue(forKey: evidence.cubaseFiles)
+                    } else {
+                        filesToIDs[evidence.cubaseFiles] = set
+                    }
+                }
+            }
+            if !evidence.normalizedFolderName.isEmpty {
+                if var set = folderNameToIDs[evidence.normalizedFolderName] {
+                    set.remove(id)
+                    if set.isEmpty {
+                        folderNameToIDs.removeValue(forKey: evidence.normalizedFolderName)
+                    } else {
+                        folderNameToIDs[evidence.normalizedFolderName] = set
+                    }
+                }
+            }
+        }
+
+        /// Synchronize after a union-merge of one entry. Evidence only grows
+        /// (formUnion), locations are only added/updated in place, and the folder
+        /// name is immutable across merges, so only additions plus a possible
+        /// fileset-key rotation need handling.
+        mutating func noteMerged(
+            id: ProjectID,
+            at index: Int,
+            oldEvidence: ProjectIdentityEvidence,
+            oldLocations: [ProjectLocation],
+            newEntry: ProjectCatalogEntry
+        ) {
+            idToIndex[id] = index
+            if oldEvidence.cubaseFiles != newEntry.evidence.cubaseFiles {
+                if !oldEvidence.cubaseFiles.isEmpty {
+                    if var set = filesToIDs[oldEvidence.cubaseFiles] {
+                        set.remove(id)
+                        if set.isEmpty {
+                            filesToIDs.removeValue(forKey: oldEvidence.cubaseFiles)
+                        } else {
+                            filesToIDs[oldEvidence.cubaseFiles] = set
+                        }
+                    }
+                }
+                if !newEntry.evidence.cubaseFiles.isEmpty {
+                    filesToIDs[newEntry.evidence.cubaseFiles, default: []].insert(id)
+                }
+            }
+            let addedHashes = newEntry.evidence.selectedContentHashes.subtracting(oldEvidence.selectedContentHashes)
+            for hash in addedHashes {
+                hashToIDs[hash, default: []].insert(id)
+            }
+            let oldKeys = Set(oldLocations.map { LocationKey(rootID: $0.rootID, relativePath: $0.relativePath) })
+            for location in newEntry.record.locations {
+                let key = LocationKey(rootID: location.rootID, relativePath: location.relativePath)
+                if !oldKeys.contains(key) {
+                    locationToIDs[key, default: []].insert(id)
+                }
+            }
+        }
+
+        mutating func rebuildIDToIndex(for entries: [ProjectCatalogEntry]) {
+            idToIndex.removeAll(keepingCapacity: true)
+            idToIndex.reserveCapacity(entries.count)
+            for (index, entry) in entries.enumerated() {
+                idToIndex[entry.record.id] = index
+            }
+        }
+    }
+
+    private func mergeIndexed(
+        _ observation: ProjectCatalogObservation,
+        at index: Int,
+        entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
+        observedAt: Date
+    ) {
+        let oldEvidence = entries[index].evidence
+        let oldLocations = entries[index].record.locations
+        merge(observation, into: &entries[index], observedAt: observedAt)
+        indexes.noteMerged(
+            id: entries[index].record.id,
+            at: index,
+            oldEvidence: oldEvidence,
+            oldLocations: oldLocations,
+            newEntry: entries[index]
+        )
+    }
+
+    private func appendReviewIfNeeded(
+        _ review: ProjectIdentityReview,
+        to reviews: inout [ProjectIdentityReview],
+        pairs: inout Set<Set<ProjectID>>
+    ) {
         let pair = Set([review.existingProjectID, review.candidateProjectID])
-        guard !reviews.contains(where: {
-            Set([$0.existingProjectID, $0.candidateProjectID]) == pair
-        }) else { return }
+        guard !pairs.contains(pair) else { return }
+        pairs.insert(pair)
         reviews.append(review)
     }
 
@@ -389,6 +571,7 @@ public struct ProjectCatalogReconciler: Sendable {
         observation: ProjectCatalogObservation,
         existingIndex: Int,
         entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
         migrations: inout [String: ProjectID],
         observedAt: Date
     ) {
@@ -396,7 +579,7 @@ public struct ProjectCatalogReconciler: Sendable {
         case .pending:
             return
         case .link:
-            merge(observation, into: &entries[existingIndex], observedAt: observedAt)
+            mergeIndexed(observation, at: existingIndex, entries: &entries, indexes: &indexes, observedAt: observedAt)
             migrations[legacyPath(for: observation.location)] = entries[existingIndex].record.id
         case .keepSeparate:
             unclaim(observation.location, from: &entries[existingIndex])
@@ -404,6 +587,7 @@ public struct ProjectCatalogReconciler: Sendable {
                 review.candidateProjectID,
                 observation: observation,
                 entries: &entries,
+                indexes: &indexes,
                 migrations: &migrations,
                 observedAt: observedAt
             )
@@ -414,6 +598,7 @@ public struct ProjectCatalogReconciler: Sendable {
         _ review: ProjectIdentityReview,
         observation: ProjectCatalogObservation,
         entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
         migrations: inout [String: ProjectID],
         observedAt: Date
     ) {
@@ -428,18 +613,25 @@ public struct ProjectCatalogReconciler: Sendable {
                 review.candidateProjectID,
                 observation: observation,
                 entries: &entries,
+                indexes: &indexes,
                 migrations: &migrations,
                 observedAt: observedAt
             )
         case .link:
-            let claimingIDs = entries.compactMap { entry -> ProjectID? in
-                entry.record.locations.contains {
-                    $0.rootID == observation.location.rootID && $0.relativePath == observation.location.relativePath
-                } ? entry.record.id : nil
-            }
-            mergeLinkedMatches(ids: claimingIDs, into: review.existingProjectID, entries: &entries, migrations: &migrations)
-            if let index = entries.firstIndex(where: { $0.record.id == review.existingProjectID }) {
-                merge(observation, into: &entries[index], observedAt: observedAt)
+            // Indexed read of the claiming set; sorted by entries order to
+            // preserve the original compactMap order for downstream merges.
+            let locationKey = LocationKey(rootID: observation.location.rootID, relativePath: observation.location.relativePath)
+            let claimingIDs: [ProjectID] = {
+                guard let ids = indexes.locationToIDs[locationKey] else { return [] }
+                let ordered = ids.compactMap { (id: ProjectID) -> (Int, ProjectID)? in
+                    guard let idx = indexes.idToIndex[id] else { return nil }
+                    return (idx, id)
+                }.sorted { $0.0 < $1.0 }.map { $0.1 }
+                return ordered
+            }()
+            mergeLinkedMatches(ids: claimingIDs, into: review.existingProjectID, entries: &entries, indexes: &indexes, migrations: &migrations)
+            if let index = indexes.idToIndex[review.existingProjectID] {
+                mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = review.existingProjectID
             }
         }
@@ -451,6 +643,7 @@ public struct ProjectCatalogReconciler: Sendable {
         locationIndex: Int?,
         matchIDs: [ProjectID],
         entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
         migrations: inout [String: ProjectID],
         observedAt: Date
     ) {
@@ -459,7 +652,7 @@ public struct ProjectCatalogReconciler: Sendable {
             return
         case .keepSeparate:
             if let locationIndex {
-                merge(observation, into: &entries[locationIndex], observedAt: observedAt)
+                mergeIndexed(observation, at: locationIndex, entries: &entries, indexes: &indexes, observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = entries[locationIndex].record.id
             } else {
                 let created = ProjectCatalogEntry(
@@ -469,12 +662,13 @@ public struct ProjectCatalogReconciler: Sendable {
                 var entry = created
                 merge(observation, into: &entry, observedAt: observedAt)
                 entries.append(entry)
+                indexes.register(entry, at: entries.count - 1)
                 migrations[legacyPath(for: observation.location)] = entry.record.id
             }
         case .link:
-            mergeLinkedMatches(ids: matchIDs, into: review.existingProjectID, entries: &entries, migrations: &migrations)
-            if let index = entries.firstIndex(where: { $0.record.id == review.existingProjectID }) {
-                merge(observation, into: &entries[index], observedAt: observedAt)
+            mergeLinkedMatches(ids: matchIDs, into: review.existingProjectID, entries: &entries, indexes: &indexes, migrations: &migrations)
+            if let index = indexes.idToIndex[review.existingProjectID] {
+                mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
                 migrations[legacyPath(for: observation.location)] = review.existingProjectID
             }
         }
@@ -484,11 +678,12 @@ public struct ProjectCatalogReconciler: Sendable {
         _ candidateID: ProjectID,
         observation: ProjectCatalogObservation,
         entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
         migrations: inout [String: ProjectID],
         observedAt: Date
     ) {
-        if let index = entries.firstIndex(where: { $0.record.id == candidateID }) {
-            merge(observation, into: &entries[index], observedAt: observedAt)
+        if let index = indexes.idToIndex[candidateID] {
+            mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
         } else {
             var created = ProjectCatalogEntry(
                 record: ProjectRecord(
@@ -500,6 +695,7 @@ public struct ProjectCatalogReconciler: Sendable {
             )
             merge(observation, into: &created, observedAt: observedAt)
             entries.append(created)
+            indexes.register(created, at: entries.count - 1)
         }
         migrations[legacyPath(for: observation.location)] = candidateID
     }
@@ -508,19 +704,36 @@ public struct ProjectCatalogReconciler: Sendable {
         ids: [ProjectID],
         into keeperID: ProjectID,
         entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
         migrations: inout [String: ProjectID]
     ) {
         guard var keeper = entries.first(where: { $0.record.id == keeperID }) else { return }
+        let oldKeeperEvidence = keeper.evidence
+        let oldKeeperLocations = keeper.record.locations
+        var removed: [(id: ProjectID, evidence: ProjectIdentityEvidence, locations: [ProjectLocation])] = []
         for sourceID in ids where sourceID != keeperID {
             guard let source = entries.first(where: { $0.record.id == sourceID }) else { continue }
             mergeEntry(source, into: &keeper)
             migrations[sourceID.description] = keeperID
+            removed.append((id: sourceID, evidence: source.evidence, locations: source.record.locations))
+        }
+        for item in removed {
+            indexes.unregister(id: item.id, evidence: item.evidence, locations: item.locations)
         }
         entries.removeAll { ids.contains($0.record.id) && $0.record.id != keeperID }
-        if let index = entries.firstIndex(where: { $0.record.id == keeperID }) {
+        indexes.rebuildIDToIndex(for: entries)
+        if let index = indexes.idToIndex[keeperID] {
             entries[index] = keeper
+            indexes.noteMerged(
+                id: keeperID,
+                at: index,
+                oldEvidence: oldKeeperEvidence,
+                oldLocations: oldKeeperLocations,
+                newEntry: keeper
+            )
         } else {
             entries.append(keeper)
+            indexes.register(keeper, at: entries.count - 1)
         }
     }
 
