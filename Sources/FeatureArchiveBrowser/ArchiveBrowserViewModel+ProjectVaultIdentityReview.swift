@@ -57,7 +57,10 @@ extension ArchiveBrowserViewModel {
               let initiating = presentation.song,
               let current = songs.first(where: { $0.id == initiating.id }),
               initiatingSongResolvesStably(current, for: presentation.review)
-        else { return }
+        else {
+            setProjectVaultStatusMessage("Identity choice saved, but the project changed or is unavailable. Refresh and retry when the project is available. Nothing was archived.")
+            return
+        }
         switch trigger {
         case .workflowDone:
             requestWorkflowDoneReconfirmation(for: current)

@@ -49,10 +49,21 @@ struct SongDetailView: View {
         return [folder, application].compactMap { $0 }.joined(separator: " · ")
     }
 
+    private var archiveNowRemovesActiveCopy: Bool {
+        viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy ?? false
+    }
+
+    private var archiveNowAlertTitle: String {
+        ProjectVaultConfirmationCopy.archiveNowTitle(
+            willRemoveActiveCopy: archiveNowRemovesActiveCopy
+        )
+    }
+
     private var archiveNowAlertMessage: String {
         guard let pending = viewModel.pendingArchiveConfirmation else { return "" }
         return ProjectVaultConfirmationCopy.archiveNowMessage(
             songTitle: pending.songTitle,
+            willRemoveActiveCopy: pending.willRemoveActiveCopy,
             independentBackupConfirmed: pending.independentBackupConfirmed
         )
     }
@@ -465,7 +476,7 @@ struct SongDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
             .alert(
-                "Archive this project?",
+                archiveNowAlertTitle,
                 isPresented: Binding(
                     get: { viewModel.pendingArchiveConfirmation?.trigger == .manual },
                     set: { if !$0 { viewModel.cancelPendingArchive() } }
@@ -473,7 +484,12 @@ struct SongDetailView: View {
             ) {
                 Button("Keep in Active", role: .cancel) { viewModel.cancelPendingArchive() }
                     .keyboardShortcut(.defaultAction)
-                Button("Archive", role: .destructive) { viewModel.confirmPendingArchive() }
+                Button(
+                    ProjectVaultConfirmationCopy.archiveNowConfirmTitle(
+                        willRemoveActiveCopy: archiveNowRemovesActiveCopy
+                    ),
+                    role: archiveNowRemovesActiveCopy ? .destructive : nil
+                ) { viewModel.confirmPendingArchive() }
             } message: {
                 Text(archiveNowAlertMessage)
             }

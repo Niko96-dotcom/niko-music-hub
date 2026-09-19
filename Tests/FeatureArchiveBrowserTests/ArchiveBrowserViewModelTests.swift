@@ -1286,10 +1286,15 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             originalFolderName: "Workflow Song",
             displayTitle: "Workflow Song"
         )
+        viewModel.scannedSongs = [song]
         viewModel.songs = [song]
         viewModel.filteredSongs = [song]
 
         viewModel.updateWorkflowStatus(for: song, status: .done)
+        for _ in 0..<100 where viewModel.pendingArchiveConfirmation == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
         viewModel.confirmPendingArchive()
 
         var archivedSong: Song?
@@ -3651,6 +3656,39 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         return snapshotValues
     }
 
+    func captureArchiveAuthorization(
+        for song: Song,
+        trigger: ProjectVaultArchiveTrigger,
+        removingActiveCopy: Bool,
+        catalogProjectID: ProjectID?
+    ) async throws -> ProjectVaultArchiveAuthorization {
+        // Compatibility fake for the explicit capture contract: copy-only only.
+        // Never mints removal; a removal request falls back to copy-only so the
+        // dialog agrees the token. No filesystem mutation.
+        _ = removingActiveCopy
+        let identity: ProjectVaultSourceFileSystemIdentity
+        if let live = try? ProjectVaultArchiveAuthorization.fileSystemIdentity(at: song.folderPath) {
+            identity = live
+        } else {
+            identity = ProjectVaultSourceFileSystemIdentity(device: 1, inode: 1)
+        }
+        return ProjectVaultArchiveAuthorization(
+            sourceCanonicalPath: ProjectVaultArchiveAuthorization.canonicalPath(for: song.folderPath),
+            sourceFileSystemIdentity: identity,
+            songID: song.id,
+            catalogProjectID: catalogProjectID,
+            activeRootID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            activeRootCanonicalPath: "/tmp/nmh-test-active",
+            activeRootFileSystemIdentity: ProjectVaultSourceFileSystemIdentity(device: 11, inode: 11),
+            archiveRootID: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            archiveRootCanonicalPath: "/tmp/nmh-test-archive",
+            archiveRootFileSystemIdentity: ProjectVaultSourceFileSystemIdentity(device: 22, inode: 22),
+            trigger: trigger,
+            maximumDestructiveness: .copyOnly,
+            authorizedAt: Date()
+        )
+    }
+
     func archive(song: Song, trigger: ProjectVaultArchiveTrigger) async throws -> ProjectVaultRuntimeSnapshot {
         archiveCalls += 1
         archivedSong = song
@@ -3668,6 +3706,15 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
             ),
             transfer: nil
         )
+    }
+
+    func archive(song: Song, trigger: ProjectVaultArchiveTrigger, authorization: ProjectVaultArchiveAuthorization) async throws -> ProjectVaultRuntimeSnapshot {
+        guard authorization.songID == song.id,
+              authorization.trigger == trigger,
+              authorization.maximumDestructiveness == .copyOnly else {
+            throw ProjectVaultAuthorizationError.removalNotAuthorized
+        }
+        return try await archive(song: song, trigger: trigger)
     }
 
     func restoreAndOpen(snapshot: ProjectVaultRuntimeSnapshot) async throws -> VaultRestoreRecord {

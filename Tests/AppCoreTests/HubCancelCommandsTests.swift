@@ -13,7 +13,7 @@ final class HubCancelCommandsTests: XCTestCase {
         XCTAssertEqual(CancelCopy.stopTransferTitle, "Stop this transfer?")
         XCTAssertEqual(
             CancelCopy.stopTransferMessage,
-            "Niko Music Hub will stop the Project Vault transfer at the next safe point. Files already copied stay in the archive. The Active Projects folder is not deleted. You may need Recover Verified Project if a copy was interrupted."
+            "Niko Music Hub will stop the Project Vault transfer at the next safe point. Files already copied stay in the archive but are not verified until the transfer completes. If the Active Projects folder was already removed after verification, stopping does not restore it. Use Get Local and Open or Recover Verified Project to review the verified archive."
         )
         XCTAssertEqual(CancelCopy.keepTransferring, "Keep Transferring")
         XCTAssertEqual(CancelCopy.stopTransfer, "Stop Transfer")

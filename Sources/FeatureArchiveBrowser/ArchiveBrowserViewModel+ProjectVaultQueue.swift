@@ -41,8 +41,28 @@ extension ArchiveBrowserViewModel {
     }
 
     func cancelQueuedProjectVaultOperation(for song: Song) {
-        guard let index = projectVaultPendingOperations.firstIndex(where: { $0.songID == song.id }) else { return }
-        projectVaultPendingOperations.remove(at: index)
+        cancelBoundArchiveCapture(for: song.id)
+        cancelDoneArchiveRetry(for: song.id)
+        if pendingArchiveConfirmation?.songID == song.id {
+            pendingArchiveConfirmation = nil
+        }
+        guard projectVaultPendingOperations.contains(where: { $0.songID == song.id }) else { return }
+        let removedRequestCount = projectVaultPendingOperations.filter { $0.songID == song.id }.count
+        let activeOwnsSong = projectVaultActiveOperation?.songID == song.id
+        projectVaultPendingOperations.removeAll(where: { $0.songID == song.id })
+        if activeOwnsSong {
+            setProjectVaultStatusMessage("Queued request cancelled for \(song.effectiveDisplayTitle). Transfer continues.")
+            return
+        }
+        // P2 truthful counts: a queued operation cancelled before execution never
+        // completed. Record it per-instance by stable songID so the final footer
+        // cannot count it as completed via total-minus-failures.
+        // REQUEST-69: also count REQUESTS, not distinct songs: cancel B, requeue
+        // B, cancel B is two cancelled requests for one songID.
+        var canceledForBatch = vaultQueueCanceledIDsForBatch
+        canceledForBatch.insert(song.id)
+        vaultQueueCanceledIDsForBatch = canceledForBatch
+        vaultQueueCanceledRequestCountForBatch += max(1, removedRequestCount)
         projectVaultBusySongIDs.remove(song.id)
         projectVaultOperationMessages[song.id] = "Queued request cancelled. No project files were changed."
         setProjectVaultStatusMessage("Queued request cancelled for \(song.effectiveDisplayTitle).")
@@ -67,11 +87,29 @@ extension ArchiveBrowserViewModel {
     }
 
     func cancelPendingProjectVaultOperations() {
+        cancelBoundArchiveCapture()
+        for (_, task) in projectVaultRetryTasks {
+            task.cancel()
+        }
+        projectVaultRetryTasks.removeAll()
+        projectVaultRetryAttemptCounts.removeAll()
+        pendingArchiveConfirmation = nil
         for operation in projectVaultPendingOperations {
             projectVaultBusySongIDs.remove(operation.songID)
+            projectVaultOperationMessages[operation.songID] = "Queued request cancelled. No project files were changed."
+            var canceledForBatch = vaultQueueCanceledIDsForBatch
+            canceledForBatch.insert(operation.songID)
+            vaultQueueCanceledIDsForBatch = canceledForBatch
+            // REQUEST-69: one REQUEST per pending operation, even when two
+            // operations share a songID across requeues.
+            vaultQueueCanceledRequestCountForBatch += 1
         }
         projectVaultPendingOperations.removeAll()
     }
+
+    /// P2 batch-stop truth lives as per-instance storage
+    /// (`vaultQueueStoppedIDsForBatch` in `ArchiveBrowserViewModel.swift`),
+    /// reset with each batch. Stable songID binding, never titles.
 
     func enqueueProjectVaultOperation(
         for song: Song,
@@ -89,6 +127,10 @@ extension ArchiveBrowserViewModel {
         if projectVaultActiveOperation == nil {
             projectVaultQueueFailures = []
             projectVaultQueueBatchCount = 0
+            vaultQueueStoppedIDsForBatch = []
+            vaultQueueCanceledIDsForBatch = []
+            vaultQueueStoppedRequestCountForBatch = 0
+            vaultQueueCanceledRequestCountForBatch = 0
         }
         projectVaultQueueBatchCount += 1
         projectVaultBusySongIDs.insert(song.id)
@@ -135,13 +177,32 @@ extension ArchiveBrowserViewModel {
             } else {
                 succeeded = await operation.perform(self)
             }
-            if Task.isCancelled || self.projectVaultStopRequested {
+            // P2: a stopped destructive operation must keep its truthful
+            // stopped/recovery copy per-song and globally. Never overwrite the
+            // per-song recovery message with a later generic footer, and never
+            // finish a multi-item batch with an unqualified "queue finished"
+            // when an interruption occurred. Normal successful batches keep the
+            // exact "Project Vault queue finished." footer.
+            let wasStopped = Task.isCancelled || self.projectVaultStopRequested
+            if wasStopped {
+                var stopped = self.vaultQueueStoppedIDsForBatch
+                stopped.insert(operation.songID)
+                self.vaultQueueStoppedIDsForBatch = stopped
+                // REQUEST-69: count stopped REQUESTS; the same song stopped
+                // twice is two stopped requests for one songID.
+                self.vaultQueueStoppedRequestCountForBatch += 1
                 self.projectVaultOperationMessages[operation.songID] = CancelCopy.transferStopped
                 self.setProjectVaultStatusMessage(CancelCopy.transferStopped)
                 self.projectVaultStopRequested = false
+                // A stop that returned success still did not complete: count it
+                // as not-completed so completed/cancelled counts stay accurate.
+                if succeeded {
+                    self.projectVaultQueueFailures.append(operation.songName)
+                }
+            } else {
+                self.projectVaultOperationMessages[operation.songID] = self.statusBaseMessage
             }
-            self.projectVaultOperationMessages[operation.songID] = self.statusBaseMessage
-            self.diagnostics.scoped(to: .vault).log(succeeded ? .info : .error, "Vault operation finished (label=\(operation.label), succeeded=\(succeeded))")
+            self.diagnostics.scoped(to: .vault).log(succeeded && !wasStopped ? .info : .error, "Vault operation finished (label=\(operation.label), succeeded=\(succeeded), stopped=\(wasStopped))")
             if !succeeded { self.projectVaultQueueFailures.append(operation.songName) }
             self.projectVaultBusySongIDs.remove(operation.songID)
             progressTask.cancel()
@@ -151,7 +212,42 @@ extension ArchiveBrowserViewModel {
             if !self.projectVaultPendingOperations.isEmpty {
                 self.startNextProjectVaultOperation()
             } else {
-                if self.projectVaultQueueBatchCount > 1 {
+                // REQUEST-69: footers count REQUESTS. The ID sets collapse
+                // repeats (same song cancelled/stopped twice) while the batch
+                // total counts every enqueue, so Set.count would under-report
+                // and inflate completed via total-minus-failures.
+                // (Sets in ArchiveBrowserViewModel.swift stay as stable
+                // per-song truth; counts here are the footer source.)
+                let stoppedCount = self.vaultQueueStoppedRequestCountForBatch
+                let canceledCount = self.vaultQueueCanceledRequestCountForBatch
+                if stoppedCount > 0, self.projectVaultQueueBatchCount > 1 {
+                    let total = self.projectVaultQueueBatchCount
+                    // Truthful completed: total minus failures minus queued
+                    // cancellations. A cancelled queued operation never executed,
+                    // so it must not be counted as completed.
+                    let completed = max(0, total - self.projectVaultQueueFailures.count - canceledCount)
+                    var footer: String
+                    if canceledCount == 0 {
+                        footer = "\(CancelCopy.transferStopped) Project Vault queue stopped: \(completed) completed, \(stoppedCount) stopped of \(total)."
+                    } else {
+                        footer = "\(CancelCopy.transferStopped) Project Vault queue stopped: \(completed) completed, \(stoppedCount) stopped, \(canceledCount) cancelled of \(total)."
+                    }
+                    if !self.projectVaultQueueFailures.isEmpty {
+                        footer += " Needs attention: \(self.projectVaultQueueFailures.joined(separator: ", "))."
+                    }
+                    self.setProjectVaultStatusMessage(footer)
+                } else if canceledCount > 0, self.projectVaultQueueBatchCount > 1 {
+                    // A batch with queued cancellations but no stop must never
+                    // report an unqualified "queue finished": cancelled items did
+                    // not complete.
+                    let total = self.projectVaultQueueBatchCount
+                    let completed = max(0, total - self.projectVaultQueueFailures.count - canceledCount)
+                    var footer = "Project Vault queue finished: \(completed) completed, \(canceledCount) cancelled of \(total)."
+                    if !self.projectVaultQueueFailures.isEmpty {
+                        footer += " Needs attention: \(self.projectVaultQueueFailures.joined(separator: ", "))."
+                    }
+                    self.setProjectVaultStatusMessage(footer)
+                } else if self.projectVaultQueueBatchCount > 1 {
                     self.setProjectVaultStatusMessage(self.projectVaultQueueFailures.isEmpty
                         ? "Project Vault queue finished."
                         : "Project Vault queue finished. Needs attention: \(self.projectVaultQueueFailures.joined(separator: ", ")).")

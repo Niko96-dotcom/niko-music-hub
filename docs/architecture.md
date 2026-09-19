@@ -253,3 +253,15 @@ Use mechanical rename + test run; avoid drive-by refactors in feature modules.
   (the archive's board⇄list flip icon).
 - Production tools render through `HubInspectorPage` (content column + fixed inspector rail). Layout
   rules and keylines: `docs/design-contract.md`.
+
+## Project Vault bound authorization
+
+- Every explicit Archive confirmation captures a `ProjectVaultArchiveAuthorization` before the dialog;
+  the exact token travels confirmation → queue → bounded Done retries and is never re-captured or
+  escalated at execution (copy-only stays copy-only; drift fails closed in the runtime).
+- The nil-authorization overload (automatic Done, relaunch) is always copy-only; a new destructive
+  action needs a fresh confirmation. Undo or leaving Done revokes that song's capture, dialog,
+  queued Done operation, retry budget, and inflight Done task; revoked approvals are never reused.
+- Cancel copy is truthful about the removal boundary: stopping before verification keeps Active;
+  at/after removal the fate is uncertain, partial copies are never claimed verified, and review
+  stays via Get Local & Open / Recover Verified Project.

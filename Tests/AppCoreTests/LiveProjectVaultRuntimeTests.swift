@@ -27,7 +27,13 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let file = sibling.appendingPathComponent("Synthetic Song.cpr")
         let version = ProjectVersion(filePath: file, fileName: file.lastPathComponent, modifiedAt: Date(timeIntervalSince1970: 1))
         let song = Song(folderPath: sibling, originalFolderName: "Separate Song", displayTitle: "Separate Song", projectVersions: [version], latestCPR: version)
-        let archived = try await runtime.archive(song: song, trigger: .manual)
+        let siblingAuthorization = try await runtime.captureArchiveAuthorization(
+            for: song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let archived = try await runtime.archive(song: song, trigger: .manual, authorization: siblingAuthorization)
         XCTAssertNotEqual(archived.record.id, first.record.id)
         XCTAssertEqual(archived.transfer?.sourceURL.resolvingSymlinksInPath().path, sibling.resolvingSymlinksInPath().path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: sibling.path))
@@ -52,7 +58,13 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             $0.musicRoots.append(stored)
             $0.vault.archiveRootID = stored.id
         }
-        let next = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let nextAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let next = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: nextAuthorization)
         XCTAssertNotEqual(next.transfer?.id, first.transfer?.id)
         XCTAssertEqual(next.transfer?.state, .archivedLocal)
         XCTAssertTrue(try XCTUnwrap(next.transfer?.destinationURL).path.hasPrefix(nextRoot.path))
@@ -189,7 +201,13 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
 
-        let archived = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let manualAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let archived = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: manualAuthorization)
         XCTAssertEqual(archived.transfer?.id, copy.transfer?.id)
         XCTAssertEqual(archived.transfer?.state, .archivedLocal)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
@@ -198,7 +216,13 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let restored = try await runtime.restoreAndOpen(snapshot: archived)
         XCTAssertNotNil(restored.completedAt)
         try VaultManifestBuilder().verify(before, at: fixture.project)
-        let again = try await runtime.archive(song: fixture.song, trigger: .manual)
+        let againAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let again = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: againAuthorization)
         XCTAssertEqual(again.transfer?.id, copy.transfer?.id)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
         try VaultManifestBuilder().verify(before, at: try XCTUnwrap(again.transfer?.destinationURL))
@@ -209,14 +233,26 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         for blocker in ["none", "backup", "keepLocal", "emergency", "daw", "openFiles"] {
             let fixture = try Fixture()
             defer { fixture.cleanup() }
-            try fixture.saveSettings(stage: .privateBeta, backupConfirmed: blocker != "backup", emergencyStop: blocker == "emergency")
+            try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+            let runtime = try fixture.runtime(activityProbe: ManualArchiveProbe(blocker: blocker))
+            let authorization = try await runtime.captureArchiveAuthorization(
+                for: fixture.song,
+                trigger: .manual,
+                removingActiveCopy: true,
+                catalogProjectID: nil
+            )
+            if blocker == "backup" {
+                try fixture.settingsStore.updateSettings { $0.vault.independentBackupConfirmed = false }
+            }
             if blocker == "keepLocal" {
                 let projectPath = fixture.project.path
                 try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs.insert(projectPath) }
             }
-            let runtime = try fixture.runtime(activityProbe: ManualArchiveProbe(blocker: blocker))
+            if blocker == "emergency" {
+                try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+            }
             do {
-                let archived = try await runtime.archive(song: fixture.song, trigger: .manual)
+                let archived = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
                 XCTAssertEqual(blocker, "none")
                 XCTAssertEqual(archived.transfer?.state, .archivedLocal)
                 XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
@@ -797,7 +833,18 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .friends, backupConfirmed: true)
-        let archived = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+        let archivingRuntime = try fixture.runtime()
+        let snapshotAuthorization = try await archivingRuntime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let archived = try await archivingRuntime.archive(
+            song: fixture.song,
+            trigger: .workflowDone,
+            authorization: snapshotAuthorization
+        )
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
 
         var entries = try fixture.catalogStore().loadEntries()
@@ -1207,9 +1254,15 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             try settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
         }
         let runtime = try fixture.runtime(archiveProviderFactory: { _ in provider })
+        let emergencyAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
 
         do {
-            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: emergencyAuthorization)
             XCTFail("expected final Emergency Stop guard to retain Active")
         } catch {
             guard case .archiveFailed = error as? ProjectVaultRuntimeError else {
@@ -1231,8 +1284,14 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .friends, backupConfirmed: true)
         let runtime = try fixture.runtime()
+        let doneAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
 
-        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: doneAuthorization)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertTrue([VaultTransferState.archivedLocal, .archivedOnlineOnly].contains(try XCTUnwrap(archived.transfer).state))
 
@@ -1482,7 +1541,18 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             backupConfirmed: true,
             transferFreeSpaceReserveGiB: 1
         )
-        let archived = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+        let archivingRuntime = try fixture.runtime()
+        let xattrAuthorization = try await archivingRuntime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let archived = try await archivingRuntime.archive(
+            song: fixture.song,
+            trigger: .workflowDone,
+            authorization: xattrAuthorization
+        )
         let transfer = try XCTUnwrap(archived.transfer)
         let manifest = try XCTUnwrap(transfer.manifest)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
@@ -1614,11 +1684,19 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let sourcePath = try XCTUnwrap(archived.transfer).sourceURL.path
         try fixture.settingsStore.updateSettings { settings in
             settings.vault.rolloutStage = .friends
+        }
+        let keepLocalAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        try fixture.settingsStore.updateSettings { settings in
             settings.vault.keepLocalProjectIDs.insert(sourcePath)
         }
 
         do {
-            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: keepLocalAuthorization)
             XCTFail("expected Keep Local to refuse automatic archiving")
         } catch {
             XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
@@ -1639,8 +1717,18 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             activityProbe: AfterCopyBusyProbe(),
             now: { clock.value }
         )
+        let postponedAuthorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
 
-        let snapshot = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        let snapshot = try await runtime.archive(
+            song: fixture.song,
+            trigger: .workflowDone,
+            authorization: postponedAuthorization
+        )
         let postponedTransfer = try XCTUnwrap(snapshot.transfer)
 
         XCTAssertEqual(postponedTransfer.state, .archiveVerified)
@@ -1655,9 +1743,16 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             now: { clock.value }
         )
 
+        let completedAuthorization = try await clearRuntime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
         let completed = try await clearRuntime.archive(
             song: fixture.song,
-            trigger: .workflowDone
+            trigger: .workflowDone,
+            authorization: completedAuthorization
         )
         let completedTransfer = try XCTUnwrap(completed.transfer)
         let persistedTransfers = try fixture.transferStore().allTransferRecords()
@@ -2244,6 +2339,553 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
     }
 }
 
+// MARK: - Bound authorization regressions (V3)
+
+extension LiveProjectVaultRuntimeTests {
+    func testCopyOnlyAuthorizationNeverRemovesDespitePermissiveSettings() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let runtime = try fixture.runtime()
+        // A truthful copy-only confirmation must stay available even when the
+        // independent-backup gate would forbid removal.
+        let copyOnly = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: false,
+            catalogProjectID: nil
+        )
+        XCTAssertEqual(copyOnly.maximumDestructiveness, .copyOnly)
+        XCTAssertFalse(copyOnly.permitsRemoval)
+        try fixture.settingsStore.updateSettings {
+            $0.vault.rolloutStage = .friends
+            $0.vault.independentBackupConfirmed = true
+        }
+
+        let archived = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: copyOnly)
+
+        XCTAssertEqual(archived.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(archived.transfer?.destinationURL).path))
+    }
+
+    func testCompatibilityEntryPointsStayCopyOnlyWhenRemovalIsPermitted() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        let runtime = try fixture.runtime()
+
+        let manual = try await runtime.archive(song: fixture.song, trigger: .manual)
+        XCTAssertEqual(manual.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        let done = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        XCTAssertEqual(done.transfer?.id, manual.transfer?.id)
+        XCTAssertEqual(done.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testSamePathSourceReplacementDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        // Same path, different filesystem object: the bound device/inode no
+        // longer matches, so the confirmation cannot authorize removal.
+        try FileManager.default.removeItem(at: fixture.project)
+        try Data("replacement".utf8).write(to: fixture.project)
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a same-path replacement must not inherit deletion approval")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .sourceIdentityMismatch)
+        }
+
+        XCTAssertEqual(try Data(contentsOf: fixture.project), Data("replacement".utf8))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testMutatedSourceRequiresNewVerifiedCopyBeforeRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let firstTransfer = try XCTUnwrap(copy.transfer)
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        try Data("new audio".utf8).write(to: fixture.project.appendingPathComponent("Added.wav"))
+
+        let archived = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+        let secondTransfer = try XCTUnwrap(archived.transfer)
+
+        XCTAssertNotEqual(secondTransfer.id, firstTransfer.id, "mutated source must claim a new verified copy, never reuse the stale terminal")
+        XCTAssertEqual(secondTransfer.state, .archivedLocal)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondTransfer.destinationURL.appendingPathComponent("Added.wav").path))
+        let firstDestination = try XCTUnwrap(fixture.transferStore().record(id: firstTransfer.id)?.destinationURL)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: firstDestination.appendingPathComponent("Added.wav").path))
+    }
+
+    func testRootRepointWithSameUUIDDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let replacement = fixture.root.appendingPathComponent("Replacement Active", isDirectory: true)
+        try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+        let activeID = fixture.activeID
+        try fixture.settingsStore.updateSettings {
+            $0.musicRoots.removeAll { $0.role == .active }
+            $0.musicRoots.append(StoredMusicRoot(id: activeID, role: .active, url: replacement))
+        }
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a re-pointed root with a retained UUID must deny removal")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .rootMismatch)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testTamperedRootIdentityDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        func forged(
+            activeIdentity: ProjectVaultSourceFileSystemIdentity,
+            archiveIdentity: ProjectVaultSourceFileSystemIdentity
+        ) -> ProjectVaultArchiveAuthorization {
+            ProjectVaultArchiveAuthorization(
+                sourceCanonicalPath: authorization.sourceCanonicalPath,
+                sourceFileSystemIdentity: authorization.sourceFileSystemIdentity,
+                songID: authorization.songID,
+                catalogProjectID: authorization.catalogProjectID,
+                activeRootID: authorization.activeRootID,
+                activeRootCanonicalPath: authorization.activeRootCanonicalPath,
+                activeRootFileSystemIdentity: activeIdentity,
+                archiveRootID: authorization.archiveRootID,
+                archiveRootCanonicalPath: authorization.archiveRootCanonicalPath,
+                archiveRootFileSystemIdentity: archiveIdentity,
+                trigger: authorization.trigger,
+                maximumDestructiveness: authorization.maximumDestructiveness,
+                authorizedAt: authorization.authorizedAt
+            )
+        }
+        let activeForged = forged(
+            activeIdentity: ProjectVaultSourceFileSystemIdentity(
+                device: authorization.activeRootFileSystemIdentity.device &+ 1,
+                inode: authorization.activeRootFileSystemIdentity.inode
+            ),
+            archiveIdentity: authorization.archiveRootFileSystemIdentity
+        )
+        let archiveForged = forged(
+            activeIdentity: authorization.activeRootFileSystemIdentity,
+            archiveIdentity: ProjectVaultSourceFileSystemIdentity(
+                device: authorization.archiveRootFileSystemIdentity.device,
+                inode: authorization.archiveRootFileSystemIdentity.inode &+ 1
+            )
+        )
+        for forgedAuthorization in [activeForged, archiveForged] {
+            do {
+                _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: forgedAuthorization)
+                XCTFail("a same-path root replacement must be stale")
+            } catch {
+                XCTAssertEqual(error as? ProjectVaultAuthorizationError, .rootMismatch)
+            }
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testRevokedBackupApprovalDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        try fixture.settingsStore.updateSettings { $0.vault.independentBackupConfirmed = false }
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a revoked backup approval must keep the Active copy")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .independentBackupRequired)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
+    }
+
+    func testEmergencyStopDuringFinalProbeDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let settingsStore = fixture.settingsStore
+        let runtime = try fixture.runtime(
+            activityProbe: FinalBoundaryMutatingProbe {
+                try? settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+            },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("an Emergency Stop raised during the final probe must keep the Active copy")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .emergencyStop)
+        }
+
+        XCTAssertTrue(try settingsStore.loadSettings().vault.automationEmergencyStop)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
+    }
+
+    func testKeepLocalDuringFinalProbeDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let settingsStore = fixture.settingsStore
+        let canonicalSource = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
+        let runtime = try fixture.runtime(
+            activityProbe: FinalBoundaryMutatingProbe {
+                try? settingsStore.updateSettings { $0.vault.keepLocalProjectIDs.insert(canonicalSource) }
+            },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("Keep Local set during the final probe must keep the Active copy")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
+        }
+
+        XCTAssertTrue(try settingsStore.loadSettings().vault.keepLocalProjectIDs.contains(canonicalSource))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
+    }
+
+    func testCatalogReassignmentDuringFinalProbeDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let knownProjectID = try XCTUnwrap(copy.transfer).projectID
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: knownProjectID
+        )
+        let catalogStore = try fixture.catalogStore()
+        let activeID = fixture.activeID
+        let probingRuntime = try fixture.runtime(
+            activityProbe: FinalBoundaryMutatingProbe {
+                let replacement = ProjectCatalogEntry(
+                    record: ProjectRecord(
+                        id: ProjectID(),
+                        canonicalTitle: "Synthetic Song",
+                        locations: [ProjectLocation(
+                            rootID: activeID,
+                            relativePath: "Synthetic Song",
+                            kind: .active,
+                            availability: .local
+                        )],
+                        workflowState: .done
+                    ),
+                    evidence: ProjectIdentityEvidence(folderName: "Synthetic Song", cubaseFiles: [])
+                )
+                try? catalogStore.apply(ProjectCatalogReconciliation(
+                    entries: [replacement],
+                    reviews: [],
+                    metadataMigrations: [:]
+                ))
+            },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+
+        do {
+            _ = try await probingRuntime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a catalog reassignment during the final probe must keep the Active copy")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .catalogMismatch)
+        }
+
+        let entries = try catalogStore.loadEntries()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertNotEqual(entries.first?.record.id, knownProjectID)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().record(id: try XCTUnwrap(copy.transfer).id)?.state, .archiveVerified)
+    }
+
+    func testKnownCatalogIDRemovalSucceeds() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let knownProjectID = try XCTUnwrap(copy.transfer).projectID
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: knownProjectID
+        )
+
+        let archived = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+
+        XCTAssertEqual(archived.record.id, knownProjectID)
+        XCTAssertEqual(archived.transfer?.state, .archivedLocal)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testTriggerMismatchDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: authorization)
+            XCTFail("a confirmation for another operation must not authorize this one")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .triggerMismatch)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testSongMismatchDeniesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let other = try fixture.makeAdditionalSong(named: "Second Project")
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: other, trigger: .manual, authorization: authorization)
+            XCTFail("a confirmation for another project must not authorize this one")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .songMismatch)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: other.folderPath.path))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+    }
+
+    func testBackupCopyCaptureRefusesRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime()
+
+        do {
+            _ = try await runtime.captureArchiveAuthorization(
+                for: fixture.song,
+                trigger: .backupCopy,
+                removingActiveCopy: true,
+                catalogProjectID: nil
+            )
+            XCTFail("backup copies never remove the Active copy")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .backupCopyRemovalForbidden)
+        }
+
+        let copyOnly = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .backupCopy,
+            removingActiveCopy: false,
+            catalogProjectID: nil
+        )
+        let copied = try await runtime.archive(song: fixture.song, trigger: .backupCopy, authorization: copyOnly)
+        XCTAssertEqual(copied.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    /// A same-UUID archive-root re-point landing inside the awaited provider
+    /// prepare must not copy into the changed target under a stale approval.
+    func testBoundCopyDeniesArchiveRootRepointDuringProviderPrepare() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let settingsStore = fixture.settingsStore
+        let replacement = fixture.root.appendingPathComponent("Replacement Archive", isDirectory: true)
+        try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+        let provider = PrepareMutatingProvider {
+            guard let archiveID = try settingsStore.loadSettings().vault.archiveRootID else {
+                throw ProjectVaultRuntimeError.unavailable
+            }
+            try settingsStore.updateSettings {
+                $0.musicRoots.removeAll { $0.role == .archive }
+                $0.musicRoots.append(StoredMusicRoot(id: archiveID, role: .archive, url: replacement))
+            }
+        }
+        let runtime = try fixture.runtime(
+            archiveProviderFactory: { _ in provider },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("an archive-root re-point during provider checks must not copy into the changed target")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .rootMismatch)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: replacement.path).isEmpty)
+        let failed = try XCTUnwrap(fixture.transferStore().allTransferRecords().first)
+        XCTAssertEqual(failed.state, .failedRecoverable)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.destinationURL.path))
+    }
+
+    /// A same-path source replacement landing inside the awaited provider
+    /// prepare must not inherit copy approval; the replacement is never copied.
+    func testBoundCopyDeniesSamePathSourceReplacementDuringProviderPrepare() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let sourceURL = fixture.project
+        let marker = sourceURL.appendingPathComponent("Replacement.cpr")
+        let provider = PrepareMutatingProvider {
+            try FileManager.default.removeItem(at: sourceURL)
+            try FileManager.default.createDirectory(at: sourceURL, withIntermediateDirectories: true)
+            try Data("replacement".utf8).write(to: marker)
+        }
+        let runtime = try fixture.runtime(
+            archiveProviderFactory: { _ in provider },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a same-path source replacement during provider checks must not inherit copy approval")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .sourceIdentityMismatch)
+        }
+
+        XCTAssertEqual(try Data(contentsOf: marker), Data("replacement".utf8))
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().allSatisfy {
+            !FileManager.default.fileExists(atPath: $0.destinationURL.path)
+        })
+    }
+
+    /// A known catalog entry disappearing inside the awaited provider prepare
+    /// must fail closed, not copy under a stale catalog identity.
+    func testBoundCopyDeniesWhenKnownCatalogEntryDisappearsDuringProviderPrepare() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let setup = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let copy = try await setup.archive(song: fixture.song, trigger: .backupCopy)
+        // Force a fresh copy so the awaited prepare hook is actually reached.
+        try Data("new recording".utf8).write(to: fixture.project.appendingPathComponent("Added.wav"))
+        let knownProjectID = try XCTUnwrap(copy.transfer).projectID
+        let catalogStore = try fixture.catalogStore()
+        let provider = PrepareMutatingProvider {
+            try catalogStore.apply(ProjectCatalogReconciliation(
+                entries: [],
+                reviews: [],
+                metadataMigrations: [:]
+            ))
+        }
+        let runtime = try fixture.runtime(
+            archiveProviderFactory: { _ in provider },
+            projectOpener: RuntimeNoopVaultProjectOpener()
+        )
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: knownProjectID
+        )
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+            XCTFail("a catalog disappearance during provider checks must fail closed, not copy under a stale identity")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultAuthorizationError, .catalogMismatch)
+        }
+
+        XCTAssertTrue(try catalogStore.loadEntries().isEmpty, "provider mutation must have executed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().record(id: try XCTUnwrap(copy.transfer).id)?.state, .archiveVerified)
+    }
+}
+
 private extension LiveProjectVaultRuntimeTests {
     struct ManualArchiveProbe: VaultAutomationActivityProbing {
         let blocker: String
@@ -2265,6 +2907,50 @@ private extension LiveProjectVaultRuntimeTests {
         func cubaseStatus() async -> VaultActivityStatus { .uncertain(reason) }
         func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
         func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
+    }
+    /// Applies a settings/catalog mutation inside the final idle probe, so the
+    /// bound admission's post-await recheck must observe it. Mutations are
+    /// idempotent; tests assert the mutation landed and the Active copy stayed.
+    struct FinalBoundaryMutatingProbe: VaultAutomationActivityProbing {
+        let mutate: @Sendable () -> Void
+        func cubaseStatus() async -> VaultActivityStatus { mutate(); return .clear }
+        func openFileStatus(in projectURL: URL) async -> VaultActivityStatus { .clear }
+        func writeActivityStatus(in projectURL: URL, since: Date) async -> VaultActivityStatus { .clear }
+    }
+
+    /// Runs a one-shot filesystem/settings/catalog mutation inside the first
+    /// provider `prepareForWrite`, so the bound copy admission's post-await
+    /// recheck must observe it before any staging bytes are created. The
+    /// archive phases are strictly ordered (prepare runs before the staging
+    /// copy), so the mutation deterministically precedes the copy admission.
+    /// The closure is actor-isolated state (not `@Sendable`) so filesystem
+    /// mutations can use `FileManager` like the rest of the fixture.
+    actor PrepareMutatingProvider: ArchiveStorageProvider {
+        private let mutate: () throws -> Void
+        private var mutated = false
+
+        init(mutate: @escaping () throws -> Void) {
+            self.mutate = mutate
+        }
+
+        func capabilities() async throws -> StorageCapabilities {
+            .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: false)
+        }
+
+        func currentLocality(at location: URL, manifest: VaultManifest) async throws -> ArchiveStorageLocality {
+            .unknown
+        }
+
+        func prepareForRead(_ location: URL) async throws {}
+        func prepareForWrite(at root: URL) async throws {
+            if !mutated {
+                mutated = true
+                try mutate()
+            }
+        }
+        func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+        func materialize(_ location: URL) async throws {}
+        func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
     }
 
     actor AfterCopyBusyProbe: VaultAutomationActivityProbing {
@@ -3271,7 +3957,13 @@ extension LiveProjectVaultRuntimeTests {
             "stored evidence is the file on disk, not the scanned representation"
         )
 
-        let archived = try await runtime.archive(song: scanned, trigger: .manual)
+        let scannedManualAuthorization = try await runtime.captureArchiveAuthorization(
+            for: scanned,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let archived = try await runtime.archive(song: scanned, trigger: .manual, authorization: scannedManualAuthorization)
         XCTAssertEqual(archived.record.id, copy.record.id)
         XCTAssertEqual(archived.transfer?.id, copy.transfer?.id)
         XCTAssertEqual(archived.transfer?.state, .archivedLocal)
@@ -3281,7 +3973,16 @@ extension LiveProjectVaultRuntimeTests {
         XCTAssertNotNil(restored.completedAt)
         try VaultManifestBuilder().verify(before, at: fixture.project)
 
-        let again = try await runtime.archive(song: scanned, trigger: .manual)
+        let rescanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
+            $0.originalFolderName == "Synthetic Song"
+        })
+        let againAuthorization = try await runtime.captureArchiveAuthorization(
+            for: rescanned,
+            trigger: .manual,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        let again = try await runtime.archive(song: rescanned, trigger: .manual, authorization: againAuthorization)
         XCTAssertEqual(again.record.id, copy.record.id)
         XCTAssertEqual(again.transfer?.id, copy.transfer?.id)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))

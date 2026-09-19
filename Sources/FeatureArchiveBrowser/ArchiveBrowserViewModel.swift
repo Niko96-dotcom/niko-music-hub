@@ -143,6 +143,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var projectVaultOperationMessages: [String: String] = [:]
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
+    var boundArchiveCaptureSongID: String?
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
     @Published var pendingStopTransferConfirmation = false
     @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
@@ -183,6 +184,37 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultStopRequested = false
     var projectVaultQueueFailures: [String] = []
     var projectVaultQueueBatchCount = 0
+    /// P2 batch-stop truth: per-batch set of songIDs whose operation was
+    /// interrupted via Stop Transfer / task cancellation. Per-instance storage
+    /// (reset with the batch); stable songID binding, never titles, so an
+    /// unrelated same-title song never pollutes the count.
+    var vaultQueueStoppedIDsForBatch: Set<String> = []
+    /// P2 batch-cancel truth: per-batch set of songIDs whose queued operation
+    /// was cancelled before execution (explicit queue cancel or Undo revocation).
+    /// Per-instance storage (reset with the batch); stable songID binding, never
+    /// titles. A cancelled item never completed, so the footer computes completed
+    /// as total minus failures minus cancelled.
+    var vaultQueueCanceledIDsForBatch: Set<String> = []
+    /// P2 REQUEST-69: per-batch REQUEST counts. The ID sets above collapse
+    /// repeats (cancel B, requeue B, cancel B keeps one songID) while every
+    /// enqueue bumps `projectVaultQueueBatchCount`; footers must count requests,
+    /// not distinct songs. Stable songIDs stay right for per-song messages.
+    var vaultQueueStoppedRequestCountForBatch = 0
+    var vaultQueueCanceledRequestCountForBatch = 0
+    /// V3 bound-authorization capture state. Every confirmation request bumps
+    /// `projectVaultAuthCaptureGeneration` and replaces
+    /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
+    /// its generation is still current and the task was not cancelled, so a
+    /// stale or superseded capture can never produce a surprise late modal.
+    var projectVaultAuthCaptureGeneration: UInt64 = 0
+    var projectVaultAuthCaptureTask: Task<Void, Never>?
+    /// Deterministic seam for behavioral tests: awaited at the start of every
+    /// bound-authorization capture so settings/roots/source changes can be
+    /// applied while a confirmation is still in flight.
+    var projectVaultAuthCaptureProbe: (@Sendable () async -> Void)?
+    /// Bounded Done-retry delay. Production waits 60 seconds between attempts
+    /// (at most 3); tests shorten it to exercise the same-auth retry path.
+    var projectVaultDoneRetryDelay: Duration = .seconds(60)
     /// Per-song Project Vault card state prepared when catalog, snapshot, or
     /// settings inputs change. `projectVaultPresentation(for:)` is deliberately
     /// a dictionary lookup so list and board re-renders stay main-thread cheap.
@@ -347,6 +379,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     deinit {
+        projectVaultAuthCaptureTask?.cancel()
         projectVaultRecoveryTask?.cancel()
         projectVaultQueueTask?.cancel()
     }

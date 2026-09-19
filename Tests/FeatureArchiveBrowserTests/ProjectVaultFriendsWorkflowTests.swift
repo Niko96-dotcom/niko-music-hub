@@ -10,8 +10,11 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         let runtime = try fixture.runtime(projectOpener: LinkedFailOnceOpener())
-        let archived = try await runtime.archive(song: Song(folderPath: fixture.project,
-            originalFolderName: fixture.project.lastPathComponent, displayTitle: "Recovery"), trigger: .manual)
+        let launchSong = Song(folderPath: fixture.project,
+            originalFolderName: fixture.project.lastPathComponent, displayTitle: "Recovery")
+        let launchAuthorization = try await runtime.captureArchiveAuthorization(
+            for: launchSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        let archived = try await runtime.archive(song: launchSong, trigger: .manual, authorization: launchAuthorization)
         do {
             _ = try await runtime.restoreAndOpen(snapshot: archived)
             XCTFail("Expected first open to fail")
@@ -31,7 +34,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let original = try XCTUnwrap(model.songs.first)
-        model.archiveInProjectVault(original)
+        let restoreDialogAuthorization = try await runtime.captureArchiveAuthorization(
+            for: original, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        model.archiveInProjectVault(original, authorization: restoreDialogAuthorization)
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
         model.setShowArchivedProjects(true)
         let archived = try XCTUnwrap(model.songs.first)
@@ -234,14 +239,19 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Second Ableton", extension: "als")
         let secondManifest = try VaultManifestBuilder().build(at: second)
-        let model = fixture.viewModel(runtime: try fixture.runtime())
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
-        model.archiveInProjectVault(firstSong)
-        model.archiveInProjectVault(secondSong)
-        model.archiveInProjectVault(secondSong)
-        model.archiveInProjectVault(firstSong)
+        let firstAuthorization = try await runtime.captureArchiveAuthorization(
+            for: firstSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        let secondAuthorization = try await runtime.captureArchiveAuthorization(
+            for: secondSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        model.archiveInProjectVault(firstSong, authorization: firstAuthorization)
+        model.archiveInProjectVault(secondSong, authorization: secondAuthorization)
+        model.archiveInProjectVault(secondSong, authorization: secondAuthorization)
+        model.archiveInProjectVault(firstSong, authorization: firstAuthorization)
         XCTAssertEqual(model.projectVaultActiveOperation?.songID, firstSong.id)
         XCTAssertEqual(model.projectVaultPendingOperations.map(\.songID), [secondSong.id])
         XCTAssertEqual(model.projectVaultQueueMessage(for: secondSong), "Queued: Archive — 1 ahead.")
@@ -272,11 +282,14 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Second Cubase", extension: "cpr")
-        let model = fixture.viewModel(runtime: try fixture.runtime())
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
-        model.archiveInProjectVault(firstSong)
+        let failedAuthorization = try await runtime.captureArchiveAuthorization(
+            for: firstSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        model.archiveInProjectVault(firstSong, authorization: failedAuthorization)
         model.archiveInProjectVault(secondSong, trigger: .backupCopy)
         // Only a disposable fixture disappears before the first queued task starts.
         try FileManager.default.removeItem(at: fixture.project)
@@ -294,12 +307,15 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Cancelled Cubase", extension: "cpr")
         let secondManifest = try VaultManifestBuilder().build(at: second)
-        let model = fixture.viewModel(runtime: try fixture.runtime())
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        let cancelledAuthorization = try await runtime.captureArchiveAuthorization(
+            for: secondSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
         model.archiveInProjectVault(firstSong, trigger: .backupCopy)
-        model.archiveInProjectVault(secondSong)
+        model.archiveInProjectVault(secondSong, authorization: cancelledAuthorization)
         model.cancelQueuedProjectVaultOperation(for: secondSong)
         XCTAssertTrue(model.projectVaultPendingOperations.isEmpty)
         XCTAssertEqual(model.projectVaultActiveOperation?.songID, firstSong.id)
@@ -347,10 +363,13 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Waiting Cubase", extension: "cpr")
-        let model = fixture.viewModel(runtime: try fixture.runtime())
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let firstSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let secondSong = try XCTUnwrap(model.songs.first { $0.originalFolderName == second.lastPathComponent })
+        let emergencyAuthorization = try await runtime.captureArchiveAuthorization(
+            for: secondSong, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
         model.enqueueProjectVaultOperation(for: firstSong, label: "Test", startMessage: "Test") { _ in
             do {
                 try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
@@ -360,7 +379,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
                 return false
             }
         }
-        model.archiveInProjectVault(secondSong)
+        model.archiveInProjectVault(secondSong, authorization: emergencyAuthorization)
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
         XCTAssertTrue(model.projectVaultOperationMessages[secondSong.id]?.contains("Emergency Stop") == true)
@@ -371,10 +390,13 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
-        let model = fixture.viewModel(runtime: try fixture.runtime())
+        let runtime = try fixture.runtime()
+        let model = fixture.viewModel(runtime: runtime)
         await model.scan()
         let song = try XCTUnwrap(model.songs.first)
-        model.archiveInProjectVault(song)
+        let foldersAuthorization = try await runtime.captureArchiveAuthorization(
+            for: song, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        model.archiveInProjectVault(song, authorization: foldersAuthorization)
         try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
@@ -450,7 +472,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertTrue(viewModel.songs.contains { $0.id == original.id })
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
 
-        viewModel.archiveInProjectVault(original)
+        let manualAuthorization = try await runtime.captureArchiveAuthorization(
+            for: original, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        viewModel.archiveInProjectVault(original, authorization: manualAuthorization)
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertFalse(viewModel.songs.contains { $0.id == original.id })
@@ -481,6 +505,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first)
         viewModel.updateWorkflowStatus(for: song, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         let store = try fixture.transferStore()
         try await waitUntil {
@@ -519,6 +544,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
         viewModel.updateWorkflowStatus(for: try XCTUnwrap(viewModel.songs.first), status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultRecoveryDeadline != nil }
         try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
@@ -549,6 +575,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         _ = try await runtime.archive(song: active, trigger: .backupCopy)
         await viewModel.refreshProjectVaultSnapshots()
         viewModel.updateWorkflowStatus(for: active, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
         try await waitUntil {
@@ -615,6 +642,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
@@ -700,6 +728,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
@@ -732,6 +761,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         XCTAssertFalse(viewModel.showArchivedProjects)
         viewModel.setShowArchivedProjects(true)

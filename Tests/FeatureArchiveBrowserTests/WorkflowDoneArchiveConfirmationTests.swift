@@ -14,10 +14,16 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertNotEqual(song.workflowStatus, .done)
 
         viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
 
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .workflowDone)
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.songID, song.id)
         XCTAssertTrue(viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy == true)
+        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let bound = try XCTUnwrap(pending.authorization)
+        XCTAssertEqual(bound.songID, song.id)
+        XCTAssertEqual(bound.trigger, .workflowDone)
+        XCTAssertEqual(pending.willRemoveActiveCopy, bound.permitsRemoval)
         XCTAssertNil(viewModel.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -43,6 +49,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
         viewModel.cancelPendingArchive()
 
@@ -62,6 +69,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.applyWorkflowStatus(.done, for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
 
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .workflowDone)
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.songID, song.id)
@@ -82,7 +90,10 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy, false)
+        let privateBetaPending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        XCTAssertEqual(try XCTUnwrap(privateBetaPending.authorization).maximumDestructiveness, .copyOnly)
         viewModel.confirmPendingArchive()
 
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
@@ -103,6 +114,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let undoManager = UndoManager()
         viewModel.workflowUndoManager = undoManager
         viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
 
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
@@ -131,6 +143,54 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         undoManager.undo()
         XCTAssertNil(viewModel.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
+    }
+
+    func testAutomaticDoneWithoutAuthorizationIsCopyOnly() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = BoundArchiveAuthorizationTests.DeterministicBoundVaultRuntime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        viewModel.commitWorkflowStatus(.done, for: song)
+        let doneSong = try XCTUnwrap(viewModel.songs.first(where: { $0.id == song.id }))
+        XCTAssertEqual(doneSong.workflowStatus, .done)
+
+        viewModel.archiveInProjectVault(doneSong, trigger: .workflowDone)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertEqual(runtime.copyCalls.count, 1)
+        XCTAssertEqual(runtime.copyCalls.first?.trigger, .workflowDone)
+        XCTAssertTrue(runtime.authCalls.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testCancelledAfterDestructiveBoundaryIsTruthful() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = BoundArchiveAuthorizationTests.DeterministicBoundVaultRuntime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let songPath = song.folderPath
+        runtime.archiveAuthImpl = { latest, _, _ in
+            try? FileManager.default.removeItem(at: songPath)
+            _ = latest
+            throw CancellationError()
+        }
+
+        viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        viewModel.confirmPendingArchive()
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: songPath.path))
+        let status = viewModel.statusMessage ?? ""
+        let detail = viewModel.projectVaultOperationMessages[song.id] ?? ""
+        XCTAssertFalse(status.contains("is not deleted"))
+        XCTAssertFalse(detail.contains("is not deleted"))
+        XCTAssertFalse(status.contains("not deleted"))
+        XCTAssertTrue(status.contains("Get Local") || detail.contains("Get Local") || status.contains("Recover") || detail.contains("Recover"))
+        XCTAssertTrue(status.contains("not verified") || detail.contains("not verified") || status.contains("review") || detail.contains("review"))
     }
 
     private func waitUntil(

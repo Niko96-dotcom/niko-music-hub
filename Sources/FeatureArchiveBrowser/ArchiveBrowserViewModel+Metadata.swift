@@ -127,6 +127,9 @@ extension ArchiveBrowserViewModel {
             return
         }
         commitWorkflowStatus(status, for: song)
+        if previous == .done, status != .done {
+            revokeBoundDoneWork(for: song.id)
+        }
         if registerUndo {
             registerWorkflowStatusUndo(
                 songID: song.id,
@@ -169,12 +172,62 @@ extension ArchiveBrowserViewModel {
     ) {
         guard let song = songs.first(where: { $0.id == songID }) else { return }
         let currentStatus = song.workflowStatus
+        let leavingDone = currentStatus == .done && previousStatus != .done
         commitWorkflowStatus(previousStatus, for: song)
+        if leavingDone {
+            revokeBoundDoneWork(for: songID)
+            if let live = songs.first(where: { $0.id == songID }),
+               !FileManager.default.fileExists(atPath: live.folderPath.path) {
+                setProjectVaultStatusMessage("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Get Local & Open to review the verified archive.")
+            }
+        }
         registerWorkflowStatusUndo(
             songID: songID,
             previousStatus: currentStatus,
             actionName: actionName
         )
+    }
+
+    /// Revokes a Done approval for one song. Cancels the matching capture and
+    /// dialog, any pending queued Done operation that never started, the retry
+    /// budget, and the inflight Done task where possible. A revoked approval
+    /// is never reused by a later retry or relaunch; a new destructive action
+    /// always needs a fresh confirmation. Other songs are untouched.
+    func revokeBoundDoneWork(for songID: String) {
+        cancelBoundArchiveCapture(for: songID)
+        if pendingArchiveConfirmation?.songID == songID {
+            pendingArchiveConfirmation = nil
+        }
+        var removedPending = false
+        var removedRequestCount = 0
+        while let index = projectVaultPendingOperations.firstIndex(where: {
+            $0.songID == songID && $0.trigger == .workflowDone
+        }) {
+            projectVaultPendingOperations.remove(at: index)
+            removedPending = true
+            removedRequestCount += 1
+        }
+        cancelDoneArchiveRetry(for: songID)
+        if let active = projectVaultActiveOperation,
+           active.songID == songID, active.trigger == .workflowDone {
+            projectVaultStopRequested = true
+            projectVaultQueueTask?.cancel()
+        } else if removedPending,
+                  projectVaultActiveOperation?.songID != songID,
+                  !projectVaultPendingOperations.contains(where: { $0.songID == songID }) {
+            // P2 truthful counts: an Undo-revoked queued Done never executed, so
+            // it must not be counted as completed via total-minus-failures.
+            // Per-instance stable songID binding, matching the stop set.
+            // REQUEST-69: count REQUESTS; Undo, requeue, Undo again is two
+            // cancelled requests for one songID.
+            var canceledForBatch = vaultQueueCanceledIDsForBatch
+            canceledForBatch.insert(songID)
+            vaultQueueCanceledIDsForBatch = canceledForBatch
+            vaultQueueCanceledRequestCountForBatch += max(1, removedRequestCount)
+            projectVaultBusySongIDs.remove(songID)
+            projectVaultOperationMessages[songID] = "Queued request cancelled. No project files were changed."
+            setProjectVaultStatusMessage("Undo revoked the Done archive before it ran. No project files were changed.")
+        }
     }
 
     func setManualMainPreview(for song: Song, candidateID: String) {

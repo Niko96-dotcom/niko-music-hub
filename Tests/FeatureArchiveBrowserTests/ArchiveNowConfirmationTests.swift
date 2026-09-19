@@ -13,8 +13,15 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
 
         XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .manual)
+        // V3: the dialog carries the exact captured token and agrees it.
+        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let bound = try XCTUnwrap(pending.authorization)
+        XCTAssertEqual(bound.songID, song.id)
+        XCTAssertEqual(bound.trigger, .manual)
+        XCTAssertEqual(pending.willRemoveActiveCopy, bound.permitsRemoval)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
@@ -37,6 +44,7 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
         viewModel.cancelPendingArchive()
 
@@ -59,12 +67,93 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         viewModel.projectVaultRetryAttemptCounts[song.id] = 3
 
         viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
 
         XCTAssertNil(viewModel.projectVaultRetryTasks[song.id])
         XCTAssertNil(viewModel.projectVaultRetryAttemptCounts[song.id])
         XCTAssertTrue(staleRetry.isCancelled)
 
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+    }
+
+    func testArchiveNowKeepLocalGatesRemovalToCopyOnlyChrome() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+
+        // Independent backup stays on, but Keep Local gates removal for this song.
+        viewModel.setProjectKeepLocal(true, for: song)
+
+        viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+
+        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let bound = try XCTUnwrap(pending.authorization)
+        XCTAssertEqual(pending.trigger, .manual)
+        XCTAssertEqual(pending.willRemoveActiveCopy, false)
+        XCTAssertEqual(pending.willRemoveActiveCopy, bound.permitsRemoval)
+        XCTAssertEqual(bound.maximumDestructiveness, .copyOnly)
+        XCTAssertTrue(pending.independentBackupConfirmed, "backup stays on while removal is gated")
+
+        // The bound dialog must agree the copy-only token: no delete promise.
+        let message = ProjectVaultConfirmationCopy.archiveNowMessage(
+            songTitle: pending.songTitle,
+            willRemoveActiveCopy: pending.willRemoveActiveCopy,
+            independentBackupConfirmed: pending.independentBackupConfirmed
+        )
+        XCTAssertFalse(message.contains("permanently delete"))
+        XCTAssertFalse(message.contains("do not go to the Trash"))
+        XCTAssertTrue(message.contains("stays in place"))
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.archiveNowTitle(willRemoveActiveCopy: pending.willRemoveActiveCopy),
+            "Archive this project?"
+        )
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.archiveNowConfirmTitle(willRemoveActiveCopy: pending.willRemoveActiveCopy),
+            "Archive Copy"
+        )
+
+        viewModel.confirmPendingArchive()
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testArchiveNowRemovalApprovedBindsDestructiveChrome() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+
+        viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+
+        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let bound = try XCTUnwrap(pending.authorization)
+        XCTAssertEqual(pending.willRemoveActiveCopy, true)
+        XCTAssertEqual(pending.willRemoveActiveCopy, bound.permitsRemoval)
+        XCTAssertEqual(bound.maximumDestructiveness, .mayRemoveActiveCopy)
+
+        let message = ProjectVaultConfirmationCopy.archiveNowMessage(
+            songTitle: pending.songTitle,
+            willRemoveActiveCopy: pending.willRemoveActiveCopy,
+            independentBackupConfirmed: pending.independentBackupConfirmed
+        )
+        XCTAssertTrue(message.contains("permanently delete"))
+        XCTAssertTrue(message.contains("Settings currently records that you protect the Archive with an independent backup"))
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.archiveNowTitle(willRemoveActiveCopy: pending.willRemoveActiveCopy),
+            "Archive and remove the Active copy?"
+        )
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.archiveNowConfirmTitle(willRemoveActiveCopy: pending.willRemoveActiveCopy),
+            "Archive"
+        )
+
+        viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
     }
 

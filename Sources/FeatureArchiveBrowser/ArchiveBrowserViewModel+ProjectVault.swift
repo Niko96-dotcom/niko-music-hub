@@ -245,15 +245,30 @@ extension ArchiveBrowserViewModel {
 
     private func enqueueDoneVaultProjectsIfNeeded() {
         for song in songs where song.workflowStatus == .done {
+            // P2: an unresolved identity sheet promises "Nothing is archived
+            // until you choose." Never auto-archive the exact song that owns
+            // the presented review. Stable song binding only (songID); never
+            // titles. Unrelated Done songs keep their automatic copy, and
+            // explicit resolution clears the presentation so the next refresh
+            // resumes normally via the fresh-confirmation path.
+            if isBlockedByUnresolvedIdentityReview(song) { continue }
             let transfer = projectVaultSnapshot(for: song)?.transfer
             // A persisted transfer—terminal, in progress, or failed—is owned by
             // recovery/manual review. Never create another automatic generation
-            // merely because the project remains marked Done.
+            // merely because the project remains marked Done. The nil
+            // authorization here is always copy-only; removal needs a fresh
+            // explicit confirmation and a revoked approval is never reused.
             if transfer == nil,
                !projectVaultBusySongIDs.contains(song.id),
                projectVaultRetryTasks[song.id] == nil {
                 archiveInProjectVault(song, trigger: .workflowDone)
             }
         }
+    }
+
+    private func isBlockedByUnresolvedIdentityReview(_ song: Song) -> Bool {
+        guard let presented = identityReviewPresentation,
+              let bound = presented.song else { return false }
+        return bound.id == song.id
     }
 }
