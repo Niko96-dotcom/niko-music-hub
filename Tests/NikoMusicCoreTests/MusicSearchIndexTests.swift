@@ -208,4 +208,24 @@ final class MusicSearchIndexTests: XCTestCase {
         XCTAssertEqual(index.search("neon").first?.displayTitle, "Neon Hook")
         XCTAssertEqual(index.search("neohok").first?.displayTitle, "Neohok Band")
     }
+
+    func testRepeatedSearchResultsPreserveOrderScoreAndExplanation() {
+        // Parity guard for the benchmark digest: repeated queries must return
+        // identical order, scores and explanations (ranking/fuzzy/diacritics).
+        let songs = [
+            Song(folderPath: URL(fileURLWithPath: "/tmp/Neon Hook"),
+                 originalFolderName: "Neon Hook", displayTitle: "Neon Hook",
+                 aliases: ["Demo"], collaboratorNames: ["Maria Klein"]),
+            Song(folderPath: URL(fileURLWithPath: "/tmp/GLÜHWURM"),
+                 originalFolderName: "GLÜHWURM", displayTitle: "GLÜHWURM"),
+        ]
+        let index = MusicSearchIndex(songs: songs)
+        for query in ["neon", "neon hook", "gluhwurm", "maria", "zzzz absent"] {
+            let first = index.searchResults(query)
+            let second = index.searchResults(query)
+            XCTAssertEqual(first.map(\.song.id), second.map(\.song.id), query)
+            XCTAssertEqual(first.map(\.score), second.map(\.score), query)
+            XCTAssertEqual(first.map(\.matchSummary), second.map(\.matchSummary), query)
+        }
+    }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 protocol ArchiveBrowseProjecting: Sendable {
     func project(_ state: ArchiveBrowseState) async -> ArchiveBrowseResult?
@@ -6,10 +7,24 @@ protocol ArchiveBrowseProjecting: Sendable {
 
 /// Serial isolation keeps expensive live searches off the main actor without
 /// running an unbounded set of searches when typing outruns a large catalog.
+/// Owns one reusable `MusicSearchIndex` incrementally synced to the latest
+/// shelf: per-song field invalidation reuses normalization, removed ids are
+/// dropped so memory stays bounded by the live shelf (no history cap, no
+/// global cache). Empty queries never touch the index.
 actor ArchiveBrowseProjector: ArchiveBrowseProjecting {
+    private var cachedIndex = MusicSearchIndex()
+
     func project(_ state: ArchiveBrowseState) -> ArchiveBrowseResult? {
         guard !Task.isCancelled else { return nil }
-        return ArchiveBrowseProjection.project(state)
+        let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            guard !Task.isCancelled else { return nil }
+            return ArchiveBrowseProjection.project(state)
+        }
+        let onShelf = ArchiveBrowseProjection.shelfSongs(from: state)
+        cachedIndex.sync(from: onShelf)
+        guard !Task.isCancelled else { return nil }
+        return ArchiveBrowseProjection.project(state, searchIndex: cachedIndex)
     }
 }
 

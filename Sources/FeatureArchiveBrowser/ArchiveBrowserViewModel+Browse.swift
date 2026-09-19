@@ -103,10 +103,18 @@ extension ArchiveBrowserViewModel {
     func recomputeBrowseResults() {
         browseRefreshDriver.cancelPendingDebounce()
         let state = browseState()
+        let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Empty query never touches the index: filtering/sorting/clearing must
+        // stay a cheap shelf→filter→sort pass with no per-song normalization.
+        // Non-empty queries incrementally sync the per-instance index so only
+        // new or searchably-changed songs re-normalize; filter/sort churn with
+        // an unchanged shelf is a no-op sync.
+        guard !trimmed.isEmpty else {
+            applyBrowseResult(ArchiveBrowseProjection.project(state))
+            return
+        }
         let onShelf = ArchiveBrowseProjection.shelfSongs(from: state)
-        // Always refresh songs in the index so title/alias edits are searchable immediately.
-        // Rebuild is an array assign; the expensive work is `searchResults` when a query is active.
-        cachedSearchIndex.rebuild(from: onShelf)
+        cachedSearchIndex.sync(from: onShelf)
 
         applyBrowseResult(ArchiveBrowseProjection.project(state, searchIndex: cachedSearchIndex))
     }

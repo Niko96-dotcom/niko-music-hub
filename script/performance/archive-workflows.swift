@@ -165,8 +165,21 @@ struct ArchiveWorkflowBenchmark {
         }
         var usage = rusage()
         getrusage(RUSAGE_SELF, &usage)
+        let process = ProcessInfo.processInfo
+        let hostInfo: [String: Any] = ["hostname": process.hostName,
+            "os": process.operatingSystemVersionString,
+            "cpu_count": process.processorCount,
+            "physical_memory_bytes": Int64(process.physicalMemory)]
+#if DEBUG
+        let buildConfig = "debug"
+#else
+        let buildConfig = "release"
+#endif
         let report: [String: Any] = ["warmup_rounds": 2, "measured_rounds": 7, "songs": 1000,
-                                   "peak_rss_bytes": usage.ru_maxrss, "metrics": metrics]
+                                   "peak_rss_bytes": usage.ru_maxrss, "metrics": metrics,
+                                   "host": hostInfo, "build_config": buildConfig,
+                                   "scope": "Catalog/sort/board/analytics/SQLite plus 50-song scan and optional 800-small-file manifest/verify. Heavy Vault manifests (100/1000/10000 records) and catalog/transfer reconciliation live in script/performance/vault-recovery.swift; this file does not duplicate them. No caps/discard; digests guard output parity.",
+                                   "budgets": "Host-specific guidance only, not a universal SLA. Sort/board/analytics feed background refresh and cached panes; keeping 1000-song medians within a frame budget on the reporting host leaves scrolling and typing responsive. Coordinator validates on the exact host/config in this report."]
         print(String(decoding: try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]), as: UTF8.self))
     }
 }

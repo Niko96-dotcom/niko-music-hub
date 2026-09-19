@@ -1,6 +1,51 @@
 import Foundation
 
 enum MusicSearchMatcher {
+    /// Narrow precomputed snapshot of every searchable field. Built once per
+    /// song at index build/sync so repeated queries reuse normalization and
+    /// tokenization instead of re-folding the same metadata per query per
+    /// token. No global cache: the owning MusicSearchIndex holds these rows
+    /// per live shelf and drops removed ids on sync(from:)/rebuild(from:),
+    /// so edited searchable metadata is visible after the owning index syncs.
+    struct IndexedFields: Sendable {
+        let title: String
+        let titleWords: [String]
+        let aliases: [String]
+        let aliasWords: [[String]]
+        let collaborators: [String]
+        let workflowStatus: String?
+        let folder: String
+        let folderWords: [String]
+        let projectFileNames: [String]
+        let projectAppNames: [String]
+        let previewFileNames: [String]
+        let scanWarnings: [String]
+        let appNote: String?
+        let sidecarNotes: String?
+    }
+
+    static func precompute(song: Song) -> IndexedFields {
+        let titleRaw = song.effectiveDisplayTitle
+        let folderRaw = song.originalFolderName
+        let aliasRaws = song.aliases
+        return IndexedFields(
+            title: normalize(titleRaw),
+            titleWords: tokens(from: titleRaw),
+            aliases: aliasRaws.map { normalize($0) },
+            aliasWords: aliasRaws.map { tokens(from: $0) },
+            collaborators: song.collaboratorNames.map { normalize($0) },
+            workflowStatus: song.workflowStatus.map { normalize($0.searchableText) },
+            folder: normalize(folderRaw),
+            folderWords: tokens(from: folderRaw),
+            projectFileNames: song.projectVersions.map { normalize($0.fileName) },
+            projectAppNames: song.projectVersions.map { normalize($0.applicationName) },
+            previewFileNames: song.previewCandidates.map { normalize($0.fileName) },
+            scanWarnings: song.scanWarnings.map { normalize($0) },
+            appNote: song.appNote.map { normalize($0) },
+            sidecarNotes: song.sidecarNotes.map { normalize($0) }
+        )
+    }
+
     static func tokens(from query: String) -> [String] {
         query
             .split(whereSeparator: { $0.isWhitespace || (!$0.isLetter && !$0.isNumber) })
@@ -13,110 +58,111 @@ enum MusicSearchMatcher {
         return matchScore(song: song, queryTokens: queryTokens) > 0
     }
 
+    static func matches(precomputed fields: IndexedFields, queryTokens: [String]) -> Bool {
+        guard !queryTokens.isEmpty else { return true }
+        return matchScore(precomputed: fields, queryTokens: queryTokens) > 0
+    }
+
     static func matchScore(song: Song, queryTokens: [String]) -> Int {
         matchDetails(song: song, queryTokens: queryTokens)
             .reduce(0) { $0 + $1.score }
     }
 
+    static func matchScore(precomputed fields: IndexedFields, queryTokens: [String]) -> Int {
+        matchDetails(precomputed: fields, queryTokens: queryTokens)
+            .reduce(0) { $0 + $1.score }
+    }
+
     static func matchDetails(song: Song, queryTokens: [String]) -> [MusicSearchMatchDetail] {
         guard !queryTokens.isEmpty else { return [] }
-        // Exact and fuzzy checks revisit the same fields. Reuse normalization
-        // only while matching this song; nothing survives a query or metadata edit.
-        var normalizedFields: [String: String] = [:]
-        func cachedNormalize(_ value: String) -> String {
-            if let cached = normalizedFields[value] { return cached }
-            let normalized = normalize(value)
-            normalizedFields[value] = normalized
-            return normalized
-        }
+        let fields = precompute(song: song)
+        return matchDetails(precomputed: fields, queryTokens: queryTokens)
+    }
+
+    static func matchDetails(precomputed fields: IndexedFields, queryTokens: [String]) -> [MusicSearchMatchDetail] {
+        guard !queryTokens.isEmpty else { return [] }
         var details: [MusicSearchMatchDetail] = []
         for token in queryTokens {
-            // Search requires every token. Once one misses, later field normalization
-            // and fuzzy matching cannot make this song eligible again.
-            guard let match = bestTokenMatch(token, for: song, normalize: cachedNormalize) else { return [] }
+            // Search requires every token. Once one misses, later field checks
+            // cannot make this song eligible again.
+            guard let match = bestTokenMatch(token, fields: fields) else { return [] }
             details.append(MusicSearchMatchDetail(queryToken: token, kind: match.kind, score: match.score))
         }
         return details
     }
 
-    private static func bestTokenMatch(_ token: String, for song: Song, normalize: (String) -> String) -> (kind: MusicSearchMatchKind, score: Int)? {
+    private static func bestTokenMatch(_ token: String, fields: IndexedFields) -> (kind: MusicSearchMatchKind, score: Int)? {
         guard !token.isEmpty else { return nil }
 
-        let title = normalize(song.effectiveDisplayTitle)
-        if title.hasPrefix(token) { return (.titlePrefix, 120) }
-        if title.contains(token) { return (.titleContains, 100) }
+        if fields.title.hasPrefix(token) { return (.titlePrefix, 120) }
+        if fields.title.contains(token) { return (.titleContains, 100) }
 
-        if song.aliases.contains(where: { normalize($0).contains(token) }) {
+        if fields.aliases.contains(where: { $0.contains(token) }) {
             return (.alias, 90)
         }
-        if song.aliases.contains(where: { isSubsequence(token, in: normalize($0)) }) {
+        if fields.aliases.contains(where: { isSubsequence(token, in: $0) }) {
             return (.fuzzyAlias, 22)
         }
 
-        if song.collaboratorNames.contains(where: { normalize($0).contains(token) }) {
+        if fields.collaborators.contains(where: { $0.contains(token) }) {
             return (.collaborator, 88)
         }
-        if song.collaboratorNames.contains(where: { isSubsequence(token, in: normalize($0)) }) {
+        if fields.collaborators.contains(where: { isSubsequence(token, in: $0) }) {
             return (.fuzzyCollaborator, 21)
         }
 
-        if let workflowStatus = song.workflowStatus {
-            let statusText = normalize(workflowStatus.searchableText)
+        if let statusText = fields.workflowStatus {
             if statusText.contains(token) { return (.workflowStatus, 86) }
             if isSubsequence(token, in: statusText) { return (.fuzzyWorkflowStatus, 21) }
         }
 
-        let folder = normalize(song.originalFolderName)
-        if folder.contains(token) { return (.folderName, 60) }
-        if isSubsequence(token, in: folder) { return (.fuzzyFolderName, 18) }
+        if fields.folder.contains(token) { return (.folderName, 60) }
+        if isSubsequence(token, in: fields.folder) { return (.fuzzyFolderName, 18) }
 
-        if song.projectVersions.contains(where: {
-            normalize($0.fileName).contains(token) || normalize($0.applicationName).contains(token)
-        }) {
+        if fields.projectFileNames.contains(where: { $0.contains(token) })
+            || fields.projectAppNames.contains(where: { $0.contains(token) }) {
             return (.projectVersionFileName, 40)
         }
-        if song.projectVersions.contains(where: { isSubsequence(token, in: normalize($0.fileName)) }) {
+        if fields.projectFileNames.contains(where: { isSubsequence(token, in: $0) }) {
             return (.fuzzyProjectVersionFileName, 17)
         }
-        if song.previewCandidates.contains(where: { normalize($0.fileName).contains(token) }) {
+        if fields.previewFileNames.contains(where: { $0.contains(token) }) {
             return (.previewFileName, 40)
         }
-        if song.previewCandidates.contains(where: { isSubsequence(token, in: normalize($0.fileName)) }) {
+        if fields.previewFileNames.contains(where: { isSubsequence(token, in: $0) }) {
             return (.fuzzyPreviewFileName, 17)
         }
 
-        if song.scanWarnings.contains(where: { normalize($0).contains(token) }) {
+        if fields.scanWarnings.contains(where: { $0.contains(token) }) {
             return (.scanWarning, 45)
         }
 
-        if let appNote = song.appNote {
-            let normalizedAppNote = normalize(appNote)
+        if let normalizedAppNote = fields.appNote {
             if normalizedAppNote.contains(token) { return (.appNote, 55) }
             if isSubsequence(token, in: normalizedAppNote) { return (.fuzzyAppNote, 21) }
         }
 
-        if let notes = song.sidecarNotes {
-            let normalizedNotes = normalize(notes)
+        if let normalizedNotes = fields.sidecarNotes {
             if normalizedNotes.contains(token) { return (.songNote, 50) }
             if isSubsequence(token, in: normalizedNotes) { return (.fuzzySongNote, 20) }
         }
 
-        if song.scanWarnings.contains(where: { isSubsequence(token, in: normalize($0)) }) {
+        if fields.scanWarnings.contains(where: { isSubsequence(token, in: $0) }) {
             return (.fuzzyScanWarning, 19)
         }
 
-        if isSubsequence(token, in: title) { return (.fuzzyTitle, 15) }
+        if isSubsequence(token, in: fields.title) { return (.fuzzyTitle, 15) }
 
         if token.count >= 3 {
-            if let fuzzy = fuzzyEditDistanceMatch(token, in: song.effectiveDisplayTitle) {
+            if let fuzzy = fuzzyEditDistanceMatch(token: token, words: fields.titleWords, normalizedHaystack: fields.title) {
                 return (.fuzzyTitle, fuzzy)
             }
-            for alias in song.aliases {
-                if let fuzzy = fuzzyEditDistanceMatch(token, in: alias) {
+            for index in fields.aliasWords.indices {
+                if let fuzzy = fuzzyEditDistanceMatch(token: token, words: fields.aliasWords[index], normalizedHaystack: fields.aliases[index]) {
                     return (.fuzzyAlias, fuzzy)
                 }
             }
-            if let fuzzy = fuzzyEditDistanceMatch(token, in: song.originalFolderName) {
+            if let fuzzy = fuzzyEditDistanceMatch(token: token, words: fields.folderWords, normalizedHaystack: fields.folder) {
                 return (.fuzzyFolderName, fuzzy)
             }
         }
@@ -170,12 +216,12 @@ enum MusicSearchMatcher {
     }
 
     private static func fuzzyEditDistanceMatch(
-        _ token: String,
-        in haystack: String,
+        token: String,
+        words: [String],
+        normalizedHaystack: String,
         maxDistance: Int = 2
     ) -> Int? {
         guard token.count >= 3 else { return nil }
-        let words = tokens(from: haystack)
         var best: Int?
         for word in words where abs(word.count - token.count) <= maxDistance {
             if let distance = boundedEditDistance(token, word, max: maxDistance) {
@@ -186,9 +232,8 @@ enum MusicSearchMatcher {
             }
         }
         if let best { return best }
-        let normalized = normalize(haystack)
-        if normalized.count >= token.count,
-           let distance = boundedEditDistance(token, String(normalized.prefix(token.count + maxDistance)), max: maxDistance) {
+        if normalizedHaystack.count >= token.count,
+           let distance = boundedEditDistance(token, String(normalizedHaystack.prefix(token.count + maxDistance)), max: maxDistance) {
             return max(6, 20 - distance * 6)
         }
         return nil
