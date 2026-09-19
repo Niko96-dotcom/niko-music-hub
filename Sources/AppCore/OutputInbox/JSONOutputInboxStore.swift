@@ -15,11 +15,30 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
 
     public func listItems() throws -> [OutputInboxItem] {
         try lock.withLock {
-            try loadItems()
-                .sorted { lhs, rhs in
-                    lhs.createdAt > rhs.createdAt
-                }
+            sortedNewestFirst(try loadItems())
         }
+    }
+
+    /// Single-pass equivalent of `refreshAvailability()` + `listItems()`.
+    ///
+    /// Blocking I/O: one JSON load, one availability scan, at most one save,
+    /// one sort — all under a single lock hold so an `addItem`/`updateItem`
+    /// racing this call is serialized before or after it, never overwritten.
+    /// Must be called off the main actor (see `OutputInboxRefreshModel`).
+    public func loadRefreshedItems() throws -> [OutputInboxItem] {
+        let (snapshot, changed) = try lock.withLock {
+            let items = try loadItems()
+            let refreshed = applyingAvailability(to: items)
+            let changed = refreshed.map(\.status) != items.map(\.status)
+            if changed {
+                try save(refreshed)
+            }
+            return (sortedNewestFirst(refreshed), changed)
+        }
+        if changed {
+            notifyChanged()
+        }
+        return snapshot
     }
 
     public func addItem(_ item: OutputInboxItem) throws {
@@ -64,21 +83,33 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     public func refreshAvailability() throws {
         let changed = try lock.withLock {
             let items = try loadItems()
-            let refreshed = items.map { item in
-                var copy = item
-                if !regularFileExists(at: item.fileURL) {
-                    copy.status = .missing
-                } else if item.status == .pending || item.status == .missing {
-                    copy.status = .available
-                }
-                return copy
-            }
-            guard !zip(items, refreshed).allSatisfy({ $0.status == $1.status }) else { return false }
+            let refreshed = applyingAvailability(to: items)
+            guard refreshed.map(\.status) != items.map(\.status) else { return false }
             try save(refreshed)
             return true
         }
         if changed {
             notifyChanged()
+        }
+    }
+
+    private func sortedNewestFirst(_ items: [OutputInboxItem]) -> [OutputInboxItem] {
+        items.sorted { lhs, rhs in
+            lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    /// Availability transitions only; identity (`id`, `createdAt`), ordering
+    /// input, dedup and record count are untouched. No history cap is applied.
+    private func applyingAvailability(to items: [OutputInboxItem]) -> [OutputInboxItem] {
+        items.map { item in
+            var copy = item
+            if !regularFileExists(at: item.fileURL) {
+                copy.status = .missing
+            } else if item.status == .pending || item.status == .missing {
+                copy.status = .available
+            }
+            return copy
         }
     }
 

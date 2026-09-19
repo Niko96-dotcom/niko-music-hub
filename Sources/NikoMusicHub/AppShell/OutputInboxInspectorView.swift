@@ -6,6 +6,9 @@ import SwiftUI
 struct OutputInboxInspectorView: View {
     let context: ToolContext
 
+    // Refresh I/O runs off the main actor inside the model; this view only
+    // mirrors its published snapshot (body/layout below are untouched).
+    @StateObject private var refreshModel: OutputInboxRefreshModel
     @State private var items: [OutputInboxItem] = []
     @State private var outputFolder: URL = AppSettings.default.outputFolder.url
     @State private var hoveredItemID: OutputInboxItem.ID?
@@ -13,6 +16,11 @@ struct OutputInboxInspectorView: View {
     @State private var inboxError: String?
     @State private var analyzingItemID: OutputInboxItem.ID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(context: ToolContext) {
+        self.context = context
+        _refreshModel = StateObject(wrappedValue: OutputInboxRefreshModel(store: context.outputInboxStore))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.section) {
@@ -41,11 +49,20 @@ struct OutputInboxInspectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             refreshSettings()
-            refreshItems()
+            refreshModel.requestRefresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: .outputInboxDidChange)) { _ in
             refreshSettings()
-            refreshItems()
+            refreshModel.requestRefresh()
+        }
+        .onChange(of: refreshModel.items) { _, snapshot in
+            items = snapshot
+        }
+        .onChange(of: refreshModel.lastError) { _, message in
+            inboxError = message
+            if let message {
+                context.diagnostics.log(.error, "Output Inbox load failed: \(message)")
+            }
         }
     }
 
@@ -122,16 +139,12 @@ struct OutputInboxInspectorView: View {
         }
     }
 
-    private func refreshItems() {
-        do {
-            try context.outputInboxStore.refreshAvailability()
-            items = try context.outputInboxStore.listItems()
-            inboxError = nil
-        } catch {
-            items = []
-            inboxError = error.localizedDescription
-            context.diagnostics.log(.error, "Output Inbox load failed: \(error)")
-        }
+    /// Refresh plumbing only: the blocking refresh + list pass runs off the
+    /// main actor inside `refreshModel` (single `loadRefreshedItems()` pass,
+    /// bursts coalesced); results and errors arrive via `onChange` above so
+    /// inbox corruption still surfaces instead of being masked.
+    private func requestInboxRefresh() {
+        refreshModel.requestRefresh()
     }
 
     private func chooseOutputFolder() {
@@ -381,7 +394,7 @@ struct OutputInboxInspectorView: View {
                 updated.metadata["bpmConfidence"] = estimate.confidence
                 do {
                     try context.outputInboxStore.updateItem(updated)
-                    refreshItems()
+                    requestInboxRefresh()
                 } catch {
                     inboxError = error.localizedDescription
                 }

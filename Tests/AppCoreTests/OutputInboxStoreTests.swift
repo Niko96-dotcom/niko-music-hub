@@ -121,6 +121,32 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(try store.listItems().first?.status, .missing)
     }
 
+    func testLoadRefreshedItemsFlipsAvailabilityInOnePass() throws {
+        let store = try makeStore()
+        let pending = OutputInboxItem(
+            fileURL: try makeExistingFile(named: "single-pass.wav"),
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 100),
+            status: .pending
+        )
+        let gone = OutputInboxItem(
+            fileURL: temporaryDirectory().appendingPathComponent("single-pass-missing.wav"),
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 200),
+            status: .available
+        )
+        try store.addItem(pending)
+        try store.addItem(gone)
+
+        let snapshot = try store.loadRefreshedItems()
+
+        XCTAssertEqual(snapshot.map(\.fileURL.lastPathComponent), ["single-pass-missing.wav", "single-pass.wav"])
+        XCTAssertEqual(snapshot.first?.status, .missing)
+        XCTAssertEqual(snapshot.last?.status, .available)
+        XCTAssertEqual(snapshot.last?.id, pending.id, "single pass must preserve record identity")
+        XCTAssertEqual(try store.listItems(), snapshot, "single pass must persist exactly what it returns")
+    }
+
     func testCorruptInboxJSONThrows() throws {
         let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
         try FileManager.default.createDirectory(
