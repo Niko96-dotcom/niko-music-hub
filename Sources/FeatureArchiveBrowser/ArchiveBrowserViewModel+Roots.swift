@@ -9,6 +9,13 @@ extension ArchiveBrowserViewModel {
         roots.isEmpty && archiveAccessFailure != nil
     }
 
+    /// Populated library keeps its lanes visible; remaining bookmark failures
+    /// surface as a compact actionable strip instead of the empty recovery
+    /// overlay. Uses the same `archiveAccessFailure` (first unresolved root).
+    var showsInlineArchiveAccessRecovery: Bool {
+        !roots.isEmpty && archiveAccessFailure != nil
+    }
+
     /// Resolves persisted bookmarks with the injected provider when it can, so a
     /// test double sees the resolve path too; Foundation is the fallback.
     private var bookmarkResolver: any SecurityScopedBookmarkResolving {
@@ -19,6 +26,13 @@ extension ArchiveBrowserViewModel {
     /// use the same form or `persistRoots()` drops them on paths like `/var` → `/private/var`.
     nonisolated static func bookmarkKey(for url: URL) -> String {
         ArchiveRootDisplayPolicy.storedRoots(from: [url]).first?.path ?? url.standardizedFileURL.path
+    }
+
+    /// Canonical comparison for `/tmp` vs `/private/tmp` (and `/var` vs
+    /// `/private/var`). Standardized paths alone mismatch the same folder, which
+    /// previously dropped stable root IDs/tokens through the legacy merge.
+    nonisolated static func canonicalPath(for url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
     }
 
     var newSongDraftRoot: URL {
@@ -39,10 +53,7 @@ extension ArchiveBrowserViewModel {
             let resolver = bookmarkResolver
             securityScopedRootAccesses.removeAll()
             scanRootBookmarks.removeAll()
-            let loadedRoots = settings.effectiveScanRoots
-                .filter { root in
-                    !(settings.vault.isEnabled && root.id == settings.vault.archiveRootID)
-                }
+            let loadedRoots = filteredEffectiveScanRoots(from: settings)
                 .compactMap { root -> URL? in
                 do {
                     let resolved = try root.resolvedURL(using: resolver)
@@ -58,8 +69,8 @@ extension ArchiveBrowserViewModel {
                             reason: Self.userFacingArchiveAccessReason(from: error),
                             storedRootID: root.id
                         )
+                        recordPersistenceWarning("Archive root access could not be restored: \(root.displayName).")
                     }
-                    recordPersistenceWarning("Archive root access could not be restored: \(root.displayName).")
                     diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
                     return nil
                 }
@@ -149,18 +160,168 @@ extension ArchiveBrowserViewModel {
         let snapshot = roots
         let bookmarks = scanRootBookmarks
         do {
-            try settingsStore.updateSettings { settings in
-                settings.archiveRoots = snapshot.map { url in
-                    StoredArchiveRoot(
-                        path: url.path,
-                        securityScopedBookmark: bookmarks[Self.bookmarkKey(for: url)]
-                    )
+            let preservedUnresolved = unresolvedPersistedScanRoots(snapshot: snapshot)
+            let preservedIDs = Set(preservedUnresolved.map(\.id))
+            let snapshotCanonicals = Set(snapshot.map { Self.canonicalPath(for: $0) })
+            var snapshotBookmarkByCanonical: [String: Data] = [:]
+            for url in snapshot {
+                let canonical = Self.canonicalPath(for: url)
+                if snapshotBookmarkByCanonical[canonical] == nil,
+                   let bookmark = bookmarks[Self.bookmarkKey(for: url)] {
+                    snapshotBookmarkByCanonical[canonical] = bookmark
                 }
+            }
+            // Capture the resolver for fallback-vs-resolved canonical matching so a
+            // moved folder (bookmark resolves elsewhere) still matches its snapshot.
+            let resolver = bookmarkResolver
+            try settingsStore.updateSettings { [snapshotBookmarkByCanonical] settings in
+                // Preserve stable IDs/tokens by editing `musicRoots` directly. The
+                // legacy `archiveRoots` setter re-keys by non-canonical path and
+                // mints new IDs on `/tmp` vs `/private/tmp`, dropping the original
+                // failure identity.
+                let retainedVaultRoots = settings.musicRoots.filter { $0.role != .scanOnly }
+                let existingScan = settings.musicRoots.filter { $0.role == .scanOnly }
+                var merged: [StoredMusicRoot] = []
+                var seenCanonical = Set<String>()
+                for var existing in existingScan {
+                    let fallbackCanonical = Self.canonicalPath(for: existing.fallbackURL)
+                    if seenCanonical.contains(fallbackCanonical) {
+                        continue
+                    }
+                    // Disabled roots are not part of effective scanning but must
+                    // never be dropped by a persist merge.
+                    if !existing.isEnabled {
+                        merged.append(existing)
+                        seenCanonical.insert(fallbackCanonical)
+                        continue
+                    }
+                    // Vault-linked scan roots are filtered out of the effective
+                    // browser roots while vault is enabled, but a valid stored
+                    // root must never be dropped by a persist merge (original
+                    // ID/bookmark preserved).
+                    if settings.vault.isEnabled,
+                       let archiveRootID = settings.vault.archiveRootID,
+                       existing.id == archiveRootID
+                    {
+                        merged.append(existing)
+                        seenCanonical.insert(fallbackCanonical)
+                        continue
+                    }
+                    var resolvedCanonical: String?
+                    if let bookmark = existing.securityScopedBookmark {
+                        if let resolved = try? resolver.resolveBookmark(bookmark) {
+                            resolvedCanonical = Self.canonicalPath(for: resolved)
+                        }
+                    }
+                    let isInSnapshot = snapshotCanonicals.contains(fallbackCanonical)
+                        || (resolvedCanonical.map { snapshotCanonicals.contains($0) } ?? false)
+                    if isInSnapshot {
+                        if let updated = snapshotBookmarkByCanonical[fallbackCanonical]
+                            ?? resolvedCanonical.flatMap({ snapshotBookmarkByCanonical[$0] }) {
+                            existing.securityScopedBookmark = updated
+                        }
+                        merged.append(existing)
+                        seenCanonical.insert(fallbackCanonical)
+                        if let resolvedCanonical, !seenCanonical.contains(resolvedCanonical) {
+                            seenCanonical.insert(resolvedCanonical)
+                        }
+                    } else if preservedIDs.contains(existing.id) {
+                        merged.append(existing)
+                        seenCanonical.insert(fallbackCanonical)
+                    } else {
+                        continue
+                    }
+                }
+                for url in snapshot {
+                    let canonical = Self.canonicalPath(for: url)
+                    if seenCanonical.contains(canonical) {
+                        continue
+                    }
+                    let bookmark = bookmarks[Self.bookmarkKey(for: url)]
+                    merged.append(
+                        StoredMusicRoot(
+                            role: .scanOnly,
+                            url: url,
+                            securityScopedBookmark: bookmark
+                        )
+                    )
+                    seenCanonical.insert(canonical)
+                }
+                for stored in preservedUnresolved where !merged.contains(where: { $0.id == stored.id }) {
+                    let canonical = Self.canonicalPath(for: stored.fallbackURL)
+                    if seenCanonical.contains(canonical) {
+                        continue
+                    }
+                    merged.append(stored)
+                    seenCanonical.insert(canonical)
+                }
+                settings.musicRoots = retainedVaultRoots + merged
             }
         } catch {
             recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
             diagnostics.log(.error, "Archive roots save failed: \(error)")
         }
+    }
+
+    /// Stored scan roots that fail to resolve and are not represented in the
+    /// in-memory snapshot. Persist merges preserve these (with tokens) so a
+    /// remove/replace of one root never drops the remaining unresolved roots.
+    private func unresolvedPersistedScanRoots(snapshot: [URL]) -> [StoredMusicRoot] {
+        guard let settings = try? settingsStore.loadSettings() else { return [] }
+        let resolver = bookmarkResolver
+        let snapshotCanonicals = Set(snapshot.map { Self.canonicalPath(for: $0) })
+        return filteredEffectiveScanRoots(from: settings).filter { stored in
+            do {
+                _ = try stored.resolvedURL(using: resolver)
+                return false
+            } catch {
+                let fallbackCanonical = Self.canonicalPath(for: stored.fallbackURL)
+                if snapshotCanonicals.contains(fallbackCanonical) {
+                    return false
+                }
+                if let bookmark = stored.securityScopedBookmark,
+                   let resolved = try? resolver.resolveBookmark(bookmark),
+                   snapshotCanonicals.contains(Self.canonicalPath(for: resolved)) {
+                    return false
+                }
+                return true
+            }
+        }
+    }
+
+    private func filteredEffectiveScanRoots(from settings: AppSettings) -> [StoredMusicRoot] {
+        settings.effectiveScanRoots.filter { root in
+            !(settings.vault.isEnabled && root.id == settings.vault.archiveRootID)
+        }
+    }
+
+    /// Clears only the root-access footer warning once no stored root remains
+    /// unresolved. Unrelated persistence warnings (settings/metadata/save)
+    /// are left untouched so a successful repair never hides them.
+    private func clearStaleArchiveRootAccessWarning() {
+        guard let current = persistenceWarningMessage,
+              current.hasPrefix("Archive root access could not be restored:")
+        else { return }
+        persistenceWarningMessage = nil
+        statusMessage = combinedStatusMessage(base: statusBaseMessage)
+    }
+
+    /// First stored root that still fails to resolve, in persisted order.
+    private func nextUnresolvedArchiveFailure() -> ArchiveAccessFailure? {
+        guard let settings = try? settingsStore.loadSettings() else { return nil }
+        let resolver = bookmarkResolver
+        for root in filteredEffectiveScanRoots(from: settings) {
+            do {
+                _ = try root.resolvedURL(using: resolver)
+            } catch {
+                return ArchiveAccessFailure(
+                    displayName: root.displayName,
+                    reason: Self.userFacingArchiveAccessReason(from: error),
+                    storedRootID: root.id
+                )
+            }
+        }
+        return nil
     }
 
     public func addRoot(_ url: URL) {
@@ -171,7 +332,8 @@ extension ArchiveBrowserViewModel {
         var changed = false
         for url in urls {
             let standardized = url.standardizedFileURL
-            guard !roots.contains(where: { $0.path == standardized.path }) else { continue }
+            let canonical = Self.canonicalPath(for: url)
+            guard !roots.contains(where: { Self.canonicalPath(for: $0) == canonical }) else { continue }
             let bookmark = bookmarkData(for: url, standardized: standardized, provided: bookmarksByURL)
             if let bookmark {
                 scanRootBookmarks[Self.bookmarkKey(for: standardized)] = bookmark
@@ -181,9 +343,15 @@ extension ArchiveBrowserViewModel {
             changed = true
         }
         if changed {
-            archiveAccessFailure = nil
             completeArchiveOnboarding()
             persistRoots()
+            if let remaining = nextUnresolvedArchiveFailure() {
+                archiveAccessFailure = remaining
+                recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+            } else {
+                archiveAccessFailure = nil
+                clearStaleArchiveRootAccessWarning()
+            }
             restartArchiveRootWatching()
             refreshFirstRunState()
             setStatusMessage("Scanning archive...")
@@ -211,7 +379,7 @@ extension ArchiveBrowserViewModel {
         guard let failure = archiveAccessFailure else { return false }
         do {
             let settings = try settingsStore.loadSettings()
-            guard let root = settings.effectiveScanRoots.first(where: { $0.id == failure.storedRootID }) else {
+            guard let root = filteredEffectiveScanRoots(from: settings).first(where: { $0.id == failure.storedRootID }) else {
                 return false
             }
             let resolved = try root.resolvedURL(using: bookmarkResolver)
@@ -221,7 +389,13 @@ extension ArchiveBrowserViewModel {
             }
             // Other stored roots resolved fine at load; keep them alongside the recovered one.
             roots = ArchiveRootDisplayPolicy.storedRoots(from: roots + [resolved])
-            archiveAccessFailure = nil
+            if let remaining = nextUnresolvedArchiveFailure() {
+                archiveAccessFailure = remaining
+                recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+            } else {
+                archiveAccessFailure = nil
+                clearStaleArchiveRootAccessWarning()
+            }
             refreshFirstRunState()
             restartArchiveRootWatching()
             setStatusMessage("Scanning archive...")
@@ -242,7 +416,7 @@ extension ArchiveBrowserViewModel {
     func storedArchiveAccessDirectory() -> URL? {
         guard let failure = archiveAccessFailure else { return nil }
         guard let settings = try? settingsStore.loadSettings() else { return nil }
-        guard let root = settings.effectiveScanRoots.first(where: { $0.id == failure.storedRootID }) else {
+        guard let root = filteredEffectiveScanRoots(from: settings).first(where: { $0.id == failure.storedRootID }) else {
             return nil
         }
         return root.fallbackURL
@@ -266,14 +440,29 @@ extension ArchiveBrowserViewModel {
 
     public func removeRoot(_ url: URL) {
         let before = roots
-        let standardizedPath = url.standardizedFileURL.path
-        roots.removeAll { $0.standardizedFileURL.path == standardizedPath }
+        let canonical = Self.canonicalPath(for: url)
+        roots.removeAll { Self.canonicalPath(for: $0) == canonical }
         guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
         scanRootBookmarks.removeValue(forKey: Self.bookmarkKey(for: url))
+        let stashedWarning = persistenceWarningMessage
         clearRootBoundArchiveState(
             statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
         )
         persistRoots()
+        // `clearRootBoundArchiveState` clears the footer warning; restore the
+        // remaining unresolved presentation so removing one root never drops it.
+        if let remaining = nextUnresolvedArchiveFailure() {
+            archiveAccessFailure = remaining
+            recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+        } else {
+            archiveAccessFailure = nil
+            // Only the root-access warning is stale now; an unrelated warning
+            // cleared above must be restored so removal never hides it.
+            if let stashed = stashedWarning,
+               !stashed.hasPrefix("Archive root access could not be restored:") {
+                recordPersistenceWarning(stashed)
+            }
+        }
         restartArchiveRootWatching()
         refreshFirstRunState()
     }

@@ -124,8 +124,9 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         let fixture = try IsolatedArchiveSettingsFixture()
         defer { fixture.tearDown() }
 
+        let storedID = UUID()
         let stored = StoredMusicRoot(
-            id: UUID(),
+            id: storedID,
             role: .scanOnly,
             displayName: "Fixture Archive",
             pathFallback: fixture.nonMusicVaultPath,
@@ -146,10 +147,16 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
         viewModel.addRoot(restoredRoot)
 
-        XCTAssertNil(viewModel.archiveAccessFailure)
+        // A1: adding a different folder must not drop the still-unresolved
+        // persisted root. The populated library stays visible with an inline
+        // actionable strip instead of the empty overlay.
+        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, storedID)
         XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
         XCTAssertFalse(viewModel.needsFirstRunOnboarding)
         XCTAssertEqual(viewModel.roots.map(\.path), [restoredRoot.standardizedFileURL.path])
+        let persisted = try fixture.store.loadSettings()
+        XCTAssertNotNil(persisted.effectiveScanRoots.first(where: { $0.id == storedID }))
     }
 
     func testUserFacingReasonForStaleAndMissingBookmarks() {

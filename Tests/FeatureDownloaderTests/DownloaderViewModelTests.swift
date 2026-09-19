@@ -358,6 +358,470 @@ final class DownloaderViewModelTests: XCTestCase {
         runner.cancelJob(id: job.id)
     }
 
+    // D1: marker alone must not claim completed. Only a verified existing
+    // regular file within the output root may register.
+    func testAlreadyDownloadedWithValidExistingFileRegistersInInbox() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outputURL = try makeExistingFile(named: "existing-\(UUID().uuidString).mp4", in: directory)
+        let marker = "[download] \(outputURL.path) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState == .completed }
+        XCTAssertEqual(viewModel.statusMessage, DownloaderCopy.alreadyExistsInInbox)
+        XCTAssertEqual(viewModel.outputURLs, [outputURL.standardizedFileURL])
+        XCTAssertEqual(inbox.items.count, 1)
+        XCTAssertEqual(inbox.items.first?.fileURL.standardizedFileURL.path, outputURL.standardizedFileURL.path)
+    }
+
+    func testAlreadyDownloadedWithAbsentFileStaysFailed() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = directory.appendingPathComponent("missing-\(UUID().uuidString).mp4")
+        let marker = "[download] \(missing.path) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("No output files found after download."))
+        XCTAssertTrue(inbox.items.isEmpty)
+        XCTAssertTrue(viewModel.outputURLs.isEmpty)
+    }
+
+    func testAlreadyDownloadedWithDirectoryStaysFailed() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let subdir = directory.appendingPathComponent("subdir-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
+        let marker = "[download] \(subdir.path) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("No output files found after download."))
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
+    func testAlreadyDownloadedWithOutsidePathStaysFailed() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outsideDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: outsideDir) }
+        let outsideFile = try makeExistingFile(named: "outside-\(UUID().uuidString).mp4", in: outsideDir)
+        let marker = "[download] \(outsideFile.path) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("No output files found after download."))
+        XCTAssertTrue(inbox.items.isEmpty)
+        XCTAssertTrue(viewModel.outputURLs.isEmpty)
+    }
+
+    func testAlreadyDownloadedWithSymlinkEscapeStaysFailed() async throws {
+        let baseDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DownloaderVM-symlink-\(UUID().uuidString)", isDirectory: true)
+        let outputDir = baseDir.appendingPathComponent("output", isDirectory: true)
+        let outsideDir = baseDir.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: baseDir) }
+        let outsideFile = outsideDir.appendingPathComponent("secret-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: outsideFile.path, contents: Data("x".utf8))
+        let linkURL = outputDir.appendingPathComponent("link")
+        do {
+            try FileManager.default.createSymbolicLink(atPath: linkURL.path, withDestinationPath: outsideDir.path)
+        } catch {
+            throw XCTSkip("Symlinks are not supported on this platform.")
+        }
+        let escapePath = linkURL.appendingPathComponent(outsideFile.lastPathComponent).path
+        let marker = "[download] \(escapePath) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: outputDir,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("No output files found after download."))
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
+    func testAlreadyDownloadedWithInboxFailureReportsFailure() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outputURL = try makeExistingFile(named: "handoff-\(UUID().uuidString).mp4", in: directory)
+        let marker = "[download] \(outputURL.path) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore(addError: FixtureOutputInboxError.forced)
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case let .failed(message) = viewModel.downloadState else {
+            XCTFail("Expected failed when inbox handoff fails, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertTrue(message.contains("Output Inbox"))
+        XCTAssertNotEqual(viewModel.statusMessage, DownloaderCopy.alreadyExistsInInbox)
+    }
+
+    func testNormalSuccessRegistersExistingOutput() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outputURL = try makeExistingFile(named: "normal-\(UUID().uuidString).mp4", in: directory)
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .completed,
+            progress: 1,
+            message: "Downloaded",
+            outputFileURLs: [outputURL]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState == .completed }
+        XCTAssertEqual(viewModel.statusMessage, "Downloaded")
+        XCTAssertEqual(viewModel.outputURLs, [outputURL])
+        XCTAssertEqual(inbox.items.count, 1)
+    }
+
+    // D1: captured destination must survive a settings mutation during a queued
+    // download. Relative marker resolves beneath the captured directory only;
+    // a same-name file appearing in the mutated directory must not verify.
+    func testSettingsMutationDuringJobUsesCapturedOutputDirectory() async throws {
+        let originalDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: originalDir) }
+        let mutatedDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: mutatedDir) }
+        let fileName = "shared-\(UUID().uuidString).mp4"
+        // Only the mutated directory contains the same-name file.
+        _ = try makeExistingFile(named: fileName, in: mutatedDir)
+        let marker = "[download] \(fileName) has already been downloaded"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "No output files found after download.",
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let store = MutableFolderSettingsStore(outputFolder: originalDir)
+        let useCase = FakeDownloaderUseCase(job: job, delay: .milliseconds(30))
+        let context = ToolContext(
+            registeredToolCount: 1,
+            settingsStore: store,
+            preferences: UserDefaultsPreferenceStore(),
+            outputInboxStore: inbox,
+            jobRunner: StaticJobRunner(job: job),
+            fileActions: FixtureFileActions(),
+            diagnostics: FixtureDiagnostics()
+        )
+        let viewModel = DownloaderViewModel(context: context, useCase: useCase)
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        // Mutate settings while the start is still queued.
+        store.outputFolder = mutatedDir
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("No output files found after download."))
+        XCTAssertTrue(viewModel.outputURLs.isEmpty)
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
+    // D1: an earlier playlist marker plus a later real error must not convert
+    // to success. Contract: expose the verified existing output AND propagate
+    // the actual failure.
+    func testAlreadyMarkerPlusRealErrorPropagatesFailureWhileExposingVerifiedOutput() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let verifiedURL = try makeExistingFile(named: "already-\(UUID().uuidString).mp4", in: directory)
+        let marker = "[download] \(verifiedURL.path) has already been downloaded"
+        let realError = "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: "Download failed: \(realError)",
+            logEntries: [JobLogEntry(message: marker), JobLogEntry(message: realError)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case let .failed(message) = viewModel.downloadState else {
+            XCTFail("Expected failed when a real error follows an already marker, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertTrue(message.contains("ERROR:"))
+        XCTAssertNotEqual(viewModel.statusMessage, DownloaderCopy.alreadyExistsInInbox)
+        // Valid existing output is still exposed/inboxed, but state stays failed.
+        XCTAssertEqual(viewModel.outputURLs, [verifiedURL.standardizedFileURL])
+        XCTAssertEqual(inbox.items.count, 1)
+        XCTAssertEqual(inbox.items.first?.fileURL.standardizedFileURL.path, verifiedURL.standardizedFileURL.path)
+    }
+
+    // D1: stall without ERROR: plus an earlier already marker must stay failed
+    // while still exposing verified files. Never infer success from absence of
+    // the ERROR: substring.
+    func testAlreadyMarkerPlusStallWithoutErrorSubstringStaysFailed() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let verifiedURL = try makeExistingFile(named: "already-stall-\(UUID().uuidString).mp4", in: directory)
+        let marker = "[download] \(verifiedURL.path) has already been downloaded"
+        let stallMessage = "Download failed: \(DownloadStallMonitor.stallErrorMessage)"
+        XCTAssertFalse(stallMessage.contains("ERROR:"))
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: stallMessage,
+            logEntries: [JobLogEntry(message: marker)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case let .failed(message) = viewModel.downloadState else {
+            XCTFail("Expected failed when stall follows an already marker, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertEqual(message, stallMessage)
+        XCTAssertNotEqual(viewModel.statusMessage, DownloaderCopy.alreadyExistsInInbox)
+        XCTAssertEqual(viewModel.outputURLs, [verifiedURL.standardizedFileURL])
+        XCTAssertEqual(inbox.items.count, 1)
+        XCTAssertEqual(inbox.items.first?.fileURL.standardizedFileURL.path, verifiedURL.standardizedFileURL.path)
+        XCTAssertFalse(DownloaderViewModel.isExplicitSkipOutcome(logEntries: [marker], message: stallMessage))
+    }
+
+    // D1: generic non-ERROR download failure plus marker must stay failed while
+    // exposing verified files.
+    func testAlreadyMarkerPlusNonErrorDownloadFailureStaysFailed() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let verifiedURL = try makeExistingFile(named: "already-generic-\(UUID().uuidString).mp4", in: directory)
+        let marker = "[download] \(verifiedURL.path) has already been downloaded"
+        let failureMessage = "Download failed: connection reset by peer"
+        XCTAssertFalse(failureMessage.contains("ERROR:"))
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .failed,
+            message: failureMessage,
+            logEntries: [JobLogEntry(message: marker), JobLogEntry(message: failureMessage)]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case let .failed(message) = viewModel.downloadState else {
+            XCTFail("Expected failed for non-ERROR failure with marker, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertEqual(message, failureMessage)
+        XCTAssertNotEqual(viewModel.statusMessage, DownloaderCopy.alreadyExistsInInbox)
+        XCTAssertEqual(viewModel.outputURLs, [verifiedURL.standardizedFileURL])
+        XCTAssertEqual(inbox.items.count, 1)
+    }
+
+    // D1: positive skip classification — pure output-not-found outcome stays a
+    // successful skip; any other message stays failed.
+    func testExplicitSkipOutcomeRequiresOutputNotFoundMessage() {
+        let marker = "[download] /tmp/out/a.mp4 has already been downloaded"
+        XCTAssertTrue(DownloaderViewModel.isExplicitSkipOutcome(
+            logEntries: [marker],
+            message: "No output files found after download."
+        ))
+        XCTAssertFalse(DownloaderViewModel.isExplicitSkipOutcome(
+            logEntries: [marker],
+            message: "Download failed: \(DownloadStallMonitor.stallErrorMessage)"
+        ))
+        XCTAssertFalse(DownloaderViewModel.isExplicitSkipOutcome(
+            logEntries: [marker],
+            message: "Download failed: connection reset by peer"
+        ))
+        XCTAssertFalse(DownloaderViewModel.isExplicitSkipOutcome(
+            logEntries: [marker, "ERROR: unable to download video data"],
+            message: "No output files found after download."
+        ))
+    }
+
+    // P2: completed job with no verified contained outputs must truthfully fail
+    // rather than report Downloaded.
+    func testCompletedWithNoVerifiedOutputsFailsInsteadOfDownloaded() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .completed,
+            progress: 1,
+            message: "Downloaded",
+            outputFileURLs: []
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case let .failed(message) = viewModel.downloadState else {
+            XCTFail("Expected failed when completed job has no verified outputs, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertEqual(message, "No output files found after download.")
+        XCTAssertNotEqual(viewModel.statusMessage, "Downloaded")
+        XCTAssertTrue(viewModel.outputURLs.isEmpty)
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
+    func testCompletedWithOutsideOutputFailsInsteadOfDownloaded() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outsideDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: outsideDir) }
+        let outsideFile = try makeExistingFile(named: "outside-\(UUID().uuidString).mp4", in: outsideDir)
+        let job = Job(
+            sourceToolID: "downloader",
+            title: "Download",
+            state: .completed,
+            progress: 1,
+            message: "Downloaded",
+            outputFileURLs: [outsideFile]
+        )
+        let inbox = RecordingOutputInboxStore()
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: inbox
+        )
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        guard case .failed = viewModel.downloadState else {
+            XCTFail("Expected failed when completed outputs are outside containment, got \(viewModel.downloadState)")
+            return
+        }
+        XCTAssertTrue(viewModel.outputURLs.isEmpty)
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
     private func makeViewModel(
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
         useCase: FakeDownloaderUseCase,
@@ -553,6 +1017,34 @@ private struct FixtureSettingsStore: SettingsStore {
     func loadSettings() throws -> AppSettings { settings }
     func saveSettings(_ settings: AppSettings) throws {}
     func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {}
+}
+
+private final class MutableFolderSettingsStore: SettingsStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var folder: URL
+
+    init(outputFolder: URL) {
+        self.folder = outputFolder
+    }
+
+    var outputFolder: URL {
+        get { lock.downloaderTestWithLock { folder } }
+        set { lock.downloaderTestWithLock { folder = newValue } }
+    }
+
+    func loadSettings() throws -> AppSettings {
+        AppSettings(
+            outputFolder: StoredFolderLocation(url: outputFolder),
+            helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
+        )
+    }
+
+    func saveSettings(_ settings: AppSettings) throws {}
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
+        var current = try loadSettings()
+        update(&current)
+        outputFolder = current.outputFolder.url
+    }
 }
 
 private struct FixtureFileActions: FileActions {

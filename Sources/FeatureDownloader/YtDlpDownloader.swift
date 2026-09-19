@@ -1,5 +1,7 @@
 import AppCore
+import Darwin
 import Foundation
+import NikoMusicCore
 
 public struct DownloadRequest: Equatable, Sendable {
     public static let defaultOutputTemplate = "%(title)s [%(id)s].%(ext)s"
@@ -141,9 +143,10 @@ public struct YtDlpDownloader: DownloadRunning {
                         collector.consume(result.standardError)
                     }
                     let outputURLs = try collector.finish()
+                    let verifiedOutputs = Self.verifiedRegularContainedOutputs(outputURLs, in: outputDirectory)
 
                     return DownloadResult(
-                        outputURLs: outputURLs,
+                        outputURLs: verifiedOutputs,
                         sourceURL: sourceURL,
                         exitCode: result.exitCode,
                         standardError: result.standardError
@@ -228,5 +231,58 @@ public struct YtDlpDownloader: DownloadRunning {
     /// Returns nil for unrelated lines.
     static func alreadyExistsCopy(for line: String) -> String? {
         containsAlreadyDownloadedMarker(line) ? DownloaderCopy.alreadyExistsInInbox : nil
+    }
+
+    /// D1: the collector already enforces containment, but it accepts any
+    /// existing path. Verified propagation requires an existing regular file
+    /// (not a directory) inside the intended output root, with symlink
+    /// escapes rejected. Never overwrites; only filters.
+    ///
+    /// Regular-file check uses `lstat`/`stat` resource types so FIFOs, devices,
+    /// and sockets never verify. A symlink verifies only when its resolved
+    /// target is a regular file *and* the resolved location stays contained in
+    /// the output root (contained-symlink allowed, escape rejected).
+    static func verifiedRegularContainedOutputs(_ urls: [URL], in outputDirectory: URL) -> [URL] {
+        let safety = PathSafety(fileManager: .default)
+        return urls.filter { url in
+            let standardized = url.standardizedFileURL
+            guard isExistingRegularFile(at: standardized) else { return false }
+            return safety.isResolvedContained(standardized, in: [outputDirectory])
+        }
+    }
+
+    /// D1: resolve an already-downloaded marker path to a verified regular
+    /// file within the intended output root. Relative paths resolve only
+    /// beneath the output directory; absolute paths must already be contained.
+    /// Tilde, empty, absent, directory, FIFO/device/socket, outside, and
+    /// symlink-escape paths return nil. No file is created or overwritten.
+    static func verifiedAlreadyDownloadedOutput(for path: String, in outputDirectory: URL) -> URL? {
+        guard !path.isEmpty, !path.hasPrefix("~") else { return nil }
+        let candidate: URL
+        if path.hasPrefix("/") {
+            candidate = URL(fileURLWithPath: path)
+        } else {
+            candidate = outputDirectory.appendingPathComponent(path)
+        }
+        let standardized = candidate.standardizedFileURL
+        guard isExistingRegularFile(at: standardized) else { return nil }
+        let safety = PathSafety(fileManager: .default)
+        guard safety.isResolvedContained(standardized, in: [outputDirectory]) else { return nil }
+        return standardized
+    }
+
+    /// Actual filesystem type check: only `S_IFREG` verifies. Symlinks are
+    /// followed to their target; only a regular-file target verifies.
+    static func isExistingRegularFile(at url: URL) -> Bool {
+        var lstatInfo = stat()
+        guard url.path.withCString({ Darwin.lstat($0, &lstatInfo) }) == 0 else { return false }
+        let fileType = lstatInfo.st_mode & mode_t(S_IFMT)
+        if fileType == mode_t(S_IFLNK) {
+            let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+            var statInfo = stat()
+            guard resolved.path.withCString({ Darwin.fstatat(AT_FDCWD, $0, &statInfo, 0) }) == 0 else { return false }
+            return (statInfo.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG)
+        }
+        return fileType == mode_t(S_IFREG)
     }
 }

@@ -32,6 +32,9 @@ struct ArchiveBrowserView: View {
             if viewModel.scanError != nil {
                 scanFailureCard
             }
+            if viewModel.showsInlineArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
+                inlineArchiveAccessRecovery(failure)
+            }
         GeometryReader { proxy in
             let listWidth = ArchiveBrowserLayout.listWidth(totalWidth: proxy.size.width)
             let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
@@ -521,6 +524,41 @@ struct ArchiveBrowserView: View {
         .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
         .background(.bar)
     }
+
+    /// A1: populated library keeps lanes visible; remaining unresolved roots
+    /// surface as a compact actionable strip reusing the footer-strip pattern.
+    private func inlineArchiveAccessRecovery(_ failure: ArchiveAccessFailure) -> some View {
+        HStack(spacing: 10) {
+            Text(failure.recoveryMessage)
+                .font(HubDesignSystem.Typography.caption())
+                .foregroundStyle(HubDesignSystem.Palette.warning)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            HubLabeledButton(
+                icon: "folder.badge.plus",
+                label: "Choose Folder",
+                style: .secondary,
+                help: "Choose a different archive folder"
+            ) {
+                chooseRoot()
+            }
+            HubLabeledButton(
+                icon: "lock.open",
+                label: "Grant Access",
+                style: .secondary,
+                help: "Grant access to the saved archive folder"
+            ) {
+                grantArchiveAccess()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, HubToolLayout.horizontalPadding)
+        .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
+        .background(.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Archive access needs attention. \(failure.recoveryMessage)")
+    }
+
 
     private func handleArchiveMoveCommand(_ direction: MoveCommandDirection) {
         guard allowsSongShortcuts else { return }

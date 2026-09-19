@@ -1,4 +1,5 @@
 import AppCore
+import Darwin
 @testable import FeatureDownloader
 import XCTest
 
@@ -191,11 +192,150 @@ final class YtDlpDownloaderTests: XCTestCase {
             ["relative/final.mp4"]
         )
     }
+
+    // D1: verified propagation with fake runner and real disposable files.
+    func testAlreadyDownloadedValidExistingPathReturnsVerifiedOutput() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-valid-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileURL = outputDir.appendingPathComponent("existing-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let runner = AlreadyDownloadedRunner(markerPath: fileURL.path)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertEqual(result.outputURLs, [fileURL.standardizedFileURL])
+    }
+
+    func testAlreadyDownloadedAbsentPathReturnsEmpty() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-absent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let missing = outputDir.appendingPathComponent("missing-\(UUID().uuidString).mp4")
+        let runner = AlreadyDownloadedRunner(markerPath: missing.path)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertTrue(result.outputURLs.isEmpty)
+    }
+
+    func testAlreadyDownloadedDirectoryReturnsEmpty() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-dir-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let subdir = outputDir.appendingPathComponent("subdir-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
+        let runner = AlreadyDownloadedRunner(markerPath: subdir.path)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertTrue(result.outputURLs.isEmpty, "directories must not propagate as outputs")
+    }
+
+    func testAlreadyDownloadedOutsidePathReturnsEmpty() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-inside-\(UUID().uuidString)", isDirectory: true)
+        let outsideDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: outputDir)
+            try? FileManager.default.removeItem(at: outsideDir)
+        }
+        let outsideFile = outsideDir.appendingPathComponent("outside-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: outsideFile.path, contents: Data("x".utf8))
+        let runner = AlreadyDownloadedRunner(markerPath: outsideFile.path)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertTrue(result.outputURLs.isEmpty, "uncontained log paths must not propagate")
+    }
+
+    func testAlreadyDownloadedSymlinkEscapeReturnsEmpty() async throws {
+        let baseDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-symlink-\(UUID().uuidString)", isDirectory: true)
+        let outputDir = baseDir.appendingPathComponent("output", isDirectory: true)
+        let outsideDir = baseDir.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: baseDir) }
+        let outsideFile = outsideDir.appendingPathComponent("secret-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: outsideFile.path, contents: Data("x".utf8))
+        let linkURL = outputDir.appendingPathComponent("link")
+        do {
+            try FileManager.default.createSymbolicLink(atPath: linkURL.path, withDestinationPath: outsideDir.path)
+        } catch {
+            throw XCTSkip("Symlinks are not supported on this platform.")
+        }
+        let escapePath = linkURL.appendingPathComponent(outsideFile.lastPathComponent).path
+        let runner = AlreadyDownloadedRunner(markerPath: escapePath)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let result = try await downloader.download(request) { _ in }
+        XCTAssertTrue(result.outputURLs.isEmpty, "symlink escapes must not propagate")
+    }
+
+    func testVerifiedRegularContainedOutputsRejectsDirectory() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-verify-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let subdir = outputDir.appendingPathComponent("subdir", isDirectory: true)
+        try FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
+        XCTAssertTrue(YtDlpDownloader.verifiedRegularContainedOutputs([subdir], in: outputDir).isEmpty)
+    }
+
+    // D1: FIFO/device/socket must not verify as regular files (lstat type check).
+    func testVerifiedRegularContainedOutputsRejectsFIFO() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-fifo-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fifoURL = outputDir.appendingPathComponent("pipe-\(UUID().uuidString).mp4")
+        guard fifoURL.path.withCString({ mkfifo($0, 0o644) }) == 0 else {
+            throw XCTSkip("mkfifo is not supported on this platform.")
+        }
+        XCTAssertFalse(YtDlpDownloader.isExistingRegularFile(at: fifoURL))
+        XCTAssertTrue(YtDlpDownloader.verifiedRegularContainedOutputs([fifoURL], in: outputDir).isEmpty)
+        XCTAssertNil(YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: fifoURL.path, in: outputDir))
+    }
 }
 
 private struct NonZeroExitRunner: ExternalProcessRunning {
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
         .init(exitCode: 1, standardOutput: "", standardError: "ERROR")
+    }
+}
+
+private struct AlreadyDownloadedRunner: ExternalProcessRunning {
+    let markerPath: String
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        .init(exitCode: 0, standardOutput: "[download] \(markerPath) has already been downloaded\n", standardError: "")
     }
 }
 
