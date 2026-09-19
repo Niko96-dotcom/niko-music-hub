@@ -179,20 +179,48 @@ extension ArchiveBrowserViewModel {
                 // legacy `archiveRoots` setter re-keys by non-canonical path and
                 // mints new IDs on `/tmp` vs `/private/tmp`, dropping the original
                 // failure identity.
-                let retainedVaultRoots = settings.musicRoots.filter { $0.role != .scanOnly }
+                var retainedVaultRoots = settings.musicRoots.filter { $0.role != .scanOnly }
+                // A1-adjacent Vault Active recovery: an explicit reauthorization of
+                // the SAME canonical folder must repair the stored Vault root
+                // in place (same ID/role/display, alias-aware) instead of minting
+                // a duplicate scanOnly. A different folder never reassigns the
+                // Vault binding (fail closed): it persists as scanOnly below.
+                var repairedVaultCanonicals = Set<String>()
+                for index in retainedVaultRoots.indices {
+                    let fallbackCanonical = Self.canonicalPath(for: retainedVaultRoots[index].fallbackURL)
+                    guard snapshotCanonicals.contains(fallbackCanonical) else { continue }
+                    // Same-folder repair dedup must only shadow the scanOnly
+                    // record when this Vault root genuinely replaces it in
+                    // effective browsing: vault on, root enabled, and not the
+                    // archive binding (filtered out of browser roots while
+                    // vault is on). When vault is off the Vault-role root is
+                    // excluded from effectiveScanRoots, and when the Vault
+                    // root is disabled it never scans — the enabled scanOnly
+                    // is the only effective root and must be preserved.
+                    let vaultReplacesEffectiveScanning = settings.vault.isEnabled
+                        && retainedVaultRoots[index].isEnabled
+                        && settings.vault.archiveRootID != retainedVaultRoots[index].id
+                    guard vaultReplacesEffectiveScanning else { continue }
+                    if let updated = snapshotBookmarkByCanonical[fallbackCanonical] {
+                        retainedVaultRoots[index].securityScopedBookmark = updated
+                    }
+                    repairedVaultCanonicals.insert(fallbackCanonical)
+                }
                 let existingScan = settings.musicRoots.filter { $0.role == .scanOnly }
                 var merged: [StoredMusicRoot] = []
-                var seenCanonical = Set<String>()
+                var seenCanonical = repairedVaultCanonicals
                 for var existing in existingScan {
                     let fallbackCanonical = Self.canonicalPath(for: existing.fallbackURL)
-                    if seenCanonical.contains(fallbackCanonical) {
-                        continue
-                    }
                     // Disabled roots are not part of effective scanning but must
-                    // never be dropped by a persist merge.
+                    // never be dropped by a persist merge — preserve even when
+                    // matching a repaired Vault path; no records discarded merely
+                    // for dedup.
                     if !existing.isEnabled {
                         merged.append(existing)
                         seenCanonical.insert(fallbackCanonical)
+                        continue
+                    }
+                    if seenCanonical.contains(fallbackCanonical) {
                         continue
                     }
                     // Vault-linked scan roots are filtered out of the effective
@@ -333,7 +361,22 @@ extension ArchiveBrowserViewModel {
         for url in urls {
             let standardized = url.standardizedFileURL
             let canonical = Self.canonicalPath(for: url)
-            guard !roots.contains(where: { Self.canonicalPath(for: $0) == canonical }) else { continue }
+            if roots.contains(where: { Self.canonicalPath(for: $0) == canonical }) {
+                // Same-folder reauthorization of a failed stable Vault root must
+                // still refresh/persist even when the URL is already in `roots`
+                // via an erroneous enabled duplicate scanOnly. The persist merge
+                // repairs the Vault root in place and drops the enabled duplicate.
+                // A different folder never reassigns the Vault binding.
+                if let provided = bookmarksByURL[url] ?? bookmarksByURL[standardized],
+                   refreshFailedVaultBookmarkForSameCanonicalReauthorization(
+                       canonical: canonical,
+                       freshBookmark: provided,
+                       standardized: standardized
+                   ) {
+                    changed = true
+                }
+                continue
+            }
             let bookmark = bookmarkData(for: url, standardized: standardized, provided: bookmarksByURL)
             if let bookmark {
                 scanRootBookmarks[Self.bookmarkKey(for: standardized)] = bookmark
@@ -357,6 +400,41 @@ extension ArchiveBrowserViewModel {
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
         }
+    }
+
+    /// Explicit same-folder Grant Access for a failed stable Vault root that is
+    /// already represented in `roots` (live old bug: enabled duplicate scanOnly
+    /// with the same canonical path). Refreshes the in-memory bookmark so the
+    /// persist merge repairs the Vault root in place (same ID/role/display,
+    /// alias-aware) and drops the erroneous enabled duplicate. Returns true
+    /// when a failed Vault match was refreshed; different folders never match.
+    private func refreshFailedVaultBookmarkForSameCanonicalReauthorization(
+        canonical: String,
+        freshBookmark: Data,
+        standardized: URL
+    ) -> Bool {
+        guard let settings = try? settingsStore.loadSettings(),
+              settings.vault.isEnabled
+        else { return false }
+        let resolver = bookmarkResolver
+        var matchesFailedVault = false
+        for root in settings.musicRoots where root.role != .scanOnly {
+            let isStableVaultRef =
+                root.id == settings.vault.activeRootID || root.id == settings.vault.archiveRootID
+            guard isStableVaultRef, root.isEnabled else { continue }
+            guard Self.canonicalPath(for: root.fallbackURL) == canonical else { continue }
+            do {
+                _ = try root.resolvedURL(using: resolver)
+                continue
+            } catch {
+                matchesFailedVault = true
+                break
+            }
+        }
+        guard matchesFailedVault else { return false }
+        scanRootBookmarks[Self.bookmarkKey(for: standardized)] = freshBookmark
+        securityScopedRootAccesses.append(SecurityScopedRootAccess(url: standardized))
+        return true
     }
 
     private func bookmarkData(for url: URL, standardized: URL, provided: [URL: Data]) -> Data? {
