@@ -700,10 +700,23 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
     private let writesAudioFrames: Bool
     private let writeErrorCount: Int
     private let inputFrameCount: Int64
-    private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
-    private var outputURL: URL?
+    private let lock = NSLock()
+    private var storedContinuation: AsyncStream<RecorderAudioLevel>.Continuation?
+    private var storedOutputURL: URL?
+    private var storedRecording = false
+    private var continuation: AsyncStream<RecorderAudioLevel>.Continuation? {
+        get { lock.withLock { storedContinuation } }
+        set { lock.withLock { storedContinuation = newValue } }
+    }
+    private var outputURL: URL? {
+        get { lock.withLock { storedOutputURL } }
+        set { lock.withLock { storedOutputURL = newValue } }
+    }
     var recordedOutputURL: URL? { outputURL }
-    var recording: Bool = false
+    var recording: Bool {
+        get { lock.withLock { storedRecording } }
+        set { lock.withLock { storedRecording = newValue } }
+    }
 
     init(writesAudioFrames: Bool, writeErrorCount: Int = 0, inputFrameCount: Int64 = 1024) {
         self.writesAudioFrames = writesAudioFrames
@@ -724,12 +737,13 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
     }
 
     func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
-        recording = true
         self.outputURL = outputURL
-        return AsyncStream { continuation in
+        let stream = AsyncStream<RecorderAudioLevel> { continuation in
             self.continuation = continuation
             continuation.yield(RecorderAudioLevel(peak: 0.5, average: 0.25, elapsedTime: 0.1))
         }
+        recording = true
+        return stream
     }
 
     func stopRecording() async throws -> RecorderResult {
@@ -913,10 +927,13 @@ private final class NaturalEndCapturePort: AudioCapturePort, @unchecked Sendable
 }
 
 private final class DelayedStartCapturePort: AudioCapturePort, @unchecked Sendable {
+    private let lock = NSLock()
     private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
-    var recording = false
-    var startRecordingCallCount = 0
+    private var storedRecording = false
+    private var storedStartRecordingCallCount = 0
+    var recording: Bool { lock.withLock { storedRecording } }
+    var startRecordingCallCount: Int { lock.withLock { storedStartRecordingCallCount } }
 
     func checkPermission() async -> RecorderPermissionState {
         try? await Task.sleep(for: .milliseconds(50))
@@ -927,56 +944,73 @@ private final class DelayedStartCapturePort: AudioCapturePort, @unchecked Sendab
     func isCompatibleMacOS() -> Bool { true }
 
     func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
-        startRecordingCallCount += 1
-        self.outputURL = outputURL
-        recording = true
-        return AsyncStream { continuation in
-            self.continuation = continuation
-            continuation.yield(RecorderAudioLevel(peak: 0.2, average: 0.1, elapsedTime: 0.1))
+        lock.withLock {
+            storedStartRecordingCallCount += 1
+            self.outputURL = outputURL
+            let stream = AsyncStream<RecorderAudioLevel> { continuation in
+                self.continuation = continuation
+                continuation.yield(RecorderAudioLevel(peak: 0.2, average: 0.1, elapsedTime: 0.1))
+            }
+            storedRecording = true
+            return stream
         }
     }
 
     func stopRecording() async throws -> RecorderResult {
-        guard let outputURL else {
-            throw RecorderError.apiError("Missing output URL")
+        let outputURL = try lock.withLock {
+            guard let outputURL = self.outputURL else {
+                throw RecorderError.apiError("Missing output URL")
+            }
+            return outputURL
         }
         try NaturalEndCapturePort.writeValidWAV(to: outputURL)
-        recording = false
-        continuation?.finish()
+        lock.withLock {
+            storedRecording = false
+            continuation?.finish()
+        }
         return RecorderResult(outputURL: outputURL, duration: 0.1, sampleRate: 44_100, bitDepth: 24, channelCount: 2, frameCount: 512)
     }
 }
 
 private final class StopFailingOnceCapturePort: AudioCapturePort, @unchecked Sendable {
+    private let lock = NSLock()
     private var continuation: AsyncStream<RecorderAudioLevel>.Continuation?
     private var outputURL: URL?
     private var shouldFailStop = true
-    var recording = false
-    var startRecordingCallCount = 0
+    private var storedRecording = false
+    private var storedStartRecordingCallCount = 0
+    var recording: Bool { lock.withLock { storedRecording } }
+    var startRecordingCallCount: Int { lock.withLock { storedStartRecordingCallCount } }
 
     func checkPermission() async -> RecorderPermissionState { .authorized }
     func requestPermission() async -> RecorderPermissionState { .authorized }
     func isCompatibleMacOS() -> Bool { true }
 
     func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
-        startRecordingCallCount += 1
-        self.outputURL = outputURL
-        recording = true
-        return AsyncStream { continuation in
-            self.continuation = continuation
-            continuation.yield(RecorderAudioLevel(peak: 0.3, average: 0.2, elapsedTime: 0.1))
+        lock.withLock {
+            storedStartRecordingCallCount += 1
+            self.outputURL = outputURL
+            let stream = AsyncStream<RecorderAudioLevel> { continuation in
+                self.continuation = continuation
+                continuation.yield(RecorderAudioLevel(peak: 0.3, average: 0.2, elapsedTime: 0.1))
+            }
+            storedRecording = true
+            return stream
         }
     }
 
     func stopRecording() async throws -> RecorderResult {
-        guard let outputURL else {
-            throw RecorderError.apiError("Missing output URL")
-        }
-        recording = false
-        continuation?.finish()
-        if shouldFailStop {
-            shouldFailStop = false
-            throw RecorderError.apiError("forced stop failure")
+        let outputURL = try lock.withLock {
+            guard let outputURL = self.outputURL else {
+                throw RecorderError.apiError("Missing output URL")
+            }
+            storedRecording = false
+            continuation?.finish()
+            if shouldFailStop {
+                shouldFailStop = false
+                throw RecorderError.apiError("forced stop failure")
+            }
+            return outputURL
         }
         try NaturalEndCapturePort.writeValidWAV(to: outputURL)
         return RecorderResult(outputURL: outputURL, duration: 0.1, sampleRate: 44_100, bitDepth: 24, channelCount: 2, frameCount: 512)
