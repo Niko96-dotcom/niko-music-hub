@@ -62,21 +62,30 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
                 tapUID: processTap.uid,
                 outputDeviceUID: outputDevice.uid
             )
-            let streamDescription = try readTapStreamDescription(tapID: tapID)
-            guard let exactTapFormat = AVAudioFormat(streamDescription: streamDescription) else {
+            // kAudioTapPropertyFormat describes the mixer's format (48 kHz here even
+            // when the speakers run at 44.1 kHz), but the IO proc runs on the
+            // aggregate's clock, i.e. its main sub-device, and drift compensation
+            // resamples the tap into that clock. Labeling the frames with the tap's
+            // rate made every recording on a 44.1 kHz device play 8.8 % fast and sharp
+            // (a 440 Hz tone came back at 479 Hz), so take the rate from the aggregate.
+            let streamDescription = SystemAudioTapConfiguration.deliveredStreamDescription(
+                tapFormat: try readTapStreamDescription(tapID: tapID),
+                aggregateSampleRate: try readNominalSampleRate(deviceID: aggregateDeviceID)
+            )
+            guard let deliveredFormat = AVAudioFormat(streamDescription: streamDescription) else {
                 throw RecorderError.apiError("Unsupported tap audio format")
             }
 
             stateLock.withLock {
                 self.generation = generation
                 self.callbacks = callbacks
-                sourceFormat = exactTapFormat
+                sourceFormat = deliveredFormat
                 running = true
             }
             callbacks.onMetadata(RecorderBackendMetadata(
                 outputDeviceUID: outputDevice.uid,
-                sourceSampleRate: exactTapFormat.sampleRate,
-                sourceChannelCount: Int(exactTapFormat.channelCount)
+                sourceSampleRate: deliveredFormat.sampleRate,
+                sourceChannelCount: Int(deliveredFormat.channelCount)
             ))
             try installIOProc(deviceID: aggregateDeviceID)
             try installPropertyListeners(anchorDeviceID: outputDevice.id)
@@ -153,6 +162,22 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             throw SystemAudioTapError.osStatus(status, context: "Could not read tap format")
         }
         return description
+    }
+
+    /// The clock rate the aggregate's IO proc actually runs at.
+    private func readNominalSampleRate(deviceID: AudioObjectID) throws -> Double {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<Double>.size)
+        var sampleRate: Double = 0
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
+        guard status == noErr else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not read aggregate device sample rate")
+        }
+        return sampleRate
     }
 
     private func readDefaultSystemOutputDevice() throws -> (id: AudioObjectID, uid: String) {
@@ -358,6 +383,23 @@ enum SystemAudioTapConfiguration {
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false
         ]
+    }
+
+    /// The format the aggregate's IO proc really delivers: the tap's sample
+    /// layout at the aggregate's clock rate. `kAudioTapPropertyFormat` reports
+    /// the mixer's rate, which differs from the aggregate's main sub-device
+    /// whenever the output device is not running at that rate; drift
+    /// compensation resamples the tap into the aggregate's clock, so frames must
+    /// be labeled with the aggregate rate or the file plays at the wrong speed.
+    static func deliveredStreamDescription(
+        tapFormat: AudioStreamBasicDescription,
+        aggregateSampleRate: Double
+    ) -> AudioStreamBasicDescription {
+        var description = tapFormat
+        if aggregateSampleRate > 0 {
+            description.mSampleRate = aggregateSampleRate
+        }
+        return description
     }
 }
 
