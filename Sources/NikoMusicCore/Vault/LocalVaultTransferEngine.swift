@@ -271,7 +271,33 @@ public actor LocalVaultTransferEngine {
             if record.state == .failedRecoverable {
                 guard let origin = record.error?.origin,
                       VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else {
-                    results.append(record)
+                    // Legacy V1 persisted failedRecoverable with a destructive
+                    // origin (removingActiveCopy/evictingProviderCache). It has
+                    // no retry route: retryRecoverableTransfer rejects
+                    // destructive origins and recoverInterruptedRemoval requires
+                    // recoveryRequired. Normalize truthfully to recoveryRequired
+                    // independent of the attempt ceiling, preserving generation
+                    // evidence and without touching the filesystem.
+                    if let destructiveOrigin = record.error?.origin,
+                       destructiveOrigin == .removingActiveCopy || destructiveOrigin == .evictingProviderCache {
+                        let persistedLegacyFailure = record
+                        var migrated = record
+                        migrated.state = .recoveryRequired
+                        migrated.error = VaultTransferError(
+                            origin: destructiveOrigin,
+                            reason: record.error?.reason ?? .unknown,
+                            message: "An earlier transfer stopped during Active-copy removal or provider eviction. The Active copy may be absent or incomplete. Existing copies require verification and recovery."
+                        )
+                        migrated.nextRetryAt = nil
+                        do {
+                            try persist(&migrated)
+                            results.append(migrated)
+                        } catch {
+                            results.append(persistedLegacyFailure)
+                        }
+                    } else {
+                        results.append(record)
+                    }
                     continue
                 }
             }
@@ -283,8 +309,8 @@ public actor LocalVaultTransferEngine {
                     origin: origin,
                     reason: .unknown,
                     message: origin == .removingActiveCopy
-                        ? "Launch recovery stopped before Active-copy removal could be confirmed. Existing copies were preserved for review."
-                        : "Launch recovery stopped before provider-cache eviction could be confirmed. Existing copies were preserved for review."
+                        ? "Launch recovery could not confirm Active-copy removal. The Active copy may be absent or incomplete. The archive requires verification before recovery."
+                        : "Launch recovery could not confirm provider-cache eviction after Active-copy removal. The Active copy may be absent. The archive requires verification before recovery."
                 )
                 record.nextRetryAt = nil
                 do {
@@ -512,6 +538,7 @@ public actor LocalVaultTransferEngine {
     private func execute(_ initial: VaultTransferRecord) async throws -> VaultTransferRecord {
         var record = initial
         var removalAdmissionDenied = false
+        var activeRemovalStarted = false
         do {
             while true {
                 try Task.checkCancellation()
@@ -599,17 +626,29 @@ public actor LocalVaultTransferEngine {
                         removalAdmissionDenied = true
                         throw error
                     }
-                    // No further await before the destructive operation.
+                    // A nonthrowing admission can suspend, observe task
+                    // cancellation, then return normally. Recheck after all await
+                    // boundaries before the destructive synchronous remove.
+                    try Task.checkCancellation()
                     try validateRemovalEvidence(
                         record,
                         expectedSourceIdentity: sourceBinding.identity
                     )
+                    // Exact boundary in this execution: no destructive call has
+                    // started until removeItem below. Fresh-entry cancellation
+                    // before this point stays verified/source-retained. Persisted
+                    // interruptions from a prior process are normalized to
+                    // recoveryRequired at launch and never reach this branch.
+                    try Task.checkCancellation()
                     if fileManager.fileExists(atPath: record.sourceURL.path) {
+                        activeRemovalStarted = true
                         try fileManager.removeItem(at: record.sourceURL)
                     }
                     try advance(&record, to: .evictingProviderCache)
                 case .evictingProviderCache:
                     let result = try await provider.evictIfSupported(record.destinationURL)
+                    record.error = nil
+                    record.nextRetryAt = nil
                     try advance(&record, to: result == .evicted ? .archivedOnlineOnly : .archivedLocal)
                     return record
                 case .archivedLocal, .archivedOnlineOnly:
@@ -624,6 +663,56 @@ public actor LocalVaultTransferEngine {
             throw VaultTransferInterruption()
         } catch is CancellationError {
             let origin = record.state
+            if VaultTransferOwnershipPolicy.isVerifiedTerminal(origin)
+                || origin == .failedRecoverable
+                || origin == .recoveryRequired
+            {
+                throw CancellationError()
+            }
+            if removalAdmissionDenied {
+                // Neither admission removes data. Cancellation arrived before any
+                // removal side effect, so the verified archive stays retryable.
+                record.error = VaultTransferError(
+                    origin: origin,
+                    reason: .unknown,
+                    message: "Transfer stopped before Active-copy removal. The Active copy was kept."
+                )
+                record.state = .archiveVerified
+                record.nextRetryAt = nil
+                try persist(&record)
+                throw CancellationError()
+            }
+            if origin == .removingActiveCopy && !activeRemovalStarted {
+                // Exact boundary: the persisted removing phase was entered in
+                // this execution but removeItem never started. No destructive
+                // call ran, so the Active copy was kept and the verified archive
+                // stays retryable. Persisted interruptions from a prior process
+                // never reach here; launch recovery normalizes those to
+                // recoveryRequired as unknown.
+                record.error = VaultTransferError(
+                    origin: origin,
+                    reason: .unknown,
+                    message: "Transfer stopped before Active-copy removal. The Active copy was kept."
+                )
+                record.state = .archiveVerified
+                record.nextRetryAt = nil
+                try persist(&record)
+                throw CancellationError()
+            }
+            let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
+            if destructiveOrigin {
+                // At/after removal the Active-copy fate is uncertain (eviction
+                // implies it is already gone). Never claim the source was
+                // retained. Require explicit review and preserve evidence/budget.
+                let message = origin == .removingActiveCopy
+                    ? "Transfer stopped during Active-copy removal. The Active copy may be partially removed. Existing copies were kept for review."
+                    : "Transfer stopped after Active-copy removal during provider eviction. The Active copy is not retained locally. The verified archive remains for review."
+                record.error = VaultTransferError(origin: origin, reason: .unknown, message: message)
+                record.state = .recoveryRequired
+                record.nextRetryAt = nil
+                try persist(&record)
+                throw CancellationError()
+            }
             record.error = VaultTransferError(
                 origin: origin,
                 reason: .unknown,

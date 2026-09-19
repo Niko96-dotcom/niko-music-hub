@@ -697,6 +697,214 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
     }
 
+    func testCancellationDuringProviderEvictionAfterActiveRemovalStaysRecoverableAndRestorable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let provider = CancellingEvictionProvider()
+        let removalEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+
+        do {
+            _ = try await removalEngine.removeActiveCopy(after: archived)
+            XCTFail("eviction CancellationError must propagate")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: fixture.source.path),
+            "Active copy was removed before provider eviction, so the boundary under test was reached"
+        )
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+        XCTAssertEqual(persisted.error?.origin, .evictingProviderCache)
+        XCTAssertEqual(
+            persisted.state, .recoveryRequired,
+            "cancellation after Active removal must stay recoveryRequired, not exhausted failedRecoverable"
+        )
+        XCTAssertLessThan(
+            persisted.retryCount,
+            VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts,
+            "cancellation after Active removal must not exhaust the automatic-attempt budget"
+        )
+        XCTAssertNil(persisted.nextRetryAt)
+        XCTAssertEqual(persisted.manifestID, archived.manifestID)
+        XCTAssertEqual(persisted.durability, archived.durability)
+        let message = try XCTUnwrap(persisted.error?.message)
+        XCTAssertFalse(
+            message.contains("not deleted"),
+            "recoveryRequired after removal must never falsely claim the source was retained: \(message)"
+        )
+        // The generation remains verifiable on disk while awaiting explicit review.
+        try VaultManifestBuilder().verify(XCTUnwrap(persisted.manifest), at: persisted.destinationURL)
+        let recoveryEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+        let recovered = try await recoveryEngine.recoverInterruptedRemoval(id: archived.id)
+        XCTAssertEqual(recovered.state, .archiveVerified)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+        try VaultManifestBuilder().verify(XCTUnwrap(recovered.manifest), at: recovered.destinationURL)
+        XCTAssertEqual(try store.verifiedArchiveGeneration(projectID: archived.projectID)?.id, archived.id)
+    }
+
+    func testCancellationBeforeRemovalPreservesSourceAndExhaustsAutomaticBudget() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let sourceBefore = try fixture.snapshotSource()
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let cancelling = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: { _, _ in throw CancellationError() }
+        )
+
+        do {
+            _ = try await cancelling.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("pre-removal CancellationError must propagate")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        let persisted = try XCTUnwrap(store.allTransferRecords().first)
+        XCTAssertEqual(persisted.state, .failedRecoverable)
+        XCTAssertEqual(persisted.error?.origin, .preparingArchive)
+        XCTAssertEqual(persisted.retryCount, VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts)
+        XCTAssertNil(persisted.nextRetryAt)
+        XCTAssertTrue(persisted.error?.message.contains("not deleted") ?? false)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+
+        let retryEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites
+        )
+        let retried = await retryEngine.retryRecoverableTransfer(id: persisted.id)
+        let retriedUnwrapped = try XCTUnwrap(retried)
+        XCTAssertEqual(retriedUnwrapped.state, .archiveVerified)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        try VaultManifestBuilder().verify(XCTUnwrap(retriedUnwrapped.manifest), at: retriedUnwrapped.destinationURL)
+    }
+
+    func testCancellationDuringRemovalAdmissionKeepsVerifiedArchiveAndSource() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let sourceBefore = try fixture.snapshotSource()
+        let cancelling = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in throw CancellationError() }
+        )
+
+        do {
+            _ = try await cancelling.removeActiveCopy(after: archived)
+            XCTFail("admission CancellationError must propagate")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        XCTAssertEqual(persisted.state, .archiveVerified)
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
+        XCTAssertNil(persisted.nextRetryAt)
+        XCTAssertLessThan(
+            persisted.retryCount,
+            VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts
+        )
+        XCTAssertTrue(persisted.error?.message.contains("kept") ?? false)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+
+        let retryEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+        let retried = try await retryEngine.removeActiveCopy(after: persisted)
+        XCTAssertTrue([.archivedLocal, .archivedOnlineOnly].contains(retried.state))
+        XCTAssertNil(retried.error)
+        XCTAssertNil(try store.record(id: archived.id)?.error)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+    }
+
+    func testCancelledEvictionRecoverySurvivesRelaunchWithoutSideEffects() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let removalEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: CancellingEvictionProvider(),
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+        do {
+            _ = try await removalEngine.removeActiveCopy(after: archived)
+            XCTFail("expected eviction cancellation")
+        } catch is CancellationError {}
+
+        let cancelled = try XCTUnwrap(store.record(id: archived.id))
+        XCTAssertEqual(cancelled.state, .recoveryRequired)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+        // Before explicit review the store has no verified generation to restore from,
+        // but the generation directory itself remains verifiable.
+        XCTAssertNil(try store.verifiedArchiveGeneration(projectID: archived.projectID))
+        try VaultManifestBuilder().verify(XCTUnwrap(cancelled.manifest), at: cancelled.destinationURL)
+
+        let writeCalls = VaultFaultPointRecorder()
+        let removalCalls = VaultFaultPointRecorder()
+        let relaunchedStore = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let relaunched = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: relaunchedStore,
+            writeAdmission: { _, _ in writeCalls.increment() },
+            removalAdmission: { _ in removalCalls.increment() }
+        )
+        let automatic = await relaunched.recoverAtLaunch()
+        XCTAssertTrue(automatic.isEmpty)
+        XCTAssertEqual(writeCalls.count, 0)
+        XCTAssertEqual(removalCalls.count, 0)
+        XCTAssertEqual(try relaunchedStore.record(id: archived.id)?.state, .recoveryRequired)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+
+        let reviewEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: relaunchedStore,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+        let recovered = try await reviewEngine.recoverInterruptedRemoval(id: archived.id)
+        XCTAssertEqual(recovered.state, .archiveVerified)
+        XCTAssertEqual(try relaunchedStore.verifiedArchiveGeneration(projectID: archived.projectID)?.id, archived.id)
+        try VaultManifestBuilder().verify(XCTUnwrap(recovered.manifest), at: recovered.destinationURL)
+    }
+
     func testOccupiedGenerationIsNeverOverwrittenAndRequiresRecovery() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -1172,11 +1380,24 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             )
 
             let automatic = await engine.recoverAtLaunch()
+            // Legacy V1 failedRecoverable with a destructive origin has no retry
+            // route. Launch normalizes truthfully to recoveryRequired without
+            // replaying destructive work, independent of the attempt ceiling.
+            XCTAssertEqual(automatic.count, 1, "automatic recovery from \(origin)")
+            XCTAssertEqual(automatic.first?.state, .recoveryRequired, "automatic recovery from \(origin)")
+            XCTAssertEqual(automatic.first?.error?.origin, origin, "automatic recovery from \(origin)")
+            XCTAssertNil(automatic.first?.nextRetryAt, "automatic recovery from \(origin)")
             let manual = await engine.retryRecoverableTransfer(id: record.id)
 
-            XCTAssertEqual(automatic, [record], "automatic recovery from \(origin)")
             XCTAssertNil(manual, "manual Retry from \(origin)")
-            XCTAssertEqual(try store.record(id: record.id), record)
+            let persisted = try XCTUnwrap(store.record(id: record.id))
+            XCTAssertEqual(persisted.state, .recoveryRequired, "persisted migration from \(origin)")
+            XCTAssertEqual(persisted.error?.origin, origin, "persisted migration from \(origin)")
+            XCTAssertEqual(persisted.manifestID, record.manifestID, "generation evidence preserved for \(origin)")
+            XCTAssertEqual(persisted.retryCount, record.retryCount, "generation evidence preserved for \(origin)")
+            XCTAssertNil(persisted.nextRetryAt)
+            let second = await engine.recoverAtLaunch()
+            XCTAssertTrue(second.isEmpty, "migrated recoveryRequired is stable for \(origin)")
             let barriers = await provider.barrierCount()
             XCTAssertEqual(barriers, 0)
             XCTAssertTrue(FileManager.default.fileExists(atPath: record.sourceURL.path))
@@ -1245,6 +1466,203 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 generationBefore,
                 "\(origin)"
             )
+        }
+    }
+
+    func testTaskCancelBeforeActiveRemovalKeepsVerifiedSourceAndRetryable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let sourceBefore = try fixture.snapshotSource()
+        let gate = RemovalAdmissionGate()
+        let provider = CountingRemovalProvider()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in
+                await gate.signalEntryAndWaitForRelease()
+            }
+        )
+
+        let task = Task {
+            try await engine.removeActiveCopy(after: archived)
+        }
+        await gate.waitForEntry()
+        // The removing phase was persisted before admission. Cancel before any
+        // destructive call started; admission returns normally.
+        task.cancel()
+        await gate.release()
+
+        do {
+            _ = try await task.value
+            XCTFail("Task.cancel before removal must propagate CancellationError")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        XCTAssertEqual(persisted.state, .archiveVerified)
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
+        XCTAssertTrue(persisted.error?.message.contains("kept") ?? false)
+        XCTAssertNil(persisted.nextRetryAt)
+        XCTAssertLessThan(
+            persisted.retryCount,
+            VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts
+        )
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+        let evictionCount = await provider.evictionCount()
+        XCTAssertEqual(evictionCount, 0)
+
+        let retryEngine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in }
+        )
+        let retried = try await retryEngine.removeActiveCopy(after: persisted)
+        XCTAssertTrue([.archivedLocal, .archivedOnlineOnly].contains(retried.state))
+        XCTAssertNil(retried.error)
+        XCTAssertNil(try store.record(id: archived.id)?.error)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.source.path))
+    }
+
+    func testNonthrowingCancelledAdmissionIsRecheckedBeforeDeletingActive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let archived = try await verifiedArchive(fixture: fixture, store: store)
+        let sourceBefore = try fixture.snapshotSource()
+        let gate = RemovalAdmissionGate()
+        let provider = CountingRemovalProvider()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in
+                // Suspend, observe Task.cancel, then return normally without
+                // throwing. The engine must recheck cancellation after all await
+                // boundaries and before the destructive synchronous remove.
+                await gate.signalEntryAndWaitForRelease()
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+        )
+
+        let task = Task {
+            try await engine.removeActiveCopy(after: archived)
+        }
+        await gate.waitForEntry()
+        task.cancel()
+        await gate.release()
+
+        do {
+            _ = try await task.value
+            XCTFail("cancelled nonthrowing admission must still propagate CancellationError")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        let persisted = try XCTUnwrap(store.record(id: archived.id))
+        XCTAssertEqual(persisted.state, .archiveVerified, "state source must stay verified when no destructive call started")
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
+        XCTAssertTrue(persisted.error?.message.contains("kept") ?? false)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        try VaultManifestBuilder().verify(XCTUnwrap(archived.manifest), at: archived.destinationURL)
+        let evictionCount = await provider.evictionCount()
+        XCTAssertEqual(evictionCount, 0)
+    }
+
+    func testLaunchNormalizesLegacyFailedRecoverableDestructiveOriginsToRecoveryRequired() async throws {
+        for origin in [VaultTransferState.removingActiveCopy, .evictingProviderCache] {
+            for sourcePresent in [true, false] {
+                let fixture = try Fixture()
+                defer { fixture.remove() }
+                let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+                let verified = try await verifiedArchive(fixture: fixture, store: store)
+                var legacy = verified
+                legacy.state = .failedRecoverable
+                legacy.error = VaultTransferError(
+                    origin: origin,
+                    reason: .unknown,
+                    message: "legacy V1 exhausted failure"
+                )
+                legacy.retryCount = 7
+                legacy.nextRetryAt = nil
+                try store.save(legacy)
+                if !sourcePresent {
+                    try FileManager.default.removeItem(at: fixture.source)
+                }
+                let sourceExistedBefore = sourcePresent
+                let sourceSnapshotBefore = sourcePresent ? try fixture.snapshotSource() : nil
+                let generationBefore = try fixture.snapshot(at: legacy.destinationURL)
+                let manifestIDBefore = legacy.manifestID
+                let durabilityBefore = legacy.durability
+
+                let relaunchedStore = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+                let writeCalls = VaultFaultPointRecorder()
+                let removalCalls = VaultFaultPointRecorder()
+                let barrierProvider = FailingDurabilityProvider()
+                let relaunched = try LocalVaultTransferEngine(
+                    activeRoot: fixture.active,
+                    archiveRoot: fixture.archive,
+                    store: relaunchedStore,
+                    provider: barrierProvider,
+                    writeAdmission: { _, _ in writeCalls.increment() },
+                    removalAdmission: { _ in removalCalls.increment() }
+                )
+
+                let automatic = await relaunched.recoverAtLaunch()
+                let context = "\(origin) sourcePresent=\(sourcePresent)"
+
+                XCTAssertEqual(automatic.count, 1, context)
+                XCTAssertEqual(automatic.first?.state, .recoveryRequired, context)
+                XCTAssertEqual(automatic.first?.error?.origin, origin, context)
+                XCTAssertNil(automatic.first?.nextRetryAt, context)
+                XCTAssertEqual(automatic.first?.manifestID, manifestIDBefore, "generation evidence preserved \(context)")
+                XCTAssertEqual(automatic.first?.durability, durabilityBefore, "generation evidence preserved \(context)")
+                XCTAssertEqual(automatic.first?.retryCount, 7, "generation evidence preserved \(context)")
+                XCTAssertEqual(writeCalls.count, 0, "migration must not move/delete source \(context)")
+                XCTAssertEqual(removalCalls.count, 0, "migration must not move/delete source \(context)")
+                let barrierCount = await barrierProvider.barrierCount()
+                XCTAssertEqual(barrierCount, 0, context)
+                XCTAssertEqual(
+                    FileManager.default.fileExists(atPath: fixture.source.path),
+                    sourceExistedBefore,
+                    "migration must not move/delete source \(context)"
+                )
+                if let expectedSource = sourceSnapshotBefore {
+                    XCTAssertEqual(try fixture.snapshotSource(), expectedSource, context)
+                }
+                XCTAssertEqual(try fixture.snapshot(at: legacy.destinationURL), generationBefore, context)
+
+                let persisted = try XCTUnwrap(relaunchedStore.record(id: legacy.id))
+                XCTAssertEqual(persisted.state, .recoveryRequired, context)
+                let second = await relaunched.recoverAtLaunch()
+                XCTAssertTrue(second.isEmpty, context)
+
+                // Subsequent explicit review/restore discovery from the migrated state.
+                let reviewEngine = try LocalVaultTransferEngine(
+                    activeRoot: fixture.active,
+                    archiveRoot: fixture.archive,
+                    store: relaunchedStore,
+                    writeAdmission: allowVaultWrites,
+                    removalAdmission: { _ in }
+                )
+                let recovered = try await reviewEngine.recoverInterruptedRemoval(id: legacy.id)
+                XCTAssertEqual(recovered.state, .archiveVerified, context)
+                XCTAssertEqual(try relaunchedStore.verifiedArchiveGeneration(projectID: legacy.projectID)?.id, legacy.id, context)
+                try VaultManifestBuilder().verify(XCTUnwrap(recovered.manifest), at: recovered.destinationURL)
+            }
         }
     }
 
@@ -1949,6 +2367,42 @@ private actor RemovalPolicyRace {
     func checkCount() -> Int { checks }
 }
 
+private actor RemovalAdmissionGate {
+    private var hasEntered = false
+    private var isReleased = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func signalEntryAndWaitForRelease() async {
+        hasEntered = true
+        let waiters = entryWaiters
+        entryWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+        if isReleased { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitForEntry() async {
+        if hasEntered { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        let waiters = releaseWaiters
+        releaseWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+}
+
 private actor CountingRemovalProvider: ArchiveStorageProvider {
     private var evictions = 0
 
@@ -1967,6 +2421,21 @@ private actor CountingRemovalProvider: ArchiveStorageProvider {
     }
 
     func evictionCount() -> Int { evictions }
+}
+
+private actor CancellingEvictionProvider: ArchiveStorageProvider {
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: false, supportsMaterialization: false, supportsEviction: true)
+    }
+
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability { .verifiedLocal }
+    func materialize(_ location: URL) async throws {}
+
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult {
+        throw CancellationError()
+    }
 }
 
 private final class SamePathSourceSwapper: @unchecked Sendable {
