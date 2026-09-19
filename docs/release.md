@@ -96,6 +96,65 @@ Copy `docs/release-uat-evidence.template.json` outside the repository and fill i
 
 Public `--skip-tests` is rejected. A release owner can use `--emergency-skip-tests --reason "..."` only as a conspicuous, recorded override; the approval JSON preserves the reason and every overridden gate.
 
+## Provenance (pinned source, frozen UAT, key continuity)
+
+`release-all.sh` pins the exact git commit first, then executes that commit from an
+isolated snapshot with isolated `.build`/output (`script/lib/release_snapshot.sh`):
+
+- The snapshot is materialized with `git worktree add --detach <pinned-commit>` (object database
+  with genuine `.git` metadata, never live working-tree files and never `git archive`
+  which has no `.git`, so helper git calls would discover the enclosing live repo)
+  into `<release-dir>.provenance-<short12>-<pid>/pinned-source`,
+  beside `RELEASE_DIR` so later `rm -rf "$RELEASE_DIR"` cannot remove it. Canonical
+  files (`VERSION`, `BUNDLE_ID`, `RELEASE_ARCHITECTURES`, `Package.swift`,
+  `SPARKLE_PUBLIC_ED_KEY`) are verified byte-equal to `git show <pinned>:<file>`.
+  The Swift build runs with the snapshot as package root (`<snapshot>/.build`),
+  never the invoking checkout's `.build`; the real build writes the private
+  snapshot dist (`<snapshot>/dist/release-build`, satisfying the lifecycle
+  `output beneath <snapshot>/dist` policy) then stages a ditto copy into the
+  isolated `build/` under `RELEASE_DIR` for packaging. Final DMG/manifest/etc
+  stay in `RELEASE_DIR` (validated allowed path); snapshot output is cleaned
+  with the worktree on EXIT. Concurrent checkout changes cannot enter the artifact.
+- Public clean/tag checks and manifest metadata bind the pinned commit; post-pin
+  preflight reads pinned snapshot files/HEAD (`--root <snapshot>`), never live
+  invoking-checkout files. The detached worktree shares origin/refs, so shared-ref
+  origin checks (stray/moved tags, remote tag binding) are retained. The run
+  never merely rechecks cleanliness then builds live.
+- Source/config overrides that would make public `VERSION`/`BUNDLE_ID`/Package/key
+  drift are rejected before pinning (`NMH_VERSION_FILE`, `NMH_BUNDLE_ID_FILE`,
+  `NMH_PACKAGE_FILE`, `NMH_RELEASE_ARCHITECTURES_FILE`, `NMH_SPARKLE_PUBLIC_ED_KEY`,
+  `NMH_SPARKLE_PUBLIC_ED_KEY_FILE`, plus `NMH_BUNDLE_ID`/`NMH_APP_NAME`/`NMH_MARKETING_VERSION`/
+  `NMH_BUILD_VERSION`/`NMH_SOURCE_COMMIT`/`NMH_BUILD_ID`/`NMH_BUILD_CONFIGURATION`/
+  `NMH_MIN_SYSTEM_VERSION`/`NMH_DIST_DIR`/`NMH_RELEASE_TEST_MODE`). Local-only and dev/test use keep explicit
+  overrides (`NMH_RELEASE_TEST_MODE` stays for local-only/test wrappers only);
+  `NMH_RELEASE_DIR` and `NMH_RELEASE_LOG` remain allowed. Public mode refuses the
+  test stub bundle and always runs the pinned Swift build. No secret is copied.
+- UAT is frozen once to the private run location (`frozen-uat.json`) BEFORE any UAT
+  validation, and its sha256 is captured before validation. The digest is re-checked
+  after validation and again at final approval (with `cmp` frozen-vs-final), so a
+  writer to the run dir cannot replace both with other still-valid bytes. The initial `validate-release-uat.sh`, the approval's UAT hash/approver
+  fields, and both final `validate-release-approval.sh` calls (candidate and hosted)
+  use the same frozen bytes with the frozen API
+  `--evidence/--uat SNAPSHOT --commit COMMIT --expected-build-id VERSION+short12 --expected-signing-identity NMH_DEVELOPER_ID_APPLICATION`.
+  Final validator semantic/hash checks are authoritative. Never reuse test or
+  historical human UAT for a real release: evidence must name the exact pinned
+  commit/build/identity.
+- R4 production Sparkle continuity: the shipped app/feed use the repository
+  `SPARKLE_PUBLIC_ED_KEY` from the pinned commit. Public mode never silently accepts
+  `NMH_SPARKLE_PUBLIC_ED_KEY` or `_FILE`; mismatches reject before build/publish.
+  Production private signing stays Keychain-only (`--account`), the canonical feed URL,
+  version monotonicity, artifact/hash binding, signing/notary/stapling order, and hosted
+  byte verification are unchanged. No keys or identities were changed.
+- Gate production consumes the shared `script/lib/release_gates.sh` contract (exact 12
+  required gates, 4 emergency-overridable); no contradictory list is kept.
+- Snapshot cleanup is safe and bounded (only the run dir beneath its allowed parent
+  carrying `snapshot-provenance.json` is removed; the working tree and untracked content
+  are never touched). `snapshot-provenance.json` is copied into `RELEASE_DIR` for review;
+  release outputs/logs remain reviewable.
+
+Behavioral coverage lives in `Tests/test_release_pipeline_provenance.py` (disposable temp
+git fixture, stubbed side effects, live-source and original-UAT mutation between stages).
+
 ## Version Bump
 
 1. Edit `VERSION`.

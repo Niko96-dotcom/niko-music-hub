@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=release-env.sh
 source "$ROOT/script/release-env.sh"
+# shellcheck source=lib/release_snapshot.sh
+source "$ROOT/script/lib/release_snapshot.sh"
+# shellcheck source=lib/release_gates.sh
+source "$ROOT/script/lib/release_gates.sh"
 
 MODE=""
 PUBLISH=false
@@ -280,21 +284,28 @@ print(f"hosted GitHub Release contract verified for {tag}: {len(actual_names)} e
 PY
 }
 
-# Locate Sparkle's appcast generator inside the resolved SPM artifacts.
+# Locate Sparkle's appcast generator inside the isolated pinned-snapshot .build.
+# No live fallback: concurrent checkout changes and a shared .build must never
+# enter feed generation. The snapshot is the package root, so SwiftPM uses
+# <snapshot>/.build only.
 find_generate_appcast() {
-  local candidate
-  candidate="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+  local candidate snapshot_build
+  snapshot_build="${SNAPSHOT_SRC:-}"
+  if [[ -z "$snapshot_build" ]]; then
+    echo "pinned snapshot source is required for update-feed generation (no live fallback)" >&2
+    return 1
+  fi
+  candidate="$snapshot_build/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
   if [[ -x "$candidate" ]]; then
     printf '%s\n' "$candidate"
     return 0
   fi
-  # Fall back to a search: the artifact path is an SPM implementation detail.
-  candidate="$(find "$ROOT/.build/artifacts" -type f -name generate_appcast -perm +111 2>/dev/null | head -n 1)"
+  candidate="$(find "$snapshot_build/.build/artifacts" -type f -name generate_appcast -perm +111 2>/dev/null | head -n 1)"
   if [[ -n "$candidate" ]]; then
     printf '%s\n' "$candidate"
     return 0
   fi
-  echo "Sparkle generate_appcast not found under $ROOT/.build/artifacts; run swift package resolve" >&2
+  echo "Sparkle generate_appcast not found under $snapshot_build/.build/artifacts; run swift package resolve" >&2
   return 1
 }
 
@@ -494,6 +505,35 @@ PY
 )" || exit 2
 fi
 
+# R1/R4 provenance: public releases must not honor source/config overrides that
+# would make VERSION/BUNDLE_ID/Package/key drift from the pinned commit.
+# Local-only and dev/test use keep explicit overrides; public fails closed here,
+# before pinning, so the pinned values below are canonical.
+nmh_snapshot_reject_public_overrides "$MODE" || exit 1
+
+# Public feed guards fail fast before pinning so a dirty development checkout
+# still proves the override rejection (not the clean-tree gate). The same
+# guards are re-checked after pinning; this pre-snapshot copy never weakens
+# publication gates.
+if [[ "$MODE" == "public" ]]; then
+  if [[ -n "${NMH_UPDATE_FEED_URL:-}" ]]; then
+    echo "public release refuses NMH_UPDATE_FEED_URL; every public build must poll the canonical feed" >&2
+    exit 1
+  fi
+  if [[ -n "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+    echo "public release refuses NMH_SPARKLE_PRIVATE_KEY_FILE; it is for test feeds only and public releases use the Keychain account" >&2
+    exit 1
+  fi
+  if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then
+    echo "public release refuses NMH_RELEASE_TEST_MODE; public builds must run the pinned Swift build, never the test stub bundle (use local-only for test builds)" >&2
+    exit 1
+  fi
+fi
+
+# Root checkout clean predicate still required initially: an artifact must never
+# claim an exact source commit for uncommitted code.
+require_clean_release_worktree
+
 VERSION="$(nmh_release_version)"
 BUNDLE_ID="$(nmh_bundle_id)"
 TAG="v$VERSION"
@@ -516,10 +556,123 @@ SIGNING_IDENTITY_RECORD="ad-hoc"
 # `set -e` instead of collapsing to an empty string inside a later test.
 SPARKLE_PUBLIC_KEY="$(nmh_sparkle_public_ed_key)"
 
+# R1 provenance: execute the pinned exact commit from an isolated detached
+# worktree with genuine .git metadata and isolated .build/output. The snapshot
+# is checked out from the object database, never from live working-tree files,
+# so concurrent changes (including branch moves) in the invoking checkout
+# cannot enter the artifact or change provenance. It lives beside RELEASE_DIR
+# (never beneath it) so later `rm -rf "$RELEASE_DIR"` cannot remove it.
+RUN_DIR=""
+SNAPSHOT_SRC=""
+SNAPSHOT_SPARKLE_KEY=""
+FROZEN_UAT=""
+FROZEN_UAT_SHA=""
+FINAL_UAT=""
+INVOKING_ROOT=""
+if ! RUN_DIR="$(nmh_snapshot_init_run_dir "$RELEASE_DIR" "$SHORT_COMMIT")"; then
+  exit 1
+fi
+# Safe, bounded cleanup that preserves the original exit status: only the
+# private run dir beneath its allowed parent is removed; the invoking working
+# tree and untracked content are never touched. The provenance record and
+# frozen UAT copy are in RELEASE_DIR for review before cleanup. Public
+# credential prerequisites use explicit nonempty checks with explicit exit 1
+# because a failing `: "${VAR:?...}"` fatal expansion does not preserve its
+# status through this EXIT trap under host bash (diagnostic yet exit 0).
+nmh_snapshot_cleanup_trap() {
+  local status=$?
+  if [[ -n "${RUN_DIR:-}" ]]; then
+    nmh_snapshot_cleanup "$RUN_DIR" "$(dirname "$RUN_DIR")" || true
+  fi
+  exit "$status"
+}
+trap nmh_snapshot_cleanup_trap EXIT
+if ! SNAPSHOT_SRC="$(nmh_snapshot_create_pinned_source "$ROOT" "$COMMIT" "$RUN_DIR")"; then
+  exit 1
+fi
+if ! SNAPSHOT_SPARKLE_KEY="$(nmh_snapshot_canonical_key "$SNAPSHOT_SRC")"; then
+  exit 1
+fi
 if [[ "$MODE" == "public" ]]; then
-  : "${NMH_DEVELOPER_ID_APPLICATION:?public release requires NMH_DEVELOPER_ID_APPLICATION}"
-  : "${NMH_NOTARY_PROFILE:?public release requires NMH_NOTARY_PROFILE}"
-  : "${NMH_RELEASE_UAT_EVIDENCE:?public release requires NMH_RELEASE_UAT_EVIDENCE}"
+  # R4 continuity: the shipped app/feed must use the repository key from the
+  # pinned commit. Never silently accept NMH_SPARKLE_PUBLIC_ED_KEY(_FILE);
+  # test/local overrides remain explicit (local-only keeps them). Reject
+  # production mismatches before build/publish and pin the snapshot key for
+  # the remainder of the run so live mutation cannot drift.
+  if ! nmh_snapshot_verify_sparkle_continuity "$SNAPSHOT_SRC" "$SPARKLE_PUBLIC_KEY"; then
+    exit 1
+  fi
+  SPARKLE_PUBLIC_KEY="$SNAPSHOT_SPARKLE_KEY"
+fi
+
+# R1: pin the whole execution source/gates/metadata to the exact revision.
+# From here on `$ROOT` is the detached worktree, so every gate, preflight,
+# validator, release-env, and app_lifecycle source is the pinned commit, git
+# metadata (`rev-parse HEAD`, `rev-list --count HEAD`, configs) is genuine and
+# cannot discover the enclosing live repo, the Swift build uses
+# <snapshot>/.build (no shared .build, no live fallback), and outputs stay
+# isolated under the original RELEASE_DIR. Branch moves in the invoking
+# checkout cannot make tests validate another commit. No new public bypass
+# env: the approved commit is checked out isolated and stages execute from
+# there; cleanup stays bounded to RUN_DIR.
+INVOKING_ROOT="$ROOT"
+ROOT="$SNAPSHOT_SRC"
+# shellcheck source=release-env.sh
+source "$ROOT/script/release-env.sh"
+# shellcheck source=lib/release_snapshot.sh
+source "$ROOT/script/lib/release_snapshot.sh"
+# shellcheck source=lib/release_gates.sh
+source "$ROOT/script/lib/release_gates.sh"
+# R1: the running orchestrator was loaded from live files before pinning.
+# Fail closed if the live top-level script diverges from the pinned commit:
+# concurrent mutation of script/release-all.sh after exec would otherwise run
+# live logic while stages run pinned. External stages already use $ROOT
+# (snapshot); this guards the inline functions that stay in memory.
+if ! cmp -s "${BASH_SOURCE[0]}" "$ROOT/script/release-all.sh"; then
+  echo "running release-all.sh differs from pinned commit $COMMIT; refusing to continue with mixed live/pinned logic" >&2
+  exit 1
+fi
+# Re-derive canonical metadata from the snapshot (never live files a concurrent
+# change could alter). The initial COMMIT above was the pin; the snapshot HEAD
+# must equal it.
+VERSION="$(nmh_release_version)" || exit 1
+BUNDLE_ID="$(nmh_bundle_id)" || exit 1
+TAG="v$VERSION"
+SNAPSHOT_HEAD="$(git -C "$ROOT" rev-parse HEAD)" || exit 1
+if [[ "$SNAPSHOT_HEAD" != "$COMMIT" ]]; then
+  echo "pinned source HEAD $SNAPSHOT_HEAD differs from approved commit $COMMIT" >&2
+  exit 1
+fi
+COMMIT="$SNAPSHOT_HEAD"
+SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 HEAD)" || exit 1
+BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD)" || exit 1
+BUILD_ID="$VERSION+$SHORT_COMMIT"
+RELEASE_ARCHITECTURES="$(nmh_release_architectures)" || exit 1
+MIN_MACOS_VERSION="$(nmh_release_min_macos_version)" || exit 1
+nmh_validate_release_host_architecture || exit 1
+ARTIFACT_LABEL="$VERSION"
+if [[ "$MODE" == "local-only" ]]; then
+  ARTIFACT_LABEL="$VERSION+$SHORT_COMMIT.LOCAL-ONLY-UNSIGNED"
+fi
+ARTIFACT_NAME="NikoMusicHub-$ARTIFACT_LABEL.dmg"
+SPARKLE_PUBLIC_KEY="$(nmh_sparkle_public_ed_key)" || exit 1
+if [[ "$MODE" == "public" ]]; then
+  SPARKLE_PUBLIC_KEY="$SNAPSHOT_SPARKLE_KEY"
+fi
+
+if [[ "$MODE" == "public" ]]; then
+  if [[ -z "${NMH_DEVELOPER_ID_APPLICATION:-}" ]]; then
+    echo "public release requires NMH_DEVELOPER_ID_APPLICATION" >&2
+    exit 1
+  fi
+  if [[ -z "${NMH_NOTARY_PROFILE:-}" ]]; then
+    echo "public release requires NMH_NOTARY_PROFILE" >&2
+    exit 1
+  fi
+  if [[ -z "${NMH_RELEASE_UAT_EVIDENCE:-}" ]]; then
+    echo "public release requires NMH_RELEASE_UAT_EVIDENCE" >&2
+    exit 1
+  fi
   if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
     echo "public release requires SPARKLE_PUBLIC_ED_KEY so the published feed matches the shipped app" >&2
     exit 1
@@ -537,12 +690,31 @@ if [[ "$MODE" == "public" ]]; then
     echo "public release refuses NMH_SPARKLE_PRIVATE_KEY_FILE; it is for test feeds only and public releases use the Keychain account" >&2
     exit 1
   fi
-  if [[ "$PUBLISH" == true ]]; then
-    "$ROOT/script/release-preflight.sh"
-  else
-    "$ROOT/script/release-preflight.sh" --allow-missing-tag
+  # R2 provenance: freeze UAT once to the private run location BEFORE any UAT
+  # validation. Hashing, final validation and approval all use the same frozen
+  # bytes even if the external original changes afterwards. The frozen digest
+  # is captured before validation and re-checked after, so a writer to RUN_DIR
+  # cannot replace the frozen bytes between freeze and use. Never reuse test
+  # or historical human UAT for a real release: evidence must name the exact
+  # pinned commit/build/id verified below.
+  if ! FROZEN_UAT="$(nmh_snapshot_freeze_uat "$NMH_RELEASE_UAT_EVIDENCE" "$RUN_DIR")"; then
+    exit 1
   fi
-  "$ROOT/script/validate-release-uat.sh" --evidence "$NMH_RELEASE_UAT_EVIDENCE" --commit "$COMMIT"
+  FROZEN_UAT_SHA="$(shasum -a 256 "$FROZEN_UAT" | awk '{print $1}')"
+  # R1 provenance: post-pin clean/tag reads the pinned snapshot files/HEAD,
+  # never live invoking-checkout files a concurrent change could alter. The
+  # detached worktree shares origin/refs with the invoking checkout, so the
+  # shared-ref origin checks (stray/moved tags, remote tag binding) are retained.
+  if [[ "$PUBLISH" == true ]]; then
+    "$ROOT/script/release-preflight.sh" --root "$ROOT"
+  else
+    "$ROOT/script/release-preflight.sh" --root "$ROOT" --allow-missing-tag
+  fi
+  "$ROOT/script/validate-release-uat.sh" --evidence "$FROZEN_UAT" --commit "$COMMIT" --expected-build-id "$BUILD_ID" --expected-signing-identity "$NMH_DEVELOPER_ID_APPLICATION"
+  if [[ "$(shasum -a 256 "$FROZEN_UAT" | awk '{print $1}')" != "$FROZEN_UAT_SHA" ]]; then
+    echo "frozen UAT evidence changed during validation; refusing to use mutated bytes" >&2
+    exit 1
+  fi
   if [[ "$PUBLISH" == true ]]; then
     command -v gh >/dev/null || { echo "public publish requires gh CLI" >&2; exit 1; }
     gh auth status >/dev/null
@@ -577,11 +749,27 @@ if [[ "$MODE" == "public" ]]; then
 fi
 
 # A release artifact records an exact source commit. Never package a dirty
-# worktree and then misrepresent the resulting binary as that commit.
+# worktree and then misrepresent the resulting binary as that commit. The
+# artifact itself is still built from the isolated pinned snapshot above, so a
+# concurrent checkout change after pinning cannot enter the build.
 require_clean_release_worktree
 
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
+# Leave the pinned-source provenance reviewable in the release output even
+# though the private run dir itself is cleaned on EXIT.
+if [[ -f "$RUN_DIR/snapshot-provenance.json" ]]; then
+  cp "$RUN_DIR/snapshot-provenance.json" "$RELEASE_DIR/snapshot-provenance.json"
+fi
+# R2: keep the validated frozen UAT bytes reviewable after cleanup. The private
+# RUN_DIR is removed on EXIT, so copy without mutating bytes into the final
+# output; approval basename/hash and both final validations use this file
+# (same bytes, verified with cmp). Never published (six-asset policy unchanged).
+if [[ "$MODE" == "public" ]]; then
+  if ! FINAL_UAT="$(nmh_snapshot_publish_frozen_uat "$FROZEN_UAT" "$RELEASE_DIR" "$VERSION")"; then
+    exit 1
+  fi
+fi
 LOG_FILE="${LOG_FILE:-$RELEASE_DIR/release.log}"
 : >"$LOG_FILE"
 
@@ -616,11 +804,20 @@ else
 fi
 
 BUILD_DIST="$RELEASE_DIR/build"
-APP="$BUILD_DIST/NikoMusicHub.app"
-mkdir -p "$BUILD_DIST"
+SNAPSHOT_BUILD_DIST="$SNAPSHOT_SRC/dist/release-build"
+# R1 isolation: the Swift build compiles from the pinned snapshot
+# (app_lifecycle.sh derives NMH_ROOT_DIR from its own BASH_SOURCE, which is
+# the snapshot, so SwiftPM uses <snapshot>/.build) and the lifecycle policy
+# requires NMH_DIST_DIR beneath <snapshot>/dist. Production therefore builds
+# into the private snapshot dist, then stages a copy into RELEASE_DIR/build
+# for packaging. Final DMG/manifest/etc stay in RELEASE_DIR (validated
+# allowed path); snapshot output is cleaned with the worktree on EXIT.
+APP=""
 
 log "build app bundle"
 if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then
+  APP="$BUILD_DIST/NikoMusicHub.app"
+  mkdir -p "$BUILD_DIST"
   mkdir -p "$APP/Contents/MacOS"
   printf '#!/usr/bin/env bash\necho NikoMusicHub %s\n' "$BUILD_ID" >"$APP/Contents/MacOS/NikoMusicHub"
   chmod +x "$APP/Contents/MacOS/NikoMusicHub"
@@ -637,15 +834,30 @@ if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then
   <key>NMHBuildID</key><string>$BUILD_ID</string>
   <key>NMHBuildConfiguration</key><string>$RELEASE_BUILD_CONFIGURATION</string>
   <key>NMHSourceCommit</key><string>$COMMIT</string>
+  <key>LSMinimumSystemVersion</key><string>$MIN_MACOS_VERSION</string>
 </dict></plist>
 PLIST
 else
-  export NMH_DIST_DIR="$BUILD_DIST"
+  mkdir -p "$SNAPSHOT_BUILD_DIST"
+  mkdir -p "$BUILD_DIST"
+  export NMH_DIST_DIR="$SNAPSHOT_BUILD_DIST"
   export NMH_MARKETING_VERSION="$VERSION"
   export NMH_BUILD_VERSION="$BUILD_NUMBER"
   export NMH_BUILD_ID="$BUILD_ID"
   export NMH_BUILD_CONFIGURATION="$RELEASE_BUILD_CONFIGURATION"
   export NMH_SOURCE_COMMIT="$COMMIT"
+  # R1 isolation: canonical file reads use the pinned snapshot, never live
+  # files a concurrent checkout change could alter. User overrides were
+  # rejected above for public mode; these internal snapshot bindings apply only
+  # when the caller did not set an explicit value, so local-only and dev/test
+  # use keep explicit overrides.
+  if [[ -z "${NMH_VERSION_FILE:-}" ]]; then export NMH_VERSION_FILE="$SNAPSHOT_SRC/VERSION"; fi
+  if [[ -z "${NMH_BUNDLE_ID_FILE:-}" ]]; then export NMH_BUNDLE_ID_FILE="$SNAPSHOT_SRC/BUNDLE_ID"; fi
+  if [[ -z "${NMH_PACKAGE_FILE:-}" ]]; then export NMH_PACKAGE_FILE="$SNAPSHOT_SRC/Package.swift"; fi
+  if [[ -z "${NMH_RELEASE_ARCHITECTURES_FILE:-}" ]]; then export NMH_RELEASE_ARCHITECTURES_FILE="$SNAPSHOT_SRC/RELEASE_ARCHITECTURES"; fi
+  if [[ -z "${NMH_SPARKLE_PUBLIC_ED_KEY_FILE:-}" && -z "${NMH_SPARKLE_PUBLIC_ED_KEY:-}" ]]; then export NMH_SPARKLE_PUBLIC_ED_KEY_FILE="$SNAPSHOT_SRC/SPARKLE_PUBLIC_ED_KEY"; fi
+  if [[ -z "${NMH_MIN_SYSTEM_VERSION:-}" ]]; then export NMH_MIN_SYSTEM_VERSION="$MIN_MACOS_VERSION"; fi
+  if [[ -z "${NMH_BUNDLE_ID:-}" ]]; then export NMH_BUNDLE_ID="$BUNDLE_ID"; fi
   if [[ "$MODE" == "public" ]]; then
     export NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION"
   else
@@ -653,7 +865,17 @@ else
   fi
   # shellcheck source=lib/app_lifecycle.sh
   source "$ROOT/script/lib/app_lifecycle.sh"
+  # NMH_ROOT_DIR is already the snapshot via BASH_SOURCE above, so the
+  # NMH_DIST_DIR check ran against <snapshot>/dist before this point and
+  # SwiftPM uses <snapshot>/.build. No post-source NMH_ROOT_DIR override:
+  # the constraint already ran at source time.
   nmh_build_bundle
+  # Stage the pinned build for packaging; downstream DMG/validators/
+  # install-smoke use RELEASE_DIR/build (same bytes, preserved with ditto).
+  SNAPSHOT_APP="$SNAPSHOT_BUILD_DIST/NikoMusicHub.app"
+  APP="$BUILD_DIST/NikoMusicHub.app"
+  rm -rf "$APP"
+  /usr/bin/ditto "$SNAPSHOT_APP" "$APP"
 fi
 
 run version-verify-bundle "$ROOT/script/release-version-verify.sh" --bundle "$APP"
@@ -725,9 +947,9 @@ if [[ "$MODE" == "public" ]]; then
   MANIFEST_ARGS+=(--public-release)
 fi
 "$ROOT/script/generate-release-record.py" "${MANIFEST_ARGS[@]}" --validation-status pending
-run validate-artifact-candidate "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE" --allow-pending
+run validate-artifact-candidate "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE" --commit "$COMMIT" --expected-build-id "$BUILD_ID" --allow-pending
 "$ROOT/script/generate-release-record.py" "${MANIFEST_ARGS[@]}" --validation-status passed
-run validate-artifact-final "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE"
+run validate-artifact-final "$ROOT/script/validate-release-artifact.sh" --artifact "$DMG" --manifest "$MANIFEST" --mode "$MODE" --commit "$COMMIT" --expected-build-id "$BUILD_ID"
 if [[ "$INSTALL_SMOKE" == true ]]; then
   run_candidate_install_smoke "$DMG" "candidate" "$APP"
 fi
@@ -756,10 +978,28 @@ fi
 
 APPROVAL=""
 if [[ "$MODE" == "public" ]]; then
+  # R2: fail closed if the frozen bytes changed after validation or the
+  # reviewable FINAL_UAT drifted from the validated FROZEN_UAT (concurrent
+  # mutation between validation and approval must not silently re-approve
+  # changed bytes, even if still valid). The frozen digest captured before
+  # validation is re-checked here; approval then binds FINAL_UAT.
+  if [[ "$(shasum -a 256 "$FROZEN_UAT" | awk '{print $1}')" != "$FROZEN_UAT_SHA" ]]; then
+    echo "frozen UAT evidence changed after validation; refusing to approve mutated bytes" >&2
+    exit 1
+  fi
+  if ! cmp -s "$FROZEN_UAT" "$FINAL_UAT"; then
+    echo "frozen UAT evidence changed after validation; refusing to approve mutated bytes" >&2
+    exit 1
+  fi
   MANIFEST_SHA="$(shasum -a 256 "$MANIFEST" | awk '{print $1}')"
-  UAT_SHA="$(shasum -a 256 "$NMH_RELEASE_UAT_EVIDENCE" | awk '{print $1}')"
-  UAT_APPROVER="$(nmh_json_value "$NMH_RELEASE_UAT_EVIDENCE" approved_by)"
-  UAT_APPROVED_AT="$(nmh_json_value "$NMH_RELEASE_UAT_EVIDENCE" approved_at_utc)"
+  # R2: approval binds the same frozen bytes now reviewable in RELEASE_DIR
+  # (FINAL_UAT, byte-identical to the private FROZEN_UAT verified with cmp),
+  # never the external original that may have changed since freezing. Final
+  # semantic validation uses FINAL_UAT, so basename/hash/semantics agree after
+  # cleanup. UAT itself is never published (six-asset policy unchanged).
+  UAT_SHA="$(shasum -a 256 "$FINAL_UAT" | awk '{print $1}')"
+  UAT_APPROVER="$(nmh_json_value "$FINAL_UAT" approved_by)"
+  UAT_APPROVED_AT="$(nmh_json_value "$FINAL_UAT" approved_at_utc)"
   APPROVAL="$RELEASE_DIR/NikoMusicHub-$VERSION-release-approval.json"
   GATE_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   TEST_RESULT="passed"
@@ -777,28 +1017,37 @@ if [[ "$MODE" == "public" ]]; then
     --manifest-sha256 "$MANIFEST_SHA"
     --machine "$(uname -m) macOS $(sw_vers -productVersion)"
     --created-utc "$GATE_TIME"
-    --uat-file "$(basename "$NMH_RELEASE_UAT_EVIDENCE")"
+    --uat-file "$(basename "$FINAL_UAT")"
     --uat-sha256 "$UAT_SHA"
     --uat-approved-by "$UAT_APPROVER"
     --uat-approved-at-utc "$UAT_APPROVED_AT"
-    --gate "clean-tagged-checkout|./script/release-preflight.sh|passed|$GATE_TIME"
-    --gate "consolidated-mac-uat|./script/validate-release-uat.sh|passed|$GATE_TIME"
-    --gate "debug-ci|./script/ci.sh|$TEST_RESULT|$GATE_TIME"
-    --gate "user-e2e|NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh|$TEST_RESULT|$GATE_TIME"
-    --gate "release-configuration|./script/ci-release.sh|$TEST_RESULT|$GATE_TIME"
-    --gate "thread-sanitizer|./script/ci-tsan.sh|$TEST_RESULT|$GATE_TIME"
-    --gate "release-identity|./script/release-version-verify.sh|passed|$GATE_TIME"
-    --gate "release-platform-contract|RELEASE_ARCHITECTURES,Package.swift minimum macOS|passed|$GATE_TIME"
-    --gate "public-tree-hygiene|./script/public-tree-hygiene.sh --public-release|passed|$GATE_TIME"
-    --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|$GATE_TIME"
-    --gate "artifact-validation|./script/validate-release-artifact.sh|passed|$GATE_TIME"
-    --gate "update-feed|./script/validate-update-feed.py|passed|$GATE_TIME"
   )
+  # R1/R3: produce the exact required gate set from the shared contract so the
+  # producer cannot drift, duplicate, or go incomplete. Only the narrow
+  # emergency-overridable gates use TEST_RESULT; the rest always pass.
+  for _nmh_gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do
+    case "$_nmh_gate" in
+      clean-tagged-checkout) _nmh_cmd="./script/release-preflight.sh"; _nmh_res="passed" ;;
+      consolidated-mac-uat) _nmh_cmd="./script/validate-release-uat.sh"; _nmh_res="passed" ;;
+      debug-ci) _nmh_cmd="./script/ci.sh"; _nmh_res="$TEST_RESULT" ;;
+      user-e2e) _nmh_cmd="NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh"; _nmh_res="$TEST_RESULT" ;;
+      release-configuration) _nmh_cmd="./script/ci-release.sh"; _nmh_res="$TEST_RESULT" ;;
+      thread-sanitizer) _nmh_cmd="./script/ci-tsan.sh"; _nmh_res="$TEST_RESULT" ;;
+      release-identity) _nmh_cmd="./script/release-version-verify.sh"; _nmh_res="passed" ;;
+      release-platform-contract) _nmh_cmd="RELEASE_ARCHITECTURES,Package.swift minimum macOS"; _nmh_res="passed" ;;
+      public-tree-hygiene) _nmh_cmd="./script/public-tree-hygiene.sh --public-release"; _nmh_res="passed" ;;
+      sign-notarize-staple) _nmh_cmd="codesign, notarytool, stapler, spctl"; _nmh_res="passed" ;;
+      artifact-validation) _nmh_cmd="./script/validate-release-artifact.sh"; _nmh_res="passed" ;;
+      update-feed) _nmh_cmd="./script/validate-update-feed.py"; _nmh_res="passed" ;;
+      *) echo "unknown required release gate: $_nmh_gate" >&2; exit 1 ;;
+    esac
+    APPROVAL_ARGS+=(--gate "$_nmh_gate|$_nmh_cmd|$_nmh_res|$GATE_TIME")
+  done
   if [[ "$EMERGENCY_SKIP_TESTS" == true ]]; then
     APPROVAL_ARGS+=(--emergency-reason "$EMERGENCY_REASON")
   fi
   "$ROOT/script/generate-release-record.py" "${APPROVAL_ARGS[@]}"
-  run validate-approval "$ROOT/script/validate-release-approval.sh" --approval "$APPROVAL" --artifact "$DMG" --manifest "$MANIFEST" --uat "$NMH_RELEASE_UAT_EVIDENCE"
+  run validate-approval "$ROOT/script/validate-release-approval.sh" --approval "$APPROVAL" --artifact "$DMG" --manifest "$MANIFEST" --uat "$FINAL_UAT" --commit "$COMMIT" --expected-build-id "$BUILD_ID" --expected-signing-identity "$NMH_DEVELOPER_ID_APPLICATION"
 fi
 
 log "installed truth"
@@ -827,8 +1076,8 @@ if [[ "$PUBLISH" == true ]]; then
     --minimum-macos "$MIN_MACOS_VERSION" \
     --architectures "$RELEASE_ARCHITECTURES" \
     --expected-enclosure-url "$(nmh_release_download_url_prefix "$TAG")$ARTIFACT_NAME"
-  run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE"
-  run validate-hosted-approval "$ROOT/script/validate-release-approval.sh" --approval "$HOSTED_DIR/$(basename "$APPROVAL")" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --uat "$NMH_RELEASE_UAT_EVIDENCE"
+  run validate-hosted "$ROOT/script/validate-release-artifact.sh" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --mode "$MODE" --commit "$COMMIT" --expected-build-id "$BUILD_ID"
+  run validate-hosted-approval "$ROOT/script/validate-release-approval.sh" --approval "$HOSTED_DIR/$(basename "$APPROVAL")" --artifact "$HOSTED_DIR/$(basename "$DMG")" --manifest "$HOSTED_DIR/$(basename "$MANIFEST")" --uat "$FINAL_UAT" --commit "$COMMIT" --expected-build-id "$BUILD_ID" --expected-signing-identity "$NMH_DEVELOPER_ID_APPLICATION"
   if [[ "$INSTALL_SMOKE" == true ]]; then
     run_candidate_install_smoke "$HOSTED_DIR/$(basename "$DMG")" "hosted" "$APP"
   fi
@@ -857,6 +1106,8 @@ cat >"$REPORT" <<REPORT
 - Approval: $([[ -n "$APPROVAL" ]] && basename "$APPROVAL" || echo "not generated for local-only mode")
 - Publish: $([[ "$PUBLISH" == true ]] && echo "GitHub release uploaded and downloaded for validation" || ([[ "$DRY_RUN_PUBLISH" == true ]] && echo "dry-run publication" || echo "skipped local-only"))
 - Install smoke: $([[ "$INSTALL_SMOKE" == true ]] && echo "ran" || echo "skipped")
+- Pinned source: ${SNAPSHOT_SRC:-not-recorded} (commit $COMMIT, provenance $RELEASE_DIR/snapshot-provenance.json)
+- Frozen UAT: ${FINAL_UAT:-not-applicable-for-local-only} (byte-identical frozen evidence, approval binds this file)
 
 ## Caveats
 

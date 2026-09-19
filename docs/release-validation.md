@@ -47,9 +47,50 @@ This validates:
 - manifest provenance
 - manifest artifact size, architecture, minimum-macOS, and signing/notarization attestation
 - exact `com.niko96.NikoMusicHub` identity in source, bundle, artifact, manifest, and installed app
-- exact-commit approved Mac UAT
+- exact-commit approved Mac UAT from frozen bytes (`frozen-uat.json` in the private
+  run dir, frozen BEFORE validation with its sha256 captured, re-checked after
+  validation and at approval with `cmp` frozen-vs-final; validated with
+  `--commit COMMIT --expected-build-id VERSION+short12
+  --expected-signing-identity NMH_DEVELOPER_ID_APPLICATION`; the same frozen bytes
+  back the approval's UAT hash and both final approval validations; never reuse
+  test or historical human UAT)
 - immutable approval data tying every gate to the artifact and evidence hashes
 - update feed generation, and both the enclosure and feed EdDSA signatures verified against the public key embedded in the candidate bundle
+- pinned-source provenance: `snapshot-provenance.json` (copied into `dist/release/`)
+  records the pinned commit, git metadata, and canonical file hashes; the snapshot
+  is a detached worktree (`git worktree add --detach`, genuine `.git`, never
+  `git archive`) living in `<release-dir>.provenance-<short12>-<pid>/pinned-source` outside
+  `dist/release` with an isolated `.build` and private snapshot dist
+  (`<snapshot>/dist/release-build` staged into `dist/release/build`), so
+  `rm -rf dist/release` cannot remove it; post-pin preflight reads pinned
+  snapshot files/HEAD while shared-ref origin checks are retained
+- production Sparkle continuity: the app/feed key equals the repository
+  `SPARKLE_PUBLIC_ED_KEY` from the pinned commit; `NMH_SPARKLE_PUBLIC_ED_KEY(_FILE)`
+  alternates and resolved-vs-pinned mismatches reject before build/publish
+- no source/config override drift: public `VERSION`/`BUNDLE_ID`/Package/arch/key/`NMH_RELEASE_TEST_MODE` envs
+  reject before pinning (local-only keeps explicit test use; public always runs
+  the pinned Swift build, never the test stub)
+- exact 12-gate / 4-override contract from `script/lib/release_gates.sh` with no
+  contradictory list; final validator semantic/hash checks authoritative
+
+## Provenance Checks
+
+After a dry-run or local-only build, confirm the pinned-source record survived
+output handling and binds the reported commit:
+
+```bash
+cat dist/release/snapshot-provenance.json
+# pinned_commit must equal the Commit in dist/release/*-release-report.md
+```
+
+Behavioral regression (disposable fixture, stubbed side effects, live-source and
+original-UAT mutation between stages) runs without signing/publication:
+
+```bash
+python3 -m unittest discover -s Tests -p 'test_release_pipeline_provenance.py'
+python3 Tests/test_release_provenance.py
+bash Tests/test_release_scripts.sh
+```
 
 ## Hosted Artifact Truth
 

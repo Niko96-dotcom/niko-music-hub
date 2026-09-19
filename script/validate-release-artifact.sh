@@ -9,10 +9,12 @@ MODE="public"
 MANIFEST=""
 ARTIFACT=""
 ALLOW_PENDING=false
+EXPECTED_COMMIT_OVERRIDE=""
+EXPECTED_BUILD_ID_OVERRIDE=""
 
 usage() {
   cat >&2 <<'USAGE'
-usage: script/validate-release-artifact.sh --artifact path.dmg --manifest manifest.json [--mode public|local-only] [--allow-pending]
+usage: script/validate-release-artifact.sh --artifact path.dmg --manifest manifest.json [--mode public|local-only] [--commit git-sha] [--expected-build-id VERSION+SHORT] [--allow-pending]
 USAGE
 }
 
@@ -21,6 +23,8 @@ while [[ $# -gt 0 ]]; do
     --artifact) ARTIFACT="${2:-}"; shift 2 ;;
     --manifest) MANIFEST="${2:-}"; shift 2 ;;
     --mode) MODE="${2:-}"; shift 2 ;;
+    --commit) EXPECTED_COMMIT_OVERRIDE="${2:-}"; shift 2 ;;
+    --expected-build-id) EXPECTED_BUILD_ID_OVERRIDE="${2:-}"; shift 2 ;;
     --allow-pending) ALLOW_PENDING=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
@@ -33,7 +37,17 @@ done
 
 VERSION="$(nmh_release_version)"
 BUNDLE_ID="$(nmh_bundle_id)"
-COMMIT="$(nmh_git_commit)"
+if [[ -n "$EXPECTED_COMMIT_OVERRIDE" ]]; then
+  COMMIT="$EXPECTED_COMMIT_OVERRIDE"
+else
+  COMMIT="$(nmh_git_commit)"
+fi
+EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 "$COMMIT" 2>/dev/null || printf '%s' "$COMMIT" | cut -c1-12)"
+CANONICAL_BUILD_ID="$VERSION+$EXPECTED_SHORT_COMMIT"
+if [[ -n "$EXPECTED_BUILD_ID_OVERRIDE" ]]; then
+  [[ "$EXPECTED_BUILD_ID_OVERRIDE" == "$CANONICAL_BUILD_ID" ]] || { echo "explicit --expected-build-id '$EXPECTED_BUILD_ID_OVERRIDE' does not match canonical $CANONICAL_BUILD_ID for commit $COMMIT" >&2; exit 1; }
+fi
+EXPECTED_BUILD_ID="$CANONICAL_BUILD_ID"
 EXPECTED_ARCHITECTURES="$(nmh_release_architectures)"
 MIN_MACOS_VERSION="$(nmh_release_min_macos_version)"
 ARTIFACT_DIR="$(cd "$(dirname "$ARTIFACT")" && pwd)"
@@ -116,6 +130,10 @@ BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString'
 BUILD_ID="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildID' "$INFO" 2>/dev/null || true)"
 [[ "$BUILD_ID" == "$VERSION"+* ]] || {
   echo "artifact build id mismatch: '$BUILD_ID' does not start with $VERSION+" >&2
+  exit 1
+}
+[[ "$BUILD_ID" == "$EXPECTED_BUILD_ID" ]] || {
+  echo "artifact build id mismatch: '$BUILD_ID' != canonical $EXPECTED_BUILD_ID for commit $COMMIT (stale build for another commit)" >&2
   exit 1
 }
 BUILD_CONFIGURATION="$(/usr/libexec/PlistBuddy -c 'Print :NMHBuildConfiguration' "$INFO" 2>/dev/null || true)"

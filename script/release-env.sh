@@ -254,3 +254,36 @@ nmh_notary_upload_endpoint_reachable() {
   code="$(curl -4 --silent --output /dev/null --max-time 15 --write-out '%{http_code}' "$NMH_NOTARY_UPLOAD_HOST" 2>/dev/null || true)"
   [[ "$code" == "403" || "$code" == "200" ]]
 }
+
+# Canonical production Sparkle public key for R4 continuity.
+#
+# Reads <root>/SPARKLE_PUBLIC_ED_KEY directly, ignoring every
+# NMH_SPARKLE_PUBLIC_ED_KEY / _FILE environment alternate. Public releases
+# must use this repository key from the pinned commit; test/local overrides
+# stay explicit through nmh_sparkle_public_ed_key. Prints nothing when absent.
+nmh_canonical_sparkle_key_from_root() {
+  local root="${1:?missing root}"
+  local key_file="$root/SPARKLE_PUBLIC_ED_KEY"
+  if [[ ! -f "$key_file" ]]; then
+    return 0
+  fi
+  local key
+  key="$(tr -d '[:space:]' <"$key_file")"
+  if [[ -z "$key" ]]; then
+    return 0
+  fi
+  if ! /usr/bin/python3 - "$key" <<'PY_KEY'; then
+import base64
+import sys
+
+try:
+    decoded = base64.b64decode(sys.argv[1], validate=True)
+except Exception:
+    raise SystemExit("SUPublicEDKey is not valid base64")
+if len(decoded) != 32:
+    raise SystemExit(f"SUPublicEDKey must decode to 32 bytes, got {len(decoded)}")
+PY_KEY
+    return 1
+  fi
+  printf '%s\n' "$key"
+}

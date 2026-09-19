@@ -50,7 +50,19 @@ assert_not_contains() {
 line_number() {
   local needle="$1"
   local file="$2"
-  awk -v needle="$needle" 'index($0, needle) { print NR; exit }' "$file"
+  # Anchored ^...$ targets the actual invocation line (trimmed exact match),
+  # not the function definition (which carries '() {'). Plain needles keep
+  # the historical substring behavior for all other order checks.
+  case "$needle" in
+    ^*\$)
+      local inner="${needle#^}"
+      inner="${inner%$}"
+      awk -v needle="$inner" '{ line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line); if (line == needle) { print NR; exit } }' "$file"
+      ;;
+    *)
+      awk -v needle="$needle" 'index($0, needle) { print NR; exit }' "$file"
+      ;;
+  esac
 }
 
 assert_order() {
@@ -267,9 +279,46 @@ assert_contains "$TMP/public-skip-tests.err" "public release rejects --skip-test
 assert_fail public-emergency-no-reason "$ROOT/script/release-all.sh" --public --dry-run-publish --emergency-skip-tests
 assert_contains "$TMP/public-emergency-no-reason.err" "requires a non-empty --reason"
 
-echo "== public mode fails closed without credentials =="
-assert_fail public-missing-creds "$ROOT/script/release-all.sh" --public --dry-run-publish
-assert_contains "$TMP/public-missing-creds.err" "NMH_DEVELOPER_ID_APPLICATION"
+echo "== public mode fails closed without credentials (clean-prerequisite aware) =="
+# The candidate checkout carries uncommitted test edits during development, so the
+# pinning clean prerequisite fires before credential checks. Both are fail-closed;
+# the clean-fixture credential contract (exact NMH_DEVELOPER_ID_APPLICATION) is
+# proven hermetically by Tests/test_release_pipeline_provenance.py orchestration.
+if [[ -n "$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)" ]]; then
+  assert_fail public-dirty-blocks-creds "$ROOT/script/release-all.sh" --public --dry-run-publish
+  assert_contains "$TMP/public-dirty-blocks-creds.err" "release artifacts require a completely clean working tree"
+else
+  assert_fail public-missing-creds "$ROOT/script/release-all.sh" --public --dry-run-publish
+  assert_contains "$TMP/public-missing-creds.err" "NMH_DEVELOPER_ID_APPLICATION"
+fi
+# Pinning order stays fail-closed: overrides rejected before pinning, clean
+# prerequisite before snapshot, snapshot before gates/build/metadata.
+assert_order 'nmh_snapshot_reject_public_overrides "$MODE"' '^require_clean_release_worktree$' "$ROOT/script/release-all.sh"
+assert_order '^require_clean_release_worktree$' 'nmh_snapshot_init_run_dir' "$ROOT/script/release-all.sh"
+assert_order 'nmh_snapshot_create_pinned_source' 'ROOT="$SNAPSHOT_SRC"' "$ROOT/script/release-all.sh"
+assert_order 'ROOT="$SNAPSHOT_SRC"' 'run ci "$ROOT/script/ci.sh"' "$ROOT/script/release-all.sh"
+assert_contains "$ROOT/script/release-all.sh" 'running release-all.sh differs from pinned commit'
+assert_contains "$ROOT/script/release-all.sh" 'frozen UAT evidence changed after validation'
+assert_contains "$ROOT/script/release-all.sh" 'FROZEN_UAT_SHA="$(shasum -a 256 "$FROZEN_UAT"'
+assert_contains "$ROOT/script/release-all.sh" '!= "$FROZEN_UAT_SHA"'
+assert_contains "$ROOT/script/lib/release_snapshot.sh" 'public release refuses NMH_RELEASE_TEST_MODE'
+
+echo "== public mode refuses the test stub bundle hook =="
+assert_contains "$ROOT/script/release-all.sh" 'public release refuses NMH_RELEASE_TEST_MODE'
+assert_fail public-test-mode env NMH_DEVELOPER_ID_APPLICATION=test NMH_NOTARY_PROFILE=test NMH_RELEASE_UAT_EVIDENCE=/dev/null NMH_RELEASE_TEST_MODE=1 "$ROOT/script/release-all.sh" --public --dry-run-publish
+assert_contains "$TMP/public-test-mode.err" "NMH_RELEASE_TEST_MODE"
+
+echo "== isolated product build writes snapshot dist, stages release build =="
+assert_contains "$ROOT/script/release-all.sh" 'SNAPSHOT_BUILD_DIST="$SNAPSHOT_SRC/dist/release-build"'
+assert_contains "$ROOT/script/release-all.sh" 'export NMH_DIST_DIR="$SNAPSHOT_BUILD_DIST"'
+assert_contains "$ROOT/script/release-all.sh" '/usr/bin/ditto "$SNAPSHOT_APP" "$APP"'
+assert_not_contains "$ROOT/script/release-all.sh" 'export NMH_DIST_DIR="$BUILD_DIST"'
+assert_not_contains "$ROOT/script/release-all.sh" 'NMH_ROOT_DIR="$SNAPSHOT_SRC"'
+
+echo "== post-pin preflight reads pinned snapshot, not live checkout =="
+assert_contains "$ROOT/script/release-all.sh" '"$ROOT/script/release-preflight.sh" --root "$ROOT"'
+assert_not_contains "$ROOT/script/release-all.sh" '--root "$INVOKING_ROOT"'
+assert_contains "$ROOT/script/release-all.sh" 'if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then'
 
 echo "== explicit local-only mode does not publish =="
 assert_fail local-publish "$ROOT/script/release-all.sh" --local-only --publish --skip-tests
@@ -480,8 +529,10 @@ source "$ROOT/script/lib/release_gates.sh"
 [[ "${#NMH_REQUIRED_RELEASE_GATES[@]}" == "12" ]] || { echo "shared contract must define exactly 12 required gates" >&2; exit 1; }
 [[ "${#NMH_EMERGENCY_OVERRIDABLE_GATES[@]}" == "4" ]] || { echo "shared contract must define exactly 4 emergency-overridable gates" >&2; exit 1; }
 [[ "${#NMH_REQUIRED_UAT_CHECKS[@]}" == "10" ]] || { echo "shared contract must define exactly 10 required UAT checks" >&2; exit 1; }
+assert_contains "$ROOT/script/release-all.sh" 'for _nmh_gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do'
+assert_contains "$ROOT/script/release-all.sh" 'APPROVAL_ARGS+=(--gate "$_nmh_gate|$_nmh_cmd|$_nmh_res|$GATE_TIME")'
 for gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do
-  assert_contains "$ROOT/script/release-all.sh" "--gate \"$gate|"
+  assert_contains "$ROOT/script/release-all.sh" "$gate) _nmh_cmd="
 done
 for gate in clean-tagged-checkout consolidated-mac-uat debug-ci user-e2e release-configuration thread-sanitizer release-identity release-platform-contract public-tree-hygiene sign-notarize-staple artifact-validation update-feed; do
   grep -Fqx -- "$gate" <(printf '%s\n' "${NMH_REQUIRED_RELEASE_GATES[@]}") || { echo "shared contract missing required gate $gate" >&2; exit 1; }

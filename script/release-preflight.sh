@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -d "$ROOT/.git" ]] || { echo "public release preflight requires a Git checkout: $ROOT" >&2; exit 1; }
+[[ -d "$ROOT/.git" || -f "$ROOT/.git" ]] || { echo "public release preflight requires a Git checkout: $ROOT" >&2; exit 1; }
 
 # Fail on environment problems before any lengthy gate. rg and the
 # cryptography module for /usr/bin/python3 are not stock assumptions on every
