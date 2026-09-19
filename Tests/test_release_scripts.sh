@@ -474,10 +474,34 @@ fi
 assert_fail forget-real-domain bash -c "source '$LIFECYCLE'; nmh_forget_settings_suite com.niko96.NikoMusicHub"
 assert_contains "$TMP/forget-real-domain.err" "refusing to forget settings suite"
 
+echo "== shared release gate contract is the single source of truth =="
+# shellcheck source=../script/lib/release_gates.sh
+source "$ROOT/script/lib/release_gates.sh"
+[[ "${#NMH_REQUIRED_RELEASE_GATES[@]}" == "12" ]] || { echo "shared contract must define exactly 12 required gates" >&2; exit 1; }
+[[ "${#NMH_EMERGENCY_OVERRIDABLE_GATES[@]}" == "4" ]] || { echo "shared contract must define exactly 4 emergency-overridable gates" >&2; exit 1; }
+[[ "${#NMH_REQUIRED_UAT_CHECKS[@]}" == "10" ]] || { echo "shared contract must define exactly 10 required UAT checks" >&2; exit 1; }
+for gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do
+  assert_contains "$ROOT/script/release-all.sh" "--gate \"$gate|"
+done
+for gate in clean-tagged-checkout consolidated-mac-uat debug-ci user-e2e release-configuration thread-sanitizer release-identity release-platform-contract public-tree-hygiene sign-notarize-staple artifact-validation update-feed; do
+  grep -Fqx -- "$gate" <(printf '%s\n' "${NMH_REQUIRED_RELEASE_GATES[@]}") || { echo "shared contract missing required gate $gate" >&2; exit 1; }
+done
+for gate in debug-ci user-e2e release-configuration thread-sanitizer; do
+  grep -Fqx -- "$gate" <(printf '%s\n' "${NMH_EMERGENCY_OVERRIDABLE_GATES[@]}") || { echo "shared contract missing overridable gate $gate" >&2; exit 1; }
+done
+assert_contains "$ROOT/script/validate-release-uat.sh" 'source "$ROOT/script/lib/release_gates.sh"'
+assert_contains "$ROOT/script/validate-release-approval.sh" 'source "$ROOT/script/lib/release_gates.sh"'
+assert_contains "$ROOT/script/lib/release_gates.sh" 'Single source of truth'
+
 echo "== consolidated exact-commit UAT evidence =="
 UAT="$TMP/uat.json"
 CURRENT_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
-cat >"$UAT" <<JSON
+EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 HEAD)"
+EXPECTED_BUILD_ID="$(cat "$ROOT/VERSION")+$EXPECTED_SHORT_COMMIT"
+TEST_SIGNING_IDENTITY="Developer ID Application: Release Test (TEAM)"
+OTHER_SIGNING_IDENTITY="Developer ID Application: Release Test (OTHER)"
+write_valid_uat() {
+  cat >"$UAT" <<JSON
 {
   "schema_version": 1,
   "version": "$(cat "$ROOT/VERSION")",
@@ -488,9 +512,9 @@ cat >"$UAT" <<JSON
   "approved_at_utc": "2026-07-13T12:00:00Z",
   "machine": "arm64 macOS test machine",
   "tested_build": {
-    "build_id": "$(cat "$ROOT/VERSION")+test",
+    "build_id": "$EXPECTED_BUILD_ID",
     "build_configuration": "release",
-    "signing_identity": "Developer ID Application: Release Test (TEAM)",
+    "signing_identity": "$TEST_SIGNING_IDENTITY",
     "hardened_runtime": true
   },
   "checks": {
@@ -507,7 +531,10 @@ cat >"$UAT" <<JSON
   }
 }
 JSON
+}
+write_valid_uat
 assert_pass uat-valid "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_pass uat-valid-explicit-identity "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$CURRENT_COMMIT" --expected-signing-identity "$TEST_SIGNING_IDENTITY" --expected-build-id "$EXPECTED_BUILD_ID"
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
@@ -518,61 +545,169 @@ PY
 assert_fail uat-pending "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-pending.err" "privacy_permissions"
 
-echo "== UAT must be run on the build shape that ships =="
-# An ad-hoc debug install has a per-build TCC identity and no hardened runtime;
-# its privacy and recorder results say nothing about the Developer ID artifact.
+echo "== UAT rejects changed status, commit, and checks =="
+write_valid_uat
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["checks"]["privacy_permissions"] = "passed"
+payload["status"] = "pending"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-status-not-approved "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-status-not-approved.err" "must be approved"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["commit"] = "0" * 40
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-commit-changed "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-commit-changed.err" "commit does not match"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["checks"]["e2e_user_smoke"] = "failed"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-check-failed "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-check-failed.err" "e2e_user_smoke"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["checks"]["evil_extra_check"] = "passed"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-unknown-check "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-unknown-check.err" "unknown checks"
+
+echo "== UAT binds the exact tested commit build =="
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["build_id"] = payload["version"] + "+000000000000"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-stale-build-id "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-stale-build-id.err" "exactly"
+assert_contains "$TMP/uat-stale-build-id.err" "stale"
+write_valid_uat
+assert_fail uat-signing-team-mismatch "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --expected-signing-identity "$OTHER_SIGNING_IDENTITY"
+assert_contains "$TMP/uat-signing-team-mismatch.err" "exactly"
+assert_contains "$TMP/uat-signing-team-mismatch.err" "$OTHER_SIGNING_IDENTITY"
+write_valid_uat
+assert_fail uat-inconsistent-expected-build-id "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$CURRENT_COMMIT" --expected-build-id "$(cat "$ROOT/VERSION")+000000000000"
+assert_contains "$TMP/uat-inconsistent-expected-build-id.err" "does not match canonical"
+write_valid_uat
+assert_fail uat-adhoc-expected-identity "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$CURRENT_COMMIT" --expected-signing-identity "ad-hoc"
+assert_contains "$TMP/uat-adhoc-expected-identity.err" "must be a Developer ID"
+
+echo "== UAT must be run on the build shape that ships =="
+# An ad-hoc debug install has a per-build TCC identity and no hardened runtime;
+# its privacy and recorder results say nothing about the Developer ID artifact.
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
 payload["tested_build"]["signing_identity"] = "ad-hoc"
 path.write_text(json.dumps(payload))
 PY
 assert_fail uat-adhoc-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-adhoc-build.err" "Developer ID signed build"
+write_valid_uat
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["tested_build"]["signing_identity"] = "Developer ID Application: Release Test (TEAM)"
 payload["tested_build"]["build_configuration"] = "debug"
 path.write_text(json.dumps(payload))
 PY
 assert_fail uat-debug-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-debug-build.err" "release-configuration build"
+write_valid_uat
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["tested_build"]["build_configuration"] = "release"
 del payload["tested_build"]
 path.write_text(json.dumps(payload))
 PY
 assert_fail uat-untracked-build "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-untracked-build.err" "tested_build.build_id"
-/usr/bin/python3 - "$UAT" "$(cat "$ROOT/VERSION")" <<'PY'
+write_valid_uat
+assert_pass uat-valid-again "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+
+echo "== UAT rejects template sentinels, placeholders, blanks, and lax types =="
+TEMPLATE_APPROVER="$(/usr/bin/python3 -c 'import json; print(json.load(open("'"$ROOT"'/docs/release-uat-evidence.template.json"))["approved_by"])')"
+TEMPLATE_MACHINE="$(/usr/bin/python3 -c 'import json; print(json.load(open("'"$ROOT"'/docs/release-uat-evidence.template.json"))["machine"])')"
+[[ "$TEMPLATE_APPROVER" == TODO* ]] || { echo "template approved_by sentinel must stay a clear TODO (got '$TEMPLATE_APPROVER')" >&2; exit 1; }
+[[ "$TEMPLATE_MACHINE" == TODO* ]] || { echo "template machine sentinel must stay a clear TODO (got '$TEMPLATE_MACHINE')" >&2; exit 1; }
+write_valid_uat
+/usr/bin/python3 - "$UAT" "$TEMPLATE_APPROVER" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["tested_build"] = {
-    "build_id": f"{sys.argv[2]}+test",
-    "build_configuration": "release",
-    "signing_identity": "Developer ID Application: Release Test (TEAM)",
-    "hardened_runtime": True,
-}
+payload["approved_by"] = sys.argv[2]
 path.write_text(json.dumps(payload))
 PY
-assert_pass uat-valid-again "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
-
-echo "== approval record binds exact artifact, manifest, UAT, and gates =="
+assert_fail uat-template-approver "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-template-approver.err" "real approved_by"
+write_valid_uat
+/usr/bin/python3 - "$UAT" "$TEMPLATE_MACHINE" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["machine"] = sys.argv[2]
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-template-machine "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-template-machine.err" "tested machine description"
+for placeholder in "TODO" "TODO_REAL_NAME_REQUIRED" "" "   " "REPLACE_WITH_SOMEONE"; do
+  write_valid_uat
+  /usr/bin/python3 - "$UAT" "$placeholder" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["approved_by"] = sys.argv[2]
+path.write_text(json.dumps(payload))
+PY
+  assert_fail "uat-placeholder-approver" "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+  assert_contains "$TMP/uat-placeholder-approver.err" "real approved_by"
+done
+write_valid_uat
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["checks"]["privacy_permissions"] = "passed"
+payload["schema_version"] = "1"
 path.write_text(json.dumps(payload))
 PY
+assert_fail uat-lax-schema-string "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-lax-schema-string.err" "schema_version"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["hardened_runtime"] = "true"
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-lax-hardened-string "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-lax-hardened-string.err" "hardened"
+write_valid_uat
+assert_pass uat-valid-after-placeholder "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+
+echo "== approval record binds exact artifact, manifest, UAT, and gates =="
+write_valid_uat
 APPROVAL_ARTIFACT="$TMP/NikoMusicHub-$(cat "$ROOT/VERSION").dmg"
 printf 'release-artifact-test\n' >"$APPROVAL_ARTIFACT"
 APPROVAL_ARTIFACT_SHA="$(shasum -a 256 "$APPROVAL_ARTIFACT" | awk '{print $1}')"
@@ -583,7 +718,7 @@ APPROVAL_MANIFEST="$TMP/NikoMusicHub-$(cat "$ROOT/VERSION")-manifest.json"
   --bundle-id "$EXPECTED_BUNDLE_ID" \
   --tag "v$(cat "$ROOT/VERSION")" \
   --commit "$CURRENT_COMMIT" \
-  --build-id "$(cat "$ROOT/VERSION")+test" \
+  --build-id "$EXPECTED_BUILD_ID" \
   --build-number 1 \
   --architectures "$EXPECTED_ARCHITECTURES" \
   --minimum-macos "$EXPECTED_MIN_MACOS" \
@@ -591,15 +726,355 @@ APPROVAL_MANIFEST="$TMP/NikoMusicHub-$(cat "$ROOT/VERSION")-manifest.json"
   --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
   --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
   --created-utc 2026-07-13T12:00:00Z \
-  --signing-identity "Developer ID Application: Release Test (TEAM)" \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
   --validation-status passed \
   --public-release
-APPROVAL_MANIFEST_SHA="$(shasum -a 256 "$APPROVAL_MANIFEST" | awk '{print $1}')"
-UAT_SHA="$(shasum -a 256 "$UAT" | awk '{print $1}')"
+build_valid_approval() {
+  _bva_out="$1"
+  _bva_uat_sha="$(shasum -a 256 "$UAT" | awk '{print $1}')"
+  _bva_manifest_sha="$(shasum -a 256 "$APPROVAL_MANIFEST" | awk '{print $1}')"
+  _bva_args=(
+    approval
+    --output "$_bva_out"
+    --version "$(cat "$ROOT/VERSION")"
+    --bundle-id "$EXPECTED_BUNDLE_ID"
+    --tag "v$(cat "$ROOT/VERSION")"
+    --commit "$CURRENT_COMMIT"
+    --artifact "$(basename "$APPROVAL_ARTIFACT")"
+    --artifact-sha256 "$APPROVAL_ARTIFACT_SHA"
+    --manifest "$(basename "$APPROVAL_MANIFEST")"
+    --manifest-sha256 "$_bva_manifest_sha"
+    --machine "arm64 macOS test machine"
+    --created-utc 2026-07-13T12:00:00Z
+    --uat-file "$(basename "$UAT")"
+    --uat-sha256 "$_bva_uat_sha"
+    --uat-approved-by "Release Test"
+    --uat-approved-at-utc 2026-07-13T12:00:00Z
+  )
+  for _bva_gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do
+    case "$_bva_gate" in
+      clean-tagged-checkout) _bva_args+=(--gate "$_bva_gate|./script/release-preflight.sh|passed|2026-07-13T12:00:00Z") ;;
+      consolidated-mac-uat) _bva_args+=(--gate "$_bva_gate|./script/validate-release-uat.sh|passed|2026-07-13T12:00:00Z") ;;
+      debug-ci) _bva_args+=(--gate "$_bva_gate|./script/ci.sh|passed|2026-07-13T12:00:00Z") ;;
+      user-e2e) _bva_args+=(--gate "$_bva_gate|NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh|passed|2026-07-13T12:00:00Z") ;;
+      release-configuration) _bva_args+=(--gate "$_bva_gate|./script/ci-release.sh|passed|2026-07-13T12:00:00Z") ;;
+      thread-sanitizer) _bva_args+=(--gate "$_bva_gate|./script/ci-tsan.sh|passed|2026-07-13T12:00:00Z") ;;
+      release-identity) _bva_args+=(--gate "$_bva_gate|./script/release-version-verify.sh|passed|2026-07-13T12:00:00Z") ;;
+      release-platform-contract) _bva_args+=(--gate "$_bva_gate|RELEASE_ARCHITECTURES,Package.swift minimum macOS|passed|2026-07-13T12:00:00Z") ;;
+      public-tree-hygiene) _bva_args+=(--gate "$_bva_gate|./script/public-tree-hygiene.sh --public-release|passed|2026-07-13T12:00:00Z") ;;
+      sign-notarize-staple) _bva_args+=(--gate "$_bva_gate|codesign, notarytool, stapler, spctl|passed|2026-07-13T12:00:00Z") ;;
+      artifact-validation) _bva_args+=(--gate "$_bva_gate|./script/validate-release-artifact.sh|passed|2026-07-13T12:00:00Z") ;;
+      update-feed) _bva_args+=(--gate "$_bva_gate|./script/validate-update-feed.py|passed|2026-07-13T12:00:00Z") ;;
+    esac
+  done
+  "$ROOT/script/generate-release-record.py" "${_bva_args[@]}"
+}
 APPROVAL="$TMP/NikoMusicHub-$(cat "$ROOT/VERSION")-release-approval.json"
-APPROVAL_ARGS=(
+build_valid_approval "$APPROVAL"
+assert_pass approval-valid "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_pass approval-valid-explicit-binding "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$CURRENT_COMMIT" --expected-build-id "$EXPECTED_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+printf 'tampered\n' >>"$APPROVAL_ARTIFACT"
+assert_fail approval-tampered "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-tampered.err" "artifact_sha256 mismatch"
+printf 'release-artifact-test\n' >"$APPROVAL_ARTIFACT"
+
+echo "== approval binds manifest artifact identity and tag (semantic, rehashed) =="
+# Each case mutates the inner manifest then rebuilds (rehashes) the approval so
+# the outer manifest_sha256 matches: the validator must still reject for the
+# semantic mismatch, not the outer hash.
+write_valid_uat
+/usr/bin/python3 - "$APPROVAL_MANIFEST" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["artifact"] = "evil-renamed.dmg"
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-manifest-artifact-name "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-manifest-artifact-name.err" "manifest artifact mismatch"
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+/usr/bin/python3 - "$APPROVAL_MANIFEST" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["artifact_sha256"] = "0" * 64
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-manifest-artifact-hash "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-manifest-artifact-hash.err" "manifest artifact_sha256 mismatch"
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+/usr/bin/python3 - "$APPROVAL_MANIFEST" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tag"] = "v0.0.0-evil"
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-manifest-tag "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-manifest-tag.err" "manifest tag mismatch"
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+build_valid_approval "$APPROVAL"
+assert_pass approval-manifest-restored "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+
+echo "== final validator rejects template sentinels with rehashed approval =="
+write_valid_uat
+/usr/bin/python3 - "$UAT" "$TEMPLATE_MACHINE" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["machine"] = sys.argv[2]
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-template-machine "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-template-machine.err" "tested machine description"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["hardened_runtime"] = "true"
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-lax-hardened-string "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-hardened-string.err" "hardened"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+
+echo "== final validator hashes and enforces the same UAT bytes =="
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["checks"]["privacy_permissions"] = "pending"
+path.write_text(json.dumps(payload))
+PY
+assert_fail approval-uat-pending-bytes "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+build_valid_approval "$APPROVAL"
+assert_fail approval-rejects-pending-uat "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-pending-uat.err" "must be passed"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["status"] = "pending"
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-rejects-status-change "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-status-change.err" "must be approved"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["commit"] = "1" * 40
+path.write_text(json.dumps(payload))
+PY
+assert_fail approval-rejects-commit-change "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-commit-change.err" "identity mismatch"
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["commit"] = "0" * 40
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-rejects-commit-semantics "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-commit-semantics.err" "UAT commit mismatch"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["build_id"] = payload["version"] + "+000000000000"
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-rejects-stale-build "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-stale-build.err" "exactly"
+
+echo "== final validator enforces one signing team =="
+write_valid_uat
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$OTHER_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+build_valid_approval "$APPROVAL"
+assert_fail approval-signing-team-mismatch "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-signing-team-mismatch.err" "different signing team"
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+build_valid_approval "$APPROVAL"
+assert_fail approval-expected-signing-mismatch "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --expected-signing-identity "$OTHER_SIGNING_IDENTITY"
+assert_contains "$TMP/approval-expected-signing-mismatch.err" "signing.identity mismatch"
+assert_fail approval-inconsistent-expected-build-id "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$CURRENT_COMMIT" --expected-build-id "$(cat "$ROOT/VERSION")+000000000000"
+assert_contains "$TMP/approval-inconsistent-expected-build-id.err" "does not match canonical"
+assert_fail approval-adhoc-expected-identity "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$CURRENT_COMMIT" --expected-signing-identity "ad-hoc"
+assert_contains "$TMP/approval-adhoc-expected-identity.err" "must be a Developer ID"
+
+echo "== final validator requires the exact gate set =="
+mutate_gates() {
+  /usr/bin/python3 - "$APPROVAL" <<PY
+import json, pathlib
+path = pathlib.Path("$APPROVAL")
+payload = json.loads(path.read_text())
+gates = payload["gates"]
+mode = "$1"
+if mode == "duplicate":
+    gates.append(dict(gates[0]))
+elif mode == "missing":
+    payload["gates"] = [g for g in gates if g["name"] != "update-feed"]
+elif mode == "unknown":
+    gates[0]["name"] = "evil-gate"
+    gates[0]["command"] = "evil-command"
+elif mode == "disallowed-override":
+    for g in gates:
+        if g["name"] == "sign-notarize-staple":
+            g["result"] = "emergency-override"
+    payload["release_approval"]["emergency_override"] = True
+    payload["release_approval"]["emergency_reason"] = "test disallowed override"
+elif mode == "bad-timestamp":
+    gates[0]["completed_utc"] = "not-a-timestamp"
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+}
+mutate_gates duplicate
+assert_fail approval-duplicate-gate "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-duplicate-gate.err" "duplicates"
+build_valid_approval "$APPROVAL"
+mutate_gates missing
+assert_fail approval-missing-gate "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-missing-gate.err" "missing"
+build_valid_approval "$APPROVAL"
+mutate_gates unknown
+assert_fail approval-unknown-gate "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-unknown-gate.err" "unknown"
+build_valid_approval "$APPROVAL"
+mutate_gates disallowed-override
+assert_fail approval-disallowed-override "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-disallowed-override.err" "not emergency-overridable"
+build_valid_approval "$APPROVAL"
+mutate_gates bad-timestamp
+assert_fail approval-bad-timestamp "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-bad-timestamp.err" "ISO-8601"
+
+echo "== narrowly allowed emergency overrides still pass =="
+OVERRIDE_APPROVAL="$TMP/override-approval.json"
+OVERRIDE_UAT_SHA="$(shasum -a 256 "$UAT" | awk '{print $1}')"
+OVERRIDE_MANIFEST_SHA="$(shasum -a 256 "$APPROVAL_MANIFEST" | awk '{print $1}')"
+OVERRIDE_ARGS=(
   approval
-  --output "$APPROVAL"
+  --output "$OVERRIDE_APPROVAL"
   --version "$(cat "$ROOT/VERSION")"
   --bundle-id "$EXPECTED_BUNDLE_ID"
   --tag "v$(cat "$ROOT/VERSION")"
@@ -607,24 +1082,43 @@ APPROVAL_ARGS=(
   --artifact "$(basename "$APPROVAL_ARTIFACT")"
   --artifact-sha256 "$APPROVAL_ARTIFACT_SHA"
   --manifest "$(basename "$APPROVAL_MANIFEST")"
-  --manifest-sha256 "$APPROVAL_MANIFEST_SHA"
+  --manifest-sha256 "$OVERRIDE_MANIFEST_SHA"
   --machine "arm64 macOS test machine"
   --created-utc 2026-07-13T12:00:00Z
   --uat-file "$(basename "$UAT")"
-  --uat-sha256 "$UAT_SHA"
+  --uat-sha256 "$OVERRIDE_UAT_SHA"
   --uat-approved-by "Release Test"
   --uat-approved-at-utc 2026-07-13T12:00:00Z
+  --emergency-reason "test emergency: hardware lab offline"
+  --gate "clean-tagged-checkout|./script/release-preflight.sh|passed|2026-07-13T12:00:00Z"
+  --gate "consolidated-mac-uat|./script/validate-release-uat.sh|passed|2026-07-13T12:00:00Z"
+  --gate "debug-ci|./script/ci.sh|emergency-override|2026-07-13T12:00:00Z"
+  --gate "user-e2e|NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh|emergency-override|2026-07-13T12:00:00Z"
+  --gate "release-configuration|./script/ci-release.sh|emergency-override|2026-07-13T12:00:00Z"
+  --gate "thread-sanitizer|./script/ci-tsan.sh|emergency-override|2026-07-13T12:00:00Z"
+  --gate "release-identity|./script/release-version-verify.sh|passed|2026-07-13T12:00:00Z"
+  --gate "release-platform-contract|RELEASE_ARCHITECTURES,Package.swift minimum macOS|passed|2026-07-13T12:00:00Z"
+  --gate "public-tree-hygiene|./script/public-tree-hygiene.sh --public-release|passed|2026-07-13T12:00:00Z"
+  --gate "sign-notarize-staple|codesign, notarytool, stapler, spctl|passed|2026-07-13T12:00:00Z"
+  --gate "artifact-validation|./script/validate-release-artifact.sh|passed|2026-07-13T12:00:00Z"
+  --gate "update-feed|./script/validate-update-feed.py|passed|2026-07-13T12:00:00Z"
 )
-for gate in {1..10}; do
-  APPROVAL_ARGS+=(--gate "gate-$gate|command-$gate|passed|2026-07-13T12:00:00Z")
-done
-"$ROOT/script/generate-release-record.py" "${APPROVAL_ARGS[@]}"
-assert_pass approval-valid "$ROOT/script/validate-release-approval.sh" \
-  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
-printf 'tampered\n' >>"$APPROVAL_ARTIFACT"
-assert_fail approval-tampered "$ROOT/script/validate-release-approval.sh" \
-  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
-assert_contains "$TMP/approval-tampered.err" "artifact_sha256 mismatch"
+"$ROOT/script/generate-release-record.py" "${OVERRIDE_ARGS[@]}"
+assert_pass approval-allowed-override "$ROOT/script/validate-release-approval.sh" \
+  --approval "$OVERRIDE_APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+/usr/bin/python3 - "$OVERRIDE_APPROVAL" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["release_approval"]["emergency_override"] = False
+payload["release_approval"]["emergency_reason"] = None
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-override-flag-mismatch "$ROOT/script/validate-release-approval.sh" \
+  --approval "$OVERRIDE_APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-override-flag-mismatch.err" "emergency_override flag does not match"
+build_valid_approval "$APPROVAL"
+
 
 echo "== release notes are current-section only =="
 NOTES="$TMP/release-notes.md"
