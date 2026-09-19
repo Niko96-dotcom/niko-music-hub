@@ -554,6 +554,12 @@ public actor LocalVaultTransferEngine {
     ///    journal barrier via `store.proveRecoveryPersistence()` before
     ///    authorizing deletion. Journal failure blocks removal while leaving
     ///    read-only catalog/recovery access available.
+    /// 6. After the last removal-admission await, re-prove the journal barrier
+    ///    synchronously before the final evidence checks and `removeItem`,
+    ///    with no await after it. A same-path catalog.sqlite (+WAL/SHM)
+    ///    replacement during admission keeps the old inode readable while a
+    ///    reopen binds the replacement without the recovery record; the old
+    ///    read alone must never authorize deletion.
     @discardableResult
     public func removeActiveCopy(after archivedRecord: VaultTransferRecord) async throws -> VaultTransferRecord {
         guard
@@ -726,6 +732,18 @@ public actor LocalVaultTransferEngine {
                         // Neither admission can remove data. Keep a verified
                         // backup retryable instead of claiming partial removal.
                         removalAdmissionDenied = true
+                        throw error
+                    }
+                    // Admission awaits can invalidate journal persistence or
+                    // catalog-path binding. SQLite may reject detached reads,
+                    // but deletion must require a fresh proof independently.
+                    // Re-prove synchronously before the final evidence checks
+                    // and before any destructive call, with no await after it.
+                    do {
+                        try store.proveRecoveryPersistence()
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
                         throw error
                     }
                     // A nonthrowing admission can suspend, observe task

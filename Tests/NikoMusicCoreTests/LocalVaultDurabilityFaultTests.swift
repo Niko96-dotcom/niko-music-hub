@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import SQLite3
 import XCTest
 @testable import NikoMusicCore
 
@@ -198,6 +199,222 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
                 .unproven("This store cannot prove recovery persistence. Existing copies were kept.")
             )
         }
+    }
+
+    func testCatalogReplacementDuringRemovalAdmissionBlockedBySecondProof() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let databaseURL = fixture.root.appendingPathComponent("catalog.sqlite")
+        // Explicit init so the raw diagnostic runs on the SAME live connection
+        // the engine validates through.
+        let database = try SQLiteArchiveDatabase(databaseURL: databaseURL)
+        let store = try SQLiteVaultTransferStore(database: database)
+        let provider = CountingFaultBarrierProvider(
+            durability: .verifiedLocal,
+            waitsForDurability: false
+        )
+        let archiver = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowFaultWrites,
+            removalAdmission: { _ in }
+        )
+        let verified = try await archiver.archive(projectID: ProjectID(), sourceURL: fixture.source)
+        let sourceBefore = try fixture.snapshotSource()
+        let replacementScratch = fixture.root.appendingPathComponent("replacement.sqlite")
+        try makeCatalogReplacementFixture(at: replacementScratch, marker: "replacement-same-path")
+        XCTAssertNoThrow(try store.proveRecoveryPersistence(), "first barrier must prove before admission window")
+        let divergence = CatalogDivergenceBox()
+        let remover = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowFaultWrites,
+            removalAdmission: { record in
+                let admissionIndex = await divergence.nextAdmission()
+                if admissionIndex == 1 {
+                    // FIRST admission: read-only probe, no mutation and NO
+                    // reopen. Opening/migrating the replacement inside the
+                    // callback is interference, and the engine calls admission
+                    // twice so replacing here would double-replace.
+                    let sees: Bool
+                    let readError: String?
+                    do {
+                        sees = try store.record(id: record.id) != nil
+                        readError = nil
+                    } catch {
+                        sees = false
+                        readError = "\(error)"
+                    }
+                    let raw = rawCatalogConnectionDiagnostic(on: database)
+                    await divergence.captureFirst(
+                        oldSees: sees,
+                        readError: readError,
+                        rawStep: raw.step,
+                        rawMessage: raw.message
+                    )
+                    return
+                }
+                // LAST/second admission only, one-shot. Any further admissions
+                // observe the already-replaced pathname without mutating again.
+                guard await divergence.tryClaimReplacement() else { return }
+                // One-shot actual same-path replacement during the admission
+                // await window: rename old main/WAL/SHM fixture-side (inode
+                // preserved) while the live connection keeps the old inode
+                // open, then copy the fixture main file to the same pathname
+                // (new inode, identical sqlite3_db_filename string).
+                try replaceCatalogFileAtPath(databaseURL, withFixture: replacementScratch)
+                // Post-replacement read through the SAME old connection, still
+                // no reopen: the reopen is deferred until the engine returns.
+                let postSees: Bool
+                let postError: String?
+                do {
+                    postSees = try store.record(id: record.id) != nil
+                    postError = nil
+                } catch {
+                    postSees = false
+                    postError = "\(error)"
+                }
+                let postRaw = rawCatalogConnectionDiagnostic(on: database)
+                await divergence.capturePost(
+                    oldSees: postSees,
+                    readError: postError,
+                    rawStep: postRaw.step,
+                    rawMessage: postRaw.message
+                )
+            }
+        )
+        do {
+            _ = try await remover.removeActiveCopy(after: verified)
+            XCTFail("catalog replacement during admission must block Active removal")
+        } catch {
+            let message = "\(error)"
+            XCTAssertTrue(
+                message.contains("replaced") || message.contains("binding")
+                    || message.contains("moved") || message.contains("identity")
+                    || message.contains("changed") || error is SQLiteArchiveDatabase.StoreError,
+                "second proof must fail closed on replacement, got \(error)"
+            )
+        }
+        // Deferred reopen: only now bind the replacement pathname, after the
+        // engine has returned. No open/migrate happened inside the callback.
+        let observed = await divergence.snapshot()
+        XCTAssertGreaterThanOrEqual(
+            observed.admissions, 2,
+            "engine calls removal admission twice; replacement is armed for the second/last admission (got \(observed.admissions))"
+        )
+        XCTAssertTrue(observed.didReplace, "one-shot replacement must have run on the second admission")
+        XCTAssertTrue(
+            observed.firstOldSees == true,
+            "first admission (pre-replacement, no reopen) must see the record; first readError=\(observed.firstReadError ?? "nil") rawStep=\(observed.firstRawStep.map { "\($0)" } ?? "nil") rawMessage=\(observed.firstRawMessage ?? "nil")"
+        )
+        // Post-replacement old-connection outcome is platform-dependent and is
+        // preserved as diagnostic, not as a causal claim: if the old inode
+        // still serves the row, validation alone would have passed and deleted
+        // without the second proof (causal protection proven). If SQLite itself
+        // refuses the old read (postOldSees false plus non-ROW step or
+        // readError), the engine still must fail closed, but do not claim
+        // validation-alone-would-delete on this platform. The injected-failure
+        // test below is the writable-store proof that the second proof alone
+        // blocks deletion.
+        if observed.postOldSees != true {
+            XCTAssertNotNil(
+                observed.postOldSees,
+                "post-replacement diagnostic must have been captured (admissions=\(observed.admissions) rawStep=\(observed.postRawStep.map { "\($0)" } ?? "nil") msg=\(observed.postRawMessage ?? "nil") readError=\(observed.postReadError ?? "nil"))"
+            )
+        }
+        let reopenedDB = try SQLiteArchiveDatabase(databaseURL: databaseURL)
+        let reopenedStore = try SQLiteVaultTransferStore(database: reopenedDB)
+        let newSees = (try? reopenedStore.record(id: verified.id)) != nil
+        XCTAssertFalse(
+            newSees,
+            "reopened replacement must not contain the original record (raw post step=\(observed.postRawStep.map { "\($0)" } ?? "nil") msg=\(observed.postRawMessage ?? "nil") readError=\(observed.postReadError ?? "nil"))"
+        )
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore, "Active bytes intact")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path), "Active copy kept")
+        try VaultManifestBuilder().verifyArchive(
+            try XCTUnwrap(verified.manifest),
+            at: verified.destinationURL
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: verified.destinationURL.path),
+            "verified generation kept"
+        )
+        let finalReopened = try SQLiteVaultTransferStore(
+            database: SQLiteArchiveDatabase(databaseURL: databaseURL)
+        )
+        XCTAssertNil(try finalReopened.record(id: verified.id), "replacement catalog must not contain original recovery record")
+        XCTAssertEqual(
+            try catalogReplacementMarker(on: SQLiteArchiveDatabase(databaseURL: databaseURL)),
+            "replacement-same-path",
+            "pathname must now name the replacement fixture"
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: databaseURL.path + ".preReplacement-backup"),
+            "old DB bytes/inode preserved fixture-side via rename, not destructive unlink"
+        )
+        // No recoveryRequired assertion here: the catalog itself was replaced,
+        // so the post-admission write may fail. The guaranteed contract is
+        // intact Active + verified generation + truthful second-proof error
+        // (asserted above). recoveryRequired persistence is asserted only where
+        // the store remains writable (see testSecondProofAfterAdmissionBlocksRemovalWhenInjectedToFail).
+        _ = try? store.record(id: verified.id)
+    }
+
+    func testSecondProofAfterAdmissionBlocksRemovalWhenInjectedToFail() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let store = FaultInMemoryStore()
+        let provider = CountingFaultBarrierProvider(
+            durability: .verifiedLocal,
+            waitsForDurability: false
+        )
+        let archiver = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowFaultWrites,
+            removalAdmission: { _ in }
+        )
+        let verified = try await archiver.archive(projectID: ProjectID(), sourceURL: fixture.source)
+        let sourceBefore = try fixture.snapshotSource()
+        // First barrier already proved inside removeActiveCopy before admission.
+        // Flip proof to fail inside the admission await window so only the
+        // second (post-admission) proof observes the failure. Without that
+        // second proof the removal would succeed and delete Active.
+        let remover = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: provider,
+            writeAdmission: allowFaultWrites,
+            removalAdmission: { _ in
+                store.setProof(.fail(VaultTransferPersistenceProofError.unproven("injected second proof failure")))
+            }
+        )
+        do {
+            _ = try await remover.removeActiveCopy(after: verified)
+            XCTFail("injected second-proof failure must block Active removal")
+        } catch {
+            XCTAssertEqual(
+                error as? VaultTransferPersistenceProofError,
+                .unproven("injected second proof failure")
+            )
+        }
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore, "Active bytes intact")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path), "Active copy kept")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: verified.destinationURL.path), "archive generation kept")
+        try VaultManifestBuilder().verifyArchive(
+            try XCTUnwrap(verified.manifest),
+            at: verified.destinationURL
+        )
+        let persisted = try XCTUnwrap(store.record(id: verified.id))
+        XCTAssertEqual(persisted.state, .recoveryRequired, "post-admission proof failure must stay truthfully recoverable")
+        XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
     }
 
     // MARK: - Legacy / mutation
@@ -1454,5 +1671,194 @@ private final class FailingSaveFaultStore: VaultTransferStoring, @unchecked Send
 
     func proveRecoveryPersistence() throws {
         try backing.proveRecoveryPersistence()
+    }
+}
+
+private actor CatalogDivergenceBox {
+    private var admissions = 0
+    private var didReplace = false
+    private var firstOldSees: Bool?
+    private var firstReadError: String?
+    private var firstRawStep: Int32?
+    private var firstRawMessage: String?
+    private var postOldSees: Bool?
+    private var postReadError: String?
+    private var postRawStep: Int32?
+    private var postRawMessage: String?
+
+    func nextAdmission() -> Int {
+        admissions += 1
+        return admissions
+    }
+
+    func admissionCount() -> Int { admissions }
+
+    func tryClaimReplacement() -> Bool {
+        guard !didReplace else { return false }
+        didReplace = true
+        return true
+    }
+
+    func didPerformReplacement() -> Bool { didReplace }
+
+    func captureFirst(oldSees: Bool, readError: String?, rawStep: Int32, rawMessage: String) {
+        guard firstOldSees == nil else { return }
+        firstOldSees = oldSees
+        firstReadError = readError
+        firstRawStep = rawStep
+        firstRawMessage = rawMessage
+    }
+
+    func capturePost(oldSees: Bool, readError: String?, rawStep: Int32, rawMessage: String) {
+        guard postOldSees == nil else { return }
+        postOldSees = oldSees
+        postReadError = readError
+        postRawStep = rawStep
+        postRawMessage = rawMessage
+    }
+
+    func snapshot() -> (
+        admissions: Int,
+        didReplace: Bool,
+        firstOldSees: Bool?,
+        firstReadError: String?,
+        firstRawStep: Int32?,
+        firstRawMessage: String?,
+        postOldSees: Bool?,
+        postReadError: String?,
+        postRawStep: Int32?,
+        postRawMessage: String?
+    ) {
+        (
+            admissions,
+            didReplace,
+            firstOldSees,
+            firstReadError,
+            firstRawStep,
+            firstRawMessage,
+            postOldSees,
+            postReadError,
+            postRawStep,
+            postRawMessage
+        )
+    }
+}
+
+private enum CatalogReplacementFixtureError: Error {
+    case unreadable(String)
+}
+
+/// Different valid SQLite fixture for actual same-path replacement faults.
+/// Checkpointed (TRUNCATE) so the main file alone carries the marker; copying
+/// only the main file yields a readable replacement. Mirrors
+/// LocalVaultDurabilityTests helper semantics near line 1170.
+private func makeCatalogReplacementFixture(at url: URL, marker: String) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    var db: OpaquePointer?
+    guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else {
+        throw CatalogReplacementFixtureError.unreadable("open replacement fixture \(url.path)")
+    }
+    defer { sqlite3_close(db) }
+    guard sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nil, nil, nil) == SQLITE_OK else {
+        throw CatalogReplacementFixtureError.unreadable("replacement WAL \(url.path)")
+    }
+    let sanitized = marker.replacingOccurrences(of: "'", with: "")
+    let sql = "CREATE TABLE IF NOT EXISTS replacement_probe(marker TEXT); DELETE FROM replacement_probe; INSERT INTO replacement_probe VALUES('\(sanitized)');"
+    guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+        throw CatalogReplacementFixtureError.unreadable("replacement content \(url.path)")
+    }
+    var checkpoint: OpaquePointer?
+    defer { sqlite3_finalize(checkpoint) }
+    guard sqlite3_prepare_v2(db, "PRAGMA wal_checkpoint(TRUNCATE);", -1, &checkpoint, nil) == SQLITE_OK,
+          sqlite3_step(checkpoint) == SQLITE_ROW else {
+        throw CatalogReplacementFixtureError.unreadable("replacement checkpoint \(url.path)")
+    }
+}
+
+/// Actual same-path replacement: preserve the old main/WAL/SHM fixture-side
+/// via rename (no destructive unlink of the live bytes) while the original
+/// connection stays open to the old inode, then copy the fixture main file to
+/// the same pathname (new inode, identical sqlite3_db_filename string).
+/// Backups live next to the target inside the disposable fixture root.
+private func replaceCatalogFileAtPath(_ target: URL, withFixture fixture: URL) throws {
+    let fm = FileManager.default
+    let mainBackup = target.path + ".preReplacement-backup"
+    let walBackup = target.path + "-wal.preReplacement-backup"
+    let shmBackup = target.path + "-shm.preReplacement-backup"
+    try? fm.removeItem(atPath: mainBackup)
+    try? fm.removeItem(atPath: walBackup)
+    try? fm.removeItem(atPath: shmBackup)
+    if fm.fileExists(atPath: target.path) {
+        // Rename preserves the inode for forensics; only fall back to unlink
+        // if the rename itself fails.
+        do {
+            try fm.moveItem(atPath: target.path, toPath: mainBackup)
+        } catch {
+            try fm.removeItem(at: target)
+        }
+    }
+    if fm.fileExists(atPath: target.path + "-wal") {
+        do {
+            try fm.moveItem(atPath: target.path + "-wal", toPath: walBackup)
+        } catch {
+            try? fm.removeItem(atPath: target.path + "-wal")
+        }
+    }
+    if fm.fileExists(atPath: target.path + "-shm") {
+        do {
+            try fm.moveItem(atPath: target.path + "-shm", toPath: shmBackup)
+        } catch {
+            try? fm.removeItem(atPath: target.path + "-shm")
+        }
+    }
+    // Defensive: no stale WAL/SHM may shadow the replacement main file.
+    try? fm.removeItem(atPath: target.path + "-wal")
+    try? fm.removeItem(atPath: target.path + "-shm")
+    try fm.copyItem(at: fixture, to: target)
+}
+
+/// Raw SQLite diagnostic on the SAME live connection the engine validates
+/// through. `store.record` hides sqlite3_step non-ROW as nil/empty, so this
+/// preserves the raw step code plus errmsg to distinguish "empty" from
+/// "read error" after the pathname is rebound.
+private func rawCatalogConnectionDiagnostic(on database: SQLiteArchiveDatabase) -> (step: Int32, message: String) {
+    do {
+        return try database.withConnection { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let prepare = sqlite3_prepare_v2(db, "SELECT count(*) FROM sqlite_master;", -1, &statement, nil)
+            guard prepare == SQLITE_OK, let statement else {
+                let message: String
+                if let raw = sqlite3_errmsg(db) {
+                    message = String(cString: raw)
+                } else {
+                    message = "prepare failed"
+                }
+                return (prepare, message)
+            }
+            let step = sqlite3_step(statement)
+            let message: String
+            if let raw = sqlite3_errmsg(db) {
+                message = String(cString: raw)
+            } else {
+                message = "unknown"
+            }
+            return (step, message)
+        }
+    } catch {
+        return (-1, "\(error)")
+    }
+}
+
+private func catalogReplacementMarker(on database: SQLiteArchiveDatabase) throws -> String {
+    try database.withConnection { db in
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "SELECT marker FROM replacement_probe LIMIT 1;", -1, &statement, nil) == SQLITE_OK,
+              sqlite3_step(statement) == SQLITE_ROW,
+              let cString = sqlite3_column_text(statement, 0) else {
+            throw CatalogReplacementFixtureError.unreadable("replacement_probe")
+        }
+        return String(cString: cString)
     }
 }

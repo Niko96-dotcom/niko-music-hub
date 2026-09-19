@@ -279,7 +279,15 @@ not listed as gaps.
    authorizing deletion, the engine calls
    `VaultTransferStoring.proveRecoveryPersistence()` (production SQLite
    delegates to `SQLiteArchiveDatabase.proveRecoveryPersistence()`:
-   strict checkpoint plus file/dir syncs with connection-file binding). On
+   strict checkpoint plus file/dir syncs with connection-file binding).
+   The engine repeats this proof synchronously after the final removal-admission
+   await, before the final evidence checks and source removal, with no further
+   await between them. A deterministic late-proof failure preserves Active;
+   removing only this second proof makes that regression delete the fixture.
+   Actual SQLite path replacement also fails closed on the tested host without
+   the added proof, so that case does not establish a previously exploitable
+   deletion window. A replaced catalog may prevent recording the failure state;
+   intact Active and verified archive bytes remain the safety guarantee. On
    throw, destructive admission is blocked, every copy is kept, and read-only
    catalog/recovery access stays available. The default `VaultTransferStoring`
    implementation is fail-closed (`VaultTransferPersistenceProofError.unproven`);
