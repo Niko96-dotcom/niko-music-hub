@@ -60,6 +60,11 @@ Credential-free local artifact validation (from a clean checkout):
 ./script/release-all.sh --local-only
 ```
 
+Local-only mode never accesses the Sparkle signing key in the Keychain. It
+generates a test appcast only when `NMH_SPARKLE_PRIVATE_KEY_FILE` explicitly
+names a throwaway private key and the configured public key matches it;
+otherwise it builds the local artifact and skips feed generation.
+
 Public release rehearsal without upload — run this **before** creating the tag. It executes every gate, signs, notarizes and staples the real artifacts, generates and validates the signed feed, and stops short of publishing. The preflight accepts a missing `v<VERSION>` tag in this mode (an existing tag must still point at `HEAD`), so a fix found by the rehearsal only costs a commit, not a moved tag:
 
 ```bash
@@ -112,5 +117,5 @@ Do not put credentials in scripts, docs, commits, release notes, or shell transc
 - The local post-publish checks cannot prevent a later privileged tag force-move; protect release tags on the GitHub repository before enabling public publishing.
 - App Store review is not part of this release path.
 - The update feed URL is permanent. Every installed build polls the URL it shipped with, so `nmh_update_feed_url` cannot be changed without stranding the field.
-- Local-only mode skips feed generation when no `SPARKLE_PUBLIC_ED_KEY` is configured; it does not skip it when a key is present and generation fails.
+- Local-only mode skips feed generation when no `SPARKLE_PUBLIC_ED_KEY` is configured, or when no explicit `NMH_SPARKLE_PRIVATE_KEY_FILE` names a throwaway test key; generation attempts remain fail-closed and never fall back to the production Keychain account.
 - `CFBundleVersion` is the commit count of `HEAD`, and Sparkle orders updates by it. Every public release must be built from the public `niko-music-hub` history (this repository), never from the private archive or another clone, or a later release can carry a lower build number than an earlier one and never be offered.

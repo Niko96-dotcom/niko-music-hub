@@ -728,11 +728,17 @@ run release-notes "$ROOT/script/extract-release-notes.sh" "$RELEASE_NOTES"
 # releases/latest/download/appcast.xml, so it must be published under exactly
 # that basename or every installed app stops seeing updates.
 APPCAST="$RELEASE_DIR/appcast.xml"
+APPCAST_STATUS="appcast.xml"
 log "update feed"
 if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
   # Public mode already refused above; only local-only reaches this.
   APPCAST=""
+  APPCAST_STATUS="not generated (no SPARKLE_PUBLIC_ED_KEY)"
   echo "LOCAL-ONLY: update feed skipped because no SPARKLE_PUBLIC_ED_KEY is configured" | tee -a "$LOG_FILE"
+elif [[ "$MODE" == "local-only" && -z "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+  APPCAST=""
+  APPCAST_STATUS="not generated (local-only test key file not configured)"
+  echo "LOCAL-ONLY: update feed skipped; set NMH_SPARKLE_PRIVATE_KEY_FILE to a throwaway private key and configure its matching SPARKLE_PUBLIC_ED_KEY to generate a test feed" | tee -a "$LOG_FILE"
 else
   run update-feed generate_update_feed "$DMG" "$RELEASE_NOTES" "$APP"
 fi
@@ -836,7 +842,7 @@ cat >"$REPORT" <<REPORT
 - Artifact size: $ARTIFACT_SIZE bytes
 - SHA-256: $ARTIFACT_SHA
 - Manifest: $(basename "$MANIFEST")
-- Update feed: $([[ -n "$APPCAST" ]] && basename "$APPCAST" || echo "not generated (no SPARKLE_PUBLIC_ED_KEY)")
+- Update feed: $APPCAST_STATUS
 - Approval: $([[ -n "$APPROVAL" ]] && basename "$APPROVAL" || echo "not generated for local-only mode")
 - Publish: $([[ "$PUBLISH" == true ]] && echo "GitHub release uploaded and downloaded for validation" || ([[ "$DRY_RUN_PUBLISH" == true ]] && echo "dry-run publication" || echo "skipped local-only"))
 - Install smoke: $([[ "$INSTALL_SMOKE" == true ]] && echo "ran" || echo "skipped")

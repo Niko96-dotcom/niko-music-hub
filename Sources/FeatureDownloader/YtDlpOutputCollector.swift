@@ -18,6 +18,7 @@ final class YtDlpOutputCollector: @unchecked Sendable {
     static let defaultMaximumCandidatePaths = 256
 
     private let outputDirectory: URL
+    private let resolvedOutputDirectory: URL
     private let fileManager: FileManager
     private let progressHandler: @Sendable (String) -> Void
     private let onActivity: (@Sendable () -> Void)?
@@ -40,6 +41,8 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         maximumCandidatePaths: Int = defaultMaximumCandidatePaths
     ) {
         self.outputDirectory = outputDirectory
+        self.resolvedOutputDirectory = outputDirectory.standardizedFileURL
+            .resolvingSymlinksInPath().standardizedFileURL
         self.fileManager = fileManager
         self.progressHandler = progressHandler
         self.onActivity = onActivity
@@ -65,7 +68,11 @@ final class YtDlpOutputCollector: @unchecked Sendable {
             for path in candidatePaths {
                 for url in urls(for: path) where !resolved.contains(url) {
                     if fileManager.fileExists(atPath: url.path) {
-                        resolved.append(url)
+                        let resolvedCandidate = url.resolvingSymlinksInPath()
+                            .standardizedFileURL
+                        if Self.isContained(resolvedCandidate, in: resolvedOutputDirectory) {
+                            resolved.append(url)
+                        }
                         break
                     }
                 }
@@ -128,13 +135,32 @@ final class YtDlpOutputCollector: @unchecked Sendable {
     }
 
     private func urls(for path: String) -> [URL] {
-        let expanded = (path as NSString).expandingTildeInPath
-        if expanded.hasPrefix("/") {
-            return [URL(fileURLWithPath: expanded)]
+        // Never expand `~`: tilde-based paths are rejected outright.
+        guard !path.isEmpty, !path.hasPrefix("~") else { return [] }
+        let candidate: URL
+        if path.hasPrefix("/") {
+            candidate = URL(fileURLWithPath: path)
+        } else {
+            // Relative paths resolve only beneath the selected output directory.
+            // There is intentionally no process-CWD fallback.
+            candidate = outputDirectory.appendingPathComponent(path)
         }
-        return [
-            outputDirectory.appendingPathComponent(path),
-            URL(fileURLWithPath: path),
-        ]
+        // Standardize `..`/`.` here so `finish()` enforces containment on the
+        // normalized, symlink-resolved location. Containment itself is checked
+        // in `finish()` after existence, against the resolved output directory.
+        return [candidate.standardizedFileURL]
+    }
+
+    private static func isContained(_ file: URL, in directory: URL) -> Bool {
+        let directoryPath = directory.path
+        let filePath = file.path
+        if filePath == directoryPath {
+            return true
+        }
+        if directoryPath == "/" {
+            return filePath.hasPrefix("/")
+        }
+        // Component-aware: "/foo/bar" must not contain "/foo/bar-evil".
+        return filePath.hasPrefix(directoryPath + "/")
     }
 }

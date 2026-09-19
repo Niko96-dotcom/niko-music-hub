@@ -81,14 +81,20 @@ NMH_SPARKLE_PUBLIC_ED_KEY=<printed public key> \
 
 Sparkle will not accept a plain `http://` feed, and neither will this project's build script. Label any evidence produced this way as test-feed evidence: it does not stand in for a production-feed round trip.
 
+Local-only releases never read a Sparkle private key from the Keychain. If
+`NMH_SPARKLE_PRIVATE_KEY_FILE` is absent, the local-only artifact is still built
+but feed generation is skipped, even when a public key is configured. A local
+test feed therefore requires both the explicit throwaway private-key file and
+its matching public key.
+
 ## Known limits
 
 - Sparkle's own window owns the download progress bar. The standard user driver exposes no byte counts, so the in-app status line names the version being downloaded but not a percentage.
-- `generate_appcast` reads the private key from the Keychain account `ed25519`
-  by default and may prompt for access on first use.
-  `NMH_SPARKLE_KEY_ACCOUNT` selects a different stored account.
-  `NMH_SPARKLE_PRIVATE_KEY_FILE` is for local test feeds only and is rejected by
-  public release mode.
+- In public release mode, `generate_appcast` reads the private key from the
+  Keychain account `ed25519` by default and may prompt for access on first use;
+  `NMH_SPARKLE_KEY_ACCOUNT` selects a different stored account. Local-only mode
+  never uses this Keychain fallback: `NMH_SPARKLE_PRIVATE_KEY_FILE` is required
+  to generate a local test feed and is rejected by public release mode.
 - `script/validate-update-feed.py` needs the `cryptography` module for `/usr/bin/python3`. If it is missing the release fails rather than skipping signature verification.
 - Feed generation requires resolved SPM artifacts because `generate_appcast`
   ships inside the exactly pinned Sparkle package. A normal release run's Swift

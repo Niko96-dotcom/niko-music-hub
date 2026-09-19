@@ -1034,4 +1034,10 @@ assert_contains "$ROOT/script/release-all.sh" '--ed-key-file "$NMH_SPARKLE_PRIVA
 assert_fail public-private-key-file env NMH_DEVELOPER_ID_APPLICATION=test NMH_NOTARY_PROFILE=test NMH_RELEASE_UAT_EVIDENCE=/dev/null NMH_SPARKLE_PRIVATE_KEY_FILE=/tmp/nmh-test-key-file "$ROOT/script/release-all.sh" --public --dry-run-publish
 assert_contains "$TMP/public-private-key-file.err" "NMH_SPARKLE_PRIVATE_KEY_FILE"
 
+echo "== local-only feeds never fall back to Keychain signing =="
+assert_contains "$ROOT/script/release-all.sh" 'elif [[ "$MODE" == "local-only" && -z "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then'
+assert_contains "$ROOT/script/release-all.sh" "update feed skipped; set NMH_SPARKLE_PRIVATE_KEY_FILE to a throwaway private key"
+assert_contains "$ROOT/script/release-all.sh" 'key_options=(--account "${NMH_SPARKLE_KEY_ACCOUNT:-ed25519}")'
+assert_order 'elif [[ "$MODE" == "local-only" && -z "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then' 'run update-feed generate_update_feed "$DMG" "$RELEASE_NOTES" "$APP"' "$ROOT/script/release-all.sh"
+
 echo "release script regression tests passed."
