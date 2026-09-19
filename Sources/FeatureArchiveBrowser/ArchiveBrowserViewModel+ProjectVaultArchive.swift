@@ -31,6 +31,24 @@ extension ArchiveBrowserViewModel {
         )
     }
 
+    /// Frozen helper: fresh bounded Done confirmation after identity review.
+    /// The user already committed `.done` via `confirmPendingArchive` before the runtime
+    /// raised identity ambiguity, so `requestWorkflowDoneArchive` would reject the
+    /// already-done song and strand the operation. This re-issues the same explicit
+    /// Done confirmation without mutating workflow status or inventing undo.
+    func requestWorkflowDoneReconfirmation(for song: Song) {
+        guard canArchiveInProjectVault(song),
+              let current = songs.first(where: { $0.id == song.id }) else { return }
+        let settings = (try? settingsStore.loadSettings())?.vault
+        pendingArchiveConfirmation = ProjectVaultArchiveConfirmation(
+            songID: current.id,
+            songTitle: current.effectiveDisplayTitle,
+            trigger: .workflowDone,
+            willRemoveActiveCopy: settings.map(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval) ?? false,
+            independentBackupConfirmed: settings?.independentBackupConfirmed ?? false
+        )
+    }
+
     func confirmPendingArchive() {
         guard let pending = pendingArchiveConfirmation,
               let song = songs.first(where: { $0.id == pending.songID }) else { return }

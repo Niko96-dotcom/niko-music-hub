@@ -3,10 +3,16 @@ import NikoMusicCore
 
 /// Small UI-facing queue for fail-closed duplicate decisions. Pending items remain separate
 /// until a person explicitly chooses to link them.
+///
+/// Safety invariant: a persisted review authorizes nothing; resolution persists before the
+/// sheet dismisses, and persistence failure keeps the review visible and retryable.
 @MainActor
 public final class ProjectIdentityReviewViewModel: ObservableObject {
     @Published public private(set) var reviews: [ProjectIdentityReview]
     private let catalogStore: SQLiteProjectCatalogStore?
+    /// Deterministic persistence seam for tests. When set, `resolve` uses it instead of
+    /// the catalog store so a failing store can be simulated without fixtures.
+    var persistenceOverride: ((UUID, ProjectIdentityReviewResolution) throws -> Void)?
 
     public init(reviews: [ProjectIdentityReview] = [], catalogStore: SQLiteProjectCatalogStore? = nil) {
         self.catalogStore = catalogStore
@@ -41,10 +47,19 @@ public final class ProjectIdentityReviewViewModel: ObservableObject {
         reviews.append(review)
     }
 
-    public func resolve(_ reviewID: UUID, as resolution: ProjectIdentityReviewResolution) {
+    /// Returns true only when the resolution is persisted (or there is no store).
+    /// Failure returns false and leaves the review pending so the sheet stays visible.
+    @discardableResult
+    public func resolve(_ reviewID: UUID, as resolution: ProjectIdentityReviewResolution) -> Bool {
         guard resolution != .pending,
-              let index = reviews.firstIndex(where: { $0.id == reviewID }) else { return }
-        if let catalogStore {
+              let index = reviews.firstIndex(where: { $0.id == reviewID }) else { return false }
+        if let persistenceOverride {
+            do {
+                try persistenceOverride(reviewID, resolution)
+            } catch {
+                return false
+            }
+        } else if let catalogStore {
             do {
                 var persisted = try catalogStore.loadReviews()
                 if let storedIndex = persisted.firstIndex(where: { $0.id == reviewID }) {
@@ -60,9 +75,10 @@ public final class ProjectIdentityReviewViewModel: ObservableObject {
                     metadataMigrations: [:]
                 ))
             } catch {
-                return
+                return false
             }
         }
         reviews[index].resolution = resolution
+        return true
     }
 }
