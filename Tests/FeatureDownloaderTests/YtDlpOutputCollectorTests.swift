@@ -193,6 +193,37 @@ final class YtDlpOutputCollectorTests: XCTestCase {
         XCTAssertEqual(try collector.finish(), [fileURL.standardizedFileURL])
     }
 
+    func testOutputDirectoryCreatedAfterInitializationThroughSymlinkIsAccepted() throws {
+        let baseDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collector-late-root-\(UUID().uuidString)", isDirectory: true)
+        let realParent = baseDir.appendingPathComponent("real", isDirectory: true)
+        let visibleParent = baseDir.appendingPathComponent("visible", isDirectory: true)
+        let outputDir = visibleParent.appendingPathComponent("output", isDirectory: true)
+        try FileManager.default.createDirectory(at: realParent, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: baseDir) }
+        do {
+            try FileManager.default.createSymbolicLink(
+                atPath: visibleParent.path,
+                withDestinationPath: realParent.path
+            )
+        } catch {
+            throw XCTSkip("Symlinks are not supported on this platform.")
+        }
+
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        let fileURL = outputDir.appendingPathComponent("track.mp4")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        collector.consume("NIKO_MUSIC_HUB_FILE:track.mp4\n")
+
+        XCTAssertEqual(try collector.finish(), [fileURL.standardizedFileURL])
+    }
+
     func testAbsolutePathOutsideOutputDirectoryIsRejected() throws {
         let outputDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("collector-output-\(UUID().uuidString)", isDirectory: true)

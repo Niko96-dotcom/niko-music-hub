@@ -1039,5 +1039,19 @@ assert_contains "$ROOT/script/release-all.sh" 'elif [[ "$MODE" == "local-only" &
 assert_contains "$ROOT/script/release-all.sh" "update feed skipped; set NMH_SPARKLE_PRIVATE_KEY_FILE to a throwaway private key"
 assert_contains "$ROOT/script/release-all.sh" 'key_options=(--account "${NMH_SPARKLE_KEY_ACCOUNT:-ed25519}")'
 assert_order 'elif [[ "$MODE" == "local-only" && -z "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then' 'run update-feed generate_update_feed "$DMG" "$RELEASE_NOTES" "$APP"' "$ROOT/script/release-all.sh"
+GENERATE_UPDATE_FEED_FN="$(awk '/^generate_update_feed\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/release-all.sh")"
+KEYCHAIN_PROBE="$TMP/local-feed-keychain-probe"
+assert_fail local-feed-missing-test-key bash -c "set -euo pipefail
+$GENERATE_UPDATE_FEED_FN
+find_generate_appcast() { touch '$KEYCHAIN_PROBE'; return 1; }
+MODE=local-only
+RELEASE_DIR='$TMP'
+unset NMH_SPARKLE_PRIVATE_KEY_FILE
+generate_update_feed /dev/null /dev/null /dev/null"
+assert_contains "$TMP/local-feed-missing-test-key.err" "local-only update feed generation requires NMH_SPARKLE_PRIVATE_KEY_FILE"
+[[ ! -e "$KEYCHAIN_PROBE" ]] || {
+  echo "local-only feed attempted to resolve the signing tool without an explicit test key" >&2
+  exit 1
+}
 
 echo "release script regression tests passed."

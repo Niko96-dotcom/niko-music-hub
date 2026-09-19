@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 enum YtDlpOutputCollectorError: LocalizedError, Equatable, Sendable {
     case candidateLimitExceeded(maximum: Int)
@@ -18,8 +19,8 @@ final class YtDlpOutputCollector: @unchecked Sendable {
     static let defaultMaximumCandidatePaths = 256
 
     private let outputDirectory: URL
-    private let resolvedOutputDirectory: URL
     private let fileManager: FileManager
+    private let pathSafety: PathSafety
     private let progressHandler: @Sendable (String) -> Void
     private let onActivity: (@Sendable () -> Void)?
     private let maximumPendingLineBytes: Int
@@ -41,9 +42,8 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         maximumCandidatePaths: Int = defaultMaximumCandidatePaths
     ) {
         self.outputDirectory = outputDirectory
-        self.resolvedOutputDirectory = outputDirectory.standardizedFileURL
-            .resolvingSymlinksInPath().standardizedFileURL
         self.fileManager = fileManager
+        self.pathSafety = PathSafety(fileManager: fileManager)
         self.progressHandler = progressHandler
         self.onActivity = onActivity
         self.maximumPendingLineBytes = max(1, maximumPendingLineBytes)
@@ -68,9 +68,7 @@ final class YtDlpOutputCollector: @unchecked Sendable {
             for path in candidatePaths {
                 for url in urls(for: path) where !resolved.contains(url) {
                     if fileManager.fileExists(atPath: url.path) {
-                        let resolvedCandidate = url.resolvingSymlinksInPath()
-                            .standardizedFileURL
-                        if Self.isContained(resolvedCandidate, in: resolvedOutputDirectory) {
+                        if pathSafety.isResolvedContained(url, in: [outputDirectory]) {
                             resolved.append(url)
                         }
                         break
@@ -149,18 +147,5 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         // normalized, symlink-resolved location. Containment itself is checked
         // in `finish()` after existence, against the resolved output directory.
         return [candidate.standardizedFileURL]
-    }
-
-    private static func isContained(_ file: URL, in directory: URL) -> Bool {
-        let directoryPath = directory.path
-        let filePath = file.path
-        if filePath == directoryPath {
-            return true
-        }
-        if directoryPath == "/" {
-            return filePath.hasPrefix("/")
-        }
-        // Component-aware: "/foo/bar" must not contain "/foo/bar-evil".
-        return filePath.hasPrefix(directoryPath + "/")
     }
 }

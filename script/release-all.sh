@@ -310,18 +310,29 @@ generate_update_feed() {
   local tool download_prefix
   local -a key_options=()
 
-  tool="$(find_generate_appcast)" || return 1
-  download_prefix="$(nmh_release_download_url_prefix "$TAG")" || return 1
-
-  if [[ -n "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]]; then
+  if [[ "$MODE" == "local-only" ]]; then
+    [[ -n "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]] || {
+      echo "local-only update feed generation requires NMH_SPARKLE_PRIVATE_KEY_FILE" >&2
+      return 1
+    }
     [[ -f "$NMH_SPARKLE_PRIVATE_KEY_FILE" ]] || {
       echo "NMH_SPARKLE_PRIVATE_KEY_FILE does not exist: $NMH_SPARKLE_PRIVATE_KEY_FILE" >&2
       return 1
     }
     key_options=(--ed-key-file "$NMH_SPARKLE_PRIVATE_KEY_FILE")
-  else
+  elif [[ "$MODE" == "public" ]]; then
+    [[ -z "${NMH_SPARKLE_PRIVATE_KEY_FILE:-}" ]] || {
+      echo "public update feed generation refuses NMH_SPARKLE_PRIVATE_KEY_FILE" >&2
+      return 1
+    }
     key_options=(--account "${NMH_SPARKLE_KEY_ACCOUNT:-ed25519}")
+  else
+    echo "unsupported release mode for update feed generation: $MODE" >&2
+    return 1
   fi
+
+  tool="$(find_generate_appcast)" || return 1
+  download_prefix="$(nmh_release_download_url_prefix "$TAG")" || return 1
 
   # An isolated workspace: generate_appcast rewrites its input directory and
   # relocates anything it considers an old update.
