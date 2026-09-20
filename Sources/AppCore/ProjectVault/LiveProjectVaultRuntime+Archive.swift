@@ -319,9 +319,11 @@ extension LiveProjectVaultRuntime {
         } else {
             transfer = try await engine.archive(projectID: entry.record.id, sourceURL: song.folderPath)
         }
-        try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
+        if VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state) {
+            try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
+        }
         let updatedEntry = try catalogStore.loadEntries().first { $0.record.id == entry.record.id } ?? entry
-        if trigger == .manual {
+        if trigger == .manual, !transfer.isWaitingForProviderUpload {
             // Compatibility (nil) and copy-only authorizations stay copy-only
             // inside `reuseVerifiedTerminal`; only a bound removal
             // authorization deletes. `.workflowDone` returns the scheduler
@@ -496,7 +498,7 @@ extension LiveProjectVaultRuntime {
             throw ProjectVaultRuntimeError.unavailable
         }
         switch result {
-        case .archived(_, let record): return record
+        case .archived(_, let record), .pending(_, let record): return record
         case .postponed(_, let reason):
             guard let verified = try transferStore.verifiedArchiveGeneration(projectID: entry.record.id),
                   verified.id != previousVerifiedTransferID else {

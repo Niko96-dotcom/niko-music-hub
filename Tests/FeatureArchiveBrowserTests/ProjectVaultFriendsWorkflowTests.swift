@@ -492,6 +492,55 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertNil(viewModel.projectVaultQueueMessage(for: restored))
     }
 
+    func testMountedBrowserResumesPendingUploadWithoutClaimingSuccess() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        let provider = FriendsDelayedUploadProvider(pending: true)
+        let runtime = try fixture.runtime(
+            provider: provider,
+            recoveryPolicy: .init(maximumAutomaticAttempts: 3, initialBackoff: 1, maximumBackoff: 2)
+        )
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first)
+        viewModel.updateWorkflowStatus(for: song, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        viewModel.confirmPendingArchive()
+        let store = try fixture.transferStore()
+        try await waitUntil {
+            (try? store.allTransferRecords().first?.state) == .awaitingProviderDurability
+                && viewModel.projectVaultBusySongIDs.isEmpty
+        }
+        var failed = try XCTUnwrap(try store.allTransferRecords().first)
+        XCTAssertTrue(failed.isWaitingForProviderUpload)
+        XCTAssertTrue(viewModel.statusMessage?.contains("Waiting for cloud upload") == true)
+        XCTAssertEqual(failed.nextRetryAt?.timeIntervalSince(failed.updatedAt), 60)
+        // Bring the persisted deadline forward to exercise the real mounted timer.
+        failed.nextRetryAt = Date().addingTimeInterval(0.2)
+        try store.save(failed)
+        let due = try XCTUnwrap(failed.nextRetryAt)
+        XCTAssertEqual(failed.retryCount, 0)
+        XCTAssertGreaterThan(due, Date())
+        // Snapshot refreshes must not postpone or multiply the pending timer.
+        for _ in 0..<3 { await viewModel.refreshProjectVaultSnapshots() }
+        try await waitUntil {
+            (try? store.record(id: failed.id)?.state) == .archiveVerified
+                && viewModel.projectVaultRecoveryDeadline == nil
+        }
+        let completed = try XCTUnwrap(try store.record(id: failed.id))
+        XCTAssertGreaterThanOrEqual(Date(), due)
+        XCTAssertEqual(try store.allTransferRecords().count, 1)
+        XCTAssertEqual(completed.durability, .syncedToProvider)
+        XCTAssertNil(viewModel.projectVaultQueueMessage(for: song))
+        XCTAssertFalse(viewModel.statusMessage?.contains("Waiting for cloud upload") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.stagingURL.path))
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: completed.destinationURL)
+        let barriers = await provider.barrierCount()
+        XCTAssertEqual(barriers, 3, "One timeout, then staging and final-generation confirmation")
+    }
+
     func testMountedBrowserResumesTimedOutCopyAtPersistedDeadlineWithoutAnotherTransfer() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -1019,6 +1068,8 @@ private final class FriendsHoldingWriteProvider: ArchiveStorageProvider, @unchec
 }
 
 private actor FriendsDelayedUploadProvider: ArchiveStorageProvider {
+    let pending: Bool
+    init(pending: Bool = false) { self.pending = pending }
     private var barriers = 0
     func capabilities() async throws -> StorageCapabilities {
         .init(waitsForDurability: true, supportsMaterialization: false, supportsEviction: false)
@@ -1027,7 +1078,7 @@ private actor FriendsDelayedUploadProvider: ArchiveStorageProvider {
     func prepareForWrite(at root: URL) async throws {}
     func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
         barriers += 1
-        if barriers == 1 { throw FileProviderArchiveStorageError.durabilityUnavailable }
+        if barriers == 1 { throw pending ? FileProviderArchiveStorageError.uploadPending : FileProviderArchiveStorageError.durabilityUnavailable }
         return .syncedToProvider
     }
     func materialize(_ location: URL) async throws {}

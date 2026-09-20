@@ -4,6 +4,59 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultTransferEngineTests: XCTestCase {
+    func testPendingUploadSurvivesRelaunchWithoutFailureBudgetAndFinishesBothBarriers() async throws {
+        for pendingAtPromotion in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            let instant = Date(timeIntervalSince1970: 50_000)
+            let provider = PendingUploadProvider(pendingAtPromotion: pendingAtPromotion)
+            let engine = try LocalVaultTransferEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive, store: store,
+                provider: provider, now: { instant }, writeAdmission: allowVaultWrites
+            )
+            let original = try fixture.snapshotSource()
+            var pending = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTAssertEqual(pending.state, pendingAtPromotion ? .promotingArchiveGeneration : .awaitingProviderDurability)
+            XCTAssertTrue(pending.isWaitingForProviderUpload)
+            XCTAssertNil(pending.error)
+            XCTAssertEqual(pending.retryCount, 0)
+            XCTAssertEqual(pending.nextRetryAt, instant.addingTimeInterval(60))
+            let callsBefore = await provider.calls
+            _ = await engine.recoverAtLaunch()
+            let callsAfter = await provider.calls
+            XCTAssertEqual(callsAfter, callsBefore, "No polling before the persisted deadline")
+            // Reopen the journal and exceed the normal five-attempt failure budget.
+            let relaunchedStore = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+            for attempt in 1...6 {
+                let checkTime = instant.addingTimeInterval(Double(attempt * 60))
+                let resumed = try LocalVaultTransferEngine(
+                    activeRoot: fixture.active, archiveRoot: fixture.archive, store: relaunchedStore,
+                    provider: provider, now: { checkTime }, writeAdmission: allowVaultWrites
+                )
+                _ = await resumed.recoverAtLaunch()
+                pending = try XCTUnwrap(relaunchedStore.record(id: pending.id))
+                XCTAssertTrue(pending.isWaitingForProviderUpload)
+                XCTAssertEqual(pending.retryCount, 0)
+                XCTAssertNil(pending.error)
+                XCTAssertEqual(try fixture.snapshotSource(), original)
+            }
+            await provider.finish()
+            let resumed = try LocalVaultTransferEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive, store: relaunchedStore,
+                provider: provider, now: { instant.addingTimeInterval(420) }, writeAdmission: allowVaultWrites
+            )
+            _ = await resumed.recoverAtLaunch()
+            let completed = try XCTUnwrap(relaunchedStore.record(id: pending.id))
+            XCTAssertEqual(completed.state, .archiveVerified)
+            XCTAssertNil(completed.nextRetryAt)
+            XCTAssertEqual(completed.durability, .syncedToProvider)
+            try VaultManifestBuilder().verifyArchive(try XCTUnwrap(completed.manifest), at: completed.destinationURL)
+            XCTAssertEqual(try fixture.snapshotSource(), original)
+            XCTAssertEqual(try relaunchedStore.allTransferRecords().count, 1)
+        }
+    }
+
     func testExplicitRemovalRecoveryPreservesCompleteAndPartialActiveCopies() async throws {
         for sourceState in ["complete", "partial", "missing"] {
             let fixture = try Fixture()
@@ -2957,4 +3010,26 @@ private struct Fixture {
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
+}
+
+private actor PendingUploadProvider: ArchiveStorageProvider {
+    let pendingAtPromotion: Bool
+    var finished = false
+    private(set) var calls = 0
+    init(pendingAtPromotion: Bool) { self.pendingAtPromotion = pendingAtPromotion }
+    func finish() { finished = true }
+    func capabilities() async throws -> StorageCapabilities {
+        .init(waitsForDurability: true, supportsMaterialization: false, supportsEviction: false)
+    }
+    func prepareForRead(_ location: URL) async throws {}
+    func prepareForWrite(at root: URL) async throws {}
+    func waitUntilDurable(_ location: URL) async throws -> VaultDurability {
+        calls += 1
+        if !finished && (!pendingAtPromotion || location.path.contains("/generations/")) {
+            throw FileProviderArchiveStorageError.uploadPending
+        }
+        return .syncedToProvider
+    }
+    func materialize(_ location: URL) async throws {}
+    func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }
 }

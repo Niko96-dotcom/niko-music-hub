@@ -557,6 +557,7 @@ public struct VaultAutomationFailureNotification: Equatable, Sendable {
 public enum VaultAutomationRunResult: Equatable, Sendable {
     case postponed(ProjectID, VaultAutomationPostponement)
     case archived(ProjectID, VaultTransferRecord)
+    case pending(ProjectID, VaultTransferRecord)
     case failed(VaultAutomationFailureNotification)
 }
 
@@ -608,6 +609,10 @@ public actor VaultAutomationScheduler {
             }
             do {
                 let archived = try await archiver.archive(projectID: candidate.projectID, sourceURL: candidate.sourceURL)
+                if archived.isWaitingForProviderUpload {
+                    results.append(.pending(candidate.projectID, archived))
+                    continue
+                }
                 if !removesActiveCopy {
                     results.append(.archived(candidate.projectID, archived))
                     continue

@@ -11,6 +11,7 @@ public enum FileProviderArchiveStorageError: Error, Equatable, Sendable {
     case expectedItemMismatch
     case expectedFileSizeMismatch(URL, expected: Int64, actual: Int64)
     case durabilityUnavailable
+    case uploadPending
     case materializationUnavailable
     case operationTimedOut
 }
@@ -233,6 +234,10 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
             try validate(location)
             try await service.waitForChanges(root: location)
             return .syncedToProvider
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch FileProviderArchiveStorageError.operationTimedOut {
+            throw FileProviderArchiveStorageError.uploadPending
         } catch {
             throw FileProviderArchiveStorageError.durabilityUnavailable
         }

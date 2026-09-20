@@ -315,6 +315,27 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertEqual(otherDeadline, otherSong.nextRetryAt)
     }
 
+    func testPendingUploadSchedulesRecoveryWithoutFailureBudgetAndHonorsEmergencyStop() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: false)
+        let store = try fixture.transferStore()
+        var record = try fixture.failedDurabilityRecord()
+        record.state = .awaitingProviderDurability
+        record.error = nil
+        record.retryCount = 10
+        record.nextRetryAt = Date().addingTimeInterval(60)
+        try store.save(record)
+        let runtime = try fixture.runtime()
+        let next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertEqual(next, record.nextRetryAt)
+        await runtime.recoverAtLaunch()
+        XCTAssertEqual(try store.record(id: record.id), record)
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        let stopped = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(stopped)
+    }
+
     func testAutomaticRecoveryDeadlineHonorsBackoffBudgetAndSafetyGates() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

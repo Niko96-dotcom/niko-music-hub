@@ -37,7 +37,12 @@ extension ArchiveBrowserViewModel {
         if let operation = projectVaultActiveOperation, operation.songID == song.id {
             return projectVaultRestoreProgress?.title ?? operation.startMessage
         }
-        return projectVaultOperationMessages[song.id]
+        let message = projectVaultOperationMessages[song.id]
+        if message == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
+           projectVaultSnapshot(for: song)?.transfer?.isWaitingForProviderUpload != true {
+            return nil // The current presentation owns the result of background recovery.
+        }
+        return message
     }
 
     func cancelQueuedProjectVaultOperation(for song: Song) {

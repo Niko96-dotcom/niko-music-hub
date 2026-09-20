@@ -328,6 +328,10 @@ extension ArchiveBrowserViewModel {
                 model.cacheProjectVaultSnapshot(snapshot)
                 model.rebuildProjectVaultPresentationCache()
                 await model.refreshProjectVaultSnapshots()
+                if snapshot.transfer?.isWaitingForProviderUpload == true {
+                    model.setProjectVaultStatusMessage(ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability))
+                    return true
+                }
                 let livePath = model.songs.first(where: { $0.id == song.id })?.folderPath ?? song.folderPath
                 let activeRetained = FileManager.default.fileExists(atPath: livePath.path)
                 model.setProjectVaultStatusMessage(activeRetained

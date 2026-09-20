@@ -67,6 +67,12 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         self.preservedArchiveCopies = nil
     }
 
+    /// A bounded provider check yielded while cloud upload is still pending.
+    public var isWaitingForProviderUpload: Bool {
+        (state == .awaitingProviderDurability || state == .promotingArchiveGeneration)
+            && nextRetryAt != nil && error == nil
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, projectID, sourceURL, stagingURL, destinationURL
         case manifestID, manifest, projectionSupplement, state, completedBytes, totalBytes, retryCount

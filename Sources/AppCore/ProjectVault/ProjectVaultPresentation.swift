@@ -330,7 +330,7 @@ public enum ProjectVaultActivityExplanation {
         switch state {
         case .copyingToArchiveStaging: return "Copying into a private staging folder. The Active copy is untouched."
         case .verifyingArchiveStaging: return "Verifying every staged file before publishing the archive generation."
-        case .awaitingProviderDurability: return "Waiting for the archive provider to confirm sync. The Active copy remains local."
+        case .awaitingProviderDurability, .promotingArchiveGeneration: return "Waiting for cloud upload. Checks resume automatically; the Active copy remains local."
         case .removingActiveCopy: return "Archive durability and metadata are verified; removing only the superseded Active copy."
         case .failedRecoverable: return "Work paused safely and can be retried. Existing copies were kept."
         case .recoveryRequired: return "A choice is required. Project Vault kept every known copy."

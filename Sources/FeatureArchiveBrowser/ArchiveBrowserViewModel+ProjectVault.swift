@@ -182,6 +182,10 @@ extension ArchiveBrowserViewModel {
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
             projectVaultSnapshots = snapshots
+            if statusBaseMessage == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
+               !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {
+                setProjectVaultStatusMessage(nil)
+            }
             projectVaultSnapshotsByPath.removeAll()
             snapshots.forEach(cacheProjectVaultSnapshot)
             archivedProjectCount = archivedOnlySnapshots(from: snapshots).count

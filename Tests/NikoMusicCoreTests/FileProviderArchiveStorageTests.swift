@@ -8,6 +8,8 @@ private actor StubFileProviderArchiveService: FileProviderArchiveServicing {
         case available
         case inspectionUnavailable
         case durabilityUnavailable
+        case uploadTimeout
+        case cancelled
         case materializationUnavailable
         case evictionUnavailable
     }
@@ -48,6 +50,8 @@ private actor StubFileProviderArchiveService: FileProviderArchiveServicing {
 
     func waitForChanges(root: URL) throws {
         durabilityRoots.append(root)
+        if behavior == .uploadTimeout { throw FileProviderArchiveStorageError.operationTimedOut }
+        if behavior == .cancelled { throw CancellationError() }
         if behavior == .durabilityUnavailable {
             throw FileProviderArchiveStorageError.domainDisconnected
         }
@@ -592,6 +596,19 @@ final class FileProviderArchiveStorageTests: XCTestCase {
         let durabilityRoots = await service.durabilityRoots
         XCTAssertEqual(durability, .syncedToProvider)
         XCTAssertEqual(durabilityRoots, [root.standardizedFileURL])
+    }
+
+    func testUploadTimeoutRemainsPendingAndCancellationStaysCancellation() async {
+        for behavior in [StubFileProviderArchiveService.Behavior.uploadTimeout, .cancelled] {
+            let storage = FileProviderArchiveStorage(root: root, service: StubFileProviderArchiveService(behavior))
+            do {
+                _ = try await storage.waitUntilDurable(root)
+                XCTFail("Pending or cancelled upload must never claim durability")
+            } catch {
+                if behavior == .cancelled { XCTAssertTrue(error is CancellationError) }
+                else { XCTAssertEqual(error as? FileProviderArchiveStorageError, .uploadPending) }
+            }
+        }
     }
 
     func testAmbiguousDurabilityNeverClaimsProviderSync() async {

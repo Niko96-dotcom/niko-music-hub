@@ -73,13 +73,15 @@ extension LiveProjectVaultRuntime {
         guard let retried = await engine.retryRecoverableTransfer(id: failed.id) else {
             throw ProjectVaultRuntimeError.unavailable
         }
-        guard retried.id == failed.id, retried.state == .archiveVerified else {
+        guard retried.id == failed.id, (retried.state == .archiveVerified || retried.isWaitingForProviderUpload) else {
             throw ProjectVaultRuntimeError.archiveFailed(
                 retried.error?.message
                     ?? "The recoverable transfer stopped in \(retried.state.rawValue) before verification."
             )
         }
-        try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
+        if retried.state == .archiveVerified {
+            try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
+        }
         // Project the verified transfer onto the current catalog entry, as
         // `snapshots()` would, so the caller does not cache the stale input record.
         guard let entry = try catalogStore.loadEntries().first(where: { $0.record.id == snapshot.record.id }) else {
@@ -95,6 +97,7 @@ extension LiveProjectVaultRuntime {
         guard !(try settingsStore.loadSettings()).vault.automationEmergencyStop else { return nil }
         let candidates = VaultTransferRecoveryPolicy.candidates(from: try transferStore.recoverableRecords())
         return candidates.compactMap { record -> Date? in
+            if record.isWaitingForProviderUpload { return record.nextRetryAt }
             guard record.state == .failedRecoverable,
                   record.retryCount < recoveryPolicy.maximumAutomaticAttempts,
                   let origin = record.error?.origin,

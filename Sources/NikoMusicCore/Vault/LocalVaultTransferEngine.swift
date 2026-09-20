@@ -348,6 +348,10 @@ public actor LocalVaultTransferEngine {
                 }
                 continue
             }
+            if record.isWaitingForProviderUpload, let due = record.nextRetryAt, due > now() {
+                results.append(record)
+                continue
+            }
             if record.state == .failedRecoverable,
                !recoveryPolicy.permitsAutomaticAttempt(for: record, at: now()) {
                 results.append(record)
@@ -779,6 +783,14 @@ public actor LocalVaultTransferEngine {
                     throw LocalVaultTransferError.unsafeDestinationPath
                 }
             }
+        } catch FileProviderArchiveStorageError.uploadPending
+            where record.state == .awaitingProviderDurability || record.state == .promotingArchiveGeneration {
+            // A slow upload is not a failed transfer. Persist its exact phase,
+            // release the work queue, and let recovery check again in a minute.
+            record.error = nil
+            record.nextRetryAt = now().addingTimeInterval(60)
+            try persist(&record)
+            return record
         } catch is VaultTransferInterruption {
             throw VaultTransferInterruption()
         } catch is CancellationError {

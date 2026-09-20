@@ -45,7 +45,9 @@ extension ArchiveBrowserViewModel {
                 model.cacheProjectVaultSnapshot(updated)
                 model.rebuildProjectVaultPresentationCache()
                 if await model.refreshProjectVaultSnapshots() {
-                    model.setProjectVaultStatusMessage("Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
+                    model.setProjectVaultStatusMessage(updated.transfer?.isWaitingForProviderUpload == true
+                        ? ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability)
+                        : "Backup copy verified. Choose Archive Now to remove the Active copy after its safety checks.")
                 } else {
                     model.setProjectVaultStatusMessage("Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action.")
                 }

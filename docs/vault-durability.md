@@ -15,6 +15,21 @@ failure throws fail-closed, preserves every byte, and reports a clear blocked
 reason. Vault functionality is never disabled to hide a missing proof, and a
 missing proof never authorizes deletion.
 
+## Pending cloud uploads
+
+A File Provider upload that exceeds a bounded check stays pending, rather than
+becoming a failed transfer. The transfer journal retains the staging or promotion
+phase and schedules another check after 60 seconds. The mounted browser runs that
+check automatically; relaunch recovery also respects the persisted deadline.
+These waits do not consume the failure retry budget or recopy the project.
+Provider errors still use the existing bounded failure recovery policy, and
+cancellation remains an explicit stop. Emergency Stop suspends automatic recovery.
+
+The Active source remains intact throughout. Background recovery verifies both
+provider barriers and the final generation content, then stops at `archiveVerified`.
+It does not persist or reuse an old Active-removal authorization: removal still
+requires the existing fresh confirmation and safety checks.
+
 ## Barrier sequence (local generations)
 
 For a staging or promoted generation directory inside the configured archive
