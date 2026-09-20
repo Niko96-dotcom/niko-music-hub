@@ -73,6 +73,9 @@ CANONICAL_BUILD_ID = f"{VERSION}+{FAKE_SHORT}"
 TEST_IDENTITY = "Developer ID Application: Release Test (TEAM)"
 OTHER_IDENTITY = "Developer ID Application: Release Test (OTHER)"
 TIMESTAMP = "2026-07-13T12:00:00Z"
+# Explicit truthful AI executor identifier: non-placeholder free text the
+# existing validator already accepts (no schema change). Never a human name.
+AI_ACTOR = "ai-acceptance Muse Spark session-304774ee"
 
 
 def clean_env() -> dict[str, str]:
@@ -348,6 +351,106 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             result = run_cmd(uat_args(uat))
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("release UAT evidence ok", result.stdout)
+
+    def test_uat_validator_accepts_explicit_ai_actor(self) -> None:
+        # No mandatory human approver: a truthful non-placeholder AI
+        # agent/session identifier passes the standalone validator under the
+        # existing schema (no new schema, no weakened requirement).
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            write_uat(uat)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+            result = run_cmd(uat_args(uat))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("release UAT evidence ok", result.stdout)
+
+    def test_approval_accepts_explicit_ai_actor(self) -> None:
+        # Same AI actor passes the final approval validator when every other
+        # byte (hashes, exact ten checks, build/signing binding) is valid.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            artifact, manifest, uat, approval = build_valid_bundle(tmp)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+            generate_approval(
+                approval,
+                artifact.name,
+                sha_file(artifact),
+                manifest.name,
+                sha_file(manifest),
+                uat.name,
+                sha_file(uat),
+                uat_approved_by=AI_ACTOR,
+            )
+            result = run_cmd(approval_args(approval, artifact, manifest, uat))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("release approval ok", result.stdout)
+
+    def test_ai_actor_pending_or_missing_checks_still_reject(self) -> None:
+        # The AI actor confers no leniency: pending and missing checks still
+        # fail closed in both validators, using the existing helpers.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            write_uat(uat)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+            mutate_json(uat, lambda payload: payload["checks"].__setitem__("privacy_permissions", "pending"))
+            standalone = run_cmd(uat_args(uat))
+            self.assertNotEqual(standalone.returncode, 0)
+            self.assertIn("must be passed", standalone.stderr)
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            artifact, manifest, uat, approval = build_valid_bundle(tmp)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+            mutate_json(uat, lambda payload: payload["checks"].__setitem__("archive_read_only", "pending"))
+            generate_approval(
+                approval,
+                artifact.name,
+                sha_file(artifact),
+                manifest.name,
+                sha_file(manifest),
+                uat.name,
+                sha_file(uat),
+                uat_approved_by=AI_ACTOR,
+            )
+            result = run_cmd(approval_args(approval, artifact, manifest, uat))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("must be passed", result.stderr)
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            write_uat(uat)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+
+            def drop_check(payload) -> None:
+                del payload["checks"]["e2e_user_smoke"]
+
+            mutate_json(uat, drop_check)
+            standalone = run_cmd(uat_args(uat))
+            self.assertNotEqual(standalone.returncode, 0)
+            self.assertIn("unknown checks", standalone.stderr)
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            artifact, manifest, uat, approval = build_valid_bundle(tmp)
+            mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
+
+            def drop_check(payload) -> None:
+                del payload["checks"]["e2e_user_smoke"]
+
+            mutate_json(uat, drop_check)
+            generate_approval(
+                approval,
+                artifact.name,
+                sha_file(artifact),
+                manifest.name,
+                sha_file(manifest),
+                uat.name,
+                sha_file(uat),
+                uat_approved_by=AI_ACTOR,
+            )
+            result = run_cmd(approval_args(approval, artifact, manifest, uat))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unknown checks", result.stderr)
 
     def test_uat_rejects_inconsistent_expected_build_id(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

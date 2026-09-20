@@ -5,6 +5,15 @@ Single source of truth for UAT semantics used by both
 script/validate-release-uat.sh (standalone, one byte snapshot) and
 script/validate-release-approval.sh (same bytes that were hashed).
 
+Acceptance is evidence-backed AI computer-use per
+docs/ai-acceptance-testing.md (owner-authorized; no mandatory human
+approver). approved_by accepts any truthful non-placeholder executor
+identifier, including an AI agent/session identifier (never a human
+name the executor is not); it must never impersonate a human. Schema
+stays schema_version int 1 with exactly the ten required checks; no
+new schema is introduced and pending/failed requirements are not
+weakened.
+
 Strict types: schema_version must be int 1 (not "1", not True),
 hardened_runtime must be boolean True (not "true", not 1), all other
 identity fields must be exact strings. Placeholder/blank/whitespace
@@ -20,7 +29,11 @@ TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{
 
 
 def is_placeholder_or_blank(value: object) -> bool:
-    """True when a human-owned free-text field is still a template value."""
+    """True when an executor-owned free-text field is still a template value.
+
+    AI agent/session identifiers are accepted; TODO, TODO_*, REPLACE_WITH_*,
+    blank, and whitespace-only values are rejected.
+    """
     if not isinstance(value, str):
         return True
     stripped = value.strip()
@@ -42,7 +55,13 @@ def validate_uat(
     expected_signing_identity: str,
     required_checks: list[str],
 ) -> None:
-    """Validate UAT semantics; raises SystemExit with a stable message."""
+    """Validate UAT semantics; raises SystemExit with a stable message.
+
+    approved_by may be an AI agent/session identifier or the responsible
+    operator, provided it is truthful, non-placeholder, and never
+    impersonates a human. Schema, exact ten-check, and fail-closed
+    (pending/failed reject) semantics are unchanged.
+    """
     # schema_version must be int 1, not string "1" and not bool True
     # (True == 1 in Python, so exclude bools explicitly).
     schema = payload.get("schema_version")

@@ -4,7 +4,7 @@
   "commit": "REPLACE_WITH_FULL_GIT_COMMIT_OF_TESTED_HEAD",
   "bundle_id": "com.niko96.NikoMusicHub",
   "status": "pending",
-  "approved_by": "TODO_REAL_NAME_REQUIRED",
+  "approved_by": "TODO_TEST_EXECUTOR_REQUIRED",
   "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP_YYYY-MM-DDTHH-MM-SSZ",
   "machine": "TODO_ARCH_AND_MACOS_OF_TESTED_MACHINE",
   "tested_build": {
@@ -25,5 +25,5 @@
     "output_handoffs": "pending",
     "e2e_user_smoke": "pending"
   },
-  "notes": "Copy outside the repo and fill only after testing the exact commit as the build shape that ships (release configuration, exact NMH_DEVELOPER_ID_APPLICATION identity, hardened runtime). Validators require status=approved, exact commit/version/bundle match, exact tested_build.build_id for that commit (stale builds fail), exact intended signing identity with UAT and manifest on the same team, all ten checks passed with no unknown checks, and real approved_by/approved_at_utc/machine values. Set every check to passed only with durable evidence; do not approve from automated checks alone."
+  "notes": "Copy outside the repo and fill only after testing the exact commit as the build shape that ships (release configuration, exact NMH_DEVELOPER_ID_APPLICATION identity, hardened runtime) following docs/ai-acceptance-testing.md. Validators require status=approved, exact commit/version/bundle match, exact tested_build.build_id for that commit (stale builds fail), exact intended signing identity with UAT and manifest on the same team, all ten checks passed with no unknown checks (pending/failed fail closed), and real approved_by/approved_at_utc/machine values. approved_by names the truthful test executor: an AI agent/session identifier (for example 'ai-acceptance <agent> <session>') or the responsible operator; never impersonate a human. Set every check to passed only with durable observation/artifact evidence; automated assertions without observed runtime and artifact evidence do not satisfy acceptance."
 }

@@ -695,7 +695,7 @@ if [[ "$MODE" == "public" ]]; then
   # bytes even if the external original changes afterwards. The frozen digest
   # is captured before validation and re-checked after, so a writer to RUN_DIR
   # cannot replace the frozen bytes between freeze and use. Never reuse test
-  # or historical human UAT for a real release: evidence must name the exact
+  # or historical UAT for a real release: evidence must name the exact
   # pinned commit/build/id verified below.
   if ! FROZEN_UAT="$(nmh_snapshot_freeze_uat "$NMH_RELEASE_UAT_EVIDENCE" "$RUN_DIR")"; then
     exit 1

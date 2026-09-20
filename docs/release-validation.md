@@ -53,7 +53,10 @@ This validates:
   `--commit COMMIT --expected-build-id VERSION+short12
   --expected-signing-identity NMH_DEVELOPER_ID_APPLICATION`; the same frozen bytes
   back the approval's UAT hash and both final approval validations; never reuse
-  test or historical human UAT)
+  test or historical UAT; acceptance is evidence-backed AI computer-use per
+  `docs/ai-acceptance-testing.md` with no mandatory human approver, and
+  `approved_by` truthfully identifies the AI agent/session without impersonating
+  a human)
 - immutable approval data tying every gate to the artifact and evidence hashes
 - update feed generation, and both the enclosure and feed EdDSA signatures verified against the public key embedded in the candidate bundle
 - pinned-source provenance: `snapshot-provenance.json` (copied into `dist/release/`)

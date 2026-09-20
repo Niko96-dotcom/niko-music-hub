@@ -108,7 +108,12 @@ Friendly wrappers: `./script/dev.sh run`, `./script/dev.sh doctor`, `./script/de
 
 `VERSION` is the canonical release version; `BUNDLE_ID` is the permanent app identity. Release is
 fail-closed and local: `script/release-all.sh`. Every public build requires a newly approved
-exact-commit UAT record. See `docs/release.md` and `docs/release-validation.md`.
+exact-commit UAT record produced by evidence-backed AI computer-use acceptance per
+`docs/ai-acceptance-testing.md` (owner-authorized; no mandatory human approver). `approved_by`
+truthfully identifies the AI agent/session and never impersonates a human; every passed check
+needs durable observation/artifact evidence for the exact final SHA, and policy edits require a
+new candidate before final acceptance. Never fabricate a human approval or a passed result.
+See `docs/release.md` and `docs/release-validation.md`.
 
 In-app updates use Sparkle, pinned exactly, isolated in the `AppUpdates` module. `SPARKLE_PUBLIC_ED_KEY`
 holds the public signing key; the private half stays in the release owner's Keychain. The feed URL in

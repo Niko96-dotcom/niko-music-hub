@@ -19,8 +19,8 @@
 - [ ] `./script/ci-tsan.sh` passed.
 - [ ] `./script/release-all.sh --public --dry-run-publish` rehearsed on the exact commit (before tagging; it accepts a missing tag).
 - [ ] Public tag `v<VERSION>` points at the intended commit.
-- [ ] UAT ran on a Developer ID, hardened-runtime, release-configuration install of the exact commit (`NMH_BUILD_CONFIGURATION=release NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" ./script/install-local.sh`), and the JSON's `tested_build` records it.
-- [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved.
+- [ ] UAT ran on a Developer ID, hardened-runtime, release-configuration install of the exact commit (`NMH_BUILD_CONFIGURATION=release NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" ./script/install-local.sh`) per `docs/ai-acceptance-testing.md` (evidence-backed AI computer-use; no mandatory human approver), and the JSON's `tested_build` records it.
+- [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved, with `approved_by` as the truthful AI agent/session identifier (never impersonating a human).
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
 - [ ] `appcast.xml` was generated after stapling and validated against the key and exact `CFBundleShortVersionString`/`CFBundleVersion` embedded in the candidate app; it contains one full `arm64` enclosure and no delta.
@@ -28,4 +28,4 @@
 - [ ] Hosted assets were downloaded and revalidated, including the hosted update feed.
 - [ ] Installed `/Applications/NikoMusicHub.app` matches `VERSION`, `BUNDLE_ID`, and `NMHBuildID`.
 - [ ] Approval JSON records every gate, command, result, timestamp, machine, commit, bundle ID, UAT hash, and artifact hash.
-- [ ] No release-critical check is pending or `human_needed`; any emergency override is explicit and justified.
+- [ ] No release-critical check is pending, failed, or otherwise not passed (fail-closed); any emergency override is explicit and justified.
