@@ -414,7 +414,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.recordingState, .idle)
     }
 
-    func testNoAudioCapturedMapsToPermissionNeeded() async throws {
+    func testNoAudioCapturedRemainsCaptureFailureWithoutClaimingPermissionDenied() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-no-audio-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -433,9 +433,8 @@ final class AudioRecorderViewModelTests: XCTestCase {
         try await waitUntilRecording(port)
         await vm.stopRecording()
 
-        XCTAssertEqual(vm.recordingState, .permissionNeeded)
-        if case .error = vm.recordingState {
-            XCTFail("Expected .permissionNeeded, not .error")
+        guard case .error(.noAudioCaptured) = vm.recordingState else {
+            return XCTFail("Expected a no-audio failure, got \(vm.recordingState)")
         }
         XCTAssertEqual(try inbox.listItems().count, 0)
     }
@@ -462,10 +461,20 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.recordingState, .permissionNeeded)
     }
 
+    func testMentioningPrivacySettingsDoesNotEstablishDenial() {
+        for message in [
+            "No frames. Check Screen & System Audio Recording permission.",
+            "Screen recording stream stopped unexpectedly",
+            "TCC permission was granted but the audio device is unavailable"
+        ] {
+            XCTAssertEqual(RecordingDisplayState.presentation(for: .apiError(message)), .error(.apiError(message)))
+        }
+    }
+
     func testPresentationMapsNoAudioAndPermissionClassErrors() {
         XCTAssertEqual(
             RecordingDisplayState.presentation(for: .noAudioCaptured("no frames")),
-            .permissionNeeded
+            .error(.noAudioCaptured("no frames"))
         )
         XCTAssertEqual(
             RecordingDisplayState.presentation(for: .apiError("not authorized to capture system audio")),

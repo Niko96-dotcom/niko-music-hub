@@ -12,9 +12,8 @@ public enum RecordingDisplayState: Equatable {
     case stopping
     case error(RecorderError)
 
-    /// Core Audio cannot preflight Screen & System Audio Recording. After a
-    /// failed take, map the permission-shaped failures onto the existing
-    /// permission card instead of a generic error card.
+    /// Only an explicit authorization failure belongs on the permission card.
+    /// Missing PCM frames also occurs when no system audio is playing.
     static func presentation(for error: RecorderError) -> RecordingDisplayState {
         if indicatesCapturePermissionFailure(error) {
             return .permissionNeeded
@@ -25,7 +24,7 @@ public enum RecordingDisplayState: Equatable {
 
 private func indicatesCapturePermissionFailure(_ error: RecorderError) -> Bool {
     switch error {
-    case .noAudioCaptured, .permissionDenied:
+    case .permissionDenied:
         return true
     case .apiError(let message):
         return messageIndicatesCapturePermissionFailure(message)
@@ -39,15 +38,11 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
     let markers = [
         "not authorized",
         "unauthorized",
-        "tcc",
         "not permitted",
         "permission denied",
         "permission is denied",
         "user declined",
         "denied authorization",
-        "screen recording",
-        "screen & system audio",
-        "system audio recording",
     ]
     return markers.contains { lowered.contains($0) }
 }
@@ -301,17 +296,14 @@ public final class AudioRecorderViewModel: ObservableObject {
             _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)
             let file = try AVAudioFile(forReading: result.outputURL)
             guard file.length > 0 else {
-                // The IO cycle ran (input callbacks fired) but no PCM frames ever reached
-                // the writer. This is macOS not delivering system-audio frames — it is not
-                // a route/device problem and not a malformed WAV. Surface it as the
-                // terminal no-audio error with actionable, permission-focused guidance.
+                // Callbacks without PCM do not establish a permission denial.
+                // Keep the no-audio failure distinct from a corrupt output file.
                 if let diagnostics = result.diagnostics,
                    diagnostics.inputBufferCallbackCount > 0,
                    diagnostics.inputFrameCount == 0 {
                     throw RecorderError.noAudioCaptured(
                         "macOS did not deliver any audio frames to the recorder. "
-                            + "Check that Screen & System Audio Recording permission is granted "
-                            + "for Niko Music Hub, then retry. CoreAudio diagnostics: \(diagnostics.summary)."
+                            + "Start audio playback and try again. CoreAudio diagnostics: \(diagnostics.summary)."
                     )
                 }
                 // Frames arrived but nothing was written (a genuine converter/write/WAV-spec

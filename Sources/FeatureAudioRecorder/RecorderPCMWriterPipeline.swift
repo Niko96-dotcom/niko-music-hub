@@ -150,7 +150,7 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         guard writer.writtenFrameCount > 0 else {
             let error = RecorderError.noAudioCaptured(
                 "The recorder tried both system-audio capture methods, but macOS did not deliver audio frames. "
-                    + "Check Screen & System Audio Recording permission, then retry. Diagnostics: \(snapshot.summary)."
+                    + "Start audio playback and try again. Diagnostics: \(snapshot.summary)."
             )
             finalizationState = .failed(error)
             try? FileManager.default.removeItem(at: outputURL)

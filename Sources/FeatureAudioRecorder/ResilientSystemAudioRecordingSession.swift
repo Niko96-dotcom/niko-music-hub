@@ -304,7 +304,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         let reasons = failureReasons.joined(separator: "; ")
         return .noAudioCaptured(
             "The recorder tried both system-audio capture methods, but macOS did not deliver audio frames. "
-                + "Check Screen & System Audio Recording permission, then retry. Attempts: \(reasons). "
+                + "Start audio playback and try again. Attempts: \(reasons). "
                 + "Diagnostics: \(diagnostics.summary)."
         )
     }

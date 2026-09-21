@@ -447,11 +447,10 @@ public struct AudioRecorderView: View {
         case .noAudioCaptured:
             return AppErrorCard(
                 category: .conversionFile,
-                label: "No Audio Captured",
+                label: "No Audio Received",
                 icon: "waveform.badge.exclamationmark",
-                body: "macOS did not deliver any audio frames to the recorder. Check that Screen & System Audio Recording permission is granted for Niko Music Hub, then retry.",
+                body: "The recorder did not receive system audio. Start playback in another app, then try again. If audio is already playing, check its output device.",
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Open System Audio Recording Settings", style: .secondary, action: .openSystemSettings),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
@@ -485,7 +484,7 @@ public struct AudioRecorderView: View {
         case .stopping:
             return "Stopping…"
         case .error(let error):
-            return error.localizedDescription
+            return cardFor(error).label
         }
     }
 
