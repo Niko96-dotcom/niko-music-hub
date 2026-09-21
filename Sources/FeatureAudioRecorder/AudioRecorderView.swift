@@ -202,6 +202,7 @@ public struct AudioRecorderView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: HubDesignSystem.Size.buttonMinHeight)
                 .padding(.horizontal, 12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             // NMH-142 (K11): FKA pattern from the BPM tap pad (NMH-029) — Tab
