@@ -67,10 +67,6 @@ public struct DownloaderView: View {
 
     @ViewBuilder
     private var liveSection: some View {
-        if viewModel.downloadState == .downloading {
-            progressSection
-            logArea
-        }
         if viewModel.downloadState == .canceled {
             canceledSection
         }
@@ -116,11 +112,15 @@ public struct DownloaderView: View {
             .opacity(viewModel.downloadState == .downloading ? 0.62 : 1)
             .disabled(viewModel.downloadState == .downloading)
 
-            Text(DownloaderCopy.trustNotice)
-                .font(HubDesignSystem.Typography.micro())
-                .italic()
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            if viewModel.downloadState == .downloading {
+                progressSection
+            } else {
+                Text(DownloaderCopy.trustNotice)
+                    .font(HubDesignSystem.Typography.micro())
+                    .italic()
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(HubDesignSystem.Spacing.cardPadding)
@@ -288,17 +288,17 @@ public struct DownloaderView: View {
             .progressViewStyle(.linear)
             .tint(HubDesignSystem.Colors.indicator)
 
-            if viewModel.showsDeterminateProgress {
-                Text("\(Int(viewModel.progress * 100))% complete")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            HStack {
+                if viewModel.showsDeterminateProgress {
+                    Text("\(Int(viewModel.progress * 100))% complete")
+                }
+                Spacer()
+                TimelineView(.periodic(from: viewModel.downloadStartedAt ?? .now, by: 1)) { context in
+                    Text(viewModel.elapsedCaption(at: context.date))
+                }
             }
-
-            TimelineView(.periodic(from: viewModel.downloadStartedAt ?? .now, by: 1)) { context in
-                Text(viewModel.elapsedCaption(at: context.date))
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            }
+            .font(HubDesignSystem.Typography.bodySmall())
+            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
             if viewModel.slowHintVisible {
                 Text(DownloadStallMonitor.slowHintMessage)
@@ -307,12 +307,10 @@ public struct DownloaderView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
-        .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
     }
 
     private var downloadActions: some View {
-        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+        Group {
             HubLabeledButton(
                 icon: "arrow.down.circle",
                 label: DownloaderCopy.download,
@@ -324,13 +322,15 @@ public struct DownloaderView: View {
                 viewModel.startDownload()
             }
 
-            if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled {
-                Button(DownloaderCopy.download) {
-                    viewModel.startDownload()
+            .background {
+                if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled {
+                    Button(DownloaderCopy.download) {
+                        viewModel.startDownload()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.defaultAction)
-                .hidden()
-                .accessibilityHidden(true)
             }
 
             if viewModel.downloadState == .downloading {
@@ -372,25 +372,6 @@ public struct DownloaderView: View {
             expands: true
         ) {
             viewModel.cancelDownload()
-        }
-    }
-
-    private var logArea: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Text("Log")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(viewModel.logEntries, id: \.self) { entry in
-                    Text(entry)
-                        .font(HubDesignSystem.Typography.mono(size: 10))
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.row)
         }
     }
 

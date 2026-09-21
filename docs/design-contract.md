@@ -130,11 +130,15 @@ Every production tool (BPM Tapper, WAV Converter, Audio Recorder, Downloader,
 Stem Separation) renders through `HubInspectorPage`:
 
 - `header` — `ToolHeaderBlock(title:statusText:)`; status is `""`/nil when idle.
-- `live` — exists only while something is happening (progress, "Recording saved",
-  errors). Idle pages have no live strip.
+- `live` — actionable errors and recovery notices inside the scrollable content,
+  never inserted above the primary object. Idle pages have no live strip.
+- Working progress and saved confirmations replace content INSIDE the fixed primary
+  object. Starting, finishing, or canceling work must not move the header, primary
+  bounds, or inspector actions. Show readable phases; raw helper logs stay out of
+  the main interface. Verify busy and completed states as well as idle.
 - `primary` — the page's ONE bounded object at 168pt: drop zone, tap pad (with
   the 44pt `Typography.readout()` BPM), capture readout (timer), URL entry card.
-- `list` — **scrolls** (the scaffold wraps it; header, live strip and the bounded
+- `list` — **scrolls** (the scaffold wraps it; header and the bounded
   object stay pinned). A flat `HubListSection` (`HubListRow`, hairlines, `HubListEmpty` one-liner)
   that is the page's content: Queue, Recent Tempos, Recordings, Details, Results.
   Produced files go through the shared `ToolOutputShelf` (keeps the drag-to-DAW

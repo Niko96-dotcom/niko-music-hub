@@ -55,6 +55,18 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §4 — transient notices may not push the fixed primary object down.
+    func testLiveNoticesAreInsideScrollingContent() throws {
+        let source = try read("Sources/AppCore/Components/HubInspectorPage.swift")
+        let body = try XCTUnwrap(source.range(of: "public var body: some View"))
+        let content = String(source[body.lowerBound...])
+        let scroll = try XCTUnwrap(content.range(of: "ScrollView {"))
+        let live = try XCTUnwrap(content.range(of: "                        live"))
+        XCTAssertLessThan(scroll.lowerBound, live.lowerBound)
+        let downloader = try read("Sources/FeatureDownloader/DownloaderView.swift")
+        XCTAssertFalse(downloader.contains("viewModel.logEntries"), "Raw helper logs must not appear in the tool page")
+    }
+
     // §4 — the growing list scrolls inside the content column. Without this a long
     // queue or stem run (28 rows shipped broken in 1.6.0 prep) pushes the whole
     // window open and clips the sidebar.

@@ -130,7 +130,7 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
                         self?.handleLine(line, progressHandler: progressHandler)
                     },
                     onStandardError: { [weak self] line in
-                        self?.handleLine(line, isError: true, progressHandler: progressHandler)
+                        self?.handleLine(line, progressHandler: progressHandler)
                     }
                 )
             } else {
@@ -201,21 +201,13 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     private func handleLine(
         _ line: String,
-        isError: Bool = false,
         progressHandler: @escaping @Sendable (Double?, String?) -> Void
     ) {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        if isError {
-            progressHandler(nil, "stderr: \(trimmed)")
-            return
-        }
-
         if let parsed = progressParser.parse(line: trimmed) {
             progressHandler(parsed.progress, parsed.message)
-        } else {
-            progressHandler(nil, trimmed)
         }
     }
 }

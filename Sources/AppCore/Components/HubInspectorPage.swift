@@ -2,9 +2,8 @@ import SwiftUI
 
 /// Tool-page scaffold: content on the left, a fixed inspector on the right.
 ///
-/// Left column (flexible): `HubPageHeader` on the shared keyline, an optional
-/// live strip (progress / banner) that only exists while something is
-/// happening, the page's one bounded object at a fixed height (drop zone,
+/// Left column (flexible): `HubPageHeader` on the shared keyline, one
+/// bounded object at a fixed height (drop zone,
 /// tap pad, capture readout, URL entry), then a flat list that fills the rest.
 /// Right column (fixed `inspectorWidth`, sidebar chrome material, hairline seam): the
 /// page's options as labelled groups, and the primary action pinned at the
@@ -46,17 +45,19 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
                 header
-                live
                 primary
                     .frame(maxWidth: .infinity)
                     .frame(height: Self.primaryHeight)
                 // The list is the only part that grows, so it is the only part that
-                // scrolls: header, live strip and the bounded object stay on their
+                // scrolls: header and the bounded object stay on their
                 // keylines no matter how many rows exist (a queue or a stem run can
                 // be dozens of rows, which otherwise pushes the whole window open).
                 ScrollView {
-                    list
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
+                        live
+                        list
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .scrollBounceBehavior(.basedOnSize)

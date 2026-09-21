@@ -7,6 +7,16 @@ struct DemucsMLXProgressParserTests {
     private let parser = DemucsMLXProgressParser()
 
     @Test
+    func terminalOutputBecomesReadableProgress() {
+        let result = parser.parse(line: "\u{001B}[32mTracks: 50%|████ | 1/2 [00:10<00:10, 0.1track/s]")
+        #expect(result?.progress == 0.5)
+        #expect(result?.message == "Separating stems…")
+        #expect(parser.parse(line: "Model htdemucs_6s version 4.0") == nil)
+        #expect(parser.parse(line: "/tmp/song2026.wav") == nil)
+        #expect(parser.parse(line: "WARNING: backend initialized") == nil)
+    }
+
+    @Test
     func parse_progressLines() {
         let cases: [(String, Double?)] = [
             ("0%", 0.0),
@@ -46,7 +56,7 @@ struct DemucsMLXProgressParserTests {
         #expect(progressValues.contains(0.0))
         #expect(progressValues.contains(0.5))
         #expect(progressValues.contains(1.0))
-        #expect(messages.contains("Loading model htdemucs..."))
+        #expect(messages.contains("Loading model…"))
     }
 
     @Test
@@ -65,7 +75,7 @@ struct DemucsMLXProgressParserTests {
                 }
             }
         }
-        #expect(messages.contains("Downloading model weights..."))
+        #expect(messages.contains("Downloading model…"))
         #expect(progressValues.contains(0.25))
         #expect(progressValues.contains(0.5))
     }

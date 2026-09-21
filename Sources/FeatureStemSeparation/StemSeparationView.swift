@@ -35,9 +35,6 @@ public struct StemSeparationView: View {
 
     @ViewBuilder
     private var liveSection: some View {
-        if viewModel.isRunning {
-            progressRow
-        }
         if viewModel.helperNeedsSetup {
             StandardErrorCard(card: Self.helperMissingCard()) { action in
                 switch action {
@@ -83,9 +80,13 @@ public struct StemSeparationView: View {
     /// Compact spacing and caption sizes so both routes fit the 168pt slot.
     private var intakeCard: some View {
         VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
-            fileIntakeContent
-            Divider()
-            youtubeRow
+            if viewModel.isRunning {
+                progressRow
+            } else {
+                fileIntakeContent
+                Divider()
+                youtubeRow
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(HubDesignSystem.Spacing.cardPadding)
@@ -248,7 +249,7 @@ public struct StemSeparationView: View {
     }
 
     private var separationActions: some View {
-        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+        Group {
             HubLabeledButton(
                 icon: "waveform.path.ecg",
                 label: "Start Separation",
@@ -259,13 +260,15 @@ public struct StemSeparationView: View {
                 viewModel.startSeparation()
             }
 
-            if viewModel.canStart || viewModel.canStartYouTube {
-                Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
-                    submitPrimaryStemJob()
+            .background {
+                if viewModel.canStart || viewModel.canStartYouTube {
+                    Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
+                        submitPrimaryStemJob()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.defaultAction)
-                .hidden()
-                .accessibilityHidden(true)
             }
 
             if viewModel.canCancel {
@@ -277,12 +280,14 @@ public struct StemSeparationView: View {
                 ) {
                     viewModel.cancelSeparation()
                 }
-                Button("Cancel") {
-                    viewModel.cancelSeparation()
+                .background {
+                    Button("Cancel") {
+                        viewModel.cancelSeparation()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.cancelAction)
-                .hidden()
-                .accessibilityHidden(true)
             }
         }
     }

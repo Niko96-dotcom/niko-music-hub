@@ -47,9 +47,6 @@ public struct AudioConverterView: View {
 
     @ViewBuilder
     private var liveSection: some View {
-        if viewModel.isConverting {
-            convertingProgressRow
-        }
         if showsFFmpegNotice {
             ffmpegNoticeCard
         }
@@ -93,26 +90,30 @@ public struct AudioConverterView: View {
 
     private var intakeSurface: some View {
         VStack(spacing: HubDesignSystem.Spacing.controlGap) {
-            Image(systemName: "doc.badge.plus")
-                .font(HubDesignSystem.Typography.display())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+            if viewModel.isConverting {
+                convertingProgressRow
+            } else {
+                Image(systemName: "doc.badge.plus")
+                    .font(HubDesignSystem.Typography.display())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-            Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
-                .font(HubDesignSystem.Typography.sectionTitle())
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
+                    .font(HubDesignSystem.Typography.sectionTitle())
+                    .foregroundStyle(HubDesignSystem.Palette.textPrimary)
 
-            Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                Text("M4A, MP3, WAV, AIFF, or FLAC accepted")
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            HubLabeledButton(
-                icon: "plus",
-                label: "Choose Files",
-                style: .secondary
-            ) {
-                fileImporterVisible = true
+                HubLabeledButton(
+                    icon: "plus",
+                    label: "Choose Files",
+                    style: .secondary
+                ) {
+                    fileImporterVisible = true
+                }
             }
         }
         .padding(HubDesignSystem.Spacing.cardPadding)
@@ -334,7 +335,7 @@ public struct AudioConverterView: View {
     }
 
     private var convertActions: some View {
-        VStack(spacing: HubDesignSystem.Spacing.controlGap) {
+        Group {
             HubLabeledButton(
                 icon: "waveform.badge.plus",
                 label: "Convert",
@@ -345,13 +346,15 @@ public struct AudioConverterView: View {
                 viewModel.startConversion()
             }
 
-            if viewModel.canConvertToWAV {
-                Button("Convert") {
-                    viewModel.startConversion()
+            .background {
+                if viewModel.canConvertToWAV {
+                    Button("Convert") {
+                        viewModel.startConversion()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.defaultAction)
-                .hidden()
-                .accessibilityHidden(true)
             }
 
             if viewModel.isConverting {
@@ -365,13 +368,15 @@ public struct AudioConverterView: View {
                 ) {
                     viewModel.requestStopAfterCurrent()
                 }
-                Button(AudioConverterCopy.stopAfterThisFile) {
-                    viewModel.requestStopAfterCurrent()
+                .background {
+                    Button(AudioConverterCopy.stopAfterThisFile) {
+                        viewModel.requestStopAfterCurrent()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(!viewModel.canRequestStopAfterCurrent)
+                    .hidden()
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.cancelAction)
-                .disabled(!viewModel.canRequestStopAfterCurrent)
-                .hidden()
-                .accessibilityHidden(true)
             }
         }
     }

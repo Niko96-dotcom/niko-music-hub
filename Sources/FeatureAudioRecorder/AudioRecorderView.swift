@@ -48,7 +48,6 @@ public struct AudioRecorderView: View {
 
     @ViewBuilder
     private var liveSection: some View {
-        saveConfirmationBanner
         permissionSection
         incompatibleSection
         errorSection
@@ -99,7 +98,6 @@ public struct AudioRecorderView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .selected)
             .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
     }
@@ -114,13 +112,19 @@ public struct AudioRecorderView: View {
 
     private var captureCard: some View {
         VStack(alignment: .center, spacing: HubDesignSystem.Spacing.controlGap) {
-            timeDisplay
+            if viewModel.showSaveConfirmation, viewModel.lastRecordedURL != nil {
+                saveConfirmationBanner
+            } else {
+                timeDisplay
+            }
             // Reference rule: live surfaces are hidden at rest — the level
             // meter only appears while a recording is actually running.
             if viewModel.isRecording {
                 meterSection
             }
-            Text(viewModel.proposedFilename)
+            Text(viewModel.showSaveConfirmation
+                 ? (viewModel.lastRecordedURL?.lastPathComponent ?? viewModel.proposedFilename)
+                 : viewModel.proposedFilename)
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 .lineLimit(1)

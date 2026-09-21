@@ -17,7 +17,7 @@ struct DemucsMLXBackendTests {
         let runner = FakeStreamingRunner(
             exitCode: 0,
             outputLines: ["Loading model", "10%", "50%", "100%", "Done"],
-            errorLines: [],
+            errorLines: ["Tracks: 25%|██ | 1/4 [00:01<00:03, 1track/s]", "unrecognized terminal chatter"],
             filesToWrite: [
                 (outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
                 (outputFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
@@ -28,7 +28,9 @@ struct DemucsMLXBackendTests {
         let backend = DemucsMLXBackend(settings: settings, runner: runner)
 
         let progressCollector = ProgressCollector()
-        let result = await backend.separate(request: request) { progress, _ in
+        let messages = MessageCollector()
+        let result = await backend.separate(request: request) { progress, message in
+            if let message { messages.add(message) }
             if progress >= 0 {
                 progressCollector.add(progress)
             }
@@ -41,6 +43,8 @@ struct DemucsMLXBackendTests {
         }
         #expect(folder == outputFolder)
         #expect(stems.count == 4)
+        #expect(progressValues.contains(0.25))
+        #expect(!messages.messages.contains { $0.contains("stderr:") || $0.contains("track/s") || $0.contains("chatter") })
         #expect(progressValues.contains(0.1))
         #expect(progressValues.contains(0.5))
         #expect(progressValues.contains(1.0))

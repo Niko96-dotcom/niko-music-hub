@@ -515,7 +515,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         var failed = try XCTUnwrap(try store.allTransferRecords().first)
         XCTAssertTrue(failed.isWaitingForProviderUpload)
         XCTAssertTrue(viewModel.statusMessage?.contains("Waiting for cloud upload") == true)
-        XCTAssertEqual(failed.nextRetryAt?.timeIntervalSince(failed.updatedAt), 60)
+        XCTAssertEqual(try XCTUnwrap(failed.nextRetryAt).timeIntervalSince(failed.updatedAt), 60, accuracy: 0.001)
         // Bring the persisted deadline forward to exercise the real mounted timer.
         failed.nextRetryAt = Date().addingTimeInterval(0.2)
         try store.save(failed)
