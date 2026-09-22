@@ -176,7 +176,7 @@ struct OutputInboxInspectorView: View {
                     guard let dragURL = OutputHandoff.dragFileURL(for: item) else {
                         return NSItemProvider()
                     }
-                    return NSItemProvider(contentsOf: dragURL) ?? NSItemProvider()
+                    return OutputHandoff.dragItemProvider(for: dragURL)
                 }
             )
         } else {

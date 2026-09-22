@@ -54,7 +54,7 @@ final class AudioConverterHandoffTests: XCTestCase {
 
         [
             "hubDragAffordance",
-            "NSItemProvider(contentsOf:",
+            "OutputHandoff.dragItemProvider(for:",
             "revealInFinder"
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing converter handoff source: \($0)")

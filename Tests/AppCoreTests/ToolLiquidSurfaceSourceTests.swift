@@ -45,7 +45,7 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
             "hubCard",
             "ToolHeaderBlock",
             "onDrop",
-            "NSItemProvider(contentsOf:",
+            "OutputHandoff.dragItemProvider(for:",
             "viewModel.addFileURLs",
             "viewModel.startConversion()",
             "Reveal",

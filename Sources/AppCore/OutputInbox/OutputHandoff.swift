@@ -46,6 +46,14 @@ public enum OutputHandoff {
         return verifiedWAVURL(for: item, fileManager: fileManager)
     }
 
+    /// Builds a drag provider that preserves the original filename in Finder.
+    /// Uses a file URL object (not file DATA), so the drop keeps `lastPathComponent`.
+    public static func dragItemProvider(for fileURL: URL) -> NSItemProvider {
+        let provider = NSItemProvider(object: fileURL as NSURL)
+        provider.suggestedName = fileURL.lastPathComponent
+        return provider
+    }
+
     private static func revealableURL(
         for item: OutputInboxItem,
         fileManager: FileManager

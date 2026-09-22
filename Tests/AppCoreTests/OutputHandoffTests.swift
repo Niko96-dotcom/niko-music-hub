@@ -109,6 +109,26 @@ final class OutputHandoffTests: XCTestCase {
         XCTAssertNil(OutputHandoff.dragFileURL(for: item))
     }
 
+    func testDragItemProviderPreservesFilename() throws {
+        let fileURL = try makeExistingFile(named: "Some Take - 44100Hz 24bit.wav")
+        let provider = OutputHandoff.dragItemProvider(for: fileURL)
+
+        XCTAssertEqual(provider.suggestedName, "Some Take - 44100Hz 24bit.wav")
+        XCTAssertTrue(
+            provider.registeredTypeIdentifiers.contains("public.file-url"),
+            "expected public.file-url in \(provider.registeredTypeIdentifiers)"
+        )
+
+        let expectation = self.expectation(description: "load dragged file URL")
+        var loadedLastPathComponent: String?
+        provider.loadObject(ofClass: NSURL.self) { nsURL, _ in
+            loadedLastPathComponent = ((nsURL as? NSURL) as URL?)?.lastPathComponent
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        XCTAssertEqual(loadedLastPathComponent, "Some Take - 44100Hz 24bit.wav")
+    }
+
     private func makeExistingFile(named name: String) throws -> URL {
         let url = temporaryDirectory().appendingPathComponent(name)
         try FileManager.default.createDirectory(

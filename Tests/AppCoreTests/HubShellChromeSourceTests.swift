@@ -152,7 +152,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             "OutputHandoff.isRevealable",
             "OutputHandoff.isOpenable",
             "OutputHandoff.dragFileURL",
-            "NSItemProvider(contentsOf:",
+            "OutputHandoff.dragItemProvider(for:",
             "Reveal in Finder",
             "NSWorkspace.shared.open",
             "contextMenu",

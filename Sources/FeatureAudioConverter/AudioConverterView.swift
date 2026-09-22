@@ -171,7 +171,7 @@ public struct AudioConverterView: View {
             queueRowContent(row)
                 .hubDragAffordance()
                 .onDrag {
-                    NSItemProvider(contentsOf: verifiedOutputURL) ?? NSItemProvider()
+                    OutputHandoff.dragItemProvider(for: verifiedOutputURL)
                 }
         } else {
             queueRowContent(row)
