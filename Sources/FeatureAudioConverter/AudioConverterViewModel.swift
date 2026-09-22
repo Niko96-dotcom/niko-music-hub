@@ -68,6 +68,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     /// router is read on the next main-queue turn, after its stored value is updated.
     public func bindConverterHandoff(to router: QuickAccessRouter) {
         handoffSubscription = router.$prefilledConverterURLs
+            .filter { !$0.isEmpty }
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak router] _ in
                 guard let self, let router else { return }

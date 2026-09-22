@@ -91,6 +91,7 @@ public final class QuickAccessRouter: ObservableObject {
     }
 
     public func consumePrefilledConverterURLs() -> [URL] {
+        guard !prefilledConverterURLs.isEmpty else { return [] }
         let urls = prefilledConverterURLs
         prefilledConverterURLs = []
         return urls

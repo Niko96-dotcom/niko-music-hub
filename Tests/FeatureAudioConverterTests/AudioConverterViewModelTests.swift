@@ -1,4 +1,5 @@
 import AppCore
+import Combine
 import FeatureAudioConverter
 import XCTest
 
@@ -111,6 +112,42 @@ final class AudioConverterViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.rows.map(\.sourceURL), [preview])
         XCTAssertTrue(router.prefilledConverterURLs.isEmpty)
+    }
+
+    func testBindConverterHandoffDoesNotPublishContinuously() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let router = QuickAccessRouter()
+        let viewModel = makeViewModel(outputFolder: directory)
+        let counter = EmissionCounter()
+        let cancellable = router.$prefilledConverterURLs.dropFirst().sink { _ in counter.increment() }
+        defer { cancellable.cancel() }
+
+        viewModel.bindConverterHandoff(to: router)
+
+        // Spin the main queue/run loop ~0.3 s. Old code republishes continuously here.
+        let deadline = Date(timeIntervalSinceNow: 0.3)
+        while Date() < deadline {
+            await drainMainQueue()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertLessThanOrEqual(
+            counter.count,
+            2,
+            "bind with no handoff must stay quiet, got \(counter.count) emissions"
+        )
+        XCTAssertTrue(viewModel.rows.isEmpty)
+
+        // A later handoff still arrives exactly once.
+        let fixture = try makeFile(named: "Handoff.wav", in: directory)
+        router.openConverter(with: [fixture])
+        await drainMainQueue()
+        await drainMainQueue()
+
+        XCTAssertEqual(viewModel.rows.map(\.sourceURL), [fixture])
+        XCTAssertTrue(router.prefilledConverterURLs.isEmpty, "handoff must be consumed exactly once")
     }
 
     func testConvertButtonDisabledWithoutQueuedRows() throws {
@@ -663,6 +700,17 @@ private final class RecordingViewModelConverter: AudioConverting, @unchecked Sen
             storedRequests.append(request)
         }
         return try await handler(request)
+    }
+}
+
+private final class EmissionCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int { lock.withLock { storedCount } }
+
+    func increment() {
+        lock.withLock { storedCount += 1 }
     }
 }
 

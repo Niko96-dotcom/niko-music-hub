@@ -1,4 +1,5 @@
 import AppCore
+import Combine
 import XCTest
 
 @MainActor
@@ -127,6 +128,45 @@ final class QuickAccessRouterTests: XCTestCase {
         router.execute(.openTool("wav-converter"))
         XCTAssertEqual(router.requestedToolID, "wav-converter")
         XCTAssertNotEqual(router.toolRequest?.sequence, first?.sequence)
+    }
+
+    // MARK: - Converter handoff consume (regression: endless publish ping-pong)
+
+    func testConsumePrefilledConverterURLsDoesNotPublishWhenEmpty() {
+        let router = QuickAccessRouter()
+        var emissions: [[URL]] = []
+        let cancellable = router.$prefilledConverterURLs.dropFirst().sink { emissions.append($0) }
+        defer { cancellable.cancel() }
+
+        XCTAssertEqual(router.consumePrefilledConverterURLs(), [])
+        XCTAssertEqual(router.consumePrefilledConverterURLs(), [])
+        XCTAssertTrue(
+            emissions.isEmpty,
+            "consume on empty must not publish, got \(emissions.count) emissions"
+        )
+    }
+
+    func testConsumeAfterOpenConverterReturnsURLsOnceWithoutExtraPublish() {
+        let router = QuickAccessRouter()
+        var emissions: [[URL]] = []
+        let cancellable = router.$prefilledConverterURLs.dropFirst().sink { emissions.append($0) }
+        defer { cancellable.cancel() }
+
+        let url = URL(fileURLWithPath: "/tmp/Preview.wav")
+        router.openConverter(with: [url])
+        XCTAssertEqual(emissions.count, 1, "openConverter must publish the handoff once")
+
+        let first = router.consumePrefilledConverterURLs()
+        XCTAssertEqual(first, [url])
+        XCTAssertEqual(emissions.count, 2, "first consume must publish the drain to empty")
+
+        let second = router.consumePrefilledConverterURLs()
+        XCTAssertEqual(second, [])
+        XCTAssertEqual(
+            emissions.count,
+            2,
+            "second consume on empty must not publish"
+        )
     }
 
     // MARK: - HAND-04: router does not call OutputHandoff
