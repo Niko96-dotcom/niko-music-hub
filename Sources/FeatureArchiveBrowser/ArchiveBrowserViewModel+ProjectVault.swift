@@ -85,7 +85,7 @@ extension ArchiveBrowserViewModel {
             return "Use Get Local & Open to choose a version and restore this project."
         case .revealArchive:
             return "Use Show in Finder to access this archive. Project versions cannot be opened directly here."
-        case .openInCubase, .retry, .review:
+        case .openInCubase, .retry, .review, .freeUpSpace:
             return presentation.explanation
         }
     }

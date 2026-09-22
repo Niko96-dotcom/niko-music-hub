@@ -28,6 +28,11 @@ public struct ToolContext: Sendable {
     public let appSettings: AppSettingsObserver
     /// App routing store: tool-open and Settings-pane requests from features.
     public let router: QuickAccessRouter
+    /// Optional Project Vault recovery integration. Created with the live
+    /// archive database and settings store; nil when the database is damaged
+    /// (import still works through the standalone service entry point, so
+    /// recovery never depends on a healthy current database).
+    public let recoveryService: ProjectVaultRecoveryService?
 
     public init(
         registeredToolCount: Int,
@@ -42,7 +47,8 @@ public struct ToolContext: Sendable {
         jobStatusCenter: ShellJobStatusCenter? = nil,
         navigationHistory: HubNavigationHistory = HubNavigationHistory(),
         appSettings: AppSettingsObserver? = nil,
-        router: QuickAccessRouter? = nil
+        router: QuickAccessRouter? = nil,
+        recoveryService: ProjectVaultRecoveryService? = nil
     ) {
         self.registeredToolCount = registeredToolCount
         self.settingsStore = settingsStore
@@ -57,5 +63,6 @@ public struct ToolContext: Sendable {
         self.navigationHistory = navigationHistory
         self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)
         self.router = router ?? QuickAccessRouter()
+        self.recoveryService = recoveryService
     }
 }

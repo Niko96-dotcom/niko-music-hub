@@ -40,8 +40,11 @@ struct ProjectVaultSettingsView: View {
                     SettingsRowDivider()
                     folderRow(role: .archive, title: "Archive / Vault")
                     SettingsRowDivider()
-                    SettingsRow("Automatic archiving") {
-                        Toggle("Automatic archiving", isOn: vaultBinding(\.automaticArchiving))
+                    SettingsRow(
+                        "Background scheduling",
+                        description: "Inactive projects or low disk space. Off unless you turn it on. Done still asks."
+                    ) {
+                        Toggle("Background scheduling", isOn: vaultBinding(\.automaticArchiving))
                             .toggleStyle(.switch)
                             .tint(HubDesignSystem.Palette.indicator)
                             .labelsHidden()
@@ -85,11 +88,11 @@ struct ProjectVaultSettingsView: View {
                     SettingsRowDivider()
                     loginItemStatusRow
                     SettingsRowDivider()
-                    SettingsRow("Rollout") {
+                    SettingsRow("After archiving", description: "Removal always asks first.") {
                         HubSegmentedChoice(
-                            "Rollout",
-                            selection: rolloutBinding,
-                            options: VaultSettings.RolloutStage.allCases.map { .init($0, label: $0.label) }
+                            "After archiving",
+                            selection: intentBinding,
+                            options: VaultSettings.SpaceIntent.allCases.map { .init($0, label: $0.label) }
                         )
                     }
                     SettingsRowDivider()
@@ -142,6 +145,8 @@ struct ProjectVaultSettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.popover)
+
+            ProjectVaultRecoverySection(context: context)
 
             Text(settings.vault.isEnabled
                 ? "Turning Project Vault off only stops scheduling. It never moves or deletes a project."
@@ -204,12 +209,15 @@ struct ProjectVaultSettingsView: View {
         guard onSave({
             $0.vault.isEnabled = true
             $0.vault.automationEmergencyStop = false
-            $0.vault.automaticArchiving = true
-            $0.vault.inactivityDays = 30
-            $0.vault.minimumFreeSpaceGiB = 120
-            $0.vault.transferFreeSpaceReserveGiB = 5
-            $0.vault.keepPreviousGenerationDays = 30
-            $0.vault.rolloutStage = .privateBeta
+            // Preserve saved preferences on re-enable: never reset thresholds
+            // or re-enable background scheduling here. Background scheduling
+            // stays opt-in (off for new setups unless the user turns it on).
+            // New installs start safe with an explicit keep-a-copy intent;
+            // re-enabling a previously configured Vault keeps its intent.
+            if $0.vault.rolloutStage == .disabled {
+                $0.vault.setSpaceIntent(.keepCopy)
+                $0.vault.rolloutStage = .privateBeta
+            }
         }) else { return }
         showSetup = false
         message = ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage
@@ -265,9 +273,9 @@ struct ProjectVaultSettingsView: View {
         }
     }
 
-    private var rolloutBinding: Binding<VaultSettings.RolloutStage> {
-        Binding(get: { settings.vault.rolloutStage }, set: { value in
-            updateVault { $0.rolloutStage = value }
+    private var intentBinding: Binding<VaultSettings.SpaceIntent> {
+        Binding(get: { settings.vault.spaceIntent }, set: { value in
+            updateVault { $0.setSpaceIntent(value) }
         })
     }
 
@@ -418,7 +426,7 @@ private struct ProjectVaultSetupSheet: View {
                 .foregroundStyle(.secondary)
             setupRow("1", "Active Projects", settings.vault.activeRootID != nil, .active)
             setupRow("2", "Archive / Vault", settings.vault.archiveRootID != nil, .archive)
-            Label("Private beta is selected. Automatic removal is not enabled for artist libraries.", systemImage: "lock.shield")
+            Label("New archives keep a verified copy. Archive and free up space removes the Active copy only after you confirm.", systemImage: "lock.shield")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             HStack {

@@ -67,7 +67,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
     func testIdentityAmbiguousPresentsReviewAndKeepSeparateAllowsArchive() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let first = ProjectID(rawValue: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!)
         let second = ProjectID(rawValue: UUID(uuidString: "22222222-2222-4222-8222-222222222222")!)
         try seedDuplicateCatalogEntries(on: fixture, projectIDs: [first, second])
@@ -461,7 +461,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
     func testCurrentIntentLostBindingReportsSavedButUnavailable() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let first = ProjectID(rawValue: UUID(uuidString: "99999999-9999-4999-8999-999999999999")!)
         let second = ProjectID(rawValue: UUID(uuidString: "abababab-abab-4aba-8aba-abababababab")!)
         try seedDuplicateCatalogEntries(on: fixture, projectIDs: [first, second])
@@ -502,7 +502,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
     func testExplicitWorkflowDoneResolutionPresentsFreshDoneConfirmation() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let first = ProjectID(rawValue: UUID(uuidString: "33333333-3333-4333-8333-333333333333")!)
         let second = ProjectID(rawValue: UUID(uuidString: "44444444-4444-4433-8433-444444444444")!)
         try seedDuplicateCatalogEntries(on: fixture, projectIDs: [first, second])
@@ -561,7 +561,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let first = ProjectID(rawValue: UUID(uuidString: "55555555-5555-4555-8555-555555555555")!)
         let second = ProjectID(rawValue: UUID(uuidString: "66666666-6666-4666-8666-666666666666")!)
         try seedDuplicateCatalogEntries(on: fixture, projectIDs: [first, second])
@@ -600,7 +600,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
     func testBackupCopyResolutionPreservesCopyOnlyScope() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let first = ProjectID(rawValue: UUID(uuidString: "77777777-7777-4777-8777-777777777777")!)
         let second = ProjectID(rawValue: UUID(uuidString: "88888888-8888-4888-8888-888888888888")!)
         try seedDuplicateCatalogEntries(on: fixture, projectIDs: [first, second])

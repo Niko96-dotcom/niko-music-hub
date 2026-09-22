@@ -16,9 +16,13 @@ struct ArchiveBoardCardVaultRow: View {
         presentation.primaryAction == .retry || (presentation.retryRestoreID != nil && presentation.reviewAction == nil)
     }
 
+    private var isFreeUpSpace: Bool {
+        presentation.primaryAction == .freeUpSpace
+    }
+
     private var showsPrimaryAction: Bool {
         activityMessage == nil
-            && ([.restoreAndOpen, .retry].contains(presentation.primaryAction) || (presentation.retryRestoreID != nil && presentation.reviewAction == nil))
+            && ([.restoreAndOpen, .retry, .freeUpSpace].contains(presentation.primaryAction) || (presentation.retryRestoreID != nil && presentation.reviewAction == nil))
     }
 
     var body: some View {
@@ -31,14 +35,14 @@ struct ArchiveBoardCardVaultRow: View {
                     : HubDesignSystem.Palette.accent)
             Spacer(minLength: 0)
             if showsPrimaryAction, let onPrimaryAction {
-                Button(isRetry ? "Retry" : "Get", action: onPrimaryAction)
+                Button(isRetry ? "Retry" : (isFreeUpSpace ? presentation.primaryActionLabel : "Get"), action: onPrimaryAction)
                     .font(HubDesignSystem.Typography.micro().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .buttonStyle(.plain)
-                    .help(isRetry
+                    .help(isRetry || isFreeUpSpace
                         ? presentation.explanation
                         : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
-                    .accessibilityLabel(isRetry
+                    .accessibilityLabel(isRetry || isFreeUpSpace
                         ? presentation.primaryActionLabel
                         : "Restore local copy and open project")
             }

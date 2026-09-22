@@ -37,6 +37,7 @@ struct SongDetailView: View {
     private var vaultNeedsAttention: Bool {
         guard let presentation = vaultPresentation else { return false }
         return presentation.state != .active
+            || presentation.primaryAction == .freeUpSpace
             || viewModel.projectVaultBusySongIDs.contains(liveSong.id)
             || viewModel.projectVaultQueueMessage(for: liveSong) != nil
             || viewModel.canRecoverInterruptedProject(liveSong)
@@ -47,25 +48,6 @@ struct SongDetailView: View {
         let application = liveSong.effectiveLatestCPR?.applicationName
         let folder = liveSong.originalFolderName == liveSong.effectiveDisplayTitle ? nil : liveSong.originalFolderName
         return [folder, application].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    private var archiveNowRemovesActiveCopy: Bool {
-        viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy ?? false
-    }
-
-    private var archiveNowAlertTitle: String {
-        ProjectVaultConfirmationCopy.archiveNowTitle(
-            willRemoveActiveCopy: archiveNowRemovesActiveCopy
-        )
-    }
-
-    private var archiveNowAlertMessage: String {
-        guard let pending = viewModel.pendingArchiveConfirmation else { return "" }
-        return ProjectVaultConfirmationCopy.archiveNowMessage(
-            songTitle: pending.songTitle,
-            willRemoveActiveCopy: pending.willRemoveActiveCopy,
-            independentBackupConfirmed: pending.independentBackupConfirmed
-        )
     }
 
     private var rankedPreviews: [PreviewCandidate] {
@@ -475,24 +457,6 @@ struct SongDetailView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.panel)
-            .alert(
-                archiveNowAlertTitle,
-                isPresented: Binding(
-                    get: { viewModel.pendingArchiveConfirmation?.trigger == .manual },
-                    set: { if !$0 { viewModel.cancelPendingArchive() } }
-                )
-            ) {
-                Button("Keep in Active", role: .cancel) { viewModel.cancelPendingArchive() }
-                    .keyboardShortcut(.defaultAction)
-                Button(
-                    ProjectVaultConfirmationCopy.archiveNowConfirmTitle(
-                        willRemoveActiveCopy: archiveNowRemovesActiveCopy
-                    ),
-                    role: archiveNowRemovesActiveCopy ? .destructive : nil
-                ) { viewModel.confirmPendingArchive() }
-            } message: {
-                Text(archiveNowAlertMessage)
-            }
         }
     }
 
@@ -533,6 +497,18 @@ struct SongDetailView: View {
                     isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
                 ) {
                     viewModel.retryReviewedProjectVaultRestore(for: liveSong)
+                }
+            }
+
+            if viewModel.canResumeRestoredWork(for: liveSong) {
+                HubLabeledButton(
+                    icon: "play.circle",
+                    label: "Resume work",
+                    style: .secondary,
+                    help: "Mark this restored project as Prod so it returns to the active workflow. Nothing is archived or removed.",
+                    isEnabled: !viewModel.projectVaultBusySongIDs.contains(liveSong.id)
+                ) {
+                    viewModel.resumeRestoredWork(for: liveSong)
                 }
             }
 

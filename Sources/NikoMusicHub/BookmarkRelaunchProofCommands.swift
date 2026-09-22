@@ -28,7 +28,7 @@ enum BookmarkRelaunchProofCommands {
                 if mode == "seed-vault-gui" {
                     // Friends-stage vault ready for GUI Accept (NMH-138/139). No live Music roots.
                     settings.vault.isEnabled = true
-                    settings.vault.rolloutStage = .friends
+                    settings.vault.setSpaceIntent(.freeSpace)
                     settings.vault.independentBackupConfirmed = true
                     settings.vault.automaticArchiving = false
                     settings.vault.automationEmergencyStop = false

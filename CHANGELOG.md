@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0 - 2026-09-22
+
+- Choose how archiving treats the Active copy: Keep a verified copy, or Archive and free up space. Earlier copy-only choices stay copy-only and never gain removal.
+- Background Vault scheduling stays off unless opted in separately from manual archiving.
+- Song completion offers Archive and free up space (only when permitted), Keep a verified copy, Keep on this Mac, or Keep Status, with the same manual confirmation on board and in detail.
+- Delayed retries stay copy-only; a verified archive with persisted recovery evidence offers Ready to free space under a fresh confirmation.
+- In-flight, pending, and failed copies stay on the board; archived-only songs stay hidden until shown again.
+- Restoring keeps the song's workflow stage, pins Keep Local before copying or opening, and offers Resume work to move explicitly to Prod.
+- Recovery copies export the full catalog and settings through an online database backup, import as a fresh isolated library with automation disabled and paused, and remain available while Vault is off. External samples and plug-ins are not collected.
+- A disabled Vault hides its configured roots from the board until re-enabled; a paused restore stays paused until explicitly unpaused.
+
 ## 1.6.1 - 2026-09-19
 
 - Keep Project Vault approval bound to the intended project and source through confirmation, queueing and retries. Settings changes cannot turn a copy-only operation into removal.

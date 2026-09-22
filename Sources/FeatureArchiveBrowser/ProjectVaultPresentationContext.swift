@@ -10,6 +10,16 @@ struct ProjectVaultPresentationContext: Equatable {
     let archiveRoot: StoredMusicRoot?
     let generationReviewResolver: ProjectVaultGenerationReviewResolver?
     let keepLocalProjectIDs: Set<String>
+    /// Whether the live settings currently allow offering "Ready to free
+    /// space": exactly the Done/manual removal gate
+    /// (`permitsUserInitiatedRemoval` — user-initiated archiving base with a
+    /// non-disabled rollout and both roots, plus an explicit free-space intent
+    /// and the independent-backup acknowledgement, but not the background
+    /// scheduler opt-in). A copy-only preference, Keep Local (per song,
+    /// checked at the card), or a pause never presents free-space as already
+    /// authorized; the offer itself still routes through a fresh confirmation
+    /// that rechecks every gate at execution.
+    let allowsFreeSpaceOffer: Bool
 
     init?(settings: AppSettings) {
         guard settings.vault.isEnabled else { return nil }
@@ -17,5 +27,6 @@ struct ProjectVaultPresentationContext: Equatable {
         archiveRoot = settings.musicRoots.first { $0.id == settings.vault.archiveRootID }
         generationReviewResolver = ProjectVaultGenerationReviewResolver(settings: settings)
         keepLocalProjectIDs = settings.vault.keepLocalProjectIDs
+        allowsFreeSpaceOffer = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
     }
 }

@@ -22,7 +22,9 @@ extension ArchiveBrowserViewModel {
     // copy-only: a new destructive action always needs a fresh confirmation.
     // Undo or a status change away from Done revokes the matching capture,
     // dialog, queued Done operation, retry budget, and inflight Done task; a
-    // revoked approval is never reused by a later retry or relaunch.
+    // revoked approval is never reused by a later retry or relaunch. A delayed
+    // automatic retry reuses the same bound token downgraded to copy-only —
+    // never the destructive approval, and never a freshly minted one.
 
     func requestArchiveNow(for song: Song) {
         guard canArchiveInProjectVault(song) else { return }
@@ -129,8 +131,13 @@ extension ArchiveBrowserViewModel {
             case .manual:
                 requestedRemoving = true
             case .workflowDone:
+                // User-initiated Done is decoupled from the background
+                // scheduler opt-in: it honors the explicit free-space intent
+                // plus the backup acknowledgement (and master enablement,
+                // pause, Keep Local, and activity gates at capture/execution),
+                // but never waits on `automaticArchiving`.
                 if let vault = settings?.vault {
-                    requestedRemoving = ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(vault)
+                    requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(vault)
                 } else {
                     requestedRemoving = false
                 }
@@ -276,6 +283,131 @@ extension ArchiveBrowserViewModel {
         pendingArchiveConfirmation = nil
     }
 
+    /// Done choice: Archive and free up space. Offered only when the bound
+    /// removal token allows it. Commits Done, then queues the exact captured
+    /// removal token. Validates pending song/trigger/token and clears
+    /// pending/retry state; registers a meaningful Undo.
+    func confirmWorkflowDoneFreeSpace() {
+        guard let pending = pendingArchiveConfirmation,
+              pending.trigger == .workflowDone,
+              let song = songs.first(where: { $0.id == pending.songID }),
+              let authorization = pending.authorization,
+              authorization.songID == song.id,
+              authorization.trigger == .workflowDone,
+              pending.willRemoveActiveCopy == authorization.permitsRemoval,
+              authorization.permitsRemoval else { return }
+        pendingArchiveConfirmation = nil
+        projectVaultAuthCaptureTask = nil
+        boundArchiveCaptureSongID = nil
+        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        let previous = song.workflowStatus
+        if song.workflowStatus != .done {
+            commitWorkflowStatus(.done, for: song)
+        }
+        registerWorkflowStatusUndo(
+            songID: song.id,
+            previousStatus: previous,
+            actionName: "Mark Done"
+        )
+        let updated = songs.first(where: { $0.id == song.id }) ?? song
+        archiveInProjectVault(updated, trigger: .workflowDone, authorization: authorization)
+    }
+
+    /// Done choice: Keep a verified copy. Commits Done, then queues the same
+    /// bound token downgraded to copy-only. Never recaptures removal.
+    /// Validates pending song/trigger/token and clears pending/retry state;
+    /// registers a meaningful Undo.
+    func confirmWorkflowDoneKeepCopy() {
+        guard let pending = pendingArchiveConfirmation,
+              pending.trigger == .workflowDone,
+              let song = songs.first(where: { $0.id == pending.songID }) else { return }
+        if let authorization = pending.authorization {
+            guard authorization.songID == song.id,
+                  authorization.trigger == pending.trigger,
+                  pending.willRemoveActiveCopy == authorization.permitsRemoval else { return }
+            let copyAuthorization = authorization.downgradedToCopyOnly()
+            pendingArchiveConfirmation = nil
+            projectVaultAuthCaptureTask = nil
+            boundArchiveCaptureSongID = nil
+            projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+            projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+            let previous = song.workflowStatus
+            if song.workflowStatus != .done {
+                commitWorkflowStatus(.done, for: song)
+            }
+            registerWorkflowStatusUndo(
+                songID: song.id,
+                previousStatus: previous,
+                actionName: "Mark Done"
+            )
+            let updated = songs.first(where: { $0.id == song.id }) ?? song
+            archiveInProjectVault(updated, trigger: .workflowDone, authorization: copyAuthorization)
+            return
+        }
+        // No bound token (copy-only path): still commit Done and queue a
+        // verified copy without removal. A removal request without a token
+        // never proceeds.
+        guard !pending.willRemoveActiveCopy else { return }
+        pendingArchiveConfirmation = nil
+        projectVaultAuthCaptureTask = nil
+        boundArchiveCaptureSongID = nil
+        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        let previous = song.workflowStatus
+        if song.workflowStatus != .done {
+            commitWorkflowStatus(.done, for: song)
+        }
+        registerWorkflowStatusUndo(
+            songID: song.id,
+            previousStatus: previous,
+            actionName: "Mark Done"
+        )
+        let updated = songs.first(where: { $0.id == song.id }) ?? song
+        archiveInProjectVault(updated, trigger: .workflowDone, authorization: nil)
+    }
+
+    /// Done choice: Keep on this Mac. Commits Done, persists Keep Local, and
+    /// queues no transfer. Validates pending song/trigger/token and clears
+    /// pending/retry state; registers a meaningful Undo. A Keep Local setting
+    /// failure never silently triggers an archive.
+    func confirmWorkflowDoneKeepLocal() {
+        guard let pending = pendingArchiveConfirmation,
+              pending.trigger == .workflowDone,
+              let song = songs.first(where: { $0.id == pending.songID }) else { return }
+        if let authorization = pending.authorization {
+            guard authorization.songID == song.id,
+                  authorization.trigger == pending.trigger,
+                  pending.willRemoveActiveCopy == authorization.permitsRemoval else { return }
+        } else if pending.willRemoveActiveCopy {
+            return
+        }
+        pendingArchiveConfirmation = nil
+        projectVaultAuthCaptureTask = nil
+        boundArchiveCaptureSongID = nil
+        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
+        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        let previous = song.workflowStatus
+        if song.workflowStatus != .done {
+            commitWorkflowStatus(.done, for: song)
+        }
+        registerWorkflowStatusUndo(
+            songID: song.id,
+            previousStatus: previous,
+            actionName: "Mark Done"
+        )
+        do {
+            let key = projectVaultSnapshot(for: song)?.transfer?.sourceURL.path ?? song.id
+            try settingsStore.updateSettings { settings in
+                settings.vault.keepLocalProjectIDs.insert(key)
+            }
+            refreshProjectVaultPresentationContext()
+        } catch {
+            diagnostics.log(.error, "Project Vault Keep Local setting failed: \(error)")
+            setProjectVaultStatusMessage("Keep Local could not be saved. No project files were changed.")
+        }
+    }
+
     func archiveInProjectVault(_ song: Song, trigger: ProjectVaultArchiveTrigger = .manual, authorization: ProjectVaultArchiveAuthorization? = nil) {
         guard let projectVaultRuntime,
               canArchiveInProjectVault(song),
@@ -396,10 +528,13 @@ extension ArchiveBrowserViewModel {
         let attemptCount = projectVaultRetryAttemptCounts[song.id, default: 0]
         guard projectVaultRetryTasks[song.id] == nil, attemptCount < 3 else { return }
         projectVaultRetryAttemptCounts[song.id] = attemptCount + 1
-        // Bounded retries retain the exact confirmation-time token (never a
-        // fresh capture): a copy-only token stays copy-only even when live
-        // settings later become permissive.
-        let retryAuthorization = authorization
+        // Bounded retries retain the same confirmation-time token but NEVER
+        // reuse a destructive approval: the same bound value is downgraded to
+        // copy-only (every binding field preserved, no new removal token
+        // minted), so a delayed retry can only ever produce a verified copy
+        // even when live settings later become permissive. A nil authorization
+        // stays on the copy-only path.
+        let retryAuthorization = authorization?.downgradedToCopyOnly()
         let retryDelay = projectVaultDoneRetryDelay
         projectVaultRetryTasks[song.id] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: retryDelay)

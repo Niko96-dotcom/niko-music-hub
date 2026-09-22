@@ -887,6 +887,157 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try VaultManifestBuilder().verify(try XCTUnwrap(transfer.manifest), at: transfer.destinationURL)
     }
 
+    func testPersistedVerifiedActiveReconstructsReadyToFreeSpaceAfterFreshViewModel() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        await viewModel.refreshProjectVaultSnapshots()
+        let readySong = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        let readyPresentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: readySong))
+        XCTAssertEqual(readyPresentation.state, .active)
+        XCTAssertEqual(readyPresentation.primaryAction, .freeUpSpace)
+        XCTAssertTrue(readyPresentation.isReadyToFreeSpace)
+        XCTAssertEqual(readyPresentation.statusLabel, "Ready to free space")
+
+        let freshRuntime = try fixture.runtime()
+        await freshRuntime.recoverAtLaunch()
+        let freshViewModel = fixture.viewModel(runtime: freshRuntime)
+        await freshViewModel.scan()
+        await freshViewModel.refreshProjectVaultSnapshots()
+        try await waitUntil { freshViewModel.songs.contains { $0.id == original.id } }
+        await freshViewModel.refreshProjectVaultSnapshots()
+        let freshSong = try XCTUnwrap(freshViewModel.songs.first { $0.id == original.id })
+        let freshPresentation = try XCTUnwrap(freshViewModel.projectVaultPresentation(for: freshSong))
+        XCTAssertEqual(freshPresentation.state, .active)
+        XCTAssertEqual(freshPresentation.primaryAction, .freeUpSpace)
+        XCTAssertTrue(freshPresentation.isReadyToFreeSpace)
+        XCTAssertEqual(freshPresentation.statusLabel, "Ready to free space")
+        XCTAssertTrue(freshPresentation.explanation.contains("fresh confirmation"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        let transfer = try XCTUnwrap(try fixture.transferStore().verifiedArchiveGeneration(projectID: fixture.projectID()))
+        XCTAssertTrue(VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state))
+        XCTAssertEqual(transfer.manifestID, transfer.manifest?.id)
+        let persistedManifest = try XCTUnwrap(transfer.manifest)
+        XCTAssertNoThrow(try persistedManifest.validatePersistedContentEnvelope())
+        try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
+        try VaultManifestBuilder().verify(try XCTUnwrap(transfer.manifest), at: transfer.destinationURL)
+        let snapshots = try await freshRuntime.snapshots()
+        let snapshot = try XCTUnwrap(snapshots.first { $0.record.id == transfer.projectID })
+        XCTAssertTrue(snapshot.record.locations.contains { $0.kind == .active })
+        XCTAssertNotNil(snapshot.transfer)
+        XCTAssertTrue(VaultTransferOwnershipPolicy.isVerifiedTerminal(snapshot.transfer?.state ?? .activeLocal))
+    }
+
+    func testWaitingProviderTransferNeverPresentsAsArchived() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let provider = FriendsDelayedUploadProvider(pending: true)
+        let runtime = try fixture.runtime(
+            provider: provider,
+            recoveryPolicy: .init(maximumAutomaticAttempts: 3, initialBackoff: 1, maximumBackoff: 2)
+        )
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.updateWorkflowStatus(for: song, status: .done)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        viewModel.confirmPendingArchive()
+        let store = try fixture.transferStore()
+        try await waitUntil {
+            (try? store.allTransferRecords().first?.state) == .awaitingProviderDurability
+                && viewModel.projectVaultBusySongIDs.isEmpty
+        }
+        let waiting = try XCTUnwrap(try store.allTransferRecords().first)
+        XCTAssertTrue(waiting.isWaitingForProviderUpload)
+        await viewModel.refreshProjectVaultSnapshots()
+        let waitingSong = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        let presentation = try XCTUnwrap(viewModel.projectVaultPresentation(for: waitingSong))
+        XCTAssertEqual(presentation.transferState, .awaitingProviderDurability)
+        XCTAssertEqual(presentation.state, .archiving)
+        XCTAssertEqual(presentation.statusLabel, "Waiting for upload")
+        XCTAssertFalse(presentation.statusLabel.contains("Archived"))
+        XCTAssertNotEqual(presentation.primaryAction, .restoreAndOpen)
+        XCTAssertEqual(ProjectVaultCardPresentation.transferStatusLabel(.awaitingProviderDurability), "Waiting for upload")
+        XCTAssertEqual(ProjectVaultCardPresentation.transferStatusLabel(.promotingArchiveGeneration), "Waiting for upload")
+        XCTAssertFalse(ProjectVaultCardPresentation.transferStatusLabel(.awaitingProviderDurability).contains("Archived"))
+    }
+
+    func testKeepLocalAndPauseSuppressReadyToFreeSpaceOffer() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        await viewModel.refreshProjectVaultSnapshots()
+        let readySong = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
+
+        viewModel.setProjectKeepLocal(true, for: readySong)
+        let pinned = try XCTUnwrap(viewModel.projectVaultPresentation(for: readySong))
+        XCTAssertTrue(pinned.isKeepLocal)
+        XCTAssertEqual(pinned.state, .keepLocal)
+        XCTAssertEqual(pinned.primaryAction, .openInCubase)
+        XCTAssertFalse(pinned.isReadyToFreeSpace)
+        XCTAssertNotEqual(pinned.primaryAction, .freeUpSpace)
+
+        viewModel.setProjectKeepLocal(false, for: readySong)
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
+
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        viewModel.refreshProjectVaultPresentationContext()
+        let paused = try XCTUnwrap(viewModel.projectVaultPresentation(for: readySong))
+        XCTAssertFalse(paused.isReadyToFreeSpace)
+        XCTAssertNotEqual(paused.primaryAction, .freeUpSpace)
+        XCTAssertEqual(paused.state, .active)
+        XCTAssertEqual(paused.primaryAction, .openInCubase)
+        XCTAssertFalse(paused.statusLabel.contains("Ready to free space"))
+    }
+
+    func testPersistedFreeSpaceActionInvokesFreshCaptureNotStaleApproval() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        await viewModel.refreshProjectVaultSnapshots()
+        let readySong = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
+
+        let stale = try await runtime.captureArchiveAuthorization(
+            for: readySong, trigger: .workflowDone, removingActiveCopy: false, catalogProjectID: nil)
+        XCTAssertEqual(stale.maximumDestructiveness, .copyOnly)
+        XCTAssertEqual(stale.trigger, .workflowDone)
+
+        viewModel.performProjectVaultPrimaryAction(for: readySong)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        XCTAssertEqual(pending.trigger, .manual)
+        XCTAssertEqual(pending.songID, readySong.id)
+        let fresh = try XCTUnwrap(pending.authorization)
+        XCTAssertEqual(fresh.trigger, .manual)
+        XCTAssertEqual(fresh.maximumDestructiveness, .mayRemoveActiveCopy)
+        XCTAssertNotEqual(fresh, stale)
+        XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
+        XCTAssertNil(viewModel.projectVaultActiveOperation)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
+        viewModel.cancelPendingArchive()
+        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(5),
         condition: @escaping @MainActor () -> Bool
@@ -950,9 +1101,9 @@ final class FriendsWorkflowFixture {
             activeRootID: activeID,
             archiveRootID: archiveID,
             automaticArchiving: true,
-            rolloutStage: .friends,
             independentBackupConfirmed: true
         )
+        settings.vault.setSpaceIntent(.freeSpace)
         try settingsStore.saveSettings(settings)
     }
 

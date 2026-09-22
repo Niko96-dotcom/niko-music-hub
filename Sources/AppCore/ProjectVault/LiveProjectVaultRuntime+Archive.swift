@@ -119,8 +119,12 @@ extension LiveProjectVaultRuntime {
                     throw ProjectVaultRuntimeError.independentBackupRequired
                 }
             } else {
+                // Done removal is user-initiated: it honors the explicit
+                // free-space intent plus the backup acknowledgement, but not
+                // the background scheduler opt-in. A copy-only capture stays
+                // copy-only; only an explicit removal capture may proceed.
                 try validateAutomaticArchivingEligibility(settings: settings, song: song)
-                guard ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings.vault) else {
+                guard ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault) else {
                     throw ProjectVaultRuntimeError.automaticArchivingDisabled
                 }
             }
@@ -384,12 +388,18 @@ extension LiveProjectVaultRuntime {
         }
     }
 
-    /// Workflow-done archiving is opt-in and must respect the rollout stage,
-    /// Emergency Stop, and Keep Local before any transfer starts.
+    /// User-initiated Done archiving is separate from background scheduling.
+    /// A Done confirmation copies when the vault is enabled, Emergency Stop is
+    /// off, the legacy rollout is not disabled, and Keep Local is off for this
+    /// song. It deliberately does not require the `automaticArchiving`
+    /// scheduler opt-in (inactivity/disk-pressure automation stays gated by
+    /// `VaultAutomationPolicy` and `permitsAutomaticArchiving`). The disabled
+    /// state is preserved: a stored disabled rollout still refuses Done.
     private func validateAutomaticArchivingEligibility(settings: AppSettings, song: Song) throws {
-        guard settings.vault.automaticArchiving else { throw ProjectVaultRuntimeError.automaticArchivingDisabled }
         guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
-        guard settings.vault.rolloutStage != .disabled else { throw ProjectVaultRuntimeError.automaticArchivingDisabled }
+        guard ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings.vault) else {
+            throw ProjectVaultRuntimeError.automaticArchivingDisabled
+        }
         let keepLocalKeys = Set([
             song.id,
             song.folderPath.standardizedFileURL.path,
@@ -468,7 +478,14 @@ extension LiveProjectVaultRuntime {
             .verifiedArchiveGeneration(projectID: entry.record.id)?.id
         let policy = VaultAutomationPolicy(
             isVaultEnabled: settings.vault.isEnabled,
-            isAutomaticArchivingEnabled: settings.vault.automaticArchiving,
+            // User-initiated Done already passed `validateAutomaticArchivingEligibility`.
+            // Bypass ONLY the background scheduler opt-in so a Done confirmation
+            // copies even when `automaticArchiving` is off. Every other gate —
+            // vault enabled, capacity, eligibility, activity probes, backup /
+            // removal admission, Keep Local, Emergency Stop — stays enforced by
+            // the scheduler evaluator, the engine admissions, and the bound
+            // removal admission.
+            isAutomaticArchivingEnabled: true,
             inactivityDays: settings.vault.inactivityDays,
             minimumFreeSpaceGiB: settings.vault.minimumFreeSpaceGiB,
             transferFreeSpaceReserveGiB: settings.vault.transferFreeSpaceReserveGiB

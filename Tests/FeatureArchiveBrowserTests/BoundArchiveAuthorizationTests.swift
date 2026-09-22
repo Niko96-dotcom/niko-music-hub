@@ -265,10 +265,27 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertEqual(runtime.authCalls.first?.auth, captured)
         XCTAssertTrue(runtime.copyCalls.isEmpty, "queue must use the exact token, not a fresh capture")
 
-        // Bounded retry retains the exact same token without re-capturing.
+        // A delayed automatic retry NEVER reuses the destructive approval: it
+        // carries the same bound token downgraded to copy-only, without
+        // minting a fresh authorization.
         try await waitUntil(timeout: .seconds(5)) { runtime.authCalls.count >= 2 }
         XCTAssertEqual(runtime.authCalls.count, 2)
-        XCTAssertEqual(runtime.authCalls[1].auth, captured)
+        XCTAssertEqual(captured.maximumDestructiveness, .mayRemoveActiveCopy)
+        let retried = try XCTUnwrap(runtime.authCalls.dropFirst().first?.auth)
+        XCTAssertEqual(retried, captured.downgradedToCopyOnly())
+        XCTAssertEqual(retried.maximumDestructiveness, .copyOnly)
+        XCTAssertEqual(retried.songID, captured.songID)
+        XCTAssertEqual(retried.trigger, captured.trigger)
+        XCTAssertEqual(retried.sourceCanonicalPath, captured.sourceCanonicalPath)
+        XCTAssertEqual(retried.sourceFileSystemIdentity, captured.sourceFileSystemIdentity)
+        XCTAssertEqual(retried.catalogProjectID, captured.catalogProjectID)
+        XCTAssertEqual(retried.activeRootID, captured.activeRootID)
+        XCTAssertEqual(retried.activeRootCanonicalPath, captured.activeRootCanonicalPath)
+        XCTAssertEqual(retried.activeRootFileSystemIdentity, captured.activeRootFileSystemIdentity)
+        XCTAssertEqual(retried.archiveRootID, captured.archiveRootID)
+        XCTAssertEqual(retried.archiveRootCanonicalPath, captured.archiveRootCanonicalPath)
+        XCTAssertEqual(retried.archiveRootFileSystemIdentity, captured.archiveRootFileSystemIdentity)
+        XCTAssertEqual(retried.authorizedAt, captured.authorizedAt)
         XCTAssertEqual(runtime.captureCalls.count, 1, "retry must not mint a fresh authorization")
         try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
     }
@@ -278,7 +295,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
     func testSettingsEscalationAfterDialogRetainsCopyOnly() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.rolloutStage = .privateBeta }
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let runtime = DeterministicBoundVaultRuntime()
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
@@ -295,7 +312,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // Escalate after the dialog: the queued execution must still use the
         // exact copy-only token and never escalate to removal.
         try fixture.settingsStore.updateSettings {
-            $0.vault.rolloutStage = .friends
+            $0.vault.setSpaceIntent(.freeSpace)
             $0.vault.independentBackupConfirmed = true
         }
         viewModel.confirmPendingArchive()
@@ -357,6 +374,71 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.folderPath.path))
         let queuedMessage = viewModel.projectVaultOperationMessages[second.id]
         XCTAssertTrue(queuedMessage?.contains("No project files were changed") == true)
+    }
+
+    // MARK: - Queued Done revoked by a status change keeps Undo distinctions
+
+    func testQueuedDoneRevokedByStatusChangeKeepsUndoDistinction() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        _ = try fixture.addSong(named: "Second Project", extension: "cpr")
+        let runtime = DeterministicBoundVaultRuntime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let first = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
+        let execGate = CaptureGate()
+        runtime.archiveAuthImpl = { song, _, _ in
+            if song.id == first.id {
+                await execGate.enterAndWait()
+                return DeterministicBoundVaultRuntime.makeSnapshot(for: song)
+            }
+            return DeterministicBoundVaultRuntime.makeSnapshot(for: song)
+        }
+
+        let undoManager = UndoManager()
+        viewModel.workflowUndoManager = undoManager
+
+        viewModel.requestArchiveNow(for: first)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        viewModel.confirmPendingArchive()
+        try await waitUntil { viewModel.projectVaultActiveOperation?.songID == first.id }
+
+        undoManager.beginUndoGrouping()
+        viewModel.requestWorkflowDoneArchive(for: second)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        viewModel.confirmPendingArchive()
+        undoManager.endUndoGrouping()
+        try await waitUntil { viewModel.projectVaultPendingOperations.contains(where: { $0.songID == second.id }) }
+        XCTAssertEqual(undoManager.undoActionName, "Mark Done")
+
+        // Moving away from Done revokes the queued Done operation before it
+        // runs. The status change itself stays undoable under its own name.
+        // Explicit separate groups match individual UI actions; without this
+        // the two registrations coalesce and a single undo would revert to nil.
+        let doneSecond = try XCTUnwrap(viewModel.songs.first(where: { $0.id == second.id }))
+        undoManager.beginUndoGrouping()
+        viewModel.updateWorkflowStatus(for: doneSecond, status: .prod)
+        undoManager.endUndoGrouping()
+        XCTAssertEqual(viewModel.songs.first(where: { $0.id == second.id })?.workflowStatus, .prod)
+        XCTAssertEqual(undoManager.undoActionName, "Change Workflow Status")
+        XCTAssertFalse(viewModel.projectVaultPendingOperations.contains(where: { $0.songID == second.id }))
+        XCTAssertNil(viewModel.projectVaultRetryTasks[second.id])
+
+        await execGate.open()
+        try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertTrue(runtime.authCalls.filter { $0.songID == second.id }.isEmpty)
+        XCTAssertTrue(runtime.copyCalls.filter { $0.songID == second.id }.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.folderPath.path))
+        let queuedMessage = viewModel.projectVaultOperationMessages[second.id]
+        XCTAssertTrue(queuedMessage?.contains("No project files were changed") == true)
+
+        // The revoked status change undoes back to Done without re-archiving:
+        // Done is a workflow status, distinct from the archive operation.
+        undoManager.undo()
+        XCTAssertEqual(viewModel.songs.first(where: { $0.id == second.id })?.workflowStatus, .done)
+        XCTAssertTrue(runtime.authCalls.filter { $0.songID == second.id }.isEmpty)
+        XCTAssertTrue(runtime.copyCalls.filter { $0.songID == second.id }.isEmpty)
     }
 
     // MARK: - Inflight capture revoked by Undo never presents a late modal
@@ -949,6 +1031,56 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertTrue(footer.contains("1 completed"), "footer was: \(footer)")
         XCTAssertTrue(footer.contains("2 stopped"), "footer was: \(footer)")
         XCTAssertTrue(footer.contains("of 3"), "footer was: \(footer)")
+    }
+
+    // MARK: - Free-space offer mints a fresh manual capture, never a stale Done token
+
+    func testFreeSpaceManualCaptureIsFreshNotStaleDoneToken() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = DeterministicBoundVaultRuntime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+
+        // A stale Done token must never authorize a later free-space removal.
+        // Free Up Space routes through the manual capture, which mints a fresh
+        // token for the same source with its own trigger.
+        viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        let staleDone = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        XCTAssertEqual(staleDone.trigger, .workflowDone)
+        viewModel.cancelPendingArchive()
+        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+
+        // The free-space path is the existing manual capture: a fresh
+        // confirmation that rechecks every live gate at execution.
+        viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        let freshManual = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        XCTAssertEqual(freshManual.trigger, .manual)
+        XCTAssertEqual(freshManual.maximumDestructiveness, .mayRemoveActiveCopy)
+        XCTAssertNotEqual(freshManual, staleDone)
+        XCTAssertEqual(runtime.captureCalls.count, 2)
+        XCTAssertEqual(runtime.captureCalls[0].trigger, .workflowDone)
+        XCTAssertEqual(runtime.captureCalls[1].trigger, .manual)
+        XCTAssertTrue(runtime.authCalls.isEmpty, "fresh offer must not execute until confirmed")
+        XCTAssertTrue(runtime.copyCalls.isEmpty)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
+        viewModel.cancelPendingArchive()
+
+        // The downgraded retry preserves every binding of the fresh token.
+        let downgraded = freshManual.downgradedToCopyOnly()
+        XCTAssertEqual(downgraded.songID, freshManual.songID)
+        XCTAssertEqual(downgraded.trigger, freshManual.trigger)
+        XCTAssertEqual(downgraded.sourceCanonicalPath, freshManual.sourceCanonicalPath)
+        XCTAssertEqual(downgraded.sourceFileSystemIdentity, freshManual.sourceFileSystemIdentity)
+        XCTAssertEqual(downgraded.catalogProjectID, freshManual.catalogProjectID)
+        XCTAssertEqual(downgraded.activeRootID, freshManual.activeRootID)
+        XCTAssertEqual(downgraded.archiveRootID, freshManual.archiveRootID)
+        XCTAssertEqual(downgraded.authorizedAt, freshManual.authorizedAt)
+        XCTAssertEqual(downgraded.maximumDestructiveness, .copyOnly)
+        XCTAssertNotEqual(downgraded, freshManual)
     }
 
     private func waitUntil(

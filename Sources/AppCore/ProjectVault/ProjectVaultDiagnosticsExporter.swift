@@ -14,6 +14,7 @@ public enum ProjectVaultDiagnosticsExporter {
             "Niko Music Hub — Project Vault diagnostics",
             "enabled=\(vault.isEnabled)",
             "rollout_stage=\(vault.rolloutStage.rawValue)",
+            "space_intent=\(vault.spaceIntent.rawValue)",
             "automatic_archiving=\(vault.automaticArchiving)",
             "emergency_stop=\(vault.automationEmergencyStop)",
             "automation_permitted=\(ProjectVaultRolloutPolicy.permitsAutomaticArchiving(vault))",

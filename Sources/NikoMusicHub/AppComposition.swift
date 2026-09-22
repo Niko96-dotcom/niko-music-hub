@@ -138,6 +138,16 @@ struct AppComposition {
         let navigationHistory = HubNavigationHistory()
         let quickAccessRouter = QuickAccessRouter()
         let appSettings = AppSettingsObserver(store: settingsStore)
+        // Recovery export needs the same live database the Vault runtime uses;
+        // nil when the database is damaged (import stays available through the
+        // standalone service entry point, which needs no healthy current DB).
+        let recoveryService: ProjectVaultRecoveryService? = {
+            guard let archiveDatabase else { return nil }
+            return ProjectVaultRecoveryService(
+                database: archiveDatabase,
+                settingsStore: settingsStore
+            )
+        }()
         let context = ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
@@ -151,7 +161,8 @@ struct AppComposition {
             jobStatusCenter: jobStatusCenter,
             navigationHistory: navigationHistory,
             appSettings: appSettings,
-            router: quickAccessRouter
+            router: quickAccessRouter,
+            recoveryService: recoveryService
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -229,7 +240,8 @@ struct AppComposition {
             jobStatusCenter: jobStatusCenter,
             navigationHistory: navigationHistory,
             appSettings: appSettings,
-            router: quickAccessRouter
+            router: quickAccessRouter,
+            recoveryService: recoveryService
         )
 
         return AppComposition(

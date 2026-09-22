@@ -17,6 +17,11 @@ extension ArchiveBrowserViewModel {
             revealLinkedArchiveInFinder(for: song)
         case .retry:
             retryProjectVaultTransfer(song)
+        case .freeUpSpace:
+            // "Ready to free space" is never pre-authorized: route through the
+            // existing bound manual archive capture for an explicit fresh
+            // confirmation that rechecks every live gate.
+            requestArchiveNow(for: song)
         case .review:
             if presentation.retryRestoreID != nil, presentation.reviewAction == nil {
                 retryReviewedProjectVaultRestore(for: song)

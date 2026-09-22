@@ -16,6 +16,12 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
     case revealArchive
     case retry
     case review
+    /// A verified archive generation exists and the local Active copy is still
+    /// retained. This action never deletes: it routes through the existing
+    /// bound manual archive capture for an explicit fresh confirmation, which
+    /// rechecks every live gate (master enablement, pause, Keep Local,
+    /// independent backup) at capture and again at execution.
+    case freeUpSpace
 
     public var label: String {
         switch self {
@@ -24,6 +30,7 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
         case .revealArchive: "Show in Finder"
         case .retry: "Retry"
         case .review: "Review"
+        case .freeUpSpace: "Free Up Space"
         }
     }
 }
@@ -148,19 +155,65 @@ public struct ProjectVaultGenerationReviewResolver: Equatable, Sendable {
 public struct ProjectVaultCardPresentation: Equatable, Sendable {
     public let availability: Availability?
     public let restorePhase: VaultRestorePhase?
+    /// The transfer phase behind an in-progress card, retained so the status
+    /// line can name the actual phase (Queued, Copying, Verifying, Waiting for
+    /// upload) instead of advertising completion before the actual state.
+    public let transferState: VaultTransferState?
+    /// Persisted-evidence readiness: a verified terminal generation plus a
+    /// retained local Active copy with no Keep Local pin, offered only when
+    /// the live free-space gates already pass. Never authority to delete.
+    public let isReadyToFreeSpace: Bool
+    /// Copy-only verified generation with the Active copy retained, shown when
+    /// the free-space offer does not apply. Archive verification is reported
+    /// separately from workflow status; the project stays visible and nothing
+    /// is removed automatically.
+    public let isVerifiedCopy: Bool
 
     public var statusLabel: String {
+        if isReadyToFreeSpace, state == .active {
+            return "Ready to free space"
+        }
+        if isVerifiedCopy, state == .active {
+            return "Verified copy"
+        }
+        if state == .archiving, let transferState {
+            return Self.transferStatusLabel(transferState)
+        }
         guard state == .archived || state == .active || state == .keepLocal || state == .needsAttention else {
             return state.rawValue
         }
-        guard let availability else { return state.rawValue }
+        guard let availability else {
+            return state == .needsAttention ? "Needs attention" : state.rawValue
+        }
         let label: String = switch availability {
         case .local: "Local"
         case .onlineOnly: "Online-only"
         case .materializing: "Downloading"
         case .missing: "Unavailable"
         }
-        return state == .archived ? "Archived · \(label)" : (state == .needsAttention ? "Needs Attention · \(label)" : state.rawValue)
+        return state == .archived ? "Archived · \(label)" : (state == .needsAttention ? "Needs attention · \(label)" : state.rawValue)
+    }
+
+    /// User-facing transfer-phase wording. A provider wait is never shown as
+    /// archived, a verified terminal generation is never shown as still
+    /// archiving, and a verified copy with the Active folder retained is never
+    /// shown as done: it is "Ready to free space" pending a fresh
+    /// confirmation, or "Verified copy" when no free-space offer applies.
+    public static func transferStatusLabel(_ state: VaultTransferState) -> String {
+        switch state {
+        case .archiveEligible, .preparingArchive:
+            return "Queued"
+        case .copyingToArchiveStaging:
+            return "Copying"
+        case .verifyingArchiveStaging:
+            return "Verifying"
+        case .awaitingProviderDurability, .promotingArchiveGeneration:
+            return "Waiting for upload"
+        case .archiveVerified, .archivedLocal, .archivedOnlineOnly:
+            return "Verified"
+        default:
+            return "Archiving"
+        }
     }
 
     public var retryRestoreLabel: String {
@@ -184,8 +237,13 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         transferErrorOrigin: VaultTransferState? = nil,
         restorePhase: VaultRestorePhase? = nil,
         restore: VaultRestoreRecord? = nil,
-        linkedArchiveAvailability: Availability? = nil
+        linkedArchiveAvailability: Availability? = nil,
+        isReadyToFreeSpace: Bool = false,
+        isVerifiedCopy: Bool = false
     ) {
+        self.transferState = transferState
+        self.isReadyToFreeSpace = isReadyToFreeSpace
+        self.isVerifiedCopy = isVerifiedCopy
         isKeepLocal = record.pinned
         self.restorePhase = restore?.phase ?? restorePhase
         availability = record.locations.contains { $0.kind == .active && $0.availability == .local }
@@ -294,10 +352,26 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             state = .archiving
             primaryAction = .review
             explanation = ProjectVaultActivityExplanation.transfer(transferState)
+        } else if isReadyToFreeSpace, !record.pinned, hasLocalActiveCopy {
+            // Persistent, evidence-backed offer: a verified generation exists
+            // and the Active copy is still retained. The status names the
+            // pending choice without claiming it is authorized, and the action
+            // is an explicit fresh confirmation, never a reused approval.
+            state = .active
+            primaryAction = .freeUpSpace
+            explanation = "A verified Project Vault copy exists and the Active folder is still here. Freeing space needs a fresh confirmation; nothing is removed automatically."
         } else if record.pinned, hasLocalActiveCopy {
             state = .keepLocal
             primaryAction = .openInCubase
             explanation = "Pinned here. Automatic archiving will leave this project in Active Projects."
+        } else if isVerifiedCopy, !record.pinned, hasLocalActiveCopy {
+            // Copy-only verified generation with the Active folder retained.
+            // Verification is reported separately from workflow status; the
+            // project stays visible and directly openable, and nothing is
+            // removed automatically.
+            state = .active
+            primaryAction = .openInCubase
+            explanation = "A verified Project Vault copy exists and the Active folder is still here. Nothing is removed automatically."
         } else if hasLocalActiveCopy {
             state = .active
             primaryAction = .openInCubase
@@ -320,7 +394,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     private static let archivingStates: Set<VaultTransferState> = [
         .archiveEligible, .preparingArchive, .copyingToArchiveStaging,
         .verifyingArchiveStaging, .awaitingProviderDurability,
-        .promotingArchiveGeneration, .archiveVerified, .removingActiveCopy,
+        .promotingArchiveGeneration, .removingActiveCopy,
         .evictingProviderCache
     ]
 }
@@ -356,6 +430,9 @@ public enum ProjectVaultActivityExplanation {
 }
 
 public enum ProjectVaultRolloutPolicy {
+    /// Legacy scheduler gate, preserved for compatibility (diagnostics,
+    /// out-of-scope capture pre-selection). Background inactivity/disk-pressure
+    /// scheduling remains opt-in via `automaticArchiving`.
     public static func permitsAutomaticArchiving(_ settings: VaultSettings) -> Bool {
         settings.isEnabled
             && settings.automaticArchiving
@@ -365,9 +442,48 @@ public enum ProjectVaultRolloutPolicy {
             && settings.archiveRootID != nil
     }
 
+    /// User-initiated archiving (manual Archive Now, user-confirmed Done).
+    /// Decoupled from the background scheduler opt-in: a Done confirmation
+    /// copies even when `automaticArchiving` is off. The disabled rollout
+    /// still blocks, so upgrades never gain new file operations from the
+    /// migration itself.
+    public static func permitsUserInitiatedArchiving(_ settings: VaultSettings) -> Bool {
+        settings.isEnabled
+            && !settings.automationEmergencyStop
+            && settings.rolloutStage != .disabled
+            && settings.activeRootID != nil
+            && settings.archiveRootID != nil
+    }
+
+    /// Whether the stored settings express a free-space desire. The persisted
+    /// `spaceIntent` is authoritative; legacy payloads without an intent key
+    /// migrate at decode, so the rollout is never consulted here. An explicit
+    /// `keepCopy` never authorizes removal, even alongside `friends`. The
+    /// backup acknowledgement is a separate execution gate, never implied here.
+    public static func expressesFreeSpaceIntent(_ settings: VaultSettings) -> Bool {
+        settings.spaceIntent == .freeSpace
+    }
+
+    /// Scheduler-coupled removal gate. Honors the persisted free-space intent
+    /// (legacy payloads without an intent key migrate at decode, so upgraded
+    /// `friends` installs keep working while explicit `keepCopy` stays
+    /// copy-only). Still scheduler-coupled; the runtime uses
+    /// `permitsUserInitiatedRemoval` for Done so Done no longer waits on the
+    /// scheduler opt-in.
     public static func permitsActiveCopyRemoval(_ settings: VaultSettings) -> Bool {
         permitsAutomaticArchiving(settings)
-            && settings.rolloutStage == .friends
+            && expressesFreeSpaceIntent(settings)
+            && settings.independentBackupConfirmed
+    }
+
+    /// Done/manual removal gate used by the owned runtime admission. Composes
+    /// the user-initiated archiving base — so a disabled rollout cannot
+    /// bypass the capture gate — plus an explicit free-space intent and the
+    /// backup acknowledgement, but not the background scheduler opt-in.
+    /// Keep Local is per-song and enforced at capture/execution.
+    public static func permitsUserInitiatedRemoval(_ settings: VaultSettings) -> Bool {
+        permitsUserInitiatedArchiving(settings)
+            && expressesFreeSpaceIntent(settings)
             && settings.independentBackupConfirmed
     }
 }

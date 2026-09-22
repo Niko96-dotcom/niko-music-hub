@@ -12,8 +12,7 @@ extension ArchiveBrowserViewModel {
         enqueueProjectVaultRestore(request.song, selectedPath: selectedPath, destinationRelativePath: destination)
     }
 
-    func retryReviewedProjectVaultRestore(for song: Song) {
-        guard let runtime = projectVaultRuntime,
+    func retryReviewedProjectVaultRestore(for song: Song) {        guard let runtime = projectVaultRuntime,
               let restoreID = projectVaultPresentation(for: song)?.retryRestoreID else {
             setProjectVaultStatusMessage(
                 "Restore retry is unavailable because no preserved Project Vault restore was found."
@@ -62,6 +61,24 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Explicit "Resume work" affordance for a restored Active copy. Moves the
+    /// workflow status to Prod (the in-progress production stage; the status
+    /// enum has no literal inProgress case) through the existing metadata API,
+    /// with undo. The default Get Local & Open path never changes workflow
+    /// status — only this explicit action does. Offered only for locally
+    /// actionable restored copies currently marked Done.
+    func canResumeRestoredWork(for song: Song) -> Bool {
+        guard let presentation = projectVaultPresentation(for: song) else { return false }
+        guard presentation.state == .active || presentation.state == .keepLocal else { return false }
+        guard canMutateWorkflowStatus(for: song) else { return false }
+        return song.workflowStatus == .done
+    }
+
+    func resumeRestoredWork(for song: Song) {
+        guard canResumeRestoredWork(for: song) else { return }
+        updateWorkflowStatus(for: song, status: .prod)
+    }
+
     func restoreAndOpenFromProjectVault(_ song: Song) {
         guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song),
               !projectVaultBusySongIDs.contains(song.id), projectVaultRestoreRequest == nil, !projectVaultRestoreOptionsLoading else { return }
@@ -89,6 +106,10 @@ extension ArchiveBrowserViewModel {
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }
+        // Default restore preserves workflow metadata: it never commits a
+        // workflow-status change. Returning to active work is an explicit
+        // "Resume work" action (`resumeRestoredWork`). Keep Local pinning for
+        // the restored copy happens in the runtime, not here.
         let message = snapshot.linkedArchive == nil
             ? "Restoring the verified project into Active Projects…"
             : "Checking and downloading archive files before restoring into Active Projects…"

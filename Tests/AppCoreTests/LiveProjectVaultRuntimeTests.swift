@@ -216,6 +216,30 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let restored = try await runtime.restoreAndOpen(snapshot: archived)
         XCTAssertNotNil(restored.completedAt)
         try VaultManifestBuilder().verify(before, at: fixture.project)
+        // Restore preserves Done and pins Keep Local: rearchive must observe
+        // protection first, then explicitly unpin project ID and canonical path.
+        let restoredCanonical = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
+        let pinnedAfterRestore = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        XCTAssertTrue(pinnedAfterRestore.contains(archived.record.id.description))
+        XCTAssertTrue(pinnedAfterRestore.contains(restoredCanonical))
+        do {
+            _ = try await runtime.captureArchiveAuthorization(
+                for: fixture.song,
+                trigger: .manual,
+                removingActiveCopy: true,
+                catalogProjectID: nil
+            )
+            XCTFail("restored copy must stay pinned until Keep Local is explicitly cleared")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
+        }
+        try fixture.settingsStore.updateSettings { [project = fixture.project, songID = fixture.song.id] in
+            $0.vault.keepLocalProjectIDs.remove(archived.record.id.description)
+            $0.vault.keepLocalProjectIDs.remove(restoredCanonical)
+            $0.vault.keepLocalProjectIDs.remove(project.path)
+            $0.vault.keepLocalProjectIDs.remove(project.standardizedFileURL.path)
+            $0.vault.keepLocalProjectIDs.remove(songID)
+        }
         let againAuthorization = try await runtime.captureArchiveAuthorization(
             for: fixture.song,
             trigger: .manual,
@@ -853,7 +877,8 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
     func testSnapshotsDuringRestoreDoNotRewriteCatalogOutsideMutationLease() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let archivingRuntime = try fixture.runtime()
         let snapshotAuthorization = try await archivingRuntime.captureArchiveAuthorization(
             for: fixture.song,
@@ -1269,7 +1294,8 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
     func testEmergencyStopRaisedAfterVerificationStillBlocksActiveDeletion() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let settingsStore = fixture.settingsStore
         let provider = RuntimePolicyChangingProvider {
             try settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
@@ -1303,7 +1329,8 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
     func testDoneInFriendsRemovesOnlyAfterVerificationAndRestoreReturnsProject() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let runtime = try fixture.runtime()
         let doneAuthorization = try await runtime.captureArchiveAuthorization(
             for: fixture.song,
@@ -1558,10 +1585,11 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(
-            stage: .friends,
+            stage: .privateBeta,
             backupConfirmed: true,
             transferFreeSpaceReserveGiB: 1
         )
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let archivingRuntime = try fixture.runtime()
         let xattrAuthorization = try await archivingRuntime.captureArchiveAuthorization(
             for: fixture.song,
@@ -1704,7 +1732,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
         let sourcePath = try XCTUnwrap(archived.transfer).sourceURL.path
         try fixture.settingsStore.updateSettings { settings in
-            settings.vault.rolloutStage = .friends
+            settings.vault.setSpaceIntent(.freeSpace)
         }
         let keepLocalAuthorization = try await runtime.captureArchiveAuthorization(
             for: fixture.song,
@@ -1730,7 +1758,8 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
     func testPostCopyActivityPostponementReturnsVerifiedGenerationWithoutDuplicateRetry() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let firstTime = Date(timeIntervalSince1970: 50_000)
         let secondTime = Date(timeIntervalSince1970: 60_000)
         let clock = RuntimeTestClock(firstTime)
@@ -2379,7 +2408,7 @@ extension LiveProjectVaultRuntimeTests {
         XCTAssertEqual(copyOnly.maximumDestructiveness, .copyOnly)
         XCTAssertFalse(copyOnly.permitsRemoval)
         try fixture.settingsStore.updateSettings {
-            $0.vault.rolloutStage = .friends
+            $0.vault.setSpaceIntent(.freeSpace)
             $0.vault.independentBackupConfirmed = true
         }
 
@@ -2393,7 +2422,8 @@ extension LiveProjectVaultRuntimeTests {
     func testCompatibilityEntryPointsStayCopyOnlyWhenRemovalIsPermitted() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
-        try fixture.saveSettings(stage: .friends, backupConfirmed: true)
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
         let runtime = try fixture.runtime()
 
         let manual = try await runtime.archive(song: fixture.song, trigger: .manual)
@@ -3993,10 +4023,42 @@ extension LiveProjectVaultRuntimeTests {
         let restored = try await runtime.restoreAndOpen(snapshot: archived)
         XCTAssertNotNil(restored.completedAt)
         try VaultManifestBuilder().verify(before, at: fixture.project)
+        // Restore preserves Done and pins Keep Local: rearchive must observe
+        // protection first, then explicitly unpin project ID and canonical path.
+        let rescannedCanonical = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
+        let rescannedPinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        XCTAssertTrue(rescannedPinned.contains(archived.record.id.description))
+        XCTAssertTrue(rescannedPinned.contains(rescannedCanonical))
+        do {
+            _ = try await runtime.captureArchiveAuthorization(
+                for: scanned,
+                trigger: .manual,
+                removingActiveCopy: true,
+                catalogProjectID: nil
+            )
+            XCTFail("restored copy must stay pinned until Keep Local is explicitly cleared")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
+        }
+        try fixture.settingsStore.updateSettings { [project = fixture.project] in
+            $0.vault.keepLocalProjectIDs.remove(archived.record.id.description)
+            $0.vault.keepLocalProjectIDs.remove(copy.record.id.description)
+            $0.vault.keepLocalProjectIDs.remove(rescannedCanonical)
+            $0.vault.keepLocalProjectIDs.remove(project.path)
+            $0.vault.keepLocalProjectIDs.remove(project.standardizedFileURL.path)
+            $0.vault.keepLocalProjectIDs.remove(scanned.id)
+        }
 
         let rescanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
             $0.originalFolderName == "Synthetic Song"
         })
+        // Rescanned identity uses the same stable folder; clear any residual
+        // scan-representation key so the explicit owner opt-out above holds.
+        try fixture.settingsStore.updateSettings {
+            $0.vault.keepLocalProjectIDs.remove(rescanned.id)
+            $0.vault.keepLocalProjectIDs.remove(rescanned.folderPath.path)
+            $0.vault.keepLocalProjectIDs.remove(rescanned.folderPath.standardizedFileURL.path)
+        }
         let againAuthorization = try await runtime.captureArchiveAuthorization(
             for: rescanned,
             trigger: .manual,
@@ -4066,6 +4128,100 @@ extension LiveProjectVaultRuntimeTests {
 
         XCTAssertEqual(try fixture.catalogRows(), before)
         XCTAssertEqual(try fixture.catalogStore().loadEntries().map(\.record.id), [shared])
+    }
+
+    func testDoneCopyDecoupledFromSchedulerOptInKeepsActive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
+        let runtime = try fixture.runtime()
+        let result = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+        XCTAssertEqual(result.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testDoneRemovalDecoupledFromSchedulerOptInRemovesActive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        // Confirmed Done with scheduler off: intent-only free-space path
+        // without the legacy friends rollout.
+        try fixture.settingsStore.updateSettings {
+            $0.vault.spaceIntent = .freeSpace
+            $0.vault.automaticArchiving = false
+        }
+        let stored = try fixture.settingsStore.loadSettings()
+        XCTAssertEqual(stored.vault.rolloutStage, .privateBeta)
+        let runtime = try fixture.runtime()
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        XCTAssertTrue(authorization.permitsRemoval)
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: authorization)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue([VaultTransferState.archivedLocal, .archivedOnlineOnly].contains(try XCTUnwrap(archived.transfer).state))
+    }
+
+    func testDisabledRolloutStillRefusesDoneWithoutFileOperations() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .disabled, backupConfirmed: false)
+        let runtime = try fixture.runtime()
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("disabled rollout must refuse Done")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .automaticArchivingDisabled)
+        }
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testDoneRemovalViaFreeSpaceIntentWithoutLegacyFriends() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        // Intent-only path: explicit free-space choice without the legacy
+        // friends rollout, so the new choice alone must authorize removal.
+        try fixture.settingsStore.updateSettings { $0.vault.spaceIntent = .freeSpace }
+        let stored = try fixture.settingsStore.loadSettings()
+        XCTAssertEqual(stored.vault.rolloutStage, .privateBeta)
+        let runtime = try fixture.runtime()
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        XCTAssertTrue(authorization.permitsRemoval)
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: authorization)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertTrue([VaultTransferState.archivedLocal, .archivedOnlineOnly].contains(try XCTUnwrap(archived.transfer).state))
+    }
+
+    func testCopyOnlyTokenNeverEscalatesAfterIntentUpgrade() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let runtime = try fixture.runtime()
+        let copyOnly = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: false,
+            catalogProjectID: nil
+        )
+        XCTAssertFalse(copyOnly.permitsRemoval)
+        try fixture.settingsStore.updateSettings {
+            $0.vault.setSpaceIntent(.freeSpace)
+            $0.vault.independentBackupConfirmed = true
+        }
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: copyOnly)
+        XCTAssertEqual(archived.transfer?.state, .archiveVerified)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 }
 

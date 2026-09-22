@@ -15,6 +15,17 @@ failure throws fail-closed, preserves every byte, and reports a clear blocked
 reason. Vault functionality is never disabled to hide a missing proof, and a
 missing proof never authorizes deletion.
 
+## User-visible workflow (1.7.0)
+
+- Archiving intent is **Keep a verified copy** or **Archive and free up space**. It replaces the earlier rollout selector in the UI; the legacy value is retained for existing records. Choosing copy-only never gains removal later through a settings change.
+- Background scheduling is off by default and opted in independently from manual archiving.
+- Song completion offers **Archive and free up space** (only when permitted), **Keep a verified copy**, **Keep on this Mac**, or **Keep Status**, with the same shared manual confirmation on the board and in song detail.
+- Delayed retries stay copy-only. A verified archive with persisted recovery evidence can offer **Ready to free space** under a fresh confirmation.
+- Copies, pending transfers, and failures stay on the board. Archive-only songs stay hidden until shown again.
+- Restoring preserves the song's workflow stage and pins Keep Local before any copy or open. **Resume work** explicitly moves the song to the existing **Prod** stage.
+- A disabled Vault keeps its configured Active and Vault roots off the board until re-enabled. A paused restore stays paused until explicitly unpaused.
+- Recovery copies are metadata-only (catalog plus settings) and stay available while Vault is off. See [Project Vault recovery copies](vault-recovery.md).
+
 ## Pending cloud uploads
 
 A File Provider upload that exceeds a bounded check stays pending, rather than

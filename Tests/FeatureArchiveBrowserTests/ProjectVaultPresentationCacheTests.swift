@@ -114,6 +114,46 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
             "Applied settings changes must replace the prepared cache without render-time reloads."
         )
     }
+
+    func testWaitingTransferNeverLabelsArchivedAndReadyRequiresFreshConfirmation() {
+        let activeRecord = ProjectRecord(
+            canonicalTitle: "Active Song",
+            locations: [ProjectLocation(rootID: UUID(), relativePath: "Active Song", kind: .active, availability: .local)]
+        )
+        for waitingState in [VaultTransferState.awaitingProviderDurability, VaultTransferState.promotingArchiveGeneration] {
+            let waiting = ProjectVaultCardPresentation(record: activeRecord, transferState: waitingState)
+            XCTAssertEqual(waiting.state, .archiving, "\(waitingState)")
+            XCTAssertEqual(waiting.statusLabel, "Waiting for upload", "\(waitingState)")
+            XCTAssertFalse(waiting.statusLabel.contains("Archived"), "\(waitingState)")
+            XCTAssertNotEqual(waiting.primaryAction, .restoreAndOpen, "\(waitingState)")
+            XCTAssertEqual(
+                ProjectVaultCardPresentation.transferStatusLabel(waitingState),
+                "Waiting for upload",
+                "\(waitingState)"
+            )
+            XCTAssertFalse(
+                ProjectVaultCardPresentation.transferStatusLabel(waitingState).contains("Archived"),
+                "\(waitingState)"
+            )
+        }
+
+        let ready = ProjectVaultCardPresentation(record: activeRecord, isReadyToFreeSpace: true)
+        XCTAssertEqual(ready.state, .active)
+        XCTAssertEqual(ready.primaryAction, .freeUpSpace)
+        XCTAssertEqual(ready.statusLabel, "Ready to free space")
+        XCTAssertTrue(ready.explanation.contains("fresh confirmation"))
+        XCTAssertTrue(ready.isReadyToFreeSpace)
+
+        let pinnedRecord = ProjectRecord(
+            canonicalTitle: "Active Song",
+            locations: [ProjectLocation(rootID: UUID(), relativePath: "Active Song", kind: .active, availability: .local)],
+            pinned: true
+        )
+        let pinned = ProjectVaultCardPresentation(record: pinnedRecord, isReadyToFreeSpace: true)
+        XCTAssertEqual(pinned.state, .keepLocal)
+        XCTAssertNotEqual(pinned.primaryAction, .freeUpSpace)
+        XCTAssertEqual(pinned.primaryAction, .openInCubase)
+    }
 }
 
 private final class CountingSettingsStore: SettingsStore, @unchecked Sendable {

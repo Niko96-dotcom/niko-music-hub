@@ -266,27 +266,28 @@ struct ArchiveBrowserView: View {
                 // NMH-136: trap VoiceOver in first-run; Esc stays blocked above.
                 .accessibilityAddTraits(.isModal)
         }
-        .alert(
-            workflowDoneAlertTitle,
+        .sheet(
             isPresented: Binding(
-                get: { viewModel.pendingArchiveConfirmation?.trigger == .workflowDone },
-                set: { if !$0 { viewModel.cancelPendingArchive() } }
+                get: { viewModel.pendingArchiveConfirmation != nil },
+                set: { presented in
+                    // The single presenter for every archive confirmation
+                    // (manual Archive Now + workflow Done choices). Sheet
+                    // content buttons do not flip this binding (unlike
+                    // `.alert` buttons): they call the confirm/cancel methods
+                    // directly, which clear pending and let the getter dismiss.
+                    // This setter only runs for system dismiss (Escape). It
+                    // cancels only while a pending is still presented, so a
+                    // dismiss racing a confirm, an external revoke
+                    // (status/root change nils pending and dismisses on its
+                    // own), or a replacement capture never cancels the wrong
+                    // state before its callback runs.
+                    if !presented, viewModel.pendingArchiveConfirmation != nil {
+                        viewModel.cancelPendingArchive()
+                    }
+                }
             )
         ) {
-            Button(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, role: .cancel) {
-                viewModel.cancelPendingArchive()
-            }
-            .keyboardShortcut(.defaultAction)
-            Button(
-                ProjectVaultConfirmationCopy.workflowDoneConfirmTitle(
-                    willRemoveActiveCopy: workflowDoneRemovesActiveCopy
-                ),
-                role: workflowDoneRemovesActiveCopy ? .destructive : nil
-            ) {
-                viewModel.confirmPendingArchive()
-            }
-        } message: {
-            Text(workflowDoneAlertMessage)
+            ProjectVaultDoneChoiceSheet(viewModel: viewModel)
         }
         .alert(
             CancelCopy.stopTransferTitle,
@@ -405,24 +406,6 @@ struct ArchiveBrowserView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(24)
         }
-    }
-
-    private var workflowDoneRemovesActiveCopy: Bool {
-        viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy ?? false
-    }
-
-    private var workflowDoneAlertTitle: String {
-        ProjectVaultConfirmationCopy.workflowDoneTitle(
-            willRemoveActiveCopy: workflowDoneRemovesActiveCopy
-        )
-    }
-
-    private var workflowDoneAlertMessage: String {
-        guard let pending = viewModel.pendingArchiveConfirmation else { return "" }
-        return ProjectVaultConfirmationCopy.workflowDoneMessage(
-            songTitle: pending.songTitle,
-            willRemoveActiveCopy: pending.willRemoveActiveCopy
-        )
     }
 
     private var allowsSongShortcuts: Bool {

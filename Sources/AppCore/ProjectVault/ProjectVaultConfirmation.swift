@@ -90,6 +90,14 @@ public enum ProjectVaultConfirmationCopy: Sendable {
 
     public static let workflowDoneCancelTitle = "Keep Status"
 
+    /// Done storage choices. Done is a creative workflow state independent of
+    /// storage: marking Done always commits the status, then handles the
+    /// Active folder per choice. Removal is offered only when the bound token
+    /// allows it.
+    public static let workflowDoneFreeSpaceTitle = "Archive and free up space"
+    public static let workflowDoneKeepCopyTitle = "Keep a verified copy"
+    public static let workflowDoneKeepLocalTitle = "Keep on this Mac"
+
     public static func workflowDoneConfirmTitle(willRemoveActiveCopy: Bool) -> String {
         willRemoveActiveCopy ? "Archive" : "Archive and Mark Done"
     }
@@ -103,9 +111,27 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         willRemoveActiveCopy: Bool
     ) -> String {
         if willRemoveActiveCopy {
-            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes the Active Projects folder because Settings records an independent backup and friends rollout is on. Deleted files do not go to the Trash. Recovery is Get Local & Open."
+            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes the Active Projects folder because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Get Local & Open."
         }
         return "Moving “\(songTitle)” to Done starts a Project Vault archive. The Active Projects folder stays in place. You can change the workflow status later from the card menu or with Edit → Undo."
+    }
+
+    public static func workflowDoneChoiceTitle(willRemoveActiveCopy: Bool) -> String {
+        willRemoveActiveCopy ? "Move to Done?" : "Move to Done?"
+    }
+
+    /// Concise choice message for the three-option Done confirmation. States
+    /// the Done commit plus the storage outcome without implying scheduler
+    /// behavior. Removal wording restates the backup gate; copy/local wording
+    /// states the Active folder stays.
+    public static func workflowDoneChoiceMessage(
+        songTitle: String,
+        willRemoveActiveCopy: Bool
+    ) -> String {
+        if willRemoveActiveCopy {
+            return "“\(songTitle)” will be marked Done. Archive and free up space verifies a Vault copy, then permanently deletes the Active folder. Deleted files do not go to the Trash. Settings records an independent backup. Recovery is Get Local & Open."
+        }
+        return "“\(songTitle)” will be marked Done and the Active folder stays. You can still keep a verified copy, or keep it on this Mac. Change status later with Edit → Undo."
     }
 
     public static let independentBackupToggleTitle = "I protect the Archive with an independent backup"
@@ -114,7 +140,7 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         "Archive Now can delete the Active Projects folder only when this is on and the other safety checks pass. Turning this on does not delete anything. Niko Music Hub still asks before Archive Now."
 
     public static let vaultEnabledSuccessMessage =
-        "Project Vault is on. Private beta automation creates copies only. Archive Now can remove the Active copy after you confirm, and only when independent backup is recorded and the other safety checks pass."
+        "Project Vault is on. New archives keep a verified copy. Archive and free up space removes the Active copy only after you confirm, and only when independent backup is recorded and the other safety checks pass."
 
     /// Automatic-Done destructive-consent contract (V3). Marking a project
     /// Done without a bound per-operation authorization only ever creates a

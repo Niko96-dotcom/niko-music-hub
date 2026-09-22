@@ -353,7 +353,11 @@ extension LiveProjectVaultRuntime {
                         throw ProjectVaultRuntimeError.independentBackupRequired
                     }
                 } else {
-                    guard ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(liveSettings.vault) else {
+                    // Done removal follows the user-initiated gate (explicit
+                    // free-space intent plus the backup acknowledgement),
+                    // not the background scheduler opt-in. Live settings may
+                    // only restrict.
+                    guard ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(liveSettings.vault) else {
                         throw ProjectVaultRuntimeError.automaticArchivingDisabled
                     }
                 }

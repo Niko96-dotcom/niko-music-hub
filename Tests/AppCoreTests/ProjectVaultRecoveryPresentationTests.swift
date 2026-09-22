@@ -17,7 +17,7 @@ final class ProjectVaultRecoveryPresentationTests: XCTestCase {
             ProjectLocation(rootID: UUID(), relativePath: "Fixture", kind: .archive, availability: .missing)
         ])
         let presentation = ProjectVaultCardPresentation(record: missing)
-        XCTAssertEqual(presentation.statusLabel, "Needs Attention · Unavailable")
+        XCTAssertEqual(presentation.statusLabel, "Needs attention · Unavailable")
         XCTAssertEqual(presentation.primaryAction, .review)
     }
 

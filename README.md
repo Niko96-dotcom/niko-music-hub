@@ -67,7 +67,7 @@ Convert a bounce, capture system audio, download a reference, separate stems loc
 ## Built to respect your library
 
 - **Read-only browsing.** Scanning, previews and project opening do not reorganise or rewrite music files.
-- **Optional archival.** Project Vault is off by default. Archival follows explicit authorization, verified-copy and recovery requirements; configured automation follows its own bounded approval contract. See [Vault durability](docs/vault-durability.md).
+- **Optional archival.** Project Vault is off by default. Archival follows explicit authorization, verified-copy and recovery requirements; configured automation follows its own bounded approval contract. Archiving lets you keep a verified copy or archive and free up space; restores keep the song's workflow stage. See [Vault durability](docs/vault-durability.md) and [Vault recovery copies](docs/vault-recovery.md).
 - **Local workspace.** The index and settings live on your Mac. Downloads and optional helper installation use their respective network services.
 - **One output destination.** Choose where produced files go; the default is `~/Music/Niko Music Hub/Inbox`.
 

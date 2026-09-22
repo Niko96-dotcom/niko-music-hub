@@ -280,7 +280,7 @@ struct ArchiveBoardCardView: View {
                 }
             }
 
-            if let vaultPresentation, vaultPresentation.state != .active || vaultActivityMessage != nil {
+            if let vaultPresentation, vaultPresentation.state != .active || vaultPresentation.isVerifiedCopy || vaultPresentation.primaryAction == .freeUpSpace || vaultActivityMessage != nil {
                 ArchiveBoardCardVaultRow(
                     presentation: vaultPresentation,
                     activityMessage: vaultActivityMessage,

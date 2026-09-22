@@ -99,6 +99,33 @@ public struct ProjectVaultArchiveAuthorization: Codable, Sendable, Equatable {
         maximumDestructiveness == .mayRemoveActiveCopy
     }
 
+    /// Returns the SAME bound operation downgraded to copy-only. Every binding
+    /// field — source path and filesystem object, song/catalog identity, both
+    /// root IDs/paths/objects, trigger, and `authorizedAt` — is preserved, so
+    /// the value still authorizes exactly the same operation and still fails
+    /// closed on any drift; only the destructiveness ceiling is lowered.
+    /// Delayed automatic retries and recovery/relaunch paths use this so a
+    /// destructive approval is never reused: no new removal token is minted,
+    /// and validation is unchanged (a copy-only value never deletes, however
+    /// permissive live settings become).
+    public func downgradedToCopyOnly() -> ProjectVaultArchiveAuthorization {
+        ProjectVaultArchiveAuthorization(
+            sourceCanonicalPath: sourceCanonicalPath,
+            sourceFileSystemIdentity: sourceFileSystemIdentity,
+            songID: songID,
+            catalogProjectID: catalogProjectID,
+            activeRootID: activeRootID,
+            activeRootCanonicalPath: activeRootCanonicalPath,
+            activeRootFileSystemIdentity: activeRootFileSystemIdentity,
+            archiveRootID: archiveRootID,
+            archiveRootCanonicalPath: archiveRootCanonicalPath,
+            archiveRootFileSystemIdentity: archiveRootFileSystemIdentity,
+            trigger: trigger,
+            maximumDestructiveness: .copyOnly,
+            authorizedAt: authorizedAt
+        )
+    }
+
     public static func canonicalPath(for url: URL) -> String {
         url.standardizedFileURL.resolvingSymlinksInPath().path
     }

@@ -42,6 +42,11 @@ public struct StoredArchiveRoot: Equatable, Codable, Sendable {
 }
 
 public struct VaultSettings: Equatable, Codable, Sendable {
+    /// Legacy rollout gate. Preserved for decode/encode compatibility and for
+    /// out-of-scope consumers (`FeatureArchiveBrowser` capture pre-selection,
+    /// DEBUG relaunch proof) until they migrate to `spaceIntent`. New UI and
+    /// the owned runtime admission prefer `spaceIntent`; policy honors either
+    /// so upgrades neither broaden nor narrow stored permissions.
     public enum RolloutStage: String, Codable, CaseIterable, Sendable {
         case disabled
         case privateBeta
@@ -52,6 +57,30 @@ public struct VaultSettings: Equatable, Codable, Sendable {
             case .disabled: "Off"
             case .privateBeta: "Private beta (automatic copies only)"
             case .friends: "Friends"
+            }
+        }
+    }
+
+    /// User-meaningful choice shown in Settings instead of rollout modes.
+    /// `keepCopy` keeps the Active folder after a verified archive;
+    /// `freeSpace` allows the Active folder to be removed, but only after an
+    /// explicit per-operation confirmation plus the existing backup,
+    /// Emergency Stop, Keep Local, and activity gates.
+    public enum SpaceIntent: String, Codable, CaseIterable, Sendable {
+        case keepCopy
+        case freeSpace
+
+        public var label: String {
+            switch self {
+            case .keepCopy: "Keep a verified copy"
+            case .freeSpace: "Archive and free up space"
+            }
+        }
+
+        public var description: String {
+            switch self {
+            case .keepCopy: "Archiving keeps the Active folder in place."
+            case .freeSpace: "Archiving can remove the Active folder after you confirm."
             }
         }
     }
@@ -69,7 +98,13 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     public var launchAtLogin: Bool
     /// Rollout stays explicit so a locally enabled development build cannot silently
     /// become an artist-library automation deployment.
+    /// Legacy field: decoded, encoded, and honored by policy (see `SpaceIntent`
+    /// migration), but no longer presented in Settings.
     public var rolloutStage: RolloutStage
+    /// User-meaningful successor to `rolloutStage`. Persisted safely; missing
+    /// keys decode from the legacy rollout so upgrades perform no file
+    /// operations and legacy copy-only users never acquire removal permission.
+    public var spaceIntent: SpaceIntent
     /// Independent, persisted stop control checked in addition to the master and
     /// automatic-archiving switches.
     public var automationEmergencyStop: Bool
@@ -84,13 +119,14 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         isEnabled: Bool = false,
         activeRootID: UUID? = nil,
         archiveRootID: UUID? = nil,
-        automaticArchiving: Bool = true,
+        automaticArchiving: Bool = false,
         inactivityDays: Int = 30,
         minimumFreeSpaceGiB: Int = 120,
         transferFreeSpaceReserveGiB: Int = 5,
         keepPreviousGenerationDays: Int = 30,
         launchAtLogin: Bool = true,
         rolloutStage: RolloutStage = .disabled,
+        spaceIntent: SpaceIntent? = nil,
         automationEmergencyStop: Bool = false,
         independentBackupConfirmed: Bool = false,
         lastSuccessfulVerificationAt: Date? = nil,
@@ -107,6 +143,9 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.keepPreviousGenerationDays = keepPreviousGenerationDays
         self.launchAtLogin = launchAtLogin
         self.rolloutStage = rolloutStage
+        // An explicit intent always wins; otherwise derive from the legacy
+        // rollout so a missing key can never escalate a copy-only install.
+        self.spaceIntent = spaceIntent ?? Self.migratedIntent(from: rolloutStage)
         self.automationEmergencyStop = automationEmergencyStop
         self.independentBackupConfirmed = independentBackupConfirmed
         self.lastSuccessfulVerificationAt = lastSuccessfulVerificationAt
@@ -114,10 +153,38 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.keepLocalProjectIDs = keepLocalProjectIDs
     }
 
+    /// Pure value mapping used by both the memberwise init and the decoder.
+    /// `friends` expressed a desire for removal (still gated on the backup
+    /// acknowledgement at execution), so it maps to `freeSpace`; every other
+    /// legacy value — including `disabled` and unknown/missing — maps to the
+    /// safe `keepCopy`. Performs no file operations.
+    public static func migratedIntent(from stage: RolloutStage) -> SpaceIntent {
+        stage == .friends ? .freeSpace : .keepCopy
+    }
+
+    /// Records an explicit user intent choice and keeps the legacy rollout in
+    /// sync for old builds and out-of-scope consumers. Downgrading to
+    /// `keepCopy` steps `friends` back to `privateBeta` (copy-only when
+    /// enabled); it never flips a stored `disabled` on, so the disabled state
+    /// is preserved. Upgrading to `freeSpace` records `friends`.
+    public mutating func setSpaceIntent(_ intent: SpaceIntent) {
+        spaceIntent = intent
+        switch intent {
+        case .freeSpace:
+            if rolloutStage != .friends {
+                rolloutStage = .friends
+            }
+        case .keepCopy:
+            if rolloutStage == .friends {
+                rolloutStage = .privateBeta
+            }
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case isEnabled, activeRootID, archiveRootID, automaticArchiving
         case inactivityDays, minimumFreeSpaceGiB, transferFreeSpaceReserveGiB, keepPreviousGenerationDays, launchAtLogin
-        case rolloutStage, automationEmergencyStop, independentBackupConfirmed
+        case rolloutStage, spaceIntent, automationEmergencyStop, independentBackupConfirmed
         case lastSuccessfulVerificationAt, lastRestoreDrillAt
         case keepLocalProjectIDs
     }
@@ -127,13 +194,27 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         isEnabled = try values.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
         activeRootID = try values.decodeIfPresent(UUID.self, forKey: .activeRootID)
         archiveRootID = try values.decodeIfPresent(UUID.self, forKey: .archiveRootID)
-        automaticArchiving = try values.decodeIfPresent(Bool.self, forKey: .automaticArchiving) ?? true
+        // Background inactivity/disk-pressure scheduling is independent
+        // OPT-IN: missing keys decode as off. An explicit stored `true` is
+        // preserved.
+        automaticArchiving = try values.decodeIfPresent(Bool.self, forKey: .automaticArchiving) ?? false
         inactivityDays = try values.decodeIfPresent(Int.self, forKey: .inactivityDays) ?? 30
         minimumFreeSpaceGiB = try values.decodeIfPresent(Int.self, forKey: .minimumFreeSpaceGiB) ?? 120
         transferFreeSpaceReserveGiB = try values.decodeIfPresent(Int.self, forKey: .transferFreeSpaceReserveGiB) ?? 5
         keepPreviousGenerationDays = try values.decodeIfPresent(Int.self, forKey: .keepPreviousGenerationDays) ?? 30
         launchAtLogin = try values.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
         rolloutStage = try values.decodeIfPresent(RolloutStage.self, forKey: .rolloutStage) ?? .disabled
+        // The persisted intent is authoritative. Only a missing intent key
+        // migrates from the legacy rollout; a present value decodes strictly
+        // so corrupt input — including an explicit null — fails this decode
+        // instead of inferring free-space permission. Callers loading
+        // `AppSettings` fall back to safe defaults on failure (`keepCopy`,
+        // disabled).
+        if values.contains(.spaceIntent) {
+            spaceIntent = try values.decode(SpaceIntent.self, forKey: .spaceIntent)
+        } else {
+            spaceIntent = Self.migratedIntent(from: rolloutStage)
+        }
         automationEmergencyStop = try values.decodeIfPresent(Bool.self, forKey: .automationEmergencyStop) ?? false
         independentBackupConfirmed = try values.decodeIfPresent(Bool.self, forKey: .independentBackupConfirmed) ?? false
         lastSuccessfulVerificationAt = try values.decodeIfPresent(Date.self, forKey: .lastSuccessfulVerificationAt)
