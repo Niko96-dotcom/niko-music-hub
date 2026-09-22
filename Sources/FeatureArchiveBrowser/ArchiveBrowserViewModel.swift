@@ -177,9 +177,28 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // Updated before filteredSongs publishes, so Board uses the applied query mode.
     var isSearching = false
     var projectVaultRestoreOptionsLoading = false
-    /// Window undo stack for workflow-status changes. Views bind this from
-    /// `@Environment(\.undoManager)`. Undo of Mark Done is status-only.
-    weak var workflowUndoManager: UndoManager?
+    /// Undo stack for workflow-status and metadata edits.
+    ///
+    /// SwiftUI's main window (`AppKitWindow`) answers `undo:` itself from its
+    /// own `undoManager`, so native Edit → Undo only works when registrations
+    /// land on that manager. `ArchiveWorkflowUndoBridge` binds it here as
+    /// `boundWindowUndoManager` while this pane is the active tool; otherwise
+    /// the owned stack is the fallback. Tests may inject a manager by assigning
+    /// `workflowUndoManager`. Registrations target `workflowUndoTarget` (weak
+    /// back-reference) so the undo stack cannot keep the view model alive.
+    /// Undo of Mark Done is status-only.
+    let ownedWorkflowUndoManager = UndoManager()
+    let workflowUndoTarget = ArchiveWorkflowUndoTarget()
+    var injectedWorkflowUndoManager: UndoManager?
+    /// Window-owned manager captured by the bridge lifecycle. Weak: the
+    /// window owns it; when the window goes away this nils and the owned
+    /// stack resumes. Set/cleared only by `ArchiveWorkflowUndoBridgeView`
+    /// (attach/sync/detach) and only while this pane is the active tool.
+    weak var boundWindowUndoManager: UndoManager?
+    var workflowUndoManager: UndoManager? {
+        get { injectedWorkflowUndoManager ?? boundWindowUndoManager ?? ownedWorkflowUndoManager }
+        set { injectedWorkflowUndoManager = newValue }
+    }
     var projectVaultQueueTask: Task<Void, Never>?
     var projectVaultStopRequested = false
     var projectVaultQueueFailures: [String] = []
@@ -362,6 +381,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 diagnostics.log(.info, message)
             }
         )
+        workflowUndoTarget.viewModel = self
         loadRootsFromSettings()
         attachNavigationHistory(context.navigationHistory)
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)

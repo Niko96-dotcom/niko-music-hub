@@ -25,7 +25,9 @@ extension ArchiveBrowserViewModel {
             messages[operation.songID] = "Queued · \(index + 1) ahead"
         }
         if let operation = projectVaultActiveOperation {
-            messages[operation.songID] = projectVaultRestoreProgress?.title ?? operation.startMessage
+            messages[operation.songID] = projectVaultRestoreProgress?.title
+                ?? projectVaultLiveArchivePhaseMessage(for: operation.songID)
+                ?? operation.startMessage
         }
         return messages
     }
@@ -35,7 +37,9 @@ extension ArchiveBrowserViewModel {
             return "Queued: \(projectVaultPendingOperations[position].label) — \(position + 1) ahead."
         }
         if let operation = projectVaultActiveOperation, operation.songID == song.id {
-            return projectVaultRestoreProgress?.title ?? operation.startMessage
+            return projectVaultRestoreProgress?.title
+                ?? projectVaultLiveArchivePhaseMessage(for: song.id)
+                ?? operation.startMessage
         }
         let message = projectVaultOperationMessages[song.id]
         if message == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
@@ -43,6 +47,23 @@ extension ArchiveBrowserViewModel {
             return nil // The current presentation owns the result of background recovery.
         }
         return message
+    }
+
+    /// Live archive phase for the active queue entry, derived from the
+    /// already-persisted transfer snapshot. Returns the current
+    /// `transferStatusLabel` once the engine has persisted phase evidence, so
+    /// the card/detail message names the actual phase
+    /// (Queued/Copying/Verifying/Waiting for upload) instead of the static
+    /// start message. Nil without evidence: callers keep the start message,
+    /// restore operations keep their progress title, and post-operation
+    /// failure text is never rewritten here.
+    private func projectVaultLiveArchivePhaseMessage(for songID: String) -> String? {
+        guard let operation = projectVaultActiveOperation,
+              operation.songID == songID,
+              !operation.tracksRestoreProgress,
+              let song = songs.first(where: { $0.id == songID }),
+              let state = projectVaultSnapshot(for: song)?.transfer?.state else { return nil }
+        return ProjectVaultCardPresentation.transferStatusLabel(state)
     }
 
     func cancelQueuedProjectVaultOperation(for song: Song) {
@@ -124,6 +145,12 @@ extension ArchiveBrowserViewModel {
         trigger: ProjectVaultArchiveTrigger? = nil,
         perform: @escaping @MainActor (ArchiveBrowserViewModel) async -> Bool
     ) {
+        // Refresh the narrow settings context so the captured rootIDs match
+        // live settings. A stale capture (e.g. from init before songs were
+        // assigned) would otherwise abort the poll/dispatch below even though
+        // the live roots are correct. This only rebuilds the card map; it
+        // never enqueues.
+        refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         let key = projectVaultSnapshot(for: song)?.record.id.description
             ?? song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path
         guard !projectVaultBusySongIDs.contains(song.id),
@@ -172,7 +199,48 @@ extension ArchiveBrowserViewModel {
                     do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
                 }
             }
-            defer { progressTask.cancel(); self.projectVaultRestoreProgress = nil }
+            // Live archive phases: the engine persists each phase while
+            // `perform` blocks, so refresh the already-persisted snapshots on
+            // a bounded 750 ms cadence for non-restore operations. Restore
+            // keeps its own progress poll above. This task only re-reads
+            // snapshots/cache and rebuilds the presentation map when values
+            // actually changed, so queued positions, failure text, and page
+            // geometry stay stable. A lookup failure is never a transfer
+            // failure: the tick is skipped and the last known phases are kept.
+            // The task is bound to this operation's identity and roots and is
+            // cancelled at the operation boundary below.
+            let archivePhaseTask = Task { @MainActor [weak self] in
+                guard !operation.tracksRestoreProgress else { return }
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
+                    guard !Task.isCancelled, let self else { return }
+                    // Refresh the narrow settings context so root comparisons
+                    // use live settings, not a stale capture. This only
+                    // re-reads snapshots/cache and rebuilds the presentation
+                    // map when values changed; it never enqueues another
+                    // automatic generation.
+                    self.refreshProjectVaultPresentationContext(notifyWhenChanged: false)
+                    guard self.projectVaultActiveOperation?.songID == operation.songID,
+                          self.projectVaultActiveOperation?.projectKey == operation.projectKey,
+                          operation.rootIDs == self.vaultQueueRootIDs else { return }
+                    guard let runtime = self.projectVaultRuntime else { continue }
+                    do {
+                        let snapshots = try await runtime.snapshots()
+                        guard !Task.isCancelled,
+                              self.projectVaultActiveOperation?.songID == operation.songID,
+                              self.projectVaultActiveOperation?.projectKey == operation.projectKey,
+                              operation.rootIDs == self.vaultQueueRootIDs else { return }
+                        guard snapshots != self.projectVaultSnapshots else { continue }
+                        self.projectVaultSnapshots = snapshots
+                        self.projectVaultSnapshotsByPath.removeAll()
+                        snapshots.forEach(self.cacheProjectVaultSnapshot)
+                        self.rebuildProjectVaultPresentationCache()
+                    } catch {
+                        continue
+                    }
+                }
+            }
+            defer { progressTask.cancel(); archivePhaseTask.cancel(); self.projectVaultRestoreProgress = nil }
 
             self.refreshProjectVaultPresentationContext()
             let succeeded: Bool
@@ -211,6 +279,7 @@ extension ArchiveBrowserViewModel {
             if !succeeded { self.projectVaultQueueFailures.append(operation.songName) }
             self.projectVaultBusySongIDs.remove(operation.songID)
             progressTask.cancel()
+            archivePhaseTask.cancel()
             self.projectVaultRestoreProgress = nil
             self.projectVaultActiveOperation = nil
             self.projectVaultQueueTask = nil

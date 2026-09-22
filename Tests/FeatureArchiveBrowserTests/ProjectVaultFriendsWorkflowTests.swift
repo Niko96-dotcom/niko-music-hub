@@ -524,9 +524,12 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertGreaterThan(due, Date())
         // Snapshot refreshes must not postpone or multiply the pending timer.
         for _ in 0..<3 { await viewModel.refreshProjectVaultSnapshots() }
+        // The recovery task clears its deadline before it refreshes snapshots,
+        // so also wait until the view model has observed the verified transfer.
         try await waitUntil {
             (try? store.record(id: failed.id)?.state) == .archiveVerified
                 && viewModel.projectVaultRecoveryDeadline == nil
+                && viewModel.projectVaultSnapshot(for: song)?.transfer?.state == .archiveVerified
         }
         let completed = try XCTUnwrap(try store.record(id: failed.id))
         XCTAssertGreaterThanOrEqual(Date(), due)

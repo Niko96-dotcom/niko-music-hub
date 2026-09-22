@@ -256,6 +256,12 @@ extension ArchiveBrowserViewModel {
             // explicit resolution clears the presentation so the next refresh
             // resumes normally via the fresh-confirmation path.
             if isBlockedByUnresolvedIdentityReview(song) { continue }
+            // Intentional Keep Local pins never auto-archive: skip silently so
+            // relaunch, queue-drain, and other-copy refreshes enqueue nothing,
+            // record no failure, and leave the footer alone. Explicit manual
+            // archiving still runs runtime admission and reports its actionable
+            // Keep Local error; only the automatic path is quieted here.
+            if isIntentionalKeepLocalForAutomaticDoneSkip(song) { continue }
             let transfer = projectVaultSnapshot(for: song)?.transfer
             // A persisted transfer—terminal, in progress, or failed—is owned by
             // recovery/manual review. Never create another automatic generation
@@ -274,5 +280,55 @@ extension ArchiveBrowserViewModel {
         guard let presented = identityReviewPresentation,
               let bound = presented.song else { return false }
         return bound.id == song.id
+    }
+
+    /// Keep Local detection for the automatic Done path, using the same
+    /// identity/path keys as the snapshot and presentation logic: the catalog
+    /// project ID, the song ID, and the transfer source path in raw,
+    /// standardized, and resolved form, plus the runtime `pinned` flag (which
+    /// already agrees with what removal admission would refuse) and the
+    /// prepared presentation pin. Every source is OR-ed; a settings-only
+    /// check never clears a runtime pin.
+    private func isIntentionalKeepLocalForAutomaticDoneSkip(_ song: Song) -> Bool {
+        guard let context = projectVaultPresentationContext else { return false }
+        let keepLocal = context.keepLocalProjectIDs
+        if keepLocal.contains(song.id) { return true }
+        let songPathKeys: Set<String> = [
+            song.folderPath.path,
+            song.folderPath.standardizedFileURL.path,
+            song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
+            Self.vaultCanonicalPath(song.folderPath),
+        ]
+        if !keepLocal.isDisjoint(with: songPathKeys) { return true }
+        if let snapshot = projectVaultSnapshot(for: song) {
+            if snapshot.record.pinned { return true }
+            if keepLocal.contains(snapshot.record.id.description) { return true }
+            if Self.isKeepLocalPinned(context: context, snapshot: snapshot, song: song) { return true }
+        }
+        if projectVaultPresentation(for: song)?.isKeepLocal == true { return true }
+        return snapshotsContainKeepLocalMatch(for: song, context: context, keepLocal: keepLocal)
+    }
+
+    /// Catalog snapshots that are not path-cached (no transfer, no linked
+    /// archive) still carry the runtime pin and record ID. Match them to the
+    /// song by canonical Active location so a Keep Local pin stored under the
+    /// catalog project ID also skips the automatic Done copy.
+    private func snapshotsContainKeepLocalMatch(
+        for song: Song,
+        context: ProjectVaultPresentationContext,
+        keepLocal: Set<String>
+    ) -> Bool {
+        guard let activeRoot = context.activeRoot else { return false }
+        let songPath = Self.vaultCanonicalPath(song.folderPath)
+        let activeBase = activeRoot.fallbackURL.standardizedFileURL.resolvingSymlinksInPath()
+        for snapshot in projectVaultSnapshots {
+            guard snapshot.record.pinned || keepLocal.contains(snapshot.record.id.description) else { continue }
+            for location in snapshot.record.locations
+                where location.kind == .active && location.rootID == activeRoot.id {
+                let candidate = activeBase.appendingPathComponent(location.relativePath, isDirectory: true)
+                if Self.vaultCanonicalPath(candidate) == songPath { return true }
+            }
+        }
+        return false
     }
 }

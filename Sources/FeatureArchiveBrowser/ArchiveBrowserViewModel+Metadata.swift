@@ -5,6 +5,25 @@ import NikoMusicCore
 // MARK: - Metadata
 
 extension ArchiveBrowserViewModel {
+    /// Manager currently driving an undo/redo, so the inverse re-registers on
+    /// the same stack that drove it (window-bound while active, owned or
+    /// injected otherwise). Falls back to `workflowUndoManager` for fresh
+    /// edits. Without this, an undo running after unbind would register its
+    /// redo on the owned stack while the undo came from the window manager.
+    var activeWorkflowUndoManager: UndoManager? {
+        let candidates: [UndoManager?] = [
+            injectedWorkflowUndoManager,
+            boundWindowUndoManager,
+            ownedWorkflowUndoManager,
+        ]
+        for candidate in candidates {
+            if let manager = candidate, manager.isUndoing || manager.isRedoing {
+                return manager
+            }
+        }
+        return workflowUndoManager
+    }
+
     func updateVirtualTitle(for song: Song, title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         applyMetadataMerge(for: song) { metadata, _ in
@@ -64,10 +83,10 @@ extension ArchiveBrowserViewModel {
         previousAppNote: String?,
         actionName: String = "Edit Song Notes"
     ) {
-        guard let undoManager = workflowUndoManager else { return }
-        undoManager.registerUndo(withTarget: self) { viewModel in
+        guard let undoManager = activeWorkflowUndoManager else { return }
+        undoManager.registerUndo(withTarget: workflowUndoTarget) { target in
             MainActor.assumeIsolated {
-                viewModel.undoMetadata(
+                target.undoMetadata(
                     songID: songID,
                     previousVirtualTitle: previousVirtualTitle,
                     previousAliases: previousAliases,
@@ -150,10 +169,10 @@ extension ArchiveBrowserViewModel {
         previousStatus: ProjectWorkflowStatus?,
         actionName: String
     ) {
-        guard let undoManager = workflowUndoManager else { return }
-        undoManager.registerUndo(withTarget: self) { viewModel in
+        guard let undoManager = activeWorkflowUndoManager else { return }
+        undoManager.registerUndo(withTarget: workflowUndoTarget) { target in
             MainActor.assumeIsolated {
-                viewModel.undoWorkflowStatus(
+                target.undoWorkflowStatus(
                     songID: songID,
                     previousStatus: previousStatus,
                     actionName: actionName

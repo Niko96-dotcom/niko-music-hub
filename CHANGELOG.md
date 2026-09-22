@@ -10,6 +10,7 @@
 - Restoring keeps the song's workflow stage, pins Keep Local before copying or opening, and offers Resume work to move explicitly to Prod.
 - Recovery copies export the full catalog and settings through an online database backup, import as a fresh isolated library with automation disabled and paused, and remain available while Vault is off. External samples and plug-ins are not collected.
 - A disabled Vault hides its configured roots from the board until re-enabled; a paused restore stays paused until explicitly unpaused.
+- Edit ▸ Undo and Redo (Command-Z) now undo board status and song-note changes while the archive is shown, and never reach those changes from another tool. Running archive copies show their live stage (Copying, Verifying, Waiting for upload), and automatic Done copies skip projects kept on this Mac without reporting them as needing attention.
 
 ## 1.6.1 - 2026-09-19
 

@@ -6,8 +6,6 @@ import SwiftUI
 /// Kanban board over the current browse list: one column per workflow stage,
 /// drag a card onto a column to change its status (recorded in status history).
 struct ArchiveBoardView: View {
-    @Environment(\.undoManager) private var undoManager
-
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     /// Opens the archive-root folder picker (owned by the browser shell).
     let onChooseRoot: () -> Void
@@ -65,7 +63,6 @@ struct ArchiveBoardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { viewModel.workflowUndoManager = undoManager }
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
             keyboardFocus = .search
         }

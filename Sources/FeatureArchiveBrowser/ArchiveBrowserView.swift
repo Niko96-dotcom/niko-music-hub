@@ -7,7 +7,6 @@ struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @ObservedObject private var previewSession = ArchivePreviewSession.shared
     @ObservedObject private var previewPlayer = ArchivePreviewSession.shared.player
-    @Environment(\.undoManager) private var undoManager
     /// False while another tool is shown; the shell keeps this pane mounted.
     @Environment(\.hubToolIsActive) private var isActiveTool
     @State private var showNewSongSheet = false
@@ -149,6 +148,12 @@ struct ArchiveBrowserView: View {
         // menu must not act on the archive selection. Unmodified letter
         // shortcuts stay gated by `allowsUnmodifiedShortcuts` inside.
         .focusedSceneValue(\.archiveSongActions, isActiveTool ? archiveSongFocusedActions : nil)
+        // Native Edit → Undo/Redo for the non-document main window:
+        // EnvironmentValues.undoManager is get-only (nil here), so a zero-size
+        // AppKit bridge splices a chain responder into window.nextResponder
+        // while this is the active tool. Same active-tool flag as the Song
+        // menu; the pane stays mounted while hidden.
+        .background(ArchiveWorkflowUndoBridge(viewModel: viewModel, isActive: isActiveTool))
         .overlay {
             // Keyboard-navigation users get the ring (NMH-006/035); a mouse click
             // that lands focus on the pane must not frame the entire board.
@@ -306,7 +311,6 @@ struct ArchiveBrowserView: View {
         } message: {
             Text(CancelCopy.stopTransferMessage)
         }
-        .onAppear { viewModel.workflowUndoManager = undoManager }
         .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
             guard !viewModel.isScanning else { return }
             if viewModel.roots.isEmpty {

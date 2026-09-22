@@ -3,8 +3,6 @@ import NikoMusicCore
 import SwiftUI
 
 struct SongDetailView: View {
-    @Environment(\.undoManager) private var undoManager
-
     let song: Song
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     @ObservedObject private var previewSession = ArchivePreviewSession.shared
@@ -124,7 +122,6 @@ struct SongDetailView: View {
         // change is a fresh view: per-song `@State` starts clean here instead of
         // being reset by hand, and the outgoing view flushes its drafts below.
         .onAppear {
-            viewModel.workflowUndoManager = undoManager
             syncDrafts(from: liveSong)
             viewModel.songDetailsExpanded = false
             viewModel.pluginsSectionExpanded = false
