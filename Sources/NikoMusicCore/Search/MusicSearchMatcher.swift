@@ -171,9 +171,16 @@ enum MusicSearchMatcher {
     }
 
     static func normalize(_ value: String) -> String {
-        let folded = value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        // Stable search folding: Locale.current is Turkish-sensitive on some
+        // hosts (ASCII "I" folds to dotless "ı"), which would split indexed
+        // metadata from queries. Folding with en_US_POSIX keeps ASCII case
+        // pairs stable while preserving diacritic stripping. Lowercasing uses
+        // plain .lowercased(): .lowercased(with:) truncates after embedded
+        // controls/NUL on this host's Foundation, dropping the remainder.
+        let searchLocale = Locale(identifier: "en_US_POSIX")
+        let folded = value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: searchLocale)
             .lowercased()
-        // Keep Foundation's locale-sensitive folding. Once its output is ASCII,
+        // Keep stable POSIX folding. Once its output is ASCII,
         // byte classification is equivalent to Character's Unicode properties.
         if folded.utf8.allSatisfy({ $0 < 0x80 }) {
             let alphanumeric = folded.utf8.filter {

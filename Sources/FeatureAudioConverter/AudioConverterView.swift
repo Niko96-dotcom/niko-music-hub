@@ -258,6 +258,7 @@ public struct AudioConverterView: View {
                 .contentShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
             }
             .buttonStyle(.plain)
+            .disabled(viewModel.isConverting)
             .focusable()
             .focusEffectDisabled()
             .help(presetEditorVisible ? "Hide preset editor" : "Edit Preset")
@@ -272,6 +273,7 @@ public struct AudioConverterView: View {
                     .init(88200, label: "88.2 kHz"),
                     .init(96000, label: "96 kHz"),
                 ], columns: 2)
+                .disabled(viewModel.isConverting)
             }
             HubInspectorGroup("Bit depth") {
                 HubSegmentedChoice("Bit depth", selection: bitDepthSelection, options: [
@@ -279,6 +281,7 @@ public struct AudioConverterView: View {
                     .init(24, label: "24-bit"),
                     .init(32, label: "32-bit"),
                 ])
+                .disabled(viewModel.isConverting)
             }
             HubInspectorGroup("Channel handling") {
                 HubSegmentedChoice("Channel handling", selection: channelModeSelection, options: [
@@ -286,6 +289,7 @@ public struct AudioConverterView: View {
                     .init(AudioChannelMode.mono, label: "Mono"),
                     .init(AudioChannelMode.stereo, label: "Stereo"),
                 ])
+                .disabled(viewModel.isConverting)
             }
         }
     }

@@ -28,8 +28,29 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         progress: BatchAudioConversionProgressHandler? = nil
     ) async throws -> [BatchAudioConversionOutcome] {
         guard !files.isEmpty else { return [] }
-
         let settings = try settingsStore.loadSettings()
+        return try await convert(
+            files: files,
+            settings: settings,
+            stopController: stopController,
+            progress: progress
+        )
+    }
+
+    /// Explicit-snapshot entry point. The output guard, the converter factory,
+    /// and every `ConversionRequest` in the run use this one snapshot, so a
+    /// durable settings change that lands mid-run cannot silently re-target
+    /// the remaining files. Callers holding durable truth at admission (the
+    /// converter pane) pass it here; direct callers keep the loading overload
+    /// above for compatibility.
+    public func convert(
+        files: [BatchAudioConversionFile],
+        settings: AppSettings,
+        stopController: StopAfterCurrentController,
+        progress: BatchAudioConversionProgressHandler? = nil
+    ) async throws -> [BatchAudioConversionOutcome] {
+        guard !files.isEmpty else { return [] }
+
         try OutputWriteGuard().validateCanWriteOutput(
             to: settings.outputFolder.url,
             archiveRoots: settings.archiveRoots.map(\.url)

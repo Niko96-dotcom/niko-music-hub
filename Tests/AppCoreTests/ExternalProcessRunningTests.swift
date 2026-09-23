@@ -1,4 +1,4 @@
-import AppCore
+@testable import AppCore
 import Darwin
 import XCTest
 
@@ -126,6 +126,156 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertTrue(streamed.joined().contains("first"))
         XCTAssertTrue(streamed.joined().contains("warn"))
         XCTAssertTrue(result.standardOutput.contains("second"))
+    }
+
+    func testStreamingDecodesUTF8ScalarSplitAcrossReadsWithStreamIsolation() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let runner = FoundationExternalProcessRunner()
+        let stdoutChunks = LockedStringArray()
+        let stderrChunks = LockedStringArray()
+
+        // The two bytes of "é" (U+00E9) are written ~0.2 s apart, so they
+        // arrive in separate pipe reads. A per-read strict decode would drop
+        // both halves; the stream must reassemble the scalar instead.
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: perlURL,
+                arguments: ["-e", "binmode STDOUT, ':raw'; binmode STDERR, ':raw'; $|=1; print STDOUT \"\\xC3\"; select undef, undef, undef, 0.2; print STDOUT \"\\xA9\"; print STDERR \"plain-err\\n\";"]
+            ),
+            onStandardOutput: { chunk in
+                stdoutChunks.append(chunk)
+            },
+            onStandardError: { chunk in
+                stderrChunks.append(chunk)
+            }
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(stdoutChunks.joined(), "é")
+        XCTAssertEqual(result.standardOutput, "é")
+        XCTAssertEqual(stderrChunks.joined(), "plain-err\n")
+        XCTAssertEqual(result.standardError, "plain-err\n")
+        XCTAssertFalse(stdoutChunks.joined().contains("plain-err"))
+        XCTAssertFalse(stderrChunks.joined().contains("é"))
+    }
+
+    func testStreamingDecoderEmitsMalformedPrefixPromptly() {
+        // Direct behavioral test for bytes FF 4F 4B 0A: the old whole-prefix
+        // strict check retained "OK\n" as a fake incomplete tail and delayed
+        // valid text until a later read or flush. Only a truly incomplete
+        // trailing scalar may be held.
+        let decoder = StreamingUTF8Decoder()
+        let chunk = decoder.decode(Data([0xFF, 0x4F, 0x4B, 0x0A]))
+        XCTAssertTrue(
+            chunk.contains("OK"),
+            "valid ASCII after an invalid byte must emit promptly, got \(chunk.debugDescription)"
+        )
+        XCTAssertTrue(
+            chunk.contains("�"),
+            "malformed byte must surface lossily in the same chunk, got \(chunk.debugDescription)"
+        )
+        XCTAssertEqual(decoder.flush(), "", "complete ASCII suffix must leave nothing pending")
+
+        // An invalid byte alone emits immediately and does not pin the next read.
+        let split = StreamingUTF8Decoder()
+        XCTAssertEqual(split.decode(Data([0xFF])), "�")
+        XCTAssertEqual(split.decode(Data([0x4F, 0x4B, 0x0A])), "OK\n")
+        XCTAssertEqual(split.flush(), "")
+
+        // A genuinely split scalar is still held across reads, then emitted whole.
+        let scalar = StreamingUTF8Decoder()
+        XCTAssertEqual(scalar.decode(Data([0xC3])), "")
+        XCTAssertEqual(scalar.decode(Data([0xA9])), "é")
+        XCTAssertEqual(scalar.flush(), "")
+    }
+
+    func testStreamingDecoderRejectsRestrictedSecondBytesPromptly() {
+        let invalidPrefixes: [[UInt8]] = [
+            [0xE0, 0x80],
+            [0xED, 0xA0],
+            [0xF0, 0x80],
+            [0xF4, 0x90],
+        ]
+        for prefix in invalidPrefixes {
+            let decoder = StreamingUTF8Decoder()
+            let chunk = decoder.decode(Data(prefix))
+            XCTAssertTrue(
+                chunk.contains("�"),
+                "prefix \(prefix) must emit replacement promptly, got \(chunk.debugDescription)"
+            )
+            XCTAssertEqual(
+                decoder.flush(),
+                "",
+                "prefix \(prefix) must leave nothing pending"
+            )
+        }
+
+        // Malformed restricted prefix plus ASCII emits ASCII in the same call.
+        for prefix in invalidPrefixes {
+            let decoder = StreamingUTF8Decoder()
+            let chunk = decoder.decode(Data(prefix + [0x41]))
+            XCTAssertTrue(
+                chunk.contains("�"),
+                "prefix \(prefix) plus ASCII must surface replacement, got \(chunk.debugDescription)"
+            )
+            XCTAssertTrue(
+                chunk.contains("A"),
+                "prefix \(prefix) must not hold trailing ASCII, got \(chunk.debugDescription)"
+            )
+            XCTAssertEqual(decoder.flush(), "")
+        }
+
+        // An invalid prefix does not pin the next read.
+        for prefix in invalidPrefixes {
+            let decoder = StreamingUTF8Decoder()
+            _ = decoder.decode(Data(prefix))
+            XCTAssertEqual(decoder.decode(Data([0x42])), "B")
+            XCTAssertEqual(decoder.flush(), "")
+        }
+
+        // Split restricted second bytes also emit promptly on arrival.
+        let splitInvalid: [(first: [UInt8], second: [UInt8])] = [
+            ([0xE0], [0x80]),
+            ([0xED], [0xA0]),
+            ([0xF0], [0x80]),
+            ([0xF4], [0x90]),
+        ]
+        for pair in splitInvalid {
+            let decoder = StreamingUTF8Decoder()
+            XCTAssertEqual(decoder.decode(Data(pair.first)), "")
+            let chunk = decoder.decode(Data(pair.second))
+            XCTAssertTrue(
+                chunk.contains("�"),
+                "split prefix \(pair.first)+\(pair.second) must emit replacement, got \(chunk.debugDescription)"
+            )
+            XCTAssertEqual(decoder.flush(), "")
+        }
+
+        // Valid boundary second bytes remain pending until completed.
+        let e0 = StreamingUTF8Decoder()
+        XCTAssertEqual(e0.decode(Data([0xE0])), "")
+        XCTAssertEqual(e0.decode(Data([0xA0])), "")
+        XCTAssertEqual(e0.decode(Data([0x80])), "\u{0800}")
+        XCTAssertEqual(e0.flush(), "")
+
+        let ed = StreamingUTF8Decoder()
+        XCTAssertEqual(ed.decode(Data([0xED])), "")
+        XCTAssertEqual(ed.decode(Data([0x9F])), "")
+        XCTAssertEqual(ed.decode(Data([0xBF])), "\u{D7FF}")
+        XCTAssertEqual(ed.flush(), "")
+
+        let f0 = StreamingUTF8Decoder()
+        XCTAssertEqual(f0.decode(Data([0xF0])), "")
+        XCTAssertEqual(f0.decode(Data([0x90])), "")
+        XCTAssertEqual(f0.decode(Data([0x80, 0x80])), "\u{10000}")
+        XCTAssertEqual(f0.flush(), "")
+
+        let f4 = StreamingUTF8Decoder()
+        XCTAssertEqual(f4.decode(Data([0xF4])), "")
+        XCTAssertEqual(f4.decode(Data([0x8F])), "")
+        XCTAssertEqual(f4.decode(Data([0xBF, 0xBF])), "\u{10FFFF}")
+        XCTAssertEqual(f4.flush(), "")
     }
 
     func testTimeoutReturnsPromptlyWhenChildIgnoresSIGTERM() async throws {

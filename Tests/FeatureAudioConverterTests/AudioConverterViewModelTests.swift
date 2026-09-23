@@ -486,6 +486,296 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(converter.requests.first?.preset.channelCount, 2)
     }
 
+    func testExternalPresetChangeUpdatesVisiblePresetAndQueuedNames() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let settingsStore = FixtureSettingsStore(
+            settings: AppSettings(outputFolder: StoredFolderLocation(url: directory))
+        )
+        let viewModel = makeViewModel(outputFolder: directory, settingsStore: settingsStore)
+        viewModel.addFileURLs([source])
+        XCTAssertEqual(viewModel.rows.first?.plannedOutputName, "Loop - 44100Hz 24bit.wav")
+
+        // External writer (e.g. the Settings pane): durable truth changes
+        // without going through the view model.
+        try settingsStore.updateSettings { settings in
+            settings.audioPreset = AudioPreset(
+                sampleRate: 48000,
+                bitDepth: 16,
+                channelCount: 1,
+                channelMode: .mono
+            )
+        }
+        await drainMainQueue()
+        await drainMainQueue()
+
+        XCTAssertEqual(viewModel.currentAudioPreset.sampleRate, 48000)
+        XCTAssertEqual(viewModel.currentAudioPreset.bitDepth, 16)
+        XCTAssertEqual(viewModel.currentAudioPreset.channelMode, .mono)
+        XCTAssertEqual(viewModel.presetSummaryText, "48 kHz - 16-bit - Mono")
+        XCTAssertEqual(viewModel.rows.first?.plannedOutputName, "Loop - 48000Hz 16bit.wav")
+        // The subscriber mirrors durable truth and never writes a stale view
+        // snapshot back over the newer edit.
+        XCTAssertEqual(settingsStore.settings.audioPreset.sampleRate, 48000)
+    }
+
+    func testConversionAdmitsDurablePresetSnapshot() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let settingsStore = FixtureSettingsStore(
+            settings: AppSettings(outputFolder: StoredFolderLocation(url: directory))
+        )
+        let converter = RecordingViewModelConverter { request in
+            makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            settingsStore: settingsStore
+        )
+        viewModel.addFileURLs([source])
+
+        // Durable change lands after the initial load and before admission.
+        // No queue drain: admission itself must reconcile stale view state.
+        try settingsStore.updateSettings { settings in
+            settings.audioPreset = AudioPreset(
+                sampleRate: 48000,
+                bitDepth: 16,
+                channelCount: 1,
+                channelMode: .mono
+            )
+        }
+
+        let outcomes = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(outcomes.count, 1)
+        let request = try XCTUnwrap(converter.requests.first)
+        XCTAssertEqual(request.preset.sampleRate, 48000)
+        XCTAssertEqual(request.preset.bitDepth, 16)
+        XCTAssertEqual(request.preset.channelMode, .mono)
+        XCTAssertEqual(request.preset.channelCount, 1)
+        XCTAssertEqual(viewModel.currentAudioPreset, request.preset)
+        XCTAssertEqual(viewModel.rows.first?.state, .verified)
+    }
+
+    func testConversionRunKeepsAdmissionSnapshotAcrossMidRunSettingsChange() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.m4a", in: directory)
+        let second = try makeFile(named: "Second.m4a", in: directory)
+        let settingsStore = FixtureSettingsStore(
+            settings: AppSettings(outputFolder: StoredFolderLocation(url: directory))
+        )
+        let admissionPreset = settingsStore.settings.audioPreset
+        let converter = RecordingViewModelConverter { request in
+            // Durable change lands while the admitted run is in flight.
+            try? settingsStore.updateSettings { settings in
+                settings.audioPreset = AudioPreset(
+                    sampleRate: 96000,
+                    bitDepth: 32,
+                    channelCount: 2,
+                    channelMode: .stereo
+                )
+            }
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            settingsStore: settingsStore
+        )
+        viewModel.addFileURLs([first, second])
+
+        let outcomes = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(outcomes.count, 2)
+        XCTAssertEqual(converter.requests.count, 2)
+        for request in converter.requests {
+            XCTAssertEqual(
+                request.preset,
+                admissionPreset,
+                "Every file in a run must use the admission snapshot, not a mid-run edit"
+            )
+        }
+    }
+
+    func testActiveBatchDefersExternalPresetChangeUntilAfterRun() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.m4a", in: directory)
+        let second = try makeFile(named: "Second.m4a", in: directory)
+        let settingsStore = FixtureSettingsStore(
+            settings: AppSettings(outputFolder: StoredFolderLocation(url: directory))
+        )
+        let gate = ConversionBlockGate()
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await gate.signalEntered()
+                await gate.waitForRelease()
+            }
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            settingsStore: settingsStore
+        )
+        viewModel.addFileURLs([first, second])
+        let admissionPreset = viewModel.currentAudioPreset
+        let admittedSecondName = try XCTUnwrap(
+            viewModel.rows.first(where: { $0.sourceURL == second })?.plannedOutputName
+        )
+
+        let conversionTask = Task { await viewModel.convertQueuedRows() }
+        await gate.waitForEntered()
+        XCTAssertTrue(viewModel.isConverting)
+
+        let latestPreset = AudioPreset(
+            sampleRate: 96000,
+            bitDepth: 32,
+            channelCount: 2,
+            channelMode: .stereo
+        )
+        try settingsStore.updateSettings { settings in
+            settings.audioPreset = latestPreset
+        }
+        await drainMainQueue()
+        await drainMainQueue()
+
+        XCTAssertEqual(
+            viewModel.currentAudioPreset,
+            admissionPreset,
+            "Visible preset must stay admitted while the batch is active"
+        )
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == second })?.plannedOutputName,
+            admittedSecondName,
+            "Queued names must stay admitted while the batch is active"
+        )
+
+        // New rows added while the batch is active belong to the next batch,
+        // but their visible names must stay aligned to the admitted snapshot.
+        let third = try makeFile(named: "Third.m4a", in: directory)
+        viewModel.addFileURLs([third])
+        XCTAssertEqual(
+            viewModel.currentAudioPreset,
+            admissionPreset,
+            "Visible preset must stay admitted even when new files are added mid-run"
+        )
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == third })?.state,
+            .queued
+        )
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == third })?.plannedOutputName,
+            "Third - 44100Hz 24bit.wav",
+            "Rows added mid-run must plan names from the admitted snapshot, not the latest durable edit"
+        )
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == second })?.plannedOutputName,
+            admittedSecondName,
+            "Existing queued names must stay admitted when new files are added mid-run"
+        )
+
+        viewModel.updateWAVPreset(sampleRate: 48000, bitDepth: 16, channelMode: .mono)
+        XCTAssertEqual(
+            viewModel.currentAudioPreset,
+            admissionPreset,
+            "Programmatic preset edits must not apply while converting"
+        )
+        XCTAssertEqual(
+            settingsStore.settings.audioPreset,
+            latestPreset,
+            "Programmatic preset edits must not overwrite durable settings while converting"
+        )
+
+        await gate.release()
+        let outcomes = await conversionTask.value
+        await drainMainQueue()
+        await drainMainQueue()
+
+        XCTAssertEqual(outcomes.count, 2)
+        XCTAssertEqual(converter.requests.count, 2)
+        for request in converter.requests {
+            XCTAssertEqual(
+                request.preset,
+                admissionPreset,
+                "Every file in a run must use the admission snapshot, not a mid-run edit"
+            )
+        }
+        XCTAssertEqual(
+            viewModel.currentAudioPreset,
+            latestPreset,
+            "Latest durable preset must appear after the run for the next batch"
+        )
+        XCTAssertFalse(viewModel.isConverting)
+
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == third })?.plannedOutputName,
+            "Third - 96000Hz 32bit.wav",
+            "Queued row added mid-run belongs to the next batch and must converge to latest durable after the run"
+        )
+
+        let followUpOutcomes = await viewModel.convertQueuedRows()
+        XCTAssertEqual(followUpOutcomes.count, 1, "Converged queued row must convert in the next batch")
+        XCTAssertEqual(converter.requests.count, 3)
+        XCTAssertEqual(
+            converter.requests.last?.preset,
+            latestPreset,
+            "Next batch must admit the latest durable preset"
+        )
+        XCTAssertEqual(
+            viewModel.rows.first(where: { $0.sourceURL == third })?.state,
+            .verified
+        )
+    }
+
+    func testOutputGuardFailureFailsRowsWithoutFalseSuccess() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let archiveRoot = directory.appendingPathComponent("Archive", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        let outputFolder = archiveRoot.appendingPathComponent("Out", isDirectory: true)
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let settingsStore = FixtureSettingsStore(
+            settings: AppSettings(
+                outputFolder: StoredFolderLocation(url: outputFolder),
+                archiveRoots: [StoredArchiveRoot(path: archiveRoot.path)]
+            )
+        )
+        let converter = RecordingViewModelConverter { request in
+            makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            settingsStore: settingsStore
+        )
+        viewModel.addFileURLs([source])
+
+        let outcomes = await viewModel.convertQueuedRows()
+
+        XCTAssertTrue(converter.requests.isEmpty, "Guard failure must not start any conversion")
+        XCTAssertTrue(outcomes.isEmpty, "Admission failure returns no outcomes")
+        XCTAssertEqual(viewModel.rows.first?.state, .failed)
+        XCTAssertFalse(viewModel.isConverting)
+        XCTAssertFalse(
+            viewModel.rows.contains { $0.state == .verified },
+            "A refused output folder must never report success"
+        )
+        XCTAssertTrue(
+            viewModel.statusText.localizedCaseInsensitiveContains("archive"),
+            "Admission refusal must explain itself, got: \(viewModel.statusText)"
+        )
+    }
+
     func testAudioConverterViewContainsUISpecCopy() throws {
         let source = try String(
             contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
@@ -606,9 +896,14 @@ private func makeResult(for request: ConversionRequest) -> ConversionResult {
 
 private final class FixtureSettingsStore: SettingsStore, @unchecked Sendable {
     var settings: AppSettings
+    private let subject = PassthroughSubject<AppSettings, Never>()
 
     init(settings: AppSettings) {
         self.settings = settings
+    }
+
+    var settingsChanges: AnyPublisher<AppSettings, Never> {
+        subject.eraseToAnyPublisher()
     }
 
     func loadSettings() throws -> AppSettings {
@@ -617,10 +912,12 @@ private final class FixtureSettingsStore: SettingsStore, @unchecked Sendable {
 
     func saveSettings(_ settings: AppSettings) throws {
         self.settings = settings
+        subject.send(settings)
     }
 
     func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
         update(&settings)
+        subject.send(settings)
     }
 }
 
@@ -719,6 +1016,42 @@ private final class EmissionCounter: @unchecked Sendable {
 
     func increment() {
         lock.withLock { storedCount += 1 }
+    }
+}
+
+/// Deterministic mid-batch gate: the converter signals entry, then suspends
+/// until the test releases it. No sleeps; both sides rendezvous on
+/// continuations.
+private actor ConversionBlockGate {
+    private var didEnter = false
+    private var enteredContinuation: CheckedContinuation<Void, Never>?
+    private var isReleased = false
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    func signalEntered() {
+        didEnter = true
+        enteredContinuation?.resume(returning: ())
+        enteredContinuation = nil
+    }
+
+    func waitForEntered() async {
+        if didEnter { return }
+        await withCheckedContinuation { continuation in
+            enteredContinuation = continuation
+        }
+    }
+
+    func waitForRelease() async {
+        if isReleased { return }
+        await withCheckedContinuation { continuation in
+            releaseContinuation = continuation
+        }
+    }
+
+    func release() {
+        isReleased = true
+        releaseContinuation?.resume(returning: ())
+        releaseContinuation = nil
     }
 }
 

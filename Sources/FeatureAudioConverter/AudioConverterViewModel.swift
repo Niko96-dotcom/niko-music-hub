@@ -20,6 +20,9 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private var conversionTask: Task<[BatchAudioConversionOutcome], Never>?
     private var isCancelRequested = false
     private var handoffSubscription: AnyCancellable?
+    private var settingsSubscription: AnyCancellable?
+    private var deferredDurableSettings: AppSettings?
+    private var activeBatchSettings: AppSettings?
 
     public static let supportedSampleRates = [44100, 48000, 88200, 96000]
     public static let supportedBitDepths = [16, 24, 32]
@@ -39,7 +42,13 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         )
         self.outputFileNamer = outputFileNamer
         self.ffmpegHealthChecker = ffmpegHealthChecker
-        self.currentAudioPreset = (try? context.settingsStore.loadSettings().audioPreset) ?? .cubaseDefault
+        self.currentAudioPreset = context.appSettings.settings.audioPreset
+        settingsSubscription = context.appSettings.$settings
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] settings in
+                guard let self else { return }
+                self.applyDurableSettingsChange(settings)
+            }
     }
 
     deinit {
@@ -143,9 +152,17 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         let files = queuedConversionFiles()
         guard !files.isEmpty else { return nil }
 
-        let controller = beginConversionRun()
+        // Admit one durable snapshot for the whole run. The visible preset may
+        // still hold a stale value when an external edit has not been delivered
+        // yet, so the run never builds requests from view state.
+        let snapshotResult = Result { try context.settingsStore.loadSettings() }
+        let controller = beginConversionRun(admittedSettings: try? snapshotResult.get())
         let task = Task { @MainActor in
-            await performConversion(files: files, controller: controller)
+            await performConversion(
+                files: files,
+                settingsSnapshot: snapshotResult,
+                controller: controller
+            )
         }
         conversionTask = task
         return task
@@ -165,10 +182,12 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
-    private func beginConversionRun() -> StopAfterCurrentController {
+    private func beginConversionRun(admittedSettings: AppSettings?) -> StopAfterCurrentController {
         let controller = StopAfterCurrentController()
         stopController = controller
         isCancelRequested = false
+        deferredDurableSettings = nil
+        activeBatchSettings = admittedSettings
         isConverting = true
         statusText = AudioConverterCopy.converting
         overallProgress = 0
@@ -178,12 +197,24 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
 
     private func performConversion(
         files: [BatchAudioConversionFile],
+        settingsSnapshot: Result<AppSettings, any Error>,
         controller: StopAfterCurrentController
     ) async -> [BatchAudioConversionOutcome] {
         context.diagnostics.scoped(to: .converter).log(.info, "Conversion started (files=\(files.count))")
         do {
+            // Durable truth at admission wins over possibly stale view state.
+            // This only mirrors the snapshot locally; it never writes back, so
+            // a newer user edit elsewhere is not overwritten. The admitted
+            // preset and queued names stay visible for the whole batch; later
+            // durable edits defer until after the run.
+            let settings = try settingsSnapshot.get()
+            if settings.audioPreset != currentAudioPreset {
+                currentAudioPreset = settings.audioPreset
+            }
+            refreshQueuedOutputNames(using: settings)
             let outcomes = try await batchUseCase.convert(
                 files: files,
+                settings: settings,
                 stopController: controller,
                 progress: { [weak self] update in
                     Task { @MainActor in
@@ -194,7 +225,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             outcomes.forEach { apply($0.update) }
             overallProgress = outcomes.last?.overallProgress ?? overallProgress
             endConversionRun()
-            refreshQueuedOutputNames()
+            convergeToLatestDurableSettings()
             let canceledCount = outcomes.filter { $0.status == .canceled }.count
             if canceledCount > 0 {
                 let convertedCount = outcomes.filter(\.status.producedVerifiedWAV).count
@@ -221,6 +252,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 )
             }
             endConversionRun()
+            convergeToLatestDurableSettings()
             statusText = error.localizedDescription
             publishShellJobStatus()
             context.diagnostics.scoped(to: .converter).log(.error, "Conversion failed: \(error.localizedDescription)")
@@ -229,6 +261,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func endConversionRun() {
+        activeBatchSettings = nil
         isConverting = false
         isCancelRequested = false
         stopController = nil
@@ -250,6 +283,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public func updateWAVPreset(sampleRate: Int, bitDepth: Int, channelMode: AudioChannelMode) {
+        guard !isConverting else { return }
         guard Self.supportedSampleRates.contains(sampleRate),
               Self.supportedBitDepths.contains(bitDepth) else {
             return
@@ -369,8 +403,15 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func plannedOutputName(for sourceURL: URL) -> String {
+        if let activeBatchSettings {
+            return plannedOutputName(for: sourceURL, using: activeBatchSettings)
+        }
         let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        return outputFileNamer.plannedOutputURL(
+        return plannedOutputName(for: sourceURL, using: settings)
+    }
+
+    private func plannedOutputName(for sourceURL: URL, using settings: AppSettings) -> String {
+        outputFileNamer.plannedOutputURL(
             for: settings.outputFolder.url,
             sourceURL: sourceURL,
             preset: settings.audioPreset,
@@ -380,15 +421,59 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func refreshQueuedOutputNames() {
+        if let activeBatchSettings {
+            refreshQueuedOutputNames(using: activeBatchSettings)
+            return
+        }
+        let settings = (try? context.settingsStore.loadSettings()) ?? .default
+        refreshQueuedOutputNames(using: settings)
+    }
+
+    private func refreshQueuedOutputNames(using settings: AppSettings) {
         rows = rows.map { row in
             guard row.state == .queued, row.isConvertible else {
                 return row
             }
 
             var updatedRow = row
-            updatedRow.plannedOutputName = plannedOutputName(for: row.sourceURL)
+            updatedRow.plannedOutputName = plannedOutputName(for: row.sourceURL, using: settings)
             return updatedRow
         }
+    }
+
+    /// Mirror a durable settings change (Settings pane or another writer). This
+    /// only reads: it never writes back, so a newer user edit cannot be
+    /// overwritten by stale view state. While a batch is active the visible
+    /// preset and queued names stay aligned with the admitted snapshot; the
+    /// change is deferred and converged after the run for the next batch.
+    private func applyDurableSettingsChange(_ settings: AppSettings) {
+        guard !isConverting else {
+            deferredDurableSettings = settings
+            return
+        }
+        if settings.audioPreset != currentAudioPreset {
+            currentAudioPreset = settings.audioPreset
+        }
+        refreshQueuedOutputNames(using: settings)
+    }
+
+    /// After the active batch ends, show the latest durable settings so the
+    /// next run admits them. Reads only; status and row outcomes are untouched.
+    private func convergeToLatestDurableSettings() {
+        let deferred = deferredDurableSettings
+        deferredDurableSettings = nil
+        let latest: AppSettings
+        if let loaded = try? context.settingsStore.loadSettings() {
+            latest = loaded
+        } else if let deferred {
+            latest = deferred
+        } else {
+            return
+        }
+        if latest.audioPreset != currentAudioPreset {
+            currentAudioPreset = latest.audioPreset
+        }
+        refreshQueuedOutputNames(using: latest)
     }
 
     private func noticeText(_ notice: AudioFileIntakeNotice) -> String {
