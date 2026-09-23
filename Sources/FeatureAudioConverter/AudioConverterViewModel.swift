@@ -17,7 +17,8 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private let outputFileNamer: OutputFileNamer
     private let ffmpegHealthChecker: FFmpegHealthChecker
     private var stopController: StopAfterCurrentController?
-    private var conversionTask: Task<Void, Never>?
+    private var conversionTask: Task<[BatchAudioConversionOutcome], Never>?
+    private var isCancelRequested = false
     private var handoffSubscription: AnyCancellable?
 
     public static let supportedSampleRates = [44100, 48000, 88200, 96000]
@@ -50,7 +51,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public var canRequestStopAfterCurrent: Bool {
-        isConverting && stopController?.isStopRequested == false
+        isConverting && !isCancelRequested && stopController?.isStopRequested == false
     }
 
     public var queuedConvertibleCount: Int {
@@ -121,24 +122,33 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public func startConversion() {
-        guard !isConverting else { return }
-        let files = queuedConversionFiles()
-        guard !files.isEmpty else { return }
-
-        let controller = beginConversionRun()
-        conversionTask = Task { @MainActor in
-            _ = await performConversion(files: files, controller: controller)
-        }
+        _ = launchConversion()
     }
 
     @discardableResult
     public func convertQueuedRows() async -> [BatchAudioConversionOutcome] {
-        guard !isConverting else { return [] }
+        guard let task = launchConversion() else { return [] }
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    /// Every run lives in `conversionTask` so `cancelConversion()` can cancel it: the
+    /// process runner then terminates FFmpeg's process group and the native path stops
+    /// at its next buffer.
+    private func launchConversion() -> Task<[BatchAudioConversionOutcome], Never>? {
+        guard !isConverting else { return nil }
         let files = queuedConversionFiles()
-        guard !files.isEmpty else { return [] }
+        guard !files.isEmpty else { return nil }
 
         let controller = beginConversionRun()
-        return await performConversion(files: files, controller: controller)
+        let task = Task { @MainActor in
+            await performConversion(files: files, controller: controller)
+        }
+        conversionTask = task
+        return task
     }
 
     private func queuedConversionFiles() -> [BatchAudioConversionFile] {
@@ -158,6 +168,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private func beginConversionRun() -> StopAfterCurrentController {
         let controller = StopAfterCurrentController()
         stopController = controller
+        isCancelRequested = false
         isConverting = true
         statusText = AudioConverterCopy.converting
         overallProgress = 0
@@ -182,13 +193,21 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             )
             outcomes.forEach { apply($0.update) }
             overallProgress = outcomes.last?.overallProgress ?? overallProgress
-            isConverting = false
-            stopController = nil
+            endConversionRun()
             refreshQueuedOutputNames()
-            refreshStatusText()
+            let canceledCount = outcomes.filter { $0.status == .canceled }.count
+            if canceledCount > 0 {
+                let convertedCount = outcomes.filter(\.status.producedVerifiedWAV).count
+                statusText = AudioConverterCopy.canceledSummary(converted: convertedCount, of: files.count)
+            } else {
+                refreshStatusText()
+            }
             publishShellJobStatus()
             let failedCount = outcomes.filter { if case .failed = $0.status { true } else { false } }.count
-            context.diagnostics.scoped(to: .converter).log(.info, "Conversion finished (files=\(outcomes.count), failed=\(failedCount))")
+            context.diagnostics.scoped(to: .converter).log(
+                .info,
+                "Conversion finished (files=\(outcomes.count), failed=\(failedCount), canceled=\(canceledCount))"
+            )
             return outcomes
         } catch {
             rows = rows.map { row in
@@ -201,8 +220,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                     progress: 1
                 )
             }
-            isConverting = false
-            stopController = nil
+            endConversionRun()
             statusText = error.localizedDescription
             publishShellJobStatus()
             context.diagnostics.scoped(to: .converter).log(.error, "Conversion failed: \(error.localizedDescription)")
@@ -210,8 +228,25 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
+    private func endConversionRun() {
+        isConverting = false
+        isCancelRequested = false
+        stopController = nil
+        conversionTask = nil
+    }
+
+    /// The pane's "Stop After This File": the file in flight finishes, the rest are skipped.
     public func requestStopAfterCurrent() {
         stopController?.requestStopAfterCurrent()
+    }
+
+    /// The shell jobs-row "Cancel": stops the file in flight now (its temp output is
+    /// removed) and cancels the rest. WAVs verified before the cancel are kept.
+    public func cancelConversion() {
+        guard isConverting, let conversionTask else { return }
+        isCancelRequested = true
+        conversionTask.cancel()
+        context.diagnostics.scoped(to: .converter).log(.info, "Conversion cancel requested")
     }
 
     public func updateWAVPreset(sampleRate: Int, bitDepth: Int, channelMode: AudioChannelMode) {
@@ -305,7 +340,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             status: status,
             cancel: { [weak self] in
                 Task { @MainActor in
-                    self?.requestStopAfterCurrent()
+                    self?.cancelConversion()
                 }
             }
         )
@@ -426,6 +461,15 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             return row.updated(
                 state: .skipped,
                 statusText: AudioConverterCopy.skipped,
+                progress: update.fileProgress
+            )
+        case .canceled:
+            guard row.state == .queued || row.state == .converting else {
+                return nil
+            }
+            return row.updated(
+                state: .skipped,
+                statusText: AudioConverterCopy.canceled,
                 progress: update.fileProgress
             )
         }
@@ -604,6 +648,7 @@ public enum AudioConverterCopy {
     public static let verificationFailed = "WAV verification failed. The source file was left untouched; check the output preset and try again."
     public static let genericFailure = "Could not convert this file. Keep the source selected, review the row message, then try Convert to WAV again."
     public static let skipped = "Skipped"
+    public static let canceled = "Canceled"
     public static let stopAfterThisFile = "Stop After This File"
     public static let stopAfterThisFileHelp = "Finishes the file that is converting, then skips the rest. Verified WAV files are kept."
     public static let chooseFFmpeg = "Choose FFmpeg"
@@ -611,5 +656,20 @@ public enum AudioConverterCopy {
 
     public static func selectedFFmpegUnusable(_ message: String) -> String {
         "Selected FFmpeg could not be used: \(message)"
+    }
+
+    public static func canceledSummary(converted: Int, of total: Int) -> String {
+        "Canceled — \(converted) of \(total) \(total == 1 ? "file" : "files") converted"
+    }
+}
+
+private extension BatchAudioConversionStatus {
+    var producedVerifiedWAV: Bool {
+        switch self {
+        case .verified, .verifiedWithHandoffWarning:
+            return true
+        case .converting, .failed, .skipped, .canceled:
+            return false
+        }
     }
 }

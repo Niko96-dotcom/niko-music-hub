@@ -92,7 +92,19 @@ public struct FFmpegAudioConverter: AudioConverting, @unchecked Sendable {
             )
         } catch {
             try? removeFileIfNeeded(at: temporaryOutputURL)
+            if error is CancellationError || Task.isCancelled {
+                sweepTemporaryOutputAfterTermination(temporaryOutputURL)
+            }
             throw error
+        }
+    }
+
+    /// On cancellation the runner returns at once and escalates SIGTERM → SIGKILL on the
+    /// process group in the background. An FFmpeg that had not opened its output yet can
+    /// still create the temp file during that window, so sweep the path once more after it.
+    private func sweepTemporaryOutputAfterTermination(_ url: URL) {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 

@@ -62,6 +62,9 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     }
 
     private func shouldAttemptFFmpegFallback(after error: Error) -> Bool {
+        if error is CancellationError || Task.isCancelled {
+            return false
+        }
         guard let conversionError = error as? AudioConversionError else {
             return true
         }

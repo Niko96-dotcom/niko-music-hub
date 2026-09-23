@@ -38,6 +38,12 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         var outcomes: [BatchAudioConversionOutcome] = []
 
         for (index, file) in files.enumerated() {
+            if Task.isCancelled {
+                let outcome = canceledOutcome(for: file, index: index, total: files.count)
+                outcomes.append(outcome)
+                progress?(outcome.update)
+                continue
+            }
             if stopController.isStopRequested {
                 let outcome = skippedOutcome(for: file, index: index, total: files.count)
                 outcomes.append(outcome)
@@ -78,6 +84,8 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
                     fileProgress: 1,
                     overallProgress: overallProgress(completed: index + 1, total: files.count)
                 )
+            } catch where error is CancellationError || Task.isCancelled {
+                outcome = canceledOutcome(for: file, index: index, total: files.count)
             } catch {
                 outcome = BatchAudioConversionOutcome(
                     file: file,
@@ -122,6 +130,21 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         BatchAudioConversionOutcome(
             file: file,
             status: .skipped,
+            fileProgress: 0,
+            overallProgress: overallProgress(completed: index + 1, total: total)
+        )
+    }
+
+    /// The file was in flight or still queued when the run's Task was canceled.
+    /// Converters remove their temp output on cancellation, so nothing reaches the inbox.
+    private func canceledOutcome(
+        for file: BatchAudioConversionFile,
+        index: Int,
+        total: Int
+    ) -> BatchAudioConversionOutcome {
+        BatchAudioConversionOutcome(
+            file: file,
+            status: .canceled,
             fileProgress: 0,
             overallProgress: overallProgress(completed: index + 1, total: total)
         )
@@ -184,6 +207,7 @@ public enum BatchAudioConversionStatus: Equatable, Sendable {
     case verifiedWithHandoffWarning(ConversionResult, message: String)
     case failed(message: String)
     case skipped
+    case canceled
 }
 
 public struct BatchAudioConversionUpdate: Equatable, Sendable {

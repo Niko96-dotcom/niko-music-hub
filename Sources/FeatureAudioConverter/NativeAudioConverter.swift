@@ -137,6 +137,9 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
         let inputState = ConverterInputState()
 
         while true {
+            // Runs synchronously inside the conversion Task; a canceled run throws here and
+            // `convert` removes the partial temp WAV.
+            try Task.checkCancellation()
             guard let outputBuffer = AVAudioPCMBuffer(
                 pcmFormat: outputFormat,
                 frameCapacity: inputFrameCapacity

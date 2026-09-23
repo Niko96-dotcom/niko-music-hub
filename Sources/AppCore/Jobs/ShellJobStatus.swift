@@ -90,7 +90,7 @@ public enum ShellJobStatusCopy: Sendable {
     public static let vaultTransferFallback = "Project Vault transfer"
     public static let converterFallback = "WAV Converter"
     public static let converterCancelHelp =
-        "Finishes the file that is converting, then skips the rest. Verified WAV files are kept."
+        "Stops converting now and skips the rest. Verified WAV files are kept."
 
     public static func multipleJobsTitle(count: Int) -> String {
         "\(count) jobs running"

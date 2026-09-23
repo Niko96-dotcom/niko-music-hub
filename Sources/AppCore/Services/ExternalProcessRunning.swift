@@ -215,7 +215,17 @@ private final class POSIXProcessExecution: @unchecked Sendable {
             posix_spawn_file_actions_addclose(&actions, descriptor)
         }
 
-        let flags = Int16(POSIX_SPAWN_SETPGROUP)
+        // The launching thread is a concurrency/dispatch worker whose signal mask blocks
+        // asynchronous signals, and the child inherits it. Start helpers with an empty
+        // mask and default handlers so the SIGTERM step of termination is delivered.
+        var emptySignalMask = sigset_t()
+        sigemptyset(&emptySignalMask)
+        posix_spawnattr_setsigmask(&attributes, &emptySignalMask)
+        var defaultSignals = sigset_t()
+        sigfillset(&defaultSignals)
+        posix_spawnattr_setsigdefault(&attributes, &defaultSignals)
+
+        let flags = Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)
         posix_spawnattr_setflags(&attributes, flags)
         posix_spawnattr_setpgroup(&attributes, 0)
 

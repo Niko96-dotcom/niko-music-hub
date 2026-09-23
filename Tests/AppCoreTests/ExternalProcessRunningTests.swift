@@ -236,6 +236,43 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertLessThan(canceledAt.duration(to: .now), .seconds(1))
     }
 
+    /// Swift concurrency / dispatch worker threads block asynchronous signals and
+    /// `posix_spawn` inherits the caller's mask. The child must start with an empty
+    /// mask, or the graceful SIGTERM never lands and only the SIGKILL escalation works.
+    func testTaskCancellationDeliversSIGTERMBeforeKillEscalation() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let pidFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("process-sigterm-\(UUID().uuidString).pid")
+        defer { try? FileManager.default.removeItem(at: pidFile) }
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 30)
+        let task = Task.detached {
+            try await runner.run(
+                ExternalProcessRequest(
+                    executableURL: perlURL,
+                    arguments: [
+                        "-e",
+                        "open($fh, '>', $ARGV[0]) or die $!; print $fh $$; close($fh); sleep 10;",
+                        pidFile.path
+                    ]
+                )
+            )
+        }
+        for _ in 0..<200 where (try? String(contentsOf: pidFile, encoding: .utf8))?.isEmpty ?? true {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let childPID = try XCTUnwrap(pid_t(String(contentsOf: pidFile, encoding: .utf8)))
+
+        task.cancel()
+        _ = try? await task.value
+
+        for _ in 0..<200 where kill(childPID, 0) == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(kill(childPID, 0), -1, "SIGTERM did not reach the helper process")
+        XCTAssertEqual(errno, ESRCH)
+    }
+
     func testSignalTerminationIsTyped() async throws {
         let shellURL = URL(fileURLWithPath: "/bin/sh")
         let runner = FoundationExternalProcessRunner()
