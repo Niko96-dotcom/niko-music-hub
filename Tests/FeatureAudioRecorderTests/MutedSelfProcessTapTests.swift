@@ -95,6 +95,70 @@ final class MutedSelfProcessTapTests: XCTestCase {
         XCTAssertEqual(hal.createdTaps, 1)
     }
 
+    /// Deterministic race for the permission-probe window: releaseMute lands between
+    /// aggregate creation and IOProc installation (inside readNominalSampleRate).
+    /// The start must abort before any later HAL call touches the released tap or
+    /// aggregate, must never start the device, and must clean the aggregate once.
+    func testReleaseBetweenAggregateAndIOProcNeverUsesReleasedTap() {
+        let hal = FakeTapHAL(hang: .none)
+        let session = SystemAudioProcessTapSession(
+            makeTapDescription: { CATapDescription(stereoMixdownOfProcesses: []) },
+            hal: hal.hal
+        )
+        hal.setSampleRateHook { [weak session] in session?.releaseMute() }
+        let metadata = MetadataFlag()
+        let callbacks = RecorderBackendCallbacks(
+            onPCM: { _, _, _, _ in true },
+            onStructuralNoData: { _ in },
+            onMetadata: { _ in metadata.set() },
+            onRouteChange: {},
+            onFailure: { _ in }
+        )
+
+        XCTAssertThrowsError(try session.startSynchronously(generation: 7, callbacks: callbacks)) { error in
+            XCTAssertEqual(error as? RecorderError, RecorderError.apiError("Tap released while starting"))
+        }
+        XCTAssertFalse(hal.muted, "the probe must not leave the app muted")
+        XCTAssertEqual(hal.destroyedTaps, [FakeTapHAL.tapID], "tap destroyed exactly once")
+        XCTAssertEqual(hal.destroyedAggregates, [FakeTapHAL.aggregateID], "aggregate cleaned exactly once")
+        XCTAssertTrue(hal.ioProcCalls.isEmpty, "no IOProc install may use a released tap")
+        XCTAssertTrue(hal.startCalls.isEmpty, "device must never start on a destroyed tap")
+        XCTAssertEqual(hal.sampleRateCalls, [FakeTapHAL.aggregateID])
+        XCTAssertEqual(hal.tapFormatCalls, [FakeTapHAL.tapID])
+        XCTAssertFalse(metadata.value, "no metadata after release")
+        XCTAssertEqual(hal.createdTaps, 1)
+    }
+
+    /// Later transition: releaseMute lands between IOProc installation and device
+    /// start (inside createIOProc). The late return must still observe the release
+    /// and tear down without starting the device.
+    func testReleaseBetweenIOProcAndStartNeverStartsDevice() {
+        let hal = FakeTapHAL(hang: .none)
+        let session = SystemAudioProcessTapSession(
+            makeTapDescription: { CATapDescription(stereoMixdownOfProcesses: []) },
+            hal: hal.hal
+        )
+        hal.setCreateIOProcHook { [weak session] in session?.releaseMute() }
+        let metadata = MetadataFlag()
+        let callbacks = RecorderBackendCallbacks(
+            onPCM: { _, _, _, _ in true },
+            onStructuralNoData: { _ in },
+            onMetadata: { _ in metadata.set() },
+            onRouteChange: {},
+            onFailure: { _ in }
+        )
+
+        XCTAssertThrowsError(try session.startSynchronously(generation: 7, callbacks: callbacks)) { error in
+            XCTAssertEqual(error as? RecorderError, RecorderError.apiError("Tap released while starting"))
+        }
+        XCTAssertFalse(hal.muted, "the probe must not leave the app muted")
+        XCTAssertEqual(hal.destroyedTaps, [FakeTapHAL.tapID], "tap destroyed exactly once")
+        XCTAssertEqual(hal.destroyedAggregates, [FakeTapHAL.aggregateID], "aggregate cleaned exactly once")
+        XCTAssertEqual(hal.ioProcCalls, [FakeTapHAL.aggregateID], "the in-flight IOProc call is allowed")
+        XCTAssertTrue(hal.startCalls.isEmpty, "device must never start after release")
+        XCTAssertEqual(hal.createdTaps, 1)
+    }
+
     private func waitUntil(timeout: TimeInterval = 1, _ condition: @escaping @Sendable () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
@@ -109,6 +173,13 @@ private final class LookupThreadRecord: @unchecked Sendable {
     private var value: Bool?
     var onTapQueue: Bool? { lock.withLock { value } }
     func record(onTapQueue: Bool) { lock.withLock { value = onTapQueue } }
+}
+
+private final class MetadataFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var delivered = false
+    var value: Bool { lock.withLock { delivered } }
+    func set() { lock.withLock { delivered = true } }
 }
 
 /// Stands in for the HAL objects of one tap graph. Creating the process tap mutes the
@@ -135,6 +206,12 @@ final class FakeTapHAL: @unchecked Sendable {
     private var ioBlock: AudioDeviceIOBlock?
     private var ioQueue: DispatchQueue?
     private var delivery: Task<Void, Never>?
+    private var tapFormatCallIDs: [AudioObjectID] = []
+    private var sampleRateCallIDs: [AudioObjectID] = []
+    private var ioProcCallIDs: [AudioObjectID] = []
+    private var startCallIDs: [AudioObjectID] = []
+    private var sampleRateHook: (() -> Void)?
+    private var ioProcHook: (() -> Void)?
 
     init(hang: Hang, echoesTone: @escaping @Sendable () -> Bool = { false }) {
         self.hang = hang
@@ -146,6 +223,23 @@ final class FakeTapHAL: @unchecked Sendable {
     var destroyedTaps: [AudioObjectID] { lock.withLock { tapDestroys } }
     var destroyedAggregates: [AudioObjectID] { lock.withLock { aggregateDestroys } }
     var hangPending: Bool { lock.withLock { pending } }
+    var tapFormatCalls: [AudioObjectID] { lock.withLock { tapFormatCallIDs } }
+    var sampleRateCalls: [AudioObjectID] { lock.withLock { sampleRateCallIDs } }
+    var ioProcCalls: [AudioObjectID] { lock.withLock { ioProcCallIDs } }
+    var startCalls: [AudioObjectID] { lock.withLock { startCallIDs } }
+
+    /// Invoked synchronously on the starting thread inside readNominalSampleRate,
+    /// after the call is recorded: deterministic release between aggregate creation
+    /// and IOProc installation.
+    func setSampleRateHook(_ hook: (() -> Void)?) {
+        lock.withLock { sampleRateHook = hook }
+    }
+
+    /// Invoked synchronously on the starting thread inside createIOProc, after the
+    /// call is recorded: deterministic release between IOProc installation and start.
+    func setCreateIOProcHook(_ hook: (() -> Void)?) {
+        lock.withLock { ioProcHook = hook }
+    }
 
     func releaseHang() {
         let signal = lock.withLock { () -> Bool in
@@ -226,7 +320,8 @@ final class FakeTapHAL: @unchecked Sendable {
             destroyAggregateDevice: { [self] id in
                 lock.withLock { aggregateDestroys.append(id) }
             },
-            readTapFormat: { _ in
+            readTapFormat: { [self] tapID in
+                lock.withLock { tapFormatCallIDs.append(tapID) }
                 var format = AudioStreamBasicDescription()
                 format.mSampleRate = 48_000
                 format.mFormatID = kAudioFormatLinearPCM
@@ -238,8 +333,16 @@ final class FakeTapHAL: @unchecked Sendable {
                 format.mBitsPerChannel = 32
                 return (noErr, format)
             },
-            readNominalSampleRate: { _ in (noErr, 48_000) },
-            createIOProc: { [self] _, queue, block in
+            readNominalSampleRate: { [self] deviceID in
+                lock.withLock { sampleRateCallIDs.append(deviceID) }
+                let hook = lock.withLock { sampleRateHook }
+                hook?()
+                return (noErr, 48_000)
+            },
+            createIOProc: { [self] deviceID, queue, block in
+                lock.withLock { ioProcCallIDs.append(deviceID) }
+                let hook = lock.withLock { ioProcHook }
+                hook?()
                 lock.withLock {
                     ioBlock = block
                     ioQueue = queue
@@ -249,7 +352,8 @@ final class FakeTapHAL: @unchecked Sendable {
             destroyIOProc: { [self] _, _ in
                 lock.withLock { ioBlock = nil }
             },
-            startDevice: { [self] _, _ in
+            startDevice: { [self] deviceID, _ in
+                lock.withLock { startCallIDs.append(deviceID) }
                 startDelivering()
                 return noErr
             },

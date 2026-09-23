@@ -75,8 +75,11 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
                 hal.destroyProcessTap(processTap.id)
                 throw Self.muteReleasedError
             }
+            try throwIfMuteReleased()
             let outputDevice = try readDefaultSystemOutputDevice()
+            try throwIfMuteReleased()
             anchorDeviceID = outputDevice.id
+            try throwIfMuteReleased()
             aggregateDeviceID = try createAggregateDevice(
                 tapUID: processTap.uid,
                 outputDeviceUID: outputDevice.uid
@@ -88,27 +91,35 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             // resamples the tap into that clock. Labeling the frames with the tap's
             // rate made every recording on a 44.1 kHz device play 8.8 % fast and sharp
             // (a 440 Hz tone came back at 479 Hz), so take the rate from the aggregate.
+            // Every HAL use below is bracketed by a mute check: a check before the
+            // call skips a tap/aggregate that releaseMute already destroyed, and a
+            // check after observes a release that landed during the call so the late
+            // return tears down instead of starting a device on a destroyed tap.
+            // releaseMute never waits on lifecycleLock, preserving the deadline.
+            let tapFormat = try readTapStreamDescription(tapID: processTap.id)
+            try throwIfMuteReleased()
+            let aggregateSampleRate = try readNominalSampleRate(deviceID: aggregateDeviceID)
+            try throwIfMuteReleased()
             let streamDescription = SystemAudioTapConfiguration.deliveredStreamDescription(
-                tapFormat: try readTapStreamDescription(tapID: processTap.id),
-                aggregateSampleRate: try readNominalSampleRate(deviceID: aggregateDeviceID)
+                tapFormat: tapFormat,
+                aggregateSampleRate: aggregateSampleRate
             )
             guard let deliveredFormat = AVAudioFormat(streamDescription: streamDescription) else {
                 throw RecorderError.apiError("Unsupported tap audio format")
             }
 
-            stateLock.withLock {
-                self.generation = generation
-                self.callbacks = callbacks
-                sourceFormat = deliveredFormat
-                running = true
-            }
+            try establishRunning(generation: generation, callbacks: callbacks, format: deliveredFormat)
+            try throwIfMuteReleased()
             callbacks.onMetadata(RecorderBackendMetadata(
                 outputDeviceUID: outputDevice.uid,
                 sourceSampleRate: deliveredFormat.sampleRate,
                 sourceChannelCount: Int(deliveredFormat.channelCount)
             ))
+            try throwIfMuteReleased()
             try installIOProc(deviceID: aggregateDeviceID)
+            try throwIfMuteReleased()
             try installPropertyListeners(anchorDeviceID: outputDevice.id)
+            try throwIfMuteReleased()
             try startDevice(deviceID: aggregateDeviceID)
             try throwIfMuteReleased()
         } catch {
@@ -125,8 +136,16 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     /// start stuck in a later HAL call must not keep the app muted. The stuck start
     /// notices when it returns, tears down the rest, and can never publish a tap again.
     func releaseMute() {
-        stateLock.withLock { running = false }
-        if let id = tapObject.take(permanently: true) {
+        // Hold stateLock across running + take so establishRunning (check + set
+        // under the same lock) is atomic against this: either the start sets
+        // running before the release destroys the tap (and its next guard aborts),
+        // or the release wins and the start never sets running.
+        let id: AudioObjectID?
+        stateLock.lock()
+        running = false
+        id = tapObject.take(permanently: true)
+        stateLock.unlock()
+        if let id {
             hal.destroyProcessTap(id)
         }
     }
@@ -135,6 +154,17 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
 
     private func throwIfMuteReleased() throws {
         if tapObject.isReleased { throw Self.muteReleasedError }
+    }
+
+    /// Sets running only while the mute is still held, atomically against releaseMute.
+    private func establishRunning(generation: Int, callbacks: RecorderBackendCallbacks, format: AVAudioFormat) throws {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        if tapObject.isReleased { throw Self.muteReleasedError }
+        self.generation = generation
+        self.callbacks = callbacks
+        sourceFormat = format
+        running = true
     }
 
     private func tearDown() {
@@ -207,6 +237,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func installIOProc(deviceID: AudioObjectID) throws {
+        try throwIfMuteReleased()
         let (status, procID) = hal.createIOProc(deviceID, ioQueue) { [weak self] _, inputData, _, _, _ in
             self?.handleAudio(inputData)
         }
@@ -217,6 +248,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func startDevice(deviceID: AudioObjectID) throws {
+        try throwIfMuteReleased()
         guard let ioProcID else { throw RecorderError.apiError("IO proc not installed") }
         let status = hal.startDevice(deviceID, ioProcID)
         guard status == noErr else {
@@ -254,26 +286,31 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
 
     private func installPropertyListeners(anchorDeviceID: AudioObjectID) throws {
         let system = AudioObjectID(kAudioObjectSystemObject)
+        try throwIfMuteReleased()
         try addPropertyListener(
             objectID: system,
             selector: kAudioHardwarePropertyDefaultSystemOutputDevice,
             scope: kAudioObjectPropertyScopeGlobal
         )
+        try throwIfMuteReleased()
         try addPropertyListener(
             objectID: system,
             selector: kAudioHardwarePropertyDefaultOutputDevice,
             scope: kAudioObjectPropertyScopeGlobal
         )
+        try throwIfMuteReleased()
         try addPropertyListener(
             objectID: anchorDeviceID,
             selector: kAudioDevicePropertyNominalSampleRate,
             scope: kAudioObjectPropertyScopeGlobal
         )
+        try throwIfMuteReleased()
         try addPropertyListener(
             objectID: anchorDeviceID,
             selector: kAudioDevicePropertyDeviceIsAlive,
             scope: kAudioObjectPropertyScopeGlobal
         )
+        try throwIfMuteReleased()
         try addPropertyListener(
             objectID: anchorDeviceID,
             selector: kAudioDevicePropertyStreamConfiguration,
