@@ -4,21 +4,29 @@ import Foundation
 
 /// What the probe could prove about Core Audio system-audio capture for this process.
 enum SystemAudioCapturePermissionVerdict: Equatable, Sendable {
-    /// The tap delivered this process's own reference tone, so capture is allowed.
+    /// The tap delivered nonzero audio of this process, so capture is allowed.
     case authorized
-    /// The tap delivered only exact digital silence while this process was provably
-    /// rendering a nonzero reference tone into it.
+    /// For the whole observation window after warm-up, every tap buffer was exact zero
+    /// while this process was provably rendering a nonzero reference tone into it.
     case blocked
-    /// Not enough evidence either way (engine or tap could not run, too few frames).
+    /// Not enough evidence either way. Callers must behave as if the probe never ran.
     case inconclusive
 }
 
-/// Evidence gathered while a known reference tone plays into a tap of this process.
+/// Evidence gathered while a known reference tone plays into a muted tap of this process.
 struct SystemAudioCapturePermissionEvidence: Equatable, Sendable {
-    var referenceSecondsRendered: Double = 0
+    /// Tap audio delivered before the tone started (tap startup; never counted as evidence).
+    var tapSecondsBeforeTone: Double = 0
+    /// Tap audio discarded as warm-up after the tone started.
+    var tapSecondsDuringWarmup: Double = 0
+    /// Tap audio after warm-up: the only tap audio that can support a `.blocked` verdict.
     var tapSecondsObservedAfterWarmup: Double = 0
+    /// Tone the engine's render callback produced, in total and after warm-up.
+    var referenceSecondsRendered: Double = 0
+    var referenceSecondsRenderedAfterWarmup: Double = 0
     var tapDeliveredNonZeroSample = false
     var tapStructuralNoDataCallbacks = 0
+    var tapStructuralNoDataCallbacksAfterWarmup = 0
 }
 
 /// Apple offers no public preflight for the Core Audio process-tap permission
@@ -28,26 +36,65 @@ struct SystemAudioCapturePermissionEvidence: Equatable, Sendable {
 /// ground truth is a signal this process knows is nonzero: if a tap of our own output
 /// returns exact zeros while we render a tone into it, macOS is withholding tap audio.
 enum SystemAudioCapturePermissionClassifier {
-    /// Reference audio that must already be flowing before tap frames count as evidence.
-    static let warmupSeconds = 0.1
-    /// Tap audio, observed after warmup, that must be all-zero before claiming a block.
+    /// Tap audio after the tone started that is discarded while the tone reaches the tap.
+    static let warmupSeconds = 0.2
+    /// Tap audio and rendered tone, both after warm-up, required before claiming a block.
     static let requiredSilentTapSeconds = 0.3
 
+    /// The final verdict, taken only once the observation window has ended.
     static func verdict(for evidence: SystemAudioCapturePermissionEvidence) -> SystemAudioCapturePermissionVerdict {
         if evidence.tapDeliveredNonZeroSample { return .authorized }
-        guard evidence.referenceSecondsRendered >= warmupSeconds + requiredSilentTapSeconds,
-              evidence.tapSecondsObservedAfterWarmup >= requiredSilentTapSeconds
+        guard evidence.tapStructuralNoDataCallbacksAfterWarmup == 0,
+              evidence.tapSecondsObservedAfterWarmup >= requiredSilentTapSeconds,
+              evidence.referenceSecondsRenderedAfterWarmup >= requiredSilentTapSeconds
         else { return .inconclusive }
         return .blocked
     }
 }
 
-/// Live probe: plays a -60 dBFS tone through an output-only `AVAudioEngine` (never the
-/// input node, so no microphone prompt) and reads it back through a muted tap of this
-/// process, so the tone never reaches the speakers. Runs for at most `timeout`.
+/// One tap IO callback, reduced to what the probe needs.
+enum SystemAudioCaptureProbeTapEvent: Sendable {
+    case pcm(seconds: Double, nonZero: Bool)
+    case structuralNoData
+}
+
+/// A muted Core Audio tap of this process only. While it exists, this process's output
+/// never reaches the speakers.
+protocol SystemAudioCaptureProbeTap: AnyObject, Sendable {
+    func start(onEvent: @escaping @Sendable (SystemAudioCaptureProbeTapEvent) -> Void) async throws
+    func stop() async
+}
+
+/// The reference tone. `prepare` builds the graph without rendering anything; `start`
+/// renders and reports each rendered block's duration from the render thread.
+protocol SystemAudioCaptureProbeTone: AnyObject, Sendable {
+    func prepare() throws
+    func start(onRender: @escaping @Sendable (Double) -> Void) throws
+    func stop()
+}
+
+/// Live probe. Order is what keeps it inaudible and honest:
+/// 1. build the tone graph (renders nothing),
+/// 2. create and start the muted tap and wait until it delivers buffers,
+/// 3. only then render a -60 dBFS tone, observe for a fixed window, and decide once at
+///    its end,
+/// 4. stop the tone before the tap, so the tone never outlives the mute.
+/// The whole run has a hard deadline; on expiry the caller gets `.inconclusive` at once
+/// and cleanup finishes in the background, so a stuck HAL call never blocks Stop.
 struct SystemAudioCapturePermissionProbe: Sendable {
-    var timeout: Duration = .milliseconds(1_200)
-    var pollInterval: Duration = .milliseconds(50)
+    struct Timing: Sendable {
+        /// Hard cap on the whole probe, however Core Audio behaves.
+        var deadline: Duration = .seconds(3)
+        /// How long the started tap may take to deliver its first buffer.
+        var tapReadyTimeout: Duration = .milliseconds(500)
+        /// How long the tone plays; the verdict is taken only when it ends.
+        var observationWindow: Duration = .milliseconds(900)
+        var pollInterval: Duration = .milliseconds(20)
+    }
+
+    var timing = Timing()
+    var makeTap: @Sendable () -> any SystemAudioCaptureProbeTap = { MutedSelfProcessTap() }
+    var makeTone: @Sendable () -> any SystemAudioCaptureProbeTone = { ReferenceToneEngine() }
     static let referenceAmplitude: Float = 0.001
 
     /// The verdict plus what produced it, for host-only diagnostics.
@@ -63,83 +110,219 @@ struct SystemAudioCapturePermissionProbe: Sendable {
 
     func probe() async -> Outcome {
         let recorder = ProbeEvidenceRecorder()
-        func inconclusive(_ stage: String) -> Outcome {
-            Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: stage)
+        let gate = ProbeOutcomeGate()
+        // Not awaited: after a deadline it only finishes cleanup, and it re-checks
+        // `gate.isResolved` before it would ever start the tone.
+        Task.detached { [self] in
+            await observe(recorder: recorder, gate: gate)
         }
-        let engine = AVAudioEngine()
-        let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
-        guard sampleRate > 0,
-              let toneFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
-        else { return inconclusive("no output format") }
+        let deadline = timing.deadline
+        let timer = Task.detached {
+            try? await Task.sleep(for: deadline)
+            guard !Task.isCancelled else { return }
+            gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: "deadline"))
+        }
+        let outcome = await withTaskCancellationHandler {
+            await gate.wait()
+        } onCancel: {
+            gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: "cancelled"))
+        }
+        timer.cancel()
+        return outcome
+    }
 
-        let phaseStep = 2 * Double.pi * 1_000 / sampleRate
-        let phase = ProbePhase()
-        let source = AVAudioSourceNode(format: toneFormat) { _, _, frameCount, audioBufferList in
-            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            var current = phase.value
-            for frame in 0..<Int(frameCount) {
-                let sample = Self.referenceAmplitude * Float(sin(current))
-                current += phaseStep
-                for buffer in buffers {
-                    buffer.mData?.assumingMemoryBound(to: Float.self)[frame] = sample
+    private func observe(recorder: ProbeEvidenceRecorder, gate: ProbeOutcomeGate) async {
+        func conclude(_ verdict: SystemAudioCapturePermissionVerdict, _ stage: String) {
+            gate.resolve(Outcome(verdict: verdict, evidence: recorder.snapshot(), stage: stage))
+        }
+        let clock = ContinuousClock()
+        let tone = makeTone()
+        do {
+            try tone.prepare()
+        } catch {
+            return conclude(.inconclusive, "tone prepare: \(error.localizedDescription)")
+        }
+
+        let tap = makeTap()
+        do {
+            try await tap.start(onEvent: { recorder.record($0) })
+        } catch {
+            conclude(.inconclusive, "tap start: \(error.localizedDescription)")
+            await tap.stop()
+            return
+        }
+
+        // The muted tap must be running (delivering buffers) before anything renders.
+        let tapReadyBy = clock.now.advanced(by: timing.tapReadyTimeout)
+        while !recorder.tapDeliveredPCM, !gate.isResolved, clock.now < tapReadyBy {
+            try? await Task.sleep(for: timing.pollInterval)
+        }
+        if recorder.snapshot().tapDeliveredNonZeroSample {
+            conclude(.authorized, "tap audio before tone")
+            await tap.stop()
+            return
+        }
+        guard recorder.tapDeliveredPCM, !gate.isResolved else {
+            conclude(.inconclusive, "tap delivered no audio")
+            await tap.stop()
+            return
+        }
+
+        do {
+            try tone.start(onRender: { recorder.recordReference(seconds: $0) })
+        } catch {
+            tone.stop()
+            conclude(.inconclusive, "tone start: \(error.localizedDescription)")
+            await tap.stop()
+            return
+        }
+        let windowEnds = clock.now.advanced(by: timing.observationWindow)
+        while clock.now < windowEnds, !gate.isResolved, !recorder.snapshot().tapDeliveredNonZeroSample {
+            try? await Task.sleep(for: timing.pollInterval)
+        }
+        tone.stop() // Before the tap: the tone must never outlive the mute.
+        let evidence = recorder.snapshot()
+        if evidence.tapDeliveredNonZeroSample {
+            conclude(.authorized, "sampled")
+        } else if clock.now >= windowEnds {
+            conclude(SystemAudioCapturePermissionClassifier.verdict(for: evidence), "sampled")
+        } else {
+            conclude(.inconclusive, "interrupted")
+        }
+        await tap.stop()
+    }
+}
+
+/// Written from the tone's render thread and the tap's IO queue; read by `observe`.
+private final class ProbeEvidenceRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var evidence = SystemAudioCapturePermissionEvidence()
+
+    private var warmedUp: Bool {
+        evidence.tapSecondsDuringWarmup >= SystemAudioCapturePermissionClassifier.warmupSeconds
+    }
+
+    var tapDeliveredPCM: Bool {
+        lock.withLock { evidence.tapSecondsBeforeTone > 0 || evidence.tapSecondsDuringWarmup > 0 }
+    }
+
+    func recordReference(seconds: Double) {
+        lock.withLock {
+            evidence.referenceSecondsRendered += seconds
+            if warmedUp { evidence.referenceSecondsRenderedAfterWarmup += seconds }
+        }
+    }
+
+    func record(_ event: SystemAudioCaptureProbeTapEvent) {
+        lock.withLock {
+            switch event {
+            case .structuralNoData:
+                evidence.tapStructuralNoDataCallbacks += 1
+                if warmedUp { evidence.tapStructuralNoDataCallbacksAfterWarmup += 1 }
+            case .pcm(let seconds, let nonZero):
+                if nonZero { evidence.tapDeliveredNonZeroSample = true }
+                if evidence.referenceSecondsRendered == 0 {
+                    evidence.tapSecondsBeforeTone += seconds
+                } else if !warmedUp {
+                    evidence.tapSecondsDuringWarmup += seconds
+                } else {
+                    evidence.tapSecondsObservedAfterWarmup += seconds
                 }
             }
-            phase.value = current.truncatingRemainder(dividingBy: 2 * Double.pi)
-            recorder.recordReference(seconds: Double(frameCount) / sampleRate)
-            return noErr
         }
-        engine.attach(source)
-        engine.connect(source, to: engine.mainMixerNode, format: toneFormat)
-        do {
-            try engine.start()
-        } catch {
-            return inconclusive("engine start: \(error.localizedDescription)")
-        }
-        defer { engine.stop() }
+    }
 
-        guard let processObject = Self.currentProcessObject() else { return inconclusive("no process object") }
-        let tap = SystemAudioProcessTapSession(makeTapDescription: {
+    func snapshot() -> SystemAudioCapturePermissionEvidence {
+        lock.withLock { evidence }
+    }
+}
+
+/// One-shot result: the first of verdict, deadline, or cancellation wins.
+private final class ProbeOutcomeGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: SystemAudioCapturePermissionProbe.Outcome?
+    private var continuation: CheckedContinuation<SystemAudioCapturePermissionProbe.Outcome, Never>?
+
+    var isResolved: Bool { lock.withLock { outcome != nil } }
+
+    func wait() async -> SystemAudioCapturePermissionProbe.Outcome {
+        await withCheckedContinuation { continuation in
+            let ready = lock.withLock { () -> SystemAudioCapturePermissionProbe.Outcome? in
+                if let outcome { return outcome }
+                self.continuation = continuation
+                return nil
+            }
+            if let ready { continuation.resume(returning: ready) }
+        }
+    }
+
+    func resolve(_ value: SystemAudioCapturePermissionProbe.Outcome) {
+        let pending = lock.withLock { () -> CheckedContinuation<SystemAudioCapturePermissionProbe.Outcome, Never>? in
+            guard outcome == nil else { return nil }
+            outcome = value
+            defer { continuation = nil }
+            return continuation
+        }
+        pending?.resume(returning: value)
+    }
+}
+
+/// Live muted tap of this process. HAL calls run on a private serial queue so a stuck
+/// call occupies that queue, never a Swift concurrency thread, and a late start is always
+/// followed by its stop.
+final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable {
+    private let queue = DispatchQueue(label: "NikoMusicHub.SystemAudioCapturePermissionProbe.tap")
+    private let lock = NSLock()
+    private var session: SystemAudioProcessTapSession?
+
+    func start(onEvent: @escaping @Sendable (SystemAudioCaptureProbeTapEvent) -> Void) async throws {
+        guard let processObject = Self.currentProcessObject() else {
+            throw RecorderError.apiError("This process has no Core Audio process object")
+        }
+        let session = SystemAudioProcessTapSession(makeTapDescription: {
             let description = CATapDescription(stereoMixdownOfProcesses: [processObject])
             description.name = "NikoMusicHub-PermissionProbe"
             description.isPrivate = true
             description.muteBehavior = CATapMuteBehavior.muted
             return description
         })
+        lock.withLock { self.session = session }
         let callbacks = RecorderBackendCallbacks(
             onPCM: { _, format, buffer, _ in
-                recorder.recordTap(
+                onEvent(.pcm(
                     seconds: Double(buffer.frameLength) / format.sampleRate,
                     nonZero: RecorderPCMWriterPipeline.containsNonZeroSample(buffer)
-                )
+                ))
                 return true
             },
-            onStructuralNoData: { _ in recorder.recordStructuralNoData() },
+            onStructuralNoData: { _ in onEvent(.structuralNoData) },
             onMetadata: { _ in },
             onRouteChange: {},
             onFailure: { _ in }
         )
-        do {
-            try await tap.start(generation: 1, callbacks: callbacks)
-        } catch {
-            return inconclusive("tap start: \(error.localizedDescription)")
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            queue.async {
+                do {
+                    try session.startSynchronously(generation: 1, callbacks: callbacks)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        var verdict = SystemAudioCapturePermissionVerdict.inconclusive
-        while clock.now < deadline {
-            verdict = SystemAudioCapturePermissionClassifier.verdict(for: recorder.snapshot())
-            if verdict != .inconclusive { break }
-            try? await Task.sleep(for: pollInterval)
-        }
-        if verdict == .inconclusive {
-            verdict = SystemAudioCapturePermissionClassifier.verdict(for: recorder.snapshot())
-        }
-        await tap.stop()
-        return Outcome(verdict: verdict, evidence: recorder.snapshot(), stage: "sampled")
     }
 
-    private static func currentProcessObject() -> AudioObjectID? {
+    func stop() async {
+        guard let session = lock.withLock({ session }) else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async {
+                session.stopSynchronously()
+                continuation.resume()
+            }
+        }
+    }
+
+    static func currentProcessObject() -> AudioObjectID? {
         var pid = getpid()
         var processObject = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
@@ -161,30 +344,73 @@ struct SystemAudioCapturePermissionProbe: Sendable {
     }
 }
 
-/// Written from the engine's render thread and the tap's IO queue; read by the poll loop.
-private final class ProbeEvidenceRecorder: @unchecked Sendable {
+/// Output-only `AVAudioEngine` rendering a 1 kHz sine at `referenceAmplitude`. It never
+/// touches the input node, so it cannot trigger a microphone prompt.
+final class ReferenceToneEngine: SystemAudioCaptureProbeTone, @unchecked Sendable {
     private let lock = NSLock()
-    private var evidence = SystemAudioCapturePermissionEvidence()
+    private let engine = AVAudioEngine()
+    private var prepared = false
+    private var renderer: ToneRenderReporter?
 
-    func recordReference(seconds: Double) {
-        lock.withLock { evidence.referenceSecondsRendered += seconds }
-    }
-
-    func recordTap(seconds: Double, nonZero: Bool) {
-        lock.withLock {
-            if nonZero { evidence.tapDeliveredNonZeroSample = true }
-            if evidence.referenceSecondsRendered >= SystemAudioCapturePermissionClassifier.warmupSeconds {
-                evidence.tapSecondsObservedAfterWarmup += seconds
+    func prepare() throws {
+        try lock.withLock {
+            guard !prepared else { return }
+            let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
+            guard sampleRate > 0,
+                  let toneFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
+            else { throw RecorderError.apiError("No output format for the reference tone") }
+            let phaseStep = 2 * Double.pi * 1_000 / sampleRate
+            let phase = ProbePhase()
+            let renderer = ToneRenderReporter()
+            let source = AVAudioSourceNode(format: toneFormat) { _, _, frameCount, audioBufferList in
+                let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                var current = phase.value
+                for frame in 0..<Int(frameCount) {
+                    let sample = SystemAudioCapturePermissionProbe.referenceAmplitude * Float(sin(current))
+                    current += phaseStep
+                    for buffer in buffers {
+                        buffer.mData?.assumingMemoryBound(to: Float.self)[frame] = sample
+                    }
+                }
+                phase.value = current.truncatingRemainder(dividingBy: 2 * Double.pi)
+                renderer.report(seconds: Double(frameCount) / sampleRate)
+                return noErr
             }
+            engine.attach(source)
+            engine.connect(source, to: engine.mainMixerNode, format: toneFormat)
+            self.renderer = renderer
+            prepared = true
         }
     }
 
-    func recordStructuralNoData() {
-        lock.withLock { evidence.tapStructuralNoDataCallbacks += 1 }
+    func start(onRender: @escaping @Sendable (Double) -> Void) throws {
+        try lock.withLock {
+            guard prepared, let renderer else { throw RecorderError.apiError("Reference tone not prepared") }
+            renderer.onRender = onRender
+            try engine.start()
+        }
     }
 
-    func snapshot() -> SystemAudioCapturePermissionEvidence {
-        lock.withLock { evidence }
+    func stop() {
+        lock.withLock {
+            engine.stop()
+            renderer?.onRender = nil
+        }
+    }
+}
+
+/// Hands rendered durations from the render thread to whoever started the tone.
+private final class ToneRenderReporter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var callback: (@Sendable (Double) -> Void)?
+
+    var onRender: (@Sendable (Double) -> Void)? {
+        get { lock.withLock { callback } }
+        set { lock.withLock { callback = newValue } }
+    }
+
+    func report(seconds: Double) {
+        onRender?(seconds)
     }
 }
 

@@ -137,25 +137,26 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         await currentBackend?.stop()
         currentBackend = nil
         // A denied tap looks exactly like nothing playing: exact zeros. Only a take with
-        // no nonzero sample is ever examined, and it is discarded only on a proven block.
-        if pipeline.containsOnlyDigitalSilence,
-           await captureIsBlockedByPermission(),
-           pipeline.discardDigitallySilentTake(error: .permissionDenied) {
-            state = .failed
-            readinessGate = nil
-            onEnded = nil
-            throw RecorderError.permissionDenied
-        }
+        // no nonzero sample is ever examined, and the probe never deletes anything: a
+        // blocked verdict keeps the silent file and only adds the permission card, so even
+        // a wrong verdict loses nothing.
+        let captureBlocked = pipeline.containsOnlyDigitalSilence
+            ? await captureIsBlockedByPermission()
+            : false
         do {
             let result = try pipeline.finalize()
             state = .completed
             readinessGate = nil
             onEnded = nil
-            return result
+            return captureBlocked ? result.markingSilentBecauseCaptureWasBlocked() : result
         } catch {
             state = .failed
             readinessGate = nil
             onEnded = nil
+            // Nothing reached disk, so there is no take to keep; say why.
+            if captureBlocked, case RecorderError.noAudioCaptured = error {
+                throw RecorderError.permissionDenied
+            }
             throw error
         }
     }

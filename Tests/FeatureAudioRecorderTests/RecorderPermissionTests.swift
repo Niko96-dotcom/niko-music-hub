@@ -20,7 +20,6 @@ final class RecorderPermissionTests: XCTestCase {
     func testProbeHearingItsOwnToneIsAuthorized() {
         let evidence = SystemAudioCapturePermissionEvidence(
             referenceSecondsRendered: 0.05,
-            tapSecondsObservedAfterWarmup: 0,
             tapDeliveredNonZeroSample: true
         )
         XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .authorized)
@@ -28,9 +27,11 @@ final class RecorderPermissionTests: XCTestCase {
 
     func testProbeReadingZerosWhileItsToneRendersIsBlocked() {
         let evidence = SystemAudioCapturePermissionEvidence(
-            referenceSecondsRendered: 0.6,
+            tapSecondsBeforeTone: 0.05,
+            tapSecondsDuringWarmup: 0.2,
             tapSecondsObservedAfterWarmup: 0.4,
-            tapDeliveredNonZeroSample: false
+            referenceSecondsRendered: 0.7,
+            referenceSecondsRenderedAfterWarmup: 0.45
         )
         XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .blocked)
     }
@@ -39,27 +40,43 @@ final class RecorderPermissionTests: XCTestCase {
         // Empty IO buffers are the known route failure, not a permission signature.
         let evidence = SystemAudioCapturePermissionEvidence(
             referenceSecondsRendered: 1.3,
-            tapSecondsObservedAfterWarmup: 0,
-            tapDeliveredNonZeroSample: false,
+            referenceSecondsRenderedAfterWarmup: 1,
             tapStructuralNoDataCallbacks: 105
         )
         XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .inconclusive)
     }
 
-    func testProbeWhoseToneNeverRenderedIsInconclusive() {
+    func testProbeWithStructuralGapsAfterWarmupIsInconclusive() {
         let evidence = SystemAudioCapturePermissionEvidence(
-            referenceSecondsRendered: 0,
-            tapSecondsObservedAfterWarmup: 1,
-            tapDeliveredNonZeroSample: false
+            tapSecondsDuringWarmup: 0.2,
+            tapSecondsObservedAfterWarmup: 0.5,
+            referenceSecondsRendered: 0.9,
+            referenceSecondsRenderedAfterWarmup: 0.5,
+            tapStructuralNoDataCallbacks: 1,
+            tapStructuralNoDataCallbacksAfterWarmup: 1
         )
         XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .inconclusive)
     }
 
-    func testProbeWithTooLittleSilentTapAudioIsInconclusive() {
+    func testProbeWhoseToneStoppedRenderingIsInconclusive() {
+        // Zeros only prove a block while the tone is provably rendering into the tap.
         let evidence = SystemAudioCapturePermissionEvidence(
-            referenceSecondsRendered: 1,
+            tapSecondsDuringWarmup: 0.2,
+            tapSecondsObservedAfterWarmup: 1,
+            referenceSecondsRendered: 0.25,
+            referenceSecondsRenderedAfterWarmup: 0.05
+        )
+        XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .inconclusive)
+    }
+
+    func testProbeWithTooLittleSilentTapAudioAfterWarmupIsInconclusive() {
+        // Startup zeros before the tone and during warm-up never count.
+        let evidence = SystemAudioCapturePermissionEvidence(
+            tapSecondsBeforeTone: 1,
+            tapSecondsDuringWarmup: 0.2,
             tapSecondsObservedAfterWarmup: 0.1,
-            tapDeliveredNonZeroSample: false
+            referenceSecondsRendered: 1,
+            referenceSecondsRenderedAfterWarmup: 0.8
         )
         XCTAssertEqual(SystemAudioCapturePermissionClassifier.verdict(for: evidence), .inconclusive)
     }
@@ -112,7 +129,7 @@ final class RecorderPermissionTests: XCTestCase {
         XCTAssertTrue(RecorderPCMWriterPipeline.containsNonZeroSample(buffer))
     }
 
-    func testSilentTakeDiscardRefusesOnceRealAudioWasWritten() throws {
+    func testDigitalSilenceFlagClearsOnceRealAudioWasWritten() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("silence-guard-\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -131,7 +148,6 @@ final class RecorderPermissionTests: XCTestCase {
         XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
 
         XCTAssertFalse(pipeline.containsOnlyDigitalSilence)
-        XCTAssertFalse(pipeline.discardDigitallySilentTake(error: .permissionDenied))
         XCTAssertEqual(try pipeline.finalize().frameCount, 512)
     }
 

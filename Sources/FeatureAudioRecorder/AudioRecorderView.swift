@@ -311,6 +311,12 @@ public struct AudioRecorderView: View {
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                if viewModel.savedRecordingIsSilentFromBlockedCapture {
+                    Text("The recording was saved, but it is silent.")
+                        .font(HubDesignSystem.Typography.bodySmall())
+                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                }
+
                 HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                     HubLabeledButton(
                         icon: "lock.shield",

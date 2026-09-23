@@ -57,6 +57,9 @@ public struct RecorderResult: Sendable {
     public let channelCount: Int
     public let frameCount: Int64
     public let diagnostics: RecorderDiagnostics?
+    /// The take is exact digital silence and the permission probe proved macOS withheld
+    /// system audio. The file is still saved; the UI adds the permission card.
+    public let silentBecauseCaptureWasBlocked: Bool
 
     public init(
         outputURL: URL,
@@ -65,7 +68,8 @@ public struct RecorderResult: Sendable {
         bitDepth: Int,
         channelCount: Int,
         frameCount: Int64 = 0,
-        diagnostics: RecorderDiagnostics? = nil
+        diagnostics: RecorderDiagnostics? = nil,
+        silentBecauseCaptureWasBlocked: Bool = false
     ) {
         self.outputURL = outputURL
         self.duration = duration
@@ -74,6 +78,20 @@ public struct RecorderResult: Sendable {
         self.channelCount = channelCount
         self.frameCount = frameCount
         self.diagnostics = diagnostics
+        self.silentBecauseCaptureWasBlocked = silentBecauseCaptureWasBlocked
+    }
+
+    func markingSilentBecauseCaptureWasBlocked() -> RecorderResult {
+        RecorderResult(
+            outputURL: outputURL,
+            duration: duration,
+            sampleRate: sampleRate,
+            bitDepth: bitDepth,
+            channelCount: channelCount,
+            frameCount: frameCount,
+            diagnostics: diagnostics,
+            silentBecauseCaptureWasBlocked: true
+        )
     }
 }
 

@@ -361,7 +361,8 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
 
     // MARK: - System-audio permission diagnosis
 
-    func testDigitallySilentTakeWithBlockedProbeThrowsPermissionDeniedAndDiscardsFile() async throws {
+    func testDigitallySilentTakeWithBlockedProbeKeepsTheFileAndFlagsIt() async throws {
+        // Even a correct block verdict loses nothing: the silent take stays on disk.
         let probe = PermissionProbeStub(.blocked)
         let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
         let session = makeSession(core: [core], fallback: [], probe: probe)
@@ -369,15 +370,44 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
 
         try await start(session, url: url)
-        do {
-            _ = try await session.stop()
-            XCTFail("A proven tap block must not be saved as a silent recording")
-        } catch RecorderError.permissionDenied {
-            // expected
-        }
+        let result = try await session.stop()
 
         XCTAssertEqual(probe.callCount, 1)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(result.silentBecauseCaptureWasBlocked)
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testHungProbeTapStillLetsStopReturnTheTake() async throws {
+        let scenario = ProbeScenario()
+        var hungProbe = scenario.probe(tap: FakeProbeTap(scenario: scenario, start: .hang, script: .allZeros))
+        hungProbe.timing.deadline = .milliseconds(300)
+        let probe = hungProbe
+        defer { scenario.releaseHangs() }
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = ResilientSystemAudioRecordingSession(
+            configuration: RecorderRecoveryConfiguration(startupTimeout: .milliseconds(20), routeDebounce: .milliseconds(5)),
+            coreAudioFactory: { core },
+            screenCaptureKitFactory: { FakeRecorderBackend(identity: .screenCaptureKit, behavior: .startFailure) },
+            permissionProbe: { await probe.run() }
+        )
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try await start(session, url: url)
+
+        let stopped = expectation(description: "stop returned")
+        let flagged = LockedCounter()
+        Task {
+            if let result = try? await session.stop() {
+                if result.silentBecauseCaptureWasBlocked { flagged.increment() }
+                stopped.fulfill()
+            }
+        }
+        await fulfillment(of: [stopped], timeout: 2)
+        scenario.releaseHangs()
+
+        XCTAssertEqual(flagged.value, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
 
     func testDigitallySilentTakeWithAuthorizedProbeKeepsTheSilentRecording() async throws {
@@ -527,7 +557,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
     }
 
     @MainActor
-    func testBlockedTapReachesThePermissionCard() async throws {
+    func testBlockedTapReachesThePermissionCardAndKeepsTheSilentRecording() async throws {
         let (viewModel, inbox, directory) = try makeViewModel(
             core: FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100)),
             probe: PermissionProbeStub(.blocked)
@@ -537,7 +567,12 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         try await recordAndStop(viewModel)
 
         XCTAssertEqual(viewModel.recordingState, .permissionNeeded)
-        XCTAssertEqual(try inbox.listItems().count, 0)
+        XCTAssertTrue(viewModel.savedRecordingIsSilentFromBlockedCapture)
+        let items = try inbox.listItems()
+        XCTAssertEqual(items.count, 1)
+        let saved = try XCTUnwrap(items.first?.fileURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: saved.path))
+        XCTAssertEqual(viewModel.lastRecordedURL, saved)
     }
 
     @MainActor

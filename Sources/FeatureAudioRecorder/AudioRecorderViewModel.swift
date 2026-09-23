@@ -76,6 +76,8 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var lastRecordedURL: URL?
     @Published public private(set) var showSaveConfirmation = false
     @Published public private(set) var handoffWarningMessage: String?
+    /// The last take was saved, but it is silent because macOS withheld system audio.
+    @Published public private(set) var savedRecordingIsSilentFromBlockedCapture = false
     @Published public private(set) var recentRecordings: [OutputInboxItem] = []
 
     public var isRecording: Bool {
@@ -151,6 +153,7 @@ public final class AudioRecorderViewModel: ObservableObject {
 
         isStartInFlight = true
         defer { isStartInFlight = false }
+        savedRecordingIsSilentFromBlockedCapture = false
 
         let permission = await capturePort.checkPermission()
         guard case .authorized = permission else {
@@ -347,6 +350,13 @@ public final class AudioRecorderViewModel: ObservableObject {
         refreshProposedFilename()
         HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.recordingStopped)
         loadRecentRecordings()
+        if result.silentBecauseCaptureWasBlocked {
+            // The take is kept (and handed off) like any other; the card explains why
+            // it is silent.
+            savedRecordingIsSilentFromBlockedCapture = true
+            error = .permissionDenied
+            recordingState = .permissionNeeded
+        }
     }
 
     public func dismissSaveConfirmation() {
@@ -358,6 +368,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     /// visible error/incompatible card and returns the tool to idle.
     public func dismissError() {
         error = nil
+        savedRecordingIsSilentFromBlockedCapture = false
         recordingState = .idle
     }
 

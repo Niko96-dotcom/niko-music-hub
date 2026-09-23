@@ -54,7 +54,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         try startSynchronously(generation: generation, callbacks: callbacks)
     }
 
-    private func startSynchronously(generation: Int, callbacks: RecorderBackendCallbacks) throws {
+    /// Blocking form for callers that run HAL work on their own queue (the permission probe).
+    func startSynchronously(generation: Int, callbacks: RecorderBackendCallbacks) throws {
         lifecycleLock.lock()
         defer { lifecycleLock.unlock() }
         guard !stateLock.withLock({ running }) else {
@@ -105,6 +106,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     func stop() async { tearDown() }
+
+    func stopSynchronously() { tearDown() }
 
     private func tearDown() {
         lifecycleLock.lock()

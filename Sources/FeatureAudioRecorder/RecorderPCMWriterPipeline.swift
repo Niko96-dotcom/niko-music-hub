@@ -194,21 +194,6 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         lock.withLock { !capturedNonZeroSample }
     }
 
-    /// Discards the take only when it holds no nonzero sample, whatever its finalization
-    /// state; returns false (and keeps the file) as soon as any real audio was written.
-    @discardableResult
-    func discardDigitallySilentTake(error: RecorderError) -> Bool {
-        lock.lock()
-        guard !capturedNonZeroSample else {
-            lock.unlock()
-            return false
-        }
-        finalizationState = .failed(error)
-        lock.unlock()
-        try? FileManager.default.removeItem(at: outputURL)
-        return true
-    }
-
     /// Scans the valid frames byte-for-byte. Integer and float PCM silence is all-zero
     /// bytes; a format this cannot vouch for counts as audio so it never looks silent.
     static func containsNonZeroSample(_ buffer: AVAudioPCMBuffer) -> Bool {
