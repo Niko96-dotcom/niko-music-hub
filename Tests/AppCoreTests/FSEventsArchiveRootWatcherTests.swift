@@ -160,6 +160,33 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
         XCTAssertEqual(delivery.events, [.fullRescanRequired])
     }
 
+    @MainActor
+    func testVolumeAndRootEventsRequestFullRescanEvenInsideCoalescedStorm() async throws {
+        let root = URL(fileURLWithPath: "/Volumes/Fixture Archive", isDirectory: true)
+        let volumeFlags = [
+            FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged),
+            FSEventStreamEventFlags(kFSEventStreamEventFlagUnmount),
+            FSEventStreamEventFlags(kFSEventStreamEventFlagMount)
+        ]
+        for flag in volumeFlags {
+            for pathCount in [1, 1_100] {
+                let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0.01)
+                let delivery = DeliveryProbe()
+                XCTAssertTrue(watcher.setRoots([root]) { event in
+                    delivery.record(event)
+                })
+                let paths = (0..<pathCount).map { "\(root.path)/Song/Take \($0).wav" }
+                var flags = Array(repeating: FSEventStreamEventFlags(kFSEventStreamEventFlagItemModified), count: pathCount)
+                flags[pathCount - 1] = flag
+                watcher.simulateFSEventBatch(paths: paths, eventFlags: flags)
+                try await waitForDelivery(delivery)
+
+                XCTAssertEqual(delivery.events, [.fullRescanRequired], "flag \(flag), \(pathCount) paths")
+                watcher.stop()
+            }
+        }
+    }
+
     func testSongFolderPathUsesDeepestRootAndKeepsItsSpelling() {
         let prefixes = ["/var/a", "/private/var/a", "/var/a/nested"]
         XCTAssertEqual(

@@ -213,7 +213,10 @@ struct ArchiveCatalogCoordinator {
             }
             if let updated = incomingByID[song.id] {
                 merged.append(updated)
-            } else if fileManager.fileExists(atPath: song.folderPath.path) {
+            } else if fileManager.fileExists(atPath: song.folderPath.path),
+                      (try? fileManager.attributesOfItem(atPath: song.folderPath.path)[.type]) as? FileAttributeType
+                        != .typeSymbolicLink {
+                // A folder now replaced by a symlink is skipped by scans, as a full scan does.
                 merged.append(song)
             }
         }

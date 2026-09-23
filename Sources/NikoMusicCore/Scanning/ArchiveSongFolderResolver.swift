@@ -55,11 +55,15 @@ public enum ArchiveSongFolderResolver {
 
             if components.count == 1 {
                 var isDirectory: ObjCBool = false
-                if fileManager.fileExists(atPath: immediateChild.path, isDirectory: &isDirectory),
-                   isDirectory.boolValue {
+                let exists = fileManager.fileExists(atPath: immediateChild.path, isDirectory: &isDirectory)
+                if exists, isDirectory.boolValue {
                     songFolders.insert(immediateChild)
                 } else if ProjectFileFormat(url: path) != nil {
                     rootsForRootLevelScan.insert(root)
+                } else if !exists {
+                    // A song folder deleted, trashed or renamed away (one rename event,
+                    // or a coalesced storm). Keep it a target so the merge drops its song.
+                    songFolders.insert(immediateChild)
                 }
             } else {
                 songFolders.insert(immediateChild)

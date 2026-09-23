@@ -176,6 +176,17 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
         for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
             try Task.checkCancellation()
+            // Same rule as `scan`: a symlink at the archive root is never followed.
+            if (try? folder.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .unreadableChild,
+                        label: folder.lastPathComponent,
+                        reason: "Skipped symbolic-link folder at archive root"
+                    )
+                )
+                continue
+            }
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
                   isDirectory.boolValue else {

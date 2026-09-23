@@ -12,10 +12,15 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     /// FSEvents cannot provide a complete path-level delta for these cases.
     /// Treat all of them as one full-rescan request rather than mis-scoping a
     /// synthetic path (such as `/`) to an incremental scan.
+    /// Volume mounts/unmounts and root renames are included: their paths say
+    /// nothing about which song folders appeared or vanished.
     private static let fullRescanFlags = FSEventStreamEventFlags(
         kFSEventStreamEventFlagMustScanSubDirs
             | kFSEventStreamEventFlagUserDropped
             | kFSEventStreamEventFlagKernelDropped
+            | kFSEventStreamEventFlagRootChanged
+            | kFSEventStreamEventFlagMount
+            | kFSEventStreamEventFlagUnmount
     )
 
     private final class DeliveryToken: @unchecked Sendable {
