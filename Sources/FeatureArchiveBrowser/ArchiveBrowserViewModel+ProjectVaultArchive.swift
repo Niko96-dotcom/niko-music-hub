@@ -130,10 +130,21 @@ extension ArchiveBrowserViewModel {
             }
             let catalogID = self.projectVaultSnapshot(for: current)?.record.id
             let settings = try? self.settingsStore.loadSettings()
+            // A pending Keep Local review never presents the removal prompt:
+            // Archive Now points at the review and captures copy-only, so an
+            // explicit Archive Copy may still proceed. Done derives its
+            // ceiling from `permitsUserInitiatedRemoval`, which is already
+            // false while review is pending.
+            let keepLocalReviewRequired = settings?.vault.keepLocalReviewRequired ?? false
+            if trigger == .manual, keepLocalReviewRequired {
+                self.setProjectVaultStatusMessage(
+                    ProjectVaultConfirmationCopy.keepLocalReviewRequiredArchiveNowMessage
+                )
+            }
             let requestedRemoving: Bool
             switch trigger {
             case .manual:
-                requestedRemoving = true
+                requestedRemoving = !keepLocalReviewRequired
             case .workflowDone:
                 // User-initiated Done is decoupled from the background
                 // scheduler opt-in: it honors the explicit free-space intent

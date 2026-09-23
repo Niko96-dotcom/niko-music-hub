@@ -12,11 +12,15 @@ struct ProjectVaultSettingsView: View {
     let onSave: (@escaping @Sendable (inout AppSettings) -> Void) -> Bool
     let onOpenLoginSetting: () -> Void
 
+    @Environment(\.openWindow) private var openWindow
+
     @State private var showSetup = false
     @State private var message: String?
     @State private var isRunningDrill = false
     @State private var pendingVaultDiagnosticsDestination: URL?
     @State private var showReplaceDiagnosticsAlert = false
+    @State private var showKeepLocalReview = false
+    @State private var keepLocalBrowserVisited = false
 
     private var health: ProjectVaultHealth {
         ProjectVaultHealthEvaluator().evaluate(settings: settings)
@@ -132,6 +136,22 @@ struct ProjectVaultSettingsView: View {
                     }
                 }
 
+                // Review recovery stays visible even when Vault is disabled: a
+                // whole-Vault repair defaults Vault off while still requiring
+                // review, and the banner says so. Card contract (§4b): same
+                // SettingsRow + divider treatment inside the card.
+                if settings.vault.keepLocalReviewRequired {
+                    SettingsRowDivider()
+                    SettingsRow(
+                        "Keep Local needs review",
+                        description: ProjectVaultConfirmationCopy.keepLocalReviewRequiredSettingsNotice
+                    ) {
+                        HubLabeledButton(icon: "checkmark.shield", label: "Review…", style: .secondary) {
+                            showKeepLocalReview = true
+                        }
+                    }
+                }
+
                 if let message {
                     SettingsRowDivider()
                     Text(message)
@@ -162,6 +182,33 @@ struct ProjectVaultSettingsView: View {
                 onEnable: finishSetup,
                 onCancel: { showSetup = false }
             )
+        }
+        .sheet(isPresented: $showKeepLocalReview) {
+            KeepLocalReviewSheet(
+                settings: settings,
+                pinCount: settings.vault.keepLocalProjectIDs.count,
+                browserVisited: keepLocalBrowserVisited,
+                onOpenArchiveBrowser: openKeepLocalArchiveBrowser,
+                onDone: doneKeepLocalReview,
+                onCancel: { showKeepLocalReview = false }
+            )
+        }
+        .onChange(of: settings.vault.keepLocalReviewRequired) { _, required in
+            if required {
+                keepLocalBrowserVisited = false
+            }
+        }
+        // A visit before choosing a new root must not authorize review of the
+        // new root: any Vault enablement or root change while review is
+        // pending discards the recorded visit.
+        .onChange(of: settings.vault.isEnabled) { _, _ in
+            resetKeepLocalBrowserVisitIfReviewPending()
+        }
+        .onChange(of: settings.vault.activeRootID) { _, _ in
+            resetKeepLocalBrowserVisitIfReviewPending()
+        }
+        .onChange(of: settings.vault.archiveRootID) { _, _ in
+            resetKeepLocalBrowserVisitIfReviewPending()
         }
         .alert(
             ProjectVaultDiagnosticsExportCopy.replaceTitle,
@@ -221,6 +268,64 @@ struct ProjectVaultSettingsView: View {
         }) else { return }
         showSetup = false
         message = ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage
+    }
+
+    /// Done Reviewing clears only the durable review flag against the latest
+    /// stored settings, and only after the user both checked the box and
+    /// visited Archive Browser (recorded in short-lived view state that
+    /// survives sheet close/reopen and resets on a fresh repair) with a
+    /// configured Vault (enabled, both folders chosen). Pins are never
+    /// written here, so a pin changed while the sheet is open survives
+    /// the save; clearing Emergency Stop or finishing setup never touches
+    /// this flag. The policy guard runs on the view snapshot before saving
+    /// (driving the disabled button) and again on the latest stored settings
+    /// inside the save closure; when the save is a no-op (roots changed,
+    /// Vault turned off, or the flag already cleared) no success message is
+    /// shown.
+    private func doneKeepLocalReview(confirmed: Bool) {
+        let browserVisited = keepLocalBrowserVisited
+        guard KeepLocalReviewPolicy.canCompleteReview(
+            settings,
+            confirmed: confirmed,
+            browserVisited: browserVisited
+        ) else { return }
+        // updateSettings runs the mutation synchronously on this thread, so
+        // recording its verdict in a box is race-free.
+        let clearance = KeepLocalReviewClearanceBox(browserVisited: browserVisited)
+        guard onSave({ settings in
+            clearance.didClear = KeepLocalReviewPolicy.completeReview(
+                &settings,
+                confirmed: confirmed,
+                browserVisited: clearance.browserVisited
+            )
+        }) else { return }
+        guard clearance.didClear else { return }
+        showKeepLocalReview = false
+        keepLocalBrowserVisited = false
+        message = ProjectVaultConfirmationCopy.keepLocalReviewClearedMessage
+    }
+
+    /// A visit before choosing a new root must not authorize review of the new
+    /// root: while review is pending, any Vault enablement or root change
+    /// discards the recorded browser visit so Done Reviewing needs a fresh one.
+    private func resetKeepLocalBrowserVisitIfReviewPending() {
+        if settings.vault.keepLocalReviewRequired {
+            keepLocalBrowserVisited = false
+        }
+    }
+
+    /// Review-sheet escape hatch: record the required browser visit, dismiss
+    /// the sheet, route to the existing Archive Browser through the
+    /// QuickAccessRouter, and bring the main window forward (opening it if
+    /// closed). Re-pinning happens in the project's detail view; the sheet
+    /// hint explains the return path. The visit survives sheet reopen and
+    /// resets on a fresh repair obligation or after Done Reviewing.
+    private func openKeepLocalArchiveBrowser() {
+        keepLocalBrowserVisited = true
+        showKeepLocalReview = false
+        context.router.execute(.openTool(ToolFeatureID("archive-browser")))
+        openWindow(id: HubMainWindowIdentity.sceneID)
+        NSApp.activate()
     }
 
     @ViewBuilder
@@ -410,6 +515,90 @@ struct ProjectVaultSettingsView: View {
     private func dateLabel(_ date: Date?) -> String {
         guard let date else { return "Never" }
         return date.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+/// Carries the Done Reviewing save verdict out of the `@Sendable` save
+/// closure. The store runs the mutation synchronously on the calling thread,
+/// so this never races; it only lets the view withhold the review-complete
+/// success message when the save was a no-op (stale roots, Vault turned off,
+/// or the flag already cleared).
+private final class KeepLocalReviewClearanceBox: @unchecked Sendable {
+    let browserVisited: Bool
+    var didClear = false
+
+    init(browserVisited: Bool) {
+        self.browserVisited = browserVisited
+    }
+}
+
+/// Keep Local review sheet: explains only readable pins survived (unreadable
+/// entries could not be shown, raw backup saved), states the surviving pin
+/// count, and requires an Archive Browser visit, an explicit check, and a
+/// configured Vault (both folders chosen, Vault on) before Done Reviewing
+/// clears the durable flag. The visit is parent-owned short-lived state so
+/// the sheet can close and reopen; the checkbox is per-presentation.
+/// Hub-only styling: no system blue.
+private struct KeepLocalReviewSheet: View {
+    let settings: AppSettings
+    let pinCount: Int
+    let browserVisited: Bool
+    let onOpenArchiveBrowser: () -> Void
+    let onDone: (Bool) -> Void
+    let onCancel: () -> Void
+
+    @State private var confirmed = false
+
+    private var vaultReady: Bool {
+        KeepLocalReviewPolicy.vaultRootsConfigured(in: settings)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Review Keep Local").font(.title2.weight(.semibold))
+            Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetMessage)
+                .foregroundStyle(.secondary)
+            Text(pinCount == 1 ? "1 project is currently pinned." : "\(pinCount) projects are currently pinned.")
+                .foregroundStyle(.secondary)
+            Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetBrowserHint)
+                .foregroundStyle(.secondary)
+            Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetVaultSetupHint)
+                .foregroundStyle(.secondary)
+            HubLabeledButton(
+                icon: "archivebox",
+                label: ProjectVaultConfirmationCopy.keepLocalReviewOpenBrowserLabel,
+                style: .secondary,
+                action: onOpenArchiveBrowser
+            )
+            if !browserVisited {
+                Text("Opening Archive Browser is required before Done Reviewing.")
+                    .foregroundStyle(.secondary)
+            }
+            if !vaultReady {
+                Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetVaultSetupRequiredLine)
+                    .foregroundStyle(.secondary)
+            }
+            Toggle(ProjectVaultConfirmationCopy.keepLocalReviewSheetConfirmLabel, isOn: $confirmed)
+                .toggleStyle(.switch)
+                .tint(HubDesignSystem.Palette.indicator)
+            HStack {
+                HubLabeledButton(icon: "xmark", label: "Cancel", style: .ghost, action: onCancel)
+                Spacer()
+                HubLabeledButton(
+                    icon: "checkmark",
+                    label: "Done Reviewing",
+                    style: .primary,
+                    isEnabled: KeepLocalReviewPolicy.canCompleteReview(
+                        settings,
+                        confirmed: confirmed,
+                        browserVisited: browserVisited
+                    ),
+                    action: { onDone(confirmed) }
+                )
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
     }
 }
 

@@ -114,6 +114,14 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     /// App metadata only. Paths are stable scan identifiers; pinning never writes
     /// into or changes a project folder.
     public var keepLocalProjectIDs: Set<String>
+    /// Durable Keep Local review obligation. Set by settings repair when the
+    /// pin list (or the whole Vault/settings blob) could not be read, so pins
+    /// may be missing. While true, every active-copy removal path refuses at
+    /// the live runtime admission gate — even with Emergency Stop cleared —
+    /// until the user completes Review Keep Local in Settings. Copy-only
+    /// transfers stay allowed. Missing keys decode as false; a present
+    /// malformed value fails decode so repair salvages it to true.
+    public var keepLocalReviewRequired: Bool
 
     public init(
         isEnabled: Bool = false,
@@ -131,7 +139,8 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         independentBackupConfirmed: Bool = false,
         lastSuccessfulVerificationAt: Date? = nil,
         lastRestoreDrillAt: Date? = nil,
-        keepLocalProjectIDs: Set<String> = []
+        keepLocalProjectIDs: Set<String> = [],
+        keepLocalReviewRequired: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.activeRootID = activeRootID
@@ -151,6 +160,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.lastSuccessfulVerificationAt = lastSuccessfulVerificationAt
         self.lastRestoreDrillAt = lastRestoreDrillAt
         self.keepLocalProjectIDs = keepLocalProjectIDs
+        self.keepLocalReviewRequired = keepLocalReviewRequired
     }
 
     /// Pure value mapping used by both the memberwise init and the decoder.
@@ -187,6 +197,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         case rolloutStage, spaceIntent, automationEmergencyStop, independentBackupConfirmed
         case lastSuccessfulVerificationAt, lastRestoreDrillAt
         case keepLocalProjectIDs
+        case keepLocalReviewRequired
     }
 
     public init(from decoder: Decoder) throws {
@@ -269,6 +280,14 @@ public struct VaultSettings: Equatable, Codable, Sendable {
             keepLocalProjectIDs = try values.decode(Set<String>.self, forKey: .keepLocalProjectIDs)
         } else {
             keepLocalProjectIDs = []
+        }
+        // Durable review obligation: a missing key means no repair ever
+        // flagged the pins (false), but a present corrupt value — including
+        // an explicit null — throws so repair salvages it to true.
+        if values.contains(.keepLocalReviewRequired) {
+            keepLocalReviewRequired = try values.decode(Bool.self, forKey: .keepLocalReviewRequired)
+        } else {
+            keepLocalReviewRequired = false
         }
     }
 }

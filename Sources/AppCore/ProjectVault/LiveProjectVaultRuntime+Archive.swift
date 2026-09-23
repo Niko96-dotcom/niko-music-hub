@@ -113,6 +113,11 @@ extension LiveProjectVaultRuntime {
             throw ProjectVaultRuntimeError.sourceUnavailable(title: song.effectiveDisplayTitle)
         }
         if removingActiveCopy {
+            // A pending Keep Local review refuses removal captures even with
+            // Emergency Stop cleared. Copy-only captures stay allowed; the
+            // execution gate re-reads live settings so a stale token cannot
+            // bypass this either.
+            guard !settings.vault.keepLocalReviewRequired else { throw ProjectVaultRuntimeError.keepLocalReviewRequired }
             guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
             if trigger == .manual {
                 guard settings.vault.independentBackupConfirmed else {

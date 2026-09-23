@@ -167,13 +167,16 @@ enum SettingsSalvage {
         )
     }
 
-    /// Engages the emergency stop and the keep-a-copy rule: no archiving or
-    /// removal runs until the user reviews Project Vault settings.
+    /// Engages the emergency stop and the keep-a-copy rule, and raises the
+    /// durable Keep Local review obligation: no active-copy removal runs
+    /// until the user completes Review Keep Local, even after Emergency Stop
+    /// is cleared. Copy-only transfers stay allowed.
     static func pausedVault(_ vault: VaultSettings) -> VaultSettings {
         var vault = vault
         vault.automationEmergencyStop = true
         vault.automaticArchiving = false
         vault.setSpaceIntent(.keepCopy)
+        vault.keepLocalReviewRequired = true
         return vault
     }
 
@@ -191,6 +194,7 @@ enum SettingsSalvage {
     /// | automationEmergencyStop       | true (stop engaged)                         |
     /// | independentBackupConfirmed    | false                                       |
     /// | keepLocalProjectIDs           | readable pins kept + removal paused         |
+    /// | keepLocalReviewRequired       | true when pins/blob unreadable, else kept   |
     /// | inactivity / free-space / retention days, launchAtLogin, dates |
     /// |                               | defaults; inert because automatic archiving |
     /// |                               | is always off after any vault reset          |
@@ -268,6 +272,18 @@ enum SettingsSalvage {
         }
         optionalField("lastRestoreDrillAt", "Project Vault last restore test date", Date.self) {
             vault.lastRestoreDrillAt = $0
+        }
+        // The durable review obligation: missing means no repair ever
+        // flagged the pins (false); a stored true survives every repair;
+        // a present malformed value salvages to true (least destructive).
+        // Any unreadable/partial pin list below forces it true via the pause.
+        if let rawReview = object["keepLocalReviewRequired"] {
+            if let review = decode(Bool.self, from: rawReview) {
+                vault.keepLocalReviewRequired = review
+            } else {
+                vault.keepLocalReviewRequired = true
+                reset.append("Project Vault Keep Local review")
+            }
         }
         var removalPaused = false
         if let rawKeepLocal = object["keepLocalProjectIDs"] {

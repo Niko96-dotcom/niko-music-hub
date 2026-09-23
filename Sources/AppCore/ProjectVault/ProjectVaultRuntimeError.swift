@@ -10,6 +10,9 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case independentBackupRequired
     case emergencyStop
     case keepLocal
+    /// A settings repair reset the Keep Local list, so pins may be missing.
+    /// Removal stays refused until Review Keep Local clears the flag.
+    case keepLocalReviewRequired
     case mutationInProgress
     case mutationLockUnavailable(Int32)
     case transferOwned
@@ -32,6 +35,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .independentBackupRequired: "Protect the Archive with an independent backup and confirm it in Project Vault settings before removing the Active copy. Use Create Backup Copy to keep the project local."
         case .emergencyStop: "Project Vault Emergency Stop is on."
         case .keepLocal: "Turn off Keep Local before archiving this project."
+        case .keepLocalReviewRequired: "Keep Local pins may be missing after a settings repair. Review Keep Local in Settings > Project Vault before removing the Active copy. A verified copy can still be archived."
         case .mutationInProgress: "Another Project Vault operation is already in progress."
         case .mutationLockUnavailable(let code): "Project Vault cannot access its operation lock: \(String(cString: strerror(code))). Check access to the app data folder and retry."
         case .transferOwned: "This project already has a Project Vault transfer that must finish or be reviewed."

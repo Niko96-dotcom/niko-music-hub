@@ -347,6 +347,14 @@ extension LiveProjectVaultRuntime {
                 guard !liveSettings.vault.automationEmergencyStop else {
                     throw ProjectVaultRuntimeError.emergencyStop
                 }
+                // Durable review obligation, re-read live on every check so
+                // a captured token from before the repair cannot bypass it.
+                // Clearing Emergency Stop never clears this; only Review
+                // Keep Local in Settings does. Copy-only authorizations are
+                // unaffected (they never reach this admission).
+                guard !liveSettings.vault.keepLocalReviewRequired else {
+                    throw ProjectVaultRuntimeError.keepLocalReviewRequired
+                }
                 guard liveSettings.vault.isEnabled else { throw ProjectVaultRuntimeError.disabled }
                 if trigger == .manual {
                     guard liveSettings.vault.independentBackupConfirmed else {

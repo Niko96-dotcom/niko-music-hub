@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 
 
@@ -150,4 +151,108 @@ public enum ProjectVaultConfirmationCopy: Sendable {
     /// revokes the queued automation instead of deleting.
     public static let automaticDoneCopyOnlyContract =
         "Marking Done without an explicit Archive confirmation creates a verified copy only. The Active copy stays until you confirm its removal, and undoing Done revokes the queued archive."
+
+    /// Archive Now notice while a Keep Local review is pending. Removal is
+    /// paused because pins may be missing; the dialog offers a verified copy
+    /// only, never the removal prompt.
+    public static let keepLocalReviewRequiredArchiveNowMessage =
+        "Keep Local needs review in Settings > Project Vault: pins may be missing, so removal is paused. You can still archive a verified copy."
+
+    /// Settings notice explaining the repair reset. Plain words, no type names.
+    public static let keepLocalReviewRequiredSettingsNotice =
+        "A settings repair reset the Keep Local list. Some projects may no longer be pinned, so removing Active copies is paused until you review."
+
+    /// Review sheet body. Only readable pins survived the repair;
+    /// unreadable entries could not be listed, and the raw settings backup
+    /// was saved. Never list opaque IDs as titles or invent dropped names;
+    /// the sheet shows only the surviving pin count and routes to Archive
+    /// Browser for title-based inspection and re-pinning.
+    public static let keepLocalReviewSheetMessage =
+        "A settings repair reset the Keep Local list. Only readable pins were kept; unreadable entries could not be shown. The original settings were saved to a backup. Removal stays paused until you finish reviewing."
+
+    public static let keepLocalReviewSheetConfirmLabel =
+        "I checked projects in Archive Browser for missing pins"
+
+    /// Navigation hint inside the review sheet. Points at the existing
+    /// Archive Browser detail-view Keep Local toggle and explains the return
+    /// path; the sheet never embeds its own project browser. Projects are
+    /// inspected by title; opaque IDs are never shown as titles.
+    public static let keepLocalReviewSheetBrowserHint =
+        "Open Archive Browser, find projects by title, and turn on Keep Local in its detail view. Then return to Settings > Project Vault and finish this review."
+
+    public static let keepLocalReviewOpenBrowserLabel = "Open Archive Browser…"
+
+    /// Setup precondition inside the review sheet. Review cannot finish while
+    /// Vault is off or its roots are missing: the durable pause stays until
+    /// the user picks both folders, enables Vault, revisits Archive Browser,
+    /// and checks the box. Leaving Vault off changes no project files.
+    public static let keepLocalReviewSheetVaultSetupHint =
+        "Choose Active and Archive folders and turn on Project Vault before finishing review. Leaving Vault off keeps removal paused; no project files change."
+
+    /// State line shown when Vault setup is still missing. Mirrors the
+    /// browser-visit line: Done Reviewing stays disabled until both read.
+    public static let keepLocalReviewSheetVaultSetupRequiredLine =
+        "Project Vault setup is required before Done Reviewing."
+
+    /// Review-complete notice. States the review is done while restating
+    /// that Emergency Stop, After archiving, backup, and the normal safety
+    /// gates still apply. It never implies removal is now available.
+    public static let keepLocalReviewClearedMessage =
+        "Keep Local review complete. Emergency Stop, After archiving, backup, and safety checks still apply."
+}
+
+/// Done Reviewing clears only the durable review flag against the latest
+/// stored settings. It never writes the pin set, so a pin added while the
+/// review sheet is open survives the save (no view-snapshot overwrite).
+/// Clearance requires all four at once: a pending review obligation, an
+/// explicit confirmation, a recorded Archive Browser visit, and a configured
+/// Vault (enabled, with both selected root IDs present as enabled
+/// StoredMusicRoot entries of the matching roles). A visit recorded before a
+/// root change authorizes nothing: the guard runs on the latest settings
+/// inside the save closure, so an empty or re-pointed Vault cannot be
+/// reviewed away. The checkbox alone never suffices. The visit is short-lived
+/// view state (reset on a fresh repair obligation and on any Vault
+/// enablement/root change while review is pending); this policy is the
+/// testable guard used by the save path so a disabled button is not the only
+/// enforcement.
+public enum KeepLocalReviewPolicy: Sendable {
+    /// Vault is reviewable only when it is enabled and both selected roots
+    /// resolve to enabled stored roots of the matching roles. Vault off,
+    /// missing IDs, unknown IDs, role mismatches, and disabled roots all
+    /// refuse.
+    public static func vaultRootsConfigured(in settings: AppSettings) -> Bool {
+        guard settings.vault.isEnabled else { return false }
+        guard let activeID = settings.vault.activeRootID,
+              let archiveID = settings.vault.archiveRootID
+        else { return false }
+        guard let active = settings.musicRoots.first(where: { $0.id == activeID }),
+              let archive = settings.musicRoots.first(where: { $0.id == archiveID })
+        else { return false }
+        guard active.role == .active, archive.role == .archive else { return false }
+        guard active.isEnabled, archive.isEnabled else { return false }
+        return true
+    }
+
+    public static func canCompleteReview(
+        _ settings: AppSettings,
+        confirmed: Bool,
+        browserVisited: Bool
+    ) -> Bool {
+        guard settings.vault.keepLocalReviewRequired else { return false }
+        guard confirmed, browserVisited else { return false }
+        return vaultRootsConfigured(in: settings)
+    }
+
+    @discardableResult
+    public static func completeReview(
+        _ settings: inout AppSettings,
+        confirmed: Bool,
+        browserVisited: Bool
+    ) -> Bool {
+        guard canCompleteReview(settings, confirmed: confirmed, browserVisited: browserVisited) else {
+            return false
+        }
+        settings.vault.keepLocalReviewRequired = false
+        return true
+    }
 }

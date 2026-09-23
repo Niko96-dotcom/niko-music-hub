@@ -469,9 +469,11 @@ public enum ProjectVaultRolloutPolicy {
     /// `friends` installs keep working while explicit `keepCopy` stays
     /// copy-only). Still scheduler-coupled; the runtime uses
     /// `permitsUserInitiatedRemoval` for Done so Done no longer waits on the
-    /// scheduler opt-in.
+    /// scheduler opt-in. A pending Keep Local review denies removal even when
+    /// every other gate passes; copy-only scheduling is unaffected.
     public static func permitsActiveCopyRemoval(_ settings: VaultSettings) -> Bool {
-        permitsAutomaticArchiving(settings)
+        !settings.keepLocalReviewRequired
+            && permitsAutomaticArchiving(settings)
             && expressesFreeSpaceIntent(settings)
             && settings.independentBackupConfirmed
     }
@@ -480,9 +482,13 @@ public enum ProjectVaultRolloutPolicy {
     /// the user-initiated archiving base — so a disabled rollout cannot
     /// bypass the capture gate — plus an explicit free-space intent and the
     /// backup acknowledgement, but not the background scheduler opt-in.
-    /// Keep Local is per-song and enforced at capture/execution.
+    /// Keep Local is per-song and enforced at capture/execution. A pending
+    /// Keep Local review denies removal even with Emergency Stop cleared;
+    /// only Review Keep Local in Settings clears it. Copy-only offers are
+    /// unaffected.
     public static func permitsUserInitiatedRemoval(_ settings: VaultSettings) -> Bool {
-        permitsUserInitiatedArchiving(settings)
+        !settings.keepLocalReviewRequired
+            && permitsUserInitiatedArchiving(settings)
             && expressesFreeSpaceIntent(settings)
             && settings.independentBackupConfirmed
     }
