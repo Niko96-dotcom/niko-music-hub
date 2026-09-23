@@ -48,6 +48,11 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     private var debounceWorkItem: DispatchWorkItem?
     private var onChange: (@MainActor (ArchiveRootWatchEvent) -> Void)?
     private var pendingChangedPaths: Set<String> = []
+    /// Set once a batch outgrows `maximumPendingPathCount`: pending paths are then
+    /// reduced to their song folder (or root-level entry) under a watched root.
+    private var isCoalescingToSongFolders = false
+    /// Each watched root as given and as resolved, since FSEvents reports real paths.
+    private var rootPrefixes: [String] = []
     private var fullRescanRequired = false
     private var deliveryToken: DeliveryToken?
     private var isActive = false
@@ -94,6 +99,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             guard !roots.isEmpty else { return true }
 
             self.onChange = onChange
+            rootPrefixes = Self.rootPrefixes(for: roots)
             isActive = true
             let token = DeliveryToken()
             deliveryToken = token
@@ -166,7 +172,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     ) {
         eventQueue.async { [weak self] in
             guard let self else { return }
-            if paths.count > self.maximumPendingPathCount
+            if paths.count > self.maximumDecodedBatchCount
                 || eventFlags.contains(where: Self.requiresFullRescan) {
                 self.recordFullRescanRequiredLocked()
             } else {
@@ -183,6 +189,8 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
         pendingChangedPaths.removeAll()
+        isCoalescingToSongFolders = false
+        rootPrefixes = []
         fullRescanRequired = false
         onChange = nil
 
@@ -217,10 +225,11 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
     ) {
         dispatchPrecondition(condition: .onQueue(eventQueue))
         guard isActive, count > 0 else { return }
-        // A native batch larger than the budget is already an incomplete
-        // incremental unit, even when it happens to contain duplicates. Fall
-        // back before walking every flag/path in a storm callback.
-        guard count <= maximumPendingPathCount else {
+        // Paths are decoded one at a time and coalesced to song folders, so a
+        // storm costs one string per event, never a materialized array. Past
+        // this bound even that is not worth it: fall back before walking the
+        // flags/paths of the callback.
+        guard count <= maximumDecodedBatchCount else {
             recordFullRescanRequiredLocked()
             return
         }
@@ -242,21 +251,78 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
 
     /// Returns `false` after replacing the bounded incremental batch with a
     /// full-rescan request, so callers stop decoding more paths immediately.
+    ///
+    /// Past `maximumPendingPathCount` exact paths, the batch keeps going as the
+    /// set of song folders (and root-level entries) those paths live in — what
+    /// the incremental scan rescans anyway. Only a path outside every watched
+    /// root, or more distinct song folders than the budget, falls back to a
+    /// full rescan.
     private func appendChangedPathLocked(_ path: String) -> Bool {
         dispatchPrecondition(condition: .onQueue(eventQueue))
-        guard !pendingChangedPaths.contains(path) else { return true }
+        if !isCoalescingToSongFolders {
+            guard !pendingChangedPaths.contains(path) else { return true }
+            if pendingChangedPaths.count < maximumPendingPathCount {
+                pendingChangedPaths.insert(path)
+                return true
+            }
+            isCoalescingToSongFolders = true
+            let exactPaths = pendingChangedPaths
+            pendingChangedPaths.removeAll(keepingCapacity: true)
+            for exactPath in exactPaths {
+                guard insertCoalescedPathLocked(exactPath) else { return false }
+            }
+        }
+        return insertCoalescedPathLocked(path)
+    }
+
+    private func insertCoalescedPathLocked(_ path: String) -> Bool {
+        guard let songFolderPath = Self.songFolderPath(containing: path, rootPrefixes: rootPrefixes) else {
+            recordFullRescanRequiredLocked()
+            return false
+        }
+        guard !pendingChangedPaths.contains(songFolderPath) else { return true }
         guard pendingChangedPaths.count < maximumPendingPathCount else {
             recordFullRescanRequiredLocked()
             return false
         }
-        pendingChangedPaths.insert(path)
+        pendingChangedPaths.insert(songFolderPath)
         return true
+    }
+
+    /// The root itself, or the entry directly inside the deepest watched root
+    /// that contains `path`, spelled with the same root prefix as `path`.
+    /// `nil` when `path` is outside every root.
+    static func songFolderPath(containing path: String, rootPrefixes: [String]) -> String? {
+        guard let root = rootPrefixes
+            .filter({ path == $0 || path.hasPrefix($0 + "/") })
+            .max(by: { $0.count < $1.count }) else { return nil }
+        guard path != root,
+              let first = path.dropFirst(root.count + 1).split(separator: "/").first else { return root }
+        return root + "/" + first
+    }
+
+    private static func rootPrefixes(for roots: [URL]) -> [String] {
+        var prefixes: [String] = []
+        for root in roots {
+            for prefix in [root.standardizedFileURL.path, root.resolvingSymlinksInPath().standardizedFileURL.path]
+            where !prefixes.contains(prefix) {
+                prefixes.append(prefix)
+            }
+        }
+        return prefixes
+    }
+
+    private var maximumDecodedBatchCount: Int {
+        maximumPendingPathCount.multipliedReportingOverflow(by: 64).overflow
+            ? Int.max
+            : maximumPendingPathCount * 64
     }
 
     private func recordFullRescanRequiredLocked() {
         dispatchPrecondition(condition: .onQueue(eventQueue))
         guard isActive else { return }
         pendingChangedPaths.removeAll(keepingCapacity: true)
+        isCoalescingToSongFolders = false
         guard !fullRescanRequired else { return }
         fullRescanRequired = true
         scheduleDebouncedCallbackLocked()
@@ -282,6 +348,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                     .sorted()
                     .map { URL(fileURLWithPath: $0) }
                 self.pendingChangedPaths.removeAll(keepingCapacity: true)
+                self.isCoalescingToSongFolders = false
                 guard !paths.isEmpty else { return }
                 event = .paths(paths)
             }

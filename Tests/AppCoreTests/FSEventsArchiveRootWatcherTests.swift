@@ -109,6 +109,72 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
     }
 
     @MainActor
+    func testPathOverflowInsideSongFoldersCoalescesToThoseFolders() async throws {
+        let root = URL(fileURLWithPath: "/Volumes/Fixture Archive", isDirectory: true)
+        let watcher = FSEventsArchiveRootWatcher(
+            debounceInterval: 0.01,
+            eventQueue: DispatchQueue(label: "watcher-coalesce"),
+            maximumPendingPathCount: 4
+        )
+        let delivery = DeliveryProbe()
+        XCTAssertTrue(watcher.setRoots([root]) { event in
+            delivery.record(event)
+        })
+        defer { watcher.stop() }
+
+        // A Cubase export storm: many files inside two songs plus one root-level project.
+        let storm = (0..<40).map { "\(root.path)/Song A/Audio/Take \($0).wav" }
+            + (0..<40).map { "\(root.path)/Song B/Mixdown/Bounce \($0).wav" }
+            + ["\(root.path)/Loose.cpr"]
+        watcher.simulateFSEventBatch(paths: storm, eventFlags: [])
+        try await waitForDelivery(delivery)
+
+        XCTAssertEqual(delivery.events.count, 1)
+        XCTAssertEqual(delivery.paths.map(\.path), [
+            "\(root.path)/Loose.cpr",
+            "\(root.path)/Song A",
+            "\(root.path)/Song B"
+        ])
+    }
+
+    @MainActor
+    func testCoalescedOverflowAcrossTooManySongFoldersRequestsFullRescan() async throws {
+        let root = URL(fileURLWithPath: "/Volumes/Fixture Archive", isDirectory: true)
+        let watcher = FSEventsArchiveRootWatcher(
+            debounceInterval: 0.01,
+            eventQueue: DispatchQueue(label: "watcher-coalesce-overflow"),
+            maximumPendingPathCount: 4
+        )
+        let delivery = DeliveryProbe()
+        XCTAssertTrue(watcher.setRoots([root]) { event in
+            delivery.record(event)
+        })
+        defer { watcher.stop() }
+
+        watcher.simulateFSEventBatch(
+            paths: (0..<6).map { "\(root.path)/Song \($0)/Song \($0).cpr" },
+            eventFlags: []
+        )
+        try await waitForDelivery(delivery)
+
+        XCTAssertEqual(delivery.events, [.fullRescanRequired])
+    }
+
+    func testSongFolderPathUsesDeepestRootAndKeepsItsSpelling() {
+        let prefixes = ["/var/a", "/private/var/a", "/var/a/nested"]
+        XCTAssertEqual(
+            FSEventsArchiveRootWatcher.songFolderPath(containing: "/private/var/a/Song/x.cpr", rootPrefixes: prefixes),
+            "/private/var/a/Song"
+        )
+        XCTAssertEqual(
+            FSEventsArchiveRootWatcher.songFolderPath(containing: "/var/a/nested/Song/Mixdown/x.wav", rootPrefixes: prefixes),
+            "/var/a/nested/Song"
+        )
+        XCTAssertEqual(FSEventsArchiveRootWatcher.songFolderPath(containing: "/var/a", rootPrefixes: prefixes), "/var/a")
+        XCTAssertNil(FSEventsArchiveRootWatcher.songFolderPath(containing: "/var/ab/Song", rootPrefixes: prefixes))
+    }
+
+    @MainActor
     func testDroppedFSEventRequestsFullRescan() async throws {
         let dropFlags = [
             FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs),

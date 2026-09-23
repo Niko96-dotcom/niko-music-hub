@@ -267,13 +267,13 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             throw ScanError.unreadableFolder(folder.path)
         }
 
-        let versions = try projectDetector.detectVersions(in: folder)
-        try Task.checkCancellation()
+        let walk = try walkSongFolder(folder)
+        let versions = walk.versions
         if versions.isEmpty {
             warnings.append("No project files (.cpr or .als) found")
         }
 
-        var previews = try previewDetector.detectCandidates(in: folder)
+        var previews = walk.previewMatches.map { previewDetector.candidate(from: $0, in: folder) }
         try Task.checkCancellation()
         let previewContext = PreviewRankingProjectContext.from(projectVersions: versions)
         let ranked = previewRanker.rank(previews, projectContext: previewContext)
@@ -298,6 +298,48 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             mainPreviewCandidateID: mainPreviewID,
             latestCPR: latest
         )
+    }
+
+    /// One recursive enumeration of a song folder feeding both `ProjectVersionDetector` and
+    /// `PreviewCandidateDetector`, with the same results and failures as running their two
+    /// walks back to back: project errors win, a preview error surfaces only after the project
+    /// walk completes, a project entry leaving the song skips only project descendants, and no
+    /// audio file is opened for its duration unless the whole walk succeeds.
+    private func walkSongFolder(_ folder: URL) throws -> (versions: [ProjectVersion], previewMatches: [PreviewCandidateDetector.Match]) {
+        try Task.checkCancellation()
+        guard let enumerator = fileManager.enumerator(
+            at: folder,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return ([], [])
+        }
+        var versions: [ProjectVersion] = []
+        var previewMatches: [PreviewCandidateDetector.Match] = []
+        var previewError: Error?
+        var projectSkippedPrefixes: [String] = []
+        for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
+            if ProjectFileFormat(url: fileURL) != nil {
+                let path = fileURL.path
+                if projectSkippedPrefixes.contains(where: { path.hasPrefix($0) }) { continue }
+                switch try projectDetector.walkStep(for: fileURL, in: folder) {
+                case .version(let version): versions.append(version)
+                case .leavesSong: projectSkippedPrefixes.append(path.hasSuffix("/") ? path : path + "/")
+                case .notProject, .excludedByName, .notRegularFile: continue
+                }
+            } else if previewError == nil {
+                do {
+                    if let match = try previewDetector.match(fileURL, in: folder) {
+                        previewMatches.append(match)
+                    }
+                } catch {
+                    previewError = error
+                }
+            }
+        }
+        if let previewError { throw previewError }
+        return (versions.sorted(by: ProjectVersionDetector.newestFirst), previewMatches)
     }
 
     private enum ScanError: LocalizedError {

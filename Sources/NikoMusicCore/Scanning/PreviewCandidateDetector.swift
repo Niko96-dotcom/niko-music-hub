@@ -34,37 +34,50 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             return []
         }
 
-        let safety = PathSafety(fileManager: fileManager)
         var candidates: [PreviewCandidate] = []
         for case let fileURL as URL in enumerator {
             try Task.checkCancellation()
-            let ext = fileURL.pathExtension.lowercased()
-            guard Self.audioExtensions.contains(ext) else { continue }
-            // Reject audio that escapes the song folder via symlinks.
-            guard safety.isResolvedContained(fileURL, in: [songFolder]) else { continue }
-
-            let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
-            guard values.isRegularFile == true else { continue }
-            let modified = values.contentModificationDate ?? .distantPast
-            let role = Self.folderRole(for: fileURL, songFolder: songFolder)
-            let fileName = fileURL.lastPathComponent
-            let detectedRole = Self.detectedRole(from: fileName)
-            let version = PreviewFilenameParser.parseVersionNumber(from: fileName)
-            let duration = shouldReadDuration(fileURL) ? durationReader(fileURL) : nil
-            candidates.append(
-                PreviewCandidate(
-                    filePath: fileURL,
-                    fileName: fileName,
-                    folderRole: role,
-                    modifiedAt: modified,
-                    detectedRole: detectedRole,
-                    fileExtension: ext,
-                    detectedVersionNumber: version,
-                    durationSeconds: duration
-                )
-            )
+            if let match = try match(fileURL, in: songFolder) {
+                candidates.append(candidate(from: match, in: songFolder))
+            }
         }
         return candidates
+    }
+
+    /// An audio file accepted by the walk whose duration has not been read yet.
+    struct Match {
+        let fileURL: URL
+        let fileExtension: String
+        let modifiedAt: Date
+    }
+
+    /// The walk's per-entry filter, without opening the file. Shared with the archive scanner,
+    /// which feeds project and preview detection from a single enumeration of each song folder.
+    func match(_ fileURL: URL, in songFolder: URL) throws -> Match? {
+        let ext = fileURL.pathExtension.lowercased()
+        guard Self.audioExtensions.contains(ext) else { return nil }
+        // Reject audio that escapes the song folder via symlinks.
+        guard PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]) else { return nil }
+
+        let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+        guard values.isRegularFile == true else { return nil }
+        return Match(fileURL: fileURL, fileExtension: ext, modifiedAt: values.contentModificationDate ?? .distantPast)
+    }
+
+    /// Builds the candidate, reading the duration from the file header.
+    func candidate(from match: Match, in songFolder: URL) -> PreviewCandidate {
+        let fileURL = match.fileURL
+        let fileName = fileURL.lastPathComponent
+        return PreviewCandidate(
+            filePath: fileURL,
+            fileName: fileName,
+            folderRole: Self.folderRole(for: fileURL, songFolder: songFolder),
+            modifiedAt: match.modifiedAt,
+            detectedRole: Self.detectedRole(from: fileName),
+            fileExtension: match.fileExtension,
+            detectedVersionNumber: PreviewFilenameParser.parseVersionNumber(from: fileName),
+            durationSeconds: shouldReadDuration(fileURL) ? durationReader(fileURL) : nil
+        )
     }
 
     static func folderRole(for fileURL: URL, songFolder: URL) -> PreviewFolderRole {

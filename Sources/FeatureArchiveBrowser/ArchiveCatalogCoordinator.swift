@@ -127,13 +127,18 @@ struct ArchiveCatalogCoordinator {
             return nil
         }
 
-        // The merge stats every existing song folder — keep it off the main actor
-        // (archives on slow/external volumes make each stat call visible).
+        // A batch that touches song folders or root entries can stat every existing song
+        // folder — keep the merge off the main actor (slow/external volumes make each stat visible).
+        let unaffectedSongFoldersMayHaveMoved = ArchiveSongFolderResolver.mayMoveSongFolders(
+            changedPaths: changedPaths,
+            roots: roots
+        )
         let merged = await Task.detached(priority: .userInitiated) { [result = incremental.result, affectedSongIDs = incremental.affectedSongIDs] in
             Self.mergeIncrementalScan(
                 existing: existingSongs,
                 incremental: result,
-                affectedSongIDs: affectedSongIDs
+                affectedSongIDs: affectedSongIDs,
+                unaffectedSongFoldersMayHaveMoved: unaffectedSongFoldersMayHaveMoved
             )
         }.value
         let uniqueMerged = SongCatalogDeduplicator.uniqueByID(merged)
@@ -186,7 +191,8 @@ struct ArchiveCatalogCoordinator {
         existing: [Song],
         incremental: ScanResult,
         affectedSongIDs: Set<String>,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        unaffectedSongFoldersMayHaveMoved: Bool = true
     ) -> [Song] {
         let uniqueExisting = SongCatalogDeduplicator.uniqueByID(existing)
         let uniqueIncoming = SongCatalogDeduplicator.uniqueByID(incremental.songs)
@@ -195,18 +201,19 @@ struct ArchiveCatalogCoordinator {
         merged.reserveCapacity(uniqueExisting.count + uniqueIncoming.count)
 
         for song in uniqueExisting {
-            let folderStillExists = fileManager.fileExists(atPath: song.folderPath.path)
             // Drop ghosts even when FSEvents did not mark the old path as affected
             // (common for Finder renames that only emit create events on the new name).
+            // Only a batch touching root entries can do that; a batch confined to song
+            // folders (a Cubase save) leaves every other song as it was, unstat'ed.
             if !affectedSongIDs.contains(song.id) {
-                if folderStillExists {
+                if !unaffectedSongFoldersMayHaveMoved || fileManager.fileExists(atPath: song.folderPath.path) {
                     merged.append(song)
                 }
                 continue
             }
             if let updated = incomingByID[song.id] {
                 merged.append(updated)
-            } else if folderStillExists {
+            } else if fileManager.fileExists(atPath: song.folderPath.path) {
                 merged.append(song)
             }
         }

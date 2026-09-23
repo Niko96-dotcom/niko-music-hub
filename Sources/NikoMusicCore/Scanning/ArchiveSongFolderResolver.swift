@@ -69,6 +69,24 @@ public enum ArchiveSongFolderResolver {
         return Resolution(songFolders: songFolders, rootsForRootLevelScan: rootsForRootLevelScan)
     }
 
+    /// Whether a batch can have renamed, moved or removed song folders it does not name as
+    /// song folders: any change at a root itself, at an entry directly inside a root (a song
+    /// folder or root-level project), or outside every root. A batch whose paths are all
+    /// inside song folders cannot, so the other songs in the catalog need not be re-checked.
+    /// Hidden root entries never become songs and are ignored, matching `resolve`.
+    public static func mayMoveSongFolders(changedPaths: [URL], roots: [URL]) -> Bool {
+        let standardizedRoots = roots.map(\.standardizedFileURL)
+        return changedPaths.contains { changedPath in
+            let path = changedPath.standardizedFileURL
+            guard let root = matchingDeepestRoot(for: path, in: standardizedRoots),
+                  path != root,
+                  let relative = relativePath(from: root, to: path) else { return true }
+            let components = relative.split(separator: "/")
+            guard let first = components.first else { return true }
+            return components.count == 1 && !first.hasPrefix(".")
+        }
+    }
+
     private static func matchingDeepestRoot(for path: URL, in roots: [URL]) -> URL? {
         roots
             .filter { contains(root: $0, path: path) }

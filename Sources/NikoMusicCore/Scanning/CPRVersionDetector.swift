@@ -122,22 +122,11 @@ public struct ProjectVersionDetector: @unchecked Sendable {
         var versions: [ProjectVersion] = []
         for case let fileURL as URL in enumerator {
             try Task.checkCancellation()
-            guard let format = ProjectFileFormat(url: fileURL) else { continue }
-            // Only consider paths inside this song; its own name may legitimately be Backup.
-            let relativeParents = fileURL.deletingLastPathComponent().pathComponents
-                .dropFirst(songFolder.pathComponents.count).map { $0.lowercased() }
-            if format == .abletonLive,
-               relativeParents.contains(where: { $0 == "backup" || $0 == "ableton project info" }) {
-                continue
-            }
-            guard PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]) else {
-                enumerator.skipDescendants()
-                continue
-            }
             do {
-                switch try classify(fileURL) {
+                switch try walkStep(for: fileURL, in: songFolder) {
+                case .notProject, .excludedByName: continue
+                case .leavesSong: enumerator.skipDescendants()
                 case .version(let version): versions.append(version)
-                case .excludedByName: continue
                 case .notRegularFile: onNotRegularFile?(fileURL)
                 }
             } catch {
@@ -146,6 +135,36 @@ public struct ProjectVersionDetector: @unchecked Sendable {
             }
         }
         return versions
+    }
+
+    /// What the walk does with one enumerated entry. Shared with the archive scanner, which
+    /// feeds project and preview detection from a single enumeration of each song folder.
+    enum WalkStep {
+        case notProject
+        case excludedByName
+        /// Resolves outside the song; the project walk skips the entry's descendants.
+        case leavesSong
+        case notRegularFile
+        case version(ProjectVersion)
+    }
+
+    func walkStep(for fileURL: URL, in songFolder: URL) throws -> WalkStep {
+        guard let format = ProjectFileFormat(url: fileURL) else { return .notProject }
+        // Only consider paths inside this song; its own name may legitimately be Backup.
+        let relativeParents = fileURL.deletingLastPathComponent().pathComponents
+            .dropFirst(songFolder.pathComponents.count).map { $0.lowercased() }
+        if format == .abletonLive,
+           relativeParents.contains(where: { $0 == "backup" || $0 == "ableton project info" }) {
+            return .excludedByName
+        }
+        guard PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]) else {
+            return .leavesSong
+        }
+        switch try classify(fileURL) {
+        case .version(let version): return .version(version)
+        case .excludedByName: return .excludedByName
+        case .notRegularFile: return .notRegularFile
+        }
     }
 
     private final class AccessFailureCollector {
@@ -171,7 +190,7 @@ public struct ProjectVersionDetector: @unchecked Sendable {
         versions.min(by: Self.newestFirst)
     }
 
-    private static func newestFirst(_ lhs: ProjectVersion, _ rhs: ProjectVersion) -> Bool {
+    static func newestFirst(_ lhs: ProjectVersion, _ rhs: ProjectVersion) -> Bool {
         lhs.modifiedAt == rhs.modifiedAt ? lhs.filePath.path < rhs.filePath.path : lhs.modifiedAt > rhs.modifiedAt
     }
 

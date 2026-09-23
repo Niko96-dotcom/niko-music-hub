@@ -103,6 +103,23 @@ final class ArchiveSongFolderResolverTests: XCTestCase {
         XCTAssertTrue(resolution.isEmpty)
     }
 
+    func testOnlyBatchesTouchingRootEntriesMayMoveSongFolders() {
+        let root = URL(fileURLWithPath: "/Volumes/Fixture Archive", isDirectory: true)
+        func mayMove(_ paths: [String]) -> Bool {
+            ArchiveSongFolderResolver.mayMoveSongFolders(
+                changedPaths: paths.map { URL(fileURLWithPath: $0) },
+                roots: [root]
+            )
+        }
+
+        XCTAssertFalse(mayMove(["/Volumes/Fixture Archive/Song/Song v3.cpr", "/Volumes/Fixture Archive/Song/Mixdown/a.wav"]))
+        XCTAssertFalse(mayMove(["/Volumes/Fixture Archive/.DS_Store", "/Volumes/Fixture Archive/.niko-staging/Song/x.cpr"]))
+        XCTAssertTrue(mayMove(["/Volumes/Fixture Archive/Song/Song v3.cpr", "/Volumes/Fixture Archive/Renamed Song"]))
+        XCTAssertTrue(mayMove(["/Volumes/Fixture Archive/Loose.cpr"]))
+        XCTAssertTrue(mayMove(["/Volumes/Fixture Archive"]))
+        XCTAssertTrue(mayMove(["/Volumes/Other/Song/x.cpr"]))
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubResolver-\(UUID().uuidString)", isDirectory: true)
