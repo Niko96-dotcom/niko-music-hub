@@ -116,18 +116,23 @@ public struct YtDlpDownloader: DownloadRunning {
         do {
             return try await withThrowingTaskGroup(of: DownloadResult.self) { group in
                 group.addTask {
-                    try await Self.pollForStall(
+                    let message = try await Self.pollForStall(
                         monitor: stallMonitor,
                         intervalNanoseconds: stallCheckIntervalNanoseconds
                     )
-                    throw DownloadError.downloadFailed(DownloadStallMonitor.stallErrorMessage)
+                    throw DownloadError.downloadFailed(message)
                 }
 
                 group.addTask {
                     let collector = YtDlpOutputCollector(
                         outputDirectory: outputDirectory,
                         fileManager: .default,
-                        progressHandler: progressHandler,
+                        progressHandler: { line in
+                            // Each complete line can move the phase (download ↔
+                            // post-processing), which picks the stall window.
+                            stallMonitor.recordActivity(line: line)
+                            progressHandler(line)
+                        },
                         onActivity: { stallMonitor.recordActivity() }
                     )
                     let result: ExternalProcessResult
@@ -169,11 +174,11 @@ public struct YtDlpDownloader: DownloadRunning {
     private static func pollForStall(
         monitor: DownloadStallMonitor,
         intervalNanoseconds: UInt64
-    ) async throws {
+    ) async throws -> String {
         while !Task.isCancelled {
             try await Task.sleep(nanoseconds: intervalNanoseconds)
-            if monitor.checkStalled() {
-                return
+            if let message = monitor.stallFailureMessage() {
+                return message
             }
         }
         throw CancellationError()

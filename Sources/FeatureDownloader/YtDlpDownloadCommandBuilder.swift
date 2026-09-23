@@ -2,6 +2,10 @@ import Foundation
 
 enum YtDlpDownloadCommandBuilder {
     static let progressTemplate = "NIKO_PROGRESS:%(progress)s"
+    /// `--print` makes yt-dlp quiet, so ffmpeg post-processing would otherwise
+    /// be invisible. Emits `NIKO_POSTPROCESS:started:ExtractAudio` etc.
+    static let postProcessTemplate =
+        "postprocess:\(DownloadActivityPhase.postProcessPrefix)%(progress.status)s:%(progress.postprocessor)s"
     static let filePrintMarker = "after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s"
 
     static func downloadArguments(for request: DownloadRequest) -> [String] {
@@ -30,6 +34,7 @@ enum YtDlpDownloadCommandBuilder {
         }
         args.append(contentsOf: [
             "--progress-template", progressTemplate,
+            "--progress-template", postProcessTemplate,
             "--print", filePrintMarker,
             "-o", outputPath,
             request.sourceURL.absoluteString,

@@ -300,7 +300,12 @@ public struct DownloaderView: View {
             .font(HubDesignSystem.Typography.bodySmall())
             .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-            if viewModel.slowHintVisible {
+            if let postProcessingStatus = viewModel.postProcessingStatus {
+                Text(postProcessingStatus)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if viewModel.slowHintVisible {
                 Text(DownloadStallMonitor.slowHintMessage)
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)

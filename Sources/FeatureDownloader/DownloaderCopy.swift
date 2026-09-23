@@ -7,6 +7,19 @@ public enum DownloaderCopy {
     public static let checkingURL = "Checking URL…"
     public static let readyToDownload = ""
     public static let downloading = "Downloading…"
+    public static let convertingAudio = "Converting audio…"
+    public static let mergingFormats = "Merging audio and video…"
+    public static let convertingVideo = "Converting video…"
+    public static let finishingFile = "Finishing file…"
+    /// Status while yt-dlp runs a post-processor (`step` is its key).
+    public static func postProcessingStatus(step: String) -> String {
+        switch step {
+        case "ExtractAudio": return convertingAudio
+        case "Merger": return mergingFormats
+        case "VideoConvertor", "VideoRemuxer": return convertingVideo
+        default: return finishingFile
+        }
+    }
     public static let downloadComplete = "Downloaded"
     public static let downloadFailed = "Download failed"
     public static let downloadCanceled = "Download canceled"

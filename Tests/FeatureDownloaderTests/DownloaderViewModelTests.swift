@@ -376,6 +376,44 @@ final class DownloaderViewModelTests: XCTestCase {
         runner.cancelJob(id: job.id)
     }
 
+    func testPostProcessingShowsConvertingStatusAndNextItemClearsIt() async throws {
+        let runner = JobRunner()
+        let convertGate = DownloadTestGate()
+        let nextItemGate = DownloadTestGate()
+        let finishGate = DownloadTestGate()
+        let job = runner.enqueue(title: "Download", sourceToolID: "downloader") { progress in
+            progress.log("NIKO_PROGRESS:{'status': 'finished', '_percent_str': '100.0%'}")
+            progress.update(progress: 1, message: nil)
+            await convertGate.wait()
+            progress.log("NIKO_POSTPROCESS:started:ExtractAudio")
+            await nextItemGate.wait()
+            progress.log("NIKO_PROGRESS:{'status': 'downloading', '_percent_str': '  3.0%'}")
+            await finishGate.wait()
+        }
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore()
+        )
+
+        viewModel.urlText = "https://example.com/audio"
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { viewModel.progress == 1 }
+        XCTAssertNil(viewModel.postProcessingStatus)
+
+        convertGate.signal()
+        try await waitUntil { viewModel.postProcessingStatus != nil }
+        XCTAssertEqual(viewModel.postProcessingStatus, DownloaderCopy.convertingAudio)
+        XCTAssertFalse(viewModel.slowHintVisible)
+
+        nextItemGate.signal()
+        try await waitUntil { viewModel.postProcessingStatus == nil }
+
+        finishGate.signal()
+        runner.cancelJob(id: job.id)
+    }
+
     // D1: marker alone must not claim completed. Only a verified existing
     // regular file within the output root may register.
     func testAlreadyDownloadedWithValidExistingFileRegistersInInbox() async throws {

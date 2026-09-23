@@ -43,6 +43,8 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public private(set) var progress: Double = 0
     @Published public private(set) var downloadStartedAt: Date?
     @Published public private(set) var slowHintVisible = false
+    /// "Converting audio…" etc. while yt-dlp post-processes; nil while downloading.
+    @Published public private(set) var postProcessingStatus: String?
     @Published public private(set) var logEntries: [String] = []
     @Published public private(set) var outputURLs: [URL] = []
     @Published public private(set) var recentDownloads: [OutputInboxItem] = []
@@ -306,7 +308,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         progress = observedJob.progress
         logEntries = nextLogs
         if progressChanged || logsChanged {
-            stallMonitor?.recordActivity()
+            let phase = logsChanged ? DownloadActivityPhase.latest(in: nextLogs) : nil
+            stallMonitor?.recordActivity(phase: phase)
+            if let phase {
+                postProcessingStatus = phase.statusMessage
+            }
             slowHintVisible = false
         }
 
@@ -605,7 +611,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             DownloadError.outputNotFound.errorDescription ?? "No output files found after download."
         guard message == skipMessage else { return false }
         if hasRealDownloadError(logEntries: logEntries, message: message) { return false }
-        if logEntries.contains(where: { $0.contains(DownloadStallMonitor.stallErrorMessage) }) {
+        if logEntries.contains(where: {
+            $0.contains(DownloadStallMonitor.stallErrorMessage)
+                || $0.contains(DownloadStallMonitor.postProcessingStallErrorMessage)
+        }) {
             return false
         }
         if logEntries.contains(where: { $0.contains("Download failed:") }) { return false }
@@ -656,6 +665,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         stallMonitor = monitor
         downloadStartedAt = Date()
         slowHintVisible = false
+        postProcessingStatus = nil
         progressFeedbackTask?.cancel()
         progressFeedbackTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -678,5 +688,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         stallMonitor = nil
         downloadStartedAt = nil
         slowHintVisible = false
+        postProcessingStatus = nil
     }
 }
