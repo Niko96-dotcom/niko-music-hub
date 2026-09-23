@@ -8,6 +8,15 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     private let previewRanker: PreviewConfidenceRanker
     private let sidecarNotesReader: SidecarNotesReader
     private let exclusionTerms: [String]
+    /// Test seams for filesystem races; production leaves them empty.
+    var raceHooks = RaceHooks()
+
+    struct RaceHooks {
+        /// Runs after the song-folder walk lists an entry and before the scan resolves it.
+        var entryListed: ((URL) -> Void)?
+        /// Runs after a song folder's walk and before its preview files are opened.
+        var songWalked: ((URL) -> Void)?
+    }
 
     public init(fileManager: FileManager = .default, exclusionTerms: [String] = []) {
         self.fileManager = fileManager
@@ -279,12 +288,13 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         }
 
         let walk = try walkSongFolder(folder)
+        raceHooks.songWalked?(folder)
         let versions = walk.versions
         if versions.isEmpty {
             warnings.append("No project files (.cpr or .als) found")
         }
 
-        var previews = walk.previewMatches.map { previewDetector.candidate(from: $0, in: folder) }
+        var previews = walk.previewMatches.compactMap { previewDetector.candidate(from: $0, in: folder) }
         try Task.checkCancellation()
         let previewContext = PreviewRankingProjectContext.from(projectVersions: versions)
         let ranked = previewRanker.rank(previews, projectContext: previewContext)
@@ -336,6 +346,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         for case let fileURL as URL in enumerator {
             try Task.checkCancellation()
             let entry = paths.observe(fileURL, level: enumerator.level)
+            raceHooks.entryListed?(fileURL)
             if ProjectFileFormat(url: fileURL) != nil {
                 let path = fileURL.path
                 if projectSkippedPrefixes.contains(where: { path.hasPrefix($0) }) { continue }
@@ -346,7 +357,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 }
             } else if previewError == nil {
                 do {
-                    if let match = try previewDetector.match(fileURL, in: folder, resolve: { paths.resolve(entry) }) {
+                    if let match = try previewDetector.match(fileURL, in: folder, resolve: { paths.resolve(entry, linkCheckDeferred: true) }) {
                         previewMatches.append(match)
                     }
                 } catch {

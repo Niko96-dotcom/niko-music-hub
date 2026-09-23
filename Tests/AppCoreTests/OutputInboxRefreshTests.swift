@@ -385,6 +385,100 @@ final class OutputInboxRefreshTests: XCTestCase {
             "newest-first ordering stays stable across the prune"
         )
         XCTAssertEqual(try store.listItems(), snapshot, "the pruned list must be persisted")
+        let archived = try archivedItems(of: store)
+        XCTAssertEqual(
+            Set(archived.map(\.id)),
+            Set(missingNewestFirst.dropFirst(bound).map(\.id)),
+            "pruned rows are archived beside the store, not deleted"
+        )
+        XCTAssertEqual(store.trimmedArchiveURL.deletingLastPathComponent(), storage.deletingLastPathComponent())
+    }
+
+    /// An unplugged output drive makes every row missing at once; none may be trimmed, however
+    /// many there are, because the files come back when the drive is reconnected.
+    func testRowsOnAnUnmountedVolumeAreNeverTrimmed() throws {
+        let bound = JSONOutputInboxStore.maxRetainedMissingCount
+        let storage = temporaryDirectory().appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storage)
+        let volume = URL(fileURLWithPath: "/Volumes/NMH Unplugged \(UUID().uuidString)", isDirectory: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: volume.path))
+        let rows = (0..<(bound + 200)).map { index in
+            OutputInboxItem(
+                fileURL: volume.appendingPathComponent("Exports/row-\(index).wav"),
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(index)),
+                status: .available
+            )
+        }
+        try seed(rows, at: storage)
+
+        let snapshot = try store.loadRefreshedItems()
+
+        XCTAssertEqual(Set(snapshot.map(\.id)), Set(rows.map(\.id)), "no row on an unreachable volume is trimmed")
+        XCTAssertTrue(snapshot.allSatisfy { $0.status == .missing })
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.trimmedArchiveURL.path))
+    }
+
+    /// Only rows whose folder is there but whose file is gone count toward the cap; rows whose
+    /// folder is gone are kept whatever their age.
+    func testCapCountsOnlyRowsWhoseFolderStillExists() throws {
+        let bound = JSONOutputInboxStore.maxRetainedMissingCount
+        let storage = temporaryDirectory().appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storage)
+        let present = temporaryDirectory()
+        try FileManager.default.createDirectory(at: present, withIntermediateDirectories: true)
+        let removedFolder = temporaryDirectory().appendingPathComponent("Removed Output Folder")
+        let unreachable = (0..<(bound + 50)).map { index in
+            OutputInboxItem(
+                fileURL: removedFolder.appendingPathComponent("old-\(index).wav"),
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(index)),
+                status: .available
+            )
+        }
+        let gone = (0..<(bound + 20)).map { index in
+            OutputInboxItem(
+                fileURL: present.appendingPathComponent("gone-\(index).wav"),
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(10_000 + index)),
+                status: .available
+            )
+        }
+        try seed(unreachable + gone, at: storage)
+
+        let snapshot = try store.loadRefreshedItems()
+        let kept = Set(snapshot.map(\.id))
+
+        XCTAssertTrue(Set(unreachable.map(\.id)).isSubset(of: kept), "rows whose folder is gone are never trimmed")
+        let oldestGone = Set(gone.prefix(20).map(\.id))
+        XCTAssertEqual(snapshot.count, unreachable.count + bound)
+        XCTAssertTrue(oldestGone.isDisjoint(with: kept))
+        XCTAssertEqual(Set(try archivedItems(of: store).map(\.id)), oldestGone)
+
+        // A later trim adds to the archive instead of replacing it.
+        let more = (0..<5).map { index in
+            OutputInboxItem(
+                fileURL: present.appendingPathComponent("later-\(index).wav"),
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(20_000 + index)),
+                status: .available
+            )
+        }
+        for item in more { try store.addItem(item) }
+        _ = try store.loadRefreshedItems()
+        XCTAssertEqual(
+            Set(try archivedItems(of: store).map(\.id)),
+            oldestGone.union(gone.dropFirst(20).prefix(5).map(\.id))
+        )
+    }
+
+    private func seed(_ items: [OutputInboxItem], at url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(items).write(to: url, options: .atomic)
+    }
+
+    private func archivedItems(of store: JSONOutputInboxStore) throws -> [OutputInboxItem] {
+        try JSONDecoder().decode([OutputInboxItem].self, from: Data(contentsOf: store.trimmedArchiveURL))
     }
 
     // MARK: - Helpers

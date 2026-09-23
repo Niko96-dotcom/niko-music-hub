@@ -7,9 +7,11 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     private let recovery = RecoveryBox()
 
     /// Refresh bounds retained missing rows to this many (newest by
-    /// `createdAt`). Every non-missing record is kept regardless of age, so
-    /// available outputs are never pruned. Well above the historical 300-row
-    /// volume test.
+    /// `createdAt`), counting only rows whose folder still exists; rows on an
+    /// unreachable volume or folder are never pruned, and pruned rows move to
+    /// `trimmedArchiveURL`. Every non-missing record is kept regardless of age,
+    /// so available outputs are never pruned. Well above the historical
+    /// 300-row volume test.
     public static let maxRetainedMissingCount = 1000
 
     /// One-shot corruption notice: non-nil when the store has quarantined
@@ -21,6 +23,14 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
             recovery.pendingWarning = nil
             return warning
         }
+    }
+
+    /// Rows trimmed past `maxRetainedMissingCount` are appended here, beside the store, rather
+    /// than deleted.
+    public var trimmedArchiveURL: URL {
+        let stem = storageURL.deletingPathExtension().lastPathComponent
+        let ext = storageURL.pathExtension.isEmpty ? "json" : storageURL.pathExtension
+        return storageURL.deletingLastPathComponent().appendingPathComponent("\(stem).trimmed.\(ext)")
     }
 
     /// Location of the most recent quarantine file, if any.
@@ -134,6 +144,14 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     /// ordering and dedup are untouched. Refresh additionally bounds the
     /// retained missing rows to `maxRetainedMissingCount` (newest by
     /// `createdAt`); every non-missing record survives regardless of age.
+    ///
+    /// Only a row whose folder is there but whose file is gone counts toward
+    /// the bound. A row whose folder cannot be reached at all (its volume is
+    /// unmounted, or the output folder itself is gone) is unavailable rather
+    /// than gone: an unplugged drive turns every row on it missing at once,
+    /// and the files come back with the drive, so those rows are never
+    /// trimmed. Trimmed rows are appended to `trimmedArchiveURL` first; if that
+    /// write fails nothing is trimmed.
     private func applyingAvailability(to items: [OutputInboxItem]) -> [OutputInboxItem] {
         let transitioned = items.map { item in
             var copy = item
@@ -144,20 +162,69 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
             }
             return copy
         }
-        let missingCount = transitioned.reduce(into: 0) { count, item in
-            if item.status == .missing { count += 1 }
+        var reachableFolders: [String: Bool] = [:]
+        let trimmable = transitioned.filter { item in
+            guard item.status == .missing else { return false }
+            let folder = item.fileURL.deletingLastPathComponent().standardizedFileURL.path
+            if let reachable = reachableFolders[folder] { return reachable }
+            let reachable = folderIsReachable(atPath: folder)
+            reachableFolders[folder] = reachable
+            return reachable
         }
-        guard missingCount > Self.maxRetainedMissingCount else {
+        guard trimmable.count > Self.maxRetainedMissingCount else {
             return transitioned
         }
-        let keepIDs = Set(
-            transitioned
-                .filter { $0.status == .missing }
+        let trimIDs = Set(
+            trimmable
                 .sorted { $0.createdAt > $1.createdAt }
-                .prefix(Self.maxRetainedMissingCount)
+                .dropFirst(Self.maxRetainedMissingCount)
                 .map(\.id)
         )
-        return transitioned.filter { $0.status != .missing || keepIDs.contains($0.id) }
+        do {
+            try archiveTrimmed(transitioned.filter { trimIDs.contains($0.id) })
+        } catch {
+            return transitioned
+        }
+        return transitioned.filter { !trimIDs.contains($0.id) }
+    }
+
+    /// Appends `rows` to the trimmed-row archive beside the store. An archive
+    /// that cannot be decoded is quarantined like the inbox, never overwritten.
+    private func archiveTrimmed(_ rows: [OutputInboxItem]) throws {
+        let archiveURL = trimmedArchiveURL
+        var archived: [OutputInboxItem] = []
+        if fileManager.fileExists(atPath: archiveURL.path) {
+            let data = try Data(contentsOf: archiveURL)
+            do {
+                archived = try JSONDecoder().decode([OutputInboxItem].self, from: data)
+            } catch {
+                guard error is DecodingError else { throw error }
+                try fileManager.moveItem(at: archiveURL, to: uniqueQuarantineURL(for: archiveURL))
+            }
+        }
+        let known = Set(archived.map(\.id))
+        archived.append(contentsOf: rows.filter { !known.contains($0.id) })
+        try fileManager.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(archived).write(to: archiveURL, options: .atomic)
+    }
+
+    /// The folder exists as a directory and, below `/Volumes/<name>`, that
+    /// volume is actually mounted: an unplugged drive can leave an empty
+    /// `/Volumes/<name>` directory behind on the startup disk.
+    private func folderIsReachable(atPath folder: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: folder, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return false
+        }
+        let components = (folder as NSString).pathComponents
+        guard components.count >= 3, components[0] == "/", components[1] == "Volumes" else { return true }
+        var volumes = stat()
+        var volume = stat()
+        guard stat("/Volumes", &volumes) == 0,
+              stat("/Volumes/" + components[2], &volume) == 0 else { return false }
+        return volume.st_dev != volumes.st_dev
     }
 
     /// Loads the inbox, quarantining it on JSON decode failure (I1). Only
@@ -196,10 +263,11 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
         }
     }
 
-    private func uniqueQuarantineURL(now: Date = Date()) -> URL {
-        let directory = storageURL.deletingLastPathComponent()
-        let stem = storageURL.deletingPathExtension().lastPathComponent
-        let ext = storageURL.pathExtension.isEmpty ? "json" : storageURL.pathExtension
+    private func uniqueQuarantineURL(for file: URL? = nil, now: Date = Date()) -> URL {
+        let file = file ?? storageURL
+        let directory = file.deletingLastPathComponent()
+        let stem = file.deletingPathExtension().lastPathComponent
+        let ext = file.pathExtension.isEmpty ? "json" : file.pathExtension
         let stamp = Self.quarantineTimestamp(now)
         var candidate = directory.appendingPathComponent(
             "\(stem).corrupt-\(stamp)-\(UUID().uuidString.prefix(8).lowercased()).\(ext)"

@@ -13,17 +13,28 @@ enum PreviewWAVDurationReader {
     }
 
     static func durationSeconds(for fileURL: URL) -> Double? {
+        durationSeconds(for: fileURL, openedAs: nil)
+    }
+
+    /// `descriptor`, when given, is `fileURL` already opened by the caller (without following
+    /// links, see `NoFollowPath`); a WAV header is read from it rather than from the path. Other
+    /// formats go through `AVAudioFile`, which opens the path itself while the caller holds the
+    /// verified descriptor.
+    static func durationSeconds(for fileURL: URL, openedAs descriptor: Int32?) -> Double? {
         if fileURL.pathExtension.lowercased() == "wav" {
-            return wavDuration(for: fileURL)
+            if let descriptor {
+                return wavDuration(from: FileHandle(fileDescriptor: descriptor, closeOnDealloc: false))
+            }
+            guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
+            defer { try? handle.close() }
+            return wavDuration(from: handle)
         }
         guard let file = try? AVAudioFile(forReading: fileURL),
               file.length > 0, file.fileFormat.sampleRate > 0 else { return nil }
         return Double(file.length) / file.fileFormat.sampleRate
     }
 
-    private static func wavDuration(for fileURL: URL) -> Double? {
-        guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
-        defer { try? handle.close() }
+    private static func wavDuration(from handle: FileHandle) -> Double? {
         guard let header = try? handle.read(upToCount: 12), header.count == 12,
               String(data: header[0..<4], encoding: .ascii) == "RIFF",
               String(data: header[8..<12], encoding: .ascii) == "WAVE" else { return nil }
