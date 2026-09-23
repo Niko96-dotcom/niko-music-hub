@@ -70,6 +70,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         if let warning = update.persistenceWarning {
             recordPersistenceWarning(warning)
         }
+        syncMetadataRepairState()
         // NMH-042: announce only full scans (announceCompletion), not every
         // incremental filesystem apply. Failures stay on statusMessage (NMH-049).
         if update.announceCompletion {

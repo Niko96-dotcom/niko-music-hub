@@ -342,7 +342,10 @@ extension ArchiveBrowserViewModel {
 
     func createNewSong(request: NewSongRequest) throws -> Song {
         var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)
-        created = catalog.mergeUserMetadata(into: [created], collaborators: collaborators).first ?? created
+        // D3: this merge adds one song and never replaces the catalog, so a
+        // failed read must not pause every song's edits — only the new one's.
+        let newSongMerge = catalog.mergeUserMetadataForNewSong(created, collaborators: collaborators)
+        created = newSongMerge.song
         mutateCatalog {
             var updatedScannedSongs = scannedSongs
             if let index = updatedScannedSongs.firstIndex(where: { $0.id == created.id }) {
@@ -356,9 +359,13 @@ extension ArchiveBrowserViewModel {
             scannedSongs = updatedScannedSongs
         }
         rebuildProjectVaultCatalog()
-        if let warning = catalog.persistUserMetadata(for: [created]) {
+        if let warning = newSongMerge.warning {
+            // Stored details for this path are unknown: never write defaults over them.
+            recordPersistenceWarning(warning)
+        } else if let warning = catalog.persistUserMetadata(for: [created]) {
             recordPersistenceWarning(warning)
         }
+        syncMetadataRepairState()
         scheduleIndexPersist(afterNanoseconds: 0)
         selectSong(created)
         if created.effectiveLatestCPR != nil {
@@ -413,6 +420,7 @@ extension ArchiveBrowserViewModel {
         let warning = catalog.persistUserMetadata(for: [updated])
         if let warning, catalog.metadataEditBlockWarning(for: updated.id) != nil {
             recordPersistenceWarning(warning)
+            syncMetadataRepairState()
             return
         }
         replaceSong(updated)
@@ -451,6 +459,58 @@ extension ArchiveBrowserViewModel {
             ) {
                 self.recordPersistenceWarning(warning)
             }
+        }
+    }
+
+    /// Mirrors the catalog's corrupt-row gate for the views, limited to songs
+    /// in the current catalog.
+    func syncMetadataRepairState() {
+        let present = Set(scannedSongs.map(\.id)).union(songs.map(\.id))
+        let ids = catalog.corruptSongIDs().intersection(present)
+        if ids != metadataRepairSongIDs {
+            metadataRepairSongIDs = ids
+        }
+    }
+
+    /// Explicit Repair Song Details (D2). The store backs up each raw row and
+    /// resets only the lists that can't be read; everything else is kept. The
+    /// repaired rows are re-read and merged back into the live catalog, which
+    /// unblocks their edits.
+    func repairSongMetadata(songIDs: [String]) {
+        guard !songIDs.isEmpty else { return }
+        let result = catalog.repairSongMetadata(songIDs: songIDs)
+        let collaboratorsByID = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
+        var repairedNames: [String] = []
+        for songID in songIDs {
+            guard let metadata = result.reloaded[songID] else { continue }
+            let current = songs.first(where: { $0.id == songID }) ?? scannedSongs.first(where: { $0.id == songID })
+            guard let current else { continue }
+            let merged = ArchiveMetadataMerger.merge(
+                scanned: current,
+                metadata: metadata,
+                collaboratorsByID: collaboratorsByID
+            )
+            replaceSong(merged)
+            repairedNames.append(SongMetadataIntegrityCopy.name(of: merged))
+        }
+        syncMetadataRepairState()
+        if let current = persistenceWarningMessage, SongMetadataIntegrityCopy.isIntegrityWarning(current) {
+            persistenceWarningMessage = catalog.metadataIntegrityWarning()
+        }
+        var parts: [String] = []
+        if !repairedNames.isEmpty {
+            parts.append(SongMetadataIntegrityCopy.repaired(names: repairedNames, cleared: result.clearedLists))
+        }
+        if !result.failedSongIDs.isEmpty {
+            let failedNames = result.failedSongIDs.map { id in
+                songs.first(where: { $0.id == id }).map(SongMetadataIntegrityCopy.name(of:))
+                    ?? SongMetadataIntegrityCopy.folderName(for: id)
+            }
+            parts.append(SongMetadataIntegrityCopy.repairFailed(names: failedNames))
+        }
+        setStatusMessage(parts.joined(separator: " "))
+        if !repairedNames.isEmpty {
+            scheduleIndexPersist(afterNanoseconds: 0)
         }
     }
 

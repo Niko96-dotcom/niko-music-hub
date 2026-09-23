@@ -843,13 +843,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             scannedAt: Date()
         )
         viewModel.applyCatalogScanUpdate(update, roots: [tempDir])
-        XCTAssertTrue(viewModel.statusMessage?.contains(badID) == true, "scan warning must name the corrupt row, got: \(viewModel.statusMessage ?? "nil")")
+        XCTAssertTrue(viewModel.statusMessage?.contains("“Bad”") == true, "scan warning must name the corrupt song, got: \(viewModel.statusMessage ?? "nil")")
+        XCTAssertFalse(viewModel.statusMessage?.contains(badID) == true, "no raw song IDs in user-facing copy")
 
         let badSong = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
         XCTAssertNil(badSong.virtualTitle, "corrupt row merges to scanned defaults in memory")
         viewModel.updateAppNote(for: badSong, note: "attempted overwrite")
         viewModel.updateWorkflowStatus(for: badSong, status: .waitingFeedback)
-        XCTAssertTrue(viewModel.statusMessage?.contains(badID) == true, "refusal warning must stay visible, got: \(viewModel.statusMessage ?? "nil")")
+        XCTAssertTrue(viewModel.statusMessage?.contains("“Bad”") == true, "refusal warning must stay visible, got: \(viewModel.statusMessage ?? "nil")")
         XCTAssertEqual(try Self.dumpVMBlockRows(databaseURL: databaseURL), before, "refused edits must leave all row bytes identical")
         XCTAssertEqual(try store.statusHistory(forSongID: badID).count, historyBefore.count, "refusal must not append status history")
         let stillBad = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
@@ -894,8 +895,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(stillLive.effectiveDisplayTitle, "Race Song", "corruption refusal must not replace in-memory song")
         XCTAssertEqual(viewModel.scannedSongs.first { $0.id == scanned.id }?.effectiveDisplayTitle, "Race Song")
         XCTAssertTrue(
-            viewModel.statusMessage?.contains(scanned.id) == true,
-            "refusal warning must name the corrupt row, got: \(viewModel.statusMessage ?? "nil")"
+            viewModel.statusMessage?.contains("“Race Song”") == true,
+            "refusal warning must name the corrupt song (not the refused edit), got: \(viewModel.statusMessage ?? "nil")"
         )
         XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: scanned.id))
         XCTAssertEqual(metadataStore.upsertAllCount, 1)
@@ -954,7 +955,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
         XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title")
         XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID))
-        XCTAssertTrue(viewModel.statusMessage?.contains(sharedID) == true)
+        XCTAssertTrue(viewModel.statusMessage?.contains("“Scanned Title”") == true)
 
         indexStore.release()
         let loadDeadline = Date().addingTimeInterval(2)
@@ -965,7 +966,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         try await Task.sleep(nanoseconds: 200_000_000)
         XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title", "stale cache must not replace fresher scan songs")
         XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID), "late clean cache must not clear the newer corrupt gate")
-        XCTAssertTrue(viewModel.statusMessage?.contains(sharedID) == true)
+        XCTAssertTrue(viewModel.statusMessage?.contains("“Scanned Title”") == true)
         // Missing/failed cache results must not clear valid scan state either.
         viewModel.catalog.applyCacheLoadReport(ArchiveCatalogCoordinator.ArchiveCacheLoadReport(
             result: .empty, corruptSongIDs: [], metadataLoadFailed: false, hasMetadataSources: true

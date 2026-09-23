@@ -13,7 +13,7 @@ final class HubShellChromeSourceTests: XCTestCase {
         [
             "HubShellBackground()",
             "HubShellTitleBarControls(",
-            "hubSurface(.card, state: .warning",
+            "hubSurface(.card, state: bannerState",
             "shellSession",
             "toolPaneCache",
             "ensureMounted",

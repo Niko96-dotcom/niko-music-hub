@@ -84,6 +84,34 @@ extension ArchiveBrowserViewModel {
         refreshFirstRunState()
     }
 
+    /// Settings were unreadable at launch (fail-closed load) and the user just
+    /// repaired them: drop the stale "could not be loaded" warning, reload the
+    /// real archive roots, and rescan when they differ from what is showing.
+    public func applyRepairedSettings() {
+        if let current = persistenceWarningMessage,
+           current.hasPrefix("Archive settings could not be") {
+            persistenceWarningMessage = nil
+            statusMessage = combinedStatusMessage(base: statusBaseMessage)
+        }
+        guard !runtime.usesFixtureRoot else {
+            refreshProjectVaultPresentationContext()
+            rebuildProjectVaultCatalog()
+            return
+        }
+        let previousRoots = roots.standardizedArchivePaths
+        loadRootsFromSettings()
+        refreshProjectVaultPresentationContext()
+        guard previousRoots != roots.standardizedArchivePaths else {
+            rebuildProjectVaultCatalog()
+            return
+        }
+        clearRootBoundArchiveState(statusMessage: roots.isEmpty ? nil : "Scanning your archive…")
+        restartArchiveRootWatching()
+        if !roots.isEmpty {
+            Task { await scanInBackground() }
+        }
+    }
+
     func refreshFirstRunState() {
         if runtime.usesFixtureRoot {
             needsFirstRunOnboarding = false

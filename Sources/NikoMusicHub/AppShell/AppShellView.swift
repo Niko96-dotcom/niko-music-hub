@@ -15,6 +15,8 @@ struct AppShellView: View {
     @ObservedObject var helperSetup: HelperToolSetupModel
     let archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject private var history: HubNavigationHistory
+    /// Unreadable-settings state; drives the Repair Settings notice in the top strip.
+    @ObservedObject private var settingsRepair: SettingsRepairModel
     @Environment(\.openSettings) private var openSettings
     /// Non-observable pane cache; the session's `selectedToolID` drives rendering.
     @State private var toolPaneCache: ToolPaneCache
@@ -39,6 +41,7 @@ struct AppShellView: View {
         self.helperSetup = helperSetup
         self.archiveViewModel = archiveViewModel
         self.history = context.navigationHistory
+        self.settingsRepair = context.settingsRepair
         // No side effects here: the launch tool is resolved (and recorded in
         // history) once by the composition root, before any scene exists.
         _toolPaneCache = State(initialValue: ToolPaneCache(registry: registry, context: context))
@@ -53,8 +56,10 @@ struct AppShellView: View {
             // and reserves the title row inside itself, so the traffic lights and
             // title controls float on the column tones.
             VStack(spacing: 0) {
+                // The strip sits below the title row so the traffic lights and
+                // title controls never cover its text or its Repair button.
                 persistenceIssueBanner
-                    .padding(.top, columnTopInset)
+                    .padding(.top, HubShellLayout.titleBarHeight)
 
                 // Flush, edge-to-edge split layout — columns sit shoulder-to-shoulder on an
                 // inky canvas, separated by hairline dividers (no floating panels / gaps).
@@ -193,7 +198,15 @@ struct AppShellView: View {
     /// Title-row reservation inside each column. When the persistence banner is
     /// up it takes the row instead, so the columns start flush below it.
     private var columnTopInset: CGFloat {
-        context.persistenceIssues.isEmpty ? HubShellLayout.titleBarHeight : 0
+        showsPersistenceBanner ? 0 : HubShellLayout.titleBarHeight
+    }
+
+    private var bannerState: HubDesignSystem.ControlState {
+        context.persistenceIssues.isEmpty && !settingsRepair.needsRepair ? .normal : .warning
+    }
+
+    private var showsPersistenceBanner: Bool {
+        !context.persistenceIssues.isEmpty || SettingsRepairNotice.isVisible(settingsRepair)
     }
 
     /// Full-height hairline that separates flush columns (the reference split-view seam).
@@ -212,11 +225,14 @@ struct AppShellView: View {
 
     @ViewBuilder
     private var persistenceIssueBanner: some View {
-        if !context.persistenceIssues.isEmpty {
+        if showsPersistenceBanner {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-                Label("Persistence running in degraded mode", systemImage: "externaldrive.badge.exclamationmark")
-                    .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
-                    .foregroundStyle(HubDesignSystem.Colors.warning)
+                SettingsRepairNotice(model: settingsRepair)
+                if !context.persistenceIssues.isEmpty {
+                    Label("Persistence running in degraded mode", systemImage: "externaldrive.badge.exclamationmark")
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                        .foregroundStyle(HubDesignSystem.Colors.warning)
+                }
                 ForEach(context.persistenceIssues) { issue in
                     Text("\(issue.title): \(issue.message)")
                         .font(HubDesignSystem.Typography.caption())
@@ -227,7 +243,7 @@ struct AppShellView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .hubSurface(.card, state: .warning, cornerRadius: HubDesignSystem.Radius.row)
+            .hubSurface(.card, state: bannerState, cornerRadius: HubDesignSystem.Radius.row)
             .padding(HubDesignSystem.Spacing.section)
         }
     }

@@ -139,6 +139,14 @@ struct AppComposition {
         let navigationHistory = HubNavigationHistory()
         let quickAccessRouter = QuickAccessRouter()
         let appSettings = AppSettingsObserver(store: settingsStore)
+        // Settings that no longer decode fail closed (every save refuses). The
+        // repair is explicit only; its backup lives beside the app's other
+        // support files, inside the isolated suite folder when one is in use.
+        let settingsRepair = SettingsRepairModel(
+            store: settingsStore,
+            backupDirectory: AppPaths.settingsBackupDirectoryURL(runtime: runtime),
+            diagnostics: diagnostics
+        )
         // Recovery export needs the same live database the Vault runtime uses;
         // nil when the database is damaged (import stays available through the
         // standalone service entry point, which needs no healthy current DB).
@@ -163,7 +171,8 @@ struct AppComposition {
             navigationHistory: navigationHistory,
             appSettings: appSettings,
             router: quickAccessRouter,
-            recoveryService: recoveryService
+            recoveryService: recoveryService,
+            settingsRepair: settingsRepair
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -206,6 +215,15 @@ struct AppComposition {
             // The setup sheet has its own Music Archive row, so the archive
             // pane's first-run sheet must not stack a second modal on top.
             archiveViewModel.completeArchiveOnboarding()
+        }
+        // A repair makes stored values readable again: reload what launch
+        // could only read as defaults (archive roots, appearance, menu icon).
+        settingsRepair.addRepairHandler { [weak shellSession] in
+            archiveViewModel.applyRepairedSettings()
+            guard let repaired = try? settingsStore.loadSettings() else { return }
+            appearanceController.apply(repaired.appearance)
+            shellSession?.applyShowMenuBarExtra(repaired.showMenuBarExtra)
+            helperSetup.refresh()
         }
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])
@@ -264,7 +282,8 @@ struct AppComposition {
             navigationHistory: navigationHistory,
             appSettings: appSettings,
             router: quickAccessRouter,
-            recoveryService: recoveryService
+            recoveryService: recoveryService,
+            settingsRepair: settingsRepair
         )
 
         return AppComposition(
@@ -322,6 +341,11 @@ private enum AppPaths {
     static func archiveIndexStoreURL(runtime: MusicHubRuntimeEnvironment = .current) -> URL {
         supportDirectory(runtime: runtime)
             .appendingPathComponent("archive-index.sqlite", isDirectory: false)
+    }
+
+    static func settingsBackupDirectoryURL(runtime: MusicHubRuntimeEnvironment = .current) -> URL {
+        supportDirectory(runtime: runtime)
+            .appendingPathComponent("Settings Backups", isDirectory: true)
     }
 
     private static func supportDirectory(runtime: MusicHubRuntimeEnvironment) -> URL {

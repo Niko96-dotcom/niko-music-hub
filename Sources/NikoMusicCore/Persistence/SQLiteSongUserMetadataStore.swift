@@ -3,7 +3,7 @@ import SQLite3
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, WorkflowStatusHistoryReading, @unchecked Sendable {
+public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, SongUserMetadataRepairing, WorkflowStatusHistoryReading, @unchecked Sendable {
     private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -220,6 +220,132 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
         }
     }
 
+    // MARK: - Repair (explicit, user-initiated only)
+
+    private static let rawRowColumns = [
+        "song_id", "virtual_title", "aliases_json", "app_note", "preview_selection_mode",
+        "manual_main_preview_id", "ignored_preview_ids_json", "updated_at",
+        "collaborator_ids_json", "is_ignored", "cpr_selection_mode",
+        "manual_main_cpr_id", "ignored_cpr_ids_json", "workflow_status",
+    ]
+
+    private static let listColumns: [(column: SongUserMetadataListColumn, name: String)] = [
+        (.aliases, "aliases_json"),
+        (.ignoredPreviews, "ignored_preview_ids_json"),
+        (.collaborators, "collaborator_ids_json"),
+        (.hiddenProjectVersions, "ignored_cpr_ids_json"),
+    ]
+
+    /// Salvages one corrupt row in a single transaction: the raw row goes to
+    /// `song_metadata_repair_backup` first (verified), then only the list
+    /// columns that no longer decode are reset to `[]`. Title, note, workflow
+    /// status, selection modes, manual picks and the hidden flag are untouched,
+    /// and no status-history transition is recorded.
+    public func repairCorruptRow(songID: String) throws -> SongUserMetadataRowRepair? {
+        try database.withConnection { db in
+            guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
+            }
+            do {
+                let repair = try repairCorruptRowLocked(songID: songID, db: db)
+                guard sqlite3_exec(db, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
+                    throw StoreError.exec(message(db))
+                }
+                return repair
+            } catch {
+                _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw error
+            }
+        }
+    }
+
+    private func repairCorruptRowLocked(songID: String, db: OpaquePointer) throws -> SongUserMetadataRowRepair? {
+        guard let raw = try rawRow(songID: songID, db: db) else { return nil }
+        let cleared = Self.listColumns.filter { entry in
+            let text = (raw[entry.name] as? String) ?? "[]"
+            return (try? decoder.decode([String].self, from: Data(text.utf8))) == nil
+        }
+        guard !cleared.isEmpty else { return nil }
+
+        let rowData = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys])
+        guard let rowJSON = String(data: rowData, encoding: .utf8) else {
+            throw StoreError.encode("utf8")
+        }
+        var insert: OpaquePointer?
+        defer { sqlite3_finalize(insert) }
+        let insertSQL = "INSERT INTO song_metadata_repair_backup (song_id, backed_up_at, row_json) VALUES (?, ?, ?);"
+        guard sqlite3_prepare_v2(db, insertSQL, -1, &insert, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(insert, 1, songID, -1, sqliteTransient)
+        sqlite3_bind_text(insert, 2, ISO8601DateFormatter().string(from: Date()), -1, sqliteTransient)
+        sqlite3_bind_text(insert, 3, rowJSON, -1, sqliteTransient)
+        guard sqlite3_step(insert) == SQLITE_DONE, sqlite3_changes(db) == 1 else {
+            throw StoreError.step(message(db))
+        }
+
+        let assignments = cleared.map { "\($0.name) = '[]'" }.joined(separator: ", ")
+        var update: OpaquePointer?
+        defer { sqlite3_finalize(update) }
+        let updateSQL = "UPDATE song_metadata SET \(assignments) WHERE song_id = ?;"
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &update, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(update, 1, songID, -1, sqliteTransient)
+        guard sqlite3_step(update) == SQLITE_DONE, sqlite3_changes(db) == 1 else {
+            throw StoreError.step(message(db))
+        }
+        return SongUserMetadataRowRepair(songID: songID, clearedLists: cleared.map(\.column))
+    }
+
+    /// Raw backups written by `repairCorruptRow`, oldest first (JSON objects
+    /// keyed by column name; SQL NULL is JSON null).
+    public func repairBackups(forSongID songID: String) throws -> [String] {
+        try database.withConnection { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let sql = "SELECT row_json FROM song_metadata_repair_backup WHERE song_id = ? ORDER BY id ASC;"
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw StoreError.prepare(message(db))
+            }
+            sqlite3_bind_text(statement, 1, songID, -1, sqliteTransient)
+            var result: [String] = []
+            while true {
+                switch sqlite3_step(statement) {
+                case SQLITE_ROW:
+                    result.append(textColumn(statement, column: 0) ?? "")
+                case SQLITE_DONE:
+                    return result
+                default:
+                    throw StoreError.step(message(db))
+                }
+            }
+        }
+    }
+
+    private func rawRow(songID: String, db: OpaquePointer) throws -> [String: Any]? {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = "SELECT \(Self.rawRowColumns.joined(separator: ", ")) FROM song_metadata WHERE song_id = ?;"
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(statement, 1, songID, -1, sqliteTransient)
+        switch sqlite3_step(statement) {
+        case SQLITE_ROW:
+            break
+        case SQLITE_DONE:
+            return nil
+        default:
+            throw StoreError.step(message(db))
+        }
+        var row: [String: Any] = [:]
+        for (index, name) in Self.rawRowColumns.enumerated() {
+            row[name] = optionalText(statement, column: Int32(index)) ?? NSNull()
+        }
+        return row
+    }
+
     /// Recorded workflow status transitions for one song, oldest first.
     public func statusHistory(forSongID songID: String) throws -> [WorkflowStatusChange] {
         try loadStatusHistory(songID: songID)
@@ -382,6 +508,19 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
               ON song_status_history(song_id);
             """
             guard sqlite3_exec(db, historySQL, nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
+            }
+            // Raw copies of rows taken before an explicit repair reset any of
+            // their list columns. Never read by the app; kept for recovery.
+            let repairBackupSQL = """
+            CREATE TABLE IF NOT EXISTS song_metadata_repair_backup (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              song_id TEXT NOT NULL,
+              backed_up_at TEXT NOT NULL,
+              row_json TEXT NOT NULL
+            );
+            """
+            guard sqlite3_exec(db, repairBackupSQL, nil, nil, nil) == SQLITE_OK else {
                 throw StoreError.exec(message(db))
             }
             try migrateLegacyColumns(db)

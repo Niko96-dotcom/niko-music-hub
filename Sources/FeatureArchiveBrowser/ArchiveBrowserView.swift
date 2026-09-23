@@ -116,6 +116,14 @@ struct ArchiveBrowserView: View {
                 if viewModel.openError != nil {
                     openFailureStrip
                 }
+                if !viewModel.metadataRepairSongIDs.isEmpty {
+                    // Every blocked song, one click — board users may never open the detail pane.
+                    SongMetadataRepairNotice(viewModel: viewModel, scope: .all)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, HubToolLayout.horizontalPadding)
+                        .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
+                        .background(.bar)
+                }
             if viewModel.searchResultCountText != nil || viewModel.statusMessage?.isEmpty == false {
                 HStack {
                     if let count = viewModel.searchResultCountText {

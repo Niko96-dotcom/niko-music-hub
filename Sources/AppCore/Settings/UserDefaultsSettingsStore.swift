@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
+public struct UserDefaultsSettingsStore: SettingsStore, SettingsRepairing, @unchecked Sendable {
     public static let defaultOutputFolderDisplayPath = "~/Music/Niko Music Hub/Inbox"
     private static let serializationLock = NSLock()
 
@@ -63,6 +63,37 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
             return settings
         }
         changeSubject.send(saved)
+    }
+
+    public func storedSettingsNeedRepair() -> Bool {
+        Self.serializationLock.withLock {
+            guard let data = userDefaults.data(forKey: key) else { return false }
+            return (try? JSONDecoder().decode(AppSettings.self, from: data)) == nil
+        }
+    }
+
+    /// Explicit repair (D1). Under the same lock as every other write: read
+    /// the raw blob, write and verify the backup, then save the salvage. A
+    /// healthy or missing blob is left alone and nothing is backed up.
+    public func repairStoredSettings(backupDirectory: URL, now: Date) throws -> SettingsRepairOutcome? {
+        let outcome: SettingsRepairOutcome? = try Self.serializationLock.withLock {
+            guard let data = userDefaults.data(forKey: key),
+                  (try? JSONDecoder().decode(AppSettings.self, from: data)) == nil
+            else { return nil }
+            let backupURL = try SettingsBackupWriter.write(data, to: backupDirectory, now: now)
+            let salvage = SettingsSalvage.salvage(data)
+            try saveSettingsLocked(salvage.settings)
+            return SettingsRepairOutcome(
+                settings: salvage.settings,
+                resetFields: salvage.resetFields,
+                droppedArchiveFolderCount: salvage.droppedArchiveFolderCount,
+                backupURL: backupURL
+            )
+        }
+        if let outcome {
+            changeSubject.send(outcome.settings)
+        }
+        return outcome
     }
 
     private static func needsTypedRootMigration(_ data: Data) -> Bool {

@@ -135,6 +135,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
+    /// Songs whose stored details are corrupt: edits are paused and Repair
+    /// Song Details is offered (mirrors the catalog's per-song gate).
+    @Published var metadataRepairSongIDs: Set<String> = []
     @Published var projectVaultBusySongIDs: Set<String> = []
     @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
     @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation? {

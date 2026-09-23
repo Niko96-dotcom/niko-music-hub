@@ -281,7 +281,8 @@ final class ArchiveCatalogCoordinatorMetadataSafetyTests: XCTestCase {
         XCTAssertEqual(byID[badID]?.displayTitle, "Bad")
 
         let warning = try XCTUnwrap(update.persistenceWarning)
-        XCTAssertTrue(warning.contains(badID), "warning must identify the corrupt row, got: \(warning)")
+        XCTAssertTrue(warning.contains("“Bad”"), "warning must name the corrupt song, got: \(warning)")
+        XCTAssertFalse(warning.contains(badID), "no raw song IDs in user-facing copy")
         XCTAssertTrue(warning.contains("nothing was overwritten"))
         XCTAssertFalse(update.shouldPersistUserMetadata)
         let model = ArchiveBrowserViewModel(
@@ -290,7 +291,7 @@ final class ArchiveCatalogCoordinatorMetadataSafetyTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
         model.applyCatalogScanUpdate(update, roots: [tempDir])
-        XCTAssertTrue(model.statusMessage?.contains(badID) == true)
+        XCTAssertTrue(model.statusMessage?.contains("“Bad”") == true)
         XCTAssertEqual(
             try dumpSafetyRows(databaseURL: databaseURL),
             before,
@@ -341,7 +342,7 @@ final class ArchiveCatalogCoordinatorMetadataSafetyTests: XCTestCase {
         // must be refused with a visible warning and no SQLite mutation.
         let badSong = try XCTUnwrap(update.songs.first { $0.id == badID })
         let badWarning = coordinator.persistUserMetadata(for: [badSong])
-        XCTAssertTrue(badWarning?.contains(badID) == true, "refusal must name the corrupt row, got: \(badWarning ?? "nil")")
+        XCTAssertTrue(badWarning?.contains("“Bad”") == true, "refusal must name the corrupt song, got: \(badWarning ?? "nil")")
         XCTAssertEqual(try dumpSafetyRows(databaseURL: databaseURL), before)
         XCTAssertEqual(try store.statusHistory(forSongID: badID).count, historyBefore.count)
 

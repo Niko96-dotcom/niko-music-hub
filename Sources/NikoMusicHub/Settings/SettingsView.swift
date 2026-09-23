@@ -21,6 +21,11 @@ final class HubSettingsSession: ObservableObject {
     @Published var helperPathError: String?
 
     private var settingsObserverCancellable: AnyCancellable?
+    private var repairObserverCancellable: AnyCancellable?
+    private var repairChangeForwarder: AnyCancellable?
+
+    /// Explicit repair for settings that no longer decode (shared with the main window).
+    var settingsRepair: SettingsRepairModel { context.settingsRepair }
 
     let recordingDurationChoices = RecordingDurationOptions.supportedMinutes
 
@@ -46,6 +51,26 @@ final class HubSettingsSession: ObservableObject {
                 guard normalized != self.settings else { return }
                 self.settings = normalized
             }
+        // A repair from either window makes the stored settings readable again;
+        // reload so the form and saving come back without reopening Settings.
+        repairObserverCancellable = context.settingsRepair.$needsRepair
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] needsRepair in
+                guard let self, !needsRepair, self.settingsLoadError != nil else { return }
+                self.refresh()
+            }
+        // The banner reads the repair model's error/result text through this
+        // session, so its changes must re-render the Settings form too.
+        repairChangeForwarder = context.settingsRepair.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
+    func repairSettings() {
+        if settingsRepair.repair() {
+            refresh()
+        }
     }
 
     /// The form only offers the supported recording caps.
@@ -128,8 +153,9 @@ final class HubSettingsSession: ObservableObject {
             shellSession.applyShowMenuBarExtra(settings.showMenuBarExtra)
         } catch {
             settings = .default
-            settingsLoadError = "Could not load settings. Existing settings were left untouched: \(error.localizedDescription)"
+            settingsLoadError = SettingsRepairModel.pausedMessage
             context.diagnostics.log(.error, "Settings load failed: \(error)")
+            settingsRepair.refresh()
         }
         launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
@@ -140,7 +166,7 @@ final class HubSettingsSession: ObservableObject {
     @discardableResult
     func persistSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
         guard settingsLoadError == nil else {
-            saveError = "Settings were not saved because the current settings could not be loaded."
+            saveError = "Settings were not saved because some settings couldn't be read."
             return false
         }
         do {
@@ -178,7 +204,7 @@ final class HubSettingsSession: ObservableObject {
 
     func chooseOutputFolder() {
         guard settingsLoadError == nil else {
-            saveError = "Settings were not saved because the current settings could not be loaded."
+            saveError = "Settings were not saved because some settings couldn't be read."
             return
         }
         guard let folder = context.fileActions.chooseOutputFolder() else { return }
@@ -302,7 +328,15 @@ struct SettingsView: View {
     @ViewBuilder
     private var settingsLoadErrorBanner: some View {
         if let settingsLoadError = session.settingsLoadError {
-            SettingsErrorBanner(message: settingsLoadError, tone: .warning)
+            SettingsErrorBanner(
+                message: settingsLoadError,
+                tone: .warning,
+                detail: session.settingsRepair.errorMessage,
+                actionLabel: "Repair Settings",
+                action: session.repairSettings
+            )
+        } else if let repaired = session.settingsRepair.resultMessage {
+            SettingsErrorBanner(message: repaired, tone: .success)
         }
     }
 

@@ -33,6 +33,8 @@ public struct ToolContext: Sendable {
     /// (import still works through the standalone service entry point, so
     /// recovery never depends on a healthy current database).
     public let recoveryService: ProjectVaultRecoveryService?
+    /// Explicit repair for settings that no longer decode (see `SettingsRepairModel`).
+    public let settingsRepair: SettingsRepairModel
 
     public init(
         registeredToolCount: Int,
@@ -48,7 +50,8 @@ public struct ToolContext: Sendable {
         navigationHistory: HubNavigationHistory = HubNavigationHistory(),
         appSettings: AppSettingsObserver? = nil,
         router: QuickAccessRouter? = nil,
-        recoveryService: ProjectVaultRecoveryService? = nil
+        recoveryService: ProjectVaultRecoveryService? = nil,
+        settingsRepair: SettingsRepairModel? = nil
     ) {
         self.registeredToolCount = registeredToolCount
         self.settingsStore = settingsStore
@@ -64,5 +67,6 @@ public struct ToolContext: Sendable {
         self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)
         self.router = router ?? QuickAccessRouter()
         self.recoveryService = recoveryService
+        self.settingsRepair = settingsRepair ?? SettingsRepairModel(store: settingsStore, backupDirectory: nil)
     }
 }

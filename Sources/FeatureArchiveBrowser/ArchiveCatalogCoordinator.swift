@@ -9,12 +9,19 @@ import NikoMusicCore
 final class SongMetadataIntegrityState: @unchecked Sendable {
     private let lock = NSLock()
     private var corruptIDs: Set<String> = []
+    /// Songs added without a successful metadata read (new-song merge failed):
+    /// their stored details are unknown, so only they wait for the next load.
+    private var unverifiedIDs: Set<String> = []
     private var loadFailed = false
+    /// User-facing names (display title, else folder name) for warning copy.
+    private var names: [String: String] = [:]
 
-    func recordLoadSuccess(corruptSongIDs: [String]) {
+    func recordLoadSuccess(corruptSongIDs: [String], names newNames: [String: String] = [:]) {
         lock.withLock {
             corruptIDs = Set(corruptSongIDs)
+            unverifiedIDs.removeAll()
             loadFailed = false
+            names.merge(newNames) { _, latest in latest }
         }
     }
 
@@ -22,17 +29,100 @@ final class SongMetadataIntegrityState: @unchecked Sendable {
         lock.withLock { loadFailed = true }
     }
 
-    func recordCorrupt(songIDs: [String]) {
-        lock.withLock { corruptIDs.formUnion(songIDs) }
+    func recordCorrupt(songIDs: [String], names newNames: [String: String] = [:]) {
+        lock.withLock {
+            corruptIDs.formUnion(songIDs)
+            names.merge(newNames) { _, latest in latest }
+        }
+    }
+
+    func clearCorrupt(songIDs: some Sequence<String>) {
+        lock.withLock { corruptIDs.subtract(songIDs) }
+    }
+
+    func recordUnverified(songID: String, name: String) {
+        lock.withLock {
+            unverifiedIDs.insert(songID)
+            names[songID] = name
+        }
     }
 
     func corruptSnapshot() -> Set<String> {
         lock.withLock { corruptIDs }
     }
 
+    func isUnverified(_ songID: String) -> Bool {
+        lock.withLock { unverifiedIDs.contains(songID) }
+    }
+
     func didFailLoad() -> Bool {
         lock.withLock { loadFailed }
     }
+
+    /// Display title if known, otherwise the song folder's name. Never the raw ID.
+    func name(for songID: String) -> String {
+        lock.withLock { names[songID] } ?? SongMetadataIntegrityCopy.folderName(for: songID)
+    }
+}
+
+/// Plain-language copy for song-detail integrity. Songs are named by display
+/// title (or folder name); raw song IDs (paths) never reach the user.
+enum SongMetadataIntegrityCopy {
+    static let loadFailedEditsBlocked =
+        "Song details could not be read; edits are blocked until song details reload — nothing was overwritten."
+    static let loadFailedScan = "Song details could not be read; nothing was overwritten."
+
+    static func name(of song: Song) -> String {
+        let title = song.effectiveDisplayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? song.originalFolderName : title
+    }
+
+    static func folderName(for songID: String) -> String {
+        URL(fileURLWithPath: songID).lastPathComponent
+    }
+
+    static func corrupt(_ names: [String]) -> String {
+        let sorted = names.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        if sorted.count == 1 {
+            return "Details for “\(sorted[0])” couldn't be read, so edits to it are paused; nothing was overwritten."
+        }
+        let shown = sorted.prefix(3).map { "“\($0)”" }.joined(separator: ", ")
+        let remainder = sorted.count > 3 ? ", …" : ""
+        return "Details for \(sorted.count) songs couldn't be read (\(shown)\(remainder)), so edits to them are paused; nothing was overwritten."
+    }
+
+    static func unverified(_ name: String) -> String {
+        "Details for “\(name)” couldn't be read yet, so edits to it are paused until the archive refreshes; nothing was overwritten."
+    }
+
+    static func repaired(names: [String], cleared: [SongUserMetadataListColumn]) -> String {
+        let head = names.count == 1 ? "Repaired “\(names[0])”." : "Repaired \(names.count) songs."
+        let order = SongUserMetadataListColumn.allCases
+        let labels = order.filter(cleared.contains).map(\.label)
+        guard !labels.isEmpty else { return head }
+        return "\(head) Cleared: \(labels.joined(separator: ", "))."
+    }
+
+    static func repairFailed(names: [String]) -> String {
+        names.count == 1
+            ? "Couldn't repair “\(names[0])”; nothing was changed."
+            : "Couldn't repair \(names.count) songs; nothing was changed."
+    }
+
+    /// True for any song-detail integrity warning this module writes.
+    static func isIntegrityWarning(_ message: String) -> Bool {
+        message.hasPrefix("Details for ") || message.hasPrefix("Song details could not be read")
+    }
+}
+
+/// Outcome of an explicit song-detail repair (D2).
+struct SongMetadataRepairResult {
+    /// Freshly reloaded metadata for every repaired song that now decodes.
+    var reloaded: [String: SongUserMetadata] = [:]
+    /// Lists that were reset across all repaired songs.
+    var clearedLists: [SongUserMetadataListColumn] = []
+    /// Songs that could not be repaired (store refused or still unreadable).
+    var failedSongIDs: [String] = []
 }
 
 /// Scan, cache, and metadata merge/persist for the archive catalog. Owned by ``ArchiveBrowserViewModel``;
@@ -351,25 +441,31 @@ struct ArchiveCatalogCoordinator {
     /// backstop. Cleared only by a later successful load with correct data.
     func metadataEditBlockWarning(for songID: String) -> String? {
         if integrity.didFailLoad() {
-            return "Song details could not be read; edits are blocked until song details reload — nothing was overwritten."
+            return SongMetadataIntegrityCopy.loadFailedEditsBlocked
         }
         if integrity.corruptSnapshot().contains(songID) {
-            return "Song details for \(songID) could not be read (corrupt stored data); edits for this song are blocked until the stored data is repaired and reloaded — nothing was overwritten."
+            return SongMetadataIntegrityCopy.corrupt([integrity.name(for: songID)])
+        }
+        if integrity.isUnverified(songID) {
+            return SongMetadataIntegrityCopy.unverified(integrity.name(for: songID))
         }
         return nil
+    }
+
+    /// Song IDs whose stored rows are known corrupt (repairable).
+    func corruptSongIDs() -> Set<String> {
+        integrity.corruptSnapshot()
     }
 
     /// Current degraded-load warning for surfaces (like cache bootstrap) that
     /// do not already return a per-scan warning. Nil when integrity is clean.
     func metadataIntegrityWarning() -> String? {
         if integrity.didFailLoad() {
-            return "Song details could not be read; edits are blocked until song details reload — nothing was overwritten."
+            return SongMetadataIntegrityCopy.loadFailedEditsBlocked
         }
-        let corrupt = integrity.corruptSnapshot().sorted()
+        let corrupt = integrity.corruptSnapshot()
         guard !corrupt.isEmpty else { return nil }
-        let shown = corrupt.prefix(3).joined(separator: ", ")
-        let remainder = corrupt.count > 3 ? ", …" : ""
-        return "Song details for \(corrupt.count) song(s) could not be read (corrupt stored data for: \(shown)\(remainder)); edits for those songs are blocked — nothing was overwritten."
+        return SongMetadataIntegrityCopy.corrupt(corrupt.map { integrity.name(for: $0) })
     }
 
     func mergeUserMetadataWithReport(
@@ -380,34 +476,20 @@ struct ArchiveCatalogCoordinator {
         var metadata: [String: SongUserMetadata] = [:]
         var warning: String? = nil
         if let songMetadataStore {
-            if let reporting = songMetadataStore as? any SongUserMetadataLoadReporting {
-                do {
-                    let report = try reporting.loadAllWithReport()
-                    metadata = report.metadata
-                    integrity.recordLoadSuccess(corruptSongIDs: report.corruptSongIDs)
-                    if !report.corruptSongIDs.isEmpty {
-                        let sorted = report.corruptSongIDs.sorted()
-                        let shown = sorted.prefix(3).joined(separator: ", ")
-                        let remainder = sorted.count > 3 ? ", …" : ""
-                        warning = "Song details for \(sorted.count) song(s) could not be read (corrupt stored data for: \(shown)\(remainder)); nothing was overwritten."
-                        diagnostics.log(.error, "Song metadata skipped corrupt rows for: \(sorted.joined(separator: ", "))")
-                    }
-                } catch {
-                    diagnostics.log(.error, "Song metadata load failed: \(error)")
-                    metadata = [:]
-                    integrity.recordLoadFailure()
-                    warning = "Song details could not be read; nothing was overwritten."
+            switch loadMetadataReport(songMetadataStore) {
+            case .success(let report):
+                metadata = report.metadata
+                let names = Self.names(for: scanned, ids: report.corruptSongIDs)
+                integrity.recordLoadSuccess(corruptSongIDs: report.corruptSongIDs, names: names)
+                if !report.corruptSongIDs.isEmpty {
+                    warning = SongMetadataIntegrityCopy.corrupt(report.corruptSongIDs.map { integrity.name(for: $0) })
+                    diagnostics.log(.error, "Song metadata skipped corrupt rows for: \(report.corruptSongIDs.sorted().joined(separator: ", "))")
                 }
-            } else {
-                do {
-                    metadata = try songMetadataStore.loadAll()
-                    integrity.recordLoadSuccess(corruptSongIDs: [])
-                } catch {
-                    diagnostics.log(.error, "Song metadata load failed: \(error)")
-                    metadata = [:]
-                    integrity.recordLoadFailure()
-                    warning = "Song details could not be read; nothing was overwritten."
-                }
+            case .failure(let error):
+                diagnostics.log(.error, "Song metadata load failed: \(error)")
+                metadata = [:]
+                integrity.recordLoadFailure()
+                warning = SongMetadataIntegrityCopy.loadFailedScan
             }
         }
         let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
@@ -417,6 +499,123 @@ struct ArchiveCatalogCoordinator {
             collaboratorsByID: map
         )
         return (songs, warning)
+    }
+
+    /// Tolerant full read, shared by every metadata merge.
+    private func loadMetadataReport(
+        _ store: any SongUserMetadataStoring
+    ) -> Result<SongUserMetadataLoadReport, any Error> {
+        Result {
+            if let reporting = store as? any SongUserMetadataLoadReporting {
+                return try reporting.loadAllWithReport()
+            }
+            return SongUserMetadataLoadReport(metadata: try store.loadAll())
+        }
+    }
+
+    /// `scannedTitleOnly` ignores in-memory title edits (an edit the store
+    /// just refused must not become the song's name in the warning).
+    private static func names(for songs: [Song], ids: [String], scannedTitleOnly: Bool = false) -> [String: String] {
+        guard !ids.isEmpty else { return [:] }
+        let wanted = Set(ids)
+        var names: [String: String] = [:]
+        for song in songs where wanted.contains(song.id) {
+            if scannedTitleOnly {
+                let title = song.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                names[song.id] = title.isEmpty ? song.originalFolderName : title
+            } else {
+                names[song.id] = SongMetadataIntegrityCopy.name(of: song)
+            }
+        }
+        return names
+    }
+
+    /// Merge for a single song that is being ADDED to the live catalog (new
+    /// song creation). The rest of the catalog is not replaced, so this never
+    /// raises or clears the global edit gate (D3): a failed read only pauses
+    /// edits to the new song, whose stored details are unknown, and returns a
+    /// one-off warning. Corrupt rows found on the way are added to the per-song
+    /// gate (that only ever blocks more, never less).
+    func mergeUserMetadataForNewSong(
+        _ song: Song,
+        collaborators: [Collaborator]
+    ) -> (song: Song, warning: String?) {
+        guard songMetadataStore != nil || collaboratorStore != nil else { return (song, nil) }
+        var metadata: SongUserMetadata?
+        var warning: String?
+        if let songMetadataStore {
+            switch loadMetadataReport(songMetadataStore) {
+            case .success(let report):
+                metadata = report.metadata[song.id]
+                if !report.corruptSongIDs.isEmpty {
+                    integrity.recordCorrupt(
+                        songIDs: report.corruptSongIDs,
+                        names: Self.names(for: [song], ids: report.corruptSongIDs)
+                    )
+                }
+                if report.corruptSongIDs.contains(song.id) {
+                    warning = SongMetadataIntegrityCopy.corrupt([SongMetadataIntegrityCopy.name(of: song)])
+                }
+            case .failure(let error):
+                diagnostics.log(.error, "Song metadata load for new song failed: \(error)")
+                let name = SongMetadataIntegrityCopy.name(of: song)
+                integrity.recordUnverified(songID: song.id, name: name)
+                warning = SongMetadataIntegrityCopy.unverified(name)
+            }
+        }
+        let map = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
+        let merged = ArchiveMetadataMerger.merge(scanned: song, metadata: metadata, collaboratorsByID: map)
+        return (merged, warning)
+    }
+
+    /// Explicit repair (D2): salvage each row through the store, then re-read
+    /// and unblock only the songs whose rows now decode. Other songs' gates are
+    /// untouched (their in-memory values were never replaced), and any newly
+    /// corrupt rows seen on the re-read are added to the gate.
+    func repairSongMetadata(songIDs: [String]) -> SongMetadataRepairResult {
+        var result = SongMetadataRepairResult()
+        guard let songMetadataStore, !songIDs.isEmpty else {
+            result.failedSongIDs = songIDs
+            return result
+        }
+        guard let repairing = songMetadataStore as? any SongUserMetadataRepairing else {
+            result.failedSongIDs = songIDs
+            return result
+        }
+        var cleared = Set<SongUserMetadataListColumn>()
+        var attempted: [String] = []
+        for songID in songIDs {
+            do {
+                if let repair = try repairing.repairCorruptRow(songID: songID) {
+                    cleared.formUnion(repair.clearedLists)
+                    diagnostics.log(.info, "Repaired song metadata row \(songID); cleared \(repair.clearedLists.map(\.rawValue))")
+                }
+                attempted.append(songID)
+            } catch {
+                diagnostics.log(.error, "Song metadata repair failed for \(songID): \(error)")
+                result.failedSongIDs.append(songID)
+            }
+        }
+        result.clearedLists = SongUserMetadataListColumn.allCases.filter(cleared.contains)
+        switch loadMetadataReport(songMetadataStore) {
+        case .success(let report):
+            let stillCorrupt = Set(report.corruptSongIDs)
+            if !stillCorrupt.isEmpty {
+                integrity.recordCorrupt(songIDs: report.corruptSongIDs)
+            }
+            let healed = attempted.filter { !stillCorrupt.contains($0) }
+            integrity.clearCorrupt(songIDs: healed)
+            for songID in healed {
+                result.reloaded[songID] = report.metadata[songID]
+                    ?? SongUserMetadata(songID: songID)
+            }
+            result.failedSongIDs.append(contentsOf: attempted.filter { stillCorrupt.contains($0) })
+        case .failure(let error):
+            // Repaired rows stay blocked until a later read proves them clean.
+            diagnostics.log(.error, "Song metadata reload after repair failed: \(error)")
+            result.failedSongIDs.append(contentsOf: attempted)
+        }
+        return result
     }
 
     func mergeUserMetadata(
@@ -552,11 +751,14 @@ struct ArchiveCatalogCoordinator {
     /// otherwise an edit before the first full scan could clobber a corrupt
     /// row (or defaulted values after a failed load) with no visible block.
     func applyCacheLoadReport(_ report: ArchiveCacheLoadReport) {
-        if case .loaded = report.result {
+        if case .loaded(let songs, _) = report.result {
             if report.metadataLoadFailed {
                 integrity.recordLoadFailure()
             } else if report.hasMetadataSources {
-                integrity.recordLoadSuccess(corruptSongIDs: report.corruptSongIDs)
+                integrity.recordLoadSuccess(
+                    corruptSongIDs: report.corruptSongIDs,
+                    names: Self.names(for: songs, ids: report.corruptSongIDs)
+                )
             }
         }
     }
@@ -587,10 +789,10 @@ struct ArchiveCatalogCoordinator {
                 // Store-level backstop: corruption appeared after the last load
                 // (or a caller bypassed the pre-check). Record it so later edits
                 // block without another store hit, and warn visibly.
-                integrity.recordCorrupt(songIDs: corrupt.songIDs)
+                integrity.recordCorrupt(songIDs: corrupt.songIDs, names: Self.names(for: allowed, ids: corrupt.songIDs, scannedTitleOnly: true))
                 let sorted = corrupt.songIDs.sorted()
                 diagnostics.log(.error, "Refused metadata overwrite for corrupt rows: \(sorted.joined(separator: ", "))")
-                persistWarning = "Song details for \(sorted.joined(separator: ", ")) could not be read (corrupt stored data); edits for those songs are blocked until the stored data is repaired and reloaded — nothing was overwritten."
+                persistWarning = SongMetadataIntegrityCopy.corrupt(sorted.map { integrity.name(for: $0) })
             } catch {
                 diagnostics.log(.error, "Song metadata save failed: \(error)")
                 persistWarning = "Song metadata could not be saved: \(error.localizedDescription)"

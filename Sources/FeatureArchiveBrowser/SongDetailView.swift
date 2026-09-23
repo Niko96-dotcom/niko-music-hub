@@ -74,6 +74,9 @@ struct SongDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     header
+                    if viewModel.metadataRepairSongIDs.contains(liveSong.id) {
+                        SongMetadataRepairNotice(viewModel: viewModel, scope: .song(id: liveSong.id))
+                    }
                     if geometry.size.width >= 900 {
                         HStack(alignment: .top, spacing: 32) {
                             workspace

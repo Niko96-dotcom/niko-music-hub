@@ -53,3 +53,42 @@ public struct SongUserMetadataCorruptRowError: Error, Sendable, Equatable {
         self.songIDs = [songID]
     }
 }
+
+/// JSON list columns of a song-metadata row. These are the only columns a
+/// repair may reset; every scalar column is kept as stored.
+public enum SongUserMetadataListColumn: String, CaseIterable, Sendable, Equatable {
+    case aliases
+    case ignoredPreviews
+    case collaborators
+    case hiddenProjectVersions
+
+    /// Plain-language name for user-facing repair summaries.
+    public var label: String {
+        switch self {
+        case .aliases: "aliases"
+        case .ignoredPreviews: "ignored previews"
+        case .collaborators: "collaborators"
+        case .hiddenProjectVersions: "hidden project versions"
+        }
+    }
+}
+
+public struct SongUserMetadataRowRepair: Sendable, Equatable {
+    public let songID: String
+    /// Undecodable list columns that were reset to an empty list, in column order.
+    public let clearedLists: [SongUserMetadataListColumn]
+
+    public init(songID: String, clearedLists: [SongUserMetadataListColumn]) {
+        self.songID = songID
+        self.clearedLists = clearedLists
+    }
+}
+
+/// Optional capability: explicit, user-initiated salvage of a corrupt row.
+/// Loads and ordinary upserts never repair; only this call does.
+public protocol SongUserMetadataRepairing: Sendable {
+    /// Backs up the raw row, then resets only its undecodable JSON list columns
+    /// to `[]`, keeping every other column exactly as stored. Returns nil (and
+    /// writes nothing) when the row is missing or already decodes.
+    func repairCorruptRow(songID: String) throws -> SongUserMetadataRowRepair?
+}

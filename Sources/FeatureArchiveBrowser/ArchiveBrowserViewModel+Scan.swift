@@ -75,6 +75,7 @@ extension ArchiveBrowserViewModel {
         mixdownKeyBySongID = [:]
         cprPluginSummaryByCPRPath = [:]
         cachedSearchIndex = MusicSearchIndex()
+        metadataRepairSongIDs = []
         setStatusMessage(nextStatusMessage)
     }
 
@@ -113,6 +114,7 @@ extension ArchiveBrowserViewModel {
                     self.scannedSongs = songs
                     self.songs = songs
                 }
+                self.syncMetadataRepairState()
                 // While the launch scan runs, its status line stays in charge.
                 if !self.isScanning {
                     let relative = HubRelativeTime.string(for: scannedAt)
