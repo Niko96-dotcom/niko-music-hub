@@ -318,8 +318,10 @@ final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable
     private var abandoned = false
     private let lookupProcessObject: @Sendable () -> AudioObjectID?
     private let makeSession: @Sendable (AudioObjectID) -> SystemAudioProcessTapSession
+    private let stopDeadline: Duration
 
     init(
+        stopDeadline: Duration = .seconds(1),
         lookupProcessObject: @escaping @Sendable () -> AudioObjectID? = { MutedSelfProcessTap.currentProcessObject() },
         makeSession: @escaping @Sendable (AudioObjectID) -> SystemAudioProcessTapSession = { processObject in
             SystemAudioProcessTapSession(makeTapDescription: {
@@ -331,6 +333,7 @@ final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable
             })
         }
     ) {
+        self.stopDeadline = stopDeadline
         self.lookupProcessObject = lookupProcessObject
         self.makeSession = makeSession
         queue.setSpecific(key: Self.queueKey, value: true)
@@ -390,12 +393,21 @@ final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable
         try session.startSynchronously(generation: 1, callbacks: callbacks)
     }
 
+    /// Orderly teardown on the HAL queue, bounded by `stopDeadline`: if a HAL call in it
+    /// (or a start still ahead of it on the queue) is stuck, the tap is destroyed directly
+    /// from another queue so the app is never left muted. The late teardown then skips it.
     func stop() async {
         guard let session = lock.withLock({ session }) else { return }
+        let deadline = stopDeadline.components
+        let seconds = Double(deadline.seconds) + Double(deadline.attoseconds) / 1e18
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let race = TapStopRace(continuation)
             queue.async {
                 session.stopSynchronously()
-                continuation.resume()
+                race.finish()
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + seconds) {
+                race.finish { session.releaseMute() }
             }
         }
     }
@@ -419,6 +431,27 @@ final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable
         )
         guard status == noErr, processObject != kAudioObjectUnknown else { return nil }
         return processObject
+    }
+}
+
+/// Resumes `stop` once: on orderly teardown, or at the deadline after lifting the mute.
+private final class TapStopRace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private let continuation: CheckedContinuation<Void, Never>
+
+    init(_ continuation: CheckedContinuation<Void, Never>) {
+        self.continuation = continuation
+    }
+
+    func finish(first action: () -> Void = {}) {
+        let won = lock.withLock { () -> Bool in
+            defer { finished = true }
+            return !finished
+        }
+        guard won else { return }
+        action()
+        continuation.resume()
     }
 }
 

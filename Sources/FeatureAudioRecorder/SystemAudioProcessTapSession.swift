@@ -144,8 +144,8 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         removePropertyListeners()
 
         if let ioProcID, aggregateDeviceID != kAudioObjectUnknown {
-            AudioDeviceStop(aggregateDeviceID, ioProcID)
-            AudioDeviceDestroyIOProcID(aggregateDeviceID, ioProcID)
+            hal.stopDevice(aggregateDeviceID, ioProcID)
+            hal.destroyIOProc(aggregateDeviceID, ioProcID)
             self.ioProcID = nil
         }
         // The aggregate references the tap, so destroy it before the tap itself.
@@ -186,14 +186,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func readTapStreamDescription(tapID: AudioObjectID) throws -> AudioStreamBasicDescription {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioTapPropertyFormat,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        var description = AudioStreamBasicDescription()
-        let status = AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &description)
+        let (status, description) = hal.readTapFormat(tapID)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not read tap format")
         }
@@ -202,14 +195,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
 
     /// The clock rate the aggregate's IO proc actually runs at.
     private func readNominalSampleRate(deviceID: AudioObjectID) throws -> Double {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyNominalSampleRate,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<Double>.size)
-        var sampleRate: Double = 0
-        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
+        let (status, sampleRate) = hal.readNominalSampleRate(deviceID)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not read aggregate device sample rate")
         }
@@ -221,8 +207,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func installIOProc(deviceID: AudioObjectID) throws {
-        var procID: AudioDeviceIOProcID?
-        let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, ioQueue) { [weak self] _, inputData, _, _, _ in
+        let (status, procID) = hal.createIOProc(deviceID, ioQueue) { [weak self] _, inputData, _, _, _ in
             self?.handleAudio(inputData)
         }
         guard status == noErr, let procID else {
@@ -233,7 +218,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
 
     private func startDevice(deviceID: AudioObjectID) throws {
         guard let ioProcID else { throw RecorderError.apiError("IO proc not installed") }
-        let status = AudioDeviceStart(deviceID, ioProcID)
+        let status = hal.startDevice(deviceID, ioProcID)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not start aggregate device")
         }
@@ -301,7 +286,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         selector: AudioObjectPropertySelector,
         scope: AudioObjectPropertyScope
     ) throws {
-        var address = AudioObjectPropertyAddress(
+        let address = AudioObjectPropertyAddress(
             mSelector: selector,
             mScope: scope,
             mElement: kAudioObjectPropertyElementMain
@@ -316,7 +301,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
                 callback?.onRouteChange()
             }
         }
-        let status = AudioObjectAddPropertyListenerBlock(objectID, &address, listenerQueue, block)
+        let status = hal.addPropertyListener(objectID, address, listenerQueue, block)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not observe audio route property \(selector)")
         }
@@ -324,26 +309,34 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func removePropertyListeners() {
-        for var registration in propertyRegistrations {
-            AudioObjectRemovePropertyListenerBlock(
-                registration.objectID,
-                &registration.address,
-                listenerQueue,
-                registration.block
-            )
+        for registration in propertyRegistrations {
+            hal.removePropertyListener(registration.objectID, registration.address, listenerQueue, registration.block)
         }
         propertyRegistrations.removeAll()
     }
 }
 
-/// The HAL calls that create and destroy a tap graph's objects, injectable so tests can
-/// make one hang. The rest of the graph talks to Core Audio directly.
+/// Every HAL call a tap graph makes, injectable so tests can run the graph against a fake
+/// and make any call hang.
 struct SystemAudioTapHAL: Sendable {
     var createProcessTap: @Sendable (CATapDescription) -> (OSStatus, AudioObjectID)
     var destroyProcessTap: @Sendable (AudioObjectID) -> Void
     var readDefaultSystemOutputDevice: @Sendable () throws -> (id: AudioObjectID, uid: String)
     var createAggregateDevice: @Sendable ([String: Any]) -> (OSStatus, AudioObjectID)
     var destroyAggregateDevice: @Sendable (AudioObjectID) -> Void
+    var readTapFormat: @Sendable (AudioObjectID) -> (OSStatus, AudioStreamBasicDescription)
+    var readNominalSampleRate: @Sendable (AudioObjectID) -> (OSStatus, Double)
+    var createIOProc: @Sendable (AudioObjectID, DispatchQueue, @escaping AudioDeviceIOBlock)
+        -> (OSStatus, AudioDeviceIOProcID?)
+    var destroyIOProc: @Sendable (AudioObjectID, AudioDeviceIOProcID) -> Void
+    var startDevice: @Sendable (AudioObjectID, AudioDeviceIOProcID) -> OSStatus
+    var stopDevice: @Sendable (AudioObjectID, AudioDeviceIOProcID) -> Void
+    var addPropertyListener: @Sendable (
+        AudioObjectID, AudioObjectPropertyAddress, DispatchQueue, @escaping AudioObjectPropertyListenerBlock
+    ) -> OSStatus
+    var removePropertyListener: @Sendable (
+        AudioObjectID, AudioObjectPropertyAddress, DispatchQueue, @escaping AudioObjectPropertyListenerBlock
+    ) -> Void
 
     static let live = SystemAudioTapHAL(
         createProcessTap: { description in
@@ -358,7 +351,45 @@ struct SystemAudioTapHAL: Sendable {
             let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &id)
             return (status, id)
         },
-        destroyAggregateDevice: { _ = AudioHardwareDestroyAggregateDevice($0) }
+        destroyAggregateDevice: { _ = AudioHardwareDestroyAggregateDevice($0) },
+        readTapFormat: { tapID in
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioTapPropertyFormat,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            var description = AudioStreamBasicDescription()
+            let status = AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &description)
+            return (status, description)
+        },
+        readNominalSampleRate: { deviceID in
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyNominalSampleRate,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var size = UInt32(MemoryLayout<Double>.size)
+            var sampleRate: Double = 0
+            let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
+            return (status, sampleRate)
+        },
+        createIOProc: { deviceID, queue, block in
+            var procID: AudioDeviceIOProcID?
+            let status = AudioDeviceCreateIOProcIDWithBlock(&procID, deviceID, queue, block)
+            return (status, procID)
+        },
+        destroyIOProc: { _ = AudioDeviceDestroyIOProcID($0, $1) },
+        startDevice: { AudioDeviceStart($0, $1) },
+        stopDevice: { _ = AudioDeviceStop($0, $1) },
+        addPropertyListener: { objectID, address, queue, block in
+            var address = address
+            return AudioObjectAddPropertyListenerBlock(objectID, &address, queue, block)
+        },
+        removePropertyListener: { objectID, address, queue, block in
+            var address = address
+            _ = AudioObjectRemovePropertyListenerBlock(objectID, &address, queue, block)
+        }
     )
 }
 
