@@ -105,7 +105,7 @@ extension ArchiveBrowserViewModel {
         needsFirstRunOnboarding = !completed && !hasDevBootstrap
     }
 
-    func completeArchiveOnboarding() {
+    public func completeArchiveOnboarding() {
         do {
             try settingsStore.updateSettings { settings in
                 settings.archiveOnboardingCompleted = true

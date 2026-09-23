@@ -66,7 +66,7 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "context.fileActions.chooseExecutable",
             "archiveViewModel.addRoot",
             "archiveViewModel.removeRoot",
-            "Read-only scan roots",
+            "Scanned read-only. Only a confirmed Project Vault archive removes a song folder",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Settings safety/accessibility source: \(required)")
         }

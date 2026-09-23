@@ -30,6 +30,7 @@ public struct AppErrorCard {
     public enum RecoveryActionType: Equatable {
         case openSystemSettings
         case openHubSettingsHelpers
+        case installHelperTools
         case tryAgain
         case chooseToolPath
         case revealInFinder

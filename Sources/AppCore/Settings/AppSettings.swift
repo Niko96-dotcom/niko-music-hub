@@ -237,6 +237,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public var scanExclusionTerms: String
     /// Menu-bar extra (waveform). Missing keys decode as `true` so 1.5.4 upgraders keep it.
     public var showMenuBarExtra: Bool
+    /// First-run helper-tool Set Up sheet was shown. Missing keys decode as `false`.
+    public var setupAssistantShown: Bool
 
     private enum CodingKeys: String, CodingKey {
         case outputFolder
@@ -251,6 +253,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         case archiveOnboardingCompleted
         case scanExclusionTerms
         case showMenuBarExtra
+        case setupAssistantShown
     }
 
     public init(
@@ -264,7 +267,8 @@ public struct AppSettings: Equatable, Codable, Sendable {
         appearance: AppAppearance = .followSystem,
         archiveOnboardingCompleted: Bool = false,
         scanExclusionTerms: String = "",
-        showMenuBarExtra: Bool = true
+        showMenuBarExtra: Bool = true,
+        setupAssistantShown: Bool = false
     ) {
         self.outputFolder = outputFolder
         self.audioPreset = audioPreset
@@ -284,6 +288,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         self.archiveOnboardingCompleted = archiveOnboardingCompleted
         self.scanExclusionTerms = scanExclusionTerms
         self.showMenuBarExtra = showMenuBarExtra
+        self.setupAssistantShown = setupAssistantShown
     }
 
     public init(from decoder: Decoder) throws {
@@ -310,6 +315,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         archiveOnboardingCompleted = (try? container.decodeIfPresent(Bool.self, forKey: .archiveOnboardingCompleted)) ?? false
         scanExclusionTerms = (try? container.decodeIfPresent(String.self, forKey: .scanExclusionTerms)) ?? ""
         showMenuBarExtra = (try? container.decodeIfPresent(Bool.self, forKey: .showMenuBarExtra)) ?? true
+        setupAssistantShown = (try? container.decodeIfPresent(Bool.self, forKey: .setupAssistantShown)) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -324,6 +330,7 @@ public struct AppSettings: Equatable, Codable, Sendable {
         try container.encode(archiveOnboardingCompleted, forKey: .archiveOnboardingCompleted)
         try container.encode(scanExclusionTerms, forKey: .scanExclusionTerms)
         try container.encode(showMenuBarExtra, forKey: .showMenuBarExtra)
+        try container.encode(setupAssistantShown, forKey: .setupAssistantShown)
     }
 
     /// Compatibility surface for existing archive-browser callers. Root-list edits only

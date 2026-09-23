@@ -56,19 +56,22 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
     private let jobRunner: any JobRunning
     private let settingsStore: any SettingsStore
     private let simulateRunner: any ExternalProcessRunning
+    private let locator: HelperToolLocator
 
     public init(
         downloader: any DownloadRunning,
         healthChecker: YtDlpHealthChecker,
         jobRunner: any JobRunning,
         settingsStore: any SettingsStore,
-        simulateRunner: any ExternalProcessRunning = FoundationExternalProcessRunner()
+        simulateRunner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        locator: HelperToolLocator = .standard()
     ) {
         self.downloader = downloader
         self.healthChecker = healthChecker
         self.jobRunner = jobRunner
         self.settingsStore = settingsStore
         self.simulateRunner = simulateRunner
+        self.locator = locator
     }
 
     public func simulateAndEnqueue(url: URL, options: DownloadJobOptions) async throws -> Job {
@@ -77,7 +80,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         let availability = await healthChecker.availability(settings: settings.helperTools)
         switch availability {
         case .missing:
-            throw DownloadUseCaseError.ytDlpUnavailable("yt-dlp path is not set in Settings.")
+            throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
         case let .unusable(message):
             throw DownloadUseCaseError.ytDlpUnavailable(message)
         case let .outdated(current, minimumExpected):
@@ -88,9 +91,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             break
         }
 
-        let ytDlpURL = settings.helperTools.ytDlp ?? YtDlpHealthChecker.detectYtDlp()
-        guard let ytDlpURL = ytDlpURL else {
-            throw DownloadUseCaseError.ytDlpUnavailable("yt-dlp path is not set in Settings and auto-detection failed.")
+        guard let ytDlpURL = healthChecker.resolvedYtDlpURL(settings: settings.helperTools) else {
+            throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
         }
 
         let simulateRequest = ExternalProcessRequest(
@@ -98,10 +100,10 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             arguments: YtDlpDownloadCommandBuilder.simulateArguments(
                 formatSelection: options.formatSelection,
                 sourceURL: url,
-                ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools),
+                ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools, locator: locator),
                 playlistMode: options.playlistMode
             ),
-            environment: DownloaderHelperToolResolver.processEnvironment(settings: settings.helperTools),
+            environment: DownloaderHelperToolResolver.processEnvironment(settings: settings.helperTools, locator: locator),
             timeoutSeconds: 30
         )
 
@@ -149,9 +151,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         for attempt in 0..<options.retries {
             do {
                 let settings = try settingsStore.loadSettings()
-                let ytDlpURL = settings.helperTools.ytDlp ?? YtDlpHealthChecker.detectYtDlp()
-                guard let ytDlpURL = ytDlpURL else {
-                    throw DownloadUseCaseError.ytDlpUnavailable("yt-dlp path is not set and auto-detection failed.")
+                guard let ytDlpURL = healthChecker.resolvedYtDlpURL(settings: settings.helperTools) else {
+                    throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
                 }
 
                 let request = DownloadRequest(
@@ -160,8 +161,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                     outputDirectory: options.outputDirectory,
                     outputTemplate: options.fileNameTemplate,
                     formatSelection: options.formatSelection,
-                    ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools),
-                    helperSearchDirectories: DownloaderHelperToolResolver.helperSearchDirectories(settings: settings.helperTools),
+                    ffmpegLocationURL: DownloaderHelperToolResolver.ffmpegLocationURL(settings: settings.helperTools, locator: locator),
+                    helperSearchDirectories: DownloaderHelperToolResolver.helperSearchDirectories(settings: settings.helperTools, locator: locator),
                     playlistMode: options.playlistMode
                 )
 

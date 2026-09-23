@@ -77,6 +77,7 @@ struct StemSeparationViewModelTests {
         fileManager.createFile(atPath: fixtureAudio.path, contents: Data("RIFF".utf8))
         let helperURL = scratch.appendingPathComponent("demucs-mlx")
         fileManager.createFile(atPath: helperURL.path, contents: Data())
+        try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helperURL.path)
         let outputRoot = scratch.appendingPathComponent("output", isDirectory: true)
         try fileManager.createDirectory(at: outputRoot, withIntermediateDirectories: true)
 
@@ -269,6 +270,84 @@ struct StemSeparationViewModelTests {
         vm.loadResults()
 
         #expect(vm.results.first?.id == newer.id)
+    }
+
+    @Test
+    func canStart_isFalseWhileHelperNeedsSetup() async throws {
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let settingsStore = FakeSettingsStore()
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
+        let vm = StemSeparationViewModel(
+            context: context,
+            service: service,
+            healthChecker: DemucsMLXHealthChecker(locator: emptyLocator)
+        )
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+        #expect(vm.canStart == true)
+        vm.refreshHelperHealth()
+        for _ in 0..<100 where vm.helperNeedsSetup == false && vm.errorMessage == nil {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.canStart == false)
+        #expect(vm.errorMessage == StemSeparationHelperCopy.missingBody)
+    }
+
+    @Test
+    func unusableHealth_setsDiagnosticInsteadOfMissingSentence() async throws {
+        let executable = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let fixtureLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [executable.deletingLastPathComponent()],
+            isExecutable: { $0 == executable.path }
+        )
+        struct FailingRunner: ExternalProcessRunning {
+            func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+                .init(exitCode: 1, standardOutput: "", standardError: "boom line1\nline2")
+            }
+        }
+        let settingsStore = FakeSettingsStore()
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
+        let vm = StemSeparationViewModel(
+            context: context,
+            service: service,
+            healthChecker: DemucsMLXHealthChecker(runner: FailingRunner(), locator: fixtureLocator)
+        )
+        vm.refreshHelperHealth()
+        for _ in 0..<100 where vm.helperNeedsSetup == false {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.errorMessage == "demucs-mlx could not start: boom line1")
     }
 }
 

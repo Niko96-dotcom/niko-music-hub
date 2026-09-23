@@ -44,11 +44,11 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
         XCTAssertEqual(card.category, .helperTool)
         XCTAssertEqual(
             card.recoveryActions.map(\.label),
-            ["Open Settings", "Choose Path", "Try Again"]
+            ["Install Tools", "Choose Path", "Try Again"]
         )
         XCTAssertEqual(
             card.recoveryActions.map(\.action),
-            [.openHubSettingsHelpers, .chooseToolPath, .tryAgain]
+            [.installHelperTools, .chooseToolPath, .tryAgain]
         )
         XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
         XCTAssertFalse(card.recoveryActions.contains { $0.label == "Open Terminal" })
@@ -63,7 +63,7 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
         XCTAssertEqual(card.category, .helperTool)
         XCTAssertEqual(
             card.recoveryActions.map(\.action),
-            [.openHubSettingsHelpers, .chooseToolPath, .tryAgain]
+            [.installHelperTools, .chooseToolPath, .tryAgain]
         )
         XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
     }

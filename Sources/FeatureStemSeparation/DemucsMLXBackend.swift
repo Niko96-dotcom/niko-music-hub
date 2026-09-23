@@ -109,16 +109,15 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             return String(format: "%d:%02d elapsed", minutes, seconds)
         }
 
-        let progressHandler: @Sendable (Double?, String?) -> Void = { progress, message in
+        let tracker = DemucsProgressTracker()
+        let progressHandler: @Sendable (Double, String?) -> Void = { progress, message in
             var parts: [String] = []
             if let message {
                 parts.append(message)
             }
-            if progress != nil {
-                parts.append(elapsedFormatter(Date().timeIntervalSince(startTime)))
-            }
-            let combined = parts.isEmpty ? elapsedFormatter(Date().timeIntervalSince(startTime)) : parts.joined(separator: " | ")
-            onProgress(progress ?? -1, combined)
+            parts.append(elapsedFormatter(Date().timeIntervalSince(startTime)))
+            let combined = parts.joined(separator: " | ")
+            onProgress(progress, combined)
         }
 
         do {
@@ -126,11 +125,11 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             if let streamingRunner = runner as? any StreamingExternalProcessRunning {
                 result = try await streamingRunner.run(
                     processRequest,
-                    onStandardOutput: { [weak self] line in
-                        self?.handleLine(line, progressHandler: progressHandler)
+                    onStandardOutput: { [weak self] chunk in
+                        self?.handleChunk(chunk, tracker: tracker, progressHandler: progressHandler)
                     },
-                    onStandardError: { [weak self] line in
-                        self?.handleLine(line, progressHandler: progressHandler)
+                    onStandardError: { [weak self] chunk in
+                        self?.handleChunk(chunk, tracker: tracker, progressHandler: progressHandler)
                     }
                 )
             } else {
@@ -199,15 +198,38 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         }
     }
 
-    private func handleLine(
-        _ line: String,
-        progressHandler: @escaping @Sendable (Double?, String?) -> Void
+    private func handleChunk(
+        _ chunk: String,
+        tracker: DemucsProgressTracker,
+        progressHandler: @escaping @Sendable (Double, String?) -> Void
     ) {
-        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let pieces = chunk.split(whereSeparator: { $0 == "\r" || $0 == "\n" })
+        for raw in pieces {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            guard let parsed = progressParser.parse(line: String(trimmed)) else { continue }
+            let reported = tracker.next(for: parsed.progress)
+            progressHandler(reported, parsed.message)
+        }
+    }
+}
 
-        if let parsed = progressParser.parse(line: trimmed) {
-            progressHandler(parsed.progress, parsed.message)
+private final class DemucsProgressTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastKnown: Double = 0
+    private var maxReported: Double = 0
+
+    func next(for parsed: Double?) -> Double {
+        lock.withLock {
+            let candidate: Double
+            if let parsed {
+                candidate = max(parsed, lastKnown, maxReported)
+            } else {
+                candidate = max(lastKnown, maxReported)
+            }
+            lastKnown = candidate
+            maxReported = max(maxReported, candidate)
+            return candidate
         }
     }
 }

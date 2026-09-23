@@ -8,6 +8,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     private let ffmpegConverterFactory: FFmpegConverterFactory?
     private let healthChecker: FFmpegHealthChecker
     private let helperSettings: HelperToolSettings
+    private let cachedFFmpegURL: LockedFFmpegURL
 
     public init(
         native: any AudioConverting = NativeAudioConverter(),
@@ -21,6 +22,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
         self.helperSettings = helperSettings
         self.ffmpegConverterFactory = ffmpegConverterFactory
         self.healthChecker = healthChecker
+        self.cachedFFmpegURL = LockedFFmpegURL()
     }
 
     public func convert(_ request: ConversionRequest) async throws -> ConversionResult {
@@ -39,11 +41,17 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
             throw missingFFmpegError()
         }
 
+        if let cachedURL = cachedFFmpegURL.value {
+            let ffmpeg = ffmpegConverterFactory(cachedURL)
+            return try await ffmpeg.convert(request)
+        }
+
         switch await healthChecker.availability(settings: helperSettings) {
         case .available:
             guard let ffmpegURL = healthChecker.resolvedFFmpegURL(settings: helperSettings) else {
                 throw missingFFmpegError()
             }
+            cachedFFmpegURL.value = ffmpegURL
             let ffmpeg = ffmpegConverterFactory(ffmpegURL)
             return try await ffmpeg.convert(request)
         case .missing:
@@ -77,5 +85,15 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
         .missingFFmpeg(
             message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
         )
+    }
+}
+
+private final class LockedFFmpegURL: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: URL?
+
+    var value: URL? {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
     }
 }

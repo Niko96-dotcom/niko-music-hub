@@ -25,15 +25,13 @@ struct DemucsMLXBackendTests {
                 (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
             ]
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let progressCollector = ProgressCollector()
         let messages = MessageCollector()
         let result = await backend.separate(request: request) { progress, message in
             if let message { messages.add(message) }
-            if progress >= 0 {
-                progressCollector.add(progress)
-            }
+            progressCollector.add(progress)
         }
         let progressValues = progressCollector.values
 
@@ -43,7 +41,10 @@ struct DemucsMLXBackendTests {
         }
         #expect(folder == outputFolder)
         #expect(stems.count == 4)
-        #expect(progressValues.contains(0.25))
+        // The fake replays all stdout before stderr, so stderr's 25% arrives after
+        // 100%; progress never moves backwards, so it must not appear.
+        #expect(!progressValues.contains(0.25))
+        #expect(progressValues == progressValues.sorted())
         #expect(!messages.messages.contains { $0.contains("stderr:") || $0.contains("track/s") || $0.contains("chatter") })
         #expect(progressValues.contains(0.1))
         #expect(progressValues.contains(0.5))
@@ -72,7 +73,7 @@ struct DemucsMLXBackendTests {
                 (nestedFolder.appendingPathComponent("other.wav"), Data("o".utf8))
             ]
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let result = await backend.separate(request: request) { _, _ in }
 
@@ -100,7 +101,7 @@ struct DemucsMLXBackendTests {
             filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8))],
             cancellationPoint: 0
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let task = Task {
             await backend.separate(request: request) { _, _ in }
@@ -120,7 +121,7 @@ struct DemucsMLXBackendTests {
         let secondOutput = makeOutputFolder()
         let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
         let runner = BlockingConcurrentRunner()
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
         let firstRequest = StemSeparationBackendRequest(
             inputURL: URL(fileURLWithPath: "/Users/music/first.wav"),
             outputFolderURL: firstOutput,
@@ -170,10 +171,15 @@ struct DemucsMLXBackendTests {
             preset: .fast4
         )
         let settings = HelperToolSettings()
-        let healthChecker = DemucsMLXHealthChecker(fileExists: { _ in false })
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
         let backend = DemucsMLXBackend(
             settings: settings,
-            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker)
+            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
         )
 
         let result = await backend.separate(request: request) { _, _ in }
@@ -199,7 +205,7 @@ struct DemucsMLXBackendTests {
             outputLines: ["Loading model"],
             errorLines: ["ModelDownloadError: could not fetch weights"]
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let result = await backend.separate(request: request) { _, _ in }
 
@@ -225,7 +231,7 @@ struct DemucsMLXBackendTests {
             errorLines: [],
             filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8))]
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let result = await backend.separate(request: request) { _, _ in }
 
@@ -256,7 +262,7 @@ struct DemucsMLXBackendTests {
                 (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
             ]
         )
-        let backend = DemucsMLXBackend(settings: settings, runner: runner)
+        let backend = makeBackend(settings: settings, runner: runner)
 
         let messageCollector = MessageCollector()
         _ = await backend.separate(request: request) { _, message in
@@ -266,6 +272,67 @@ struct DemucsMLXBackendTests {
 
         #expect(messages.contains { $0.contains("elapsed") })
     }
+
+    @Test
+    func separate_chunkWithCarriageReturns_reportsEachUpdateWithoutRegression() async throws {
+        let outputFolder = makeOutputFolder()
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: outputFolder,
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = ChunkStreamingRunner(
+            exitCode: 0,
+            chunks: ["Tracks:  10%|█\rTracks:  40%|██\r", "Writing vocals.wav\n"],
+            filesToWrite: [
+                (outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
+                (outputFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
+                (outputFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
+                (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+            ]
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let progressCollector = ProgressCollector()
+        let result = await backend.separate(request: request) { progress, _ in
+            progressCollector.add(progress)
+        }
+        guard case .success = result else {
+            Issue.record("Expected success, got \(result)")
+            return
+        }
+        let values = progressCollector.values
+        #expect(!values.contains { $0 < 0 })
+        #expect(values.contains(0.1))
+        #expect(values.contains(0.4))
+        // The "Writing" phase carries no percentage; it must repeat the last
+        // known fraction instead of jumping back to 0 or -1.
+        #expect(values.count >= 3)
+        #expect(values.last == 0.4)
+        var maxSoFar = 0.0
+        for value in values {
+            #expect(value >= maxSoFar - 1e-9)
+            maxSoFar = max(maxSoFar, value)
+        }
+    }
+}
+
+private func makeBackend(settings: HelperToolSettings, runner: any StreamingExternalProcessRunning) -> DemucsMLXBackend {
+    let executables: Set<String> = settings.demucsMlx.map { [$0.path] } ?? []
+    let locator = HelperToolLocator(
+        managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+        systemDirectories: [],
+        isExecutable: { executables.contains($0) }
+    )
+    let healthChecker = DemucsMLXHealthChecker(locator: locator)
+    let commandBuilder = DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: locator)
+    return DemucsMLXBackend(
+        settings: settings,
+        healthChecker: healthChecker,
+        commandBuilder: commandBuilder,
+        runner: runner
+    )
 }
 
 private func makeOutputFolder() -> URL {
@@ -343,8 +410,7 @@ private final class BlockingConcurrentRunner: StreamingExternalProcessRunning, @
     )
 }
 
-private final class FakeStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {
-    private let exitCode: Int32
+private final class FakeStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {    private let exitCode: Int32
     private let outputLines: [String]
     private let errorLines: [String]
     private let filesToWrite: [(URL, Data)]
@@ -406,6 +472,42 @@ private final class FakeStreamingRunner: StreamingExternalProcessRunning, @unche
             exitCode: exitCode,
             standardOutput: combinedOutput,
             standardError: combinedError
+        )
+    }
+}
+
+private final class ChunkStreamingRunner: StreamingExternalProcessRunning, @unchecked Sendable {
+    private let exitCode: Int32
+    private let chunks: [String]
+    private let filesToWrite: [(URL, Data)]
+
+    init(exitCode: Int32, chunks: [String], filesToWrite: [(URL, Data)] = []) {
+        self.exitCode = exitCode
+        self.chunks = chunks
+        self.filesToWrite = filesToWrite
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        for chunk in chunks {
+            try Task.checkCancellation()
+            onStandardOutput(chunk)
+        }
+        for (url, data) in filesToWrite {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: url.path, contents: data)
+        }
+        return ExternalProcessResult(
+            exitCode: exitCode,
+            standardOutput: chunks.joined(),
+            standardError: ""
         )
     }
 }

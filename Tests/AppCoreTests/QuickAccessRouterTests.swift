@@ -169,6 +169,17 @@ final class QuickAccessRouterTests: XCTestCase {
         )
     }
 
+    // MARK: - Helper-tool Set Up sheet request
+
+    func testRequestHelperToolSetupIncrementsOneShotCounter() {
+        let router = QuickAccessRouter()
+        XCTAssertEqual(router.helperSetupRequest, 0)
+        router.requestHelperToolSetup()
+        XCTAssertEqual(router.helperSetupRequest, 1)
+        router.requestHelperToolSetup()
+        XCTAssertEqual(router.helperSetupRequest, 2)
+    }
+
     // MARK: - HAND-04: router does not call OutputHandoff
 
     func testRouterSourceDoesNotReferenceOutputHandoff() throws {

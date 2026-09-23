@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ArchiveFirstRunView: View {
     let onChooseRoot: () -> Void
+    let onSkip: () -> Void
 
     var body: some View {
         VStack(spacing: HubDesignSystem.Spacing.panel) {
@@ -37,6 +38,14 @@ struct ArchiveFirstRunView: View {
                 onChooseRoot()
             }
             .controlSize(.large)
+
+            HubLabeledButton(
+                icon: "clock",
+                label: "Not Now",
+                style: .ghost
+            ) {
+                onSkip()
+            }
         }
         .padding(28)
         .frame(maxWidth: 420)

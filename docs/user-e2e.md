@@ -15,7 +15,7 @@ This script:
 5. Asserts stdout includes user-flow markers, search match explainability (`search_match_summary`), CPR path, dry-run log, read-only write-probe, and unchanged fixture tree
 6. Launches the real `.app` bundle through `./script/build_and_run.sh --verify`, captures `.build/e2e-public-ui.png`, dumps the macOS accessibility tree, and asserts the normal first-run UI is clean
 
-The public first-run UI smoke requires the archive onboarding and Output Inbox empty state, and rejects prototype/community-hostile strings such as `Outside Cubase`, `Dev Tool`, fixture roots, `/var/folders`, and exposed scan diagnostics.
+The public first-run UI smoke requires the Set Up sheet (helper tools + music archive rows) over the empty archive board, and rejects prototype/community-hostile strings such as `Outside Cubase`, `Dev Tool`, fixture roots, `/var/folders`, and exposed scan diagnostics.
 
 Environment variables:
 

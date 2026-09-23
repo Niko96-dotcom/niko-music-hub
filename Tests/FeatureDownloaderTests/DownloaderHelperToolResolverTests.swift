@@ -3,24 +3,41 @@ import AppCore
 import XCTest
 
 final class DownloaderHelperToolResolverTests: XCTestCase {
+    private func locator(executables: Set<String>, managedRoot: String = "/nonexistent-managed") -> HelperToolLocator {
+        HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: managedRoot, isDirectory: true),
+            systemDirectories: [URL(fileURLWithPath: "/fixture/bin", isDirectory: true)],
+            isExecutable: { executables.contains($0) }
+        )
+    }
+
     func testFfmpegLocationPrefersConfiguredPath() {
         let settings = HelperToolSettings(
             ffmpeg: URL(fileURLWithPath: "/custom/helpers/ffmpeg")
         )
         let location = DownloaderHelperToolResolver.ffmpegLocationURL(
             settings: settings,
-            fileExists: { $0 == "/custom/helpers/ffmpeg" }
+            locator: locator(executables: ["/custom/helpers/ffmpeg"])
         )
         XCTAssertEqual(location?.path, "/custom/helpers")
     }
 
-    func testFfmpegLocationFallsBackToCommonDirectories() {
+    func testFfmpegLocationFallsBackToSystemDirectories() {
         let settings = HelperToolSettings(ffmpeg: nil)
         let location = DownloaderHelperToolResolver.ffmpegLocationURL(
             settings: settings,
-            fileExists: { $0 == "/opt/homebrew/bin/ffmpeg" }
+            locator: locator(executables: ["/fixture/bin/ffmpeg"])
         )
-        XCTAssertEqual(location?.path, "/opt/homebrew/bin")
+        XCTAssertEqual(location?.path, "/fixture/bin")
+    }
+
+    func testFfmpegLocationIsNilWhenNothingResolves() {
+        let settings = HelperToolSettings(ffmpeg: URL(fileURLWithPath: "/deleted/ffmpeg"))
+        let location = DownloaderHelperToolResolver.ffmpegLocationURL(
+            settings: settings,
+            locator: locator(executables: [])
+        )
+        XCTAssertNil(location)
     }
 
     func testProcessEnvironmentPrependsHelperDirectoriesToStrippedPath() {
@@ -60,19 +77,31 @@ final class DownloaderHelperToolResolverTests: XCTestCase {
         XCTAssertNil(environment)
     }
 
-    func testHelperSearchDirectoriesIncludeConfiguredAndCommonPaths() {
+    func testHelperSearchDirectoriesIncludeConfiguredAndSystemPaths() {
         let settings = HelperToolSettings(
             ffmpeg: URL(fileURLWithPath: "/custom/bin/ffmpeg"),
             ytDlp: URL(fileURLWithPath: "/custom/bin/yt-dlp")
         )
         let directories = DownloaderHelperToolResolver.helperSearchDirectories(
             settings: settings,
-            fileExists: { path in
-                path == "/custom/bin/yt-dlp" || path == "/custom/bin/ffmpeg"
-            }
+            locator: locator(executables: ["/custom/bin/yt-dlp", "/custom/bin/ffmpeg"])
         )
         let paths = Set(directories.map(\.path))
         XCTAssertTrue(paths.contains("/custom/bin"))
-        XCTAssertTrue(paths.contains("/opt/homebrew/bin"))
+        XCTAssertTrue(paths.contains("/fixture/bin"))
+    }
+
+    func testSettingsProcessEnvironmentUsesLocator() {
+        let settings = HelperToolSettings(
+            ffmpeg: URL(fileURLWithPath: "/custom/bin/ffmpeg")
+        )
+        let environment = DownloaderHelperToolResolver.processEnvironment(
+            settings: settings,
+            base: ["PATH": "/usr/bin:/bin"],
+            locator: locator(executables: ["/custom/bin/ffmpeg"])
+        )
+        let path = environment?["PATH"] ?? ""
+        XCTAssertTrue(path.contains("/custom/bin"))
+        XCTAssertTrue(path.contains("/usr/bin:/bin"))
     }
 }

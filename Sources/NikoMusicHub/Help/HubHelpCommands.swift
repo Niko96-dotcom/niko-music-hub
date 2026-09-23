@@ -2,12 +2,11 @@ import AppCore
 import SwiftUI
 
 /// Help menu: app Help window plus section jumps (NMH-014).
-/// Helper Tools also opens Settings → Helpers.
+/// Set Up Helper Tools opens the one-click setup sheet.
 struct HubHelpCommands: Commands {
     let router: QuickAccessRouter
 
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
 
     var body: some Commands {
         CommandGroup(replacing: .help) {
@@ -16,15 +15,16 @@ struct HubHelpCommands: Commands {
             }
             .keyboardShortcut("?", modifiers: .command)
 
+            Button("Set Up Helper Tools…") {
+                router.requestHelperToolSetup()
+                openWindow(id: "main")
+            }
+
             Divider()
 
             ForEach(HubHelpTopics.all) { topic in
                 Button(topic.menuTitle) {
                     openHelp(topic: topic)
-                    if topic == HubHelpTopics.helperTools {
-                        router.requestSettingsPane(.helpers)
-                        openSettings()
-                    }
                 }
             }
         }

@@ -193,10 +193,13 @@ struct ToolSidebarView: View {
         .accessibilityHint("Shows whether yt-dlp, FFmpeg, and demucs-mlx are ready.")
         .popover(isPresented: $showHelperHealth, arrowEdge: .leading) {
             if let context {
-                HelperToolsHealthStrip(context: context) {
-                    showHelperHealth = false
-                    context.router.openSettingsHelpers()
-                }
+                HelperToolsHealthStrip(
+                    context: context,
+                    onInstallTools: {
+                        showHelperHealth = false
+                        context.router.requestHelperToolSetup()
+                    }
+                )
                 .frame(width: 240)
                 .padding(12)
             }

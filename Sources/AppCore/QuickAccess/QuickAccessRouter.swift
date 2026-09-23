@@ -35,6 +35,10 @@ public final class QuickAccessRouter: ObservableObject {
     /// Monotonic request counter so repeated Find (⌘F / ⌥⌘F) and Search Archive… commands are observable.
     @Published public private(set) var archiveSearchFocusRequest: UInt64 = 0
 
+    /// One-shot "open the helper-tool Set Up sheet" request, mirroring
+    /// `archiveSearchFocusRequest`: repeating the request produces a new value.
+    @Published public private(set) var helperSetupRequest: UInt64 = 0
+
     /// Pending Settings pane. Does not request a tool. `HubSettingsRoot` consumes
     /// it (`clearOpenSettingsPane()`); the shell opens the Settings window on change.
     @Published public private(set) var openSettingsPane: HubSettingsPane?
@@ -107,6 +111,20 @@ public final class QuickAccessRouter: ObservableObject {
     /// Open in-app Settings → Helpers (helper-missing recovery, NMH-010).
     public func openSettingsHelpers() {
         requestSettingsPane(.helpers)
+    }
+
+    /// Request the helper-tool Set Up sheet. Feature views route the
+    /// `.installHelperTools` recovery action here.
+    public func requestHelperToolSetup() {
+        helperSetupRequest &+= 1
+    }
+
+    /// Bumped after the setup sheet installs helpers, so mounted tool panes
+    /// (which never re-run `onAppear`) re-check their helper health.
+    @Published public private(set) var helperToolsChangeCount: UInt64 = 0
+
+    public func noteHelperToolsChanged() {
+        helperToolsChangeCount &+= 1
     }
 
     public func clearOpenSettingsPane() {

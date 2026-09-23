@@ -18,8 +18,18 @@ To verify an installed release directly:
 ./script/verify-installed-release.sh /Applications/NikoMusicHub.app
 ```
 
+## First launch
+
+The **Set Up Niko Music Hub** window opens once:
+
+- **Download & Convert** installs yt-dlp and FFmpeg (about 100 MB).
+- **Stem Separation** installs demucs-mlx and prepares its model (about 1.2 GB; takes a few minutes).
+- **Music Archive** picks your Cubase or Ableton projects folder.
+
+Click **Install All** or install each row on its own. Everything is optional; close the window with **Later** and reopen it any time from **Help → Set Up Helper Tools…**. The tools go into `~/Library/Application Support/Niko Music Hub/Tools`; nothing is installed system-wide and no password is needed. If you already have Homebrew copies, the app uses those as well.
+
 Niko Music Hub checks for updates on its own once a day and can install them for you. Use **Niko Music Hub ▸ Check for Updates…** to check immediately, or turn automatic checks off under **Settings ▸ Updates**. Updates are downloaded from the signed release feed and their signature is verified before anything is unpacked.
 
 You can also upgrade manually by replacing `/Applications/NikoMusicHub.app` with the app from the newer DMG.
 
-Uninstall by quitting Niko Music Hub and removing `/Applications/NikoMusicHub.app`. App metadata is stored in `~/Library/Application Support/Niko Music Hub/`; remove that folder only if you intentionally want to clear local app state.
+Uninstall by quitting Niko Music Hub and removing `/Applications/NikoMusicHub.app`. App metadata is stored in `~/Library/Application Support/Niko Music Hub/`; remove that folder only if you intentionally want to clear local app state. It also holds the downloaded helper tools (`Tools/`). Stem models live in `~/.cache/demucs-mlx`.

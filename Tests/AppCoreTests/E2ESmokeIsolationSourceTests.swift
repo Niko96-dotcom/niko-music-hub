@@ -73,12 +73,12 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         XCTAssertTrue(script.contains("PUBLIC_UI_DEADLINE=$((SECONDS + 20))"))
         // The readiness marker must be copy the first-run view really renders: the
         // 1.6.0 rewording turned the strict release gate red for a stale string.
-        let readinessMarker = "Choose the folder that holds your song projects"
+        let readinessMarker = "The app downloads the free tools it needs into its own folder"
         XCTAssertTrue(script.contains("grep -Fq \"\(readinessMarker)\""))
-        let firstRunView = try SourceTestSupport.read("Sources/FeatureArchiveBrowser/ArchiveFirstRunView.swift")
+        let firstRunView = try SourceTestSupport.read("Sources/NikoMusicHub/Onboarding/HubSetupView.swift")
         XCTAssertTrue(
             firstRunView.contains(readinessMarker),
-            "e2e_user_smoke.sh waits for first-run copy that ArchiveFirstRunView no longer renders"
+            "e2e_user_smoke.sh waits for first-run copy that HubSetupView no longer renders"
         )
         XCTAssertTrue(script.contains("strict UI mode requires AX-visible first-run content"))
     }

@@ -12,32 +12,28 @@ public struct YtDlpHealthChecker: Sendable {
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
     private let referenceDate: Date
-
-    public static let homebrewPaths: [String] = [
-        "/opt/homebrew/bin/yt-dlp",
-        "/usr/local/bin/yt-dlp",
-        "/opt/local/bin/yt-dlp"
-    ]
+    private let locator: HelperToolLocator
 
     public init(
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
         },
-        referenceDate: Date = Date()
+        referenceDate: Date = Date(),
+        locator: HelperToolLocator = .standard()
     ) {
         self.runner = runner
         self.fileExists = fileExists
         self.referenceDate = referenceDate
+        self.locator = locator
+    }
+
+    public func resolvedYtDlpURL(settings: HelperToolSettings) -> URL? {
+        locator.resolve(.ytDlp, settings: settings)
     }
 
     public func availability(settings: HelperToolSettings) async -> YtDlpAvailability {
-        let ytDlpPath = settings.ytDlp ?? Self.detectYtDlp()
-
-        guard let ytDlpURL = ytDlpPath else {
-            return .missing
-        }
-        guard fileExists(ytDlpURL.path) else {
+        guard let ytDlpURL = resolvedYtDlpURL(settings: settings) else {
             return .missing
         }
 
@@ -63,15 +59,6 @@ public struct YtDlpHealthChecker: Sendable {
         } catch {
             return .unusable(message: error.localizedDescription)
         }
-    }
-
-    public static func detectYtDlp() -> URL? {
-        for path in homebrewPaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-        return nil
     }
 
     private func versionLine(from output: String) -> String {

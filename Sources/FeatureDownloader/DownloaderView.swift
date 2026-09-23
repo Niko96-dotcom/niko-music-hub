@@ -385,8 +385,8 @@ public struct DownloaderView: View {
                 } else {
                     viewModel.retryAfterFailure()
                 }
-            case .openHubSettingsHelpers:
-                context.router.openSettingsHelpers()
+            case .installHelperTools:
+                context.router.requestHelperToolSetup()
             case .chooseToolPath:
                 viewModel.chooseYtDlpPath()
             default:
@@ -414,7 +414,7 @@ public struct DownloaderView: View {
                 icon: "tool.badge.xmark",
                 body: message,
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Open Settings", style: .primary, action: .openHubSettingsHelpers),
+                    AppErrorCard.RecoveryAction(label: "Install Tools", style: .primary, action: .installHelperTools),
                     AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain)
                 ]

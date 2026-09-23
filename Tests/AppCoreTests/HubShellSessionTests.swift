@@ -199,6 +199,17 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(shell.contains("toolPaneCache"))
     }
 
+    func testSetupSheetPresentDismiss() throws {
+        let store = try makeIsolatedStore()
+        let session = HubShellSession(preferences: store)
+
+        XCTAssertFalse(session.isSetupPresented)
+        session.presentSetup()
+        XCTAssertTrue(session.isSetupPresented)
+        session.dismissSetup()
+        XCTAssertFalse(session.isSetupPresented)
+    }
+
     private func makeIsolatedStore() throws -> UserDefaultsPreferenceStore {
         let suiteName = "HubShellSessionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -243,5 +254,20 @@ private struct StubRestoreFeature: ToolFeature {
     @MainActor
     func makeView(context: ToolContext) -> AnyView {
         AnyView(EmptyView())
+    }
+
+}
+
+extension HubShellSessionTests {
+    func testSetupRequestIsPresentedOncePerSequence() {
+        let session = HubShellSession(preferences: MockPreferenceStore())
+        session.presentSetup(forRequest: 1)
+        XCTAssertTrue(session.isSetupPresented)
+        session.dismissSetup()
+        // A reopened window replays the router's current value; it must not re-open.
+        session.presentSetup(forRequest: 1)
+        XCTAssertFalse(session.isSetupPresented)
+        session.presentSetup(forRequest: 2)
+        XCTAssertTrue(session.isSetupPresented)
     }
 }

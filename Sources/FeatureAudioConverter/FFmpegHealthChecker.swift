@@ -8,41 +8,25 @@ public enum FFmpegAvailability: Equatable, Sendable {
 }
 
 public struct FFmpegHealthChecker: Sendable {
-    public static let homebrewPaths: [String] = [
-        "/opt/homebrew/bin/ffmpeg",
-        "/usr/local/bin/ffmpeg",
-        "/opt/local/bin/ffmpeg"
-    ]
-
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
+    private let locator: HelperToolLocator
 
     public init(
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
-        }
+        },
+        locator: HelperToolLocator = .standard()
     ) {
         self.runner = runner
         self.fileExists = fileExists
+        self.locator = locator
     }
 
-    public static func detectFfmpeg() -> URL? {
-        for path in homebrewPaths where FileManager.default.fileExists(atPath: path) {
-            return URL(fileURLWithPath: path)
-        }
-        return nil
-    }
-
-    /// Saved settings path first, then the same Homebrew-style auto-detect paths as the health strip.
+    /// Saved settings path first, then managed and system search paths via the locator.
     public func resolvedFFmpegURL(settings: HelperToolSettings) -> URL? {
-        if let configured = settings.ffmpeg, fileExists(configured.path) {
-            return configured
-        }
-        for path in Self.homebrewPaths where fileExists(path) {
-            return URL(fileURLWithPath: path)
-        }
-        return nil
+        locator.resolve(.ffmpeg, settings: settings)
     }
 
     public func availability(settings: HelperToolSettings) async -> FFmpegAvailability {
@@ -52,7 +36,8 @@ public struct FFmpegHealthChecker: Sendable {
 
         let request = ExternalProcessRequest(
             executableURL: ffmpegURL,
-            arguments: ["-version"]
+            arguments: ["-version"],
+            timeoutSeconds: 15
         )
 
         do {

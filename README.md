@@ -77,11 +77,11 @@ Convert a bounce, capture system audio, download a reference, separate stems loc
 
 1. Get the DMG from the [latest public release](https://github.com/Niko96-dotcom/niko-music-hub/releases/latest).
 2. Open it and drag **Niko Music Hub** into **Applications**.
-3. Add your music folders and start browsing.
+3. Open the app. The **Set Up** window installs the helper tools with one click (**Install All**) and lets you pick your music folder. Both steps are optional and can be done later from **Help → Set Up Helper Tools…**.
 
 Public releases are Developer ID signed and notarized. The release includes a SHA-256 checksum if you want to verify the download. Use **Niko Music Hub → Check for Updates…** for updates; automatic checks are configurable in **Settings → Updates**.
 
-Optional helpers: [FFmpeg](https://ffmpeg.org) for conversion and downloads, [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading, and [demucs-mlx](docs/user-guide-stem-separation.md) for stem separation. Their availability is shown in the app.
+Helper tools: [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org) for downloading and some conversions, and [demucs-mlx](docs/user-guide-stem-separation.md) for stem separation. The app downloads them from their official release pages into its own folder (`~/Library/Application Support/Niko Music Hub/Tools`), checks each download's SHA-256 checksum, and never needs Homebrew, Python, or Terminal. Copies you already installed with Homebrew are used too.
 
 [Installation guide](docs/install.md) · [Stem separation guide](docs/user-guide-stem-separation.md) · [Report an issue](https://github.com/Niko96-dotcom/niko-music-hub/issues)
 

@@ -202,8 +202,17 @@ struct StemSeparationServiceTests {
         defer { try? fileManager.removeItem(at: outputRoot) }
 
         let processRunner = BlockingCancellationAwareProcessRunner()
+        let executable = URL(fileURLWithPath: "/usr/local/bin/demucs-mlx")
+        let locator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { $0 == executable.path }
+        )
+        let healthChecker = DemucsMLXHealthChecker(locator: locator)
         let backend = DemucsMLXBackend(
-            settings: HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx")),
+            settings: HelperToolSettings(demucsMlx: executable),
+            healthChecker: healthChecker,
+            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: locator),
             runner: processRunner
         )
         let runner = JobRunner()

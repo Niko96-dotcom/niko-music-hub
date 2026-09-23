@@ -5,7 +5,19 @@ import Testing
 
 struct DemucsMLXCommandBuilderTests {
 
-    private let builder = DemucsMLXCommandBuilder()
+    private func locator(executables: Set<String>) -> HelperToolLocator {
+        HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [URL(fileURLWithPath: "/fixture/bin", isDirectory: true)],
+            isExecutable: { executables.contains($0) }
+        )
+    }
+
+    private func builder(executables: Set<String>) -> DemucsMLXCommandBuilder {
+        let fixtureLocator = locator(executables: executables)
+        let healthChecker = DemucsMLXHealthChecker(locator: fixtureLocator)
+        return DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: fixtureLocator)
+    }
 
     @Test
     func buildRequest_usesConfiguredExecutableURL() throws {
@@ -13,9 +25,29 @@ struct DemucsMLXCommandBuilderTests {
         let settings = HelperToolSettings(demucsMlx: executable)
         let request = makeRequest(preset: .fast4)
 
-        let processRequest = try builder.buildRequest(backendRequest: request, settings: settings)
+        let processRequest = try builder(executables: [executable.path]).buildRequest(backendRequest: request, settings: settings)
 
         #expect(processRequest.executableURL == executable)
+    }
+
+    @Test
+    func buildRequest_ignoresDeletedConfiguredPathAndUsesFixture() throws {
+        let deleted = URL(fileURLWithPath: "/deleted/demucs-mlx")
+        let fixture = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let settings = HelperToolSettings(demucsMlx: deleted)
+        let request = makeRequest(preset: .fast4)
+
+        let processRequest = try builder(executables: [fixture.path]).buildRequest(backendRequest: request, settings: settings)
+
+        #expect(processRequest.executableURL == fixture)
+    }
+
+    @Test
+    func buildRequest_throwsWhenNothingResolves() {
+        let request = makeRequest(preset: .fast4)
+        #expect(throws: DemucsMLXCommandBuilderError.missingExecutable) {
+            try builder(executables: []).buildRequest(backendRequest: request, settings: HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/deleted/demucs-mlx")))
+        }
     }
 
     @Test
@@ -25,7 +57,7 @@ struct DemucsMLXCommandBuilderTests {
 
         for preset in StemSeparationPreset.allCases {
             let request = makeRequest(preset: preset)
-            let processRequest = try builder.buildRequest(backendRequest: request, settings: settings)
+            let processRequest = try builder(executables: [executable.path]).buildRequest(backendRequest: request, settings: settings)
             let args = processRequest.arguments
             if let modelIndex = args.firstIndex(of: "-n") {
                 #expect(args[modelIndex + 1] == preset.demucsModelID)
@@ -44,7 +76,7 @@ struct DemucsMLXCommandBuilderTests {
         let settings = HelperToolSettings(demucsMlx: executable)
         let request = makeRequest(preset: .best4)
 
-        let processRequest = try builder.buildRequest(backendRequest: request, settings: settings)
+        let processRequest = try builder(executables: [executable.path]).buildRequest(backendRequest: request, settings: settings)
 
         #expect(argsContainsSequence(processRequest.arguments, ["--overlap", "0.50"]))
         #expect(argsContainsSequence(processRequest.arguments, ["--shifts", "2"]))
@@ -52,14 +84,23 @@ struct DemucsMLXCommandBuilderTests {
 
     @Test
     func buildRequest_autoDetectsKnownExecutableWhenUnconfigured() throws {
-        let detectedPath = "/opt/homebrew/bin/demucs-mlx"
-        let healthChecker = DemucsMLXHealthChecker(fileExists: { $0 == detectedPath })
-        let builder = DemucsMLXCommandBuilder(healthChecker: healthChecker)
+        let detectedPath = "/fixture/bin/demucs-mlx"
         let request = makeRequest(preset: .fast4)
 
-        let processRequest = try builder.buildRequest(backendRequest: request, settings: HelperToolSettings())
+        let processRequest = try builder(executables: [detectedPath]).buildRequest(backendRequest: request, settings: HelperToolSettings())
 
         #expect(processRequest.executableURL == URL(fileURLWithPath: detectedPath))
+    }
+
+    @Test
+    func buildRequest_passesProcessEnvironment() throws {
+        let executable = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let settings = HelperToolSettings(demucsMlx: executable)
+        let request = makeRequest(preset: .fast4)
+
+        let processRequest = try builder(executables: [executable.path]).buildRequest(backendRequest: request, settings: settings)
+
+        #expect(processRequest.environment?["PATH"]?.contains("/fixture/bin") == true)
     }
 
     @Test
@@ -68,7 +109,7 @@ struct DemucsMLXCommandBuilderTests {
         let settings = HelperToolSettings(demucsMlx: executable)
         let request = makeRequest(preset: .experimental6)
 
-        let processRequest = try builder.buildRequest(backendRequest: request, settings: settings)
+        let processRequest = try builder(executables: [executable.path]).buildRequest(backendRequest: request, settings: settings)
 
         // Each argument must be a discrete token; no spaces inside an argument.
         for arg in processRequest.arguments {
@@ -81,13 +122,10 @@ struct DemucsMLXCommandBuilderTests {
 
     @Test
     func buildRequest_throwsWhenExecutableMissing() {
-        let healthChecker = DemucsMLXHealthChecker(fileExists: { _ in false })
-        let builder = DemucsMLXCommandBuilder(healthChecker: healthChecker)
-        let settings = HelperToolSettings()
         let request = makeRequest(preset: .fast4)
 
         #expect(throws: DemucsMLXCommandBuilderError.missingExecutable) {
-            try builder.buildRequest(backendRequest: request, settings: settings)
+            try builder(executables: []).buildRequest(backendRequest: request, settings: HelperToolSettings())
         }
     }
 }

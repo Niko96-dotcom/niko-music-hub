@@ -34,8 +34,12 @@ final class DownloaderUATCoverageTests: XCTestCase {
         let settings = HelperToolSettings(ytDlp: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"))
         let checker = YtDlpHealthChecker(
             runner: UATVersionRunner(output: "2024.01.01\n"),
-            fileExists: { _ in true },
-            referenceDate: reference
+            referenceDate: reference,
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == "/usr/local/bin/yt-dlp" }
+            )
         )
         if case .outdated = await checker.availability(settings: settings) {
             // expected stale path

@@ -3,12 +3,20 @@ import FeatureAudioConverter
 import XCTest
 
 final class FFmpegHealthTests: XCTestCase {
+    private func locator(executables: Set<String>) -> HelperToolLocator {
+        HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [URL(fileURLWithPath: "/fixture/bin", isDirectory: true)],
+            isExecutable: { executables.contains($0) }
+        )
+    }
+
     func testMissingWhenPathIsNilAndAutoDetectUnavailable() async {
         let checker = FFmpegHealthChecker(
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
             )),
-            fileExists: { _ in false }
+            locator: locator(executables: [])
         )
 
         let availability = await checker.availability(settings: HelperToolSettings(ffmpeg: nil))
@@ -21,7 +29,7 @@ final class FFmpegHealthTests: XCTestCase {
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
             )),
-            fileExists: { _ in false }
+            locator: locator(executables: [])
         )
 
         let availability = await checker.availability(
@@ -32,12 +40,12 @@ final class FFmpegHealthTests: XCTestCase {
     }
 
     func testResolvedFFmpegURLUsesAutoDetectWhenSettingsUnset() {
-        let detected = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
+        let detected = URL(fileURLWithPath: "/fixture/bin/ffmpeg")
         let checker = FFmpegHealthChecker(
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
             )),
-            fileExists: { $0 == detected.path }
+            locator: locator(executables: [detected.path])
         )
 
         XCTAssertEqual(
@@ -52,12 +60,24 @@ final class FFmpegHealthTests: XCTestCase {
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
             )),
-            fileExists: { $0 == configured.path }
+            locator: locator(executables: [configured.path])
         )
 
         XCTAssertEqual(
             checker.resolvedFFmpegURL(settings: HelperToolSettings(ffmpeg: configured)),
             configured
+        )
+    }
+
+    func testSavedDeletedPathFallsBackToFixtureExecutable() {
+        let savedDeleted = URL(fileURLWithPath: "/deleted/ffmpeg")
+        let fixture = URL(fileURLWithPath: "/fixture/bin/ffmpeg")
+        let checker = FFmpegHealthChecker(
+            locator: locator(executables: [fixture.path])
+        )
+        XCTAssertEqual(
+            checker.resolvedFFmpegURL(settings: HelperToolSettings(ffmpeg: savedDeleted)),
+            fixture
         )
     }
 
@@ -69,14 +89,17 @@ final class FFmpegHealthTests: XCTestCase {
                 standardError: ""
             )
         ))
-        let ffmpegURL = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
-        let checker = FFmpegHealthChecker(runner: runner, fileExists: { _ in true })
+        let ffmpegURL = URL(fileURLWithPath: "/fixture/bin/ffmpeg")
+        let checker = FFmpegHealthChecker(
+            runner: runner,
+            locator: locator(executables: [ffmpegURL.path])
+        )
 
         let availability = await checker.availability(settings: HelperToolSettings(ffmpeg: ffmpegURL))
 
         XCTAssertEqual(availability, .available(version: "ffmpeg version 8.1 Copyright"))
         XCTAssertEqual(runner.requests, [
-            ExternalProcessRequest(executableURL: ffmpegURL, arguments: ["-version"])
+            ExternalProcessRequest(executableURL: ffmpegURL, arguments: ["-version"], timeoutSeconds: 15)
         ])
     }
 
@@ -85,11 +108,11 @@ final class FFmpegHealthTests: XCTestCase {
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 1, standardOutput: "", standardError: "bad helper")
             )),
-            fileExists: { _ in true }
+            locator: locator(executables: ["/fixture/bin/ffmpeg"])
         )
 
         let availability = await checker.availability(
-            settings: HelperToolSettings(ffmpeg: URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg"))
+            settings: HelperToolSettings(ffmpeg: URL(fileURLWithPath: "/fixture/bin/ffmpeg"))
         )
 
         XCTAssertEqual(availability, .unusable(message: "bad helper"))
@@ -98,11 +121,11 @@ final class FFmpegHealthTests: XCTestCase {
     func testUnusableWhenRunnerThrows() async {
         let checker = FFmpegHealthChecker(
             runner: FakeExternalProcessRunner(result: .failure(SampleProcessError.expected)),
-            fileExists: { _ in true }
+            locator: locator(executables: ["/fixture/bin/ffmpeg"])
         )
 
         let availability = await checker.availability(
-            settings: HelperToolSettings(ffmpeg: URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg"))
+            settings: HelperToolSettings(ffmpeg: URL(fileURLWithPath: "/fixture/bin/ffmpeg"))
         )
 
         XCTAssertEqual(availability, .unusable(message: "Expected process failure"))

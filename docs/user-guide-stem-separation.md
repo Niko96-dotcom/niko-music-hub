@@ -4,15 +4,9 @@ Niko Music Hub can split a stereo audio file into separate stems (vocals, drums,
 
 ## Prerequisites
 
-Install `demucs-mlx` in a Python environment. The app does not bundle Python or the model.
+Stem Separation needs `demucs-mlx`. Install it from the app: **Help → Set Up Helper Tools…**, then **Install** on the **Stem Separation** row. The app downloads a private Python and `demucs-mlx` into `~/Library/Application Support/Niko Music Hub/Tools` and prepares the default model (about 1.2 GB in total, a few minutes). No Terminal, Homebrew, or Python install is needed.
 
-```bash
-pip install demucs-mlx
-```
-
-After installation, make sure the `demucs-mlx` executable is on your `PATH`, or configure its full path in **Settings**.
-
-The first time you run a preset, `demucs-mlx` downloads and converts the model. This can take several minutes depending on your connection. The app shows download progress in the status area.
+If you already installed `demucs-mlx` yourself (for example with `uv tool install demucs-mlx` into `~/.local/bin`), the app finds it automatically, or you can set its path in **Settings → Helpers**.
 
 ## Opening the tool
 
@@ -23,9 +17,10 @@ The first time you run a preset, `demucs-mlx` downloads and converts the model. 
 
 1. Drop an audio file onto the drop area, or click **Choose File...** to pick one. Supported formats include WAV, AIFF, MP3, M4A, and FLAC.
 2. Choose a preset:
-   - **Fast 4-stem** — uses `htdemucs`; fastest, good quality.
-   - **Best 4-stem** — uses `htdemucs_ft`; best standard Demucs quality, slower.
-   - **Experimental 6-stem** — uses `htdemucs_6s`; also separates guitar and piano. Quality of the extra stems may vary.
+   - **Fast 4-stem** — uses `htdemucs`; fastest, good quality. The first run downloads and prepares this model.
+   - **Best 4-stem** — uses `htdemucs_ft`; best standard Demucs quality, slower. Setup prepares this model already.
+
+   A 6-stem preset (guitar and piano) exists in the code but is hidden in this release.
 3. Choose the output folder. The default is `~/Music/Niko Music Hub/Inbox`.
 4. Click **Start Separation**.
 
@@ -44,9 +39,8 @@ Stems are also added to the global Output Inbox, so you can find them again from
 
 | Problem | Likely cause | Fix |
 |---------|--------------|-----|
-| "Executable not found" | `demucs-mlx` is not on `PATH` | Install it, or set the executable path in Settings |
-| "Model cache missing" | First run has not downloaded the model | Run any preset; the model downloads automatically |
-| "Backend unavailable" | The version check failed | Check that `demucs-mlx --version` works in Terminal |
+| "demucs-mlx is not installed" | The helper is missing | Click **Install Tools** on the card, or use **Help → Set Up Helper Tools…** |
+| "demucs-mlx could not start" | The helper is broken or incomplete | Install it again from the setup window; the message shows the helper's own error |
 | No stems after success | Output scanner could not identify files | Check the output folder for files named with known stem roles |
 | Cancel did nothing | Job already finished or failed | Check the status message |
 

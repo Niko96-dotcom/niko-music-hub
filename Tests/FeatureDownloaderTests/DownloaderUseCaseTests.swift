@@ -3,6 +3,18 @@
 import XCTest
 
 final class DownloaderUseCaseTests: XCTestCase {
+    private func ytDlpLocator() -> HelperToolLocator {
+        HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { $0 == "/opt/homebrew/bin/yt-dlp" }
+        )
+    }
+
+    private func healthChecker(runner: any ExternalProcessRunning) -> YtDlpHealthChecker {
+        YtDlpHealthChecker(runner: runner, locator: ytDlpLocator())
+    }
+
     func testYtDlpFailureMessagePrefersStderr() {
         let result = ExternalProcessResult(
             exitCode: 1,
@@ -29,13 +41,11 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(
-                runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
         )
 
         let url = URL(string: "https://example.com/watch?v=bad")!
@@ -66,13 +76,11 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(
-                runner: simulateRunner,
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: simulateRunner),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
         )
 
         let url = URL(string: "https://example.com/watch?v=ok")!
@@ -90,13 +98,11 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
             downloader: SuccessfulDownloader(outputURLs: [outputURL]),
-            healthChecker: YtDlpHealthChecker(
-                runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: AvailableVersionRunner()
+            simulateRunner: AvailableVersionRunner(),
+            locator: ytDlpLocator()
         )
 
         let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
@@ -118,13 +124,11 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(
-                runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
         )
 
         let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
@@ -156,12 +160,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = FirstAttempt403Downloader(outputURL: outputURL)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: YtDlpHealthChecker(
-                runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            locator: ytDlpLocator()
         )
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=retry")!
 
@@ -183,13 +185,11 @@ final class DownloaderUseCaseTests: XCTestCase {
         let simulateRunner = CapturingSimulateRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(
-                runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
-            ),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
         )
 
         let url = URL(string: "https://example.com/watch?v=ok")!
@@ -251,23 +251,32 @@ final class DownloaderUseCaseTests: XCTestCase {
         _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("ffmpeg").path, contents: Data())
         _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("ffprobe").path, contents: Data())
         _ = FileManager.default.createFile(atPath: helperDirectory.appendingPathComponent("yt-dlp").path, contents: Data())
+        let ffmpegURL = helperDirectory.appendingPathComponent("ffmpeg")
+        let ffprobeURL = helperDirectory.appendingPathComponent("ffprobe")
+        let ytDlpURL = helperDirectory.appendingPathComponent("yt-dlp")
         let settings = AppSettings(
             outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
             helperTools: HelperToolSettings(
-                ffmpeg: helperDirectory.appendingPathComponent("ffmpeg"),
-                ffprobe: helperDirectory.appendingPathComponent("ffprobe"),
-                ytDlp: helperDirectory.appendingPathComponent("yt-dlp")
+                ffmpeg: ffmpegURL,
+                ffprobe: ffprobeURL,
+                ytDlp: ytDlpURL
             )
+        )
+        let fixtureLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { [ffmpegURL.path, ffprobeURL.path, ytDlpURL.path].contains($0) }
         )
         let useCase = DownloaderUseCase(
             downloader: downloader,
             healthChecker: YtDlpHealthChecker(
                 runner: AvailableVersionRunner(),
-                fileExists: { _ in true }
+                locator: fixtureLocator
             ),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(settings: settings),
-            simulateRunner: AvailableVersionRunner()
+            simulateRunner: AvailableVersionRunner(),
+            locator: fixtureLocator
         )
 
         let url = URL(string: "https://example.com/audio")!
@@ -285,6 +294,91 @@ final class DownloaderUseCaseTests: XCTestCase {
         let request = try XCTUnwrap(downloader.requests.first)
         XCTAssertEqual(request.ffmpegLocationURL, helperDirectory)
         XCTAssertTrue(request.helperSearchDirectories.contains(helperDirectory))
+    }
+
+    func testSavedDeletedYtDlpPathFallsBackToFixture() async throws {
+        let fixtureURL = URL(fileURLWithPath: "/fixture/bin/yt-dlp")
+        let fixtureLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [URL(fileURLWithPath: "/fixture/bin", isDirectory: true)],
+            isExecutable: { $0 == fixtureURL.path }
+        )
+        let settings = AppSettings(
+            outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
+            helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/deleted/yt-dlp"))
+        )
+        let checker = YtDlpHealthChecker(
+            runner: AvailableVersionRunner(),
+            // Close to the fake's 2026.08.19 so the freshness policy passes.
+            referenceDate: Date(timeIntervalSince1970: 1_790_000_000),
+            locator: fixtureLocator
+        )
+        let availability = await checker.availability(settings: settings.helperTools)
+        guard case .available = availability else {
+            return XCTFail("Expected available via fallback, got \(availability)")
+        }
+        XCTAssertEqual(checker.resolvedYtDlpURL(settings: settings.helperTools), fixtureURL)
+
+        let simulateRunner = CapturingSimulateRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: checker,
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore(settings: settings),
+            simulateRunner: simulateRunner,
+            locator: fixtureLocator
+        )
+        let url = URL(string: "https://example.com/watch?v=ok")!
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(sourceURL: url, outputDirectory: URL(fileURLWithPath: "/tmp/out"))
+        )
+        XCTAssertEqual(simulateRunner.lastRequest?.executableURL, fixtureURL)
+    }
+
+    func testMissingYtDlpUsesInstallToolsCopy() async {
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: YtDlpHealthChecker(
+                runner: AvailableVersionRunner(),
+                locator: HelperToolLocator(
+                    managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                    systemDirectories: [],
+                    isExecutable: { _ in false }
+                )
+            ),
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore(settings: AppSettings(
+                outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
+                helperTools: HelperToolSettings(ytDlp: nil)
+            )),
+            simulateRunner: CapturingSimulateRunner(),
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { _ in false }
+            )
+        )
+        let url = URL(string: "https://example.com/watch?v=ok")!
+        do {
+            _ = try await useCase.simulateAndEnqueue(
+                url: url,
+                options: DownloadJobOptions(sourceURL: url, outputDirectory: URL(fileURLWithPath: "/tmp/out"))
+            )
+            XCTFail("Expected missing error")
+        } catch let error as DownloadUseCaseError {
+            XCTAssertEqual(error, .ytDlpUnavailable(DownloaderCopy.ytDlpMissing))
+            XCTAssertEqual(DownloaderCopy.ytDlpMissing, "yt-dlp is not installed. Use Install Tools to add it.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testOutdatedCopyUsesInstallTools() {
+        XCTAssertEqual(
+            DownloaderCopy.outdatedYtDlp(current: "2023.01.01", minimumExpected: "2024.01.01"),
+            "yt-dlp 2023.01.01 is outdated (expected 2024.01.01 or newer). Use Install Tools to update it."
+        )
     }
 
     private func waitForJob(_ id: Job.ID, in runner: JobRunner) async throws -> Job {

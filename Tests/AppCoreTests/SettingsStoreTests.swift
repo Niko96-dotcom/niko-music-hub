@@ -319,6 +319,22 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(preset.channelMode, .mono)
     }
 
+    func testSetupAssistantShownDecodesMissingAsFalse() throws {
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+
+        XCTAssertFalse(settings.setupAssistantShown)
+    }
+
+    func testSetupAssistantShownRoundTrips() throws {
+        var settings = AppSettings.default
+        XCTAssertFalse(settings.setupAssistantShown)
+        settings.setupAssistantShown = true
+
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+
+        XCTAssertTrue(decoded.setupAssistantShown)
+    }
+
     private func makeStore(suiteName: String = UUID().uuidString, reset: Bool = false) -> UserDefaultsSettingsStore {
         let userDefaults = UserDefaults(suiteName: suiteName)!
         if reset {

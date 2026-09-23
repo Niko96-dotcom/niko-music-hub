@@ -2,36 +2,31 @@ import AppCore
 import Foundation
 
 public struct DemucsMLXHealthChecker: Sendable {
-    public static let knownExecutablePaths: [String] = [
-        "\(NSHomeDirectory())/.local/bin/demucs-mlx",
-        "/opt/homebrew/bin/demucs-mlx",
-        "/usr/local/bin/demucs-mlx"
-    ]
-
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
+    private let locator: HelperToolLocator
 
     public init(
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
-        }
+        },
+        locator: HelperToolLocator = .standard()
     ) {
         self.runner = runner
         self.fileExists = fileExists
+        self.locator = locator
     }
 
     public func availability(settings: HelperToolSettings) async -> StemBackendHealth {
         guard let executableURL = resolvedExecutableURL(settings: settings) else {
             return .missing
         }
-        guard fileExists(executableURL.path) else {
-            return .missing
-        }
 
         let request = ExternalProcessRequest(
             executableURL: executableURL,
-            arguments: ["--list-models"]
+            arguments: ["--list-models"],
+            timeoutSeconds: 30
         )
 
         do {
@@ -47,21 +42,7 @@ public struct DemucsMLXHealthChecker: Sendable {
     }
 
     public func resolvedExecutableURL(settings: HelperToolSettings) -> URL? {
-        if let configured = settings.demucsMlx, fileExists(configured.path) {
-            return configured
-        }
-        return Self.detectExecutable(fileExists: fileExists)
-    }
-
-    public static func detectExecutable(
-        fileExists: @Sendable (String) -> Bool = {
-            FileManager.default.fileExists(atPath: $0)
-        }
-    ) -> URL? {
-        for path in knownExecutablePaths where fileExists(path) {
-            return URL(fileURLWithPath: path)
-        }
-        return nil
+        locator.resolve(.demucsMlx, settings: settings)
     }
 
     private func versionLine(from output: String) -> String {

@@ -208,7 +208,11 @@ final class AudioConverterViewModelTests: XCTestCase {
                     standardError: ""
                 )
             )),
-            fileExists: { $0 == ffmpegURL.path }
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == ffmpegURL.path }
+            )
         )
         let viewModel = makeViewModel(
             outputFolder: directory,
@@ -242,7 +246,11 @@ final class AudioConverterViewModelTests: XCTestCase {
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 1, standardOutput: "", standardError: "bad helper")
             )),
-            fileExists: { $0 == ffmpegURL.path }
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == ffmpegURL.path }
+            )
         )
         let viewModel = makeViewModel(
             outputFolder: directory,

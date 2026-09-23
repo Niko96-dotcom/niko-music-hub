@@ -114,8 +114,8 @@ while (( SECONDS < PUBLIC_UI_DEADLINE )); do
       --binary-path "$APP_BINARY" \
       --ax-dump >"$PUBLIC_UI_TEXT_TMP" 2>/dev/null; then
     mv "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_TEXT"
-    # The first-run body copy lives in ArchiveFirstRunView; keep this in step with it.
-    if grep -Fq "Choose the folder that holds your song projects" "$PUBLIC_UI_TEXT"; then
+    # A brand-new user first sees the setup sheet (HubSetupView); keep this in step with it.
+    if grep -Fq "The app downloads the free tools it needs into its own folder" "$PUBLIC_UI_TEXT"; then
       PUBLIC_UI_READY=true
       break
     fi
@@ -147,11 +147,14 @@ fi
 for required_text in \
   "Niko Music Hub" \
   "Archive Browser" \
-  "Music archive" \
   "Add archive root" \
   "Show output inbox" \
-  "Choose the folder that holds your song projects. The hub scans read-only" \
-  "Choose archive folder"; do
+  "Set Up Niko Music Hub" \
+  "The app downloads the free tools it needs into its own folder" \
+  "Download & Convert" \
+  "Stem Separation" \
+  "Music Archive" \
+  "Choose Folder"; do
   if ! grep -Fq "$required_text" "$PUBLIC_UI_TEXT"; then
     echo "E2E failed: public first-run UI missing: $required_text" >&2
     exit 1

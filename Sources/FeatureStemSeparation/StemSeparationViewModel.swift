@@ -31,6 +31,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let healthChecker: DemucsMLXHealthChecker
     private var jobObservationTask: Task<Void, Never>?
     private var inboxObservationTask: Task<Void, Never>?
+    private var helperToolsObservation: AnyCancellable?
     private(set) var currentJobID: Job.ID?
 
     public init(
@@ -52,12 +53,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public var canStart: Bool {
-        !isRunning && droppedFileURL != nil
+        !isRunning && droppedFileURL != nil && !helperNeedsSetup
     }
 
-    /// Helper-missing recovery: open Settings → Helpers (NMH-010).
+    /// Helper-missing recovery: open the helper-tool Set Up sheet.
     public func openHubSettingsHelpers() {
-        context.router.openSettingsHelpers()
+        context.router.requestHelperToolSetup()
     }
 
     public var canStartYouTube: Bool {
@@ -265,6 +266,11 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public func onAppear() {
         loadResults()
         refreshHelperHealth()
+        if helperToolsObservation == nil {
+            helperToolsObservation = context.router.$helperToolsChangeCount
+                .dropFirst()
+                .sink { [weak self] _ in self?.refreshHelperHealth() }
+        }
         guard inboxObservationTask == nil else { return }
         inboxObservationTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
@@ -304,10 +310,24 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
                 errorMessage = nil
             }
             helperNeedsSetup = false
-        case .unusable, .modelCacheMissing:
+        case let .unusable(message):
+            helperNeedsSetup = true
+            errorMessage = Self.startFailureMessage(from: message)
+        case .modelCacheMissing:
             helperNeedsSetup = true
             errorMessage = StemSeparationHelperCopy.missingBody
         }
+    }
+
+    static func startFailureMessage(from message: String) -> String {
+        let firstLine = message
+            .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = (firstLine?.isEmpty == false ? firstLine! : message.trimmingCharacters(in: .whitespacesAndNewlines))
+        let limited = String(trimmed.prefix(200))
+        return "demucs-mlx could not start: \(limited)"
     }
 
     private func observe(job: Job) {

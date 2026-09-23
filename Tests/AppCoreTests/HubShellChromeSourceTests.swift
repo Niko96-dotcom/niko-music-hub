@@ -131,10 +131,10 @@ final class HubShellChromeSourceTests: XCTestCase {
             "HubDesignSystem.Colors.success",
             "HubDesignSystem.Colors.warning",
             "HubDesignSystem.Colors.danger",
-            "Install missing helpers with Homebrew",
+            "label: \"Install Tools\"",
             "DemucsMLXHealthChecker",
-            "label: \"Open Settings\"",
-            "openSettingsHelpers",
+            "requestHelperToolSetup",
+            "onInstallTools",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing helper health Liquid source: \(required)")
         }

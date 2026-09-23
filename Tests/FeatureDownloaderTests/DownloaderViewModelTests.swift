@@ -15,7 +15,11 @@ final class DownloaderViewModelTests: XCTestCase {
         let runner = SequencedHealthRunner()
         let checker = YtDlpHealthChecker(
             runner: runner,
-            fileExists: { _ in true }
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == "/fixture/yt-dlp" }
+            )
         )
         let viewModel = makeViewModel(
             useCase: FakeDownloaderUseCase(job: Job(sourceToolID: "downloader", title: "Download")),
@@ -35,7 +39,14 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testSlowURLAResultCannotOverwriteURLB() async throws {
         let runner = SequencedHealthRunner(firstDelay: .milliseconds(150), firstExitCode: 1)
-        let checker = YtDlpHealthChecker(runner: runner, fileExists: { _ in true })
+        let checker = YtDlpHealthChecker(
+            runner: runner,
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == "/fixture/yt-dlp" }
+            )
+        )
         let job = Job(sourceToolID: "downloader", title: "Download")
         let viewModel = makeViewModel(
             useCase: FakeDownloaderUseCase(job: job),
@@ -60,7 +71,14 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testClearInputCancelsInFlightHealthCheck() async throws {
         let runner = CancellableHealthRunner()
-        let checker = YtDlpHealthChecker(runner: runner, fileExists: { _ in true })
+        let checker = YtDlpHealthChecker(
+            runner: runner,
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == "/fixture/yt-dlp" }
+            )
+        )
         let job = Job(sourceToolID: "downloader", title: "Download")
         let viewModel = makeViewModel(
             useCase: FakeDownloaderUseCase(job: job),

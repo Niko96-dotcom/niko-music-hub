@@ -264,9 +264,9 @@ struct ArchiveBrowserView: View {
         }
         .sheet(isPresented: Binding(
             get: { viewModel.needsFirstRunOnboarding },
-            set: { _ in /* NMH-083: no Skip; dismiss only via a chosen root */ }
+            set: { _ in /* Skip keeps the archive empty; roots can be added from the board or Settings */ }
         )) {
-            ArchiveFirstRunView(onChooseRoot: chooseRoot)
+            ArchiveFirstRunView(onChooseRoot: chooseRoot, onSkip: { viewModel.completeArchiveOnboarding() })
                 .interactiveDismissDisabled(true)
                 // NMH-136: trap VoiceOver in first-run; Esc stays blocked above.
                 .accessibilityAddTraits(.isModal)

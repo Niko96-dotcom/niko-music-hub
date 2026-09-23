@@ -5,13 +5,21 @@ import Testing
 
 struct DemucsMLXHealthCheckerTests {
 
+    private func locator(executables: Set<String>) -> HelperToolLocator {
+        HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [URL(fileURLWithPath: "/fixture/bin", isDirectory: true)],
+            isExecutable: { executables.contains($0) }
+        )
+    }
+
     // MARK: - Discovery
 
     @Test
     func availability_whenExecutableIsMissing_reportsMissing() async {
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(exitCode: 0, standardOutput: "", standardError: "")),
-            fileExists: { _ in false }
+            locator: locator(executables: [])
         )
         let health = await checker.availability(settings: HelperToolSettings())
         #expect(health == .missing)
@@ -27,40 +35,60 @@ struct DemucsMLXHealthCheckerTests {
         ))
         let checker = DemucsMLXHealthChecker(
             runner: runner,
-            fileExists: { path in path == configuredURL.path }
+            locator: locator(executables: [configuredURL.path])
         )
         let health = await checker.availability(settings: HelperToolSettings(demucsMlx: configuredURL))
         #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
         #expect(runner.lastRequest?.executableURL == configuredURL)
         #expect(runner.lastRequest?.arguments == ["--list-models"])
+        #expect(runner.lastRequest?.timeoutSeconds == 30)
     }
 
     @Test
-    func detectExecutable_findsKnownPathWithoutPATH() {
-        let foundURL = DemucsMLXHealthChecker.detectExecutable { path in
-            path == "/opt/homebrew/bin/demucs-mlx"
-        }
-        #expect(foundURL == URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx"))
+    func resolvedExecutableURL_fallsBackWhenConfiguredDeleted() {
+        let savedDeleted = URL(fileURLWithPath: "/deleted/demucs-mlx")
+        let fixture = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let checker = DemucsMLXHealthChecker(
+            locator: locator(executables: [fixture.path])
+        )
+        #expect(checker.resolvedExecutableURL(settings: HelperToolSettings(demucsMlx: savedDeleted)) == fixture)
     }
 
     @Test
-    func detectExecutable_returnsNilWhenNoKnownPathExists() {
-        let foundURL = DemucsMLXHealthChecker.detectExecutable { _ in false }
-        #expect(foundURL == nil)
+    func resolvedExecutableURL_returnsNilWhenNothingResolves() {
+        let checker = DemucsMLXHealthChecker(
+            locator: locator(executables: [])
+        )
+        #expect(checker.resolvedExecutableURL(settings: HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/deleted/demucs-mlx"))) == nil)
+    }
+
+    @Test
+    func availability_whenFixtureExecutableExists_reportsReady() async {
+        let fixtureURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let checker = DemucsMLXHealthChecker(
+            runner: FakeRunner(result: .init(
+                exitCode: 0,
+                standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
+                standardError: ""
+            )),
+            locator: locator(executables: [fixtureURL.path])
+        )
+        let health = await checker.availability(settings: HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/deleted/demucs-mlx")))
+        #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
     }
 
     // MARK: - Runtime health
 
     @Test
     func availability_whenVersionCommandFails_reportsUnusable() async {
-        let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
+        let executableURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(
                 exitCode: 1,
                 standardOutput: "",
                 standardError: "Python module not found"
             )),
-            fileExists: { path in path == executableURL.path }
+            locator: locator(executables: [executableURL.path])
         )
         let health = await checker.availability(settings: HelperToolSettings())
         #expect(health == .unusable(message: "Python module not found"))
@@ -68,10 +96,10 @@ struct DemucsMLXHealthCheckerTests {
 
     @Test
     func availability_whenRunnerThrows_reportsUnusable() async {
-        let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
+        let executableURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
         let checker = DemucsMLXHealthChecker(
             runner: ThrowingRunner(),
-            fileExists: { path in path == executableURL.path }
+            locator: locator(executables: [executableURL.path])
         )
         let health = await checker.availability(settings: HelperToolSettings())
         if case .unusable = health {
@@ -83,14 +111,14 @@ struct DemucsMLXHealthCheckerTests {
 
     @Test
     func availability_whenExecutableRunsWithoutCachedModels_reportsReady() async {
-        let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
+        let executableURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(
                 exitCode: 0,
                 standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
                 standardError: ""
             )),
-            fileExists: { path in path == executableURL.path }
+            locator: locator(executables: [executableURL.path])
         )
         let health = await checker.availability(settings: HelperToolSettings())
         #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
@@ -98,14 +126,14 @@ struct DemucsMLXHealthCheckerTests {
 
     @Test
     func availability_whenEverythingAvailable_reportsReady() async {
-        let executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/demucs-mlx")
+        let executableURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
         let checker = DemucsMLXHealthChecker(
             runner: FakeRunner(result: .init(
                 exitCode: 0,
                 standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
                 standardError: ""
             )),
-            fileExists: { path in path == executableURL.path }
+            locator: locator(executables: [executableURL.path])
         )
         let health = await checker.availability(settings: HelperToolSettings())
         #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))

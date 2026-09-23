@@ -3,7 +3,7 @@ import Foundation
 
 public enum StemSeparationHelperCopy {
     public static let missingLabel = "Stem helper missing"
-    public static let missingBody = "demucs-mlx is not available at the configured path. Stem Separation cannot start until you choose the binary."
+    public static let missingBody = "demucs-mlx is not installed. Use Install Tools to add it, or choose an existing copy."
 }
 
 public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {
@@ -19,21 +19,21 @@ public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {
 
 public struct DemucsMLXCommandBuilder: Sendable {
     private let healthChecker: DemucsMLXHealthChecker
+    private let locator: HelperToolLocator
 
-    public init(healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker()) {
+    public init(
+        healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker(),
+        locator: HelperToolLocator = .standard()
+    ) {
         self.healthChecker = healthChecker
+        self.locator = locator
     }
 
     public func buildRequest(
         backendRequest: StemSeparationBackendRequest,
         settings: HelperToolSettings
     ) throws -> ExternalProcessRequest {
-        let executableURL: URL
-        if let configured = settings.demucsMlx {
-            executableURL = configured
-        } else if let detected = healthChecker.resolvedExecutableURL(settings: settings) {
-            executableURL = detected
-        } else {
+        guard let executableURL = healthChecker.resolvedExecutableURL(settings: settings) else {
             throw DemucsMLXCommandBuilderError.missingExecutable
         }
 
@@ -52,7 +52,8 @@ public struct DemucsMLXCommandBuilder: Sendable {
 
         return ExternalProcessRequest(
             executableURL: executableURL,
-            arguments: arguments
+            arguments: arguments,
+            environment: locator.processEnvironment(settings: settings)
         )
     }
 }

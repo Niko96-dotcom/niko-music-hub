@@ -6,13 +6,13 @@ import SwiftUI
 
 struct HelperToolsHealthStrip: View {
     let context: ToolContext
-    var onOpenSettingsHelpers: (() -> Void)? = nil
+    var onInstallTools: (() -> Void)? = nil
 
-    private func openSettingsHelpers() {
-        if let onOpenSettingsHelpers {
-            onOpenSettingsHelpers()
+    private func handleInstallTools() {
+        if let onInstallTools {
+            onInstallTools()
         } else {
-            context.router.openSettingsHelpers()
+            context.router.requestHelperToolSetup()
         }
     }
 
@@ -29,17 +29,12 @@ struct HelperToolsHealthStrip: View {
             }
 
             if snapshot.anyNeedsSetup {
-                Text("Install missing helpers with Homebrew to enable downloader and conversion workflows.")
-                    .font(HubDesignSystem.Typography.micro())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 HubLabeledButton(
-                    icon: "wrench.and.screwdriver",
-                    label: "Open Settings",
-                    style: .secondary
+                    icon: "arrow.down.circle",
+                    label: "Install Tools",
+                    style: .primary
                 ) {
-                    openSettingsHelpers()
+                    handleInstallTools()
                 }
             }
         }
@@ -52,7 +47,7 @@ struct HelperToolsHealthStrip: View {
     }
 
     private func helperRow(_ item: HelperToolsHealthItem) -> some View {
-        Button(action: openSettingsHelpers) {
+        Button(action: handleInstallTools) {
             HStack(spacing: 8) {
                 Image(systemName: symbol(for: item.state))
                     .foregroundStyle(color(for: item.state))
@@ -71,7 +66,7 @@ struct HelperToolsHealthStrip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.label) \(item.state.displayText)")
-        .accessibilityHint("Opens Settings, Helpers pane.")
+        .accessibilityHint("Opens the helper setup sheet.")
     }
 
     private var stripState: HubDesignSystem.ControlState {

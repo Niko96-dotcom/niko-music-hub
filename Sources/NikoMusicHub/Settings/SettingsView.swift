@@ -288,7 +288,8 @@ struct SettingsView: View {
                 chooseExecutable: { prompt in
                     session.context.fileActions.chooseExecutable(prompt: prompt)
                 },
-                onSetPath: setHelperToolPath
+                onSetPath: setHelperToolPath,
+                onInstallTools: openHelperSetup
             )
         case .updates:
             SettingsUpdatesPane(
@@ -344,6 +345,12 @@ struct SettingsView: View {
 
     private func openWAVConverter() {
         router.execute(.openTool(ToolFeatureID("wav-converter")))
+        openWindow(id: "main")
+        NSApp.activate()
+    }
+
+    private func openHelperSetup() {
+        router.requestHelperToolSetup()
         openWindow(id: "main")
         NSApp.activate()
     }
@@ -427,7 +434,7 @@ private struct SettingsArchivePane: View {
     var body: some View {
         SettingsSection(
             title: "Music archive",
-            footer: "Read-only scan roots — files are never renamed, moved, or deleted"
+            footer: "Scanned read-only. Only a confirmed Project Vault archive removes a song folder"
         ) {
             archiveRootsSection
             SettingsRowDivider()
@@ -547,12 +554,26 @@ private struct SettingsHelpersPane: View {
     @Binding var helperPathError: String?
     let chooseExecutable: (String) -> URL?
     let onSetPath: (SettingsHelperTool, URL?) -> Void
+    let onInstallTools: () -> Void
 
     var body: some View {
         SettingsSection(
             title: "Helper tools",
-            footer: "Only needed when Homebrew installs are not on PATH"
+            footer: "Paths are only needed for helpers installed somewhere else"
         ) {
+            SettingsRow(
+                "Install or update",
+                description: "Downloads yt-dlp, FFmpeg and demucs-mlx into the app"
+            ) {
+                HubLabeledButton(
+                    icon: "arrow.down.circle",
+                    label: "Install Tools",
+                    style: .secondary
+                ) {
+                    onInstallTools()
+                }
+            }
+            SettingsRowDivider()
             helperPathRow(.ffmpeg)
             SettingsRowDivider()
             helperPathRow(.ffprobe)

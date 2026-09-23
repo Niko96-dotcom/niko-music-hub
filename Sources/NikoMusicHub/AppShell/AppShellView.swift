@@ -12,6 +12,8 @@ struct AppShellView: View {
     @ObservedObject var router: QuickAccessRouter
     /// Single owner of the selected tool and panel visibility.
     @ObservedObject var shellSession: HubShellSession
+    @ObservedObject var helperSetup: HelperToolSetupModel
+    let archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject private var history: HubNavigationHistory
     @Environment(\.openSettings) private var openSettings
     /// Non-observable pane cache; the session's `selectedToolID` drives rendering.
@@ -19,18 +21,23 @@ struct AppShellView: View {
     /// Router tool requests are one-shot: remember the last one applied so a
     /// window re-appear does not replay it.
     @State private var appliedToolRequestSequence: UInt64 = 0
+    /// Helper setup requests are one-shot like tool requests.
 
     @MainActor
     init(
         registry: ToolRegistry,
         context: ToolContext,
         router: QuickAccessRouter,
-        shellSession: HubShellSession
+        shellSession: HubShellSession,
+        helperSetup: HelperToolSetupModel,
+        archiveViewModel: ArchiveBrowserViewModel
     ) {
         self.registry = registry
         self.context = context
         self.router = router
         self.shellSession = shellSession
+        self.helperSetup = helperSetup
+        self.archiveViewModel = archiveViewModel
         self.history = context.navigationHistory
         // No side effects here: the launch tool is resolved (and recorded in
         // history) once by the composition root, before any scene exists.
@@ -122,6 +129,18 @@ struct AppShellView: View {
             if router.openSettingsPane != nil {
                 openSettings()
             }
+            applyHelperSetupRequest(router.helperSetupRequest)
+        }
+        .sheet(isPresented: Binding(
+            get: { shellSession.isSetupPresented },
+            set: { if !$0 { shellSession.dismissSetup() } }
+        )) {
+            HubSetupView(
+                model: helperSetup,
+                archiveViewModel: archiveViewModel,
+                chooseArchiveFolder: chooseSetupArchiveFolder,
+                onClose: { shellSession.dismissSetup() }
+            )
         }
         .onChange(of: router.toolRequest) { _, request in
             applyToolRequest(request)
@@ -147,6 +166,12 @@ struct AppShellView: View {
         .onChange(of: router.openSettingsPane) { _, pane in
             guard pane != nil else { return }
             openSettings()
+        }
+        .onChange(of: router.helperSetupRequest) { _, request in
+            applyHelperSetupRequest(request)
+        }
+        .onChange(of: helperSetup.installGeneration) { _, _ in
+            router.noteHelperToolsChanged()
         }
         .background {
             GeometryReader { proxy in
@@ -215,6 +240,15 @@ struct AppShellView: View {
         guard let request, request.sequence > appliedToolRequestSequence else { return }
         appliedToolRequestSequence = request.sequence
         selectTool(request.toolID)
+    }
+
+    private func applyHelperSetupRequest(_ request: UInt64) {
+        shellSession.presentSetup(forRequest: request)
+    }
+
+    private func chooseSetupArchiveFolder() {
+        guard let url = context.fileActions.chooseDirectory(prompt: "Choose Archive Folder") else { return }
+        archiveViewModel.addRoot(url)
     }
 
     /// Sidebar writes go through `selectTool` so Settings opens the Settings

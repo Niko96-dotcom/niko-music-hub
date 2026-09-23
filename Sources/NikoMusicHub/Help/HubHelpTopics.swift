@@ -30,7 +30,7 @@ enum HubHelpTopics {
         id: "helper-tools",
         menuTitle: "Helper Tools",
         heading: "Helper tools",
-        body: "Downloader needs yt-dlp. WAV Converter needs FFmpeg. Stem Separation needs demucs-mlx. Set paths in Settings → Helpers.",
+        body: "Downloader needs yt-dlp and FFmpeg. Stem Separation needs demucs-mlx. Choose Help → Set Up Helper Tools… to install them in one step; they go into the app's own folder. To use copies you installed yourself, set their paths in Settings → Helpers.",
         anchor: "helper-tools"
     )
 

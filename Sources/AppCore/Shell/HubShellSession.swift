@@ -43,6 +43,10 @@ public final class HubShellSession: ObservableObject {
     /// `selectedToolIDKey`. Resolved once at composition time
     /// (`restoreSelectedToolID`), before any scene exists.
     @Published public private(set) var selectedToolID: ToolFeatureID?
+    /// Helper-tool "Set Up" sheet. The session is the single owner of
+    /// panel/sheet visibility; the setup model outlives the sheet so installs
+    /// continue if it closes.
+    @Published public var isSetupPresented: Bool = false
     /// Live MenuBarExtra insertion, observed by the `App`. Canonical persistence
     /// is `AppSettings.showMenuBarExtra`.
     public let menuBarExtra: MenuBarExtraState
@@ -214,5 +218,25 @@ public final class HubShellSession: ObservableObject {
     /// Update the live extra without writing settings (Settings already persisted).
     public func applyShowMenuBarExtra(_ visible: Bool) {
         menuBarExtra.apply(visible)
+    }
+
+    public func presentSetup() {
+        isSetupPresented = true
+    }
+
+    /// Last `QuickAccessRouter.helperSetupRequest` already shown. Kept here, not in
+    /// view state, because the main window can close and reopen while the app
+    /// keeps running (menu bar extra); a fresh view must not replay an old request.
+    private var appliedHelperSetupRequest: UInt64 = 0
+
+    /// Presents the setup sheet once per router request sequence.
+    public func presentSetup(forRequest request: UInt64) {
+        guard request > appliedHelperSetupRequest else { return }
+        appliedHelperSetupRequest = request
+        presentSetup()
+    }
+
+    public func dismissSetup() {
+        isSetupPresented = false
     }
 }

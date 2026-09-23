@@ -38,10 +38,10 @@ public struct StemSeparationView: View {
         if viewModel.helperNeedsSetup {
             StandardErrorCard(card: Self.helperMissingCard()) { action in
                 switch action {
+                case .installHelperTools:
+                    viewModel.openHubSettingsHelpers()
                 case .chooseToolPath:
                     viewModel.chooseHelperPath()
-                case .openHubSettingsHelpers:
-                    viewModel.openHubSettingsHelpers()
                 case .tryAgain:
                     viewModel.refreshHelperHealth()
                 default:
@@ -299,8 +299,8 @@ public struct StemSeparationView: View {
             icon: "tool.badge.xmark",
             body: StemSeparationHelperCopy.missingBody,
             recoveryActions: [
-                AppErrorCard.RecoveryAction(label: "Choose Path", style: .primary, action: .chooseToolPath),
-                AppErrorCard.RecoveryAction(label: "Open Settings", style: .secondary, action: .openHubSettingsHelpers),
+                AppErrorCard.RecoveryAction(label: "Install Tools", style: .primary, action: .installHelperTools),
+                AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),
                 AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain),
             ]
         )

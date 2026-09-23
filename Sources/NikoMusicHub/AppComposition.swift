@@ -18,6 +18,7 @@ struct AppComposition {
     let context: ToolContext
     let router: QuickAccessRouter
     let shellSession: HubShellSession
+    let helperSetup: HelperToolSetupModel
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
     let archiveViewModel: ArchiveBrowserViewModel
@@ -184,6 +185,28 @@ struct AppComposition {
             settingsStore: settingsStore,
             navigationHistory: navigationHistory
         )
+        let helperSetup = HelperToolSetupModel(settingsProvider: {
+            (try? settingsStore.loadSettings())?.helperTools ?? HelperToolSettings()
+        })
+        helperSetup.refresh()
+        // First-launch rule, decided here before any scene exists (no side
+        // effects in views' init): brand-new installs see the helper-tool Set
+        // Up sheet once. Existing users who already completed archive
+        // onboarding never see it automatically.
+        let launchSettings = (try? settingsStore.loadSettings()) ?? .default
+        if !launchSettings.setupAssistantShown,
+           !launchSettings.archiveOnboardingCompleted,
+           !runtime.e2eSmoke,
+           !runtime.usesFixtureRoot,
+           runtime.devArchiveRootURL == nil,
+           runtime.bookmarkProofMode == nil
+        {
+            shellSession.presentSetup()
+            try? settingsStore.updateSettings { $0.setupAssistantShown = true }
+            // The setup sheet has its own Music Archive row, so the archive
+            // pane's first-run sheet must not stack a second modal on top.
+            archiveViewModel.completeArchiveOnboarding()
+        }
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])
         }
@@ -250,6 +273,7 @@ struct AppComposition {
             context: finalContext,
             router: quickAccessRouter,
             shellSession: shellSession,
+            helperSetup: helperSetup,
             appearanceController: appearanceController,
             updateController: updateController,
             archiveViewModel: archiveViewModel,
