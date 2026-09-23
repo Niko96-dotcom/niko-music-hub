@@ -32,6 +32,7 @@ public struct AppErrorCard {
         case openHubSettingsHelpers
         case installHelperTools
         case tryAgain
+        case clearHistory
         case chooseToolPath
         case revealInFinder
         case openTerminal

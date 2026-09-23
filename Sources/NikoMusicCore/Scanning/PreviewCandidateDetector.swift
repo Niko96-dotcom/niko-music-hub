@@ -3,7 +3,7 @@ import Foundation
 public struct PreviewCandidateDetector: @unchecked Sendable {
     private static let audioExtensions: Set<String> = ["wav", "mp3", "m4a", "aiff", "aif", "flac"]
     private let fileManager: FileManager
-    private let shouldReadDuration: @Sendable (URL) -> Bool
+    private let shouldReadDuration: @Sendable (_ canonicalPath: String) -> Bool
     private let durationReader: @Sendable (URL) -> Double?
 
     public init(fileManager: FileManager = .default) {
@@ -16,7 +16,7 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
 
     init(
         fileManager: FileManager = .default,
-        shouldReadDuration: @escaping @Sendable (URL) -> Bool,
+        shouldReadDuration: @escaping @Sendable (_ canonicalPath: String) -> Bool,
         durationReader: @escaping @Sendable (URL) -> Double?
     ) {
         self.fileManager = fileManager
@@ -49,19 +49,42 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
         let fileURL: URL
         let fileExtension: String
         let modifiedAt: Date
+        /// The file's resolved path when the walk already derived it.
+        var canonicalPath: String?
     }
 
     /// The walk's per-entry filter, without opening the file. Shared with the archive scanner,
     /// which feeds project and preview detection from a single enumeration of each song folder.
     func match(_ fileURL: URL, in songFolder: URL) throws -> Match? {
+        try match(fileURL, in: songFolder) {
+            .init(
+                isContained: PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]),
+                canonicalPath: nil
+            )
+        }
+    }
+
+    /// `resolve` answers `PathSafety.isResolvedContained(fileURL, in: [songFolder])`, plus the
+    /// resolved path when known; the archive scanner derives both from its enumeration.
+    func match(
+        _ fileURL: URL,
+        in songFolder: URL,
+        resolve: () -> EnumeratedPathResolver.Resolution
+    ) throws -> Match? {
         let ext = fileURL.pathExtension.lowercased()
         guard Self.audioExtensions.contains(ext) else { return nil }
         // Reject audio that escapes the song folder via symlinks.
-        guard PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]) else { return nil }
+        let resolution = resolve()
+        guard resolution.isContained else { return nil }
 
         let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
         guard values.isRegularFile == true else { return nil }
-        return Match(fileURL: fileURL, fileExtension: ext, modifiedAt: values.contentModificationDate ?? .distantPast)
+        return Match(
+            fileURL: fileURL,
+            fileExtension: ext,
+            modifiedAt: values.contentModificationDate ?? .distantPast,
+            canonicalPath: resolution.canonicalPath
+        )
     }
 
     /// Builds the candidate, reading the duration from the file header.
@@ -76,7 +99,9 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
             detectedRole: Self.detectedRole(from: fileName),
             fileExtension: match.fileExtension,
             detectedVersionNumber: PreviewFilenameParser.parseVersionNumber(from: fileName),
-            durationSeconds: shouldReadDuration(fileURL) ? durationReader(fileURL) : nil
+            durationSeconds: shouldReadDuration(match.canonicalPath ?? PreviewWAVDurationReader.canonicalPath(of: fileURL))
+                ? durationReader(fileURL)
+                : nil
         )
     }
 

@@ -70,6 +70,7 @@ public struct StandardErrorCard: View {
         case .openHubSettingsHelpers: return "wrench.and.screwdriver"
         case .installHelperTools: return "arrow.down.circle"
         case .tryAgain: return "arrow.clockwise"
+        case .clearHistory: return "trash"
         case .dismiss: return "xmark"
         case .chooseToolPath: return "folder"
         case .revealInFinder: return "folder"
@@ -88,7 +89,7 @@ public struct StandardErrorCard: View {
             // In-app Settings → Helpers / Set Up sheet. Feature views pass `onRecovery`;
             // this case must not open System Settings privacy URLs.
             break
-        case .tryAgain, .dismiss, .chooseToolPath, .revealInFinder:
+        case .tryAgain, .dismiss, .chooseToolPath, .revealInFinder, .clearHistory:
             break
         case .openTerminal:
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))

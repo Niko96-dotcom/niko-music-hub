@@ -8,7 +8,8 @@ import XCTest
 /// (single load/scan/save/sort pass) on a background task. These tests prove:
 /// main-thread responsiveness with a blocked store, burst coalescing without
 /// a lost refresh, no lost concurrent updates, preserved identity/order,
-/// surfaced (never masked) corruption with recovery, and no history cap.
+/// quarantined (never deleted) corruption with a one-time warning, and
+/// bounded missing history (available records are never pruned).
 final class OutputInboxRefreshTests: XCTestCase {
     // MARK: - Off-main-thread refresh with latest result
 
@@ -219,42 +220,85 @@ final class OutputInboxRefreshTests: XCTestCase {
         wait(for: [silent], timeout: 0.2)
     }
 
-    func testCorruptInboxJSONThrowsAndIsNeverMasked() throws {
+    func testCorruptInboxJSONIsQuarantinedInSameCall() throws {
+        let badBytes = Data("{not-json".utf8)
         let directory = temporaryDirectory()
         let storage = directory.appendingPathComponent("inbox.json")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try Data("{not-json".utf8).write(to: storage)
+        try badBytes.write(to: storage)
         let store = JSONOutputInboxStore(storageURL: storage)
 
-        XCTAssertThrowsError(try store.loadRefreshedItems(), "corruption must throw, not return []")
+        // Recovery happens in the same call: no throw, empty snapshot.
+        XCTAssertEqual(try store.loadRefreshedItems(), [])
+
+        let quarantineURL = try XCTUnwrap(
+            store.lastQuarantineURL,
+            "quarantine location must be recorded"
+        )
+        XCTAssertEqual(
+            quarantineURL.deletingLastPathComponent().standardizedFileURL,
+            directory.standardizedFileURL
+        )
+        XCTAssertTrue(
+            quarantineURL.lastPathComponent.hasPrefix("inbox.corrupt-"),
+            "quarantine must be unique and sit next to the store, got \(quarantineURL.lastPathComponent)"
+        )
+        XCTAssertEqual(quarantineURL.pathExtension, "json")
+        XCTAssertEqual(try Data(contentsOf: quarantineURL), badBytes)
+
+        // The one-time warning drains exactly once.
+        XCTAssertNotNil(store.takeCorruptionWarning())
+        XCTAssertNil(store.takeCorruptionWarning())
+
+        // The inbox is usable immediately: new output records normally.
+        try store.addItem(OutputInboxItem(
+            fileURL: directory.appendingPathComponent("fresh.wav"),
+            sourceToolID: "dev-tool",
+            status: .available
+        ))
+        XCTAssertEqual(try store.listItems().count, 1)
+
+        // A second corruption episode gets its own quarantine file.
+        try badBytes.write(to: storage)
+        XCTAssertEqual(try store.loadRefreshedItems(), [])
+        XCTAssertNotEqual(try XCTUnwrap(store.lastQuarantineURL), quarantineURL)
     }
 
     @MainActor
-    func testModelSurfacesCorruptionThenRecovers() async throws {
+    func testModelSurfacesQuarantineWarningOnceThenClears() async throws {
+        let badBytes = Data("{not-json".utf8)
         let directory = temporaryDirectory()
         let storage = directory.appendingPathComponent("inbox.json")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try Data("{not-json".utf8).write(to: storage)
+        try badBytes.write(to: storage)
         let store = JSONOutputInboxStore(storageURL: storage)
         let model = OutputInboxRefreshModel(store: store)
 
+        // Auto-recovery needs no manual fix: empty snapshot plus a visible
+        // one-time warning through the existing error channel.
         model.requestRefresh()
         await model.waitForIdle()
-        XCTAssertNotNil(model.lastError, "corruption must surface as a visible error")
+        XCTAssertTrue(model.items.isEmpty)
+        let warning = try XCTUnwrap(model.lastError)
+        XCTAssertTrue(warning.contains("unreadable"), "got: \(warning)")
+        let quarantineURL = try XCTUnwrap(store.lastQuarantineURL)
+        XCTAssertEqual(try Data(contentsOf: quarantineURL), badBytes)
+
+        // The next clean pass clears the warning; no restart required.
+        model.requestRefresh()
+        await model.waitForIdle()
+        XCTAssertNil(model.lastError)
         XCTAssertTrue(model.items.isEmpty)
 
-        // Recovery is a plain retry from disk: no restart, no hidden reset.
+        // New output flows through the recovered inbox and its scan.
         let file = directory.appendingPathComponent("back.wav")
         try Data("audio".utf8).write(to: file)
-        let recovered = [OutputInboxItem(
+        try store.addItem(OutputInboxItem(
             fileURL: file,
             sourceToolID: "dev-tool",
             createdAt: Date(timeIntervalSince1970: 50),
             status: .pending
-        )]
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(recovered).write(to: storage, options: .atomic)
+        ))
 
         model.requestRefresh()
         await model.waitForIdle()
@@ -263,7 +307,8 @@ final class OutputInboxRefreshTests: XCTestCase {
         XCTAssertEqual(model.items.first?.status, .available)
     }
 
-    func testRefreshKeepsEveryRecordWithoutHistoryCap() throws {
+    func testRefreshKeepsRecordsWithinMissingCap() throws {
+        // 300 missing rows sit under the bound, so every record survives.
         let store = try makeStore()
         let base = temporaryDirectory()
         for index in 0..<300 {
@@ -277,10 +322,69 @@ final class OutputInboxRefreshTests: XCTestCase {
 
         let snapshot = try store.loadRefreshedItems()
 
-        XCTAssertEqual(snapshot.count, 300, "no arbitrary history cap may drop records")
+        XCTAssertEqual(snapshot.count, 300, "records within the missing cap must survive")
         XCTAssertEqual(snapshot.first?.fileURL.lastPathComponent, "row-299.wav")
         XCTAssertEqual(snapshot.last?.fileURL.lastPathComponent, "row-0.wav")
         XCTAssertTrue(snapshot.allSatisfy { $0.status == .missing })
+    }
+
+    func testRefreshPrunesOnlyOldestMissingBeyondBound() throws {
+        let bound = JSONOutputInboxStore.maxRetainedMissingCount
+        let directory = temporaryDirectory()
+        let storage = directory.appendingPathComponent("inbox.json")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Five available outputs older than every missing row: all must
+        // survive regardless of age.
+        var availableIDs: Set<UUID> = []
+        var seeded: [OutputInboxItem] = []
+        for index in 0..<5 {
+            let url = directory.appendingPathComponent("keep-\(index).wav")
+            try Data("audio".utf8).write(to: url)
+            let item = OutputInboxItem(
+                fileURL: url,
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(index)),
+                status: .pending
+            )
+            availableIDs.insert(item.id)
+            seeded.append(item)
+        }
+        let missingTotal = bound + 200
+        for index in 0..<missingTotal {
+            seeded.append(OutputInboxItem(
+                fileURL: directory.appendingPathComponent("gone-\(index).wav"),
+                sourceToolID: "volume",
+                createdAt: Date(timeIntervalSince1970: Double(1000 + index)),
+                status: .pending
+            ))
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(seeded).write(to: storage, options: .atomic)
+        let store = JSONOutputInboxStore(storageURL: storage)
+
+        let snapshot = try store.loadRefreshedItems()
+
+        XCTAssertEqual(snapshot.count, bound + 5, "only oldest missing beyond the bound may go")
+        XCTAssertEqual(
+            Set(snapshot.filter { $0.status == .available }.map(\.id)),
+            availableIDs,
+            "every available record survives, whatever its age"
+        )
+        let missingNewestFirst = seeded
+            .filter { !availableIDs.contains($0.id) }
+            .sorted { $0.createdAt > $1.createdAt }
+        XCTAssertEqual(
+            snapshot.filter { $0.status == .missing }.map(\.id),
+            missingNewestFirst.prefix(bound).map(\.id),
+            "the newest missing rows stay; the oldest 200 are pruned"
+        )
+        XCTAssertEqual(
+            snapshot.map(\.createdAt),
+            snapshot.map(\.createdAt).sorted(by: >),
+            "newest-first ordering stays stable across the prune"
+        )
+        XCTAssertEqual(try store.listItems(), snapshot, "the pruned list must be persisted")
     }
 
     // MARK: - Helpers

@@ -21,6 +21,16 @@ public final class BPMTapperViewModel: ObservableObject {
     @Published public private(set) var copyConfirmation: String?
     @Published public private(set) var saveConfirmation: String?
     @Published public private(set) var errorText: String?
+    /// B1: true while the persisted history is unreadable. Keeps Clear
+    /// History enabled so the user can discard the bad payload.
+    @Published public private(set) var hasCorruptHistory = false
+
+    /// Shown when the persisted history cannot be decoded. Points at both
+    /// recovery paths; the live slot already renders `errorText`.
+    public static let corruptHistoryMessage =
+        "Saved BPM history was unreadable. Clear History or Save BPM starts fresh; a backup is kept."
+    private static let saveFailureMessage =
+        "Could not save this BPM. Check local app storage, then try Save BPM again."
 
     private var estimator: TempoEstimator
     private let historyStore: any BPMHistoryStore
@@ -75,7 +85,9 @@ public final class BPMTapperViewModel: ObservableObject {
         clipboard.copyPlainNumber(formatBPM(displayedBPM))
         copyConfirmation = "BPM copied"
         saveConfirmation = nil
-        errorText = nil
+        if !hasCorruptHistory {
+            errorText = nil
+        }
     }
 
     public func saveDisplayedBPM() {
@@ -93,8 +105,14 @@ public final class BPMTapperViewModel: ObservableObject {
             saveConfirmation = "BPM saved"
             copyConfirmation = nil
             errorText = nil
+        } catch is DecodingError {
+            // A store without B1 quarantine still throws here; surface the
+            // corrupt-history copy so Clear/Save stay discoverable.
+            hasCorruptHistory = true
+            errorText = Self.corruptHistoryMessage
+            saveConfirmation = nil
         } catch {
-            errorText = "Could not save this BPM. Check local app storage, then try Save BPM again."
+            errorText = Self.saveFailureMessage
             saveConfirmation = nil
         }
     }
@@ -103,22 +121,54 @@ public final class BPMTapperViewModel: ObservableObject {
         clipboard.copyPlainNumber(formatBPM(entry.bpm))
         copyConfirmation = "BPM copied"
         saveConfirmation = nil
-        errorText = nil
+        if !hasCorruptHistory {
+            errorText = nil
+        }
     }
 
     public func loadHistory() throws {
-        historyEntries = try historyStore.listEntries()
+        do {
+            historyEntries = try historyStore.listEntries()
+            hasCorruptHistory = false
+        } catch let error as DecodingError {
+            // B1: keep the decode failure visible (the view's `try?` in
+            // onAppear would otherwise swallow it into an empty list with
+            // Clear disabled and Save failing forever).
+            historyEntries = []
+            hasCorruptHistory = true
+            errorText = Self.corruptHistoryMessage
+            throw error
+        }
     }
 
     public func clearHistory() {
         do {
+            // clearEntries is decode-free, so this recovers from corruption.
+            // The current tap run (estimator, rawBPM, tapCount) is untouched.
             try historyStore.clearEntries()
             try loadHistory()
             copyConfirmation = nil
             saveConfirmation = nil
             errorText = nil
+            hasCorruptHistory = false
+        } catch is DecodingError {
+            hasCorruptHistory = true
+            if errorText == nil {
+                errorText = Self.corruptHistoryMessage
+            }
+        } catch BPMHistoryStoreError.corruptBackupFailed {
+            // The live malformed bytes were left in place, so keep the
+            // truthful corrupt-history copy visible for a later Clear/Save.
+            hasCorruptHistory = true
+            errorText = Self.corruptHistoryMessage
         } catch {
-            errorText = "Could not save this BPM. Check local app storage, then try Save BPM again."
+            // A failed Clear after corruption must not replace the truthful
+            // corrupt copy with a generic save failure.
+            if hasCorruptHistory {
+                errorText = Self.corruptHistoryMessage
+            } else {
+                errorText = Self.saveFailureMessage
+            }
         }
     }
 
@@ -132,8 +182,11 @@ public final class BPMTapperViewModel: ObservableObject {
             } else {
                 errorText = nil
             }
+        } catch is DecodingError {
+            // loadHistory already published the corrupt-history copy.
+            hasCorruptHistory = true
         } catch {
-            errorText = "Could not save this BPM. Check local app storage, then try Save BPM again."
+            errorText = Self.saveFailureMessage
         }
     }
 
@@ -165,7 +218,12 @@ public final class BPMTapperViewModel: ObservableObject {
     private func clearTransientMessages() {
         copyConfirmation = nil
         saveConfirmation = nil
-        errorText = nil
+        // Corrupt-history copy stays visible across taps, resets, copies, and
+        // adjustment changes until Clear History or a successful Save repairs
+        // storage; only non-corruption messages clear here.
+        if !hasCorruptHistory {
+            errorText = nil
+        }
     }
 
     private func formatBPM(_ bpm: Double) -> String {

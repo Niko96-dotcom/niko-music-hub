@@ -147,16 +147,76 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(try store.listItems(), snapshot, "single pass must persist exactly what it returns")
     }
 
-    func testCorruptInboxJSONThrows() throws {
+    func testCorruptInboxJSONIsQuarantinedWithExactBytes() throws {
+        let badBytes = Data("{not-json".utf8)
         let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
         try FileManager.default.createDirectory(
             at: storeURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try Data("{not-json".utf8).write(to: storeURL)
+        try badBytes.write(to: storeURL)
         let store = JSONOutputInboxStore(storageURL: storeURL)
 
-        XCTAssertThrowsError(try store.listItems())
+        // A read recovers to empty instead of throwing, preserving the bytes.
+        XCTAssertEqual(try store.listItems(), [])
+
+        let quarantineURL = try XCTUnwrap(
+            store.lastQuarantineURL,
+            "quarantine location must be recorded"
+        )
+        XCTAssertEqual(
+            quarantineURL.deletingLastPathComponent(),
+            storeURL.deletingLastPathComponent(),
+            "quarantine must sit next to the store"
+        )
+        XCTAssertEqual(try Data(contentsOf: quarantineURL), badBytes)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: storeURL.path),
+            "the corrupt original is moved away, never left to fail every call"
+        )
+
+        // Subsequent reads and adds work on the recovered inbox.
+        XCTAssertEqual(try store.listItems(), [])
+        try store.addItem(OutputInboxItem(
+            fileURL: storeURL.deletingLastPathComponent().appendingPathComponent("take.wav"),
+            sourceToolID: "dev-tool",
+            status: .available
+        ))
+        XCTAssertEqual(try store.listItems().count, 1)
+    }
+
+    func testAddItemRecoversFromCorruptJSONInSameCall() throws {
+        let badBytes = Data("[broken".utf8)
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        try FileManager.default.createDirectory(
+            at: storeURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try badBytes.write(to: storeURL)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+
+        try store.addItem(OutputInboxItem(
+            fileURL: storeURL.deletingLastPathComponent().appendingPathComponent("fresh.wav"),
+            sourceToolID: "dev-tool",
+            status: .available
+        ))
+
+        let items = try store.listItems()
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.fileURL.lastPathComponent, "fresh.wav")
+        let quarantineURL = try XCTUnwrap(store.lastQuarantineURL)
+        XCTAssertEqual(try Data(contentsOf: quarantineURL), badBytes)
+    }
+
+    func testRealIOFailuresStillThrowWithoutQuarantine() throws {
+        // A directory at the storage path is an I/O failure, not bad JSON:
+        // it must throw and must not be moved aside.
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+
+        XCTAssertThrowsError(try store.listItems(), "real I/O failures must still throw")
+        XCTAssertNil(store.lastQuarantineURL, "nothing may be quarantined on I/O failure")
     }
 
     func testSaveSweepsStaleAtomicWriteTemporariesButKeepsFreshOnes() throws {

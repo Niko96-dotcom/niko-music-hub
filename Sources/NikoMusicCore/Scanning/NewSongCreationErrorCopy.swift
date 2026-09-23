@@ -19,7 +19,7 @@ public enum NewSongCreationErrorCopy: Sendable {
             }
             return "A folder named “\(name)” already exists in New Song Drafts. Choose another name."
         case .archiveRootIsReadOnly:
-            return "New Song Drafts cannot be created inside an archive root. The draft stays in the app output folder."
+            return "The draft was not created because the output folder is inside an archive root. Choose another folder in Settings > Output, then try again."
         case .destinationUnavailable:
             return "The New Song Drafts folder could not be created. Check the output folder in Settings, then try again."
         case .templateMissing:

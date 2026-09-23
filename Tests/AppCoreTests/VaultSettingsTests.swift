@@ -82,9 +82,17 @@ final class VaultSettingsTests: XCTestCase {
         }
 
         let wrapped = Data(#"{"vault":{"isEnabled":true,"rolloutStage":"friends","spaceIntent":"bogus","independentBackupConfirmed":true}}"#.utf8)
-        let fallback = try JSONDecoder().decode(AppSettings.self, from: wrapped)
-        XCTAssertEqual(fallback.vault.spaceIntent, .keepCopy, "corrupt intent must never decode to free space")
-        XCTAssertFalse(ProjectVaultRolloutPolicy.expressesFreeSpaceIntent(fallback.vault))
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AppSettings.self, from: wrapped),
+            "a present corrupt intent inside AppSettings must throw instead of falling back to whole-vault defaults"
+        ) { _ in
+            XCTAssertFalse(
+                (try? JSONDecoder().decode(AppSettings.self, from: wrapped)).map {
+                    ProjectVaultRolloutPolicy.expressesFreeSpaceIntent($0.vault)
+                } ?? false,
+                "corrupt intent must never decode to free space"
+            )
+        }
     }
 
     func testExplicitNullSpaceIntentFailsClosedRatherThanMigrating() throws {
@@ -99,9 +107,17 @@ final class VaultSettingsTests: XCTestCase {
         )
 
         let wrapped = Data(#"{"vault":{"isEnabled":true,"rolloutStage":"friends","spaceIntent":null,"independentBackupConfirmed":true}}"#.utf8)
-        let fallback = try JSONDecoder().decode(AppSettings.self, from: wrapped)
-        XCTAssertEqual(fallback.vault.spaceIntent, .keepCopy, "explicit null must never decode to free space")
-        XCTAssertFalse(ProjectVaultRolloutPolicy.expressesFreeSpaceIntent(fallback.vault))
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AppSettings.self, from: wrapped),
+            "an explicit null intent inside AppSettings must throw instead of falling back to whole-vault defaults"
+        ) { _ in
+            XCTAssertFalse(
+                (try? JSONDecoder().decode(AppSettings.self, from: wrapped)).map {
+                    ProjectVaultRolloutPolicy.expressesFreeSpaceIntent($0.vault)
+                } ?? false,
+                "explicit null must never decode to free space"
+            )
+        }
     }
 
     func testSetSpaceIntentSyncsLegacyRolloutWithoutEnablingDisabled() {
@@ -119,6 +135,74 @@ final class VaultSettingsTests: XCTestCase {
         friends.setSpaceIntent(.keepCopy)
         XCTAssertEqual(friends.spaceIntent, .keepCopy)
         XCTAssertEqual(friends.rolloutStage, .privateBeta, "downgrading to Keep steps friends back to copy-only")
+    }
+
+    func testPresentNullNonoptionalVaultFieldsThrow() throws {
+        let payloads = [
+            #"{"isEnabled":null}"#,
+            #"{"automaticArchiving":null}"#,
+            #"{"inactivityDays":null}"#,
+            #"{"minimumFreeSpaceGiB":null}"#,
+            #"{"transferFreeSpaceReserveGiB":null}"#,
+            #"{"keepPreviousGenerationDays":null}"#,
+            #"{"launchAtLogin":null}"#,
+            #"{"rolloutStage":null}"#,
+            #"{"automationEmergencyStop":null}"#,
+            #"{"independentBackupConfirmed":null}"#,
+            #"{"keepLocalProjectIDs":null}"#,
+            #"{"isEnabled":"bogus"}"#,
+            #"{"keepLocalProjectIDs":"bogus"}"#,
+        ]
+        for payload in payloads {
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(VaultSettings.self, from: Data(payload.utf8)),
+                "present malformed vault field must throw: \(payload)"
+            )
+            let wrapped = Data(#"{"vault":\#(payload)}"#.utf8)
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AppSettings.self, from: wrapped),
+                "present malformed vault field inside AppSettings must throw: \(payload)"
+            )
+        }
+    }
+
+    func testMissingNonoptionalVaultKeysDecodeToLegacyDefaults() throws {
+        let empty = try JSONDecoder().decode(VaultSettings.self, from: Data("{}".utf8))
+        XCTAssertEqual(empty, VaultSettings())
+
+        let partial = try JSONDecoder().decode(
+            VaultSettings.self,
+            from: Data(#"{"isEnabled":true}"#.utf8)
+        )
+        XCTAssertTrue(partial.isEnabled)
+        XCTAssertFalse(partial.automaticArchiving)
+        XCTAssertEqual(partial.inactivityDays, 30)
+        XCTAssertEqual(partial.minimumFreeSpaceGiB, 120)
+        XCTAssertEqual(partial.transferFreeSpaceReserveGiB, 5)
+        XCTAssertEqual(partial.keepPreviousGenerationDays, 30)
+        XCTAssertTrue(partial.launchAtLogin)
+        XCTAssertEqual(partial.rolloutStage, .disabled)
+        XCTAssertEqual(partial.spaceIntent, .keepCopy)
+        XCTAssertFalse(partial.automationEmergencyStop)
+        XCTAssertFalse(partial.independentBackupConfirmed)
+        XCTAssertEqual(partial.keepLocalProjectIDs, [])
+    }
+
+    func testOptionalVaultFieldsAcceptMissingAndNull() throws {
+        let empty = try JSONDecoder().decode(VaultSettings.self, from: Data("{}".utf8))
+        XCTAssertNil(empty.activeRootID)
+        XCTAssertNil(empty.archiveRootID)
+        XCTAssertNil(empty.lastSuccessfulVerificationAt)
+        XCTAssertNil(empty.lastRestoreDrillAt)
+
+        let nulled = try JSONDecoder().decode(
+            VaultSettings.self,
+            from: Data(#"{"activeRootID":null,"archiveRootID":null,"lastSuccessfulVerificationAt":null,"lastRestoreDrillAt":null}"#.utf8)
+        )
+        XCTAssertNil(nulled.activeRootID)
+        XCTAssertNil(nulled.archiveRootID)
+        XCTAssertNil(nulled.lastSuccessfulVerificationAt)
+        XCTAssertNil(nulled.lastRestoreDrillAt)
     }
 
     func testAutomaticArchivingMissingDecodesOffButExplicitTruePreserved() throws {

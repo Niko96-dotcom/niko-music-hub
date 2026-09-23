@@ -199,6 +199,101 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
         XCTAssertEqual(try store.recoverableRecords().filter { $0.id == record.id }.count, 1)
     }
 
+    func testTransferQueriesFailClosedOnMidIterationStepError() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var store = try SQLiteVaultTransferStore(databaseURL: root.appendingPathComponent("vault.sqlite"))
+        let projectID = ProjectID()
+        func makeTransfer(state: VaultTransferState) -> VaultTransferRecord {
+            VaultTransferRecord(
+                projectID: projectID,
+                sourceURL: root.appendingPathComponent("active/project"),
+                stagingURL: root.appendingPathComponent("archive/.niko-staging/\(UUID().uuidString)"),
+                destinationURL: root.appendingPathComponent("archive/generations/\(UUID().uuidString)"),
+                state: state,
+                createdAt: Date(timeIntervalSince1970: 100)
+            )
+        }
+        let copying = makeTransfer(state: .copyingToArchiveStaging)
+        let failed = makeTransfer(state: .failedRecoverable)
+        let verified = makeTransfer(state: .archiveVerified)
+        try store.save(copying)
+        try store.save(failed)
+        try store.save(verified)
+        // Sanity: without fault injection all three rows read back.
+        XCTAssertEqual(try store.allTransferRecords().count, 3)
+
+        // Fail the second sqlite3_step with BUSY after one ROW: the old
+        // `while step == ROW` loop returned the partial first row as success.
+        // The fixed loop must throw StoreError.step instead.
+        func expectStepFailure(_ query: () throws -> Void, file: StaticString = #filePath, line: UInt = #line) {
+            let counter = StepFaultCounter()
+            store.stepForTesting = { statement in
+                counter.calls += 1
+                if counter.calls == 2 { return SQLITE_BUSY }
+                return sqlite3_step(statement)
+            }
+            defer { store.stepForTesting = nil }
+            XCTAssertThrowsError(try query(), file: file, line: line) { error in
+                guard case SQLiteArchiveDatabase.StoreError.step = error else {
+                    XCTFail("expected StoreError.step, got \(error)", file: file, line: line)
+                    return
+                }
+            }
+        }
+        expectStepFailure { _ = try store.allTransferRecords() }
+        expectStepFailure { _ = try store.recoverableRecords() }
+        expectStepFailure { _ = try store.record(id: copying.id) }
+        expectStepFailure { _ = try store.verifiedArchiveGeneration(projectID: projectID) }
+        // Clearing the seam restores successful reads.
+        store.stepForTesting = nil
+        XCTAssertEqual(try store.allTransferRecords().count, 3)
+    }
+
+    func testRestoreQueriesFailClosedOnMidIterationStepError() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var store = try SQLiteVaultTransferStore(databaseURL: root.appendingPathComponent("vault.sqlite"))
+        let manifest = VaultManifest(entries: [])
+        func makeRestore() -> VaultRestoreRecord {
+            VaultRestoreRecord(
+                projectID: ProjectID(),
+                archiveGenerationURL: root.appendingPathComponent("archive/generations/\(UUID().uuidString)"),
+                stagingURL: root.appendingPathComponent("active/.niko-staging/\(UUID().uuidString)"),
+                destinationURL: root.appendingPathComponent("active/\(UUID().uuidString)"),
+                manifest: manifest,
+                createdAt: Date(timeIntervalSince1970: 100)
+            )
+        }
+        let first = makeRestore()
+        let second = makeRestore()
+        try store.saveRestore(first)
+        try store.saveRestore(second)
+        XCTAssertEqual(try store.recoverableRestoreRecords().count, 2)
+
+        func expectStepFailure(_ query: () throws -> Void, file: StaticString = #filePath, line: UInt = #line) {
+            let counter = StepFaultCounter()
+            store.stepForTesting = { statement in
+                counter.calls += 1
+                if counter.calls == 2 { return SQLITE_IOERR }
+                return sqlite3_step(statement)
+            }
+            defer { store.stepForTesting = nil }
+            XCTAssertThrowsError(try query(), file: file, line: line) { error in
+                guard case SQLiteArchiveDatabase.StoreError.step = error else {
+                    XCTFail("expected StoreError.step, got \(error)", file: file, line: line)
+                    return
+                }
+            }
+        }
+        expectStepFailure { _ = try store.recoverableRestoreRecords() }
+        expectStepFailure { _ = try store.restoreRecord(id: first.id) }
+        store.stepForTesting = nil
+        XCTAssertEqual(try store.recoverableRestoreRecords().count, 2)
+    }
+
     func testVerifiedArchiveGenerationUsesImmutableCreationOrder() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -385,4 +480,8 @@ private extension VaultRestoreClaimResult {
 private enum LegacyBlobFixtureError: Error {
     case prepare
     case insert
+}
+
+private final class StepFaultCounter: @unchecked Sendable {
+    var calls = 0
 }

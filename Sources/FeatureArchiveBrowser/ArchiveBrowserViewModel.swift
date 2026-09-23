@@ -249,6 +249,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
     var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
     var projectVaultRetryAttemptCounts: [String: Int] = [:]
+    /// Done song IDs already postponed for non-retryable destination capacity.
+    /// The automatic Done path must not re-enqueue them on a later snapshots
+    /// refresh (launch recovery, settings changes, the recovery timer):
+    /// without this, a full destination is re-attempted once per refresh after
+    /// every rejection. Deliberate `archiveInProjectVault` calls bypass this
+    /// gate; success, explicit confirmation/cancel/undo
+    /// (`cancelDoneArchiveRetry`), cancel-all, and a newly persisted transfer
+    /// release it.
+    var projectVaultCapacityPostponedSongIDs: Set<String> = []
     var projectVaultRecoveryTask: Task<Void, Never>?
     var projectVaultRecoveryDeadline: Date?
     var projectVaultLastRecoveryAttemptAt: Date?

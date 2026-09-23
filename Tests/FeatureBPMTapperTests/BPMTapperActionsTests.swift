@@ -1,3 +1,4 @@
+import AppCore
 import FeatureBPMTapper
 import XCTest
 
@@ -133,6 +134,110 @@ final class BPMTapperActionsTests: XCTestCase {
         )
     }
 
+    // B1: unreadable history must surface once (not an empty list with
+    // Clear disabled) and flag itself corrupt so Clear stays available.
+    func testCorruptHistorySurfacesErrorAndFlagsClear() throws {
+        let fixture = CorruptHistoryFixture()
+        let viewModel = BPMTapperViewModel(
+            historyStore: fixture.store,
+            clipboard: FakeClipboard()
+        )
+
+        XCTAssertThrowsError(try viewModel.loadHistory())
+        XCTAssertTrue(viewModel.hasCorruptHistory)
+        XCTAssertEqual(viewModel.historyEntries, [])
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+    }
+
+    // B1: Clear discards the bad bytes without decoding and keeps the tap run.
+    func testClearHistoryRecoversFromCorruptionKeepingTapRun() throws {
+        let fixture = CorruptHistoryFixture()
+        let viewModel = BPMTapperViewModel(
+            historyStore: fixture.store,
+            clipboard: FakeClipboard()
+        )
+        tap120BPM(on: viewModel)
+        XCTAssertThrowsError(try viewModel.loadHistory())
+
+        viewModel.clearHistory()
+
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertFalse(viewModel.hasCorruptHistory)
+        XCTAssertEqual(viewModel.historyEntries, [])
+        XCTAssertEqual(try XCTUnwrap(viewModel.rawBPM), 120.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), 120.0, accuracy: 0.001)
+        XCTAssertEqual(viewModel.tapCount, 2)
+        XCTAssertEqual(try fixture.store.listEntries(), [])
+    }
+
+    // B1: a new Save backs up the bad bytes, then succeeds on fresh history.
+    func testSaveAfterCorruptionBacksUpAndSucceeds() throws {
+        let fixture = CorruptHistoryFixture()
+        let viewModel = BPMTapperViewModel(
+            historyStore: fixture.store,
+            clipboard: FakeClipboard()
+        )
+        tap120BPM(on: viewModel)
+        XCTAssertThrowsError(try viewModel.loadHistory())
+
+        viewModel.saveDisplayedBPM()
+
+        XCTAssertEqual(viewModel.saveConfirmation, "BPM saved")
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertFalse(viewModel.hasCorruptHistory)
+        XCTAssertEqual(viewModel.historyEntries.count, 1)
+        XCTAssertEqual(
+            fixture.preferences.data(forKey: fixture.store.corruptBackupKey),
+            Data("{not-json".utf8),
+            "the unreadable payload must survive under the quarantine key"
+        )
+    }
+
+    func testCorruptErrorPersistsAcrossTapResetAndCopy() throws {
+        let fixture = CorruptHistoryFixture()
+        let clipboard = FakeClipboard()
+        let viewModel = BPMTapperViewModel(
+            historyStore: fixture.store,
+            clipboard: clipboard
+        )
+        XCTAssertThrowsError(try viewModel.loadHistory())
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+
+        viewModel.recordTap(at: 0.0)
+        viewModel.recordTap(at: 0.5)
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+        XCTAssertTrue(viewModel.hasCorruptHistory)
+
+        viewModel.copyDisplayedBPM()
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+
+        viewModel.resetTaps()
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+        XCTAssertTrue(viewModel.hasCorruptHistory)
+    }
+
+    func testClearHistoryFromCorruptionBacksUpBadBytes() throws {
+        let fixture = CorruptHistoryFixture()
+        let viewModel = BPMTapperViewModel(
+            historyStore: fixture.store,
+            clipboard: FakeClipboard()
+        )
+        tap120BPM(on: viewModel)
+        XCTAssertThrowsError(try viewModel.loadHistory())
+
+        viewModel.clearHistory()
+
+        XCTAssertNil(viewModel.errorText)
+        XCTAssertFalse(viewModel.hasCorruptHistory)
+        XCTAssertEqual(
+            fixture.preferences.data(forKey: fixture.store.corruptBackupKey),
+            Data("{not-json".utf8),
+            "confirmed Clear must preserve the exact malformed bytes"
+        )
+        XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), 120.0, accuracy: 0.001)
+        XCTAssertEqual(viewModel.tapCount, 2)
+    }
+
     private func makeViewModel(
         store: FakeHistoryStore = FakeHistoryStore(),
         clipboard: FakeClipboard = FakeClipboard()
@@ -175,6 +280,26 @@ private final class FakeClipboard: BPMClipboardWriting, @unchecked Sendable {
 }
 
 private struct FlakyHistoryStoreError: Error {}
+
+/// Isolated `UserDefaults` preference store pre-seeded with invalid BPM
+/// history bytes, so view-model recovery is exercised end to end.
+private struct CorruptHistoryFixture {
+    let store: UserDefaultsBPMHistoryStore
+    let preferences: UserDefaultsPreferenceStore
+
+    init() {
+        let suiteName = "OutsideCubaseHubBPMCorruptTests.\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
+        preferences.set(
+            Data("{not-json".utf8),
+            forKey: "outsideCubaseHub.bpmHistory"
+        )
+        self.preferences = preferences
+        self.store = UserDefaultsBPMHistoryStore(preferences: preferences)
+    }
+}
 
 private final class FlakyHistoryStore: BPMHistoryStore, @unchecked Sendable {
     private(set) var entries: [BPMHistoryEntry] = []

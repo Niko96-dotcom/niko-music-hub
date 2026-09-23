@@ -28,6 +28,10 @@ final class NewSongCreationErrorCopyTests: XCTestCase {
             NewSongCreationErrorCopy.errorDescription(for: .folderExists, name: name),
             "A folder named “Neon Hook” already exists in New Song Drafts. Choose another name."
         )
+        XCTAssertEqual(
+            NewSongCreationErrorCopy.errorDescription(for: .archiveRootIsReadOnly, name: name),
+            "The draft was not created because the output folder is inside an archive root. Choose another folder in Settings > Output, then try again."
+        )
         // LocalizedError conformance surfaces the same copy table.
         XCTAssertEqual(
             (NewSongFolderCreator.CreationError.invalidName as Error).localizedDescription,

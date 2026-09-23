@@ -10,9 +10,9 @@ public protocol OutputInboxStore: Sendable {
     /// Blocking filesystem/JSON I/O: call off the main actor (see
     /// `OutputInboxRefreshModel`). The default implementation preserves the
     /// historical two-step behavior (`refreshAvailability()` + `listItems()`);
-    /// stores may override it with one load/sort pass. Ordering, dedup,
-    /// error (corrupt JSON throws) and "no history cap" semantics must match
-    /// `listItems()`.
+    /// stores may override it with one load/sort pass. Implementations must
+    /// preserve item identity, ordering, and available outputs. The JSON store
+    /// quarantines corrupt payloads and bounds retained missing records.
     func loadRefreshedItems() throws -> [OutputInboxItem]
 }
 

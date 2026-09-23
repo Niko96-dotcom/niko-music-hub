@@ -149,6 +149,14 @@ public struct ProjectVersionDetector: @unchecked Sendable {
     }
 
     func walkStep(for fileURL: URL, in songFolder: URL) throws -> WalkStep {
+        try walkStep(for: fileURL, in: songFolder) {
+            PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder])
+        }
+    }
+
+    /// `isContained` answers `PathSafety.isResolvedContained(fileURL, in: [songFolder])`; the
+    /// archive scanner derives it from its enumeration instead of resolving every file.
+    func walkStep(for fileURL: URL, in songFolder: URL, isContained: () -> Bool) throws -> WalkStep {
         guard let format = ProjectFileFormat(url: fileURL) else { return .notProject }
         // Only consider paths inside this song; its own name may legitimately be Backup.
         let relativeParents = fileURL.deletingLastPathComponent().pathComponents
@@ -157,9 +165,7 @@ public struct ProjectVersionDetector: @unchecked Sendable {
            relativeParents.contains(where: { $0 == "backup" || $0 == "ableton project info" }) {
             return .excludedByName
         }
-        guard PathSafety(fileManager: fileManager).isResolvedContained(fileURL, in: [songFolder]) else {
-            return .leavesSong
-        }
+        guard isContained() else { return .leavesSong }
         switch try classify(fileURL) {
         case .version(let version): return .version(version)
         case .excludedByName: return .excludedByName

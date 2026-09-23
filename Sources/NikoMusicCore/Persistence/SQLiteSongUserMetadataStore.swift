@@ -3,7 +3,7 @@ import SQLite3
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStatusHistoryReading, @unchecked Sendable {
+public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, WorkflowStatusHistoryReading, @unchecked Sendable {
     private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -23,7 +23,17 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
         SQLiteArchiveIndexStore.defaultStoreURL(fileManager: fileManager)
     }
 
+    /// Tolerant read: every row decodes independently, so one corrupt row
+    /// (malformed JSON, undecodable value) is skipped without hiding the good
+    /// rows. SQLite-level failures (prepare/step) still throw.
     public func loadAll() throws -> [String: SongUserMetadata] {
+        try loadAllWithReport().metadata
+    }
+
+    /// Tolerant read with integrity reporting. Corrupt rows are skipped and
+    /// their song IDs returned in `corruptSongIDs`; the rows themselves are
+    /// left untouched (loads never write). SQLite-level failures still throw.
+    public func loadAllWithReport() throws -> SongUserMetadataLoadReport {
         try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -38,6 +48,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 throw StoreError.prepare(message(db))
             }
             var result: [String: SongUserMetadata] = [:]
+            var corruptSongIDs: [String] = []
             let formatter = ISO8601DateFormatter()
             while true {
                 let stepResult = sqlite3_step(statement)
@@ -45,7 +56,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 case SQLITE_ROW:
                     break
                 case SQLITE_DONE:
-                    return result
+                    return SongUserMetadataLoadReport(metadata: result, corruptSongIDs: corruptSongIDs)
                 default:
                     throw StoreError.step(message(db))
                 }
@@ -64,10 +75,21 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 let manualCPRID = optionalText(statement, column: 11)
                 let ignoredCPRJSON = textColumn(statement, column: 12) ?? "[]"
                 let workflowStatusRaw = optionalText(statement, column: 13)
-                let aliases = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
-                let ignoredPreviews = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
-                let collaboratorIDs = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
-                let ignoredCPRs = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
+                let aliases: [String]
+                let ignoredPreviews: [String]
+                let collaboratorIDs: [String]
+                let ignoredCPRs: [String]
+                do {
+                    aliases = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
+                    ignoredPreviews = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
+                    collaboratorIDs = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
+                    ignoredCPRs = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
+                } catch {
+                    // One corrupt row must not hide the good rows, and a read
+                    // must never delete or rewrite stored data: skip and report.
+                    corruptSongIDs.append(songID)
+                    continue
+                }
                 let previewMode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
                 let cprMode = CPRSelectionMode(rawValue: cprModeRaw) ?? .auto
                 let workflowStatus = workflowStatusRaw.flatMap(ProjectWorkflowStatus.init(rawValue:))
@@ -121,6 +143,13 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
     }
 
     private func upsertItem(_ item: SongUserMetadata, formatter: ISO8601DateFormatter, db: OpaquePointer) throws {
+        // Fail-closed backstop (M1): a stored row whose JSON columns no longer
+        // decode must never be overwritten with defaulted in-memory values.
+        // Single-row read only — ordinary edits never pay for a full-table read.
+        // Checked before any status-history insert so refusal mutates nothing.
+        if try isStoredRowCorrupt(songID: item.songID, db: db) {
+            throw SongUserMetadataCorruptRowError(songID: item.songID)
+        }
         let previousStatus = try storedWorkflowStatus(for: item.songID, db: db)
         if previousStatus != item.workflowStatus {
             try insertStatusChange(
@@ -238,6 +267,43 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, WorkflowStat
                 )
             }
         }
+    }
+
+    /// True when a stored row exists for `songID` but its JSON columns no longer
+    /// decode (the same per-row tolerance as `loadAllWithReport`). Missing rows
+    /// (new songs) are not corrupt. Single-row SELECT only.
+    private func isStoredRowCorrupt(songID: String, db: OpaquePointer) throws -> Bool {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = """
+        SELECT aliases_json, ignored_preview_ids_json, collaborator_ids_json, ignored_cpr_ids_json
+        FROM song_metadata WHERE song_id = ?;
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        sqlite3_bind_text(statement, 1, songID, -1, sqliteTransient)
+        switch sqlite3_step(statement) {
+        case SQLITE_ROW:
+            break
+        case SQLITE_DONE:
+            return false
+        default:
+            throw StoreError.step(message(db))
+        }
+        let aliasesJSON = textColumn(statement, column: 0) ?? "[]"
+        let ignoredPreviewJSON = textColumn(statement, column: 1) ?? "[]"
+        let collaboratorJSON = textColumn(statement, column: 2) ?? "[]"
+        let ignoredCPRJSON = textColumn(statement, column: 3) ?? "[]"
+        do {
+            _ = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
+            _ = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
+            _ = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
+            _ = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
+        } catch {
+            return true
+        }
+        return false
     }
 
     private func storedWorkflowStatus(for songID: String, db: OpaquePointer) throws -> ProjectWorkflowStatus? {

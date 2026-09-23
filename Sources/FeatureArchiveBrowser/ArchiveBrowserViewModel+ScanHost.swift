@@ -62,16 +62,17 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             bpmCache: &mixdownBPMBySongID,
             keyCache: &mixdownKeyBySongID
         )
-        // Scan writes a fresh index. Scheduling supersedes any pending metadata-edit persist
-        // and keeps the whole-catalog encode+write off the main actor. Metadata upserts stay
-        // synchronous so an in-flight snapshot write can never clobber a fresh edit.
-        if update.shouldPersistUserMetadata,
-           let warning = catalog.persistUserMetadata(for: scannedSongs) {
+        // P0 data-loss fix: scan applies never write song metadata. Per-song edits
+        // persist single rows via commitSongMetadataUpdate/createNewSong; the former
+        // whole-catalog scan-time upsert overwrote stored titles/notes/status whenever
+        // the metadata load failed, and blocked the main actor on a full-table write.
+        // Any load degradation arrives as update.persistenceWarning instead.
+        if let warning = update.persistenceWarning {
             recordPersistenceWarning(warning)
         }
-        // NMH-042: announce only full scans (shouldPersistUserMetadata), not every
+        // NMH-042: announce only full scans (announceCompletion), not every
         // incremental filesystem apply. Failures stay on statusMessage (NMH-049).
-        if update.shouldPersistUserMetadata {
+        if update.announceCompletion {
             HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.scanComplete)
         }
         scheduleIndexPersist(afterNanoseconds: 0)

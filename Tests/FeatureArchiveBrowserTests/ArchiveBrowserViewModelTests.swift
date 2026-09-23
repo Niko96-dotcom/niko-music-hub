@@ -1,6 +1,7 @@
 import AppCore
 @testable import FeatureArchiveBrowser
 import NikoMusicCore
+import SQLite3
 import XCTest
 
 @MainActor
@@ -800,6 +801,307 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.statusMessage?.contains("Song metadata could not be saved") == true)
     }
 
+    func testCorruptSQLiteRowEditBlockedThroughViewModel() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-corrupt-block-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let databaseURL = tempDir.appendingPathComponent("metadata.sqlite")
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        let badFolder = tempDir.appendingPathComponent("Bad", isDirectory: true)
+        let goodFolder = tempDir.appendingPathComponent("Good", isDirectory: true)
+        try FileManager.default.createDirectory(at: badFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: goodFolder, withIntermediateDirectories: true)
+        let badID = badFolder.standardizedFileURL.path
+        let goodID = goodFolder.standardizedFileURL.path
+        try store.upsertAll([
+            SongUserMetadata(songID: badID, virtualTitle: "Bad Title", appNote: "do-not-erase", workflowStatus: .prod),
+            SongUserMetadata(songID: goodID, virtualTitle: "Good Title"),
+        ])
+        try Self.executeVMBlockSQL("UPDATE song_metadata SET aliases_json = '{not-json}' WHERE song_id = '\(badID)';", databaseURL: databaseURL)
+        let before = try Self.dumpVMBlockRows(databaseURL: databaseURL)
+        let historyBefore = try store.statusHistory(forSongID: badID)
+        XCTAssertEqual(historyBefore.count, 1)
+
+        let badScanned = Song(folderPath: badFolder, originalFolderName: "Bad", displayTitle: "Bad")
+        let goodScanned = Song(folderPath: goodFolder, originalFolderName: "Good", displayTitle: "Good")
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: store,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [badScanned, goodScanned]) }
+        )
+        viewModel.roots = [tempDir]
+        // Drive the actual coordinator path synchronously through a full scan.
+        let coordinator = viewModel.catalog
+        let update = coordinator.applyFullScanResult(
+            result: ScanResult(songs: [badScanned, goodScanned]),
+            roots: [tempDir],
+            collaborators: [],
+            scannedAt: Date()
+        )
+        viewModel.applyCatalogScanUpdate(update, roots: [tempDir])
+        XCTAssertTrue(viewModel.statusMessage?.contains(badID) == true, "scan warning must name the corrupt row, got: \(viewModel.statusMessage ?? "nil")")
+
+        let badSong = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
+        XCTAssertNil(badSong.virtualTitle, "corrupt row merges to scanned defaults in memory")
+        viewModel.updateAppNote(for: badSong, note: "attempted overwrite")
+        viewModel.updateWorkflowStatus(for: badSong, status: .waitingFeedback)
+        XCTAssertTrue(viewModel.statusMessage?.contains(badID) == true, "refusal warning must stay visible, got: \(viewModel.statusMessage ?? "nil")")
+        XCTAssertEqual(try Self.dumpVMBlockRows(databaseURL: databaseURL), before, "refused edits must leave all row bytes identical")
+        XCTAssertEqual(try store.statusHistory(forSongID: badID).count, historyBefore.count, "refusal must not append status history")
+        let stillBad = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
+        XCTAssertNil(stillBad.appNote, "refused edit must not mutate in-memory state either")
+
+        // The good row stays editable.
+        let goodSong = try XCTUnwrap(viewModel.songs.first { $0.id == goodID })
+        viewModel.updateAppNote(for: goodSong, note: "good edit")
+        XCTAssertEqual(try store.loadAllWithReport().metadata[goodID]?.appNote, "good edit")
+    }
+
+    func testCorruptBackstopKeepsInMemoryAndIndexUnchanged() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-corrupt-race-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let songFolder = root.appendingPathComponent("Race Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        let scanned = Song(folderPath: songFolder, originalFolderName: "Race Song", displayTitle: "Race Song")
+        // Clean on load, corrupt at write: simulates a row turning corrupt after the last load.
+        let metadataStore = CleanLoadCorruptWriteMetadataStore()
+        let indexStore = RecordingArchiveIndexStore()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [scanned]) }
+        )
+        viewModel.roots = [root]
+        await viewModel.scan()
+        _ = await viewModel.indexPersistTask?.value
+        let live = try XCTUnwrap(viewModel.songs.first { $0.id == scanned.id })
+        XCTAssertNil(viewModel.catalog.metadataEditBlockWarning(for: live.id))
+        let savedBefore = indexStore.savedSnapshots.count
+
+        viewModel.updateVirtualTitle(for: live, title: "Visible Edit")
+
+        let stillLive = try XCTUnwrap(viewModel.songs.first { $0.id == scanned.id })
+        XCTAssertEqual(stillLive.effectiveDisplayTitle, "Race Song", "corruption refusal must not replace in-memory song")
+        XCTAssertEqual(viewModel.scannedSongs.first { $0.id == scanned.id }?.effectiveDisplayTitle, "Race Song")
+        XCTAssertTrue(
+            viewModel.statusMessage?.contains(scanned.id) == true,
+            "refusal warning must name the corrupt row, got: \(viewModel.statusMessage ?? "nil")"
+        )
+        XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: scanned.id))
+        XCTAssertEqual(metadataStore.upsertAllCount, 1)
+        // The scheduled index snapshot reads live catalog state at fire time; with no
+        // replacement it cannot contain the refused edit. Wait past the debounce to
+        // prove no stale edited snapshot lands.
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(indexStore.savedSnapshots.count, savedBefore, "refused edit must not schedule an index write")
+        if let last = indexStore.savedSnapshots.last {
+            XCTAssertFalse(last.songs.contains { $0.effectiveDisplayTitle == "Visible Edit" })
+        }
+    }
+
+    func testDelayedCleanCacheDoesNotClearNewerCorruptScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-stale-cache-clean-\(UUID().uuidString)", isDirectory: true)
+        let sharedFolder = root.appendingPathComponent("Shared", isDirectory: true)
+        try FileManager.default.createDirectory(at: sharedFolder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sharedID = sharedFolder.standardizedFileURL.path
+        let cachedSong = Song(folderPath: sharedFolder, originalFolderName: "Shared", displayTitle: "Cached Title")
+        let scannedSong = Song(folderPath: sharedFolder, originalFolderName: "Shared", displayTitle: "Scanned Title")
+        // First metadata load is the scan (corrupt), second is the delayed cache (clean).
+        let metadataStore = SequencedReportMetadataStore(reports: [
+            SongUserMetadataLoadReport(metadata: [:], corruptSongIDs: [sharedID]),
+            SongUserMetadataLoadReport(metadata: [:], corruptSongIDs: []),
+        ])
+        let indexStore = GatedCacheIndexStore(snapshot: ArchiveIndexSnapshot(
+            roots: [root.standardizedFileURL.path],
+            songs: [cachedSong],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [scannedSong]) }
+        )
+        viewModel.roots = [root]
+        let initialDeadline = Date().addingTimeInterval(2)
+        while !indexStore.didFinishInitialLoad, Date() < initialDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(indexStore.didFinishInitialLoad)
+        indexStore.arm()
+        viewModel.loadCachedIndexIfAvailable()
+        let gateDeadline = Date().addingTimeInterval(2)
+        while !indexStore.didEnterBlockedLoad, Date() < gateDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(indexStore.didEnterBlockedLoad)
+
+        await viewModel.scan()
+        XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title")
+        XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID))
+        XCTAssertTrue(viewModel.statusMessage?.contains(sharedID) == true)
+
+        indexStore.release()
+        let loadDeadline = Date().addingTimeInterval(2)
+        while metadataStore.loadCallCount < 2, Date() < loadDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(metadataStore.loadCallCount, 2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title", "stale cache must not replace fresher scan songs")
+        XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID), "late clean cache must not clear the newer corrupt gate")
+        XCTAssertTrue(viewModel.statusMessage?.contains(sharedID) == true)
+        // Missing/failed cache results must not clear valid scan state either.
+        viewModel.catalog.applyCacheLoadReport(ArchiveCatalogCoordinator.ArchiveCacheLoadReport(
+            result: .empty, corruptSongIDs: [], metadataLoadFailed: false, hasMetadataSources: true
+        ))
+        viewModel.catalog.applyCacheLoadReport(ArchiveCatalogCoordinator.ArchiveCacheLoadReport(
+            result: .failed("Archive cache could not be loaded: forced"),
+            corruptSongIDs: [], metadataLoadFailed: false, hasMetadataSources: true
+        ))
+        XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID))
+    }
+
+    func testDelayedCorruptCacheDoesNotBlockCleanerScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-stale-cache-corrupt-\(UUID().uuidString)", isDirectory: true)
+        let sharedFolder = root.appendingPathComponent("Shared", isDirectory: true)
+        try FileManager.default.createDirectory(at: sharedFolder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sharedID = sharedFolder.standardizedFileURL.path
+        let cachedSong = Song(folderPath: sharedFolder, originalFolderName: "Shared", displayTitle: "Cached Title")
+        let scannedSong = Song(folderPath: sharedFolder, originalFolderName: "Shared", displayTitle: "Scanned Title")
+        // First metadata load is the scan (clean), second is the delayed cache (corrupt).
+        let metadataStore = SequencedReportMetadataStore(reports: [
+            SongUserMetadataLoadReport(metadata: [:], corruptSongIDs: []),
+            SongUserMetadataLoadReport(metadata: [:], corruptSongIDs: [sharedID]),
+        ])
+        let indexStore = GatedCacheIndexStore(snapshot: ArchiveIndexSnapshot(
+            roots: [root.standardizedFileURL.path],
+            songs: [cachedSong],
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [scannedSong]) }
+        )
+        viewModel.roots = [root]
+        let initialDeadline = Date().addingTimeInterval(2)
+        while !indexStore.didFinishInitialLoad, Date() < initialDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(indexStore.didFinishInitialLoad)
+        indexStore.arm()
+        viewModel.loadCachedIndexIfAvailable()
+        let gateDeadline = Date().addingTimeInterval(2)
+        while !indexStore.didEnterBlockedLoad, Date() < gateDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(indexStore.didEnterBlockedLoad)
+
+        await viewModel.scan()
+        XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title")
+        XCTAssertNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID))
+
+        indexStore.release()
+        let loadDeadline = Date().addingTimeInterval(2)
+        while metadataStore.loadCallCount < 2, Date() < loadDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(metadataStore.loadCallCount, 2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(viewModel.songs.first?.displayTitle, "Scanned Title", "stale cache must not replace fresher scan songs")
+        XCTAssertNil(viewModel.catalog.metadataEditBlockWarning(for: sharedID), "late corrupt cache must not block the clean newer scan")
+    }
+
+    func testDegradedLoadBlocksAllEditsThroughViewModel() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let store = DegradedLoadSongUserMetadataStore()
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-degraded-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let song = Song(folderPath: folder, originalFolderName: "Degraded", displayTitle: "Degraded")
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: store,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [song]) }
+        )
+        viewModel.roots = [folder]
+        let update = viewModel.catalog.applyFullScanResult(
+            result: ScanResult(songs: [song]),
+            roots: [folder],
+            collaborators: [],
+            scannedAt: Date()
+        )
+        viewModel.applyCatalogScanUpdate(update, roots: [folder])
+        XCTAssertTrue(viewModel.statusMessage?.contains("nothing was overwritten") == true)
+        let upsertsBefore = store.upsertAllCount
+        let live = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        viewModel.updateAppNote(for: live, note: "must not persist defaulted values")
+        viewModel.updateWorkflowStatus(for: live, status: .prod)
+        XCTAssertEqual(store.upsertAllCount, upsertsBefore, "degraded-load edits must never reach the store")
+        XCTAssertTrue(viewModel.statusMessage?.contains("blocked") == true, "refusal must be visible, got: \(viewModel.statusMessage ?? "nil")")
+    }
+
+    static func executeVMBlockSQL(_ sql: String, databaseURL: URL) throws {
+        var db: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else { throw TestPersistenceError.forced }
+        defer { sqlite3_close(db) }
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw TestPersistenceError.forced }
+    }
+
+    static func dumpVMBlockRows(databaseURL: URL) throws -> String {
+        var db: OpaquePointer?
+        guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else { throw TestPersistenceError.forced }
+        defer { sqlite3_close(db) }
+        let sql = """
+        SELECT song_id, ifnull(virtual_title, ''), aliases_json, ifnull(app_note, ''),
+               preview_selection_mode, ifnull(manual_main_preview_id, ''), ignored_preview_ids_json,
+               updated_at, collaborator_ids_json, is_ignored, cpr_selection_mode,
+               ifnull(manual_main_cpr_id, ''), ignored_cpr_ids_json, ifnull(workflow_status, '')
+        FROM song_metadata ORDER BY song_id;
+        """
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { throw TestPersistenceError.forced }
+        var rows: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            var columns: [String] = []
+            for index in 0 ..< 14 {
+                if let cString = sqlite3_column_text(statement, Int32(index)) {
+                    columns.append(String(cString: cString))
+                } else {
+                    columns.append("<null>")
+                }
+            }
+            rows.append(columns.joined(separator: "\u{1F}"))
+        }
+        return rows.joined(separator: "\n")
+    }
+
     func testArchivePersistenceSourceDoesNotSwallowRootSettingsWrites() throws {
         let source = try String(
             contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift",
@@ -1306,6 +1608,22 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(archivedSong?.workflowStatus, .done)
     }
 
+    func testVaultRecoveryPreflightSurfacesUnreadableRecordsWithoutRunningRecovery() async {
+        let runtime = RecordingProjectVaultRuntime(snapshotError: .archiveFailed("injected journal read failure"))
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime
+        )
+
+        await viewModel.recoverProjectVaultAndRefresh()
+
+        let recoveryCalls = await runtime.recoveryCallCount()
+        XCTAssertEqual(recoveryCalls, 0)
+        XCTAssertTrue(viewModel.persistenceWarningMessage?.contains("Project Vault records could not be read") == true)
+        XCTAssertTrue(viewModel.statusMessage?.contains("injected journal read failure") == true)
+    }
+
     func testDoneProjectWithPersistedFailedTransferIsNotAutomaticallyRequeued() async throws {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("workflow-failed-transfer-\(UUID().uuidString)", isDirectory: true)
@@ -1418,10 +1736,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
         XCTAssertEqual(viewModel.projectVaultPresentation(for: fixture.song)?.primaryAction, .openInCubase)
-        XCTAssertEqual(
-            viewModel.statusMessage,
+        let status = try XCTUnwrap(viewModel.statusMessage)
+        XCTAssertTrue(status.hasPrefix(
             "Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action."
-        )
+        ))
+        XCTAssertTrue(status.contains("Project Vault records could not be read:"))
     }
 
     func testFailedRetryRefreshesRecoveryRequiredPresentation() async throws {
@@ -2525,6 +2844,40 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[fixture.song.id], 1)
     }
 
+    func testCapacityPostponementRefreshDoesNotDuplicateAndManualRetryReachesRuntime() async throws {
+        let fixture = try ProjectVaultViewModelFixture(workflowStatus: .done)
+        defer { fixture.cleanUp() }
+        let runtime = RecordingProjectVaultRuntime(
+            archiveError: .activityPostponed(.insufficientArchiveCapacity)
+        )
+        let viewModel = fixture.makeViewModel(runtime: runtime)
+
+        viewModel.archiveInProjectVault(fixture.song, trigger: .workflowDone)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(viewModel.projectVaultRetryTasks.isEmpty)
+        let initialArchiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(initialArchiveCallCount, 1)
+
+        // A second automatic refresh (launch recovery, settings change, the
+        // recovery timer) must not immediately re-attempt a destination known
+        // to be full after a non-retryable capacity postponement.
+        await viewModel.refreshProjectVaultSnapshots()
+        try await Task.sleep(for: .milliseconds(25))
+        let refreshedArchiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(refreshedArchiveCallCount, 1)
+
+        // A deliberate manual attempt still reaches the runtime.
+        viewModel.archiveInProjectVault(fixture.song, trigger: .workflowDone)
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let manualArchiveCallCount = await runtime.archiveCallCount()
+        XCTAssertEqual(manualArchiveCallCount, 2)
+    }
+
     func testIncrementalScanCompletionDoesNotOverwriteNewerProjectVaultStatus() async throws {
         let fixture = try ProjectVaultViewModelFixture()
         defer { fixture.cleanUp() }
@@ -3624,6 +3977,8 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     private let restoreRetryError: ProjectVaultRuntimeError?
     private var restoreRetryCalls: [UUID] = []
     private var didRetry = false
+    private let snapshotError: ProjectVaultRuntimeError?
+    private var recoveryCalls = 0
 
     init(
         snapshots: [ProjectVaultRuntimeSnapshot] = [],
@@ -3635,7 +3990,8 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         restoreError: ProjectVaultRuntimeError? = nil,
         restoreFailureSnapshots: [ProjectVaultRuntimeSnapshot] = [],
         restoreRetryGate: ScanReleaseGate? = nil,
-        restoreRetryError: ProjectVaultRuntimeError? = nil
+        restoreRetryError: ProjectVaultRuntimeError? = nil,
+        snapshotError: ProjectVaultRuntimeError? = nil
     ) {
         snapshotValues = snapshots
         self.retryFailureState = retryFailureState
@@ -3647,9 +4003,11 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         self.restoreFailureSnapshots = restoreFailureSnapshots
         self.restoreRetryGate = restoreRetryGate
         self.restoreRetryError = restoreRetryError
+        self.snapshotError = snapshotError
     }
 
     func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] {
+        if let snapshotError { throw snapshotError }
         if didRetry, refreshFailsAfterRetry {
             throw ProjectVaultRuntimeError.archiveFailed("forced refresh failure")
         }
@@ -3774,7 +4132,9 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         return restore
     }
 
-    func recoverAtLaunch() async {}
+    func recoverAtLaunch() async { recoveryCalls += 1 }
+
+    func recoveryCallCount() -> Int { recoveryCalls }
 
     func lastArchivedSong() -> Song? { archivedSong }
     func archiveCallCount() -> Int { archiveCalls }
@@ -3844,6 +4204,141 @@ private final class RecordingSongUserMetadataStore: SongUserMetadataStoring, @un
     func upsertAll(_ metadata: [SongUserMetadata]) throws {
         lock.withLock { recordedBulkUpserts += 1 }
     }
+}
+
+/// Fail-closed fixture: every metadata load throws, so the coordinator must
+/// treat the catalog as degraded and refuse all explicit edits without
+/// persisting defaulted values.
+private final class DegradedLoadSongUserMetadataStore: SongUserMetadataStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedBulkUpserts = 0
+
+    var upsertAllCount: Int {
+        lock.withLock { recordedBulkUpserts }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] { throw TestPersistenceError.forced }
+
+    func upsert(_ metadata: SongUserMetadata) throws {
+        lock.withLock { recordedBulkUpserts += 1 }
+    }
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {
+        lock.withLock { recordedBulkUpserts += 1 }
+    }
+}
+
+/// Race fixture for commit ordering: clean on load, corrupt at write.
+private final class CleanLoadCorruptWriteMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedBulkUpserts = 0
+
+    var upsertAllCount: Int {
+        lock.withLock { recordedBulkUpserts }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] { [:] }
+
+    func loadAllWithReport() throws -> SongUserMetadataLoadReport {
+        SongUserMetadataLoadReport(metadata: [:], corruptSongIDs: [])
+    }
+
+    func upsert(_ metadata: SongUserMetadata) throws {
+        throw SongUserMetadataCorruptRowError(songIDs: [metadata.songID])
+    }
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {
+        lock.withLock { recordedBulkUpserts += 1 }
+        throw SongUserMetadataCorruptRowError(songIDs: metadata.map(\.songID))
+    }
+}
+
+/// Sequenced load reports: the scan's metadata load runs while the cache index
+/// load is gated, so reports[0] serves the scan and reports[1] the delayed cache.
+private final class SequencedReportMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, @unchecked Sendable {
+    private let lock = NSLock()
+    private let reports: [SongUserMetadataLoadReport]
+    private var loadCount = 0
+
+    init(reports: [SongUserMetadataLoadReport]) {
+        self.reports = reports
+    }
+
+    var loadCallCount: Int {
+        lock.withLock { loadCount }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] {
+        lock.withLock {
+            let report = reports[min(loadCount, reports.count - 1)]
+            loadCount += 1
+            return report.metadata
+        }
+    }
+
+    func loadAllWithReport() throws -> SongUserMetadataLoadReport {
+        lock.withLock {
+            let report = reports[min(loadCount, reports.count - 1)]
+            loadCount += 1
+            return report
+        }
+    }
+
+    func upsert(_ metadata: SongUserMetadata) throws {}
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {}
+}
+
+/// Index store that blocks the next cache load until released, so a full scan
+/// can apply fresher results (and integrity) while the cache read is in flight.
+private final class GatedCacheIndexStore: ArchiveIndexStoring, @unchecked Sendable {
+    private let semaphore = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var armed = false
+    private var entered = false
+    private var initialLoadFinished = false
+    private let snapshot: ArchiveIndexSnapshot?
+    private var saved: [ArchiveIndexSnapshot] = []
+
+    init(snapshot: ArchiveIndexSnapshot?) {
+        self.snapshot = snapshot
+    }
+
+    func arm() {
+        lock.withLock { armed = true }
+    }
+
+    var didEnterBlockedLoad: Bool {
+        lock.withLock { entered }
+    }
+
+    var didFinishInitialLoad: Bool {
+        lock.withLock { initialLoadFinished }
+    }
+
+    func loadLatest() throws -> ArchiveIndexSnapshot? {
+        let shouldBlock = lock.withLock { armed }
+        if !shouldBlock {
+            // ViewModel init launches an eager cache read. Let it finish with
+            // no snapshot before the test arms this store for the deliberate
+            // delayed read, so the two asynchronous calls cannot race.
+            lock.withLock { initialLoadFinished = true }
+            return nil
+        }
+        lock.withLock { entered = true }
+        semaphore.wait()
+        return snapshot
+    }
+
+    func release() {
+        semaphore.signal()
+    }
+
+    func save(_ snapshot: ArchiveIndexSnapshot) throws {
+        lock.withLock { saved.append(snapshot) }
+    }
+
+    func clear() throws {}
 }
 
 private final class ThrowingSettingsStore: SettingsStore, @unchecked Sendable {

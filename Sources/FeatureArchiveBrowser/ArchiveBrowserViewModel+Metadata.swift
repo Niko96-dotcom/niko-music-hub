@@ -377,6 +377,14 @@ extension ArchiveBrowserViewModel {
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) {
         guard !blocksGenericProjectVaultFileActions(for: song) else { return }
+        // Fail-closed (M1): refuse before building/persisting defaulted values.
+        // No SQLite write and no in-memory replacement on refusal; good rows
+        // are unaffected because the gate is per-song (or global only after a
+        // failed whole-load). No full-table read here.
+        if let blockWarning = catalog.metadataEditBlockWarning(for: song.id) {
+            recordPersistenceWarning(blockWarning)
+            return
+        }
         guard let merged = ArchiveSongMetadataEditor.mergedSongAfterEdit(
             for: song,
             in: songs,
@@ -388,8 +396,27 @@ extension ArchiveBrowserViewModel {
     }
 
     func commitSongMetadataUpdate(_ updated: Song) {
+        // Backstop for direct callers: the same gate as applyMetadataMerge so a
+        // stale caller cannot replace in-memory state and then hit the store
+        // with defaulted values. Refusal leaves catalog and SQLite untouched.
+        if let blockWarning = catalog.metadataEditBlockWarning(for: updated.id) {
+            recordPersistenceWarning(blockWarning)
+            return
+        }
+        // Persist before replacing in-memory state. If the row turned corrupt
+        // after the last load, the store backstop refuses the write and records
+        // the corruption; the post-write gate check below then keeps the
+        // in-memory catalog (and the scheduled index snapshot, which reads live
+        // catalog state at fire time) unchanged. An ordinary storage failure is
+        // not corruption-blocked, so the visible edit is still retained with a
+        // warning (see testMetadataSaveFailureIsVisibleWithoutDiscardingEdit).
+        let warning = catalog.persistUserMetadata(for: [updated])
+        if let warning, catalog.metadataEditBlockWarning(for: updated.id) != nil {
+            recordPersistenceWarning(warning)
+            return
+        }
         replaceSong(updated)
-        if let warning = catalog.persistUserMetadata(for: [updated]) {
+        if let warning {
             recordPersistenceWarning(warning)
         }
         scheduleDebouncedIndexPersist()

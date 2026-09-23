@@ -49,7 +49,9 @@ public struct BPMTapperView: View {
                 viewModel.clearHistory()
             }
         } message: {
-            Text("Removes saved BPM history. The current tap run is kept.")
+            Text(viewModel.hasCorruptHistory
+                ? "Sets aside unreadable history and clears the list. The current tap run is kept."
+                : "Removes saved BPM history. The current tap run is kept.")
         }
     }
 
@@ -190,24 +192,47 @@ public struct BPMTapperView: View {
             }
 
             if let errorText = viewModel.errorText {
-                let card = AppErrorCard(
-                    category: .conversionFile,
-                    label: "Could Not Save BPM",
-                    icon: "externaldrive.badge.xmark",
-                    body: errorText,
-                    recoveryActions: [
-                        AppErrorCard.RecoveryAction(
-                            label: "Try Again",
-                            style: .primary,
-                            action: .tryAgain
-                        )
-                    ]
-                )
-                StandardErrorCard(card: card) { action in
-                    // NMH-043: every shown action must do something. The card
-                    // offers Try Again only; it retries the failed storage work.
-                    if action == .tryAgain {
-                        viewModel.retryAfterStorageError()
+                if viewModel.hasCorruptHistory {
+                    let card = AppErrorCard(
+                        category: .conversionFile,
+                        label: "Saved BPM History Is Unreadable",
+                        icon: "externaldrive.badge.xmark",
+                        body: errorText,
+                        recoveryActions: [
+                            AppErrorCard.RecoveryAction(
+                                label: "Clear History",
+                                style: .destructive,
+                                action: .clearHistory
+                            )
+                        ]
+                    )
+                    StandardErrorCard(card: card) { action in
+                        // Corrupt bytes never Retry: the only recovery is the
+                        // existing Clear History confirmation (never direct).
+                        if action == .clearHistory {
+                            clearHistoryConfirmationVisible = true
+                        }
+                    }
+                } else {
+                    let card = AppErrorCard(
+                        category: .conversionFile,
+                        label: "Could Not Save BPM",
+                        icon: "externaldrive.badge.xmark",
+                        body: errorText,
+                        recoveryActions: [
+                            AppErrorCard.RecoveryAction(
+                                label: "Try Again",
+                                style: .primary,
+                                action: .tryAgain
+                            )
+                        ]
+                    )
+                    StandardErrorCard(card: card) { action in
+                        // NMH-043: every shown action must do something. The card
+                        // offers Try Again only; it retries the failed storage work.
+                        if action == .tryAgain {
+                            viewModel.retryAfterStorageError()
+                        }
                     }
                 }
             }
@@ -217,15 +242,19 @@ public struct BPMTapperView: View {
 
     private var historySection: some View {
         HubListSection("Recent Tempos", count: viewModel.historyEntries.count, trailing: {
-            HubLabeledButton(
-                icon: "trash",
-                label: "Clear History",
-                style: .ghost,
-                role: .destructive,
-                isEnabled: !viewModel.historyEntries.isEmpty
-            ) {
-                copiedHistoryEntryID = nil
-                clearHistoryConfirmationVisible = true
+            // The unreadable-history card supplies this action beside its
+            // explanation. Keep one Clear control in that recovery state.
+            if !viewModel.hasCorruptHistory {
+                HubLabeledButton(
+                    icon: "trash",
+                    label: "Clear History",
+                    style: .ghost,
+                    role: .destructive,
+                    isEnabled: !viewModel.historyEntries.isEmpty
+                ) {
+                    copiedHistoryEntryID = nil
+                    clearHistoryConfirmationVisible = true
+                }
             }
         }) {
             if viewModel.historyEntries.isEmpty {

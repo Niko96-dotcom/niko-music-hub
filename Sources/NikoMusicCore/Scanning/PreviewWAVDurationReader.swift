@@ -3,9 +3,13 @@ import Foundation
 
 /// Reads metadata only; never decodes samples during an archive scan.
 enum PreviewWAVDurationReader {
-    static func shouldReadDuration(for fileURL: URL) -> Bool {
-        let path = fileURL.resolvingSymlinksInPath().standardizedFileURL.path
-        return !path.contains("/Library/CloudStorage/")
+    /// `canonicalPath` is the file's resolved path, as `canonicalPath(of:)` returns it.
+    static func shouldReadDuration(canonicalPath: String) -> Bool {
+        !canonicalPath.contains("/Library/CloudStorage/")
+    }
+
+    static func canonicalPath(of fileURL: URL) -> String {
+        PathResolutionProbe.resolvingSymlinks(fileURL).standardizedFileURL.path
     }
 
     static func durationSeconds(for fileURL: URL) -> Double? {

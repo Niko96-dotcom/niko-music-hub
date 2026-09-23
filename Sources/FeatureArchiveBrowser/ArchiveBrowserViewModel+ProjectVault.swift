@@ -12,7 +12,19 @@ extension ArchiveBrowserViewModel {
 
     func recoverProjectVaultAndRefresh() async {
         guard let projectVaultRuntime else { return }
-        let hadPendingRestore = (try? await projectVaultRuntime.snapshots())?.contains { $0.restore != nil } ?? false
+        let hadPendingRestore: Bool
+        do {
+            hadPendingRestore = try await projectVaultRuntime.snapshots().contains { $0.restore != nil }
+        } catch ProjectVaultRuntimeError.unavailable {
+            await refreshProjectVaultSnapshots()
+            return
+        } catch {
+            // Recovery must not treat an unreadable transfer journal as empty.
+            // Preserve the current presentation and show the persistence fault.
+            recordPersistenceWarning("Project Vault records could not be read: \(error.localizedDescription)")
+            diagnostics.log(.error, "Project Vault recovery preflight failed: \(error)")
+            return
+        }
         await projectVaultRuntime.recoverAtLaunch()
         await refreshProjectVaultSnapshots()
         // Recovery can create an Active folder after the initial scan completed.
@@ -181,6 +193,10 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
+            if persistenceWarningMessage?.hasPrefix("Project Vault records could not be read:") == true {
+                persistenceWarningMessage = nil
+                statusMessage = combinedStatusMessage(base: statusBaseMessage)
+            }
             projectVaultSnapshots = snapshots
             if statusBaseMessage == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
                !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {
@@ -205,6 +221,7 @@ extension ArchiveBrowserViewModel {
         } catch {
             cancelProjectVaultRecovery()
             diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
+            recordPersistenceWarning("Project Vault records could not be read: \(error.localizedDescription)")
             return false
         }
     }
@@ -263,14 +280,25 @@ extension ArchiveBrowserViewModel {
             // Keep Local error; only the automatic path is quieted here.
             if isIntentionalKeepLocalForAutomaticDoneSkip(song) { continue }
             let transfer = projectVaultSnapshot(for: song)?.transfer
+            if transfer != nil {
+                // A persisted transfer releases any capacity postponement
+                // recorded for this song; recovery/manual review owns next steps.
+                projectVaultCapacityPostponedSongIDs.remove(song.id)
+            }
             // A persisted transfer—terminal, in progress, or failed—is owned by
             // recovery/manual review. Never create another automatic generation
             // merely because the project remains marked Done. The nil
             // authorization here is always copy-only; removal needs a fresh
             // explicit confirmation and a revoked approval is never reused.
+            // A Done song already postponed for non-retryable destination
+            // capacity stays quiet until a manual attempt, success, or undo
+            // clears it: otherwise every snapshots refresh (launch recovery,
+            // settings changes, the recovery timer) would immediately
+            // re-attempt a destination known to be full.
             if transfer == nil,
                !projectVaultBusySongIDs.contains(song.id),
-               projectVaultRetryTasks[song.id] == nil {
+               projectVaultRetryTasks[song.id] == nil,
+               !projectVaultCapacityPostponedSongIDs.contains(song.id) {
                 archiveInProjectVault(song, trigger: .workflowDone)
             }
         }

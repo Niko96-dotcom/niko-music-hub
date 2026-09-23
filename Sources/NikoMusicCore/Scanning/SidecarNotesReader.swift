@@ -15,20 +15,17 @@ public struct SidecarNotesReader: @unchecked Sendable {
         self.fileManager = fileManager
     }
 
+    /// Runs once per song on every scan, so it asks the filesystem once: the `open` below is the
+    /// whole check. A missing folder, a folder that is a file, or a missing `notes.txt` fails the
+    /// open. `O_NOFOLLOW` refuses `notes.txt` when it is a symbolic link, the only way a file
+    /// named directly inside the folder can resolve outside it. So a separate existence check
+    /// and a resolve-both-paths containment check would only repeat it, at a `stat` plus two
+    /// path resolutions per song. The folder itself may be reached through a link, as before.
     public func readNotes(in songFolder: URL) -> String? {
-        let folder = songFolder.standardizedFileURL
-        var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            return nil
-        }
+        let url = songFolder.standardizedFileURL.appendingPathComponent(Self.fileName)
 
-        let url = folder.appendingPathComponent(Self.fileName)
-        let resolvedFolder = folder.resolvingSymlinksInPath().standardizedFileURL
-        let resolvedURL = url.resolvingSymlinksInPath().standardizedFileURL
-        guard isContained(resolvedURL, in: resolvedFolder) else { return nil }
-
-        // `O_NOFOLLOW` closes the time-of-check/time-of-use gap for a final-component
-        // symlink. `O_NONBLOCK` also ensures a hostile FIFO named notes.txt cannot stall a scan.
+        // Checking at open time leaves no time-of-check/time-of-use gap for a final-component
+        // symlink. `O_NONBLOCK` ensures a hostile FIFO named notes.txt cannot stall a scan.
         let descriptor = Darwin.open(url.path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW)
         guard descriptor >= 0 else { return nil }
         defer { Darwin.close(descriptor) }
@@ -53,10 +50,5 @@ public struct SidecarNotesReader: @unchecked Sendable {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func isContained(_ child: URL, in folder: URL) -> Bool {
-        let parentPath = folder.path.hasSuffix("/") ? folder.path : folder.path + "/"
-        return child.path.hasPrefix(parentPath)
     }
 }

@@ -316,32 +316,37 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     /// walks back to back: project errors win, a preview error surfaces only after the project
     /// walk completes, a project entry leaving the song skips only project descendants, and no
     /// audio file is opened for its duration unless the whole walk succeeds.
+    ///
+    /// Symlink containment and canonical paths come from `EnumeratedPathResolver`: once per
+    /// folder instead of a `stat` plus a full path resolution for every candidate file.
     private func walkSongFolder(_ folder: URL) throws -> (versions: [ProjectVersion], previewMatches: [PreviewCandidateDetector.Match]) {
         try Task.checkCancellation()
         guard let enumerator = fileManager.enumerator(
             at: folder,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            includingPropertiesForKeys: EnumeratedPathResolver.prefetchedKeys,
             options: [.skipsHiddenFiles]
         ) else {
             return ([], [])
         }
+        let paths = EnumeratedPathResolver(folder: folder, fileManager: fileManager)
         var versions: [ProjectVersion] = []
         var previewMatches: [PreviewCandidateDetector.Match] = []
         var previewError: Error?
         var projectSkippedPrefixes: [String] = []
         for case let fileURL as URL in enumerator {
             try Task.checkCancellation()
+            let entry = paths.observe(fileURL, level: enumerator.level)
             if ProjectFileFormat(url: fileURL) != nil {
                 let path = fileURL.path
                 if projectSkippedPrefixes.contains(where: { path.hasPrefix($0) }) { continue }
-                switch try projectDetector.walkStep(for: fileURL, in: folder) {
+                switch try projectDetector.walkStep(for: fileURL, in: folder, isContained: { paths.resolve(entry).isContained }) {
                 case .version(let version): versions.append(version)
                 case .leavesSong: projectSkippedPrefixes.append(path.hasSuffix("/") ? path : path + "/")
                 case .notProject, .excludedByName, .notRegularFile: continue
                 }
             } else if previewError == nil {
                 do {
-                    if let match = try previewDetector.match(fileURL, in: folder) {
+                    if let match = try previewDetector.match(fileURL, in: folder, resolve: { paths.resolve(entry) }) {
                         previewMatches.append(match)
                     }
                 } catch {

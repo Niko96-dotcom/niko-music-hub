@@ -41,6 +41,55 @@ final class SidecarNotesReaderTests: XCTestCase {
         XCTAssertEqual(SidecarNotesReader().readNotes(in: root), "useful note")
     }
 
+    func testRejectsNotesThatAreNotARegularFileInsideTheFolder() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fm = FileManager.default
+        let notes = root.appendingPathComponent(SidecarNotesReader.fileName)
+
+        // A link that stays inside the folder is still a link.
+        try Data("inside".utf8).write(to: root.appendingPathComponent("real.txt"))
+        try fm.createSymbolicLink(atPath: notes.path, withDestinationPath: "real.txt")
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root))
+
+        try fm.removeItem(at: notes)
+        try fm.createSymbolicLink(atPath: notes.path, withDestinationPath: SidecarNotesReader.fileName)
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root), "link loop")
+
+        try fm.removeItem(at: notes)
+        try fm.createDirectory(at: notes, withIntermediateDirectories: false)
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root), "directory")
+
+        try fm.removeItem(at: notes)
+        XCTAssertEqual(mkfifo(notes.path, 0o600), 0)
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root), "FIFO")
+    }
+
+    func testMissingOrNonDirectoryFolderHasNoNotes() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root.appendingPathComponent("missing")))
+        XCTAssertNil(SidecarNotesReader().readNotes(in: root), "no notes.txt")
+
+        let file = root.appendingPathComponent("song.cpr")
+        try Data("x".utf8).write(to: file)
+        XCTAssertNil(SidecarNotesReader().readNotes(in: file))
+    }
+
+    /// The folder itself may be reached through a link; only `notes.txt` must not be one.
+    func testReadsNotesThroughALinkedFolder() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let real = root.appendingPathComponent("Real", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: false)
+        try Data("linked note".utf8).write(to: real.appendingPathComponent(SidecarNotesReader.fileName))
+        let alias = root.appendingPathComponent("Alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: real)
+
+        XCTAssertEqual(SidecarNotesReader().readNotes(in: alias), "linked note")
+        XCTAssertEqual(SidecarNotesReader().readNotes(in: URL(fileURLWithPath: "/private" + real.path)), "linked note")
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("niko-music-hub-sidecar-\(UUID().uuidString)", isDirectory: true)

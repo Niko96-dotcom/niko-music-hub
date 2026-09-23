@@ -7,6 +7,11 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
     private let database: SQLiteArchiveDatabase
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    /// Deterministic test seam for mid-iteration `sqlite3_step` failures
+    /// (BUSY/IOERR/CORRUPT/FULL). Production stays `nil` and calls
+    /// `sqlite3_step` directly; tests inject a failure after N rows to prove
+    /// `query`/`queryRestores` fail closed instead of returning partial rows.
+    var stepForTesting: (@Sendable (OpaquePointer?) -> Int32)? = nil
 
     public init(database: SQLiteArchiveDatabase) throws {
         self.database = database
@@ -271,7 +276,8 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
     }
 
     private func query(_ sql: String, bind: (OpaquePointer?) -> Void) throws -> [VaultTransferRecord] {
-        try database.withConnection { db in
+        let step = stepForTesting ?? { sqlite3_step($0) }
+        return try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -279,10 +285,16 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
             }
             bind(statement)
             var records: [VaultTransferRecord] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                records.append(try decodedRecord(VaultTransferRecord.self, from: statement))
+            while true {
+                switch step(statement) {
+                case SQLITE_ROW:
+                    records.append(try decodedRecord(VaultTransferRecord.self, from: statement))
+                case SQLITE_DONE:
+                    return records
+                default:
+                    throw SQLiteArchiveDatabase.StoreError.step(Self.message(db))
+                }
             }
-            return records
         }
     }
 
@@ -437,6 +449,7 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
         // `completed_at` is stored inside the record blob; filter decoded rows so
         // old databases need no column migration.
         let effectiveSQL = sql.replacingOccurrences(of: " WHERE completed_at IS NULL", with: "")
+        let step = stepForTesting ?? { sqlite3_step($0) }
         return try database.withConnection { db in
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -445,11 +458,17 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
             }
             bind(statement)
             var records: [VaultRestoreRecord] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                let record = try decodedRecord(VaultRestoreRecord.self, from: statement)
-                if !sql.contains("completed_at IS NULL") || record.completedAt == nil { records.append(record) }
+            while true {
+                switch step(statement) {
+                case SQLITE_ROW:
+                    let record = try decodedRecord(VaultRestoreRecord.self, from: statement)
+                    if !sql.contains("completed_at IS NULL") || record.completedAt == nil { records.append(record) }
+                case SQLITE_DONE:
+                    return records
+                default:
+                    throw SQLiteArchiveDatabase.StoreError.step(Self.message(db))
+                }
             }
-            return records
         }
     }
 

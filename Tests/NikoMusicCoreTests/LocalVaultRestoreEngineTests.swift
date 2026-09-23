@@ -4,6 +4,24 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultRestoreEngineTests: XCTestCase {
+    func testLaunchRecoveryFailsClosedWhenRestoreStoreReconciliationThrows() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let archiveBefore = try fixture.snapshot(at: fixture.generation)
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: StepFailingRestoreStore(), projectionStore: nil,
+            provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: VaultRestoreEventLog()),
+            projectOpener: SafeVaultProjectOpener(workspace: VaultRestoreWorkspaceSpy(events: VaultRestoreEventLog())),
+            writeAdmission: allowRestoreWrites)
+        let results = await engine.recoverAtLaunch()
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent("Restored").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent(".niko-staging").path))
+    }
+
     func testSelectedManagedVersionSurvivesRetryOpenAndRejectsInvalidSelection() async throws {
         let fixture = try VaultRestoreFixture(projectFiles: ["Versions/Chosen.als", "Newest.cpr"])
         defer { fixture.remove() }
@@ -1960,6 +1978,19 @@ private actor BlockingRestoreAdmission {
         let waiters = releaseWaiters
         releaseWaiters.removeAll()
         waiters.forEach { $0.resume() }
+    }
+}
+
+private struct StepFailingRestoreStore: VaultRestoreStoring, Sendable {
+    func saveRestore(_ record: VaultRestoreRecord) throws {}
+    func restoreRecord(id: UUID) throws -> VaultRestoreRecord? {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_CORRUPT")
+    }
+    func recoverableRestoreRecords() throws -> [VaultRestoreRecord] {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_CORRUPT")
+    }
+    func reconcileRestoreRecordsForRecovery() throws -> [VaultRestoreRecord] {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_CORRUPT")
     }
 }
 

@@ -191,35 +191,85 @@ public struct VaultSettings: Equatable, Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        isEnabled = try values.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        // Fail-closed on present malformed nonoptional values (S1): a missing
+        // key decodes to its historical default/migration, but a present
+        // corrupt value — including an explicit null — throws via `decode`
+        // (not `decodeIfPresent`) so `updateSettings` cannot persist defaults
+        // over stored pins and confirmations. Truly optional fields (root IDs,
+        // dates) keep `decodeIfPresent` so missing/null stay nil.
+        if values.contains(.isEnabled) {
+            isEnabled = try values.decode(Bool.self, forKey: .isEnabled)
+        } else {
+            isEnabled = false
+        }
         activeRootID = try values.decodeIfPresent(UUID.self, forKey: .activeRootID)
         archiveRootID = try values.decodeIfPresent(UUID.self, forKey: .archiveRootID)
         // Background inactivity/disk-pressure scheduling is independent
         // OPT-IN: missing keys decode as off. An explicit stored `true` is
         // preserved.
-        automaticArchiving = try values.decodeIfPresent(Bool.self, forKey: .automaticArchiving) ?? false
-        inactivityDays = try values.decodeIfPresent(Int.self, forKey: .inactivityDays) ?? 30
-        minimumFreeSpaceGiB = try values.decodeIfPresent(Int.self, forKey: .minimumFreeSpaceGiB) ?? 120
-        transferFreeSpaceReserveGiB = try values.decodeIfPresent(Int.self, forKey: .transferFreeSpaceReserveGiB) ?? 5
-        keepPreviousGenerationDays = try values.decodeIfPresent(Int.self, forKey: .keepPreviousGenerationDays) ?? 30
-        launchAtLogin = try values.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
-        rolloutStage = try values.decodeIfPresent(RolloutStage.self, forKey: .rolloutStage) ?? .disabled
+        if values.contains(.automaticArchiving) {
+            automaticArchiving = try values.decode(Bool.self, forKey: .automaticArchiving)
+        } else {
+            automaticArchiving = false
+        }
+        if values.contains(.inactivityDays) {
+            inactivityDays = try values.decode(Int.self, forKey: .inactivityDays)
+        } else {
+            inactivityDays = 30
+        }
+        if values.contains(.minimumFreeSpaceGiB) {
+            minimumFreeSpaceGiB = try values.decode(Int.self, forKey: .minimumFreeSpaceGiB)
+        } else {
+            minimumFreeSpaceGiB = 120
+        }
+        if values.contains(.transferFreeSpaceReserveGiB) {
+            transferFreeSpaceReserveGiB = try values.decode(Int.self, forKey: .transferFreeSpaceReserveGiB)
+        } else {
+            transferFreeSpaceReserveGiB = 5
+        }
+        if values.contains(.keepPreviousGenerationDays) {
+            keepPreviousGenerationDays = try values.decode(Int.self, forKey: .keepPreviousGenerationDays)
+        } else {
+            keepPreviousGenerationDays = 30
+        }
+        if values.contains(.launchAtLogin) {
+            launchAtLogin = try values.decode(Bool.self, forKey: .launchAtLogin)
+        } else {
+            launchAtLogin = true
+        }
+        if values.contains(.rolloutStage) {
+            rolloutStage = try values.decode(RolloutStage.self, forKey: .rolloutStage)
+        } else {
+            rolloutStage = .disabled
+        }
         // The persisted intent is authoritative. Only a missing intent key
         // migrates from the legacy rollout; a present value decodes strictly
         // so corrupt input — including an explicit null — fails this decode
-        // instead of inferring free-space permission. Callers loading
-        // `AppSettings` fall back to safe defaults on failure (`keepCopy`,
-        // disabled).
+        // instead of inferring free-space permission. `AppSettings` propagates
+        // that failure so an unrelated edit cannot persist vault defaults over
+        // stored pins and confirmations.
         if values.contains(.spaceIntent) {
             spaceIntent = try values.decode(SpaceIntent.self, forKey: .spaceIntent)
         } else {
             spaceIntent = Self.migratedIntent(from: rolloutStage)
         }
-        automationEmergencyStop = try values.decodeIfPresent(Bool.self, forKey: .automationEmergencyStop) ?? false
-        independentBackupConfirmed = try values.decodeIfPresent(Bool.self, forKey: .independentBackupConfirmed) ?? false
+        if values.contains(.automationEmergencyStop) {
+            automationEmergencyStop = try values.decode(Bool.self, forKey: .automationEmergencyStop)
+        } else {
+            automationEmergencyStop = false
+        }
+        if values.contains(.independentBackupConfirmed) {
+            independentBackupConfirmed = try values.decode(Bool.self, forKey: .independentBackupConfirmed)
+        } else {
+            independentBackupConfirmed = false
+        }
         lastSuccessfulVerificationAt = try values.decodeIfPresent(Date.self, forKey: .lastSuccessfulVerificationAt)
         lastRestoreDrillAt = try values.decodeIfPresent(Date.self, forKey: .lastRestoreDrillAt)
-        keepLocalProjectIDs = try values.decodeIfPresent(Set<String>.self, forKey: .keepLocalProjectIDs) ?? []
+        if values.contains(.keepLocalProjectIDs) {
+            keepLocalProjectIDs = try values.decode(Set<String>.self, forKey: .keepLocalProjectIDs)
+        } else {
+            keepLocalProjectIDs = []
+        }
     }
 }
 
@@ -294,14 +344,36 @@ public struct AppSettings: Equatable, Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        outputFolder = (try? container.decodeIfPresent(StoredFolderLocation.self, forKey: .outputFolder)) ?? StoredFolderLocation()
-        audioPreset = (try? container.decodeIfPresent(AudioPreset.self, forKey: .audioPreset)) ?? .cubaseDefault
-        helperTools = (try? container.decodeIfPresent(HelperToolSettings.self, forKey: .helperTools)) ?? HelperToolSettings()
-        maxRecordingDurationMinutes = (try? container.decodeIfPresent(Int.self, forKey: .maxRecordingDurationMinutes)) ?? 30
-        if let typedRoots = try container.decodeIfPresent([StoredMusicRoot].self, forKey: .musicRoots) {
-            musicRoots = typedRoots
+        // Fail-closed on present malformed values (S1): a missing key decodes
+        // to its historical default/migration, but a present corrupt value
+        // throws so `UserDefaultsSettingsStore.updateSettings` cannot load
+        // silently-defaulted settings and persist them over stored pins and
+        // confirmations. `contains` distinguishes missing from explicit null;
+        // `decode` (not `decodeIfPresent`) makes explicit null throw.
+        if container.contains(.outputFolder) {
+            outputFolder = try container.decode(StoredFolderLocation.self, forKey: .outputFolder)
         } else {
-            let legacyRoots = (try? container.decodeIfPresent([StoredArchiveRoot].self, forKey: .archiveRoots)) ?? []
+            outputFolder = StoredFolderLocation()
+        }
+        if container.contains(.audioPreset) {
+            audioPreset = try container.decode(AudioPreset.self, forKey: .audioPreset)
+        } else {
+            audioPreset = .cubaseDefault
+        }
+        if container.contains(.helperTools) {
+            helperTools = try container.decode(HelperToolSettings.self, forKey: .helperTools)
+        } else {
+            helperTools = HelperToolSettings()
+        }
+        if container.contains(.maxRecordingDurationMinutes) {
+            maxRecordingDurationMinutes = try container.decode(Int.self, forKey: .maxRecordingDurationMinutes)
+        } else {
+            maxRecordingDurationMinutes = 30
+        }
+        if container.contains(.musicRoots) {
+            musicRoots = try container.decode([StoredMusicRoot].self, forKey: .musicRoots)
+        } else if container.contains(.archiveRoots) {
+            let legacyRoots = try container.decode([StoredArchiveRoot].self, forKey: .archiveRoots)
             musicRoots = legacyRoots.map {
                 StoredMusicRoot(
                     role: .scanOnly,
@@ -309,13 +381,39 @@ public struct AppSettings: Equatable, Codable, Sendable {
                     securityScopedBookmark: $0.securityScopedBookmark
                 )
             }
+        } else {
+            musicRoots = []
         }
-        vault = (try? container.decodeIfPresent(VaultSettings.self, forKey: .vault)) ?? VaultSettings()
-        appearance = (try? container.decodeIfPresent(AppAppearance.self, forKey: .appearance)) ?? .followSystem
-        archiveOnboardingCompleted = (try? container.decodeIfPresent(Bool.self, forKey: .archiveOnboardingCompleted)) ?? false
-        scanExclusionTerms = (try? container.decodeIfPresent(String.self, forKey: .scanExclusionTerms)) ?? ""
-        showMenuBarExtra = (try? container.decodeIfPresent(Bool.self, forKey: .showMenuBarExtra)) ?? true
-        setupAssistantShown = (try? container.decodeIfPresent(Bool.self, forKey: .setupAssistantShown)) ?? false
+        if container.contains(.vault) {
+            vault = try container.decode(VaultSettings.self, forKey: .vault)
+        } else {
+            vault = VaultSettings()
+        }
+        if container.contains(.appearance) {
+            appearance = try container.decode(AppAppearance.self, forKey: .appearance)
+        } else {
+            appearance = .followSystem
+        }
+        if container.contains(.archiveOnboardingCompleted) {
+            archiveOnboardingCompleted = try container.decode(Bool.self, forKey: .archiveOnboardingCompleted)
+        } else {
+            archiveOnboardingCompleted = false
+        }
+        if container.contains(.scanExclusionTerms) {
+            scanExclusionTerms = try container.decode(String.self, forKey: .scanExclusionTerms)
+        } else {
+            scanExclusionTerms = ""
+        }
+        if container.contains(.showMenuBarExtra) {
+            showMenuBarExtra = try container.decode(Bool.self, forKey: .showMenuBarExtra)
+        } else {
+            showMenuBarExtra = true
+        }
+        if container.contains(.setupAssistantShown) {
+            setupAssistantShown = try container.decode(Bool.self, forKey: .setupAssistantShown)
+        } else {
+            setupAssistantShown = false
+        }
     }
 
     public func encode(to encoder: Encoder) throws {

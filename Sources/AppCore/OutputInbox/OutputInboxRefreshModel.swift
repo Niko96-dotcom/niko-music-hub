@@ -15,9 +15,11 @@ import Foundation
 ///   requested refresh is lost but N bursts never cause N passes.
 /// - Total work is unchanged (one load/scan/save/sort per pass); the win is
 ///   main-thread responsiveness, not less work. Do not claim otherwise.
-/// - Corruption is surfaced via `lastError`, never masked: a failed pass
-///   keeps the previous `items` and records the failure message; the next
-///   request retries from disk, so recovery needs no restart.
+/// - Corruption is quarantined by the store, never masked or deleted: an
+///   unreadable inbox file is moved next to the store and the pass continues
+///   with an empty inbox. The one-time quarantine warning surfaces via
+///   `lastError` (the inspector already mirrors it); the following clean
+///   pass clears it, so recovery needs no restart.
 @MainActor
 public final class OutputInboxRefreshModel: ObservableObject {
     @Published public private(set) var items: [OutputInboxItem] = []
@@ -66,7 +68,16 @@ public final class OutputInboxRefreshModel: ObservableObject {
             switch outcome {
             case .success(let snapshot):
                 items = snapshot
-                lastError = nil
+                // I1: the store may have quarantined a corrupt inbox during
+                // this pass. Surface its one-time warning through the existing
+                // error channel; the next clean pass clears it.
+                if let store = store as? JSONOutputInboxStore,
+                   let warning = store.takeCorruptionWarning()
+                {
+                    lastError = warning
+                } else {
+                    lastError = nil
+                }
             case .failure(let message):
                 lastError = message
             }

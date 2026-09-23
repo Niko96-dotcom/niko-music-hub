@@ -119,6 +119,7 @@ extension ArchiveBrowserViewModel {
         }
         projectVaultRetryTasks.removeAll()
         projectVaultRetryAttemptCounts.removeAll()
+        projectVaultCapacityPostponedSongIDs.removeAll()
         pendingArchiveConfirmation = nil
         for operation in projectVaultPendingOperations {
             projectVaultBusySongIDs.remove(operation.songID)

@@ -127,15 +127,9 @@ final class ProjectVaultPolishTests: XCTestCase {
 
     func testInvalidSpaceIntentWithFriendsNeverEscalates() throws {
         let payload = Data(#"{"vault":{"isEnabled":true,"rolloutStage":"friends","spaceIntent":"bogus","independentBackupConfirmed":true}}"#.utf8)
-        let settings = try JSONDecoder().decode(AppSettings.self, from: payload)
-        XCTAssertEqual(settings.vault.spaceIntent, .keepCopy)
-        var permissive = settings.vault
-        permissive.isEnabled = true
-        permissive.activeRootID = UUID()
-        permissive.archiveRootID = UUID()
-        permissive.independentBackupConfirmed = true
-        XCTAssertFalse(ProjectVaultRolloutPolicy.expressesFreeSpaceIntent(permissive))
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(permissive))
+        // A present invalid intent now fails closed so an unrelated settings
+        // edit cannot save defaults over the stored Vault choices or pins.
+        XCTAssertThrowsError(try JSONDecoder().decode(AppSettings.self, from: payload))
     }
 
     func testDisabledRolloutWithFreeSpaceIntentDeniesRemoval() {

@@ -22,7 +22,7 @@ public struct PathSafety: @unchecked Sendable {
             throw PathSafetyError.pathDoesNotExist(standardized)
         }
 
-        let resolved = standardized.resolvingSymlinksInPath()
+        let resolved = PathResolutionProbe.resolvingSymlinks(standardized)
         guard isResolvedContained(resolved, in: allowedRoots) else {
             throw PathSafetyError.pathOutsideAllowedRoots(resolved)
         }
@@ -62,7 +62,7 @@ public struct PathSafety: @unchecked Sendable {
     /// Existing child components must be real filesystem nodes rather than
     /// symlinks; a missing tail is allowed only below the verified ancestor.
     public func isResolvedContainedWithoutNestedSymlinks(_ path: URL, in root: URL) -> Bool {
-        let canonicalRoot = root.standardizedFileURL.resolvingSymlinksInPath()
+        let canonicalRoot = PathResolutionProbe.resolvingSymlinks(root.standardizedFileURL)
         let candidate = path.standardizedFileURL
         guard isContained(candidate, in: [canonicalRoot]),
               isResolvedContained(candidate, in: [canonicalRoot]) else { return false }
@@ -102,6 +102,11 @@ public struct PathSafety: @unchecked Sendable {
         return left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
     }
 
+    /// The resolved path `isResolvedContained` compares for `url`.
+    func resolvedPath(of url: URL) -> String {
+        resolvedURLAllowingMissingTail(url).path
+    }
+
     private func resolvedURLAllowingMissingTail(_ url: URL) -> URL {
         var existingAncestor = url.standardizedFileURL
         var missingComponents: [String] = []
@@ -116,7 +121,7 @@ public struct PathSafety: @unchecked Sendable {
             existingAncestor = parent
         }
 
-        var resolved = existingAncestor.resolvingSymlinksInPath()
+        var resolved = PathResolutionProbe.resolvingSymlinks(existingAncestor)
         for component in missingComponents.reversed() {
             resolved.appendPathComponent(component, isDirectory: false)
         }

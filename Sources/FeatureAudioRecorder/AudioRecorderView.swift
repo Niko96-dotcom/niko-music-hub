@@ -380,7 +380,7 @@ public struct AudioRecorderView: View {
                 context.fileActions.revealInFinder(settings.outputFolder.url)
             case .dismiss:
                 viewModel.dismissError()
-            case .openHubSettingsHelpers, .installHelperTools, .chooseToolPath, .openTerminal:
+            case .openHubSettingsHelpers, .installHelperTools, .chooseToolPath, .openTerminal, .clearHistory:
                 break
             }
         }

@@ -3,10 +3,14 @@ import Foundation
 import NikoMusicCore
 
 extension ArchiveBrowserViewModel {
-    /// Cancels a bounded Done retry without reusing its approval.
+    /// Cancels a bounded Done retry without reusing its approval. Also releases
+    /// any recorded capacity postponement so a fresh explicit Done (or undo +
+    /// re-Done) resumes normal automatic behavior; a still-full destination
+    /// simply records it again on the next rejection.
     func cancelDoneArchiveRetry(for songID: String) {
         projectVaultRetryTasks.removeValue(forKey: songID)?.cancel()
         projectVaultRetryAttemptCounts.removeValue(forKey: songID)
+        projectVaultCapacityPostponedSongIDs.remove(songID)
     }
     // MARK: - Bound authorization (final contract)
     //
@@ -457,6 +461,7 @@ extension ArchiveBrowserViewModel {
                 }
                 model.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
                 model.projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+                model.projectVaultCapacityPostponedSongIDs.remove(song.id)
                 model.cacheProjectVaultSnapshot(snapshot)
                 model.rebuildProjectVaultPresentationCache()
                 await model.refreshProjectVaultSnapshots()
@@ -496,9 +501,17 @@ extension ArchiveBrowserViewModel {
                 if trigger == .workflowDone {
                     model.setProjectVaultStatusMessage("Marked Done. \(error.localizedDescription)")
                     model.diagnostics.log(.warning, "Done auto-archive postponed: \(error)")
-                    if case .activityPostponed(let reason) = error,
-                       reason.permitsBoundedAutomaticRetry {
-                        model.scheduleDoneArchiveRetry(for: song, authorization: capturedAuthorization)
+                    if case .activityPostponed(let reason) = error {
+                        if reason.permitsBoundedAutomaticRetry {
+                            model.scheduleDoneArchiveRetry(for: song, authorization: capturedAuthorization)
+                        } else if reason == .insufficientArchiveCapacity || reason == .archiveCapacityUnavailable {
+                            // Non-retryable capacity: remember it so later automatic
+                            // refreshes (launch recovery, settings changes, the
+                            // recovery timer) do not immediately re-attempt a
+                            // destination known to be full. Deliberate manual
+                            // attempts bypass that gate and re-record on failure.
+                            model.projectVaultCapacityPostponedSongIDs.insert(song.id)
+                        }
                     }
                     return false
                 }

@@ -57,6 +57,21 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         }
     }
 
+    func testLaunchRecoveryFailsClosedWhenTransferStoreReadsThrow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let before = try fixture.snapshotSource()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active, archiveRoot: fixture.archive,
+            store: StepFailingTransferStore(),
+            writeAdmission: allowVaultWrites, removalAdmission: { _ in }
+        )
+        let results = await engine.recoverAtLaunch()
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(try fixture.snapshotSource(), before)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.archive.appendingPathComponent("generations").path))
+    }
+
     func testExplicitRemovalRecoveryPreservesCompleteAndPartialActiveCopies() async throws {
         for sourceState in ["complete", "partial", "missing"] {
             let fixture = try Fixture()
@@ -2971,6 +2986,19 @@ private final class SurvivorValidationProbe: @unchecked Sendable {
             storedTotalProbeCount += 1
             storedVerificationRootCount += 1
         }
+    }
+}
+
+private struct StepFailingTransferStore: VaultTransferStoring, Sendable {
+    func save(_ record: VaultTransferRecord) throws {}
+    func record(id: UUID) throws -> VaultTransferRecord? {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_BUSY")
+    }
+    func recoverableRecords() throws -> [VaultTransferRecord] {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_BUSY")
+    }
+    func allTransferRecords() throws -> [VaultTransferRecord] {
+        throw SQLiteArchiveDatabase.StoreError.step("injected SQLITE_BUSY")
     }
 }
 

@@ -33,10 +33,37 @@ public struct AudioPreset: Equatable, Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let sampleRate = try container.decodeIfPresent(Int.self, forKey: .sampleRate) ?? 44100
-        let bitDepth = try container.decodeIfPresent(Int.self, forKey: .bitDepth) ?? 24
-        let decodedChannelCount = try container.decodeIfPresent(Int.self, forKey: .channelCount)
-        let decodedChannelMode = try? container.decodeIfPresent(AudioChannelMode.self, forKey: .channelMode)
+        // S1 fail-closed: a missing key decodes to its historical default or
+        // channelCount-to-mode migration, but a present value decodes strictly
+        // so explicit null or malformed input throws instead of silently
+        // defaulting. `contains` distinguishes missing from explicit null;
+        // `decode` (not `decodeIfPresent`/`try?`) makes a present null or
+        // bogus enum throw so AppSettings cannot load a silently-defaulted
+        // preset and persist it over stored values via updateSettings.
+        let sampleRate: Int
+        if container.contains(.sampleRate) {
+            sampleRate = try container.decode(Int.self, forKey: .sampleRate)
+        } else {
+            sampleRate = 44100
+        }
+        let bitDepth: Int
+        if container.contains(.bitDepth) {
+            bitDepth = try container.decode(Int.self, forKey: .bitDepth)
+        } else {
+            bitDepth = 24
+        }
+        let decodedChannelCount: Int?
+        if container.contains(.channelCount) {
+            decodedChannelCount = try container.decode(Int.self, forKey: .channelCount)
+        } else {
+            decodedChannelCount = nil
+        }
+        let decodedChannelMode: AudioChannelMode?
+        if container.contains(.channelMode) {
+            decodedChannelMode = try container.decode(AudioChannelMode.self, forKey: .channelMode)
+        } else {
+            decodedChannelMode = nil
+        }
         let channelMode = decodedChannelMode
             ?? (decodedChannelCount == 1 ? .mono : .preserveMonoStereo)
         let channelCount = decodedChannelCount

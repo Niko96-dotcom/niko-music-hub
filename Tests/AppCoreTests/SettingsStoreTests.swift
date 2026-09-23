@@ -335,6 +335,347 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(decoded.setupAssistantShown)
     }
 
+    func testCorruptVaultSpaceIntentBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        // Both a bogus string and an explicit null are present-malformed intents.
+        let intents = [#""bogus""#, #"123"#, #"null"#]
+        for intent in intents {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            // S1: pins and confirmations must survive an unrelated edit attempt.
+            let corrupt = """
+            {
+              "appearance": "light",
+              "vault": {
+                "isEnabled": true,
+                "rolloutStage": "friends",
+                "spaceIntent": \(intent),
+                "independentBackupConfirmed": true,
+                "keepLocalProjectIDs": ["song-a", "song-b"]
+              }
+            }
+            """
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "intent must throw: \(intent)")
+            XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark }, "intent: \(intent)")
+            XCTAssertThrowsError(try store.updateSettings { $0.showMenuBarExtra = false }, "intent: \(intent)")
+
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for intent: \(intent)")
+            XCTAssertTrue(String(data: before, encoding: .utf8)!.contains("song-a"))
+            // Fail-closed: the corrupt intent never decodes, so it can never be
+            // read as free-space permission.
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(
+                    VaultSettings.self,
+                    from: Data(#"{"isEnabled":true,"rolloutStage":"friends","spaceIntent":\#(intent)}"#.utf8)
+                )
+            )
+        }
+    }
+
+    func testPresentNullVaultFieldsBlockUnrelatedUpdateAndPreserveBlob() throws {
+        let vaultPayloads = [
+            #"{"isEnabled":null,"rolloutStage":"privateBeta","independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
+            #"{"isEnabled":true,"automaticArchiving":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
+            #"{"isEnabled":true,"rolloutStage":"privateBeta","independentBackupConfirmed":null,"keepLocalProjectIDs":["song-a"]}"#,
+            #"{"isEnabled":true,"rolloutStage":"privateBeta","independentBackupConfirmed":true,"keepLocalProjectIDs":null}"#,
+            #"{"isEnabled":true,"inactivityDays":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
+            #"{"isEnabled":true,"launchAtLogin":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
+            #"{"isEnabled":true,"rolloutStage":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
+        ]
+        for vault in vaultPayloads {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            let corrupt = #"{"appearance":"light","vault":\#(vault)}"#
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "vault must throw: \(vault)")
+            XCTAssertThrowsError(
+                try store.updateSettings { $0.appearance = .dark },
+                "unrelated edit must throw and preserve blob: \(vault)"
+            )
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for: \(vault)")
+        }
+    }
+
+    func testCorruptHelperToolsBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(Data(#"{"helperTools":{"ffmpeg":123},"appearance":"light"}"#.utf8), forKey: "nikoMusicHub.settings")
+        let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+        XCTAssertThrowsError(try store.loadSettings())
+        XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark })
+        XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before)
+    }
+
+    func testCorruptMusicRootsBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(Data(#"{"musicRoots":"bogus","appearance":"light"}"#.utf8), forKey: "nikoMusicHub.settings")
+        let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+        XCTAssertThrowsError(try store.loadSettings())
+        XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark })
+        XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before)
+    }
+
+    func testCorruptLegacyArchiveRootsBlocksUnrelatedUpdate() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(Data(#"{"archiveRoots":"bogus"}"#.utf8), forKey: "nikoMusicHub.settings")
+        let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+        XCTAssertThrowsError(try store.loadSettings())
+        XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark })
+        XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before)
+    }
+
+    func testCorruptOutputFolderBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let suiteName = uniqueSuiteName()
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(Data(#"{"outputFolder":"bogus","appearance":"light"}"#.utf8), forKey: "nikoMusicHub.settings")
+        let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+        XCTAssertThrowsError(try store.loadSettings())
+        XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark })
+        XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before)
+    }
+
+    func testCorruptScalarFieldsBlockUnrelatedUpdateAndPreservesBlob() throws {
+        let payloads = [
+            #"{"maxRecordingDurationMinutes":"bogus"}"#,
+            #"{"appearance":"bogus"}"#,
+            #"{"appearance":null}"#,
+            #"{"showMenuBarExtra":"bogus"}"#,
+            #"{"scanExclusionTerms":123}"#,
+            #"{"archiveOnboardingCompleted":"bogus"}"#,
+            #"{"setupAssistantShown":123}"#,
+            #"{"audioPreset":"bogus"}"#,
+            #"{"vault":"bogus"}"#,
+        ]
+        for payload in payloads {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            userDefaults.set(Data(payload.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "payload must throw: \(payload)")
+            XCTAssertThrowsError(
+                try store.updateSettings { $0.appearance = .dark },
+                "unrelated edit must throw and preserve blob: \(payload)"
+            )
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for: \(payload)")
+        }
+    }
+
+    func testMissingKeysStillDecodeToHistoricalDefaults() throws {
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertEqual(settings.audioPreset, .cubaseDefault)
+        XCTAssertEqual(settings.helperTools, HelperToolSettings())
+        XCTAssertEqual(settings.maxRecordingDurationMinutes, 30)
+        XCTAssertEqual(settings.musicRoots, [])
+        XCTAssertEqual(settings.vault, VaultSettings())
+        XCTAssertEqual(settings.appearance, .followSystem)
+        XCTAssertFalse(settings.archiveOnboardingCompleted)
+        XCTAssertEqual(settings.scanExclusionTerms, "")
+        XCTAssertTrue(settings.showMenuBarExtra)
+        XCTAssertFalse(settings.setupAssistantShown)
+        XCTAssertTrue(settings.outputFolder.url.path.contains("Niko Music Hub/Inbox"))
+    }
+
+    func testValidSettingsRoundTripAndUnrelatedUpdate() throws {
+        let suiteName = uniqueSuiteName()
+        let store = makeStore(suiteName: suiteName, reset: true)
+        try store.updateSettings {
+            $0.appearance = .light
+            $0.showMenuBarExtra = false
+            $0.maxRecordingDurationMinutes = 45
+        }
+        let loaded = try makeStore(suiteName: suiteName).loadSettings()
+        XCTAssertEqual(loaded.appearance, .light)
+        XCTAssertFalse(loaded.showMenuBarExtra)
+        XCTAssertEqual(loaded.maxRecordingDurationMinutes, 45)
+
+        try store.updateSettings { $0.appearance = .dark }
+        let reloaded = try makeStore(suiteName: suiteName).loadSettings()
+        XCTAssertEqual(reloaded.appearance, .dark)
+        XCTAssertFalse(reloaded.showMenuBarExtra, "unrelated field must survive a valid edit")
+        XCTAssertEqual(reloaded.maxRecordingDurationMinutes, 45)
+    }
+
+    func testCorruptAudioPresetSampleRateBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let intents = [#""bogus""#, #"null"#]
+        for intent in intents {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            let corrupt = """
+            {"appearance":"light","audioPreset":{"sampleRate":\(intent),"bitDepth":24,"channelCount":2,"channelMode":"preserveMonoStereo"}}
+            """
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "sampleRate must throw: \(intent)")
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AudioPreset.self, from: Data(#"{"sampleRate":\#(intent),"bitDepth":24,"channelCount":2,"channelMode":"preserveMonoStereo"}"#.utf8)),
+                "direct preset decode must throw: \(intent)"
+            )
+            XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark }, "intent: \(intent)")
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for intent: \(intent)")
+        }
+    }
+
+    func testCorruptAudioPresetBitDepthBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let intents = [#""bogus""#, #"null"#]
+        for intent in intents {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            let corrupt = """
+            {"appearance":"light","audioPreset":{"sampleRate":44100,"bitDepth":\(intent),"channelCount":2,"channelMode":"preserveMonoStereo"}}
+            """
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "bitDepth must throw: \(intent)")
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AudioPreset.self, from: Data(#"{"sampleRate":44100,"bitDepth":\#(intent),"channelCount":2,"channelMode":"preserveMonoStereo"}"#.utf8)),
+                "direct preset decode must throw: \(intent)"
+            )
+            XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark }, "intent: \(intent)")
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for intent: \(intent)")
+        }
+    }
+
+    func testCorruptAudioPresetChannelCountBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        let intents = [#""bogus""#, #"null"#]
+        for intent in intents {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            let corrupt = """
+            {"appearance":"light","audioPreset":{"sampleRate":44100,"bitDepth":24,"channelCount":\(intent),"channelMode":"preserveMonoStereo"}}
+            """
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "channelCount must throw: \(intent)")
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AudioPreset.self, from: Data(#"{"sampleRate":44100,"bitDepth":24,"channelCount":\#(intent),"channelMode":"preserveMonoStereo"}"#.utf8)),
+                "direct preset decode must throw: \(intent)"
+            )
+            XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark }, "intent: \(intent)")
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for intent: \(intent)")
+        }
+    }
+
+    func testCorruptAudioPresetChannelModeBlocksUnrelatedUpdateAndPreservesBlob() throws {
+        // A present bogus enum string, a wrong-typed number, and an explicit
+        // null must all throw rather than silently fall back to the default.
+        let intents = [#""bogus""#, #"123"#, #"null"#]
+        for intent in intents {
+            let suiteName = uniqueSuiteName()
+            let userDefaults = UserDefaults(suiteName: suiteName)!
+            userDefaults.removePersistentDomain(forName: suiteName)
+            let corrupt = """
+            {"appearance":"light","audioPreset":{"sampleRate":44100,"bitDepth":24,"channelCount":2,"channelMode":\(intent)}}
+            """
+            userDefaults.set(Data(corrupt.utf8), forKey: "nikoMusicHub.settings")
+            let before = try XCTUnwrap(userDefaults.data(forKey: "nikoMusicHub.settings"))
+            let store = UserDefaultsSettingsStore(userDefaults: userDefaults)
+
+            XCTAssertThrowsError(try store.loadSettings(), "channelMode must throw: \(intent)")
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AudioPreset.self, from: Data(#"{"sampleRate":44100,"bitDepth":24,"channelCount":2,"channelMode":\#(intent)}"#.utf8)),
+                "direct preset decode must throw: \(intent)"
+            )
+            XCTAssertThrowsError(try store.updateSettings { $0.appearance = .dark }, "intent: \(intent)")
+            XCTAssertEqual(userDefaults.data(forKey: "nikoMusicHub.settings"), before, "blob changed for intent: \(intent)")
+        }
+    }
+
+    func testAudioPresetMissingKeysKeepLegacyDefaultsAndMigration() throws {
+        let empty = try JSONDecoder().decode(AudioPreset.self, from: Data("{}".utf8))
+        XCTAssertEqual(empty, .cubaseDefault)
+
+        let missingSampleRate = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"bitDepth":16,"channelCount":1,"channelMode":"mono"}"#.utf8)
+        )
+        XCTAssertEqual(missingSampleRate.sampleRate, 44100)
+        XCTAssertEqual(missingSampleRate.bitDepth, 16)
+
+        let missingBitDepth = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"sampleRate":48000,"channelCount":2,"channelMode":"preserveMonoStereo"}"#.utf8)
+        )
+        XCTAssertEqual(missingBitDepth.sampleRate, 48000)
+        XCTAssertEqual(missingBitDepth.bitDepth, 24)
+
+        // Legacy channelCount-to-mode migration when the mode key is absent.
+        let monoByCount = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"sampleRate":48000,"bitDepth":16,"channelCount":1}"#.utf8)
+        )
+        XCTAssertEqual(monoByCount.channelCount, 1)
+        XCTAssertEqual(monoByCount.channelMode, .mono)
+
+        let stereoByCount = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"sampleRate":48000,"bitDepth":16,"channelCount":2}"#.utf8)
+        )
+        XCTAssertEqual(stereoByCount.channelMode, .preserveMonoStereo)
+
+        // Missing channelCount derives from the present mode.
+        let countFromMono = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"sampleRate":44100,"bitDepth":24,"channelMode":"mono"}"#.utf8)
+        )
+        XCTAssertEqual(countFromMono.channelCount, 1)
+        XCTAssertEqual(countFromMono.channelMode, .mono)
+
+        let countFromStereo = try JSONDecoder().decode(
+            AudioPreset.self,
+            from: Data(#"{"sampleRate":44100,"bitDepth":24,"channelMode":"stereo"}"#.utf8)
+        )
+        XCTAssertEqual(countFromStereo.channelCount, 2)
+        XCTAssertEqual(countFromStereo.channelMode, .stereo)
+    }
+
+    func testValidAudioPresetRoundTripsAndSurvivesUnrelatedUpdate() throws {
+        let preset = AudioPreset(sampleRate: 48000, bitDepth: 16, channelCount: 1, channelMode: .mono)
+        let decoded = try JSONDecoder().decode(AudioPreset.self, from: JSONEncoder().encode(preset))
+        XCTAssertEqual(decoded, preset)
+
+        let suiteName = uniqueSuiteName()
+        let store = makeStore(suiteName: suiteName, reset: true)
+        try store.updateSettings { $0.audioPreset = preset }
+        try store.updateSettings { $0.appearance = .dark }
+        let reloaded = try makeStore(suiteName: suiteName).loadSettings()
+        XCTAssertEqual(reloaded.audioPreset, preset)
+        XCTAssertEqual(reloaded.appearance, .dark)
+    }
+
     private func makeStore(suiteName: String = UUID().uuidString, reset: Bool = false) -> UserDefaultsSettingsStore {
         let userDefaults = UserDefaults(suiteName: suiteName)!
         if reset {

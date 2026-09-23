@@ -24,16 +24,23 @@ final class ArchiveScanWalkBudgetTests: XCTestCase {
 
     func testFullScanWalksEachSongFolderOnce() throws {
         let fileManager = CountingFileManager()
+        let resolutions = PathResolutionProbe.Counter()
         let start = Date()
-        let result = try MusicArchiveScanner(fileManager: fileManager).scan(roots: [archive.root])
+        let result = try PathResolutionProbe.$counter.withValue(resolutions) {
+            try MusicArchiveScanner(fileManager: fileManager).scan(roots: [archive.root])
+        }
         let elapsed = Date().timeIntervalSince(start)
         let counts = fileManager.snapshot()
         let folderSongs = archive.songFolders.count
 
-        report("full scan", songs: folderSongs, elapsed: elapsed, counts: counts)
+        report("full scan", songs: folderSongs, elapsed: elapsed, counts: counts, resolutions: resolutions.count)
         XCTAssertEqual(result.songs.filter { $0.previewCandidates.isEmpty == false }.count, folderSongs)
         // One recursive walk per song folder feeds both project and preview detection.
         XCTAssertEqual(counts.enumerators, folderSongs)
+        // Symlink containment is settled once per folder, not by a stat and a path resolution
+        // per candidate file (about 18 and 24 per song before). Only actual links pay per file.
+        XCTAssertLessThanOrEqual(counts.fileExists, folderSongs * 3 / 2, "stats per candidate file are back")
+        XCTAssertLessThanOrEqual(resolutions.count, folderSongs * 3 / 2, "path resolutions per candidate file are back")
     }
 
     @MainActor
@@ -97,13 +104,20 @@ final class ArchiveScanWalkBudgetTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(fileManager.snapshot().fileExists, existing.count - 1)
     }
 
-    private func report(_ label: String, songs: Int, elapsed: TimeInterval, counts: CountingFileManager.Counts) {
+    private func report(
+        _ label: String,
+        songs: Int,
+        elapsed: TimeInterval,
+        counts: CountingFileManager.Counts,
+        resolutions: Int? = nil
+    ) {
         let perSong = Double(counts.enumeratedEntries) / Double(max(songs, 1))
         print(String(
             format: "[scan-budget] %@: songs=%d wall=%.3fs enumerators=%d entries=%d (%.1f/song) "
-                + "contentsOfDirectory=%d fileExists=%d",
+                + "contentsOfDirectory=%d fileExists=%d isReadableFile=%d symlinkResolutions=%@",
             label, songs, elapsed, counts.enumerators, counts.enumeratedEntries, perSong,
-            counts.contentsOfDirectory, counts.fileExists
+            counts.contentsOfDirectory, counts.fileExists, counts.isReadableFile,
+            resolutions.map(String.init) ?? "-"
         ))
     }
 }
@@ -133,7 +147,7 @@ final class ArchiveScanEquivalenceTests: XCTestCase {
         assertSameCatalog(incremental.songs, fullFolderSongs)
     }
 
-    private func assertScanMatchesStandaloneDetectors(root: URL, file: StaticString = #filePath, line: UInt = #line) throws {
+    func assertScanMatchesStandaloneDetectors(root: URL, file: StaticString = #filePath, line: UInt = #line) throws {
         let result = try MusicArchiveScanner().scan(roots: [root])
         XCTAssertFalse(result.songs.isEmpty, file: file, line: line)
         var compared = 0
@@ -157,7 +171,7 @@ final class ArchiveScanEquivalenceTests: XCTestCase {
     }
 
     /// The pre-change `scanSongFolder`: two independent walks composed by the ranker.
-    private static func referenceSong(folder: URL) throws -> Song {
+    static func referenceSong(folder: URL) throws -> Song {
         let versions = try ProjectVersionDetector().detectVersions(in: folder)
         let ranker = PreviewConfidenceRanker()
         let ranked = ranker.rank(
@@ -295,6 +309,7 @@ final class CountingFileManager: FileManager, @unchecked Sendable {
         var enumeratedEntries = 0
         var contentsOfDirectory = 0
         var fileExists = 0
+        var isReadableFile = 0
     }
 
     private let lock = NSLock()
@@ -334,6 +349,11 @@ final class CountingFileManager: FileManager, @unchecked Sendable {
     override func fileExists(atPath path: String, isDirectory: UnsafeMutablePointer<ObjCBool>?) -> Bool {
         bump { $0.fileExists += 1 }
         return super.fileExists(atPath: path, isDirectory: isDirectory)
+    }
+
+    override func isReadableFile(atPath path: String) -> Bool {
+        bump { $0.isReadableFile += 1 }
+        return super.isReadableFile(atPath: path)
     }
 }
 

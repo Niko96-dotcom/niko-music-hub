@@ -80,24 +80,35 @@ extension ArchiveBrowserViewModel {
 
     /// Launch-time cache bootstrap. The snapshot decode runs off the main actor; the result
     /// is dropped when roots changed while loading or a scan already applied fresher data.
+    /// Cache integrity is applied only for a current loaded result, after those freshness
+    /// checks, so a late cache read can neither clear a newer corrupt-row gate nor block a
+    /// clean newer scan. Empty/failed cache results never touch the gate.
     func loadCachedIndexIfAvailable() {
         let rootsSnapshot = roots
         let generation = rootGeneration
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let cached = await self.catalog.loadCachedSongsDetached(
+            let report = await self.catalog.loadCachedSongsReportDetached(
                 roots: rootsSnapshot,
                 collaborators: self.collaborators
             )
             guard self.rootGeneration == generation else { return }
-            switch cached {
+            switch report.result {
             case .failed(let warning):
                 self.recordPersistenceWarning(warning)
             case .empty:
                 break
             case .loaded(let songs, let scannedAt):
-                // A finished scan already applied fresher results; keep them.
+                // A finished scan already applied fresher results; keep them and
+                // leave the integrity gate untouched.
                 guard self.songs.isEmpty, self.scanDiagnostics == nil else { return }
+                // Fail-closed (M1): a degraded cache metadata load must be
+                // visible immediately, otherwise an edit before the first full
+                // scan could overwrite a corrupt row with defaulted values.
+                self.catalog.applyCacheLoadReport(report)
+                if let integrityWarning = self.catalog.metadataIntegrityWarning() {
+                    self.recordPersistenceWarning(integrityWarning)
+                }
                 self.mutateCatalog {
                     self.scannedSongs = songs
                     self.songs = songs
