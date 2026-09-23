@@ -210,6 +210,80 @@ struct StemSeparationViewModelTests {
         #expect(vm.statusMessage.contains("Canceled") || vm.errorMessage != nil || vm.statusMessage.contains("complete"))
     }
 
+    /// Esc / ⌘. (HubCancelCommands) route a stem job through ShellJobStatusCenter to
+    /// JobRunner.cancelJob — the pane's Cancel path. The pane must return to idle and
+    /// keep stems the backend already wrote (user guide promise), for file and YouTube jobs.
+    @Test(arguments: [false, true])
+    func escapeCancel_returnsPaneToIdleAndKeepsWrittenStems(youtube: Bool) async throws {
+        let fileManager = FileManager.default
+        let scratch = fileManager.temporaryDirectory
+            .appendingPathComponent("nmh-stem-esc-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: scratch) }
+
+        let settingsStore = FakeSettingsStore()
+        settingsStore.stored.outputFolder = StoredFolderLocation(url: scratch)
+        let inbox = FakeOutputInboxStore()
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let backend = BlockingAfterFirstStemBackend()
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: service,
+            jobRunner: runner
+        )
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let vm = StemSeparationViewModel(context: context, service: service, youtubeWorkflow: workflow)
+
+        if youtube {
+            vm.youtubeURLText = "https://youtu.be/test"
+            vm.startYouTubeSeparation()
+        } else {
+            _ = vm.handleDrop(urls: [scratch.appendingPathComponent("song.wav")])
+            vm.startSeparation()
+        }
+        let jobID = try #require(vm.currentJobID)
+
+        for _ in 0..<300 where backend.writtenStemURL == nil {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let writtenStem = try #require(backend.writtenStemURL)
+        for _ in 0..<300 where !center.jobs.contains(where: { $0.id == jobID.uuidString }) {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        let activity = InAppJobActivity(jobs: center.jobs)
+        #expect(
+            InAppJobCancelRouting.escapeTarget(selectedToolID: StemSeparationService.toolID, activity)
+                == .stemSeparation
+        )
+        let routed = activity.jobs(for: .stemSeparation)
+        #expect(routed.map(\.id) == [jobID.uuidString])
+        for status in routed {
+            center.cancel(id: status.cancelActionID ?? status.id)
+        }
+
+        for _ in 0..<300 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(runner.job(id: jobID)?.state == .canceled)
+        #expect(vm.isRunning == false)
+        #expect(vm.currentJobID == nil)
+        #expect(vm.statusMessage == "Canceled.")
+        #expect(vm.errorMessage == nil)
+        #expect(vm.canStart == !youtube)
+        #expect(backend.cancelRequested)
+        #expect(fileManager.fileExists(atPath: writtenStem.path))
+    }
+
     @Test
     func loadResults_filtersByToolID() throws {
         let inbox = FakeOutputInboxStore()
@@ -407,5 +481,40 @@ private struct FakeViewModelYouTubeAudioDownloader: YouTubeAudioDownloading {
         FileManager.default.createFile(atPath: outputURL.path, contents: Data("audio".utf8))
         progress.update(progress: 1, message: "Downloaded")
         return outputURL
+    }
+}
+
+/// Writes one stem, then blocks until the job is canceled (like demucs mid-run).
+private final class BlockingAfterFirstStemBackend: StemSeparationBackend, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stemURL: URL?
+    private var canceled = false
+
+    var writtenStemURL: URL? { lock.withLock { stemURL } }
+    var cancelRequested: Bool { lock.withLock { canceled } }
+
+    var supportedPresets: [StemSeparationPreset] { StemSeparationPreset.allCases }
+
+    func health(settings: HelperToolSettings) async -> StemBackendHealth {
+        .ready(version: "mock")
+    }
+
+    func separate(
+        request: StemSeparationBackendRequest,
+        onProgress: @escaping @Sendable (Double, String?) -> Void
+    ) async -> StemSeparationResult {
+        let url = request.outputFolderURL.appendingPathComponent("vocals.wav")
+        try? FileManager.default.createDirectory(at: request.outputFolderURL, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: url.path, contents: Data("stem".utf8))
+        onProgress(0.25, "Wrote vocals.wav")
+        lock.withLock { stemURL = url }
+        while !Task.isCancelled && !cancelRequested {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return .canceled
+    }
+
+    func cancel() {
+        lock.withLock { canceled = true }
     }
 }

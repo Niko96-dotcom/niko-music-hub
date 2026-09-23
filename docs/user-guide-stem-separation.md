@@ -24,7 +24,7 @@ If you already installed `demucs-mlx` yourself (for example with `uv tool instal
 3. Choose the output folder. The default is `~/Music/Niko Music Hub/Inbox`.
 4. Click **Start Separation**.
 
-The progress bar and status label show what the backend is doing. You can click **Cancel** to stop the current job. Already-written stem files remain in the output folder.
+The progress bar and status label show what the backend is doing. You can click **Cancel** to stop the current job, press Esc while Stem Separation is showing, or press ⌘. from any tool. Already-written stem files remain in the output folder.
 
 ## Working with results
 
