@@ -266,7 +266,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         if state == .runningScreenCaptureKit {
             state = .failed
             if let diagnostics {
-                pipeline?.abort(error: terminalNoAudioError(diagnostics: diagnostics.snapshot()))
+                pipeline?.endAfterCaptureLoss(error: terminalNoAudioError(diagnostics: diagnostics.snapshot()))
             } else {
                 pipeline?.abort()
             }
@@ -296,7 +296,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         if await startFallback(pipeline: pipeline, diagnostics: diagnostics) { return }
 
         state = .failed
-        pipeline.abort(error: terminalNoAudioError(diagnostics: diagnostics.snapshot()))
+        pipeline.endAfterCaptureLoss(error: terminalNoAudioError(diagnostics: diagnostics.snapshot()))
         onEnded?()
     }
 
@@ -304,7 +304,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         let reasons = failureReasons.joined(separator: "; ")
         return .noAudioCaptured(
             "The recorder tried both system-audio capture methods, but macOS did not deliver audio frames. "
-                + "Start audio playback and try again. Attempts: \(reasons). "
+                + "Start audio playback and try again. If it keeps happening, allow Niko Music Hub in System Settings → Privacy & Security → Screen & System Audio Recording. Attempts: \(reasons). "
                 + "Diagnostics: \(diagnostics.summary)."
         )
     }

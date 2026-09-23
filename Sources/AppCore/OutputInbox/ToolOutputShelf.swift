@@ -66,7 +66,7 @@ public struct ToolOutputShelf: View {
             guard let url = OutputHandoff.dragFileURL(for: item) else {
                 return NSItemProvider()
             }
-            return NSItemProvider(object: url as NSURL)
+            return OutputHandoff.dragItemProvider(for: url)
         }
         .help("Drag into your DAW, or Reveal in Finder")
     }

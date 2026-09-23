@@ -150,7 +150,7 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         guard writer.writtenFrameCount > 0 else {
             let error = RecorderError.noAudioCaptured(
                 "The recorder tried both system-audio capture methods, but macOS did not deliver audio frames. "
-                    + "Start audio playback and try again. Diagnostics: \(snapshot.summary)."
+                    + "Start audio playback and try again. If it keeps happening, allow Niko Music Hub in System Settings → Privacy & Security → Screen & System Audio Recording. Diagnostics: \(snapshot.summary)."
             )
             finalizationState = .failed(error)
             try? FileManager.default.removeItem(at: outputURL)
@@ -167,6 +167,20 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
             try? FileManager.default.removeItem(at: outputURL)
             throw mapped
         }
+    }
+
+    /// Capture ended on its own (route loss with no working fallback). Keep the
+    /// take when audio already reached disk: finalizing caches the result, so the
+    /// follow-up `stop()` hands the recording to the user instead of an error.
+    /// Only an empty take is discarded.
+    func endAfterCaptureLoss(error: RecorderError) {
+        lock.lock()
+        let hasAudio = writer.writtenFrameCount > 0
+        lock.unlock()
+        if hasAudio, (try? finalize()) != nil {
+            return
+        }
+        abort(error: error)
     }
 
     func abort(

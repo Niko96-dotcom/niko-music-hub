@@ -64,7 +64,7 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         independentBackupConfirmed: Bool
     ) -> String {
         if willRemoveActiveCopy {
-            return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. It will then permanently delete the Active Projects folder. Deleted files do not go to the Trash. You can later use Get Local & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
+            return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Get Local & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
         }
         if !independentBackupConfirmed {
             return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. You can later use Get Local & Open from a verified generation."
@@ -111,7 +111,7 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         willRemoveActiveCopy: Bool
     ) -> String {
         if willRemoveActiveCopy {
-            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes the Active Projects folder because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Get Local & Open."
+            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Get Local & Open."
         }
         return "Moving “\(songTitle)” to Done starts a Project Vault archive. The Active Projects folder stays in place. You can change the workflow status later from the card menu or with Edit → Undo."
     }

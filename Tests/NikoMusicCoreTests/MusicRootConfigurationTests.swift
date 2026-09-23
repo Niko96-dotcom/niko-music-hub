@@ -30,6 +30,27 @@ final class MusicRootConfigurationTests: XCTestCase {
         XCTAssertNoThrow(try validator.validate(activeRoot: active, archiveRoot: archive))
     }
 
+    func testValidatorRejectsOverlapThatDiffersOnlyInCase() throws {
+        let base = try makeDirectory("case-overlap")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let active = try makeDirectory("Active", under: base)
+        let vault = try makeDirectory("Vault", under: active)
+        // Same folder on a case-insensitive volume, spelled differently.
+        let recased = base.appendingPathComponent(active.lastPathComponent.uppercased(), isDirectory: true)
+            .appendingPathComponent(vault.lastPathComponent.lowercased(), isDirectory: true)
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: recased.path),
+            "Temporary volume is case-sensitive"
+        )
+        let validator = MusicRootValidator(applicationDataRoots: [])
+
+        XCTAssertThrowsError(try validator.validate(activeRoot: active, archiveRoot: recased)) { error in
+            guard case MusicRootValidationError.rootsOverlap = error else {
+                return XCTFail("Expected rootsOverlap, got \(error)")
+            }
+        }
+    }
+
     func testValidatorRejectsApplicationDataOverlap() throws {
         let base = try makeDirectory("app-data")
         defer { try? FileManager.default.removeItem(at: base) }

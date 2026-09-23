@@ -91,6 +91,17 @@ public struct PathSafety: @unchecked Sendable {
         return true
     }
 
+    /// True when either resolved path equals or contains the other, compared
+    /// case-insensitively. macOS volumes are case-insensitive by default, so
+    /// "/Music/Active" and "/music/active" are the same folder; a byte compare
+    /// would let two Project Vault roots nest inside each other. Folding case can
+    /// only report more overlaps, never fewer, so it is the safe direction.
+    public func resolvedPathsOverlapIgnoringCase(_ lhs: URL, _ rhs: URL) -> Bool {
+        let left = resolvedURLAllowingMissingTail(lhs).path.lowercased()
+        let right = resolvedURLAllowingMissingTail(rhs).path.lowercased()
+        return left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
+    }
+
     private func resolvedURLAllowingMissingTail(_ url: URL) -> URL {
         var existingAncestor = url.standardizedFileURL
         var missingComponents: [String] = []

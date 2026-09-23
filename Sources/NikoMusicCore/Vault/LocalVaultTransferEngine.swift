@@ -165,7 +165,9 @@ public actor LocalVaultTransferEngine {
     ) throws {
         let active = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
         let archive = archiveRoot.standardizedFileURL.resolvingSymlinksInPath()
-        guard !Self.contains(active, archive), !Self.contains(archive, active) else {
+        guard !Self.contains(active, archive),
+              !Self.contains(archive, active),
+              !PathSafety().resolvedPathsOverlapIgnoringCase(active, archive) else {
             throw LocalVaultTransferError.overlappingRoots
         }
         self.activeRoot = active

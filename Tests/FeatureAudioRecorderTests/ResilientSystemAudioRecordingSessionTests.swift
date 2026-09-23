@@ -144,6 +144,31 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(result.diagnostics?.coreAudioRebuildCount, 1)
     }
 
+    func testRouteLossAfterAudioKeepsTheTake() async throws {
+        // Audio is already on disk when the output route changes, and neither the
+        // Core Audio rebuild nor the ScreenCaptureKit fallback can start. The take
+        // must survive: stop() returns it instead of an error and a deleted file.
+        let ended = expectation(description: "capture ended")
+        let first = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [first], fallback: [], debounce: .milliseconds(1))
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await session.start(
+            outputURL: url,
+            preset: .cubaseDefault,
+            maxDuration: nil,
+            onLevel: { _ in },
+            onEnded: { ended.fulfill() }
+        )
+        first.emitRouteChange()
+        await fulfillment(of: [ended], timeout: 2)
+        let result = try await session.stop()
+
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.outputURL.path))
+    }
+
     func testSampleRateChangeRebuildsConverterUsingNewExactSourceFormat() async throws {
         let rebuilt = expectation(description: "48 kHz backend started")
         let first = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))

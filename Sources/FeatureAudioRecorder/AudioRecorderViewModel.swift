@@ -303,7 +303,7 @@ public final class AudioRecorderViewModel: ObservableObject {
                    diagnostics.inputFrameCount == 0 {
                     throw RecorderError.noAudioCaptured(
                         "macOS did not deliver any audio frames to the recorder. "
-                            + "Start audio playback and try again. CoreAudio diagnostics: \(diagnostics.summary)."
+                            + "Start audio playback and try again. If it keeps happening, allow Niko Music Hub in System Settings → Privacy & Security → Screen & System Audio Recording. CoreAudio diagnostics: \(diagnostics.summary)."
                     )
                 }
                 // Frames arrived but nothing was written (a genuine converter/write/WAV-spec

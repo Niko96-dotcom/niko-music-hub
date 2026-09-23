@@ -18,6 +18,9 @@ struct HubSongCommands: Commands {
                 NotificationCenter.default.post(name: .archiveNewSongDraftRequested, object: nil)
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
+            // The draft sheet belongs to the archive pane; from another tool it
+            // would open over a page the user is not looking at.
+            .disabled(songActions == nil)
 
             Divider()
 

@@ -173,9 +173,7 @@ public struct MusicRootValidator: @unchecked Sendable {
     }
 
     private func overlaps(_ lhs: URL, _ rhs: URL) -> Bool {
-        let left = canonical(lhs).path
-        let right = canonical(rhs).path
-        return left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
+        PathSafety().resolvedPathsOverlapIgnoringCase(canonical(lhs), canonical(rhs))
     }
 
     private static func defaultApplicationDataRoots(fileManager: FileManager) -> [URL] {
