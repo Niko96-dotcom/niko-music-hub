@@ -37,7 +37,27 @@ public struct SettingsRepairOutcome: Equatable, Sendable {
     public let resetFields: [String]
     /// Unreadable archive-folder entries that were dropped (the rest are kept).
     public let droppedArchiveFolderCount: Int
+    /// The Keep Local pin list (or the whole Project Vault block) could not
+    /// be read, so removal was paused (emergency stop on, keep-a-copy rule).
+    public let vaultRemovalPaused: Bool
     public let backupURL: URL
+
+    public init(
+        settings: AppSettings,
+        resetFields: [String],
+        droppedArchiveFolderCount: Int,
+        vaultRemovalPaused: Bool = false,
+        backupURL: URL
+    ) {
+        self.settings = settings
+        self.resetFields = resetFields
+        self.droppedArchiveFolderCount = droppedArchiveFolderCount
+        self.vaultRemovalPaused = vaultRemovalPaused
+        self.backupURL = backupURL
+    }
+
+    public static let removalPausedMessage =
+        "Keep Local list couldn't be read — Project Vault removal is paused until you review it."
 
     /// One plain sentence group for the user; never type names or errors.
     public var message: String {
@@ -48,6 +68,9 @@ public struct SettingsRepairOutcome: Equatable, Sendable {
         if droppedArchiveFolderCount > 0 {
             let noun = droppedArchiveFolderCount == 1 ? "archive folder" : "archive folders"
             parts.append("Removed \(droppedArchiveFolderCount) unreadable \(noun).")
+        }
+        if vaultRemovalPaused {
+            parts.append(Self.removalPausedMessage)
         }
         parts.append("A backup was saved.")
         return parts.joined(separator: " ")
@@ -60,15 +83,24 @@ enum SettingsSalvage {
         var settings: AppSettings
         var resetFields: [String]
         var droppedArchiveFolderCount: Int
+        var vaultRemovalPaused = false
     }
 
     static func salvage(_ data: Data) -> Result {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            return Result(settings: .default, resetFields: ["all settings"], droppedArchiveFolderCount: 0)
+            var settings = AppSettings.default
+            settings.vault = pausedVault(VaultSettings())
+            return Result(
+                settings: settings,
+                resetFields: ["all settings"],
+                droppedArchiveFolderCount: 0,
+                vaultRemovalPaused: true
+            )
         }
         var settings = AppSettings.default
         var reset: [String] = []
         var dropped = 0
+        var removalPaused = false
 
         func field<T: Decodable>(_ key: String, _ label: String, _ type: T.Type, _ apply: (T) -> Void) {
             guard let raw = object[key] else { return }
@@ -110,8 +142,12 @@ enum SettingsSalvage {
                 let salvaged = salvageVault(vaultObject)
                 settings.vault = salvaged.vault
                 reset.append(contentsOf: salvaged.resetFields)
+                removalPaused = salvaged.removalPaused
             } else {
+                // The pins and the stop inside it are gone too: pause removal.
                 reset.append("Project Vault settings")
+                settings.vault = pausedVault(VaultSettings())
+                removalPaused = true
             }
         }
 
@@ -123,14 +159,44 @@ enum SettingsSalvage {
         field("showMenuBarExtra", "menu bar icon", Bool.self) { settings.showMenuBarExtra = $0 }
         field("setupAssistantShown", "setup assistant status", Bool.self) { settings.setupAssistantShown = $0 }
 
-        return Result(settings: settings, resetFields: reset, droppedArchiveFolderCount: dropped)
+        return Result(
+            settings: settings,
+            resetFields: reset,
+            droppedArchiveFolderCount: dropped,
+            vaultRemovalPaused: removalPaused
+        )
     }
 
-    /// Keeps each Project Vault sub-field that decodes. Broken ones take their
-    /// safe defaults; a broken free-space rule never becomes removal
-    /// permission, and background archiving pauses whenever anything here was
-    /// reset (the same stance as recovered settings).
-    static func salvageVault(_ object: [String: Any]) -> (vault: VaultSettings, resetFields: [String]) {
+    /// Engages the emergency stop and the keep-a-copy rule: no archiving or
+    /// removal runs until the user reviews Project Vault settings.
+    static func pausedVault(_ vault: VaultSettings) -> VaultSettings {
+        var vault = vault
+        vault.automationEmergencyStop = true
+        vault.automaticArchiving = false
+        vault.setSpaceIntent(.keepCopy)
+        return vault
+    }
+
+    /// Keeps each Project Vault sub-field that decodes. RULE: salvage never
+    /// increases destructive permission. Each unreadable field takes its
+    /// least destructive value:
+    ///
+    /// | field                         | unreadable becomes                          |
+    /// |-------------------------------|---------------------------------------------|
+    /// | isEnabled                     | false (vault off)                           |
+    /// | activeRootID / archiveRootID  | nil (no transfers without a root)           |
+    /// | automaticArchiving            | false                                       |
+    /// | rolloutStage                  | disabled                                    |
+    /// | spaceIntent                   | keepCopy, legacy rollout stepped back       |
+    /// | automationEmergencyStop       | true (stop engaged)                         |
+    /// | independentBackupConfirmed    | false                                       |
+    /// | keepLocalProjectIDs           | readable pins kept + removal paused         |
+    /// | inactivity / free-space / retention days, launchAtLogin, dates |
+    /// |                               | defaults; inert because automatic archiving |
+    /// |                               | is always off after any vault reset          |
+    static func salvageVault(
+        _ object: [String: Any]
+    ) -> (vault: VaultSettings, resetFields: [String], removalPaused: Bool) {
         var vault = VaultSettings()
         var reset: [String] = []
 
@@ -185,8 +251,14 @@ enum SettingsSalvage {
             vault.spaceIntent = VaultSettings.migratedIntent(from: vault.rolloutStage)
         }
 
-        field("automationEmergencyStop", "Project Vault emergency stop", Bool.self) {
-            vault.automationEmergencyStop = $0
+        if let rawStop = object["automationEmergencyStop"] {
+            if let stop = decode(Bool.self, from: rawStop) {
+                vault.automationEmergencyStop = stop
+            } else {
+                // A stuck stop must never be switched off by a repair.
+                vault.automationEmergencyStop = true
+                reset.append("Project Vault emergency stop (turned on)")
+            }
         }
         field("independentBackupConfirmed", "Project Vault backup confirmation", Bool.self) {
             vault.independentBackupConfirmed = $0
@@ -197,25 +269,35 @@ enum SettingsSalvage {
         optionalField("lastRestoreDrillAt", "Project Vault last restore test date", Date.self) {
             vault.lastRestoreDrillAt = $0
         }
+        var removalPaused = false
         if let rawKeepLocal = object["keepLocalProjectIDs"] {
-            if let entries = rawKeepLocal as? [Any] {
-                let ids = entries.compactMap { $0 as? String }
+            let entries = rawKeepLocal as? [Any]
+            let ids = entries?.compactMap { $0 as? String } ?? []
+            if entries == nil || ids.count != entries?.count {
+                // Unpinning a Keep Local project would expose it to removal.
+                // Keep every readable pin, and pause removal until the user
+                // reviews the list (the raw value stays in the backup).
                 vault.keepLocalProjectIDs = Set(ids)
-                if ids.count != entries.count {
-                    reset.append("Project Vault Keep Local list")
-                }
+                removalPaused = true
             } else {
-                reset.append("Project Vault Keep Local list")
+                vault.keepLocalProjectIDs = Set(ids)
             }
         }
 
-        if !reset.isEmpty, vault.automaticArchiving {
+        if removalPaused {
+            let wasArchivingAutomatically = vault.automaticArchiving
+            vault = pausedVault(vault)
+            if wasArchivingAutomatically, !reset.contains("automatic archiving") {
+                reset.append("automatic archiving")
+            }
+        }
+        if (!reset.isEmpty || removalPaused), vault.automaticArchiving {
             vault.automaticArchiving = false
             if !reset.contains("automatic archiving") {
                 reset.append("automatic archiving")
             }
         }
-        return (vault, reset)
+        return (vault, reset, removalPaused)
     }
 
     private static func decode<T: Decodable>(_ type: T.Type, from raw: Any) -> T? {

@@ -93,6 +93,9 @@ extension ArchiveBrowserViewModel {
             persistenceWarningMessage = nil
             statusMessage = combinedStatusMessage(base: statusBaseMessage)
         }
+        // Vault status read while settings were unreadable failed too; re-read
+        // it now so its warning clears without a relaunch.
+        Task { await refreshProjectVaultSnapshots() }
         guard !runtime.usesFixtureRoot else {
             refreshProjectVaultPresentationContext()
             rebuildProjectVaultCatalog()
@@ -125,7 +128,13 @@ extension ArchiveBrowserViewModel {
             needsFirstRunOnboarding = false
             return
         }
-        let completed = (try? settingsStore.loadSettings())?.archiveOnboardingCompleted ?? false
+        // Unreadable settings belong to a returning user: the settings-repair
+        // notice explains the empty archive; never show the new-user sheet.
+        guard let settings = try? settingsStore.loadSettings() else {
+            needsFirstRunOnboarding = false
+            return
+        }
+        let completed = settings.archiveOnboardingCompleted
         let hasDevBootstrap =
             runtime.usesIsolatedSettingsSuite
             ? false

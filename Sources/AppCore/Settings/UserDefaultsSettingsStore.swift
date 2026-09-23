@@ -87,6 +87,7 @@ public struct UserDefaultsSettingsStore: SettingsStore, SettingsRepairing, @unch
                 settings: salvage.settings,
                 resetFields: salvage.resetFields,
                 droppedArchiveFolderCount: salvage.droppedArchiveFolderCount,
+                vaultRemovalPaused: salvage.vaultRemovalPaused,
                 backupURL: backupURL
             )
         }

@@ -202,14 +202,14 @@ struct AppComposition {
         // effects in views' init): brand-new installs see the helper-tool Set
         // Up sheet once. Existing users who already completed archive
         // onboarding never see it automatically.
-        let launchSettings = (try? settingsStore.loadSettings()) ?? .default
-        if !launchSettings.setupAssistantShown,
-           !launchSettings.archiveOnboardingCompleted,
-           !runtime.e2eSmoke,
-           !runtime.usesFixtureRoot,
-           runtime.devArchiveRootURL == nil,
-           runtime.bookmarkProofMode == nil
-        {
+        let runtimeAllowsAutoSetup = !runtime.e2eSmoke
+            && !runtime.usesFixtureRoot
+            && runtime.devArchiveRootURL == nil
+            && runtime.bookmarkProofMode == nil
+        if HubFirstLaunchSetupPolicy.shouldPresentSetup(
+            store: settingsStore,
+            runtimeAllowsAutoSetup: runtimeAllowsAutoSetup
+        ) {
             shellSession.presentSetup()
             try? settingsStore.updateSettings { $0.setupAssistantShown = true }
             // The setup sheet has its own Music Archive row, so the archive

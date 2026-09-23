@@ -21,8 +21,7 @@ extension ArchiveBrowserViewModel {
         } catch {
             // Recovery must not treat an unreadable transfer journal as empty.
             // Preserve the current presentation and show the persistence fault.
-            recordPersistenceWarning("Project Vault records could not be read: \(error.localizedDescription)")
-            diagnostics.log(.error, "Project Vault recovery preflight failed: \(error)")
+            recordProjectVaultReadFailure(error, context: "Project Vault recovery preflight failed")
             return
         }
         await projectVaultRuntime.recoverAtLaunch()
@@ -193,7 +192,7 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
-            if persistenceWarningMessage?.hasPrefix("Project Vault records could not be read:") == true {
+            if persistenceWarningMessage == Self.projectVaultReadFailureMessage {
                 persistenceWarningMessage = nil
                 statusMessage = combinedStatusMessage(base: statusBaseMessage)
             }
@@ -220,10 +219,21 @@ extension ArchiveBrowserViewModel {
             return false
         } catch {
             cancelProjectVaultRecovery()
-            diagnostics.log(.error, "Project Vault state refresh failed: \(error)")
-            recordPersistenceWarning("Project Vault records could not be read: \(error.localizedDescription)")
+            recordProjectVaultReadFailure(error, context: "Project Vault state refresh failed")
             return false
         }
+    }
+
+    static let projectVaultReadFailureMessage = "Project Vault status couldn't be read. Nothing was changed."
+
+    /// Plain footer copy for an unreadable Vault state; the technical detail
+    /// goes to diagnostics only. While settings themselves are unreadable the
+    /// Vault read fails for that reason, and the settings-repair notice
+    /// already explains it, so nothing is added here.
+    func recordProjectVaultReadFailure(_ error: any Error, context: String) {
+        diagnostics.log(.error, "\(context): \(error)")
+        if (try? settingsStore.loadSettings()) == nil { return }
+        recordPersistenceWarning(Self.projectVaultReadFailureMessage)
     }
 
     func scheduleProjectVaultRecovery() async {

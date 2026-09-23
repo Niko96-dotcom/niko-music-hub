@@ -1621,8 +1621,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let recoveryCalls = await runtime.recoveryCallCount()
         XCTAssertEqual(recoveryCalls, 0)
-        XCTAssertTrue(viewModel.persistenceWarningMessage?.contains("Project Vault records could not be read") == true)
-        XCTAssertTrue(viewModel.statusMessage?.contains("injected journal read failure") == true)
+        XCTAssertEqual(viewModel.persistenceWarningMessage, "Project Vault status couldn't be read. Nothing was changed.")
+        XCTAssertFalse(viewModel.statusMessage?.contains("injected journal read failure") == true, "raw errors stay in diagnostics")
     }
 
     func testDoneProjectWithPersistedFailedTransferIsNotAutomaticallyRequeued() async throws {
@@ -1741,7 +1741,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(status.hasPrefix(
             "Project Vault retry completed, but the current Vault state could not be refreshed. Review before taking another action."
         ))
-        XCTAssertTrue(status.contains("Project Vault records could not be read:"))
+        XCTAssertTrue(status.contains("Project Vault status couldn't be read. Nothing was changed."))
     }
 
     func testFailedRetryRefreshesRecoveryRequiredPresentation() async throws {
