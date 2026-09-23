@@ -31,6 +31,7 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
     private var converterSourceFormat: AVAudioFormat?
     private var acceptedGeneration = 0
     private var finalizationState: FinalizationState = .active
+    private var capturedNonZeroSample = false
 
     init(
         outputURL: URL,
@@ -124,6 +125,9 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
             return false
         }
         diagnostics.setWrittenFrameCount(writer.writtenFrameCount)
+        if !capturedNonZeroSample, Self.containsNonZeroSample(buffer) {
+            capturedNonZeroSample = true
+        }
         let level = RecorderAudioLevel(
             peak: Self.meterPeak(from: buffer),
             average: Self.meterAverage(from: buffer),
@@ -181,6 +185,53 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
             return
         }
         abort(error: error)
+    }
+
+    /// True until a written buffer carried at least one nonzero sample. A take that is
+    /// exact digital silence is what a Core Audio tap delivers when macOS withholds
+    /// system-audio capture, and also what it delivers when nothing is playing.
+    var containsOnlyDigitalSilence: Bool {
+        lock.withLock { !capturedNonZeroSample }
+    }
+
+    /// Discards the take only when it holds no nonzero sample, whatever its finalization
+    /// state; returns false (and keeps the file) as soon as any real audio was written.
+    @discardableResult
+    func discardDigitallySilentTake(error: RecorderError) -> Bool {
+        lock.lock()
+        guard !capturedNonZeroSample else {
+            lock.unlock()
+            return false
+        }
+        finalizationState = .failed(error)
+        lock.unlock()
+        try? FileManager.default.removeItem(at: outputURL)
+        return true
+    }
+
+    /// Scans the valid frames byte-for-byte. Integer and float PCM silence is all-zero
+    /// bytes; a format this cannot vouch for counts as audio so it never looks silent.
+    static func containsNonZeroSample(_ buffer: AVAudioPCMBuffer) -> Bool {
+        let format = buffer.format
+        switch format.commonFormat {
+        case .pcmFormatFloat32, .pcmFormatFloat64, .pcmFormatInt16, .pcmFormatInt32:
+            break
+        default:
+            return true
+        }
+        let bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
+        let validBytes = Int(buffer.frameLength) * bytesPerFrame
+        guard validBytes > 0 else { return false }
+        let buffers = UnsafeMutableAudioBufferListPointer(
+            UnsafeMutablePointer(mutating: buffer.audioBufferList)
+        )
+        for audioBuffer in buffers {
+            guard let data = audioBuffer.mData else { continue }
+            let count = min(validBytes, Int(audioBuffer.mDataByteSize))
+            let bytes = UnsafeRawBufferPointer(start: data, count: count)
+            if bytes.contains(where: { $0 != 0 }) { return true }
+        }
+        return false
     }
 
     func abort(

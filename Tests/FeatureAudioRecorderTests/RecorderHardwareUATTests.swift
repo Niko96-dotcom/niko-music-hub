@@ -112,6 +112,26 @@ final class RecorderHardwareUATTests: XCTestCase {
                 + "backend=\(backend) peak=\(peak) diagnostics=\(diagnostics)"
         )
     }
+
+    /// Host-only: toggle the test host's System Audio Recording grant, then set
+    /// RECORDER_PERMISSION_PROBE_EXPECT=authorized|blocked to check the live verdict.
+    func testLivePermissionProbeVerdict() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["RECORDER_PERMISSION_PROBE_UAT"] == "1" else {
+            throw XCTSkip("Set RECORDER_PERMISSION_PROBE_UAT=1 to run the live system-audio permission probe")
+        }
+        let outcome = await SystemAudioCapturePermissionProbe().probe()
+        let verdict = outcome.verdict
+        print(
+            "RECORDER_PERMISSION_PROBE_UAT verdict=\(verdict) stage=\(outcome.stage) "
+                + "evidence=\(outcome.evidence)"
+        )
+        switch environment["RECORDER_PERMISSION_PROBE_EXPECT"] {
+        case "authorized": XCTAssertEqual(verdict, .authorized)
+        case "blocked": XCTAssertEqual(verdict, .blocked)
+        default: break
+        }
+    }
 }
 
 private final class AlwaysFailingCoreBackend: RecorderCaptureBackend, Sendable {

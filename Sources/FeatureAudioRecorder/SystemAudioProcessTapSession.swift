@@ -39,6 +39,14 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     private var generation = 0
     private var running = false
     private var propertyRegistrations: [PropertyRegistration] = []
+    private let makeTapDescription: @Sendable () -> CATapDescription
+
+    /// The recorder taps every process; the permission probe taps only this process.
+    init(makeTapDescription: @escaping @Sendable () -> CATapDescription = {
+        SystemAudioTapConfiguration.makeGlobalTapDescription()
+    }) {
+        self.makeTapDescription = makeTapDescription
+    }
 
     deinit { tearDown() }
 
@@ -126,7 +134,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func createProcessTap() throws -> (id: AudioObjectID, uid: String) {
-        let description = SystemAudioTapConfiguration.makeGlobalTapDescription()
+        let description = makeTapDescription()
         description.uuid = UUID()
         var id = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateProcessTap(description, &id)

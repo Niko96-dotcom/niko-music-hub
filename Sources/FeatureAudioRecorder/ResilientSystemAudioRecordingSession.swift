@@ -51,6 +51,9 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
     private var failureReasons: [String] = []
     private var cancelled = false
     private var onEnded: (@Sendable () -> Void)?
+    private let permissionProbe: @Sendable () async -> SystemAudioCapturePermissionVerdict
+    /// A backend's start failed with an explicit authorization error (ScreenCaptureKit).
+    private var backendReportedPermissionDenial = false
 
     init(
         configuration: RecorderRecoveryConfiguration = RecorderRecoveryConfiguration(),
@@ -59,11 +62,15 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         },
         screenCaptureKitFactory: @escaping @Sendable () -> any RecorderCaptureBackend = {
             ScreenCaptureKitAudioSession()
+        },
+        permissionProbe: @escaping @Sendable () async -> SystemAudioCapturePermissionVerdict = {
+            await SystemAudioCapturePermissionProbe().run()
         }
     ) {
         self.configuration = configuration
         self.coreAudioFactory = coreAudioFactory
         self.screenCaptureKitFactory = screenCaptureKitFactory
+        self.permissionProbe = permissionProbe
     }
 
     func start(
@@ -86,6 +93,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         self.onEnded = onEnded
         cancelled = false
         failureReasons = []
+        backendReportedPermissionDenial = false
 
         if await startCoreAudioAttempt(pipeline: newPipeline, diagnostics: newDiagnostics) { return }
         try Task.checkCancellation()
@@ -102,6 +110,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
 
         state = .failed
         newPipeline.abort()
+        if await captureIsBlockedByPermission() { throw RecorderError.permissionDenied }
         throw terminalNoAudioError(diagnostics: newDiagnostics.snapshot())
     }
 
@@ -127,6 +136,16 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         routeRecoveryTask = nil
         await currentBackend?.stop()
         currentBackend = nil
+        // A denied tap looks exactly like nothing playing: exact zeros. Only a take with
+        // no nonzero sample is ever examined, and it is discarded only on a proven block.
+        if pipeline.containsOnlyDigitalSilence,
+           await captureIsBlockedByPermission(),
+           pipeline.discardDigitallySilentTake(error: .permissionDenied) {
+            state = .failed
+            readinessGate = nil
+            onEnded = nil
+            throw RecorderError.permissionDenied
+        }
         do {
             let result = try pipeline.finalize()
             state = .completed
@@ -196,6 +215,9 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         do {
             try await backend.start(generation: backendGeneration, callbacks: callbacks)
         } catch {
+            if (error as? RecorderError) == .permissionDenied {
+                backendReportedPermissionDenial = true
+            }
             failureReasons.append("\(backend.identity.rawValue) start: \(error.localizedDescription)")
             await backend.stop()
             return false
@@ -298,6 +320,13 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         state = .failed
         pipeline.endAfterCaptureLoss(error: terminalNoAudioError(diagnostics: diagnostics.snapshot()))
         onEnded?()
+    }
+
+    /// Explicit backend authorization failures win; otherwise ask the probe, whose only
+    /// positive answer is proof that macOS zeroes this process's own tapped audio.
+    private func captureIsBlockedByPermission() async -> Bool {
+        if backendReportedPermissionDenial { return true }
+        return await permissionProbe() == .blocked
     }
 
     private func terminalNoAudioError(diagnostics: RecorderDiagnostics) -> RecorderError {

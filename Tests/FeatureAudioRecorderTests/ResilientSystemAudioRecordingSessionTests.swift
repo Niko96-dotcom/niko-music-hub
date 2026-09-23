@@ -359,18 +359,264 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(viewModel.recordingState, RecordingDisplayState.idle)
     }
 
+    // MARK: - System-audio permission diagnosis
+
+    func testDigitallySilentTakeWithBlockedProbeThrowsPermissionDeniedAndDiscardsFile() async throws {
+        let probe = PermissionProbeStub(.blocked)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await start(session, url: url)
+        do {
+            _ = try await session.stop()
+            XCTFail("A proven tap block must not be saved as a silent recording")
+        } catch RecorderError.permissionDenied {
+            // expected
+        }
+
+        XCTAssertEqual(probe.callCount, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testDigitallySilentTakeWithAuthorizedProbeKeepsTheSilentRecording() async throws {
+        // Nothing playing with permission granted: exact zeros, but the probe hears its tone.
+        let probe = PermissionProbeStub(.authorized)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await start(session, url: url)
+        let result = try await session.stop()
+
+        XCTAssertEqual(probe.callCount, 1)
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testDigitallySilentTakeWithInconclusiveProbeKeepsTheSilentRecording() async throws {
+        let probe = PermissionProbeStub(.inconclusive)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await start(session, url: url)
+        let result = try await session.stop()
+
+        XCTAssertEqual(probe.callCount, 1)
+        XCTAssertGreaterThan(result.frameCount, 0)
+    }
+
+    func testAudibleTakeIsKeptWithoutConsultingTheProbe() async throws {
+        let probe = PermissionProbeStub(.blocked)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .audible(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await start(session, url: url)
+        let result = try await session.stop()
+
+        XCTAssertEqual(probe.callCount, 0)
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testAudioAfterLeadingSilenceIsKeptWithoutConsultingTheProbe() async throws {
+        let probe = PermissionProbeStub(.blocked)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await start(session, url: url)
+        core.emitPCM(frames: 256, amplitude: 0.1)
+        let result = try await session.stop()
+
+        XCTAssertEqual(probe.callCount, 0)
+        XCTAssertEqual(result.frameCount, 512)
+    }
+
+    func testRouteLossAfterAudibleAudioKeepsTheTakeEvenWhenProbeWouldBlock() async throws {
+        let ended = expectation(description: "capture ended")
+        let probe = PermissionProbeStub(.blocked)
+        let first = FakeRecorderBackend(identity: .coreAudio, behavior: .audible(sampleRate: 44_100))
+        let session = makeSession(core: [first], fallback: [], debounce: .milliseconds(1), probe: probe)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await session.start(
+            outputURL: url,
+            preset: .cubaseDefault,
+            maxDuration: nil,
+            onLevel: { _ in },
+            onEnded: { ended.fulfill() }
+        )
+        first.emitRouteChange()
+        await fulfillment(of: [ended], timeout: 2)
+        let result = try await session.stop()
+
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.outputURL.path))
+        XCTAssertEqual(probe.callCount, 0)
+    }
+
+    func testScreenCaptureKitPermissionDenialSurfacesAsPermissionDenied() async throws {
+        let session = makeSession(
+            core: [
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData),
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData)
+            ],
+            fallback: [FakeRecorderBackend(identity: .screenCaptureKit, behavior: .permissionDenied)],
+            probe: PermissionProbeStub(.inconclusive)
+        )
+        let url = temporaryWAV()
+
+        do {
+            try await start(session, url: url)
+            XCTFail("Expected the fallback's authorization failure")
+        } catch RecorderError.permissionDenied {
+            // expected
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testTerminalNoAudioWithBlockedProbeSurfacesAsPermissionDenied() async throws {
+        let probe = PermissionProbeStub(.blocked)
+        let session = makeSession(
+            core: [
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData),
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData)
+            ],
+            fallback: [FakeRecorderBackend(identity: .screenCaptureKit, behavior: .structuralNoData)],
+            probe: probe
+        )
+        let url = temporaryWAV()
+
+        do {
+            try await start(session, url: url)
+            XCTFail("Expected a permission failure")
+        } catch RecorderError.permissionDenied {
+            // expected
+        }
+        XCTAssertEqual(probe.callCount, 1)
+    }
+
+    func testTerminalNoAudioWithInconclusiveProbeStaysNoAudioCaptured() async throws {
+        let probe = PermissionProbeStub(.inconclusive)
+        let session = makeSession(
+            core: [
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData),
+                FakeRecorderBackend(identity: .coreAudio, behavior: .structuralNoData)
+            ],
+            fallback: [FakeRecorderBackend(identity: .screenCaptureKit, behavior: .structuralNoData)],
+            probe: probe
+        )
+        let url = temporaryWAV()
+
+        do {
+            try await start(session, url: url)
+            XCTFail("Expected terminal no-audio failure")
+        } catch RecorderError.noAudioCaptured {
+            // expected: a route failure, not a permission claim
+        }
+        XCTAssertEqual(probe.callCount, 1)
+    }
+
+    @MainActor
+    func testBlockedTapReachesThePermissionCard() async throws {
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100)),
+            probe: PermissionProbeStub(.blocked)
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await recordAndStop(viewModel)
+
+        XCTAssertEqual(viewModel.recordingState, .permissionNeeded)
+        XCTAssertEqual(try inbox.listItems().count, 0)
+    }
+
+    @MainActor
+    func testSilenceWithNothingPlayingDoesNotReachThePermissionCard() async throws {
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100)),
+            probe: PermissionProbeStub(.authorized)
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await recordAndStop(viewModel)
+
+        XCTAssertEqual(viewModel.recordingState, .idle)
+        XCTAssertEqual(try inbox.listItems().count, 1)
+    }
+
+    @MainActor
+    func testGenuineAudioIsSavedEvenWhenTheProbeWouldBlock() async throws {
+        let probe = PermissionProbeStub(.blocked)
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: FakeRecorderBackend(identity: .coreAudio, behavior: .audible(sampleRate: 44_100)),
+            probe: probe
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await recordAndStop(viewModel)
+
+        XCTAssertEqual(viewModel.recordingState, .idle)
+        XCTAssertEqual(try inbox.listItems().count, 1)
+        XCTAssertEqual(probe.callCount, 0)
+    }
+
+    @MainActor
+    private func makeViewModel(
+        core: FakeRecorderBackend,
+        probe: PermissionProbeStub
+    ) throws -> (AudioRecorderViewModel, RecordingInboxStore, URL) {
+        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let adapter = CoreAudioTapAdapter(sessionFactory: { session })
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("permission-card-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let inbox = RecordingInboxStore()
+        let viewModel = AudioRecorderViewModel(
+            capturePort: adapter,
+            useCase: RecordSystemAudioUseCase(capturePort: adapter),
+            outputURL: directory,
+            outputInboxStore: inbox
+        )
+        return (viewModel, inbox, directory)
+    }
+
+    @MainActor
+    private func recordAndStop(_ viewModel: AudioRecorderViewModel) async throws {
+        let recording = expectation(description: "view model is recording")
+        var cancellable: AnyCancellable?
+        cancellable = viewModel.$recordingState.sink { state in
+            if state == .recording { recording.fulfill() }
+        }
+        await viewModel.startRecording()
+        await fulfillment(of: [recording], timeout: 1)
+        cancellable?.cancel()
+        await viewModel.stopRecording()
+    }
+
     private func makeSession(
         core: [FakeRecorderBackend],
         fallback: [FakeRecorderBackend],
         timeout: Duration = .milliseconds(20),
-        debounce: Duration = .milliseconds(5)
+        debounce: Duration = .milliseconds(5),
+        probe: PermissionProbeStub = PermissionProbeStub(.authorized)
     ) -> ResilientSystemAudioRecordingSession {
         let coreQueue = BackendFactoryQueue(backends: core)
         let fallbackQueue = BackendFactoryQueue(backends: fallback)
         return ResilientSystemAudioRecordingSession(
             configuration: RecorderRecoveryConfiguration(startupTimeout: timeout, routeDebounce: debounce),
             coreAudioFactory: { coreQueue.next(identity: .coreAudio) },
-            screenCaptureKitFactory: { fallbackQueue.next(identity: .screenCaptureKit) }
+            screenCaptureKitFactory: { fallbackQueue.next(identity: .screenCaptureKit) },
+            permissionProbe: { probe.run() }
         )
     }
 
@@ -407,9 +653,11 @@ private final class BackendFactoryQueue: @unchecked Sendable {
 private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBackend {
     enum Behavior {
         case healthy(sampleRate: Double, frames: AVAudioFrameCount = 256)
+        case audible(sampleRate: Double, frames: AVAudioFrameCount = 256)
         case structuralNoData
         case waitForExternalPCM
         case startFailure
+        case permissionDenied
     }
 
     let identity: RecorderCaptureBackendIdentity
@@ -448,12 +696,17 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
         case .healthy(let rate, let frames):
             emitPCM(sampleRate: rate, frames: frames)
             onPCM()
+        case .audible(let rate, let frames):
+            emitPCM(sampleRate: rate, frames: frames, amplitude: 0.25)
+            onPCM()
         case .structuralNoData:
             callbacks.onStructuralNoData(generation)
         case .waitForExternalPCM:
             break
         case .startFailure:
             throw RecorderError.apiError("forced backend start failure")
+        case .permissionDenied:
+            throw RecorderError.permissionDenied
         }
     }
 
@@ -465,7 +718,7 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
         lock.withLock { callbacks }?.onRouteChange()
     }
 
-    func emitPCM(sampleRate: Double = 44_100, frames: AVAudioFrameCount = 256) {
+    func emitPCM(sampleRate: Double = 44_100, frames: AVAudioFrameCount = 256, amplitude: Float = 0) {
         let snapshot = lock.withLock { (generation, callbacks) }
         guard let callbacks = snapshot.1,
               let format = AVAudioFormat(
@@ -477,6 +730,11 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)
         else { return }
         buffer.frameLength = frames // zero-valued storage is genuine silent PCM.
+        if amplitude != 0, let channels = buffer.floatChannelData {
+            for channel in 0..<2 {
+                for frame in 0..<Int(frames) { channels[channel][frame] = amplitude }
+            }
+        }
         let bytes = Int64(frames) * Int64(format.streamDescription.pointee.mBytesPerFrame) * 2
         callbacks.onMetadata(RecorderBackendMetadata(
             outputDeviceUID: identity.rawValue,
@@ -484,6 +742,24 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
             sourceChannelCount: 2
         ))
         _ = callbacks.onPCM(snapshot.0, format, buffer, bytes)
+    }
+}
+
+/// Stands in for the live tap probe; counts how often the session asks.
+final class PermissionProbeStub: @unchecked Sendable {
+    private let lock = NSLock()
+    private let verdict: SystemAudioCapturePermissionVerdict
+    private var calls = 0
+
+    init(_ verdict: SystemAudioCapturePermissionVerdict) { self.verdict = verdict }
+
+    var callCount: Int { lock.withLock { calls } }
+
+    func run() -> SystemAudioCapturePermissionVerdict {
+        lock.withLock {
+            calls += 1
+            return verdict
+        }
     }
 }
 

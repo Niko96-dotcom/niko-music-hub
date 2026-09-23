@@ -1,4 +1,5 @@
 @preconcurrency import AVFAudio
+import CoreGraphics
 @preconcurrency import CoreMedia
 import Foundation
 @preconcurrency import ScreenCaptureKit
@@ -16,6 +17,33 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
     private var stopping = false
 
     func start(generation: Int, callbacks: RecorderBackendCallbacks) async throws {
+        do {
+            try await startCapture(generation: generation, callbacks: callbacks)
+        } catch let error as RecorderError {
+            throw error
+        } catch {
+            if Self.isCapturePermissionFailure(error) { throw RecorderError.permissionDenied }
+            throw error
+        }
+    }
+
+    /// ScreenCaptureKit reports a refused Screen & System Audio Recording grant as
+    /// `SCStreamError.userDeclined`. Any other ScreenCaptureKit failure counts as a
+    /// permission failure only when the public preflight also says access is missing;
+    /// the preflight never gates a start, so a stale answer cannot block a working capture.
+    static func isCapturePermissionFailure(
+        _ error: any Error,
+        screenCaptureAccessGranted: () -> Bool = { CGPreflightScreenCaptureAccess() }
+    ) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == SCStreamErrorDomain,
+           nsError.code == SCStreamError.Code.userDeclined.rawValue {
+            return true
+        }
+        return !screenCaptureAccessGranted()
+    }
+
+    private func startCapture(generation: Int, callbacks: RecorderBackendCallbacks) async throws {
         let content = try await SCShareableContent.current
         guard let display = content.displays.first else {
             throw RecorderError.apiError("ScreenCaptureKit found no display to anchor system-audio capture")

@@ -136,7 +136,10 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         // CoreAudio process taps use the system-audio capture privacy prompt
         // (`NSAudioCaptureUsageDescription`). Apple does not expose a public
         // preflight/request API for that permission, so the first real
-        // `AudioDeviceStart` is what requests it.
+        // `AudioDeviceStart` is what requests it. A denied tap still starts and
+        // delivers exact zeros; ResilientSystemAudioRecordingSession diagnoses that
+        // after the fact (SystemAudioCapturePermissionProbe) and throws
+        // `RecorderError.permissionDenied`, which lands on the permission card.
         return .authorized
     }
 
