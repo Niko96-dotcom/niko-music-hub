@@ -279,6 +279,8 @@ final class FakeProbeTap: SystemAudioCaptureProbeTap, @unchecked Sendable {
         lock.withLock { emitter = task }
     }
 
+    func abandon() { scenario.log("tap.abandon") }
+
     /// Logs when teardown begins; the mute only ends once teardown returns.
     func stop() async {
         scenario.log("tap.stop")

@@ -63,6 +63,9 @@ enum SystemAudioCaptureProbeTapEvent: Sendable {
 protocol SystemAudioCaptureProbeTap: AnyObject, Sendable {
     func start(onEvent: @escaping @Sendable (SystemAudioCaptureProbeTapEvent) -> Void) async throws
     func stop() async
+    /// The probe gave up (deadline or cancellation) before the tone started. Callable from
+    /// any thread; must lift the mute without waiting for a start that may be stuck.
+    func abandon()
 }
 
 /// The reference tone. `prepare` builds the graph without rendering anything; `start`
@@ -111,27 +114,41 @@ struct SystemAudioCapturePermissionProbe: Sendable {
     func probe() async -> Outcome {
         let recorder = ProbeEvidenceRecorder()
         let gate = ProbeOutcomeGate()
-        // Not awaited: after a deadline it only finishes cleanup, and it re-checks
-        // `gate.isResolved` before it would ever start the tone.
+        let latch = ProbeToneLatch()
+        let tap = makeTap()
+        // Not awaited: after a deadline it only finishes cleanup, and the latch stops it
+        // from ever starting the tone.
         Task.detached { [self] in
-            await observe(recorder: recorder, gate: gate)
+            await observe(tap: tap, latch: latch, recorder: recorder, gate: gate)
+        }
+        // Giving up before the tone started lifts the mute at once, even while a HAL
+        // call inside the tap's start is stuck. Once the tone runs, the tap is already
+        // up, so `observe` stops the tone and then the tap itself.
+        let giveUp: @Sendable (String) -> Void = { stage in
+            gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: stage))
+            if latch.abandonUnlessToneStarted() { tap.abandon() }
         }
         let deadline = timing.deadline
         let timer = Task.detached {
             try? await Task.sleep(for: deadline)
             guard !Task.isCancelled else { return }
-            gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: "deadline"))
+            giveUp("deadline")
         }
         let outcome = await withTaskCancellationHandler {
             await gate.wait()
         } onCancel: {
-            gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: "cancelled"))
+            giveUp("cancelled")
         }
         timer.cancel()
         return outcome
     }
 
-    private func observe(recorder: ProbeEvidenceRecorder, gate: ProbeOutcomeGate) async {
+    private func observe(
+        tap: any SystemAudioCaptureProbeTap,
+        latch: ProbeToneLatch,
+        recorder: ProbeEvidenceRecorder,
+        gate: ProbeOutcomeGate
+    ) async {
         func conclude(_ verdict: SystemAudioCapturePermissionVerdict, _ stage: String) {
             gate.resolve(Outcome(verdict: verdict, evidence: recorder.snapshot(), stage: stage))
         }
@@ -143,7 +160,6 @@ struct SystemAudioCapturePermissionProbe: Sendable {
             return conclude(.inconclusive, "tone prepare: \(error.localizedDescription)")
         }
 
-        let tap = makeTap()
         do {
             try await tap.start(onEvent: { recorder.record($0) })
         } catch {
@@ -162,7 +178,7 @@ struct SystemAudioCapturePermissionProbe: Sendable {
             await tap.stop()
             return
         }
-        guard recorder.tapDeliveredPCM, !gate.isResolved else {
+        guard recorder.tapDeliveredPCM, !gate.isResolved, latch.beginTone() else {
             conclude(.inconclusive, "tap delivered no audio")
             await tap.stop()
             return
@@ -237,6 +253,29 @@ private final class ProbeEvidenceRecorder: @unchecked Sendable {
     }
 }
 
+/// Decides, atomically, between "the tone starts" and "the probe gave up first".
+private final class ProbeToneLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var toneStarted = false
+    private var abandoned = false
+
+    func beginTone() -> Bool {
+        lock.withLock {
+            guard !abandoned else { return false }
+            toneStarted = true
+            return true
+        }
+    }
+
+    func abandonUnlessToneStarted() -> Bool {
+        lock.withLock {
+            guard !toneStarted else { return false }
+            abandoned = true
+            return true
+        }
+    }
+}
+
 /// One-shot result: the first of verdict, deadline, or cancellation wins.
 private final class ProbeOutcomeGate: @unchecked Sendable {
     private let lock = NSLock()
@@ -267,26 +306,49 @@ private final class ProbeOutcomeGate: @unchecked Sendable {
     }
 }
 
-/// Live muted tap of this process. HAL calls run on a private serial queue so a stuck
-/// call occupies that queue, never a Swift concurrency thread, and a late start is always
-/// followed by its stop.
+/// Live muted tap of this process. Every blocking HAL call, including the PID lookup,
+/// runs on a private serial queue, so a stuck call occupies that queue, never a Swift
+/// concurrency thread, and a late start is always followed by its stop. `abandon` lifts
+/// the mute from another queue without waiting for that stuck call.
 final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable {
+    private static let queueKey = DispatchSpecificKey<Bool>()
     private let queue = DispatchQueue(label: "NikoMusicHub.SystemAudioCapturePermissionProbe.tap")
     private let lock = NSLock()
     private var session: SystemAudioProcessTapSession?
+    private var abandoned = false
+    private let lookupProcessObject: @Sendable () -> AudioObjectID?
+    private let makeSession: @Sendable (AudioObjectID) -> SystemAudioProcessTapSession
+
+    init(
+        lookupProcessObject: @escaping @Sendable () -> AudioObjectID? = { MutedSelfProcessTap.currentProcessObject() },
+        makeSession: @escaping @Sendable (AudioObjectID) -> SystemAudioProcessTapSession = { processObject in
+            SystemAudioProcessTapSession(makeTapDescription: {
+                let description = CATapDescription(stereoMixdownOfProcesses: [processObject])
+                description.name = "NikoMusicHub-PermissionProbe"
+                description.isPrivate = true
+                description.muteBehavior = CATapMuteBehavior.muted
+                return description
+            })
+        }
+    ) {
+        self.lookupProcessObject = lookupProcessObject
+        self.makeSession = makeSession
+        queue.setSpecific(key: Self.queueKey, value: true)
+    }
+
+    /// True on this type's private HAL queue, where every blocking Core Audio call belongs.
+    static var isOnTapQueue: Bool { DispatchQueue.getSpecific(key: queueKey) == true }
+
+    func abandon() {
+        let session = lock.withLock { () -> SystemAudioProcessTapSession? in
+            abandoned = true
+            return self.session
+        }
+        guard let session else { return } // A start that has not built its session never will.
+        DispatchQueue.global(qos: .userInitiated).async { session.releaseMute() }
+    }
 
     func start(onEvent: @escaping @Sendable (SystemAudioCaptureProbeTapEvent) -> Void) async throws {
-        guard let processObject = Self.currentProcessObject() else {
-            throw RecorderError.apiError("This process has no Core Audio process object")
-        }
-        let session = SystemAudioProcessTapSession(makeTapDescription: {
-            let description = CATapDescription(stereoMixdownOfProcesses: [processObject])
-            description.name = "NikoMusicHub-PermissionProbe"
-            description.isPrivate = true
-            description.muteBehavior = CATapMuteBehavior.muted
-            return description
-        })
-        lock.withLock { self.session = session }
         let callbacks = RecorderBackendCallbacks(
             onPCM: { _, format, buffer, _ in
                 onEvent(.pcm(
@@ -301,15 +363,31 @@ final class MutedSelfProcessTap: SystemAudioCaptureProbeTap, @unchecked Sendable
             onFailure: { _ in }
         )
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            queue.async {
+            queue.async { [self] in
                 do {
-                    try session.startSynchronously(generation: 1, callbacks: callbacks)
+                    try startOnQueue(callbacks: callbacks)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }
+    }
+
+    private func startOnQueue(callbacks: RecorderBackendCallbacks) throws {
+        let abandonedError = RecorderError.apiError("Permission probe gave up before the tap started")
+        guard !lock.withLock({ abandoned }) else { throw abandonedError }
+        guard let processObject = lookupProcessObject() else {
+            throw RecorderError.apiError("This process has no Core Audio process object")
+        }
+        let session = makeSession(processObject)
+        let admitted = lock.withLock { () -> Bool in
+            guard !abandoned else { return false }
+            self.session = session
+            return true
+        }
+        guard admitted else { throw abandonedError }
+        try session.startSynchronously(generation: 1, callbacks: callbacks)
     }
 
     func stop() async {

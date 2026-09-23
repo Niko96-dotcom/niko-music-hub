@@ -30,7 +30,9 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     private let lifecycleLock = NSRecursiveLock()
     private let ioQueue = DispatchQueue(label: "NikoMusicHub.SystemAudioProcessTapSession.io", qos: .userInitiated)
     private let listenerQueue = DispatchQueue(label: "NikoMusicHub.SystemAudioProcessTapSession.listeners")
-    private var tapID: AudioObjectID = kAudioObjectUnknown
+    /// Published the moment the tap exists (it mutes from creation), outside
+    /// `lifecycleLock`, so `releaseMute` never waits for a stuck HAL call.
+    private let tapObject = ProcessTapObjectCell()
     private var aggregateDeviceID: AudioObjectID = kAudioObjectUnknown
     private var anchorDeviceID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
@@ -40,12 +42,17 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     private var running = false
     private var propertyRegistrations: [PropertyRegistration] = []
     private let makeTapDescription: @Sendable () -> CATapDescription
+    private let hal: SystemAudioTapHAL
 
     /// The recorder taps every process; the permission probe taps only this process.
-    init(makeTapDescription: @escaping @Sendable () -> CATapDescription = {
-        SystemAudioTapConfiguration.makeGlobalTapDescription()
-    }) {
+    init(
+        makeTapDescription: @escaping @Sendable () -> CATapDescription = {
+            SystemAudioTapConfiguration.makeGlobalTapDescription()
+        },
+        hal: SystemAudioTapHAL = .live
+    ) {
         self.makeTapDescription = makeTapDescription
+        self.hal = hal
     }
 
     deinit { tearDown() }
@@ -64,13 +71,17 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
 
         do {
             let processTap = try createProcessTap()
-            tapID = processTap.id
+            guard tapObject.publish(processTap.id) else {
+                hal.destroyProcessTap(processTap.id)
+                throw Self.muteReleasedError
+            }
             let outputDevice = try readDefaultSystemOutputDevice()
             anchorDeviceID = outputDevice.id
             aggregateDeviceID = try createAggregateDevice(
                 tapUID: processTap.uid,
                 outputDeviceUID: outputDevice.uid
             )
+            try throwIfMuteReleased()
             // kAudioTapPropertyFormat describes the mixer's format (48 kHz here even
             // when the speakers run at 44.1 kHz), but the IO proc runs on the
             // aggregate's clock, i.e. its main sub-device, and drift compensation
@@ -78,7 +89,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             // rate made every recording on a 44.1 kHz device play 8.8 % fast and sharp
             // (a 440 Hz tone came back at 479 Hz), so take the rate from the aggregate.
             let streamDescription = SystemAudioTapConfiguration.deliveredStreamDescription(
-                tapFormat: try readTapStreamDescription(tapID: tapID),
+                tapFormat: try readTapStreamDescription(tapID: processTap.id),
                 aggregateSampleRate: try readNominalSampleRate(deviceID: aggregateDeviceID)
             )
             guard let deliveredFormat = AVAudioFormat(streamDescription: streamDescription) else {
@@ -99,6 +110,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             try installIOProc(deviceID: aggregateDeviceID)
             try installPropertyListeners(anchorDeviceID: outputDevice.id)
             try startDevice(deviceID: aggregateDeviceID)
+            try throwIfMuteReleased()
         } catch {
             tearDown()
             throw error
@@ -108,6 +120,22 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     func stop() async { tearDown() }
 
     func stopSynchronously() { tearDown() }
+
+    /// Destroys the process tap right away, from any thread, without `lifecycleLock`: a
+    /// start stuck in a later HAL call must not keep the app muted. The stuck start
+    /// notices when it returns, tears down the rest, and can never publish a tap again.
+    func releaseMute() {
+        stateLock.withLock { running = false }
+        if let id = tapObject.take(permanently: true) {
+            hal.destroyProcessTap(id)
+        }
+    }
+
+    private static let muteReleasedError = RecorderError.apiError("Tap released while starting")
+
+    private func throwIfMuteReleased() throws {
+        if tapObject.isReleased { throw Self.muteReleasedError }
+    }
 
     private func tearDown() {
         lifecycleLock.lock()
@@ -122,12 +150,11 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         }
         // The aggregate references the tap, so destroy it before the tap itself.
         if aggregateDeviceID != kAudioObjectUnknown {
-            AudioHardwareDestroyAggregateDevice(aggregateDeviceID)
+            hal.destroyAggregateDevice(aggregateDeviceID)
             aggregateDeviceID = kAudioObjectUnknown
         }
-        if tapID != kAudioObjectUnknown {
-            AudioHardwareDestroyProcessTap(tapID)
-            tapID = kAudioObjectUnknown
+        if let id = tapObject.take(permanently: false) {
+            hal.destroyProcessTap(id)
         }
         anchorDeviceID = kAudioObjectUnknown
         stateLock.withLock {
@@ -139,8 +166,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     private func createProcessTap() throws -> (id: AudioObjectID, uid: String) {
         let description = makeTapDescription()
         description.uuid = UUID()
-        var id = AudioObjectID(kAudioObjectUnknown)
-        let status = AudioHardwareCreateProcessTap(description, &id)
+        let (status, id) = hal.createProcessTap(description)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not create system audio tap")
         }
@@ -152,8 +178,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             tapUID: tapUID,
             outputDeviceUID: outputDeviceUID
         )
-        var id = AudioObjectID(kAudioObjectUnknown)
-        let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &id)
+        let (status, id) = hal.createAggregateDevice(description)
         guard status == noErr else {
             throw SystemAudioTapError.osStatus(status, context: "Could not create aggregate device")
         }
@@ -192,37 +217,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func readDefaultSystemOutputDevice() throws -> (id: AudioObjectID, uid: String) {
-        do {
-            return try readOutputDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
-        } catch {
-            return try readOutputDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
-        }
-    }
-
-    private func readOutputDevice(selector: AudioObjectPropertySelector) throws -> (id: AudioObjectID, uid: String) {
-        var deviceID = AudioDeviceID(kAudioObjectUnknown)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        var address = AudioObjectPropertyAddress(
-            mSelector: selector,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        let system = AudioObjectID(kAudioObjectSystemObject)
-        var status = AudioObjectGetPropertyData(system, &address, 0, nil, &size, &deviceID)
-        guard status == noErr, deviceID != kAudioObjectUnknown else {
-            throw SystemAudioTapError.osStatus(status, context: "Could not read output device")
-        }
-
-        var uid = "" as CFString
-        size = UInt32(MemoryLayout<CFString>.size)
-        address.mSelector = kAudioDevicePropertyDeviceUID
-        status = withUnsafeMutablePointer(to: &uid) { pointer in
-            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, pointer)
-        }
-        guard status == noErr else {
-            throw SystemAudioTapError.osStatus(status, context: "Could not read output device UID")
-        }
-        return (deviceID, uid as String)
+        try hal.readDefaultSystemOutputDevice()
     }
 
     private func installIOProc(deviceID: AudioObjectID) throws {
@@ -338,6 +333,110 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             )
         }
         propertyRegistrations.removeAll()
+    }
+}
+
+/// The HAL calls that create and destroy a tap graph's objects, injectable so tests can
+/// make one hang. The rest of the graph talks to Core Audio directly.
+struct SystemAudioTapHAL: Sendable {
+    var createProcessTap: @Sendable (CATapDescription) -> (OSStatus, AudioObjectID)
+    var destroyProcessTap: @Sendable (AudioObjectID) -> Void
+    var readDefaultSystemOutputDevice: @Sendable () throws -> (id: AudioObjectID, uid: String)
+    var createAggregateDevice: @Sendable ([String: Any]) -> (OSStatus, AudioObjectID)
+    var destroyAggregateDevice: @Sendable (AudioObjectID) -> Void
+
+    static let live = SystemAudioTapHAL(
+        createProcessTap: { description in
+            var id = AudioObjectID(kAudioObjectUnknown)
+            let status = AudioHardwareCreateProcessTap(description, &id)
+            return (status, id)
+        },
+        destroyProcessTap: { _ = AudioHardwareDestroyProcessTap($0) },
+        readDefaultSystemOutputDevice: { try LiveOutputDevice.readDefaultSystemOutputDevice() },
+        createAggregateDevice: { description in
+            var id = AudioObjectID(kAudioObjectUnknown)
+            let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &id)
+            return (status, id)
+        },
+        destroyAggregateDevice: { _ = AudioHardwareDestroyAggregateDevice($0) }
+    )
+}
+
+private enum LiveOutputDevice {
+    static func readDefaultSystemOutputDevice() throws -> (id: AudioObjectID, uid: String) {
+        do {
+            return try readOutputDevice(selector: kAudioHardwarePropertyDefaultSystemOutputDevice)
+        } catch {
+            return try readOutputDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
+        }
+    }
+
+    private static func readOutputDevice(selector: AudioObjectPropertySelector) throws -> (id: AudioObjectID, uid: String) {
+        var deviceID = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var status = AudioObjectGetPropertyData(system, &address, 0, nil, &size, &deviceID)
+        guard status == noErr, deviceID != kAudioObjectUnknown else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not read output device")
+        }
+
+        var uid = "" as CFString
+        size = UInt32(MemoryLayout<CFString>.size)
+        address.mSelector = kAudioDevicePropertyDeviceUID
+        status = withUnsafeMutablePointer(to: &uid) { pointer in
+            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, pointer)
+        }
+        guard status == noErr else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not read output device UID")
+        }
+        return (deviceID, uid as String)
+    }
+}
+
+/// The process tap's object ID, handed out for destruction exactly once.
+final class ProcessTapObjectCell: @unchecked Sendable {
+    private enum State {
+        case empty
+        case holding(AudioObjectID)
+        case released
+    }
+
+    private let lock = NSLock()
+    private var state = State.empty
+
+    var isReleased: Bool {
+        lock.withLock {
+            if case .released = state { return true }
+            return false
+        }
+    }
+
+    /// False once the mute was released: the caller must destroy `id` itself.
+    func publish(_ id: AudioObjectID) -> Bool {
+        lock.withLock {
+            if case .released = state { return false }
+            state = .holding(id)
+            return true
+        }
+    }
+
+    /// The tap to destroy, if any. `permanently` also refuses every later `publish`.
+    func take(permanently: Bool) -> AudioObjectID? {
+        lock.withLock {
+            let held: AudioObjectID?
+            if case .holding(let id) = state { held = id } else { held = nil }
+            if permanently {
+                state = .released
+            } else if held != nil {
+                state = .empty
+            }
+            return held
+        }
     }
 }
 
