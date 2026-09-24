@@ -43,7 +43,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .activityPostponed(.openFiles): "A program still has files open in this project. Close those files and retry. The Active copy was kept."
         case .activityPostponed(let reason): reason.message
         case .archiveFailed(let reason): "Archiving stopped safely: \(reason)."
-        case .noVerifiedArchive: "No verified archive generation is available."
+        case .noVerifiedArchive: "There’s no verified Vault copy yet."
         case .sourceUnavailable(let title): "The project folder for “\(title)” is not available in Active Projects. Rescan the archive, then retry. Nothing was changed."
         case .sourceInventoryIncomplete(let title, let reason): "Project Vault could not read every project file for “\(title)”: \(reason). Rescan the archive, then retry. Nothing was changed."
         case .identityAmbiguous(let title, let reason): "Project Vault cannot tell whether “\(title)” is the same project as an existing catalog entry. \(reason) Choose Link if these are the same project. Choose Keep Separate if they are different projects. Nothing is archived until you choose."

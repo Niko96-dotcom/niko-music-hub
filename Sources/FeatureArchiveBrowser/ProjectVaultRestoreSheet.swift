@@ -25,7 +25,7 @@ struct ProjectVaultRestoreSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Get Local & Open").font(.title2)
+            Text("Restore & Open").font(.title2)
             Text(request.song.effectiveDisplayTitle).font(.headline)
             Text("Copies the complete project into Active Projects, then opens the version you choose.")
                 .foregroundStyle(.secondary)
@@ -68,7 +68,7 @@ struct ProjectVaultRestoreSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Get Local & Open") {
+                Button("Restore & Open") {
                     viewModel.confirmProjectVaultRestore(selectedPath: selectedPath.isEmpty ? nil : selectedPath,
                         destinationRelativePath: destination)
                 }

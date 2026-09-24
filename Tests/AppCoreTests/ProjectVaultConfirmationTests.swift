@@ -11,14 +11,14 @@ final class ProjectVaultConfirmationTests: XCTestCase {
                 songTitle: title,
                 independentBackupConfirmed: true
             ),
-            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Get Local & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
+            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Restore & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
         )
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.archiveNowMessage(
                 songTitle: title,
                 independentBackupConfirmed: false
             ),
-            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. You can later use Get Local & Open from a verified generation."
+            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. If that folder ever goes missing, Restore & Open brings it back."
         )
     }
 
@@ -119,7 +119,7 @@ final class ProjectVaultConfirmationTests: XCTestCase {
                 songTitle: "Test Song",
                 willRemoveActiveCopy: true
             ),
-            "Moving “Test Song” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Get Local & Open."
+            "Moving “Test Song” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Restore & Open."
         )
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Keep Status")
         XCTAssertEqual(

@@ -217,7 +217,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertFalse(status.contains("is not deleted"))
         XCTAssertFalse(detail.contains("is not deleted"))
         XCTAssertFalse(status.contains("not deleted"))
-        XCTAssertTrue(status.contains("Get Local") || detail.contains("Get Local") || status.contains("Recover") || detail.contains("Recover"))
+        XCTAssertTrue(status.contains("Restore & Open") || detail.contains("Restore & Open") || status.contains("Recover") || detail.contains("Recover"))
         XCTAssertTrue(status.contains("not verified") || detail.contains("not verified") || status.contains("review") || detail.contains("review"))
     }
 

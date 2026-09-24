@@ -86,7 +86,7 @@ struct SongCardView: View {
                            let onProjectVaultPrimaryAction {
                             Button(action: onProjectVaultPrimaryAction) {
                                 Label(
-                                    isRetryAction ? "Retry" : (isFreeUpSpaceAction ? vaultPresentation.primaryActionLabel : "Get"),
+                                    isRetryAction ? "Retry" : (isFreeUpSpaceAction ? vaultPresentation.primaryActionLabel : "Restore"),
                                     systemImage: isRetryAction
                                         ? "arrow.clockwise.circle"
                                         : (isFreeUpSpaceAction ? "trash" : "arrow.down.circle")
@@ -100,10 +100,10 @@ struct SongCardView: View {
                             .buttonStyle(.plain)
                             .help(isRetryAction || isFreeUpSpaceAction
                                 ? vaultPresentation.explanation
-                                : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
+                                : "Copies the verified Vault copy back to Active Projects and opens it. The Vault copy stays as it is.")
                             .accessibilityLabel(isRetryAction || isFreeUpSpaceAction
                                 ? vaultPresentation.primaryActionLabel
-                                : "Restore local copy and open project")
+                                : "Restore & Open")
                         }
                     }
                 }

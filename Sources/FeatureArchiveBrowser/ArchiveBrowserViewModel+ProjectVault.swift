@@ -93,7 +93,7 @@ extension ArchiveBrowserViewModel {
         }
         switch presentation.primaryAction {
         case .restoreAndOpen:
-            return "Use Get Local & Open to choose a version and restore this project."
+            return "Use Restore & Open to choose a version and restore this project."
         case .revealArchive:
             return "Use Show in Finder to access this archive. Project versions cannot be opened directly here."
         case .openInCubase, .retry, .review, .freeUpSpace:

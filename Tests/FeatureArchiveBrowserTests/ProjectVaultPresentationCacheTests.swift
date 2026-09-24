@@ -141,7 +141,7 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
         XCTAssertEqual(ready.state, .active)
         XCTAssertEqual(ready.primaryAction, .freeUpSpace)
         XCTAssertEqual(ready.statusLabel, "Ready to free space")
-        XCTAssertTrue(ready.explanation.contains("fresh confirmation"))
+        XCTAssertTrue(ready.explanation.contains("Nothing is removed until you confirm"))
         XCTAssertTrue(ready.isReadyToFreeSpace)
 
         let pinnedRecord = ProjectRecord(

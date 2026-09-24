@@ -231,11 +231,11 @@ final class ProjectVaultPolishTests: XCTestCase {
         let expectations: [(VaultTransferState, String)] = [
             (
                 .removingActiveCopy,
-                "Archive generation remains verified. Active-copy removal was interrupted, so the Active copy may or may not remain; automatic removal will not resume."
+                "Removing the Active folder was interrupted, so some or all of it may still be there. The Vault copy is still verified, and removal won’t restart on its own."
             ),
             (
                 .evictingProviderCache,
-                "Archive generation remains verified. Active-copy removal completed, but provider-cache eviction was interrupted; automatic eviction will not resume."
+                "The Active folder was removed, but clearing the cloud app’s offline copy was interrupted. The Vault copy is still verified, and this won’t restart on its own."
             ),
         ]
         var explanations: [String] = []
@@ -273,7 +273,7 @@ final class ProjectVaultPolishTests: XCTestCase {
                 availability: .local
             )]
         )
-        let expectedExplanation = "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+        let expectedExplanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
 
         for phase in [VaultRestorePhase.persistingActiveLocation, .openingInCubase] {
             var restore = VaultRestoreRecord(

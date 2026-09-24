@@ -26,7 +26,7 @@ public enum ProjectVaultPrimaryAction: Equatable, Sendable {
     public var label: String {
         switch self {
         case .openInCubase: "Open project"
-        case .restoreAndOpen: "Get Local & Open"
+        case .restoreAndOpen: "Restore & Open"
         case .revealArchive: "Show in Finder"
         case .retry: "Retry"
         case .review: "Review"
@@ -217,7 +217,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     }
 
     public var retryRestoreLabel: String {
-        restorePhase == .openingInCubase ? "Retry Open" : "Retry Get Local"
+        restorePhase == .openingInCubase ? "Retry Open" : "Retry Restore"
     }
 
     public var primaryActionLabel: String {
@@ -255,7 +255,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             retryRestoreID = nil
             state = .needsAttention
             primaryAction = .review
-            explanation = "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+            explanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
             return
         }
         if restore?.phase == .superseded || restore?.supersededBy != nil {
@@ -271,7 +271,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             retryRestoreID = nil
             state = .needsAttention
             primaryAction = .review
-            explanation = restore?.error ?? "The archive no longer matches its verified manifest. Review the changed files before restoring. Existing copies were kept."
+            explanation = restore?.error ?? "Files in the Vault copy changed since it was verified. Check them before restoring. Every copy was kept."
             return
         }
         if let restore, restore.completedAt == nil, restore.error != nil,
@@ -283,17 +283,17 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             primaryAction = .review
             switch restore.phase {
             case .materializingArchive:
-                explanation = "The archive could not finish downloading. Check the archive drive or provider connection, then choose Retry Get Local. Existing copies were kept."
+                explanation = "The Vault copy couldn’t finish downloading. Check the drive or your cloud connection, then choose Retry Restore. Every copy was kept."
             case .copyingToActiveStaging:
-                explanation = "Copying stopped. Check free space and access to Active Projects, then choose Retry Get Local. The archive and partial copy were kept."
+                explanation = "Copying stopped. Check free space and access to Active Projects, then choose Retry Restore. The Vault copy and the partial copy were kept."
             case .verifyingActiveStaging:
-                explanation = "The copied files could not be verified. Check archive availability, then choose Retry Get Local to recheck the preserved copy. The project has not been opened."
+                explanation = "The copied files couldn’t be verified, so the project wasn’t opened. The Vault copy and the copied files were kept. Make sure the Vault is available, then choose Retry Restore."
             case .promotingActiveCopy:
-                explanation = "The verified copy could not be placed in Active Projects. Check for an existing folder with the same name and folder access, then choose Retry Get Local. Existing files will not be overwritten."
+                explanation = "The verified copy couldn’t be moved into Active Projects. Check for a folder with the same name or a permissions problem, then choose Retry Restore. Nothing will be overwritten."
             case .persistingActiveLocation:
-                explanation = "The copy is restored, but its library location could not be saved. Check disk space and access, then choose Retry Get Local. The copy will be verified again before opening."
+                explanation = "The project is restored, but the app couldn’t save where it lives. Check disk space and access, then choose Retry Restore. It will be verified again before opening."
             case .openingInCubase:
-                explanation = "The project was restored and verified, but its DAW could not open it. Check that the DAW is installed and available, then choose Retry Open. The restored copy will be verified again."
+                explanation = "Restored and verified, but your DAW couldn’t open it. Check that Cubase or Ableton Live is installed, then choose Retry Open. The files will be verified again first."
             case .superseded:
                 explanation = ProjectVaultActivityExplanation.restore(.superseded)
             }
@@ -314,15 +314,15 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         if restore?.failureReason == .archiveTransferBindingUnavailable {
             state = .needsAttention
             primaryAction = .review
-            explanation = "This restore no longer matches its verified archive transfer binding. Existing copies were kept; review archive integrity before continuing."
+            explanation = "This restore doesn’t match the verified Vault copy it was tied to, so it stopped. Every copy was kept. Check that Vault copy before trying again."
         } else if restore?.failureReason == .legacyProjectionIdentityMismatch {
             state = .needsAttention
             primaryAction = .review
-            explanation = "This legacy archive no longer matches its verified content identity. Existing copies were kept; reconcile the exact generation before retrying."
+            explanation = "This older Vault copy changed since it was verified, so it can’t be restored as is. Every copy was kept. Check its files in the Vault before retrying."
         } else if reviewAction != nil {
             state = .needsAttention
             primaryAction = .review
-            explanation = "This legacy archive needs fresh capacity evidence. Make the exact generation available offline in Finder, then retry this restore. No archive bytes were downloaded or copied."
+            explanation = "This older Vault copy has to be downloaded before its size can be checked. Use Make Available Offline in Finder, then retry. Nothing has been copied yet."
         } else if let effectiveRestorePhase = restore?.phase ?? restorePhase {
             state = .restoring
             primaryAction = .review
@@ -335,16 +335,16 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
                 explanation = ProjectVaultActivityExplanation.transfer(.failedRecoverable)
             } else {
                 primaryAction = .review
-                explanation = "This paused operation cannot be retried automatically because it may remove or evict files. Existing copies were kept for review."
+                explanation = "This paused step may already have removed files, so it won’t retry on its own. Whatever is left was kept for you to check."
             }
         } else if transferState == .recoveryRequired {
             state = .needsAttention
             primaryAction = .review
             switch transferErrorOrigin {
             case .removingActiveCopy:
-                explanation = "Archive generation remains verified. Active-copy removal was interrupted, so the Active copy may or may not remain; automatic removal will not resume."
+                explanation = "Removing the Active folder was interrupted, so some or all of it may still be there. The Vault copy is still verified, and removal won’t restart on its own."
             case .evictingProviderCache:
-                explanation = "Archive generation remains verified. Active-copy removal completed, but provider-cache eviction was interrupted; automatic eviction will not resume."
+                explanation = "The Active folder was removed, but clearing the cloud app’s offline copy was interrupted. The Vault copy is still verified, and this won’t restart on its own."
             default:
                 explanation = ProjectVaultActivityExplanation.transfer(.recoveryRequired)
             }
@@ -359,11 +359,11 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             // is an explicit fresh confirmation, never a reused approval.
             state = .active
             primaryAction = .freeUpSpace
-            explanation = "A verified Project Vault copy exists and the Active folder is still here. Freeing space needs a fresh confirmation; nothing is removed automatically."
+            explanation = "A verified copy is in the Vault, and the folder is still on this Mac. Nothing is removed until you confirm Free Up Space."
         } else if record.pinned, hasLocalActiveCopy {
             state = .keepLocal
             primaryAction = .openInCubase
-            explanation = "Pinned here. Automatic archiving will leave this project in Active Projects."
+            explanation = "Kept on this Mac. Automatic archiving skips it."
         } else if isVerifiedCopy, !record.pinned, hasLocalActiveCopy {
             // Copy-only verified generation with the Active folder retained.
             // Verification is reported separately from workflow status; the
@@ -371,7 +371,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             // removed automatically.
             state = .active
             primaryAction = .openInCubase
-            explanation = "A verified Project Vault copy exists and the Active folder is still here. Nothing is removed automatically."
+            explanation = "A verified copy is in the Vault, and the folder is still on this Mac. Nothing is removed automatically."
         } else if hasLocalActiveCopy {
             state = .active
             primaryAction = .openInCubase
@@ -379,15 +379,15 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         } else if let availability = linkedArchiveAvailability, availability != .missing {
             state = .archived
             primaryAction = .restoreAndOpen
-            explanation = "Get Local & Open downloads any online-only files, verifies a copy in Active Projects, then opens it in its DAW. The original archive stays intact."
+            explanation = "Restore & Open downloads anything stored only in the cloud, copies it back to Active Projects, verifies it, and opens it. The Vault copy stays as it is."
         } else if record.locations.contains(where: { $0.kind == .archive && $0.availability != .missing }) {
             state = .archived
             primaryAction = .restoreAndOpen
-            explanation = "Get Local & Open copies this song into Active Projects, verifies the copy, then opens its newest project in the matching DAW. The archive stays intact."
+            explanation = "Restore & Open copies this song back to Active Projects, verifies it, and opens the newest version. The Vault copy stays as it is."
         } else {
             state = .needsAttention
             primaryAction = .review
-            explanation = "No safe, available project location could be confirmed. No files will be changed."
+            explanation = "This project’s files can’t be found right now. Nothing will be changed."
         }
     }
 

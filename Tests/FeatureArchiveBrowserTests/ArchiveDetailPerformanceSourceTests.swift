@@ -14,7 +14,7 @@ final class ArchiveDetailPerformanceSourceTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(detail.contains("MAIN PROJECT"))
+        XCTAssertTrue(detail.contains("Text(\"Main project\")"))
         XCTAssertTrue(detail.contains("ArchivePreviewCandidatePagination.page"))
         XCTAssertTrue(detail.contains("LazyVStack"))
         XCTAssertTrue(detail.contains("Page \\(page.index + 1) of \\(page.pageCount)"))

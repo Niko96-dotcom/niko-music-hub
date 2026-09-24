@@ -29,7 +29,7 @@ public struct ProjectVaultHealth: Equatable, Codable, Sendable {
     }
 
     public var backupWarning: String? {
-        hasIndependentBackup ? nil : "Your Archive may be the only durable copy. Protect it with provider version history and an independent backup."
+        hasIndependentBackup ? nil : "Your Archive may be the only copy of these projects. Back it up somewhere else too, like Time Machine or your cloud’s version history."
     }
 }
 

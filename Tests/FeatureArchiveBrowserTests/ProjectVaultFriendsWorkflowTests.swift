@@ -191,7 +191,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: song))
         let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: song))
-        XCTAssertTrue(openBlockReason.contains("Get Local & Open"))
+        XCTAssertTrue(openBlockReason.contains("Restore & Open"))
         XCTAssertThrowsError(try viewModel.openLatestCPR(for: song))
         XCTAssertEqual(viewModel.statusMessage, openBlockReason)
         XCTAssertNil(viewModel.lastDryRunLog)
@@ -204,7 +204,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
 
         let online = ProjectVaultCardPresentation(record: snapshot.record, linkedArchiveAvailability: .onlineOnly)
         XCTAssertEqual(online.primaryAction, .restoreAndOpen)
-        XCTAssertTrue(online.explanation.contains("online-only"))
+        XCTAssertTrue(online.explanation.contains("stored only in the cloud"))
 
         let reopened = fixture.viewModel(runtime: try fixture.runtime(), songMetadataStore: metadataStore)
         await reopened.refreshProjectVaultSnapshots()
@@ -920,7 +920,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(freshPresentation.primaryAction, .freeUpSpace)
         XCTAssertTrue(freshPresentation.isReadyToFreeSpace)
         XCTAssertEqual(freshPresentation.statusLabel, "Ready to free space")
-        XCTAssertTrue(freshPresentation.explanation.contains("fresh confirmation"))
+        XCTAssertTrue(freshPresentation.explanation.contains("Nothing is removed until you confirm"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         let transfer = try XCTUnwrap(try fixture.transferStore().verifiedArchiveGeneration(projectID: fixture.projectID()))
         XCTAssertTrue(VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state))

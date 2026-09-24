@@ -12,9 +12,9 @@ public enum CancelCopy: Sendable {
 
     public static let stopTransferTitle = "Stop this transfer?"
     public static let stopTransferMessage =
-        "Niko Music Hub will stop the Project Vault transfer at the next safe point. Files already copied stay in the archive but are not verified until the transfer completes. If the Active Projects folder was already removed after verification, stopping does not restore it. Use Get Local and Open or Recover Verified Project to review the verified archive."
+        "Niko Music Hub will stop the Project Vault transfer at the next safe point. Files already copied stay in the archive but are not verified until the transfer completes. If the Active Projects folder was already removed after verification, stopping does not restore it. Use Restore & Open or Recover Verified Project to review the verified archive."
     public static let keepTransferring = "Keep Transferring"
     public static let stopTransfer = "Stop Transfer"
     public static let transferStopped =
-        "Transfer stopped. The Active Projects folder may have been kept or removed depending on when the transfer stopped. Use Get Local and Open or Recover Verified Project to review the verified archive. Partial copies are not verified."
+        "Transfer stopped. The Active Projects folder may have been kept or removed depending on when the transfer stopped. Use Restore & Open or Recover Verified Project to review the verified archive. Partial copies are not verified."
 }

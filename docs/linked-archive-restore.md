@@ -1,6 +1,6 @@
 # Restoring linked historical archives
 
-Archived cards offer **Get Local & Open**. A dialog lists CPR and ALS versions,
+Archived cards offer **Restore & Open**. A dialog lists CPR and ALS versions,
 including their relative paths and modification dates, and shows the destination
 inside Active Projects. Choose a version or keep **Newest available version**.
 The complete project folder is restored, including audio and other versions.
@@ -33,8 +33,8 @@ overwritten.
   Recheck the catalog link on retries and before copy side effects.
 
 A download failure before the content manifest is established leaves the archive
-in place; selecting Get Local & Open again restarts preparation. Once a restore
-record exists, the existing recovery and Retry Get Local flow resumes that record.
+in place; selecting Restore & Open again restarts preparation. Once a restore
+record exists, the existing recovery and Retry Restore flow resumes that record.
 The explicitly selected relative project path is saved in the restore record,
 so interruption recovery and Retry Open use the same version. Older records and
 the default newest-version choice retain their existing behavior. A missing or

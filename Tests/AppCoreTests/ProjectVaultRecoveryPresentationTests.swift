@@ -30,7 +30,7 @@ final class ProjectVaultRecoveryPresentationTests: XCTestCase {
             let presentation = ProjectVaultCardPresentation(record: record, restore: restore)
             XCTAssertEqual(presentation.state, .needsAttention)
             XCTAssertEqual(presentation.retryRestoreID, restore.id)
-            XCTAssertEqual(presentation.primaryActionLabel, phase == .openingInCubase ? "Retry Open" : "Retry Get Local")
+            XCTAssertEqual(presentation.primaryActionLabel, phase == .openingInCubase ? "Retry Open" : "Retry Restore")
             explanations.insert(presentation.explanation)
             restore.failureReason = .activeDestinationIntegrityMismatch
             let unsafe = ProjectVaultCardPresentation(record: record, restore: restore)

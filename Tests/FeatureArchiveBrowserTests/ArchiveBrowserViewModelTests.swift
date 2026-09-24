@@ -1858,7 +1858,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertEqual(
             presentation.explanation,
-            "This restore no longer matches its verified archive transfer binding. Existing copies were kept; review archive integrity before continuing."
+            "This restore doesn’t match the verified Vault copy it was tied to, so it stopped. Every copy was kept. Check that Vault copy before trying again."
         )
         XCTAssertFalse(presentation.explanation.contains("Downloading"))
         XCTAssertNil(presentation.reviewAction, "binding failure must not authorize Finder")
@@ -1931,7 +1931,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertEqual(
             presentation.explanation,
-            "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+            "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
         )
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
@@ -2026,7 +2026,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertEqual(
             presentation.explanation,
-            "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+            "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
         )
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
@@ -2070,7 +2070,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             .activeDestinationIntegrityMismatch,
             nil,
         ]
-        let integrityExplanation = "The restored Active copy no longer matches the verified archive manifest. It will not be opened; existing copies were kept for review."
+        let integrityExplanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
 
         for phase in phases {
             for failureReason in failureReasons {
@@ -2142,7 +2142,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 } else {
                     XCTAssertEqual(presentation.state, .needsAttention, label)
                     XCTAssertEqual(presentation.primaryActionLabel,
-                        phase == .openingInCubase ? "Retry Open" : "Retry Get Local", label)
+                        phase == .openingInCubase ? "Retry Open" : "Retry Restore", label)
                 }
                 XCTAssertEqual(presentation.primaryAction, .review, label)
                 XCTAssertNil(presentation.reviewAction, label)
@@ -2395,7 +2395,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(presentation.retryRestoreID)
         XCTAssertNil(
             viewModel.preferredRevealURL(for: archivedSong),
-            "archived-only Project Vault cards must route through Restore/Get Local, not generic Reveal"
+            "archived-only Project Vault cards must route through Restore & Open, not generic Reveal"
         )
 
         // Song Detail controls.
@@ -2595,7 +2595,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canArchiveInProjectVault(archivedSong))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
         let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: archivedSong))
-        XCTAssertTrue(openBlockReason.contains("Get Local & Open"))
+        XCTAssertTrue(openBlockReason.contains("Restore & Open"))
         let archivedVersion = try XCTUnwrap(archivedSong.visibleProjectVersions.first)
         XCTAssertThrowsError(try viewModel.openProjectVersion(archivedVersion, for: archivedSong))
         XCTAssertEqual(viewModel.statusMessage, openBlockReason)
@@ -2633,7 +2633,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(revealed.urls.isEmpty)
         XCTAssertNil(viewModel.lastDryRunLog)
 
-        // The dedicated Get Local & Open action is the sole mutating authority.
+        // The dedicated Restore & Open action is the sole mutating authority.
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
         for _ in 0..<100 where viewModel.projectVaultRestoreOptionsLoading || viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
             try await Task.sleep(for: .milliseconds(10))

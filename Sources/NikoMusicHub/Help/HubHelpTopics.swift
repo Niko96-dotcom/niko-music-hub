@@ -38,7 +38,7 @@ enum HubHelpTopics {
         id: "project-vault",
         menuTitle: "Project Vault",
         heading: "Project Vault",
-        body: "Archive Now copies a project to the vault, verifies it, then deletes the Active folder after you confirm. Create Backup Copy verifies a copy and keeps Active. Get Local & Open never overwrites an existing Active folder.",
+        body: "Archive Now copies a project to the vault, verifies it, then deletes the Active folder after you confirm. Create Backup Copy verifies a copy and keeps Active. Restore & Open never overwrites an existing Active folder.",
         anchor: "project-vault"
     )
 

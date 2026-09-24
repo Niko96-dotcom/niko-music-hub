@@ -264,4 +264,4 @@ Use mechanical rename + test run; avoid drive-by refactors in feature modules.
   queued Done operation, retry budget, and inflight Done task; revoked approvals are never reused.
 - Cancel copy is truthful about the removal boundary: stopping before verification keeps Active;
   at/after removal the fate is uncertain, partial copies are never claimed verified, and review
-  stays via Get Local & Open / Recover Verified Project.
+  stays via Restore & Open / Recover Verified Project.

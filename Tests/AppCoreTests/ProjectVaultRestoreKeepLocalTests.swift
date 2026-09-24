@@ -3,7 +3,7 @@ import Foundation
 import NikoMusicCore
 import XCTest
 
-/// Package 3: default Get Local & Open preserves workflow metadata, pins the
+/// Package 3: default Restore & Open preserves workflow metadata, pins the
 /// restored copy under Keep Local, refuses occupied destinations, and hands
 /// the selected project version to the opener. Fixture-only; no real music.
 final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
@@ -291,8 +291,8 @@ final class ProjectVaultRestorePresentationTests: XCTestCase {
         let eviction = ProjectVaultCardPresentation(
             record: record, transferState: .recoveryRequired, transferErrorOrigin: .evictingProviderCache)
         XCTAssertNotEqual(removal.explanation, eviction.explanation)
-        XCTAssertTrue(removal.explanation.contains("Active-copy removal"))
-        XCTAssertTrue(eviction.explanation.contains("provider-cache eviction"))
+        XCTAssertTrue(removal.explanation.contains("Removing the Active folder was interrupted"))
+        XCTAssertTrue(eviction.explanation.contains("clearing the cloud app’s offline copy was interrupted"))
         for explanation in [removal.explanation, eviction.explanation] {
             for banned in ["reclaim", "freed", "saved ", "MB", "GB", "bytes"] {
                 XCTAssertFalse(explanation.contains(banned), "\(banned) in: \(explanation)")

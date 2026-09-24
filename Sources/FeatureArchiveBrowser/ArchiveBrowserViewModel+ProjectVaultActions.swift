@@ -27,7 +27,7 @@ extension ArchiveBrowserViewModel {
                 retryReviewedProjectVaultRestore(for: song)
             } else if case .makeAvailableOfflineInFinder(let generationURL) = presentation.reviewAction {
                 setProjectVaultStatusMessage(
-                    "Make this exact archive generation available offline in Finder, then choose Retry Get Local."
+                    "Make this Vault copy available offline in Finder, then choose Retry Restore."
                 )
                 revealProjectVaultGenerationInFinder(generationURL, for: song)
             } else {
@@ -120,7 +120,7 @@ extension ArchiveBrowserViewModel {
             diagnostics.log(.warning, "Project Vault generation reveal refused: \(error)")
         } catch {
             setProjectVaultStatusMessage(
-                "Project Vault generation cannot be revealed: \(error.localizedDescription)"
+                "The Vault copy can’t be shown in Finder: \(error.localizedDescription)"
             )
             diagnostics.log(.warning, "Project Vault generation reveal failed: \(error)")
         }

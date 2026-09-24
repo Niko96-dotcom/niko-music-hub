@@ -35,16 +35,16 @@ struct ArchiveBoardCardVaultRow: View {
                     : HubDesignSystem.Palette.accent)
             Spacer(minLength: 0)
             if showsPrimaryAction, let onPrimaryAction {
-                Button(isRetry ? "Retry" : (isFreeUpSpace ? presentation.primaryActionLabel : "Get"), action: onPrimaryAction)
+                Button(isRetry ? "Retry" : (isFreeUpSpace ? presentation.primaryActionLabel : "Restore"), action: onPrimaryAction)
                     .font(HubDesignSystem.Typography.micro().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .buttonStyle(.plain)
                     .help(isRetry || isFreeUpSpace
                         ? presentation.explanation
-                        : "Restore a verified copy into Active Projects and open it in its DAW. The archive copy stays intact.")
+                        : "Copies the verified Vault copy back to Active Projects and opens it. The Vault copy stays as it is.")
                     .accessibilityLabel(isRetry || isFreeUpSpace
                         ? presentation.primaryActionLabel
-                        : "Restore local copy and open project")
+                        : "Restore & Open")
             }
         }
     }

@@ -65,7 +65,7 @@ extension ArchiveBrowserViewModel {
     /// Explicit "Resume work" affordance for a restored Active copy. Moves the
     /// workflow status to Prod (the in-progress production stage; the status
     /// enum has no literal inProgress case) through the existing metadata API,
-    /// with undo. The default Get Local & Open path never changes workflow
+    /// with undo. The default Restore & Open path never changes workflow
     /// status — only this explicit action does. Offered only for locally
     /// actionable restored copies currently marked Done.
     func canResumeRestoredWork(for song: Song) -> Bool {
@@ -103,7 +103,7 @@ extension ArchiveBrowserViewModel {
 
     private func enqueueProjectVaultRestore(_ song: Song, selectedPath: String? = nil, destinationRelativePath: String? = nil) {
         guard let runtime = projectVaultRuntime, let snapshot = projectVaultSnapshot(for: song) else {
-            setProjectVaultStatusMessage("Restore is unavailable because no verified Project Vault generation was found.")
+            setProjectVaultStatusMessage("There’s no verified Vault copy to restore yet.")
             return
         }
         guard !projectVaultBusySongIDs.contains(song.id) else { return }

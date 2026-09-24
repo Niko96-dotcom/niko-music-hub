@@ -2,38 +2,27 @@ import AppCore
 import NikoMusicCore
 import XCTest
 
-/// NMH-091: Get Local & Open is the only name for this action.
+/// NMH-091: one name for this action, everywhere. The name is Restore & Open
+/// (it was Get Local & Open until the 2026-09-24 copy pass; the rule is the
+/// single name, not the specific words).
 ///
-/// Guards that no user-facing `Restore & Open` copy remains on the
-/// Archive Now / Get Local surfaces. Enum case names (`restoreAndOpen`)
-/// and comments are intentionally allowed.
+/// Guards that no `Get Local` copy survives anywhere under `Sources/`.
+/// Enum case names (`restoreAndOpen`) are intentionally unaffected.
 final class ProjectVaultCopyConsistencyTests: XCTestCase {
-    func testUserFacingRestoreAndOpenIsGone() throws {
-        let presentation = try SourceTestSupport.read(
-            "Sources/AppCore/ProjectVault/ProjectVaultPresentation.swift"
-        )
-        let sheet = try SourceTestSupport.read(
-            "Sources/FeatureArchiveBrowser/ProjectVaultRestoreSheet.swift"
-        )
-        XCTAssertFalse(
-            presentation.contains("Restore & Open"),
-            "NMH-091: no user-facing Restore & Open may remain in ProjectVaultPresentation.swift"
-        )
-        XCTAssertFalse(
-            presentation.contains("Restore and Open"),
-            "NMH-091: no user-facing Restore and Open may remain in ProjectVaultPresentation.swift"
-        )
-        XCTAssertFalse(
-            sheet.contains("Restore & Open"),
-            "NMH-091: no user-facing Restore & Open may remain in ProjectVaultRestoreSheet.swift"
-        )
-        XCTAssertFalse(
-            sheet.contains("Restore and Open"),
-            "NMH-091: no user-facing Restore and Open may remain in ProjectVaultRestoreSheet.swift"
-        )
+    func testRetiredGetLocalNameIsGone() throws {
+        let sources = SourceTestSupport.packageRoot.appendingPathComponent("Sources", isDirectory: true)
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            if text.contains("Get Local") {
+                offenders.append(url.lastPathComponent)
+            }
+        }
+        XCTAssertEqual(offenders, [], "NMH-091: the retired name Get Local must not appear in Sources/")
     }
 
-    func testManagedArchiveExplanationUsesGetLocalAndOpen() {
+    func testManagedArchiveExplanationUsesRestoreAndOpen() {
         let record = ProjectRecord(
             canonicalTitle: "Fixture",
             locations: [
@@ -47,10 +36,10 @@ final class ProjectVaultCopyConsistencyTests: XCTestCase {
         )
         let presentation = ProjectVaultCardPresentation(record: record)
         XCTAssertEqual(presentation.primaryAction, .restoreAndOpen)
-        XCTAssertEqual(presentation.primaryAction.label, "Get Local & Open")
+        XCTAssertEqual(presentation.primaryAction.label, "Restore & Open")
         XCTAssertEqual(
             presentation.explanation,
-            "Get Local & Open copies this song into Active Projects, verifies the copy, then opens its newest project in the matching DAW. The archive stays intact."
+            "Restore & Open copies this song back to Active Projects, verifies it, and opens the newest version. The Vault copy stays as it is."
         )
     }
 
@@ -60,11 +49,11 @@ final class ProjectVaultCopyConsistencyTests: XCTestCase {
         )
         XCTAssertTrue(
             sheet.contains("Copies the complete project into Active Projects, then opens the version you choose."),
-            "NMH-091: restore sheet body must use the agreed Get Local wording"
+            "NMH-091: restore sheet body must use the agreed Restore & Open wording"
         )
         XCTAssertTrue(
-            sheet.contains("Get Local & Open"),
-            "NMH-091: restore sheet primary action must stay Get Local & Open"
+            sheet.contains("Restore & Open"),
+            "NMH-091: restore sheet primary action must stay Restore & Open"
         )
     }
 }

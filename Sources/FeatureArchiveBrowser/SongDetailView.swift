@@ -231,7 +231,7 @@ struct SongDetailView: View {
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("MAIN PROJECT")
+                Text("Main project")
                     .font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 ViewThatFits(in: .horizontal) {
@@ -310,12 +310,12 @@ struct SongDetailView: View {
     private var detailsRail: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("SONG DETAILS").font(HubDesignSystem.Typography.caption().weight(.semibold))
+                Text("Details").font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 essentialInfo
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("NOTES").font(HubDesignSystem.Typography.caption().weight(.semibold))
+                Text("Notes").font(HubDesignSystem.Typography.caption().weight(.semibold))
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 Text(liveSong.appNote?.isEmpty == false ? (liveSong.appNote ?? "") : "No notes")
                     .font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)

@@ -35,11 +35,11 @@ Automatic preview selection checks full-song suitability before scores, versions
 
 ## Archive in the UI
 
-**Archive Now** verifies the Vault generation and current project, checks that the DAW and project files are closed, then removes the Active copy. The song leaves the normal board and becomes a **Get Local & Open** target under **Show archived projects**. A restored, unchanged song can reuse its verified generation when archived again.
+**Archive Now** verifies the Vault generation and current project, checks that the DAW and project files are closed, then removes the Active copy. The song leaves the normal board and becomes a **Restore & Open** target under **Show archived projects**. A restored, unchanged song can reuse its verified generation when archived again.
 
 **Create Backup Copy** verifies a Vault copy and keeps the song in Active Projects. Use this when you want another copy without removing the local project.
 
-Existing archive folders explicitly linked to a catalog identity also appear under **Show archived projects**. Their details report whether files are local, online-only, or downloading, and offer **Show in Finder**. Linking preserves the project ID, original evidence, historical locations and user metadata. It does not create a verified Vault generation or enable **Get Local & Open**; that action requires a managed, verified backup. File availability comes from the files inside the folder, since a locally present Dropbox folder may contain online-only audio and project files.
+Existing archive folders explicitly linked to a catalog identity also appear under **Show archived projects**. Their details report whether files are local, online-only, or downloading, and offer **Show in Finder**. Linking preserves the project ID, original evidence, historical locations and user metadata. It does not create a verified Vault generation or enable **Restore & Open**; that action requires a managed, verified backup. File availability comes from the files inside the folder, since a locally present Dropbox folder may contain online-only audio and project files.
 
 Manual archiving requires Project Vault enabled, independent backup confirmation, Keep Local off, and Emergency Stop off. It can run after a save without waiting for the automatic inactivity window. Private beta limits automatic archiving to copies; it does not convert an explicit Archive Now request into a copy-only success. If removal is blocked, the app reports the reason and keeps the Active project.
 
@@ -57,7 +57,7 @@ Waiting requests remain queued while Niko Music Hub is open; they are not saved 
 4. The hub makes the verified archive generation available locally if needed, copies the whole song into Active Projects, verifies it, and saves the restored location before opening its newest working project in the matching DAW. The archive copy stays intact. An occupied destination is never overwritten.
 5. After restore, the song is active again. Use **Keep Local** if you want automatic archiving to leave that active copy on the Mac.
 
-Restore opens the newest working project in the restored folder. For mixed songs, use **Project versions** after restoration to open or select a different version. **Keep Local** alone does not download an archived song. **Test Restore** in Settings runs a disposable rehearsal; it does not restore one of your songs. If an online-only generation requires manual download, the UI directs you to its exact Finder location and **Retry Get Local**.
+Restore opens the newest working project in the restored folder. For mixed songs, use **Project versions** after restoration to open or select a different version. **Keep Local** alone does not download an archived song. **Test Restore** in Settings runs a disposable rehearsal; it does not restore one of your songs. If an online-only generation requires manual download, the UI directs you to its exact Finder location and **Retry Restore**.
 
 ## Recover an interrupted archive
 

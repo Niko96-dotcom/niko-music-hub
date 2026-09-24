@@ -197,7 +197,7 @@ extension ArchiveBrowserViewModel {
             revokeBoundDoneWork(for: songID)
             if let live = songs.first(where: { $0.id == songID }),
                !FileManager.default.fileExists(atPath: live.folderPath.path) {
-                setProjectVaultStatusMessage("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Get Local & Open to review the verified archive.")
+                setProjectVaultStatusMessage("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
             }
         }
         registerWorkflowStatusUndo(

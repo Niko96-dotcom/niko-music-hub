@@ -665,7 +665,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // Per-song recovery message for the interrupted operation stays truthful.
         let stoppedPerSong = try XCTUnwrap(viewModel.projectVaultOperationMessages[first.id])
         XCTAssertTrue(stoppedPerSong.contains("Transfer stopped"))
-        XCTAssertTrue(stoppedPerSong.contains("Get Local"))
+        XCTAssertTrue(stoppedPerSong.contains("Restore & Open"))
         XCTAssertTrue(stoppedPerSong.contains("Recover"))
         XCTAssertTrue(stoppedPerSong.contains("Partial copies are not verified"))
         XCTAssertEqual(viewModel.projectVaultQueueMessage(for: first), stoppedPerSong)
@@ -678,7 +678,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertNotEqual(footer, "Project Vault queue finished.")
         XCTAssertFalse(footer == "Project Vault queue finished. Needs attention: \(first.effectiveDisplayTitle).")
         XCTAssertTrue(footer.contains("Transfer stopped"))
-        XCTAssertTrue(footer.contains("Get Local"))
+        XCTAssertTrue(footer.contains("Restore & Open"))
         XCTAssertTrue(footer.contains("Recover"))
         XCTAssertTrue(footer.contains("Partial copies are not verified"))
         // Accurate completed/cancelled counts for the two-item batch.
