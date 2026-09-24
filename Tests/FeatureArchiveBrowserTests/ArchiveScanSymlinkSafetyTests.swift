@@ -45,6 +45,84 @@ extension ArchiveScanEquivalenceTests {
         )
     }
 
+    /// An incremental rescan whose song folder is swapped for an outside link mid-walk. Uses
+    /// only the pre-existing `entryListed` hook and the attack fixture, so it compiles on the
+    /// original HEAD and fails there (the `resourceValues`/`fileExists` check already passed, so
+    /// the walk re-opens paths through the swapped link); the fix `lstat`-verifies the song base
+    /// (`O_NOFOLLOW` plus `dev`/`ino`) and discards it with the existing symlink reason.
+    func testIncrementalSongFolderSwappedToOutsideLinkIsNotScanned() throws {
+        let archive = try SymlinkAttackArchive.make()
+        defer { archive.remove() }
+        let songA = archive.root.appendingPathComponent("Song A", isDirectory: true)
+        let innerSongA = songA.resolvingSymlinksInPath().path + "/"
+        let outsideDir = archive.base.appendingPathComponent("Outside/Dir", isDirectory: true)
+        var scanner = MusicArchiveScanner()
+        var swapped = false
+        scanner.raceHooks.entryListed = { _ in
+            guard !swapped else { return }
+            swapped = true
+            do {
+                try FileManager.default.moveItem(
+                    at: songA, to: archive.base.appendingPathComponent("Parked Song A")
+                )
+                try FileManager.default.createSymbolicLink(at: songA, withDestinationURL: outsideDir)
+            } catch {
+                XCTFail("Could not swap song folder: \(error)")
+            }
+        }
+        let incremental = try scanner.scanIncremental(
+            resolution: ArchiveSongFolderResolver.Resolution(songFolders: Set([songA])),
+            roots: [archive.root]
+        )
+        XCTAssertTrue(swapped)
+        XCTAssertEqual(
+            incremental.skippedEntries.map { "\($0.kind.rawValue)|\($0.label)|\($0.reason)" },
+            ["unreadableChild|Song A|Skipped symbolic-link folder at archive root"]
+        )
+        XCTAssertTrue(incremental.songs.isEmpty, "swapped base must not return dangling inside paths")
+        for song in incremental.songs {
+            for path in song.previewCandidates.map(\.filePath) + song.projectVersions.map(\.filePath) {
+                XCTAssertTrue(path.resolvingSymlinksInPath().path.hasPrefix(innerSongA), path.path)
+            }
+        }
+    }
+
+    /// A song folder that already is a symlink to outside before `scanIncremental` starts.
+    /// The candidate URL is listed via `contentsOfDirectory` (with the link key prefetched)
+    /// while the folder is still real, then the real folder is moved aside and the outside
+    /// link installed — so on the original HEAD the prefetched `resourceValues` still report
+    /// "not a link" and `fileExists` follows it, and the walk returns an outside song with no
+    /// skipped entry. The fix `lstat`-verifies the base and reports the existing symlink reason.
+    func testIncrementalSongFolderAlreadyALinkIsSkipped() throws {
+        let archive = try SymlinkAttackArchive.make()
+        defer { archive.remove() }
+        let listed = try FileManager.default.contentsOfDirectory(
+            at: archive.root,
+            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]
+        )
+        let prefetchedSongA = try XCTUnwrap(listed.first { $0.lastPathComponent == "Song A" })
+        XCTAssertEqual(
+            try prefetchedSongA.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink,
+            false
+        )
+        let songAPath = archive.root.appendingPathComponent("Song A", isDirectory: true)
+        let outsideDir = archive.base.appendingPathComponent("Outside/Dir", isDirectory: true)
+        try FileManager.default.moveItem(
+            at: songAPath, to: archive.base.appendingPathComponent("Parked Song A")
+        )
+        try FileManager.default.createSymbolicLink(at: songAPath, withDestinationURL: outsideDir)
+        let incremental = try MusicArchiveScanner().scanIncremental(
+            resolution: ArchiveSongFolderResolver.Resolution(songFolders: Set([prefetchedSongA])),
+            roots: [archive.root]
+        )
+        XCTAssertEqual(
+            incremental.skippedEntries.map { "\($0.kind.rawValue)|\($0.label)|\($0.reason)" },
+            ["unreadableChild|Song A|Skipped symbolic-link folder at archive root"]
+        )
+        XCTAssertTrue(incremental.songs.isEmpty, "linked base must not return an outside song")
+    }
+
     /// Nothing a scan returns may resolve outside its song folder.
     func testSymlinkAttackArchiveNeverLeavesASong() throws {
         let archive = try SymlinkAttackArchive.make()

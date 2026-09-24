@@ -76,6 +76,109 @@ final class ArchiveScanSwapRaceTests: XCTestCase {
         XCTAssertEqual(songResult.previewCandidates.compactMap(\.durationSeconds), [1, 1])
     }
 
+    /// The song folder itself is listed as a real directory at the archive root, then swapped
+    /// for a link to outside before its walk finishes. Uses only the pre-existing `entryListed`
+    /// hook, so it compiles on the original HEAD and fails there (the walk follows the swapped
+    /// link through re-opened paths); the fix rejects the swapped base via its `O_NOFOLLOW`
+    /// open and `dev`/`ino` verification and discards the song instead of returning outside
+    /// (or dangling) paths.
+    func testSongFolderSwappedForOutsideLinkBetweenEnumerationAndWalkIsNotScanned() throws {
+        let innerSong = song.resolvingSymlinksInPath().path + "/"
+        var scanner = MusicArchiveScanner()
+        var swapped = false
+        scanner.raceHooks.entryListed = { [self] _ in
+            guard !swapped else { return }
+            swapped = true
+            swapSongForLink()
+        }
+        let result = try scanner.scan(roots: [root])
+        XCTAssertTrue(swapped)
+        guard let songResult = result.songs.first(where: { $0.originalFolderName == "Song" }) else {
+            return
+        }
+        for preview in songResult.previewCandidates {
+            XCTAssertNotEqual(
+                preview.durationSeconds, Self.outsideSeconds,
+                "read \(preview.filePath.path) outside the archive"
+            )
+            XCTAssertTrue(
+                preview.filePath.resolvingSymlinksInPath().path.hasPrefix(innerSong),
+                preview.filePath.path
+            )
+        }
+        for version in songResult.projectVersions {
+            XCTAssertTrue(
+                version.filePath.resolvingSymlinksInPath().path.hasPrefix(innerSong),
+                version.filePath.path
+            )
+        }
+        XCTAssertFalse(songResult.previewCandidates.contains { $0.fileName == "Stolen take.wav" })
+        XCTAssertFalse(songResult.projectVersions.contains { $0.fileName == "Stolen v9.cpr" })
+    }
+
+    /// The song folder is moved aside mid-walk and a DIFFERENT real directory (initially
+    /// outside the root) is moved into its path. After the move the replacement is physically
+    /// under the root, but its inode was not the one the walk enumerated and must be rejected.
+    /// Uses only the pre-existing `entryListed` hook, so it compiles on the original HEAD and
+    /// fails there (per-file opens re-resolve the swapped path and return the replacement's
+    /// duration/notes); the fix pins the verified fd for the whole song and discards on the
+    /// `dev`/`ino` mismatch before returning anything.
+    func testSongFolderSwappedForDifferentRealDirectoryIsDiscarded() throws {
+        let fm = FileManager.default
+        try Data("inside note".utf8).write(to: song.appendingPathComponent("notes.txt"))
+        let insideCPRDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try fm.setAttributes(
+            [.modificationDate: insideCPRDate],
+            ofItemAtPath: song.appendingPathComponent("Song v1.cpr").path
+        )
+        let replacement = base.appendingPathComponent("Replacement", isDirectory: true)
+        try fm.createDirectory(at: replacement.appendingPathComponent("Mixdown"), withIntermediateDirectories: true)
+        let outsideMarker = "OUTSIDE-REPLACEMENT-\(UUID().uuidString)"
+        let outsideCPRDate = Date(timeIntervalSince1970: 1_800_000_000)
+        try Data(outsideMarker.utf8).write(to: replacement.appendingPathComponent("notes.txt"))
+        try Data("placeholder".utf8).write(to: replacement.appendingPathComponent("Song v1.cpr"))
+        try fm.setAttributes(
+            [.modificationDate: outsideCPRDate],
+            ofItemAtPath: replacement.appendingPathComponent("Song v1.cpr").path
+        )
+        try Self.wav(seconds: Self.outsideSeconds).write(to: replacement.appendingPathComponent("Mixdown/Song mix.wav"))
+        try Self.wav(seconds: Self.outsideSeconds).write(to: replacement.appendingPathComponent("Song bounce.wav"))
+        var scanner = MusicArchiveScanner()
+        var swapped = false
+        scanner.raceHooks.entryListed = { [self] _ in
+            guard !swapped else { return }
+            swapped = true
+            do {
+                try fm.moveItem(at: song, to: base.appendingPathComponent("Parked Song"))
+                try fm.moveItem(at: replacement, to: song)
+            } catch {
+                XCTFail("Could not swap song folder: \(error)")
+            }
+        }
+        let result = try scanner.scan(roots: [root])
+        XCTAssertTrue(swapped)
+        guard let songResult = result.songs.first(where: { $0.originalFolderName == "Song" }) else {
+            return
+        }
+        for preview in songResult.previewCandidates {
+            XCTAssertNotEqual(
+                preview.durationSeconds, Self.outsideSeconds,
+                "read \(preview.filePath.path) from the swapped-in directory"
+            )
+        }
+        XCTAssertNotEqual(songResult.sidecarNotes, outsideMarker, "read notes from the swapped-in directory")
+        for version in songResult.projectVersions {
+            XCTAssertNotEqual(version.modifiedAt, outsideCPRDate, "read version from the swapped-in directory")
+        }
+        XCTFail("swapped-in real directory must be discarded, not returned as Song")
+    }
+
+    private func swapSongForLink() {
+        let fm = FileManager.default
+        XCTAssertNoThrow(try fm.moveItem(at: song, to: base.appendingPathComponent("Parked Song")))
+        XCTAssertNoThrow(try fm.createSymbolicLink(at: song, withDestinationURL: outside))
+    }
+
     private func swapMixdownForLink() {
         let fm = FileManager.default
         let mixdown = song.appendingPathComponent("Mixdown")

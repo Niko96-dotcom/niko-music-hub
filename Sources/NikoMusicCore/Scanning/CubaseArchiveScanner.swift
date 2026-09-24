@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct MusicArchiveScanner: @unchecked Sendable {
@@ -185,8 +186,18 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
         for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
             try Task.checkCancellation()
-            // Same rule as `scan`: a symlink at the archive root is never followed.
-            if (try? folder.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+            // Same rule as `scan`: a symlink at the archive root is never followed. This is a
+            // single `lstat` (via the song-base verification in `scanSongFolder`): `S_IFLNK`
+            // keeps the existing skipped reason, while a vanished path or non-directory keeps
+            // the existing silent-drop behavior. No fail-open `resourceValues`/`fileExists`
+            // sequence that a swap could slip between.
+            do {
+                if let song = try scanSongFolder(folder) {
+                    songs.append(song)
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch ScanError.songBaseLeavesBase {
                 skippedEntries.append(
                     SkippedScanEntry(
                         kind: .unreadableChild,
@@ -194,19 +205,8 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                         reason: "Skipped symbolic-link folder at archive root"
                     )
                 )
+            } catch ScanError.songBaseUnavailable {
                 continue
-            }
-            var isDirectory: ObjCBool = false
-            guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
-                continue
-            }
-            do {
-                if let song = try scanSongFolder(folder) {
-                    songs.append(song)
-                }
-            } catch is CancellationError {
-                throw CancellationError()
             } catch {
                 skippedEntries.append(
                     SkippedScanEntry(
@@ -283,19 +283,54 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         try Task.checkCancellation()
         let folderName = folder.lastPathComponent
         var warnings: [String] = []
-        guard fileManager.isReadableFile(atPath: folder.path) else {
-            throw ScanError.unreadableFolder(folder.path)
+        // The song base itself must never be followed through a symlink (including a swap
+        // between the root enumeration and this walk). Verified once per folder here with one
+        // `lstat` plus one `fstat` and no path resolution; the verified fd stays pinned for
+        // this whole song and every later per-file `NoFollowPath` and the sidecar `openat`
+        // walk from it with no path lookup of the base, so a swapped link or a swapped-in
+        // real directory cannot redirect them. The archive root above may still be reached
+        // through a link (`/Volumes`, aliases): `O_NOFOLLOW` only refuses the final
+        // song-folder component. No `isReadableFile` follows the base path: the verified
+        // `O_RDONLY` open already proved readability, and that check would follow a swap.
+        let paths = EnumeratedPathResolver(folder: folder, fileManager: fileManager, baseKind: .songFolder)
+        switch paths.songBaseValidity {
+        case .leavesBase:
+            throw ScanError.songBaseLeavesBase(folder.path)
+        case .unavailable:
+            throw ScanError.songBaseUnavailable(folder.path)
+        case .valid:
+            break
         }
 
-        let walk = try walkSongFolder(folder)
+        let walk = try walkSongFolder(folder, paths: paths)
         raceHooks.songWalked?(folder)
         let versions = walk.versions
         if versions.isEmpty {
             warnings.append("No project files (.cpr or .als) found")
         }
 
-        var previews = walk.previewMatches.compactMap { previewDetector.candidate(from: $0, in: folder) }
+        // Previews open through the pinned song base. A `nil` from a file-level link
+        // (e.g. an escaped mix) skips just that file, preserving the existing partial-song
+        // behavior; a `nil` because the song base itself left (link or different real
+        // directory, via the `dev`/`ino` compare) discards the whole song, so no dangling
+        // inside paths that now resolve outside are returned and no swapped content is read.
+        // Only refused files pay for the fresh base check.
+        var previews: [PreviewCandidate] = []
+        for match in walk.previewMatches {
+            if let candidate = previewDetector.candidate(from: match, in: folder, baseDescriptor: paths.borrowedSongDescriptor) {
+                previews.append(candidate)
+            } else if paths.isSongBaseChanged() {
+                throw ScanError.songBaseLeavesBase(folder.path)
+            }
+        }
         try Task.checkCancellation()
+        // A swap after the walk (including via the `songWalked` hook) with no previews to fail
+        // above is still refused here with one `O_NOFOLLOW` open plus the `dev`/`ino` compare
+        // against the pinned open and no resolution. A mismatch discards the song; it never
+        // falls back to `PathSafety`, which would resolve the swapped path inside.
+        if paths.isSongBaseChanged() {
+            throw ScanError.songBaseLeavesBase(folder.path)
+        }
         let previewContext = PreviewRankingProjectContext.from(projectVersions: versions)
         let ranked = previewRanker.rank(previews, projectContext: previewContext)
         previews = ranked
@@ -315,7 +350,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             projectVersions: versions,
             previewCandidates: previews,
             scanWarnings: warnings,
-            sidecarNotes: sidecarNotesReader.readNotes(in: folder),
+            sidecarNotes: sidecarNotesReader.readNotes(in: folder, borrowing: paths.borrowedSongDescriptor),
             mainPreviewCandidateID: mainPreviewID,
             latestCPR: latest
         )
@@ -328,9 +363,24 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     /// audio file is opened for its duration unless the whole walk succeeds.
     ///
     /// Symlink containment and canonical paths come from `EnumeratedPathResolver`: once per
-    /// folder instead of a `stat` plus a full path resolution for every candidate file.
-    private func walkSongFolder(_ folder: URL) throws -> (versions: [ProjectVersion], previewMatches: [PreviewCandidateDetector.Match]) {
+    /// folder instead of a `stat` plus a full path resolution for every candidate file. The
+    /// resolver already verified the song base itself (`O_NOFOLLOW|O_DIRECTORY` plus
+    /// `dev`/`ino` against the pre-open `lstat`); a song folder swapped for an outside link
+    /// between the root enumeration and this walk throws `.songBaseLeavesBase` without
+    /// enumerating outside, and a swap found mid-walk discards the song the same way.
+    private func walkSongFolder(
+        _ folder: URL,
+        paths: EnumeratedPathResolver
+    ) throws -> (versions: [ProjectVersion], previewMatches: [PreviewCandidateDetector.Match]) {
         try Task.checkCancellation()
+        switch paths.songBaseValidity {
+        case .leavesBase:
+            throw ScanError.songBaseLeavesBase(folder.path)
+        case .unavailable:
+            throw ScanError.songBaseUnavailable(folder.path)
+        case .valid:
+            break
+        }
         guard let enumerator = fileManager.enumerator(
             at: folder,
             includingPropertiesForKeys: EnumeratedPathResolver.prefetchedKeys,
@@ -338,7 +388,6 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         ) else {
             return ([], [])
         }
-        let paths = EnumeratedPathResolver(folder: folder, fileManager: fileManager)
         var versions: [ProjectVersion] = []
         var previewMatches: [PreviewCandidateDetector.Match] = []
         var previewError: Error?
@@ -347,6 +396,9 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             try Task.checkCancellation()
             let entry = paths.observe(fileURL, level: enumerator.level)
             raceHooks.entryListed?(fileURL)
+            if paths.encounteredBaseSwap {
+                throw ScanError.songBaseLeavesBase(folder.path)
+            }
             if ProjectFileFormat(url: fileURL) != nil {
                 let path = fileURL.path
                 if projectSkippedPrefixes.contains(where: { path.hasPrefix($0) }) { continue }
@@ -354,6 +406,9 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 case .version(let version): versions.append(version)
                 case .leavesSong: projectSkippedPrefixes.append(path.hasSuffix("/") ? path : path + "/")
                 case .notProject, .excludedByName, .notRegularFile: continue
+                }
+                if paths.encounteredBaseSwap {
+                    throw ScanError.songBaseLeavesBase(folder.path)
                 }
             } else if previewError == nil {
                 do {
@@ -363,7 +418,13 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 } catch {
                     previewError = error
                 }
+                if paths.encounteredBaseSwap {
+                    throw ScanError.songBaseLeavesBase(folder.path)
+                }
             }
+        }
+        if paths.encounteredBaseSwap {
+            throw ScanError.songBaseLeavesBase(folder.path)
         }
         if let previewError { throw previewError }
         return (versions.sorted(by: ProjectVersionDetector.newestFirst), previewMatches)
@@ -371,11 +432,22 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
     private enum ScanError: LocalizedError {
         case unreadableFolder(String)
+        /// The song folder itself is a symlink or was swapped for one (or another directory)
+        /// between enumeration and use. The full scan reports it as an unscannable folder; the
+        /// incremental scan reports the existing symlink reason.
+        case songBaseLeavesBase(String)
+        /// The song folder vanished or is not a directory. Both scans keep the existing
+        /// vanished/not-directory behavior (silent drop in incremental, unscannable in full).
+        case songBaseUnavailable(String)
 
         var errorDescription: String? {
             switch self {
             case .unreadableFolder(let path):
                 "Folder is not readable: \(path)"
+            case .songBaseLeavesBase(let path):
+                "Song folder is a symbolic link or was replaced: \(path)"
+            case .songBaseUnavailable(let path):
+                "Song folder vanished or is not a directory: \(path)"
             }
         }
     }

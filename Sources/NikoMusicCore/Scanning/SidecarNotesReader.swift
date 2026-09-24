@@ -15,18 +15,40 @@ public struct SidecarNotesReader: @unchecked Sendable {
         self.fileManager = fileManager
     }
 
-    /// Runs once per song on every scan, so it asks the filesystem once: the `open` below is the
-    /// whole check. A missing folder, a folder that is a file, or a missing `notes.txt` fails the
-    /// open. `O_NOFOLLOW` refuses `notes.txt` when it is a symbolic link, the only way a file
-    /// named directly inside the folder can resolve outside it. So a separate existence check
-    /// and a resolve-both-paths containment check would only repeat it, at a `stat` plus two
-    /// path resolutions per song. The folder itself may be reached through a link, as before.
+    /// Opens the song folder itself before reading anything below it, so a folder that
+    /// is a symbolic link, a file, or missing yields no notes instead of text from elsewhere.
+    /// The folder descriptor pins the directory: `notes.txt` is opened relative to it with
+    /// `openat`, so swapping the folder for a link between enumeration and this read cannot
+    /// redirect it. `O_NOFOLLOW` refuses `notes.txt` when it is itself a symbolic link, and
+    /// `O_NONBLOCK` keeps a hostile FIFO of that name from stalling a scan. Both descriptors
+    /// are closed on every path below.
     public func readNotes(in songFolder: URL) -> String? {
-        let url = songFolder.standardizedFileURL.appendingPathComponent(Self.fileName)
+        let folderDescriptor = Darwin.open(
+            songFolder.standardizedFileURL.path,
+            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+        )
+        guard folderDescriptor >= 0 else { return nil }
+        defer { Darwin.close(folderDescriptor) }
 
-        // Checking at open time leaves no time-of-check/time-of-use gap for a final-component
-        // symlink. `O_NONBLOCK` ensures a hostile FIFO named notes.txt cannot stall a scan.
-        let descriptor = Darwin.open(url.path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW)
+        return readNotesBorrowing(folderDescriptor)
+    }
+
+    /// Reads through the scan's pinned verified song-base fd without looking up its path.
+    /// The borrowed fd remains owned by the caller.
+    func readNotes(in songFolder: URL, borrowing baseDescriptor: Int32?) -> String? {
+        guard let baseDescriptor else { return readNotes(in: songFolder) }
+        return readNotesBorrowing(baseDescriptor)
+    }
+
+    private func readNotesBorrowing(_ folderDescriptor: Int32) -> String? {
+        // Opened relative to the pinned folder, there is no time-of-check/time-of-use gap
+        // for a final-component symlink. `O_NONBLOCK` ensures a hostile FIFO named
+        // notes.txt cannot stall a scan.
+        let descriptor = Darwin.openat(
+            folderDescriptor,
+            Self.fileName,
+            O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC
+        )
         guard descriptor >= 0 else { return nil }
         defer { Darwin.close(descriptor) }
 

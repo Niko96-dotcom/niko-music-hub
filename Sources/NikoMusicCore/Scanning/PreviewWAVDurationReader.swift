@@ -18,8 +18,15 @@ enum PreviewWAVDurationReader {
 
     /// `descriptor`, when given, is `fileURL` already opened by the caller (without following
     /// links, see `NoFollowPath`); a WAV header is read from it rather than from the path. Other
-    /// formats go through `AVAudioFile`, which opens the path itself while the caller holds the
-    /// verified descriptor.
+    /// formats read the same verified descriptor through `/dev/fd/<descriptor>`, which
+    /// duplicates the open file instead of resolving `fileURL` again, so a pathname swapped
+    /// for a link after the caller opened the file cannot redirect the read.
+    ///
+    /// Fully closed when a descriptor is given: there is no path fallback and therefore no
+    /// residual open-then-check window. When `AVAudioFile(/dev/fd/<descriptor>)` fails, nil
+    /// is returned (fail closed) and `fileURL` is never opened. A nil descriptor keeps the
+    /// legacy direct path read. WAV never takes the `/dev/fd` path: its header is always
+    /// read from the descriptor itself.
     static func durationSeconds(for fileURL: URL, openedAs descriptor: Int32?) -> Double? {
         if fileURL.pathExtension.lowercased() == "wav" {
             if let descriptor {
@@ -29,7 +36,18 @@ enum PreviewWAVDurationReader {
             defer { try? handle.close() }
             return wavDuration(from: handle)
         }
+        if let descriptor {
+            return nonWAVDuration(descriptor: descriptor)
+        }
         guard let file = try? AVAudioFile(forReading: fileURL),
+              file.length > 0, file.fileFormat.sampleRate > 0 else { return nil }
+        return Double(file.length) / file.fileFormat.sampleRate
+    }
+
+    /// A non-WAV duration from the caller's verified `descriptor` only. Fail closed:
+    /// a `/dev/fd` read failure returns nil without ever opening the path.
+    private static func nonWAVDuration(descriptor: Int32) -> Double? {
+        guard let file = try? AVAudioFile(forReading: URL(fileURLWithPath: "/dev/fd/\(descriptor)")),
               file.length > 0, file.fileFormat.sampleRate > 0 else { return nil }
         return Double(file.length) / file.fileFormat.sampleRate
     }

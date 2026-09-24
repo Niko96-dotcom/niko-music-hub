@@ -76,8 +76,8 @@ final class SidecarNotesReaderTests: XCTestCase {
         XCTAssertNil(SidecarNotesReader().readNotes(in: file))
     }
 
-    /// The folder itself may be reached through a link; only `notes.txt` must not be one.
-    func testReadsNotesThroughALinkedFolder() throws {
+    /// The folder itself must not be reached through a link: only the real folder yields notes.
+    func testRefusesNotesWhenFolderItselfIsALink() throws {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let real = root.appendingPathComponent("Real", isDirectory: true)
@@ -86,8 +86,24 @@ final class SidecarNotesReaderTests: XCTestCase {
         let alias = root.appendingPathComponent("Alias")
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: real)
 
-        XCTAssertEqual(SidecarNotesReader().readNotes(in: alias), "linked note")
+        XCTAssertNil(SidecarNotesReader().readNotes(in: alias))
         XCTAssertEqual(SidecarNotesReader().readNotes(in: URL(fileURLWithPath: "/private" + real.path)), "linked note")
+    }
+
+    /// A song folder that is a link to an outside folder must never surface the outside notes.
+    func testLinkedFolderNeverReturnsOutsideNotesMarker() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let outside = root.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
+        let marker = "OUTSIDE-MARKER-\(UUID().uuidString)"
+        try Data(marker.utf8).write(to: outside.appendingPathComponent(SidecarNotesReader.fileName))
+        let alias = root.appendingPathComponent("Song")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: outside)
+
+        XCTAssertNil(SidecarNotesReader().readNotes(in: alias))
+        // Sanity: the marker is really there when read through the real folder.
+        XCTAssertEqual(SidecarNotesReader().readNotes(in: outside), marker)
     }
 
     private func makeTemporaryRoot() throws -> URL {

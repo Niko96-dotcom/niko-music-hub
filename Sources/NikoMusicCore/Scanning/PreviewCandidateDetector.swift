@@ -94,17 +94,19 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
 
     /// Builds the candidate, reading the duration from the file header. When the walk derived the
     /// match (`noFollowPath` set), this is where its link check runs: nil when the file can no
-    /// longer be reached without following a link below the song folder.
-    func candidate(from match: Match, in songFolder: URL) -> PreviewCandidate? {
+    /// longer be reached without following a link below the song folder. `baseDescriptor`, when
+    /// given, is the pinned verified song-base fd the check/open walks from, so a song folder
+    /// swapped for a different real directory at the same path cannot redirect the read.
+    func candidate(from match: Match, in songFolder: URL, baseDescriptor: Int32? = nil) -> PreviewCandidate? {
         let fileURL = match.fileURL
         let fileName = fileURL.lastPathComponent
         var durationSeconds: Double?
         if !shouldReadDuration(match.canonicalPath ?? PreviewWAVDurationReader.canonicalPath(of: fileURL)) {
             // Not opened (cloud placeholders would download), but still never listed through a link.
-            if let noFollowPath = match.noFollowPath, !noFollowPath.isLinkFree() { return nil }
+            if let noFollowPath = match.noFollowPath, !noFollowPath.isLinkFree(baseDescriptor: baseDescriptor) { return nil }
         } else {
             if let noFollowPath = match.noFollowPath {
-                switch noFollowPath.openRegularFile() {
+                switch noFollowPath.openRegularFile(baseDescriptor: baseDescriptor) {
                 case .file(let descriptor):
                     durationSeconds = durationReader(fileURL, descriptor)
                     Darwin.close(descriptor)

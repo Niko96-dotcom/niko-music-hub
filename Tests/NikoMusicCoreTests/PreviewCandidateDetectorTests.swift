@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import NikoMusicCore
 
@@ -133,6 +134,91 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         let candidates = try PreviewCandidateDetector(fileManager: fm).detectCandidates(in: songFolder)
         XCTAssertEqual(candidates.map(\.fileName), ["legit.wav"])
         XCTAssertFalse(candidates.contains(where: { $0.fileName == "escape.wav" }))
+    }
+
+    /// After the detector's verified open, the pathname is swapped for a link to an outside
+    /// file. The duration must come from the verified descriptor (or be refused), never from
+    /// the swapped-in outside file. Against the pre-fix reader, which reopens the pathname
+    /// for non-WAV formats, this returns the outside duration and fails.
+    func testNonWAVDurationIgnoresPathnameSwappedAfterOpen() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "preview-race-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        let mixdown = songFolder.appendingPathComponent("Mixdown", isDirectory: true)
+        let outside = base.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: mixdown, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let insideURL = mixdown.appendingPathComponent("take.m4a")
+        try Self.makeM4ATone(at: insideURL, durationSeconds: 1)
+        let outsideURL = outside.appendingPathComponent("evil.m4a")
+        try Self.makeM4ATone(at: outsideURL, durationSeconds: 7)
+
+        let insideDuration = try XCTUnwrap(PreviewWAVDurationReader.durationSeconds(for: insideURL))
+        let outsideDuration = try XCTUnwrap(PreviewWAVDurationReader.durationSeconds(for: outsideURL))
+        XCTAssertNotEqual(insideDuration, outsideDuration, accuracy: 0.5, "fixtures must be distinguishable")
+
+        let detector = PreviewCandidateDetector(
+            shouldReadDuration: { _ in true },
+            durationReader: { url, descriptor in
+                // The attacker wins the race between the verified open and the duration read:
+                // the pathname now points outside the song folder.
+                try? FileManager.default.removeItem(at: url)
+                try? FileManager.default.createSymbolicLink(at: url, withDestinationURL: outsideURL)
+                return PreviewWAVDurationReader.durationSeconds(for: url, openedAs: descriptor)
+            }
+        )
+
+        let match = try XCTUnwrap(try detector.match(
+            insideURL,
+            in: songFolder,
+            resolve: {
+                .init(
+                    isContained: true,
+                    canonicalPath: insideURL.path,
+                    noFollowPath: NoFollowPath(base: songFolder.path, components: ["Mixdown", "take.m4a"])
+                )
+            }
+        ))
+        let candidate = detector.candidate(from: match, in: songFolder)
+        XCTAssertNotNil(candidate, "a swapped pathname must not drop the candidate listing")
+        // Fail-closed: nil (refused) or the inside duration are both safe. The outside
+        // duration leaking through is the vulnerability.
+        if let duration = candidate?.durationSeconds {
+            XCTAssertNotEqual(
+                duration,
+                outsideDuration,
+                accuracy: 0.5,
+                "duration must not come from the file swapped in after the verified open"
+            )
+            XCTAssertEqual(duration, insideDuration, accuracy: 0.5, "duration must come from the verified file")
+        }
+    }
+
+    private static func makeM4ATone(at url: URL, durationSeconds: Double) throws {
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44_100.0,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 128_000,
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        try writeTone(into: file, durationSeconds: durationSeconds)
+    }
+
+    private static func writeTone(into file: AVAudioFile, durationSeconds: Double) throws {
+        let sampleRate = 44_100.0
+        let frames = AVAudioFrameCount(sampleRate * durationSeconds)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames))
+        buffer.frameLength = frames
+        let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+        for index in 0..<Int(frames) {
+            samples[index] = Float(sin(2.0 * .pi * 440.0 * Double(index) / sampleRate)) * 0.25
+        }
+        try file.write(from: buffer)
     }
 
     private static func wavHeader(
