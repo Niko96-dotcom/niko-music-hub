@@ -35,7 +35,7 @@ final class NewSongCreationErrorCopyTests: XCTestCase {
         // LocalizedError conformance surfaces the same copy table.
         XCTAssertEqual(
             (NewSongFolderCreator.CreationError.invalidName as Error).localizedDescription,
-            "Use a plain folder name without slashes or parent-folder segments."
+            "Use a plain folder name without slashes or colons that does not start with a dot."
         )
         XCTAssertEqual(
             (NewSongFolderCreator.CreationError.emptyName as Error).localizedDescription,

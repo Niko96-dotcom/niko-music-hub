@@ -15,7 +15,7 @@ failure throws fail-closed, preserves every byte, and reports a clear blocked
 reason. Vault functionality is never disabled to hide a missing proof, and a
 missing proof never authorizes deletion.
 
-## User-visible workflow (1.7.0)
+## User-visible workflow
 
 - Archiving intent is **Keep a verified copy** or **Archive and free up space**. It replaces the earlier rollout selector in the UI; the legacy value is retained for existing records. Choosing copy-only never gains removal later through a settings change.
 - Background scheduling is off by default and opted in independently from manual archiving.

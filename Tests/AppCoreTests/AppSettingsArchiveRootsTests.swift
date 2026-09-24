@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 import XCTest
 
 final class AppSettingsArchiveRootsTests: XCTestCase {

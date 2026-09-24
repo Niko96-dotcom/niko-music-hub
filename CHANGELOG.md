@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1 - 2026-09-24
+
+- Make first-run helper installation a single guided step, keep downloads and conversions cancellable, and prevent cancelled helper installs from resetting a newer attempt.
+- Keep recorder permission checks bounded and inaudible, preserve takes when capture is lost, and record the correct tap stream on output devices that also have inputs.
+- Repair settings and song metadata without loosening Project Vault protections; keep archive roots read-only, including CLI exports, and recheck song folders against symlink changes during scans.
+- Keep incomplete downloads out of the output folder, avoid false stalls during post-processing, and support the converter's 32-bit FFmpeg fallback.
+- Improve mixdown key detection at 88.2 and 96 kHz, reject hidden song-draft names, and tighten path containment for stem outputs and diagnostics.
+
 ## 1.7.0 - 2026-09-22
 
 - Choose how archiving treats the Active copy: Keep a verified copy, or Archive and free up space. Earlier copy-only choices stay copy-only and never gain removal.
