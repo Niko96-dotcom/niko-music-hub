@@ -82,11 +82,13 @@ final class ArchiveWorkflowUndoChainResponder: NSResponder, NSMenuItemValidation
     /// continues down the chain (field editor, NSApp, app delegate) instead
     /// of locking onto us and disabling the menu.
     override func responds(to aSelector: Selector!) -> Bool {
+        // AppKit resolves action targets on the main thread; the override is
+        // nonisolated only because NSObject declares it that way.
         if aSelector == #selector(ArchiveWorkflowUndoChainResponder.undo(_:)) {
-            return scopedUndoManager?.canUndo == true
+            return MainActor.assumeIsolated { scopedUndoManager?.canUndo == true }
         }
         if aSelector == #selector(ArchiveWorkflowUndoChainResponder.redo(_:)) {
-            return scopedUndoManager?.canRedo == true
+            return MainActor.assumeIsolated { scopedUndoManager?.canRedo == true }
         }
         return super.responds(to: aSelector)
     }

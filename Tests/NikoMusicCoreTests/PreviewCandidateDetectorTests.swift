@@ -185,17 +185,16 @@ final class PreviewCandidateDetectorTests: XCTestCase {
         ))
         let candidate = detector.candidate(from: match, in: songFolder)
         XCTAssertNotNil(candidate, "a swapped pathname must not drop the candidate listing")
-        // Fail-closed: nil (refused) or the inside duration are both safe. The outside
-        // duration leaking through is the vulnerability.
-        if let duration = candidate?.durationSeconds {
-            XCTAssertNotEqual(
-                duration,
-                outsideDuration,
-                accuracy: 0.5,
-                "duration must not come from the file swapped in after the verified open"
-            )
-            XCTAssertEqual(duration, insideDuration, accuracy: 0.5, "duration must come from the verified file")
-        }
+        // The duration is read from the verified descriptor, so it is the inside file's even
+        // after the swap. A nil here would mean non-WAV durations vanished from ordinary scans.
+        let duration = try XCTUnwrap(candidate?.durationSeconds, "the verified file's duration must still be read")
+        XCTAssertNotEqual(
+            duration,
+            outsideDuration,
+            accuracy: 0.5,
+            "duration must not come from the file swapped in after the verified open"
+        )
+        XCTAssertEqual(duration, insideDuration, accuracy: 0.5, "duration must come from the verified file")
     }
 
     private static func makeM4ATone(at url: URL, durationSeconds: Double) throws {

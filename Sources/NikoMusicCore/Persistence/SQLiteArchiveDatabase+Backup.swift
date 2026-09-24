@@ -11,7 +11,7 @@ import SQLite3
 /// validation never creates sidecars and never consumes WAL/SHM content.
 /// Source files are only read; failures remove only owned staging content.
 public extension SQLiteArchiveDatabase {
-    public enum BackupError: Error, Equatable, Sendable, CustomStringConvertible {
+    enum BackupError: Error, Equatable, Sendable, CustomStringConvertible {
         case destinationOccupied(String)
         case destinationIsSymlink(String)
         case backupFailed(String)
@@ -37,7 +37,7 @@ public extension SQLiteArchiveDatabase {
     /// staged inside a private owned staging directory (O_EXCL file) and
     /// promoted with a no-replace hard link, so a raced destination is never
     /// overwritten and only owned staging is ever removed.
-    public func backup(to destinationURL: URL) throws {
+    func backup(to destinationURL: URL) throws {
         try Self.rejectSymlinkOrOccupied(destinationURL)
         let parent = destinationURL.deletingLastPathComponent()
         do {
@@ -163,7 +163,7 @@ public extension SQLiteArchiveDatabase {
     /// files, and unexpected sidecars; requires a DELETE header so no
     /// WAL/SHM/journal content is consumed; opens immutable read-only so no
     /// sidecar is created; then checks integrity and expected app tables.
-    public static func verifyBackupFileIntegrity(at url: URL) throws {
+    static func verifyBackupFileIntegrity(at url: URL) throws {
         if isSymlink(at: url) {
             throw BackupError.integrityFailed("symlink refused: \(url.lastPathComponent)")
         }
