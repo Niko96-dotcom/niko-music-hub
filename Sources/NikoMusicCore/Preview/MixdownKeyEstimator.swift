@@ -66,9 +66,12 @@ public enum MixdownKeyEstimator {
     ) -> Int? {
         var bestLag = 0
         var bestCorrelation = 0.0
-        let minLag = Int(sampleRate / 400)
-        let maxLag = Int(sampleRate / 70)
-        guard maxLag < count else { return nil }
+        // The window is fixed at 1024 frames; at 88.2/96 kHz the 70 Hz lag would
+        // exceed it, so clamp instead of skipping every window (which returned
+        // nil for every high-sample-rate mixdown).
+        let minLag = max(1, Int(sampleRate / 400))
+        let maxLag = min(Int(sampleRate / 70), count - 1)
+        guard minLag <= maxLag else { return nil }
         for lag in minLag...maxLag {
             guard !Task.isCancelled else { return nil }
             var sum = 0.0

@@ -9,15 +9,21 @@ public enum DiagnosticsPathRedactor {
         let home = homeDirectory ?? NSHomeDirectory()
         let standardizedHome = (home as NSString).standardizingPath
         let standardizedPath = (path as NSString).standardizingPath
-        guard standardizedPath.hasPrefix(standardizedHome) else { return path }
+        guard isHomeOrDescendant(standardizedPath, home: standardizedHome) else { return path }
         let suffix = standardizedPath.dropFirst(standardizedHome.count)
-        if suffix.hasPrefix("/") {
-            return "~" + suffix
-        }
         if suffix.isEmpty {
             return "~"
         }
-        return "~/" + suffix
+        return "~" + suffix
+    }
+
+    /// True for the home directory itself and paths below it. A plain prefix
+    /// match would also claim sibling accounts (`/Users/nikolaus` for home
+    /// `/Users/niko`), rewriting them to a wrong `~/...` path.
+    private static func isHomeOrDescendant(_ path: String, home: String) -> Bool {
+        guard !home.isEmpty, path.hasPrefix(home) else { return false }
+        let suffix = path.dropFirst(home.count)
+        return suffix.isEmpty || suffix.hasPrefix("/") || home.hasSuffix("/")
     }
 
     /// Redacts every home-prefixed path embedded in free-form diagnostics text.
@@ -29,7 +35,8 @@ public enum DiagnosticsPathRedactor {
         var result = ""
         var index = text.startIndex
         while index < text.endIndex {
-            if text[index...].hasPrefix(standardizedHome) {
+            if text[index...].hasPrefix(standardizedHome),
+               isHomeOrDescendant(String(text[index...].prefix(standardizedHome.count + 1)), home: standardizedHome) {
                 let pathEnd = endOfEmbeddedPath(in: text, startingAt: index)
                 let path = String(text[index..<pathEnd])
                 result += redact(path, homeDirectory: home)

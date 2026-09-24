@@ -143,6 +143,8 @@ public struct FFmpegAudioConverter: AudioConverting, @unchecked Sendable {
             return "pcm_s16le"
         case 24:
             return "pcm_s24le"
+        case 32:
+            return "pcm_s32le"
         default:
             throw AudioConversionError.unsupportedBitDepth(bitDepth)
         }

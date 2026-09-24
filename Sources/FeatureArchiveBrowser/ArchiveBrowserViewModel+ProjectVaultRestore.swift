@@ -12,7 +12,8 @@ extension ArchiveBrowserViewModel {
         enqueueProjectVaultRestore(request.song, selectedPath: selectedPath, destinationRelativePath: destination)
     }
 
-    func retryReviewedProjectVaultRestore(for song: Song) {        guard let runtime = projectVaultRuntime,
+    func retryReviewedProjectVaultRestore(for song: Song) {
+        guard let runtime = projectVaultRuntime,
               let restoreID = projectVaultPresentation(for: song)?.retryRestoreID else {
             setProjectVaultStatusMessage(
                 "Restore retry is unavailable because no preserved Project Vault restore was found."

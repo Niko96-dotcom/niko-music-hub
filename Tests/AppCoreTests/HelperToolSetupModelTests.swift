@@ -108,6 +108,50 @@ final class HelperToolSetupModelTests: XCTestCase {
         XCTAssertEqual(model.installGeneration, 0)
     }
 
+    func testInstallStartedAfterCancelIsNotClearedByTheCancelledRun() async throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let locator = HelperToolLocator(
+            managedRoot: root.appendingPathComponent("Tools", isDirectory: true),
+            systemDirectories: []
+        )
+        let installer = HelperToolInstaller(
+            locator: locator,
+            downloader: HangingSetupDownloader(),
+            processRunner: SucceedingSetupRunner()
+        )
+        let model = HelperToolSetupModel(
+            locator: locator,
+            installer: installer,
+            settingsProvider: { HelperToolSettings() }
+        )
+        model.refresh()
+
+        model.install(.downloadAndConvert)
+        model.cancelInstalls()
+        // Second run starts before the cancelled run has observed its cancellation.
+        model.install(.downloadAndConvert)
+        XCTAssertTrue(model.isInstalling)
+
+        // Let the cancelled run finish; it must not reset the row the new run owns.
+        try await Task.sleep(for: .milliseconds(300))
+        guard case .installing = model.states[.downloadAndConvert] else {
+            return XCTFail("Cancelled run reset the newer install: \(String(describing: model.states[.downloadAndConvert]))")
+        }
+        XCTAssertTrue(model.isInstalling)
+
+        model.cancelInstalls()
+        try await waitUntilNotInstalling(model)
+        XCTAssertEqual(model.states[.downloadAndConvert], .notInstalled)
+        XCTAssertEqual(model.installGeneration, 0)
+
+        // The model accepts a fresh install once the last run is really done.
+        model.install(.downloadAndConvert)
+        XCTAssertTrue(model.isInstalling)
+        model.cancelInstalls()
+        try await waitUntilNotInstalling(model)
+    }
+
     func testSuccessfulInstallEndsReadyAndBumpsGeneration() async throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }

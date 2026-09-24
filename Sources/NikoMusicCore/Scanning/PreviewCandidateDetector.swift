@@ -132,10 +132,20 @@ public struct PreviewCandidateDetector: @unchecked Sendable {
     }
 
     static func folderRole(for fileURL: URL, songFolder: URL) -> PreviewFolderRole {
-        let relative = fileURL.deletingLastPathComponent().path
-            .replacingOccurrences(of: songFolder.standardizedFileURL.path, with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let components = relative.split(separator: "/").map(String.init)
+        let parentPath = fileURL.deletingLastPathComponent().standardizedFileURL.path
+        let basePath = songFolder.standardizedFileURL.path
+        // Only a leading song-folder prefix is removed; a substring replacement
+        // would also strip later occurrences of the same text inside the path.
+        let relative: String
+        if parentPath == basePath {
+            relative = ""
+        } else if parentPath.hasPrefix(basePath + "/") {
+            relative = String(parentPath.dropFirst(basePath.count))
+        } else {
+            relative = parentPath
+        }
+        let relativeComponents = relative.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let components = relativeComponents.split(separator: "/").map(String.init)
         let lowerComponents = components.map { $0.lowercased() }
         if lowerComponents.contains("stems") {
             return .stems

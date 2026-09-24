@@ -11,7 +11,7 @@ public enum NewSongCreationErrorCopy: Sendable {
         case .emptyName:
             return "Enter a song folder name."
         case .invalidName:
-            return "Use a plain folder name without slashes or parent-folder segments."
+            return "Use a plain folder name without slashes or colons that does not start with a dot."
         case .folderExists:
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {

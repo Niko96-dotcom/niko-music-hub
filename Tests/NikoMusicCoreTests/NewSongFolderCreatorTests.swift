@@ -46,6 +46,24 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertTrue(song.folderPath.path.hasPrefix(drafts.standardizedFileURL.path))
     }
 
+    func testHiddenAndColonNamesAreRejectedBeforeAnythingIsCreated() throws {
+        let fm = FileManager.default
+        let root = try makeDirectory(prefix: "new-song-unsafe-names")
+        defer { try? fm.removeItem(at: root) }
+
+        // A dot-prefixed folder is hidden from the read-only scanner, so the draft
+        // would disappear on the next scan; ":" renders as "/" in Finder.
+        for name in [".Hidden Draft", "Mix: Final"] {
+            XCTAssertThrowsError(
+                try NewSongFolderCreator.create(request: NewSongRequest(name: name, root: root), fileManager: fm),
+                name
+            ) { error in
+                XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .invalidName, name)
+            }
+        }
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: root.path), [])
+    }
+
     func testTemplateEqualToOutputRootIsRejectedWithoutSongFolder() throws {
         let fm = FileManager.default
         let root = try makeDirectory(prefix: "new-song-template-root")

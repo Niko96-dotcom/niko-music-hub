@@ -200,6 +200,13 @@ private final class POSIXProcessExecution: @unchecked Sendable {
             closePair(standardOutputPipe)
             throw launchError(errno)
         }
+        // Concurrent launches: a second child spawned while these pipes are open
+        // must not inherit them, or the first child's EOF is delayed until the
+        // second exits. The dup2 file actions below still hand the child its own
+        // stdout/stderr (dup2 clears close-on-exec on the target descriptors).
+        for descriptor in standardOutputPipe + standardErrorPipe {
+            setCloseOnExec(descriptor)
+        }
 
         var actions: posix_spawn_file_actions_t? = nil
         var attributes: posix_spawnattr_t? = nil
@@ -315,6 +322,13 @@ private final class POSIXProcessExecution: @unchecked Sendable {
         let currentFlags = fcntl(descriptor, F_GETFL)
         if currentFlags >= 0 {
             _ = fcntl(descriptor, F_SETFL, currentFlags | O_NONBLOCK)
+        }
+    }
+
+    private func setCloseOnExec(_ descriptor: Int32) {
+        let currentFlags = fcntl(descriptor, F_GETFD)
+        if currentFlags >= 0 {
+            _ = fcntl(descriptor, F_SETFD, currentFlags | FD_CLOEXEC)
         }
     }
 

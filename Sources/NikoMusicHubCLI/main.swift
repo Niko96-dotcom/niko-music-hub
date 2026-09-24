@@ -38,6 +38,15 @@ struct NikoMusicHubCLI {
     private static func runExportIndex(args: [String]) throws {
         let roots = try parseRoots(args)
         let output = parseOutput(args) ?? URL(fileURLWithPath: "archive-index-export.json")
+        // Same read-only boundary as the app's export and `export-diagnostics`:
+        // never write the index into an archive root.
+        let policy = ReadOnlyArchivePolicy()
+        do {
+            try policy.enforceNoWrite(at: output, archiveRoots: roots)
+            try policy.enforceNoWrite(at: output.deletingLastPathComponent(), archiveRoots: roots)
+        } catch ReadOnlyArchivePolicyError.writeDenied {
+            throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
+        }
         let result = try MusicArchiveScanner().scan(roots: roots)
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: result.songs)
         try data.write(to: output)

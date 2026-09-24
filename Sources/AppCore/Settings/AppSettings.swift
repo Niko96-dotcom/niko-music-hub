@@ -460,10 +460,13 @@ public struct AppSettings: Equatable, Codable, Sendable {
         }
         set {
             let retainedVaultRoots = musicRoots.filter { $0.role != .scanOnly }
+            // Stored lists can carry the same Scan-only path twice (legacy salvage,
+            // hand-edited defaults); keep the first entry instead of trapping.
             let existingScanRoots = Dictionary(
-                uniqueKeysWithValues: musicRoots
+                musicRoots
                     .filter { $0.role == .scanOnly }
-                    .map { ($0.fallbackURL.path, $0) }
+                    .map { ($0.fallbackURL.path, $0) },
+                uniquingKeysWith: { first, _ in first }
             )
             let replacementScanRoots = newValue.map { legacyRoot -> StoredMusicRoot in
                 if var existing = existingScanRoots[legacyRoot.url.standardizedFileURL.path] {

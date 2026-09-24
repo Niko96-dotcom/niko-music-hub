@@ -11,7 +11,9 @@ public enum YtDlpAvailability: Equatable, Sendable {
 public struct YtDlpHealthChecker: Sendable {
     private let runner: any ExternalProcessRunning
     private let fileExists: @Sendable (String) -> Bool
-    private let referenceDate: Date
+    /// Fixed "today" for tests; `nil` reads the clock on every check so a
+    /// long-running app does not keep judging staleness against its launch date.
+    private let referenceDateOverride: Date?
     private let locator: HelperToolLocator
 
     public init(
@@ -19,12 +21,12 @@ public struct YtDlpHealthChecker: Sendable {
         fileExists: @escaping @Sendable (String) -> Bool = {
             FileManager.default.fileExists(atPath: $0)
         },
-        referenceDate: Date = Date(),
+        referenceDate: Date? = nil,
         locator: HelperToolLocator = .standard()
     ) {
         self.runner = runner
         self.fileExists = fileExists
-        self.referenceDate = referenceDate
+        self.referenceDateOverride = referenceDate
         self.locator = locator
     }
 
@@ -49,6 +51,7 @@ public struct YtDlpHealthChecker: Sendable {
                 return .unusable(message: diagnosticMessage(from: result))
             }
             let version = versionLine(from: result.standardOutput)
+            let referenceDate = referenceDateOverride ?? Date()
             if YtDlpVersionPolicy.isStale(version: version, referenceDate: referenceDate) {
                 return .outdated(
                     current: version,

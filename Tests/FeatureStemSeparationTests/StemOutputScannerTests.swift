@@ -56,6 +56,28 @@ struct StemOutputScannerTests {
     }
 
     @Test
+    func scan_rejectsSymlinkIntoSiblingFolderSharingThePrefix() throws {
+        // "/x/job-other/vocals.wav" starts with "/x/job" but is outside "/x/job".
+        let folder = try createTempFolder(withFiles: ["drums.wav", "bass.wav", "other.wav"])
+        let sibling = URL(fileURLWithPath: folder.path + "-other", isDirectory: true)
+        try FileManager.default.createDirectory(at: sibling, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: sibling) }
+        let outsideVocals = sibling.appendingPathComponent("vocals.wav")
+        FileManager.default.createFile(atPath: outsideVocals.path, contents: Data("stem".utf8))
+        try FileManager.default.createSymbolicLink(
+            at: folder.appendingPathComponent("vocals.wav"),
+            withDestinationURL: outsideVocals
+        )
+
+        let result = scanner.scan(outputFolderURL: folder, expectedRoles: StemSeparationPreset.fast4.expectedStemRoles)
+        guard case .failed(let message) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        #expect(message.contains("escapes"))
+    }
+
+    @Test
     func scan_ignoresSubdirectoriesAndUnrelatedFiles() throws {
         let folder = try createTempFolder(withFiles: ["vocals.wav", "drums.wav", "bass.wav", "other.wav", "readme.txt"])
         let subFolder = folder.appendingPathComponent("nested")

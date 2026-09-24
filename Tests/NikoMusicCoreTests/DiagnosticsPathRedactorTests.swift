@@ -29,6 +29,23 @@ final class DiagnosticsPathRedactorTests: XCTestCase {
         )
     }
 
+    func testLeavesSiblingHomeDirectoryUntouched() {
+        // "/Users/testerson" shares the prefix of "/Users/tester" but is another account.
+        let home = "/Users/tester"
+        let sibling = "/Users/testerson/Music/Other.cpr"
+        XCTAssertEqual(DiagnosticsPathRedactor.redact(sibling, homeDirectory: home), sibling)
+        XCTAssertEqual(DiagnosticsPathRedactor.redact(home, homeDirectory: home), "~")
+    }
+
+    func testRedactPathsInTextLeavesSiblingHomeDirectoryUntouched() {
+        let home = "/Users/tester"
+        let input = "Copied /Users/testerson/Music/Other.cpr next to \(home)/Music/Mine.cpr"
+        XCTAssertEqual(
+            DiagnosticsPathRedactor.redactPathsInText(input, homeDirectory: home),
+            "Copied /Users/testerson/Music/Other.cpr next to ~/Music/Mine.cpr"
+        )
+    }
+
     func testRedactPathsInTextLeavesNonHomePathsUntouched() {
         let home = "/Users/tester"
         let input = "External archive at /Volumes/Studio/Song.cpr"

@@ -431,7 +431,6 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     }
 
     private enum ScanError: LocalizedError {
-        case unreadableFolder(String)
         /// The song folder itself is a symlink or was swapped for one (or another directory)
         /// between enumeration and use. The full scan reports it as an unscannable folder; the
         /// incremental scan reports the existing symlink reason.
@@ -442,8 +441,6 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .unreadableFolder(let path):
-                "Folder is not readable: \(path)"
             case .songBaseLeavesBase(let path):
                 "Song folder is a symbolic link or was replaced: \(path)"
             case .songBaseUnavailable(let path):

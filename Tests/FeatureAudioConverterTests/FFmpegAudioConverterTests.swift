@@ -217,7 +217,7 @@ final class FFmpegAudioConverterTests: XCTestCase {
         let outputDirectory = directory.appendingPathComponent("out", isDirectory: true)
         try Data("source".utf8).write(to: sourceURL)
         var preset = AudioPreset.cubaseDefault
-        preset.bitDepth = 32
+        preset.bitDepth = 20
         preset.channelMode = .stereo
         let converter = FFmpegAudioConverter(
             ffmpegURL: URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg"),
@@ -238,8 +238,45 @@ final class FFmpegAudioConverterTests: XCTestCase {
             )
             XCTFail("Expected unsupported bit depth")
         } catch let error as AudioConversionError {
-            XCTAssertEqual(error, .unsupportedBitDepth(32))
+            XCTAssertEqual(error, .unsupportedBitDepth(20))
         }
+    }
+
+    func testUsesThirtyTwoBitPCMCodecForThePresetTheConverterOffers() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("Source File.wav")
+        let outputDirectory = directory.appendingPathComponent("out", isDirectory: true)
+        try writeTestWAV(to: sourceURL, sampleRate: 44100, bitDepth: 16, channelCount: 1)
+        var preset = AudioPreset.cubaseDefault
+        preset.bitDepth = 32
+
+        let runner = RecordingRunner { request in
+            try writeTestWAV(
+                to: URL(fileURLWithPath: request.arguments.last ?? ""),
+                sampleRate: 44100,
+                bitDepth: 32,
+                channelCount: 1
+            )
+            return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+        }
+        let converter = FFmpegAudioConverter(
+            ffmpegURL: URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg"),
+            runner: runner
+        )
+
+        let result = try await converter.convert(
+            ConversionRequest(
+                sourceURL: sourceURL,
+                outputDirectory: outputDirectory,
+                preset: preset,
+                sourceType: .wav
+            )
+        )
+
+        XCTAssertEqual(runner.requests.first?.arguments.dropLast().last, "pcm_s32le")
+        XCTAssertEqual(result.spec.bitDepth, 32)
     }
 
     func testPreserveMonoStereoProbesFFmpegWhenNativeCannotReadSource() async throws {

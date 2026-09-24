@@ -61,6 +61,8 @@ public struct StemOutputScanner: Sendable {
     private func isInsideFolder(itemURL: URL, folderURL: URL) -> Bool {
         let itemPath = itemURL.resolvingSymlinksInPath().standardizedFileURL.path
         let folderPath = folderURL.resolvingSymlinksInPath().standardizedFileURL.path
-        return itemPath.hasPrefix(folderPath) && itemPath != folderPath
+        // Boundary-aware: "/out/stems-other/x" is not inside "/out/stems".
+        let folderPrefix = folderPath.hasSuffix("/") ? folderPath : folderPath + "/"
+        return itemPath.hasPrefix(folderPrefix)
     }
 }

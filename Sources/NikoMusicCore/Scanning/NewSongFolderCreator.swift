@@ -191,9 +191,12 @@ public enum NewSongFolderCreator {
         return song
     }
 
+    /// A dot-prefixed name creates a hidden folder the read-only scanner skips,
+    /// so the draft would vanish from the archive on the next scan; ":" is the
+    /// Finder path separator and shows up as "/" in every file dialog.
     private static func isSafeFolderName(_ name: String) -> Bool {
-        guard name != ".", name != ".." else { return false }
-        return name.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\")) == nil
+        guard !name.hasPrefix(".") else { return false }
+        return name.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\:")) == nil
     }
 
     private static func copyTemplate(

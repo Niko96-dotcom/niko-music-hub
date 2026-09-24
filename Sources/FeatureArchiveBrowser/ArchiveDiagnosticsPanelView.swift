@@ -290,7 +290,8 @@ struct ArchiveDiagnosticsPanelView: View {
         viewModel.performExport { try viewModel.exportDiagnostics(to: destination) }
     }
 
-    private func diagnosticRow(_ label: String, value: String) -> some View {        HStack {
+    private func diagnosticRow(_ label: String, value: String) -> some View {
+        HStack {
             Text(label)
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
