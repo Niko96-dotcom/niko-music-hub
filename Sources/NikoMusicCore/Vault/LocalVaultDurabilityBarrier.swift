@@ -22,23 +22,23 @@ extension LocalVaultDurabilityBarrierError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .missingNode(let url):
-            "The archive copy at \(url.path) disappeared before durability could be confirmed. Existing copies were kept."
+            "A copied item disappeared before the Vault could confirm it was safely saved (\(url.path)). Every copy was kept."
         case .locationOutsideArchiveRoot(let url):
-            "The archive copy at \(url.path) is outside the configured archive folder, or resolves through a link that escapes it. Existing copies were kept."
+            "A copied file ended up outside the Vault folder, or points outside it through a link (\(url.path)). Every copy was kept."
         case .symlinkEscape(let url):
-            "The archive copy contains a symbolic link at \(url.path) that could divert durability or promotion outside the archive folder. Existing copies were kept."
+            "The copy contains a link (\(url.path)). Only real files and folders can be archived. Every copy was kept."
         case .unexpectedNodeType(let url):
-            "The archive copy contains an unsupported filesystem node at \(url.path). Only regular files and directories are archived. Existing copies were kept."
+            "The copy contains something that isn’t a normal file or folder (\(url.path)). Only files and folders can be archived. Every copy was kept."
         case .unsupportedFilesystem(let name):
-            "The archive volume uses the \"\(name)\" filesystem, which cannot confirm local persistence with F_FULLFSYNC. The archive copy was kept; reconnect a supported local volume or keep the Active copy."
+            "The Vault drive uses the \"\(name)\" format, which can’t confirm files are safely written to disk. The copy was kept. Use an APFS, Mac OS Extended, MS-DOS (FAT) or UDF drive, or keep the project in Active."
         case .deviceMismatch(let url):
-            "The archive copy at \(url.path) changed volumes or was replaced during the transfer (device or inode identity no longer matches the traversed node). Existing copies were kept."
+            "A copied item moved to another drive or was swapped out during the copy (\(url.path)). Every copy was kept."
         case .fileFlushFailed(let url, let errno):
-            "Persisting file data at \(url.path) failed (errno \(errno)). The archive copy was kept."
+            "macOS couldn’t finish writing a file to the Vault drive (\(url.path), error \(errno)). The copy was kept."
         case .directoryFlushFailed(let url, let errno):
-            "Persisting a directory entry at \(url.path) failed (errno \(errno)). The archive copy was kept."
+            "macOS couldn’t finish writing a folder to the Vault drive (\(url.path), error \(errno)). The copy was kept."
         case .fullSyncFailed(let url, let errno):
-            "Draining the device queue for \(url.path) failed (errno \(errno)). An earlier plain sync is not sufficient evidence, so durability is not claimed. The archive copy was kept."
+            "The Vault drive didn’t confirm the copy was safely written (\(url.path), error \(errno)), so it isn’t treated as saved. The copy was kept."
         }
     }
 }

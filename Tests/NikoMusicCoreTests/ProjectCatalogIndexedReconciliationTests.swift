@@ -314,7 +314,7 @@ private struct FrozenProjectCatalogReconciler: Sendable {
                 appendReviewIfNeeded(ProjectIdentityReview(
                     existingProjectID: weak.record.id,
                     candidateProjectID: newEntry.record.id,
-                    reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+                    reason: "The names match, but the files don’t clearly show it’s the same project."
                 ), to: &reviews)
             }
         }

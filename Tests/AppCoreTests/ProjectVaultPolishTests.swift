@@ -273,7 +273,7 @@ final class ProjectVaultPolishTests: XCTestCase {
                 availability: .local
             )]
         )
-        let expectedExplanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
+        let expectedExplanation = "The restored folder couldn’t be confirmed, so the project won’t open. Every copy was kept for you to check."
 
         for phase in [VaultRestorePhase.persistingActiveLocation, .openingInCubase] {
             var restore = VaultRestoreRecord(

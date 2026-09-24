@@ -255,7 +255,7 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             retryRestoreID = nil
             state = .needsAttention
             primaryAction = .review
-            explanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
+            explanation = "The restored folder couldn’t be confirmed, so the project won’t open. Every copy was kept for you to check."
             return
         }
         if restore?.phase == .superseded || restore?.supersededBy != nil {

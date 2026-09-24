@@ -136,7 +136,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [
@@ -217,7 +217,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [
@@ -285,7 +285,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [
@@ -329,7 +329,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [
@@ -391,7 +391,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: ProjectID(),
             candidateProjectID: ProjectID(),
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [],
@@ -423,7 +423,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: ProjectID(),
             candidateProjectID: ProjectID(),
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [],
@@ -665,7 +665,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+            reason: "The names match, but the files don’t clearly show it’s the same project."
         )
         try fixture.catalogStore().apply(ProjectCatalogReconciliation(
             entries: [

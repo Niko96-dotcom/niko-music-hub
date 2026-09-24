@@ -175,15 +175,15 @@ public enum VaultManifestError: LocalizedError, Equatable, Sendable {
         case .enumerationFailed(let path):
             return "Could not read all files in \(path). Check folder availability and permissions"
         case .unsupportedSymbolicLink(let path):
-            return "Vault cannot verify a symbolic link: \(path). The actual files must be included in the project"
+            return "The project contains a link (symlink) instead of the real file: \(path). Replace it with the actual file"
         case .unsupportedFileType(let path):
-            return "Vault cannot safely copy this file type: \(path)"
+            return "This item can’t be archived safely: \(path)"
         case .invalidRelativePath:
-            return "The saved file list contains an unsafe path"
+            return "A file path isn’t safe to copy"
         case .invalidSize:
-            return "The saved file list contains invalid sizes"
+            return "A file size isn’t safe to copy"
         case .mismatch:
-            return "File verification failed: contents differ from the recorded copy. Check project and archive integrity before retrying"
+            return "A file doesn’t match the verified copy. Check the project and the Vault copy before retrying"
         }
     }
 }

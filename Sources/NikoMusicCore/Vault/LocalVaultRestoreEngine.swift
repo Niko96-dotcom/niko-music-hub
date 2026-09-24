@@ -30,15 +30,37 @@ public enum LocalVaultRestoreError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .archiveContentsChanged(let detail):
-            "Archive verification failed: \(detail) The archive was kept. Review the changed file before restoring."
+            "Archive verification failed: \(detail) The Vault copy was kept. Check the changed file before restoring."
         case .occupiedDestination:
             "A folder already exists at this Active Projects destination. Choose a different folder name. Existing files were kept."
         case .noSupportedProject:
-            "The chosen project version is unavailable. Review the archive and choose an available CPR or ALS file."
+            "That project version isn’t in the Vault copy. Choose another Cubase (.cpr) or Ableton (.als) file."
         case .archiveLocalityUnavailable:
-            "The archive provider could not confirm that the verified files are available locally. Check the provider's download status before retrying."
-        default:
-            "Restore stopped safely: \(String(describing: self))."
+            "The cloud app couldn’t confirm the Vault files are downloaded to this Mac. Check its download status, then retry."
+        case .archiveGenerationNotFound:
+            "The Vault copy for this project can’t be found, or this restore already finished."
+        case .archiveGenerationNotVerified:
+            "This Vault copy isn’t in a verified state, so it can’t be restored. Nothing was changed."
+        case .missingManifest:
+            "This Vault copy has no saved file list, so it can’t be checked. Nothing was restored."
+        case .invalidDestination:
+            "That destination isn’t inside Active Projects. Choose a folder there and try again."
+        case .unsafeStagingPath:
+            "The temporary folder for this restore isn’t safe to use, so nothing was restored."
+        case .restoreAlreadyInProgress:
+            "This project is already being restored."
+        case .crossVolumePromotion:
+            "The temporary copy and Active Projects ended up on different drives, so the restore stopped. Nothing was overwritten."
+        case .writeTargetVolumeMismatch:
+            "Active Projects changed drives during the restore, so it stopped. Nothing was overwritten."
+        case .unsafeArchiveGenerationPath:
+            "This Vault copy isn’t where it should be inside the Vault folder, so the restore stopped."
+        case .legacyProjectionIdentityMismatch:
+            "This older Vault copy changed since it was verified, so it can’t be restored as is. Every copy was kept."
+        case .archiveTransferBindingUnavailable:
+            "This restore doesn’t match the verified Vault copy it was tied to, so it stopped. Every copy was kept."
+        case .activeDestinationIntegrityMismatch:
+            "The restored folder couldn’t be confirmed, so the project won’t open. The Vault copy was kept."
         }
     }
 
@@ -628,7 +650,7 @@ public actor LocalVaultRestoreEngine {
             try manifestBuilder.verify(record.manifest, at: record.destinationURL)
         } catch {
             record.failureReason = .activeDestinationIntegrityMismatch
-            record.error = "Promoted Active destination changed before Catalog/Open: \(error)"
+            record.error = "The restored folder couldn’t be confirmed before opening (\(error)). Nothing was opened."
             try persist(&record)
             throw LocalVaultRestoreError.activeDestinationIntegrityMismatch
         }

@@ -198,11 +198,11 @@ public struct ProjectCatalogReconciler: Sendable {
         public var description: String {
             switch self {
             case .duplicateLocation(let ids):
-                "\(ids.count) catalog entries share this folder"
+                "\(ids.count) library entries point to this folder."
             case .locationEvidenceMismatch:
-                "the catalog entry for this folder does not match its current project files"
+                "The library’s record of this folder doesn’t match its current project files."
             case .multipleStrongMatches(let ids):
-                "\(ids.count) catalog entries share this project's file evidence"
+                "\(ids.count) library entries match these project files."
             }
         }
     }
@@ -368,7 +368,7 @@ public struct ProjectCatalogReconciler: Sendable {
                     appendReviewIfNeeded(ProjectIdentityReview(
                         existingProjectID: weak.record.id,
                         candidateProjectID: newEntry.record.id,
-                        reason: "Names match, but file evidence is insufficient or conflicting. Review before linking."
+                        reason: "The names match, but the files don’t clearly show it’s the same project."
                     ), to: &reviews, pairs: &indexes.reviewPairs)
                 }
             }

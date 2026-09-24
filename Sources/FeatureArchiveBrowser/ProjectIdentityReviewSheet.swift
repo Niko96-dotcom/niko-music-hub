@@ -9,7 +9,7 @@ enum ProjectIdentityReviewCopy: Sendable {
     static let cancel = "Cancel"
 
     static func message(title: String, reason: String) -> String {
-        "Project Vault cannot tell whether “\(title)” is the same project as an existing catalog entry. \(reason) Choose Link if these are the same project. Choose Keep Separate if they are different projects. Nothing is archived until you choose."
+        "Project Vault cannot tell whether “\(title)” is the same project as one already in your library. \(reason) Choose Link if these are the same project. Choose Keep Separate if they are different projects. Nothing is archived until you choose."
     }
 }
 

@@ -3948,7 +3948,7 @@ extension LiveProjectVaultRuntimeTests {
                 error as? ProjectVaultRuntimeError,
                 .identityAmbiguous(
                     title: "Synthetic Song",
-                    reason: "the catalog entry for this folder does not match its current project files"
+                    reason: "The library’s record of this folder doesn’t match its current project files."
                 )
             )
         }
@@ -3974,7 +3974,7 @@ extension LiveProjectVaultRuntimeTests {
         } catch {
             XCTAssertEqual(
                 error as? ProjectVaultRuntimeError,
-                .identityAmbiguous(title: "Synthetic Song", reason: "2 catalog entries share this folder")
+                .identityAmbiguous(title: "Synthetic Song", reason: "2 library entries point to this folder.")
             )
         }
 
@@ -4121,7 +4121,7 @@ extension LiveProjectVaultRuntimeTests {
                 error as? ProjectVaultRuntimeError,
                 .identityAmbiguous(
                     title: "Synthetic Song",
-                    reason: "the catalog entry for this folder does not match its current project files"
+                    reason: "The library’s record of this folder doesn’t match its current project files."
                 )
             )
         }

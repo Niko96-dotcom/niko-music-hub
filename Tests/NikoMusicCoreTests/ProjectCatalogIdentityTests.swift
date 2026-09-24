@@ -323,7 +323,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         var review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "the catalog entry for this folder does not match its current project files"
+            reason: "The library’s record of this folder doesn’t match its current project files."
         )
         review.resolution = .keepSeparate
         let fresh = preciseEvidence()
@@ -361,7 +361,7 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         var review = ProjectIdentityReview(
             existingProjectID: existingID,
             candidateProjectID: candidateID,
-            reason: "the catalog entry for this folder does not match its current project files"
+            reason: "The library’s record of this folder doesn’t match its current project files."
         )
         review.resolution = .link
         let fresh = preciseEvidence()

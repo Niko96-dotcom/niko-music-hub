@@ -315,7 +315,7 @@ public actor LocalVaultTransferEngine {
                         migrated.error = VaultTransferError(
                             origin: destructiveOrigin,
                             reason: record.error?.reason ?? .unknown,
-                            message: "An earlier transfer stopped during Active-copy removal or provider eviction. The Active copy may be absent or incomplete. Existing copies require verification and recovery."
+                            message: "An earlier transfer stopped while removing the Active folder or clearing the cloud app’s offline copy. The Active folder may be missing or incomplete. Recovery will verify the Vault copy first."
                         )
                         migrated.nextRetryAt = nil
                         do {
@@ -338,8 +338,8 @@ public actor LocalVaultTransferEngine {
                     origin: origin,
                     reason: .unknown,
                     message: origin == .removingActiveCopy
-                        ? "Launch recovery could not confirm Active-copy removal. The Active copy may be absent or incomplete. The archive requires verification before recovery."
-                        : "Launch recovery could not confirm provider-cache eviction after Active-copy removal. The Active copy may be absent. The archive requires verification before recovery."
+                        ? "At launch, the app couldn’t confirm whether removing the Active folder finished. It may be missing or incomplete. The Vault copy will be verified before recovery."
+                        : "At launch, the app couldn’t confirm whether clearing the cloud app’s offline copy finished. The Active folder had already been removed. The Vault copy will be verified before recovery."
                 )
                 record.nextRetryAt = nil
                 do {
@@ -809,7 +809,7 @@ public actor LocalVaultTransferEngine {
                 record.error = VaultTransferError(
                     origin: origin,
                     reason: .unknown,
-                    message: "Transfer stopped before Active-copy removal. The Active copy was kept."
+                    message: "Stopped before removing the Active folder. It was kept."
                 )
                 record.state = .archiveVerified
                 record.nextRetryAt = nil
@@ -826,7 +826,7 @@ public actor LocalVaultTransferEngine {
                 record.error = VaultTransferError(
                     origin: origin,
                     reason: .unknown,
-                    message: "Transfer stopped before Active-copy removal. The Active copy was kept."
+                    message: "Stopped before removing the Active folder. It was kept."
                 )
                 record.state = .archiveVerified
                 record.nextRetryAt = nil
@@ -839,8 +839,8 @@ public actor LocalVaultTransferEngine {
                 // implies it is already gone). Never claim the source was
                 // retained. Require explicit review and preserve evidence/budget.
                 let message = origin == .removingActiveCopy
-                    ? "Transfer stopped during Active-copy removal. The Active copy may be partially removed. Existing copies were kept for review."
-                    : "Transfer stopped after Active-copy removal during provider eviction. The Active copy is not retained locally. The verified archive remains for review."
+                    ? "Stopped while removing the Active folder, so part of it may be gone. Whatever is left was kept for review."
+                    : "Stopped while clearing the cloud app’s offline copy. The Active folder had already been removed from this Mac. The verified Vault copy is kept for review."
                 record.error = VaultTransferError(origin: origin, reason: .unknown, message: message)
                 record.state = .recoveryRequired
                 record.nextRetryAt = nil

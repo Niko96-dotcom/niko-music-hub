@@ -221,23 +221,23 @@ public enum ProjectVaultAuthorizationError: Error, LocalizedError, Equatable, Se
     public var errorDescription: String? {
         switch self {
         case .authorizationRequired:
-            "Project Vault needs an explicit confirmation for this operation before the Active copy can be removed. Nothing was deleted."
+            "The Active folder can only be removed after you confirm. Nothing was deleted."
         case .triggerMismatch:
-            "The confirmation was captured for a different operation and cannot authorize this one. Nothing was deleted."
+            "That confirmation was for a different action, so it can’t be used here. Nothing was deleted."
         case .sourcePathMismatch:
-            "The project folder changed since confirmation. Nothing was deleted."
+            "The project folder changed after you confirmed. Nothing was deleted."
         case .sourceIdentityMismatch:
-            "The project folder was replaced since confirmation. Nothing was deleted."
+            "The project folder was replaced after you confirmed. Nothing was deleted."
         case .songMismatch:
-            "The confirmation was captured for a different project and cannot authorize this one. Nothing was deleted."
+            "That confirmation was for a different project, so it can’t be used here. Nothing was deleted."
         case .catalogMismatch:
-            "The catalog identity changed since confirmation. Nothing was deleted."
+            "The project’s library record changed after you confirmed. Nothing was deleted."
         case .rootMismatch:
-            "The Active or Archive folder changed since confirmation. Nothing was deleted."
+            "The Active or Archive folder setting changed after you confirmed. Nothing was deleted."
         case .removalNotAuthorized:
-            "This confirmation permits a verified copy only. The Active copy was kept."
+            "You confirmed a copy only, so the Active folder was kept."
         case .backupCopyRemovalForbidden:
-            "Backup copies never remove the Active copy. The Active copy was kept."
+            "A backup copy never removes the Active folder. It was kept."
         }
     }
 }

@@ -1931,7 +1931,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertEqual(
             presentation.explanation,
-            "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
+            "The restored folder couldn’t be confirmed, so the project won’t open. Every copy was kept for you to check."
         )
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
@@ -2026,7 +2026,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(presentation.primaryAction, .review)
         XCTAssertEqual(
             presentation.explanation,
-            "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
+            "The restored folder couldn’t be confirmed, so the project won’t open. Every copy was kept for you to check."
         )
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
@@ -2070,7 +2070,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             .activeDestinationIntegrityMismatch,
             nil,
         ]
-        let integrityExplanation = "The restored files changed after they were verified, so the project won’t open. Every copy was kept for you to check."
+        let integrityExplanation = "The restored folder couldn’t be confirmed, so the project won’t open. Every copy was kept for you to check."
 
         for phase in phases {
             for failureReason in failureReasons {
