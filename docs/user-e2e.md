@@ -67,7 +67,7 @@ Fixture fuzzy/active searches all use the same **Active search** panel section (
 |-------|----------------|
 | **neon hk** | `diagnostics_panel_search_*` |
 | **project** (scan warning) | `diagnostics_panel_warning_search_*` |
-| **ncpr fnd** (fuzzy scan warning) | `diagnostics_panel_fuzzy_warning_search_*` |
+| **prjct fnd** (fuzzy scan warning) | `diagnostics_panel_fuzzy_warning_search_*` |
 | **nts nly** (sidecar notes) | `diagnostics_panel_notes_search_*` |
 | **brkn fld** (folder) | `diagnostics_panel_folder_search_*` |
 | **neohkv2** (CPR file) | `diagnostics_panel_cpr_search_*` |

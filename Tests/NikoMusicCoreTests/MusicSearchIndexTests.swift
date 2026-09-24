@@ -129,7 +129,7 @@ final class MusicSearchIndexTests: XCTestCase {
         let result = try scanner.scan(roots: [CubaseFixtures.archiveRoot])
         let index = MusicSearchIndex(songs: result.songs)
 
-        let matches = index.searchResults("ncpr fnd")
+        let matches = index.searchResults("prjct fnd")
         XCTAssertEqual(matches.first?.song.displayTitle, "Broken Folder Example")
         XCTAssertTrue(matches.first?.matchSummary.contains("fuzzy scan warning") == true)
         XCTAssertFalse(matches.first?.matchSummary.contains("fuzzy text") == true)

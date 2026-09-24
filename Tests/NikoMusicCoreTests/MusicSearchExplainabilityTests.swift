@@ -99,7 +99,7 @@ final class MusicSearchExplainabilityTests: XCTestCase {
         )
         let index = MusicSearchIndex(songs: [song])
 
-        let result = try XCTUnwrap(index.searchResults("ncpr fnd").first)
+        let result = try XCTUnwrap(index.searchResults("prjct fnd").first)
         XCTAssertTrue(result.matchSummary.contains("fuzzy scan warning"))
         XCTAssertFalse(result.matchSummary.contains("fuzzy text"))
     }

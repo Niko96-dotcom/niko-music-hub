@@ -94,64 +94,72 @@ enum MusicSearchMatcher {
     private static func bestTokenMatch(_ token: String, fields: IndexedFields) -> (kind: MusicSearchMatchKind, score: Int)? {
         guard !token.isEmpty else { return nil }
 
+        // The cascade is ordered by tier so a weaker field never shadows a
+        // stronger one: the first hit wins, and the index keeps only the best
+        // tier, so exact primary beats exact secondary beats fuzzy.
+        // Pass 1: exact primary checks, highest score first.
         if fields.title.hasPrefix(token) { return (.titlePrefix, 120) }
         if fields.title.contains(token) { return (.titleContains, 100) }
-
         if fields.aliases.contains(where: { $0.contains(token) }) {
             return (.alias, 90)
         }
-        if fields.aliases.contains(where: { isSubsequence(token, in: $0) }) {
-            return (.fuzzyAlias, 22)
-        }
-
         if fields.collaborators.contains(where: { $0.contains(token) }) {
             return (.collaborator, 88)
         }
-        if fields.collaborators.contains(where: { isSubsequence(token, in: $0) }) {
-            return (.fuzzyCollaborator, 21)
+        if let statusText = fields.workflowStatus, statusText.contains(token) {
+            return (.workflowStatus, 86)
         }
-
-        if let statusText = fields.workflowStatus {
-            if statusText.contains(token) { return (.workflowStatus, 86) }
-            if isSubsequence(token, in: statusText) { return (.fuzzyWorkflowStatus, 21) }
-        }
-
         if fields.folder.contains(token) { return (.folderName, 60) }
-        if isSubsequence(token, in: fields.folder) { return (.fuzzyFolderName, 18) }
+        if let normalizedAppNote = fields.appNote, normalizedAppNote.contains(token) {
+            return (.appNote, 55)
+        }
 
+        // Pass 2: exact secondary checks.
         if fields.projectFileNames.contains(where: { $0.contains(token) })
             || fields.projectAppNames.contains(where: { $0.contains(token) }) {
             return (.projectVersionFileName, 40)
         }
-        if fields.projectFileNames.contains(where: { isSubsequence(token, in: $0) }) {
-            return (.fuzzyProjectVersionFileName, 17)
-        }
         if fields.previewFileNames.contains(where: { $0.contains(token) }) {
             return (.previewFileName, 40)
         }
-        if fields.previewFileNames.contains(where: { isSubsequence(token, in: $0) }) {
-            return (.fuzzyPreviewFileName, 17)
-        }
-
         if fields.scanWarnings.contains(where: { $0.contains(token) }) {
             return (.scanWarning, 45)
         }
-
-        if let normalizedAppNote = fields.appNote {
-            if normalizedAppNote.contains(token) { return (.appNote, 55) }
-            if isSubsequence(token, in: normalizedAppNote) { return (.fuzzyAppNote, 21) }
+        if let normalizedNotes = fields.sidecarNotes, normalizedNotes.contains(token) {
+            return (.songNote, 50)
         }
 
-        if let normalizedNotes = fields.sidecarNotes {
-            if normalizedNotes.contains(token) { return (.songNote, 50) }
-            if isSubsequence(token, in: normalizedNotes) { return (.fuzzySongNote, 20) }
+        // Pass 3: fuzzy checks in the existing relative order.
+        if fields.aliases.contains(where: { isSubsequenceWithinBound(token, in: $0) }) {
+            return (.fuzzyAlias, 22)
         }
-
-        if fields.scanWarnings.contains(where: { isSubsequence(token, in: $0) }) {
+        if fields.collaborators.contains(where: { isSubsequenceWithinBound(token, in: $0) }) {
+            return (.fuzzyCollaborator, 21)
+        }
+        if let statusText = fields.workflowStatus,
+           isSubsequenceWithinBound(token, in: statusText) {
+            return (.fuzzyWorkflowStatus, 21)
+        }
+        if isSubsequenceWithinBound(token, in: fields.folder) { return (.fuzzyFolderName, 18) }
+        if fields.projectFileNames.contains(where: { isSubsequenceWithinBound(token, in: $0) }) {
+            return (.fuzzyProjectVersionFileName, 17)
+        }
+        if fields.previewFileNames.contains(where: { isSubsequenceWithinBound(token, in: $0) }) {
+            return (.fuzzyPreviewFileName, 17)
+        }
+        if let normalizedAppNote = fields.appNote,
+           isSubsequenceWithinBound(token, in: normalizedAppNote) {
+            return (.fuzzyAppNote, 21)
+        }
+        if let normalizedNotes = fields.sidecarNotes,
+           isSubsequenceWithinBound(token, in: normalizedNotes) {
+            return (.fuzzySongNote, 20)
+        }
+        if fields.scanWarnings.contains(where: { isSubsequenceWithinBound(token, in: $0) }) {
             return (.fuzzyScanWarning, 19)
         }
 
-        if isSubsequence(token, in: fields.title) { return (.fuzzyTitle, 15) }
+        if isSubsequenceWithinBound(token, in: fields.title) { return (.fuzzyTitle, 15) }
 
         if token.count >= 3 {
             if let fuzzy = fuzzyEditDistanceMatch(token: token, words: fields.titleWords, normalizedHaystack: fields.title) {
@@ -191,6 +199,61 @@ enum MusicSearchMatcher {
         return folded.filter { $0.isLetter || $0.isNumber }
     }
 
+    /// Bounded subsequence check for fuzzy matching: the needle must occur
+    /// in order inside a window of at most `2 * needle.count` characters.
+    /// `isSubsequence(_:in:)` itself is unchanged in meaning; this helper
+    /// additionally rejects letters spread thinly across a long field.
+    /// The minimal window is computed exactly (greedy match per start
+    /// position ends earliest for that start, so the minimum over starts
+    /// is the true minimum), not greedy-from-first-occurrence.
+    static func isSubsequenceWithinBound(_ needle: String, in haystack: String) -> Bool {
+        guard !needle.isEmpty else { return true }
+        let bound = 2 * needle.count
+        // Keep the ASCII byte fast path idea: normalized strings are mostly ASCII.
+        if needle.utf8.allSatisfy({ (0x61...0x7A).contains($0) || (0x30...0x39).contains($0) }),
+           haystack.utf8.allSatisfy({ $0 < 0x80 }) {
+            return isSubsequenceWithinBoundElements(
+                needle: Array(needle.utf8), haystack: Array(haystack.utf8), bound: bound
+            )
+        }
+        return isSubsequenceWithinBoundElements(
+            needle: Array(needle), haystack: Array(haystack), bound: bound
+        )
+    }
+
+    private static func isSubsequenceWithinBoundElements<C: Equatable>(
+        needle: [C],
+        haystack: [C],
+        bound: Int
+    ) -> Bool {
+        guard !needle.isEmpty else { return true }
+        guard haystack.count >= needle.count else { return false }
+        // The upper bound already stops once the remaining haystack is shorter
+        // than the needle. Only starts at the first element can match, and a
+        // greedy match that runs out of haystack proves no later start can
+        // succeed (its match positions could only be later, leaving less room).
+        for start in 0...(haystack.count - needle.count) {
+            guard haystack[start] == needle[0] else { continue }
+            var cursor = start
+            var matched = true
+            for element in needle {
+                while cursor < haystack.count, haystack[cursor] != element {
+                    cursor += 1
+                }
+                if cursor >= haystack.count {
+                    matched = false
+                    break
+                }
+                cursor += 1
+            }
+            if !matched { return false }
+            if cursor - start <= bound {
+                return true
+            }
+        }
+        return false
+    }
+
     static func isSubsequence(_ needle: String, in haystack: String) -> Bool {
         guard !needle.isEmpty else { return true }
         // Normalized ASCII tokens have one byte per Character. Restrict the needle
@@ -225,10 +288,11 @@ enum MusicSearchMatcher {
     private static func fuzzyEditDistanceMatch(
         token: String,
         words: [String],
-        normalizedHaystack: String,
-        maxDistance: Int = 2
+        normalizedHaystack: String
     ) -> Int? {
         guard token.count >= 3 else { return nil }
+        // Short tokens get a tighter typo budget to keep search precise.
+        let maxDistance = token.count >= 5 ? 2 : 1
         var best: Int?
         for word in words where abs(word.count - token.count) <= maxDistance {
             if let distance = boundedEditDistance(token, word, max: maxDistance) {

@@ -100,13 +100,13 @@ final class ArchiveDiagnosticsSearchPanelContextTests: XCTestCase {
         try CubaseFixtures.ensureGenerated()
         let result = try CubaseArchiveScanner().scan(roots: [CubaseFixtures.archiveRoot])
         let index = MusicSearchIndex(songs: result.songs)
-        let searchResults = index.searchResults("ncpr fnd")
+        let searchResults = index.searchResults("prjct fnd")
         XCTAssertEqual(searchResults.count, 1)
         XCTAssertEqual(searchResults.first?.song.displayTitle, "Broken Folder Example")
         XCTAssertTrue(searchResults.first?.matchSummary.contains("fuzzy scan warning") == true)
 
         let context = ArchiveDiagnosticsSearchContext(
-            query: "ncpr fnd",
+            query: "prjct fnd",
             matches: searchResults.map {
                 ArchiveDiagnosticsSearchMatch(
                     displayTitle: $0.song.displayTitle,

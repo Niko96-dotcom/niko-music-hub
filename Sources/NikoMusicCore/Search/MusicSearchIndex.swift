@@ -92,13 +92,20 @@ public struct MusicSearchIndex: Sendable {
         let tokens = MusicSearchMatcher.tokens(from: trimmed)
         guard !tokens.isEmpty else { return [] }
 
-        return entries
-            .map { entry in
-                let details = MusicSearchMatcher.matchDetails(precomputed: entry.fields, queryTokens: tokens)
-                let score = details.reduce(0) { $0 + $1.score }
-                return MusicSearchResult(song: entry.song, score: score, details: details)
-            }
-            .filter { $0.score > 0 }
+        let scored: [(result: MusicSearchResult, tier: MusicSearchMatchTier)] = entries.compactMap { entry in
+            let details = MusicSearchMatcher.matchDetails(precomputed: entry.fields, queryTokens: tokens)
+            let score = details.reduce(0) { $0 + $1.score }
+            guard score > 0 else { return nil }
+            // A result's tier is the weakest tier across its per-token details.
+            let tier = details.map(\.kind.tier).max() ?? .primary
+            let result = MusicSearchResult(song: entry.song, score: score, details: details)
+            return (result, tier)
+        }
+        // Return only the best tier that has at least one result.
+        guard let bestTier = scored.map({ $0.tier }).min() else { return [] }
+        return scored
+            .filter { $0.tier == bestTier }
+            .map({ $0.result })
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
                 return lhs.song.effectiveDisplayTitle.localizedCaseInsensitiveCompare(rhs.song.effectiveDisplayTitle) == .orderedAscending

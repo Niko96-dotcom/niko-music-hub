@@ -131,9 +131,9 @@ enum ArchiveUserFlowSmokeScenarios {
             logPrefix: "fuzzy_warning_search",
             diagnosticsExportStem: "fuzzy_warning",
             diagnosticsPanelStem: "fuzzy_warning",
-            query: "ncpr fnd",
+            query: "prjct fnd",
             expectedDisplayTitle: "Broken Folder Example",
-            summarySubstrings: ["fuzzy scan warning", "ncpr", "fnd"],
+            summarySubstrings: ["fuzzy scan warning", "prjct", "fnd"],
             exportMustContain: [
                 "search_match title=Broken Folder Example",
                 "fuzzy scan warning",
