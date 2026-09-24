@@ -185,6 +185,8 @@ private final class MetadataFlag: @unchecked Sendable {
 /// Stands in for the HAL objects of one tap graph. Creating the process tap mutes the
 /// app, exactly like `CATapMuteBehavior.muted`; destroying it un-mutes. A started device
 /// delivers 10 ms float buffers that carry the tone whenever `echoesTone` says it plays.
+/// Like the real aggregate, the output device's own input streams (an audio interface's
+/// mics) come first in every IO buffer list and the tap's stereo stream comes last.
 final class FakeTapHAL: @unchecked Sendable {
     enum Hang { case none, aggregateCreation, deviceStop }
 
@@ -196,6 +198,9 @@ final class FakeTapHAL: @unchecked Sendable {
     private let lock = NSLock()
     private let hang: Hang
     private let echoesTone: @Sendable () -> Bool
+    private let outputDeviceInputChannels: [UInt32]
+    private let interfaceInputIsLive: Bool
+    private let aggregateInputChannelsOverride: [UInt32]?
     private let hangGate = DispatchSemaphore(value: 0)
     private var released = false
     private var tapCreates = 0
@@ -213,9 +218,25 @@ final class FakeTapHAL: @unchecked Sendable {
     private var sampleRateHook: (() -> Void)?
     private var ioProcHook: (() -> Void)?
 
-    init(hang: Hang, echoesTone: @escaping @Sendable () -> Bool = { false }) {
+    /// `outputDeviceInputChannels`: the output device's input streams (a UAD2 has one
+    /// 10-channel stream). `interfaceInputIsLive` fills them with nonzero "mic" signal.
+    /// `aggregateInputChannels` overrides the aggregate's reported input streams.
+    init(
+        hang: Hang,
+        echoesTone: @escaping @Sendable () -> Bool = { false },
+        outputDeviceInputChannels: [UInt32] = [],
+        interfaceInputIsLive: Bool = false,
+        aggregateInputChannels: [UInt32]? = nil
+    ) {
         self.hang = hang
         self.echoesTone = echoesTone
+        self.outputDeviceInputChannels = outputDeviceInputChannels
+        self.interfaceInputIsLive = interfaceInputIsLive
+        self.aggregateInputChannelsOverride = aggregateInputChannels
+    }
+
+    private var aggregateInputChannels: [UInt32] {
+        aggregateInputChannelsOverride ?? outputDeviceInputChannels + [2]
     }
 
     var muted: Bool { lock.withLock { isMuted } }
@@ -269,28 +290,36 @@ final class FakeTapHAL: @unchecked Sendable {
     private func startDelivering() {
         let task = Task.detached { [self] in
             let frames = 480
-            let byteCount = frames * 8
-            let samples = UnsafeMutablePointer<Float>.allocate(capacity: frames * 2)
-            let list = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
+            let streams = aggregateInputChannels
+            let storage = streams.map { UnsafeMutablePointer<Float>.allocate(capacity: frames * Int($0)) }
+            let list = AudioBufferList.allocate(maximumBuffers: max(1, streams.count))
             let output = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
             let time = UnsafeMutablePointer<AudioTimeStamp>.allocate(capacity: 1)
             defer {
-                samples.deallocate()
-                list.deallocate()
+                storage.forEach { $0.deallocate() }
+                free(list.unsafeMutablePointer)
                 output.deallocate()
                 time.deallocate()
             }
             time.initialize(to: AudioTimeStamp())
             output.initialize(to: AudioBufferList())
+            let tapIndex = streams.count - 1
             while !Task.isCancelled {
                 guard let (block, queue) = lock.withLock({ ioBlock.map { ($0, ioQueue!) } }) else { return }
-                let value: Float = echoesTone() ? 0.001 : 0
-                samples.update(repeating: value, count: frames * 2)
-                list.initialize(to: AudioBufferList(
-                    mNumberBuffers: 1,
-                    mBuffers: AudioBuffer(mNumberChannels: 2, mDataByteSize: UInt32(byteCount), mData: samples)
-                ))
-                queue.sync { block(time, list, time, output, time) }
+                list.count = streams.count
+                for (index, channels) in streams.enumerated() {
+                    let count = frames * Int(channels)
+                    let value: Float = index == tapIndex
+                        ? (echoesTone() ? 0.001 : 0)
+                        : (interfaceInputIsLive ? 0.25 : 0)
+                    storage[index].update(repeating: value, count: count)
+                    list[index] = AudioBuffer(
+                        mNumberChannels: channels,
+                        mDataByteSize: UInt32(count * MemoryLayout<Float>.size),
+                        mData: storage[index]
+                    )
+                }
+                queue.sync { block(time, list.unsafePointer, time, output, time) }
                 try? await Task.sleep(for: .milliseconds(10))
             }
         }
@@ -338,6 +367,13 @@ final class FakeTapHAL: @unchecked Sendable {
                 let hook = lock.withLock { sampleRateHook }
                 hook?()
                 return (noErr, 48_000)
+            },
+            readInputStreamChannels: { [self] deviceID in
+                switch deviceID {
+                case Self.aggregateID: (noErr, aggregateInputChannels)
+                case Self.outputDeviceID: (noErr, outputDeviceInputChannels)
+                default: (kAudioHardwareBadObjectError, [])
+                }
             },
             createIOProc: { [self] deviceID, queue, block in
                 lock.withLock { ioProcCallIDs.append(deviceID) }

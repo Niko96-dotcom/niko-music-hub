@@ -37,6 +37,9 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     private var anchorDeviceID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
     private var sourceFormat: AVAudioFormat?
+    /// Picks the tap's buffers out of the aggregate's input list (which also carries the
+    /// output device's own inputs). Resolved once per start.
+    private var tapInput: SystemAudioTapInputSelector?
     private var callbacks: RecorderBackendCallbacks?
     private var generation = 0
     private var running = false
@@ -107,8 +110,25 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             guard let deliveredFormat = AVAudioFormat(streamDescription: streamDescription) else {
                 throw RecorderError.apiError("Unsupported tap audio format")
             }
+            // The aggregate's input list also carries the output device's own input
+            // streams (an audio interface's mics), ahead of the tap's. Only the tap's
+            // buffers may reach the pipeline; an unrecognized layout fails this attempt.
+            let aggregateInputs = try readInputStreamChannels(deviceID: aggregateDeviceID, of: "aggregate device")
+            try throwIfMuteReleased()
+            let outputDeviceInputs = try readInputStreamChannels(deviceID: outputDevice.id, of: "output device")
+            try throwIfMuteReleased()
+            let inputLayout = try SystemAudioTapInputLayout.resolve(
+                aggregateInputChannels: aggregateInputs,
+                outputDeviceInputChannels: outputDeviceInputs,
+                tapFormat: tapFormat
+            )
 
-            try establishRunning(generation: generation, callbacks: callbacks, format: deliveredFormat)
+            try establishRunning(
+                generation: generation,
+                callbacks: callbacks,
+                format: deliveredFormat,
+                tapInput: SystemAudioTapInputSelector(layout: inputLayout)
+            )
             try throwIfMuteReleased()
             callbacks.onMetadata(RecorderBackendMetadata(
                 outputDeviceUID: outputDevice.uid,
@@ -157,13 +177,19 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     /// Sets running only while the mute is still held, atomically against releaseMute.
-    private func establishRunning(generation: Int, callbacks: RecorderBackendCallbacks, format: AVAudioFormat) throws {
+    private func establishRunning(
+        generation: Int,
+        callbacks: RecorderBackendCallbacks,
+        format: AVAudioFormat,
+        tapInput: SystemAudioTapInputSelector
+    ) throws {
         stateLock.lock()
         defer { stateLock.unlock() }
         if tapObject.isReleased { throw Self.muteReleasedError }
         self.generation = generation
         self.callbacks = callbacks
         sourceFormat = format
+        self.tapInput = tapInput
         running = true
     }
 
@@ -189,6 +215,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         anchorDeviceID = kAudioObjectUnknown
         stateLock.withLock {
             sourceFormat = nil
+            tapInput = nil
             callbacks = nil
         }
     }
@@ -232,6 +259,14 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
         return sampleRate
     }
 
+    private func readInputStreamChannels(deviceID: AudioObjectID, of device: String) throws -> [UInt32] {
+        let (status, channels) = hal.readInputStreamChannels(deviceID)
+        guard status == noErr else {
+            throw SystemAudioTapError.osStatus(status, context: "Could not read \(device) input streams")
+        }
+        return channels
+    }
+
     private func readDefaultSystemOutputDevice() throws -> (id: AudioObjectID, uid: String) {
         try hal.readDefaultSystemOutputDevice()
     }
@@ -257,16 +292,19 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
     }
 
     private func handleAudio(_ inputData: UnsafePointer<AudioBufferList>) {
-        let snapshot = stateLock.withLock { () -> (Bool, Int, AVAudioFormat?, RecorderBackendCallbacks?) in
-            (running, generation, sourceFormat, callbacks)
+        let snapshot = stateLock.withLock {
+            () -> (Bool, Int, AVAudioFormat?, SystemAudioTapInputSelector?, RecorderBackendCallbacks?) in
+            (running, generation, sourceFormat, tapInput, callbacks)
         }
-        guard snapshot.0, let format = snapshot.2, let callbacks = snapshot.3 else { return }
-        guard inputData.pointee.mNumberBuffers > 0,
+        guard snapshot.0, let format = snapshot.2, let tapInput = snapshot.3, let callbacks = snapshot.4 else { return }
+        // Everything below sees only the tap's buffers, never the interface's inputs.
+        guard let tapData = tapInput.tapBuffers(of: inputData),
+              tapData.pointee.mNumberBuffers > 0,
               let frames = RecorderPCMBufferLayout.frameCount(
-                  bufferList: inputData,
+                  bufferList: tapData,
                   streamDescription: format.streamDescription.pointee
               ),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: inputData, deallocator: nil)
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: tapData, deallocator: nil)
         else {
             callbacks.onStructuralNoData(snapshot.1)
             return
@@ -276,7 +314,7 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             callbacks.onStructuralNoData(snapshot.1)
             return
         }
-        let bytes = RecorderPCMBufferLayout.usableByteCount(bufferList: inputData)
+        let bytes = RecorderPCMBufferLayout.usableByteCount(bufferList: tapData)
         guard bytes > 0 else {
             callbacks.onStructuralNoData(snapshot.1)
             return
@@ -315,6 +353,14 @@ final class SystemAudioProcessTapSession: @unchecked Sendable, RecorderCaptureBa
             objectID: anchorDeviceID,
             selector: kAudioDevicePropertyStreamConfiguration,
             scope: kAudioObjectPropertyScopeOutput
+        )
+        // The device's input streams precede the tap in the aggregate's input list, so a
+        // change there reshapes the list: rebuild with a freshly resolved layout.
+        try throwIfMuteReleased()
+        try addPropertyListener(
+            objectID: anchorDeviceID,
+            selector: kAudioDevicePropertyStreamConfiguration,
+            scope: kAudioObjectPropertyScopeInput
         )
     }
 
@@ -363,6 +409,8 @@ struct SystemAudioTapHAL: Sendable {
     var destroyAggregateDevice: @Sendable (AudioObjectID) -> Void
     var readTapFormat: @Sendable (AudioObjectID) -> (OSStatus, AudioStreamBasicDescription)
     var readNominalSampleRate: @Sendable (AudioObjectID) -> (OSStatus, Double)
+    /// Channels of each input stream, in IO-proc buffer order (kAudioDevicePropertyStreamConfiguration).
+    var readInputStreamChannels: @Sendable (AudioObjectID) -> (OSStatus, [UInt32])
     var createIOProc: @Sendable (AudioObjectID, DispatchQueue, @escaping AudioDeviceIOBlock)
         -> (OSStatus, AudioDeviceIOProcID?)
     var destroyIOProc: @Sendable (AudioObjectID, AudioDeviceIOProcID) -> Void
@@ -410,6 +458,24 @@ struct SystemAudioTapHAL: Sendable {
             var sampleRate: Double = 0
             let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &sampleRate)
             return (status, sampleRate)
+        },
+        readInputStreamChannels: { deviceID in
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreamConfiguration,
+                mScope: kAudioObjectPropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var size: UInt32 = 0
+            var status = AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size)
+            guard status == noErr else { return (status, []) }
+            // Room for the header plus as many AudioBuffers as the reported size can hold.
+            let capacity = max(1, (Int(size) - MemoryLayout<AudioBufferList>.size) / MemoryLayout<AudioBuffer>.stride + 1)
+            let list = AudioBufferList.allocate(maximumBuffers: capacity)
+            defer { free(list.unsafeMutablePointer) }
+            status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, list.unsafeMutablePointer)
+            guard status == noErr else { return (status, []) }
+            guard list.count <= capacity else { return (kAudioHardwareBadPropertySizeError, []) }
+            return (noErr, list.map(\.mNumberChannels))
         },
         createIOProc: { deviceID, queue, block in
             var procID: AudioDeviceIOProcID?
