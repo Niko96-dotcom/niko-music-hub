@@ -196,6 +196,46 @@ final class SettingsRepairTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: key), blob)
     }
 
+    @MainActor
+    func testRepairGenerationIncrementsOnRealRepair() throws {
+        let (defaults, suite) = makeDefaults()
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: key)
+        let model = SettingsRepairModel(
+            store: UserDefaultsSettingsStore(userDefaults: defaults),
+            backupDirectory: makeTempDirectory(suite)
+        )
+
+        XCTAssertEqual(model.repairGeneration, 0)
+        XCTAssertTrue(model.repair())
+        XCTAssertEqual(model.repairGeneration, 1)
+    }
+
+    @MainActor
+    func testRepairGenerationStaysUnchangedOnNoOpRepair() throws {
+        let (defaults, suite) = makeDefaults()
+        let store = UserDefaultsSettingsStore(userDefaults: defaults)
+        try store.updateSettings { $0.appearance = .dark }
+        let model = SettingsRepairModel(store: store, backupDirectory: makeTempDirectory(suite))
+
+        XCTAssertEqual(model.repairGeneration, 0)
+        XCTAssertTrue(model.repair())
+        XCTAssertEqual(model.repairGeneration, 0, "a no-op repair of a readable blob must not bump the generation")
+    }
+
+    @MainActor
+    func testRepairGenerationStaysUnchangedWhenBackupDirectoryIsMissing() throws {
+        let (defaults, _) = makeDefaults()
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: key)
+        let model = SettingsRepairModel(
+            store: UserDefaultsSettingsStore(userDefaults: defaults),
+            backupDirectory: nil
+        )
+
+        XCTAssertEqual(model.repairGeneration, 0)
+        XCTAssertFalse(model.repair())
+        XCTAssertEqual(model.repairGeneration, 0, "a failed repair must not bump the generation")
+    }
+
     // MARK: - Salvage never increases destructive permission (R1/R2)
 
     /// Every removal/archiving gate, most permissive first.

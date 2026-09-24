@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import Combine
 import NikoMusicCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -210,6 +211,8 @@ struct ProjectVaultSettingsView: View {
         .onChange(of: settings.vault.archiveRootID) { _, _ in
             resetKeepLocalBrowserVisitIfReviewPending()
         }
+        // A successful settings repair may have dropped unreadable pins: require a fresh visit.
+        .onReceive(context.settingsRepair.$repairGeneration.dropFirst()) { _ in keepLocalBrowserVisited = false }
         .alert(
             ProjectVaultDiagnosticsExportCopy.replaceTitle,
             isPresented: $showReplaceDiagnosticsAlert

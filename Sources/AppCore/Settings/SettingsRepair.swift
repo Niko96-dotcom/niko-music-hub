@@ -363,6 +363,7 @@ public final class SettingsRepairModel: ObservableObject, @unchecked Sendable {
     @Published public private(set) var needsRepair: Bool
     @Published public private(set) var resultMessage: String?
     @Published public private(set) var errorMessage: String?
+    @Published public private(set) var repairGeneration: Int = 0
 
     private let repairer: (any SettingsRepairing)?
     private let backupDirectory: URL?
@@ -412,6 +413,7 @@ public final class SettingsRepairModel: ObservableObject, @unchecked Sendable {
             needsRepair = false
             errorMessage = nil
             resultMessage = outcome.message
+            repairGeneration += 1
             for handler in repairHandlers { handler() }
             return true
         } catch SettingsRepairError.backupFailed {
