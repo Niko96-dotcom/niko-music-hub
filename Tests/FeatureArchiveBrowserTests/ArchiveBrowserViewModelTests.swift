@@ -3130,13 +3130,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
         viewModel.roots = []
         XCTAssertFalse(viewModel.showsSidebarMorePanel)
-        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & intelligence")
+        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & insights")
 
         viewModel.roots = [
             URL(fileURLWithPath: "/tmp/archive-root", isDirectory: true)
         ]
         XCTAssertTrue(viewModel.showsSidebarMorePanel)
-        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & intelligence")
+        XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & insights")
     }
 
     func testIncrementalFilesystemChangeUpdatesOnlyAffectedSong() async throws {

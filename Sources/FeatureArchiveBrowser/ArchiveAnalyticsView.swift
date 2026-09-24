@@ -31,7 +31,7 @@ struct ArchiveAnalyticsView: View {
     }
 
     private var header: some View {
-        HubPageHeader("Analytics", statusText: "From project file dates and status changes", statusColor: HubDesignSystem.Palette.textTertiary) {
+        HubPageHeader("Analytics") {
             // ONE flipping icon, same last-trailing slot as the board's chart.bar
             // entry — going there and back never moves under the cursor (Esc too).
             HubIconButton(
@@ -84,13 +84,13 @@ struct ArchiveAnalyticsView: View {
     private func monthlySection(_ months: [ArchiveAnalyticsSnapshot.MonthActivity]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HubSectionHeader("Project saves per month")
-            Text("Bar chart of project saves by month for the last 12 months.")
+            Text("Last 12 months")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .accessibilityAddTraits(.isHeader)
 
             if months.allSatisfy({ $0.versionCount == 0 }) {
-                emptyHint("No project file activity in the last \(months.count) months.")
+                emptyHint("No projects saved in the last \(months.count) months")
             } else {
                 let peak = max(months.map(\.versionCount).max() ?? 1, 1)
                 HStack(alignment: .bottom, spacing: 6) {
@@ -159,7 +159,7 @@ struct ArchiveAnalyticsView: View {
             HubSectionHeader("Time spent per stage")
 
             if snapshot.stageDwell.isEmpty {
-                emptyHint("Builds up as songs change status — tracking since \(historyStartLabel(snapshot)).")
+                emptyHint("Fills in as songs change status. Tracking since \(historyStartLabel(snapshot))")
             } else {
                 let peak = max(snapshot.stageDwell.map(\.averageDays).max() ?? 1, 0.01)
                 VStack(alignment: .leading, spacing: 5) {
@@ -173,7 +173,7 @@ struct ArchiveAnalyticsView: View {
                         )
                     }
                 }
-                Text("Average stay per stage, from recorded status changes since \(historyStartLabel(snapshot)).")
+                Text("Average time in each stage since \(historyStartLabel(snapshot))")
                     .font(HubDesignSystem.Typography.micro())
                     .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             }

@@ -229,7 +229,7 @@ struct AppShellView: View {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
                 SettingsRepairNotice(model: settingsRepair)
                 if !context.persistenceIssues.isEmpty {
-                    Label("Persistence running in degraded mode", systemImage: "externaldrive.badge.exclamationmark")
+                    Label("Some saved data couldn’t be loaded", systemImage: "externaldrive.badge.exclamationmark")
                         .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Colors.warning)
                 }

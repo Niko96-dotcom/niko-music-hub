@@ -349,7 +349,7 @@ public struct AudioRecorderView: View {
                     .font(HubDesignSystem.Typography.sectionTitle())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-                Text("Audio Recorder requires macOS 14.2 or later. Current version: \(version). Please upgrade macOS or use an external audio interface.")
+                Text("Audio Recorder requires macOS 14.2 or later. This Mac has \(version).")
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -466,7 +466,7 @@ public struct AudioRecorderView: View {
                 category: .permission,
                 label: "macOS Too Old",
                 icon: "laptopcomputer",
-                body: "Audio Recorder requires macOS \(minimum) or later. Current version: \(current). Please upgrade macOS or use an external audio interface.",
+                body: "Audio Recorder requires macOS \(minimum) or later. This Mac has \(current).",
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Dismiss", style: .secondary, action: .dismiss)
                 ]

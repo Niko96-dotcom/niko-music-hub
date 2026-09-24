@@ -731,13 +731,13 @@ public enum AudioConverterCopy {
     public static let unsupported = "This file type is not supported. Add M4A, MP3, WAV, AIFF, or FLAC instead."
     public static let missingFFmpeg = "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
     public static let verificationFailed = "WAV verification failed. The source file was left untouched; check the output preset and try again."
-    public static let genericFailure = "Could not convert this file. Keep the source selected, review the row message, then try Convert to WAV again."
+    public static let genericFailure = "Couldn’t convert this file. It may be damaged or in an unusual format."
     public static let skipped = "Skipped"
     public static let canceled = "Canceled"
     public static let stopAfterThisFile = "Stop After This File"
     public static let stopAfterThisFileHelp = "Finishes the file that is converting, then skips the rest. Verified WAV files are kept."
     public static let chooseFFmpeg = "Choose FFmpeg"
-    public static let selectedFFmpegMissing = "Selected FFmpeg could not be found. Choose FFmpeg, then pick the executable again."
+    public static let selectedFFmpegMissing = "FFmpeg isn’t where it used to be. Choose FFmpeg to find it again."
 
     public static func selectedFFmpegUnusable(_ message: String) -> String {
         "Selected FFmpeg could not be used: \(message)"

@@ -7,7 +7,7 @@ final class ArchiveEmptyScanCopyTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(
-            board.contains("Songs already in the cache stay visible."),
+            board.contains("Songs from earlier scans stay visible."),
             "Empty-board scanning copy must explain cache visibility (NMH-044)"
         )
         XCTAssertFalse(

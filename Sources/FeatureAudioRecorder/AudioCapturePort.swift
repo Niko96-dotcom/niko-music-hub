@@ -20,7 +20,7 @@ public enum RecorderError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Audio recording permission was denied. Please enable access in System Settings."
+            return "Niko Music Hub isn’t allowed to record system audio. Turn it on in System Settings."
         case .permissionRestricted:
             return "Audio recording is restricted on this device."
         case .apiError(let message):

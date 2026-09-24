@@ -49,10 +49,10 @@ struct ArchiveSidebarView: View {
             if viewModel.canBrowseArchivedProjects && !compactList {
                 HubIconButton(
                     systemImage: "archivebox",
-                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects",
+                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
                     help: viewModel.showArchivedProjects
-                        ? "Hide Project Vault archive-only projects"
-                        : "Show \(viewModel.archivedProjectCount) Project Vault archive-only project(s)",
+                        ? "Hide archived songs"
+                        : "Show \(viewModel.archivedProjectCount) archived \(viewModel.archivedProjectCount == 1 ? "song" : "songs")",
                     isSelected: viewModel.showArchivedProjects,
                     isToggle: true
                 ) {
@@ -74,12 +74,12 @@ struct ArchiveSidebarView: View {
             }
 
             Menu {
-                Button(viewModel.isScanning ? "Scanning archive…" : "Scan archive") {
+                Button(viewModel.isScanning ? "Scanning Archive…" : "Scan Archive") {
                     Task { await viewModel.scan() }
                 }
                 .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
                 if viewModel.canBrowseArchivedProjects {
-                    Button(viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects") {
+                    Button(viewModel.showArchivedProjects ? "Hide Archived Songs" : "Show Archived Songs") {
                         viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
                     }
                 }
@@ -87,13 +87,13 @@ struct ArchiveSidebarView: View {
                 Button {
                     showNewSongSheet = true
                 } label: {
-                    Label("New song draft", systemImage: "plus.circle")
+                    Label("New Song Draft…", systemImage: "plus.circle")
                 }
 
                 Button {
                     onChooseRoot()
                 } label: {
-                    Label("Add archive root", systemImage: "folder.badge.plus")
+                    Label("Add Archive Folder…", systemImage: "folder.badge.plus")
                 }
 
                 Divider()
@@ -102,7 +102,7 @@ struct ArchiveSidebarView: View {
                     viewModel.toggleShowHiddenSongs()
                 } label: {
                     Label(
-                        viewModel.showHiddenSongs ? "Hide hidden songs" : "Show hidden songs",
+                        viewModel.showHiddenSongs ? "Hide Hidden Songs" : "Show Hidden Songs",
                         systemImage: viewModel.showHiddenSongs ? "eye.slash" : "eye"
                     )
                 }
@@ -186,9 +186,9 @@ struct ArchiveSidebarView: View {
                         viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
                     } label: {
                         if viewModel.showArchivedProjects {
-                            Label("Hide archived projects", systemImage: "checkmark")
+                            Label("Hide Archived Songs", systemImage: "checkmark")
                         } else {
-                            Label("Show archived projects", systemImage: "archivebox")
+                            Label("Show Archived Songs", systemImage: "archivebox")
                         }
                     }
                 }
@@ -276,14 +276,14 @@ struct ArchiveSidebarView: View {
     private var songList: some View {
         if viewModel.roots.isEmpty {
             archiveEmptyState(
-                title: "No archive root",
-                body: "Choose the folder that holds your song projects",
+                title: "No archive folder",
+                body: "Add the folder with your song projects",
                 systemImage: "folder.badge.plus"
             )
         } else if viewModel.songs.isEmpty && !viewModel.isScanning {
             archiveEmptyState(
-                title: "No songs scanned",
-                body: "Run Scan archive",
+                title: "No songs yet",
+                body: "Choose Scan Archive from the + menu",
                 systemImage: "music.note.list"
             )
         } else if viewModel.songs.isEmpty && viewModel.isScanning {

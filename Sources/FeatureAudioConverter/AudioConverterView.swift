@@ -97,7 +97,7 @@ public struct AudioConverterView: View {
                     .font(HubDesignSystem.Typography.display())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-                Text(dropTargeted ? "Release to add supported audio" : "Drop audio files to convert")
+                Text(dropTargeted ? "Drop to add" : "Drop audio files to convert")
                     .font(HubDesignSystem.Typography.sectionTitle())
                     .foregroundStyle(HubDesignSystem.Palette.textPrimary)
 
@@ -134,7 +134,7 @@ public struct AudioConverterView: View {
 
     private var queueSection: some View {
         HubListSection("Queue", count: viewModel.rows.count, trailing: {
-            HubLabeledButton(icon: "plus", label: "Add files", style: .ghost) {
+            HubLabeledButton(icon: "plus", label: "Add Files", style: .ghost) {
                 fileImporterVisible = true
             }
             if !viewModel.rows.isEmpty, !viewModel.isConverting {

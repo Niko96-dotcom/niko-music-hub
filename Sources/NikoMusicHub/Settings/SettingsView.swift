@@ -83,7 +83,7 @@ final class HubSettingsSession: ObservableObject {
     var updatesFooter: String {
         updateController.status.isUnavailable
             ? "Update checks are switched off for this build."
-            : "Updates are downloaded from the signed release feed and verified before they are installed."
+            : "Every update is signature-checked before it installs."
     }
 
     var maxRecordingBinding: Binding<Int> {
@@ -352,7 +352,7 @@ struct SettingsView: View {
     }
 
     private func addArchiveRoot() {
-        guard let folder = session.context.fileActions.chooseDirectory(prompt: "Choose Archive Root") else { return }
+        guard let folder = session.context.fileActions.chooseDirectory(prompt: "Add Folder") else { return }
         archiveViewModel.addRoot(folder)
     }
 
@@ -416,7 +416,7 @@ private struct SettingsGeneralSection: View {
             SettingsRowDivider()
             SettingsRow(
                 "Open at login",
-                description: "Project Vault automatic archiving needs this to run while you are away"
+                description: "Lets Project Vault archive while you’re away"
             ) {
                 Toggle("Open at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
@@ -433,8 +433,8 @@ private struct SettingsGeneralSection: View {
                     .padding(.vertical, 10)
             }
             SettingsRowDivider()
-            SettingsRow("Show menu bar extra") {
-                Toggle("Show menu bar extra", isOn: $showMenuBarExtra)
+            SettingsRow("Show in menu bar") {
+                Toggle("Show in menu bar", isOn: $showMenuBarExtra)
                     .toggleStyle(.switch)
                     .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
@@ -468,12 +468,12 @@ private struct SettingsArchivePane: View {
     var body: some View {
         SettingsSection(
             title: "Music archive",
-            footer: "Scanned read-only. Only a confirmed Project Vault archive removes a song folder"
+            footer: "Read-only. Nothing moves or gets deleted unless you confirm a Project Vault archive"
         ) {
             archiveRootsSection
             SettingsRowDivider()
-            SettingsRow("Compact empty board stages") {
-                Toggle("Compact empty board stages", isOn: $compactEmptyStages)
+            SettingsRow("Collapse empty board columns") {
+                Toggle("Collapse empty board columns", isOn: $compactEmptyStages)
                     .toggleStyle(.switch)
                     .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
@@ -481,7 +481,7 @@ private struct SettingsArchivePane: View {
             SettingsRowDivider()
             SettingsRow(
                 "Scan exclusions",
-                description: "Comma-separated folder-name terms to skip during scan."
+                description: "Skips folders whose names contain these words. Separate with commas."
             ) {
                 TextField(
                     "Scan exclusions",
@@ -489,7 +489,7 @@ private struct SettingsArchivePane: View {
                     prompt: Text("backup, tmp, archive")
                         .foregroundColor(HubDesignSystem.Palette.textTertiary)
                 )
-                .accessibilityHint("Comma-separated folder-name terms to skip during scan.")
+                .accessibilityHint("Skips folders whose names contain these words. Separate with commas.")
                 .textFieldStyle(.plain)
                 .font(HubDesignSystem.Typography.body())
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
@@ -504,7 +504,7 @@ private struct SettingsArchivePane: View {
     @ViewBuilder
     private var archiveRootsSection: some View {
         if roots.isEmpty {
-            Text("No archive roots — add the folder that holds your song projects")
+            Text("No folders yet. Add the one with your song projects.")
                 .font(HubDesignSystem.Typography.bodySmall())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -520,7 +520,7 @@ private struct SettingsArchivePane: View {
             }
         }
         SettingsRowDivider()
-        SettingsRow("Add archive root") {
+        SettingsRow("Add folder") {
             HubLabeledButton(
                 icon: "folder.badge.plus",
                 label: "Add",
@@ -533,12 +533,12 @@ private struct SettingsArchivePane: View {
 
     private func archiveRootRow(_ root: URL) -> some View {
         SettingsRow(
-            root.lastPathComponent.isEmpty ? "Archive Root" : root.lastPathComponent,
+            root.lastPathComponent.isEmpty ? "Folder" : root.lastPathComponent,
             description: root.path
         ) {
             HubIconButton(
                 systemImage: "trash",
-                accessibilityLabel: "Remove archive root",
+                accessibilityLabel: "Remove from scan list",
                 help: "Remove \(root.lastPathComponent) from scan list",
                 role: .destructive
             ) {

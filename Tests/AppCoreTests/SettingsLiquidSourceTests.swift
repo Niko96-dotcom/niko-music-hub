@@ -60,13 +60,13 @@ final class SettingsLiquidSourceTests: XCTestCase {
 
         [
             "SystemPrivacySettings.openSystemAudioRecordingSettings()",
-            "accessibilityLabel: \"Remove archive root\"",
+            "accessibilityLabel: \"Remove from scan list\"",
             "Settings were not saved",
             "context.fileActions.chooseOutputFolder()",
             "context.fileActions.chooseExecutable",
             "archiveViewModel.addRoot",
             "archiveViewModel.removeRoot",
-            "Scanned read-only. Only a confirmed Project Vault archive removes a song folder",
+            "Read-only. Nothing moves or gets deleted unless you confirm a Project Vault archive",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Settings safety/accessibility source: \(required)")
         }

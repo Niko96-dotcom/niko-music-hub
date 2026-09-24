@@ -9,11 +9,11 @@ struct SettingsPrivacySection: View {
     var body: some View {
         SettingsSection(
             title: "Privacy & recording",
-            footer: "Only Audio Recorder needs this; a rebuilt app may ask again"
+            footer: "Only the Recorder needs this"
         ) {
             SettingsRow(
                 "Open System Settings",
-                description: "Enable Niko Music Hub under Screen & System Audio Recording so Recorder can capture Mac output to a WAV in your output folder."
+                description: "Turn on Niko Music Hub under Screen & System Audio Recording"
             ) {
                 HubLabeledButton(
                     icon: "lock.shield",

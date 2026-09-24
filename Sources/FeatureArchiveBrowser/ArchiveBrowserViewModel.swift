@@ -468,6 +468,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func chooseTemplateFolder() -> URL? {
-        fileActions.chooseDirectory(prompt: "Choose Cubase or Ableton template folder")
+        fileActions.chooseDirectory(prompt: "Choose Template Folder")
     }
 }

@@ -352,7 +352,7 @@ struct SongDetailView: View {
                     value: "\(key.key) (\(key.confidence))"
                 )
             } else {
-                infoLine(label: "Key", value: "Not analysed")
+                infoLine(label: "Key", value: "Not analyzed")
             }
             infoLine(label: "Stems", value: liveSong.hasStems ? "Detected" : "Not detected")
             infoLine(label: "Project files", value: "\(liveSong.visibleProjectVersions.count) versions")
@@ -436,7 +436,7 @@ struct SongDetailView: View {
                     }
                 }
                 if viewModel.projectVaultPendingOperations.contains(where: { $0.songID == liveSong.id }) {
-                    Text("Waiting requests run while Niko Music Hub is open.")
+                    Text("Queued. Runs while Niko Music Hub is open.")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     Button("Cancel queued request") {
@@ -444,7 +444,7 @@ struct SongDetailView: View {
                     }
                 }
                 if liveSong.projectFormats.contains(.abletonLive) {
-                    Text("Before archiving, use File → Collect All and Save in Ableton Live to include external samples. Plug-ins must remain installed separately.")
+                    Text("In Ableton Live, use File → Collect All and Save first so outside samples come along. Plug-ins aren’t archived.")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -472,7 +472,7 @@ struct SongDetailView: View {
 
             if viewModel.canRecoverInterruptedProject(liveSong) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Recovery verifies the archive, preserves any remaining Active folder separately, then restores the verified project. No existing files are overwritten.")
+                    Text("Restores the verified Vault copy. Anything still in Active is set aside first, so nothing is overwritten.")
                         .font(HubDesignSystem.Typography.caption())
                     Button("Recover Verified Project") {
                         viewModel.recoverInterruptedProject(liveSong)

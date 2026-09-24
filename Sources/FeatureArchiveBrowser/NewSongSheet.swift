@@ -18,7 +18,7 @@ struct NewSongSheet: View {
             Text("New Song Draft")
                 .font(HubDesignSystem.Typography.sectionTitle())
 
-            Text("Drafts are created in the app output folder, not inside archive roots.")
+            Text("Saved in your output folder, never inside your archive.")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
@@ -56,7 +56,7 @@ struct NewSongSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Cubase or Ableton template folder (optional)")
+                    Text("Template folder (optional)")
                         .font(HubDesignSystem.Typography.caption().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     HStack {

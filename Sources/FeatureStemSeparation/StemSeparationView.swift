@@ -173,7 +173,7 @@ public struct StemSeparationView: View {
                 .font(HubDesignSystem.Typography.body().weight(.medium))
                 .foregroundStyle(.tertiary)
 
-            HubQuietTextField("Paste YouTube URL…", text: $viewModel.youtubeURLText)
+            HubQuietTextField("Paste a YouTube link…", text: $viewModel.youtubeURLText)
                 .disabled(viewModel.isRunning)
                 .onSubmit {
                     submitPrimaryStemJob()

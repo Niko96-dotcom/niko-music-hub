@@ -147,7 +147,7 @@ fi
 for required_text in \
   "Niko Music Hub" \
   "Archive Browser" \
-  "Add archive root" \
+  "Add Archive Folder" \
   "Show output inbox" \
   "Set Up Niko Music Hub" \
   "The app downloads the free tools it needs into its own folder" \

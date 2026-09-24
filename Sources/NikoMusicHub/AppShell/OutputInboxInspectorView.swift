@@ -97,12 +97,8 @@ struct OutputInboxInspectorView: View {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 24))
                     .foregroundStyle(.quaternary)
-                Text("No outputs yet")
+                Text("No files yet")
                     .font(HubDesignSystem.Typography.body().weight(.semibold))
-                Text("Converted files, recordings, and\ndownloads appear here.")
-                    .font(HubDesignSystem.Typography.caption())
-                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                    .multilineTextAlignment(.center)
             }
             // Codex-flat: no card — the empty state is bare content on the
             // inspector background, like the sidebar rows around it.
@@ -316,7 +312,7 @@ struct OutputInboxInspectorView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.danger)
         } else if item.status == .missing {
-            Text("File missing — choose Output Folder if you moved the inbox.")
+            Text("File not found. Moved the folder? Choose it again above.")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.warning)
                 .lineLimit(2)

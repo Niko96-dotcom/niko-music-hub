@@ -402,14 +402,14 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
 public enum ProjectVaultActivityExplanation {
     public static func transfer(_ state: VaultTransferState) -> String {
         switch state {
-        case .copyingToArchiveStaging: return "Copying into a private staging folder. The Active copy is untouched."
-        case .verifyingArchiveStaging: return "Verifying every staged file before publishing the archive generation."
-        case .awaitingProviderDurability, .promotingArchiveGeneration: return "Waiting for cloud upload. Checks resume automatically; the Active copy remains local."
-        case .removingActiveCopy: return "Archive durability and metadata are verified; removing only the superseded Active copy."
-        case .failedRecoverable: return "Work paused safely and can be retried. Existing copies were kept."
-        case .recoveryRequired: return "A choice is required. Project Vault kept every known copy."
-        case .archivedOnlineOnly: return "Archived and provider-synced; local provider cache was released."
-        case .archivedLocal: return "Archived and verified locally. The provider could not safely release its local cache."
+        case .copyingToArchiveStaging: return "Copying to a temporary folder in the Vault. Your Active folder isn’t touched."
+        case .verifyingArchiveStaging: return "Verifying every copied file."
+        case .awaitingProviderDurability, .promotingArchiveGeneration: return "Waiting for cloud upload to finish. Your Active folder stays on this Mac."
+        case .removingActiveCopy: return "Vault copy verified. Removing only the old Active folder."
+        case .failedRecoverable: return "Paused safely. Every copy was kept, and you can retry."
+        case .recoveryRequired: return "Needs your decision. Every copy we know about was kept."
+        case .archivedOnlineOnly: return "Archived and synced. The cloud app’s offline copy on this Mac was cleared to free space."
+        case .archivedLocal: return "Archived and verified. The cloud app couldn’t clear its offline copy safely, so it’s still on this Mac."
         default:
             let readableState = state.rawValue.replacingOccurrences(of: "_", with: " ")
             return "Project Vault is completing \(readableState)."
@@ -418,13 +418,13 @@ public enum ProjectVaultActivityExplanation {
 
     public static func restore(_ phase: VaultRestorePhase) -> String {
         switch phase {
-        case .materializingArchive: return "Downloading the verified archive generation."
-        case .copyingToActiveStaging: return "Copying into Active Projects staging. The archive remains untouched."
-        case .verifyingActiveStaging: return "Verifying the restored copy before it becomes active."
-        case .promotingActiveCopy: return "Publishing the verified copy into Active Projects."
-        case .persistingActiveLocation: return "Saving the restored location before opening the project."
-        case .openingInCubase: return "Restore is verified. Opening the project in its DAW."
-        case .superseded: return "A newer restore recovery job owns this project."
+        case .materializingArchive: return "Downloading the Vault copy."
+        case .copyingToActiveStaging: return "Copying to a temporary folder first. The Vault copy isn’t touched."
+        case .verifyingActiveStaging: return "Verifying the restored files."
+        case .promotingActiveCopy: return "Moving the verified copy into Active Projects."
+        case .persistingActiveLocation: return "Saving where the project now lives."
+        case .openingInCubase: return "Restored and verified. Opening it in your DAW."
+        case .superseded: return "Another restore is already handling this project."
         }
     }
 }

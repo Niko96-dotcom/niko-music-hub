@@ -10,8 +10,7 @@ struct SettingsOutputSection: View {
 
     var body: some View {
         SettingsSection(
-            title: "Output",
-            footer: "Also listed in the Output Inbox"
+            title: "Output"
         ) {
             SettingsRow(
                 "Output folder",

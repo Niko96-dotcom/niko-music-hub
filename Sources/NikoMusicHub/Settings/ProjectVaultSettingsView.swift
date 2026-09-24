@@ -46,26 +46,26 @@ struct ProjectVaultSettingsView: View {
                     folderRow(role: .archive, title: "Archive / Vault")
                     SettingsRowDivider()
                     SettingsRow(
-                        "Background scheduling",
-                        description: "Inactive projects or low disk space. Off unless you turn it on. Done still asks."
+                        "Archive automatically",
+                        description: "Archives projects you haven’t touched in a while, or when space runs low"
                     ) {
-                        Toggle("Background scheduling", isOn: vaultBinding(\.automaticArchiving))
+                        Toggle("Archive automatically", isOn: vaultBinding(\.automaticArchiving))
                             .toggleStyle(.switch)
                             .tint(HubDesignSystem.Palette.indicator)
                             .labelsHidden()
                     }
                     SettingsRowDivider()
-                    SettingsRow("Eligible after \(settings.vault.inactivityDays) inactive days") {
+                    SettingsRow("After \(settings.vault.inactivityDays) days untouched") {
                         Stepper(
-                            "Eligible after \(settings.vault.inactivityDays) inactive days",
+                            "After \(settings.vault.inactivityDays) days untouched",
                             value: intBinding(\.inactivityDays, range: 7...365)
                         )
                         .labelsHidden()
                     }
                     SettingsRowDivider()
-                    SettingsRow("Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free") {
+                    SettingsRow("Or when less than \(settings.vault.minimumFreeSpaceGiB) GiB is free") {
                         Stepper(
-                            "Start archiving below \(settings.vault.minimumFreeSpaceGiB) GiB free",
+                            "Or when less than \(settings.vault.minimumFreeSpaceGiB) GiB is free",
                             value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000),
                             step: 10
                         )
@@ -73,19 +73,18 @@ struct ProjectVaultSettingsView: View {
                     }
                     SettingsRowDivider()
                     SettingsRow(
-                        "Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB",
-                        description: "Before copying, allow room for the project plus this reserve. Marking Done skips the inactivity wait."
+                        "Keep \(settings.vault.transferFreeSpaceReserveGiB) GiB spare while copying"
                     ) {
                         Stepper(
-                            "Copying reserve: \(settings.vault.transferFreeSpaceReserveGiB) GiB",
+                            "Keep \(settings.vault.transferFreeSpaceReserveGiB) GiB spare while copying",
                             value: intBinding(\.transferFreeSpaceReserveGiB, range: 1...1000)
                         )
                         .labelsHidden()
                     }
                     SettingsRowDivider()
-                    SettingsRow("Keep previous generation \(settings.vault.keepPreviousGenerationDays) days") {
+                    SettingsRow("Keep older Vault copies \(settings.vault.keepPreviousGenerationDays) days") {
                         Stepper(
-                            "Keep previous generation \(settings.vault.keepPreviousGenerationDays) days",
+                            "Keep older Vault copies \(settings.vault.keepPreviousGenerationDays) days",
                             value: intBinding(\.keepPreviousGenerationDays, range: 7...365)
                         )
                         .labelsHidden()
@@ -107,9 +106,9 @@ struct ProjectVaultSettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     backupWarning
                     SettingsRowDivider()
-                    SettingsRow("Emergency stop — pause all automation") {
+                    SettingsRow("Emergency stop", description: "Pauses everything Project Vault does on its own") {
                         Toggle(
-                            "Emergency stop — pause all automation",
+                            "Emergency stop",
                             isOn: vaultBinding(\.automationEmergencyStop)
                         )
                         .toggleStyle(.switch)
@@ -122,7 +121,7 @@ struct ProjectVaultSettingsView: View {
                             icon: "checkmark.shield",
                             label: isRunningDrill ? "Testing…" : "Test",
                             style: .secondary,
-                            help: "Run a restore using only an app-created temporary fixture",
+                            help: "Restores a throwaway test project to check the Vault works. Your projects aren’t touched.",
                             isEnabled: !isRunningDrill
                         ) { runRestoreDrill() }
                     }
@@ -132,7 +131,7 @@ struct ProjectVaultSettingsView: View {
                             icon: "doc.text",
                             label: "Export",
                             style: .ghost,
-                            help: "Export path-free Project Vault settings and health"
+                            help: "Save Vault settings and health for support. No file paths included."
                         ) { exportDiagnostics() }
                     }
                 }
@@ -169,11 +168,11 @@ struct ProjectVaultSettingsView: View {
 
             ProjectVaultRecoverySection(context: context)
 
-            Text(settings.vault.isEnabled
-                ? "Turning Project Vault off only stops scheduling. It never moves or deletes a project."
-                : "Off by default. Read-only Archive browsing continues unchanged.")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            if settings.vault.isEnabled {
+                Text("Turning Project Vault off never moves or deletes a project.")
+                    .font(HubDesignSystem.Typography.caption())
+                    .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showSetup) {
@@ -345,7 +344,7 @@ struct ProjectVaultSettingsView: View {
         VStack(alignment: .leading, spacing: 3) {
             Label(health.summary, systemImage: health.providerStatus == .offline ? "externaldrive.badge.exclamationmark" : "externaldrive.badge.checkmark")
             Text("Last verified: \(dateLabel(settings.vault.lastSuccessfulVerificationAt))")
-            Text("Last restore drill: \(dateLabel(settings.vault.lastRestoreDrillAt))")
+            Text("Last test restore: \(dateLabel(settings.vault.lastRestoreDrillAt))")
         }
         .font(HubDesignSystem.Typography.caption())
         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
@@ -458,11 +457,11 @@ struct ProjectVaultSettingsView: View {
                 let result = try ProjectVaultRestoreDrill().run()
                 await MainActor.run {
                     updateVault { $0.lastRestoreDrillAt = result.completedAt; $0.lastSuccessfulVerificationAt = result.completedAt }
-                    message = "Synthetic restore verified \(result.fileCount) files; the archive fixture remained intact."
+                    message = "Test restore passed. \(result.fileCount) files verified."
                     isRunningDrill = false
                 }
             } catch {
-                await MainActor.run { message = "Synthetic restore failed safely: \(error.localizedDescription)"; isRunningDrill = false }
+                await MainActor.run { message = "Test restore failed: \(error.localizedDescription). Your projects weren’t touched."; isRunningDrill = false }
             }
         }
     }
@@ -504,7 +503,7 @@ struct ProjectVaultSettingsView: View {
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try ProjectVaultDiagnosticsExporter.export(settings: settings, health: health, to: destination)
             context.fileActions.revealInFinder(destination)
-            message = "Exported path-free Project Vault diagnostics."
+            message = "Diagnostics saved."
         } catch let error as ProjectVaultDiagnosticsExportError {
             switch error {
             case .destinationInsideMusicRoot:

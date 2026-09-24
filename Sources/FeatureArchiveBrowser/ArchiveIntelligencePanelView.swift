@@ -7,13 +7,6 @@ struct ArchiveIntelligencePanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Library Insights")
-                .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-            Text("Accept saves collaborator names to this song’s metadata. Dismiss only hides the suggestion until the next scan.")
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-
             if !viewModel.pendingCollaboratorSuggestions.isEmpty {
                 Text("Collaborator suggestions")
                     .font(HubDesignSystem.Typography.caption())

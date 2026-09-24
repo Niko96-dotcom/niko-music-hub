@@ -19,6 +19,6 @@ struct ArchiveSidebarHealthContext: Equatable {
         if skippedEntryCount > 0 {
             parts.append("\(skippedEntryCount) skipped")
         }
-        return parts.isEmpty ? "Health & intelligence" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "Health & insights" : parts.joined(separator: " · ")
     }
 }

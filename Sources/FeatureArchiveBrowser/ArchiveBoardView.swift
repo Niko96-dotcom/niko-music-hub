@@ -104,10 +104,10 @@ struct ArchiveBoardView: View {
             if viewModel.canBrowseArchivedProjects {
                 HubIconButton(
                     systemImage: "archivebox",
-                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived projects" : "Show archived projects",
+                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
                     help: viewModel.showArchivedProjects
-                        ? "Hide Project Vault archive-only projects"
-                        : "Show \(viewModel.archivedProjectCount) Project Vault archive-only project(s)",
+                        ? "Hide archived songs"
+                        : "Show \(viewModel.archivedProjectCount) archived \(viewModel.archivedProjectCount == 1 ? "song" : "songs")",
                     isSelected: viewModel.showArchivedProjects,
                     isToggle: true
                 ) {
@@ -117,7 +117,7 @@ struct ArchiveBoardView: View {
 
             HubIconButton(
                 systemImage: "folder.badge.plus",
-                accessibilityLabel: "Add archive root",
+                accessibilityLabel: "Add archive folder",
                 help: "Add archive folder"
             ) {
                 onChooseRoot()
@@ -161,13 +161,13 @@ struct ArchiveBoardEmptyState: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(
-                isScanning ? "Scanning archive" : "No songs on the board",
+                isScanning ? "Scanning your archive" : "No songs on the board",
                 systemImage: isScanning ? "arrow.triangle.2.circlepath" : "music.note.list"
             )
             .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
             if isScanning {
-                Text("Scanning archive. This can take a while on a large folder. Songs already in the cache stay visible.")
+                Text("Big folders can take a few minutes. Songs from earlier scans stay visible.")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -176,14 +176,14 @@ struct ArchiveBoardEmptyState: View {
                 HStack(spacing: HubDesignSystem.Spacing.controlGap) {
                     HubLabeledButton(
                         icon: "folder.badge.plus",
-                        label: "Add archive root",
+                        label: "Add Archive Folder",
                         style: .primary
                     ) {
                         onChooseRoot()
                     }
                     HubLabeledButton(
                         icon: "list.bullet",
-                        label: "Open list view",
+                        label: "Open List View",
                         style: .ghost
                     ) {
                         onOpenListView()

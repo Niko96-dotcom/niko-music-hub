@@ -64,7 +64,7 @@ struct ArchiveSidebarMorePanel: View {
                 }
 
                 libraryRow(
-                    title: "Intelligence",
+                    title: "Insights",
                     systemImage: "sparkles",
                     isExpanded: $sidebarUI.intelligenceRowExpanded
                 ) {

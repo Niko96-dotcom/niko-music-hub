@@ -400,19 +400,11 @@ struct ArchiveBrowserView: View {
                         .foregroundStyle(HubDesignSystem.Palette.accent)
                 }
                 VStack(spacing: 6) {
-                    Text(viewModel.roots.isEmpty ? "Add an archive root" : "Select a song")
+                    Text(viewModel.roots.isEmpty ? "Add your archive folder" : "Select a song")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                    Text(viewModel.roots.isEmpty
-                        ? "Scan a root to browse your songs here."
-                        : "Preview mixdowns and open the latest Cubase or Ableton project — without touching your archive.")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 320)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

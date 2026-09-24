@@ -79,7 +79,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         guard let first = urls.first else { return false }
         let isAudio = Self.allowedDropExtensions.contains(first.pathExtension.lowercased())
         guard isAudio else {
-            errorMessage = "Please drop an audio file."
+            errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
             return false
         }
         droppedFileURL = first
@@ -133,12 +133,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     /// NMH-061: delegate drop entry. Rejects non-audio with the existing error copy.
     public func performDrop(info: DropInfo) -> Bool {
         guard canAcceptDrop(info: info) else {
-            errorMessage = "Please drop an audio file."
+            errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
             return false
         }
         let providers = info.itemProviders(for: [.fileURL])
         guard !providers.isEmpty else {
-            errorMessage = "Please drop an audio file."
+            errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
             return false
         }
         Task { @MainActor [weak self] in
@@ -157,7 +157,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
                 }
             }
             guard !urls.isEmpty else {
-                self?.errorMessage = "Please drop an audio file."
+                self?.errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
                 return
             }
             _ = self?.handleDrop(urls: urls)
@@ -349,7 +349,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         }
         switch current.state {
         case .completed:
-            finish(message: "Separation complete.")
+            finish(message: "Stems ready")
             loadResults()
             return true
         case .failed:

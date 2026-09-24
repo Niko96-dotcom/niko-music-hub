@@ -73,7 +73,7 @@ final class VaultLaunchAtLoginTests: XCTestCase {
         XCTAssertTrue(general.contains("Toggle(\"Open at login\""))
         XCTAssertTrue(
             general.contains(
-                "Project Vault automatic archiving needs this to run while you are away"
+                "Lets Project Vault archive while you’re away"
             )
         )
 

@@ -226,7 +226,7 @@ final class SettingsStoreTests: XCTestCase {
             contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",
             encoding: .utf8
         )
-        XCTAssertTrue(source.contains("Show menu bar extra"))
+        XCTAssertTrue(source.contains("Show in menu bar"))
         XCTAssertTrue(source.contains("showMenuBarExtraBinding"))
     }
 
