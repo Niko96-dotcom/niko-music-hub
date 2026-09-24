@@ -95,7 +95,18 @@ public struct YtDlpDownloader: DownloadRunning {
     }
 
     public func download(_ request: DownloadRequest, progressHandler: @escaping @Sendable (String) -> Void) async throws -> DownloadResult {
-        let args = YtDlpDownloadCommandBuilder.downloadArguments(for: request)
+        let partialDirectory = request.outputDirectory.appendingPathComponent(
+            ".nmh-partial-\(UUID().uuidString.lowercased())",
+            isDirectory: true
+        )
+        do {
+            // yt-dlp used to create a missing output folder itself; keep that.
+            try FileManager.default.createDirectory(at: request.outputDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: partialDirectory, withIntermediateDirectories: false)
+        } catch {
+            throw DownloadError.downloadFailed(error.localizedDescription)
+        }
+        let args = YtDlpDownloadCommandBuilder.downloadArguments(for: request, partialDirectory: partialDirectory)
 
         let processRequest = ExternalProcessRequest(
             executableURL: request.ytDlpURL,
@@ -112,9 +123,18 @@ public struct YtDlpDownloader: DownloadRunning {
         let outputDirectory = request.outputDirectory
         let sourceURL = request.sourceURL
         let stallCheckIntervalNanoseconds = self.stallCheckIntervalNanoseconds
+        // yt-dlp keeps .part files and un-merged fragments here; only finished files
+        // move to the output folder, so removing this one folder never touches user files.
+        func removePartialDirectory(reportingCleanup: Bool) {
+            let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: partialDirectory.path)) ?? []
+            try? FileManager.default.removeItem(at: partialDirectory)
+            if reportingCleanup, !leftovers.isEmpty {
+                progressHandler(DownloaderCopy.partialCleanup)
+            }
+        }
 
         do {
-            return try await withThrowingTaskGroup(of: DownloadResult.self) { group in
+            let downloadResult = try await withThrowingTaskGroup(of: DownloadResult.self) { group in
                 group.addTask {
                     let message = try await Self.pollForStall(
                         monitor: stallMonitor,
@@ -164,9 +184,13 @@ public struct YtDlpDownloader: DownloadRunning {
                 group.cancelAll()
                 return downloadResult
             }
+            removePartialDirectory(reportingCleanup: false)
+            return downloadResult
         } catch let error as DownloadError {
+            removePartialDirectory(reportingCleanup: true)
             throw error
         } catch {
+            removePartialDirectory(reportingCleanup: true)
             throw DownloadError.downloadFailed(error.localizedDescription)
         }
     }

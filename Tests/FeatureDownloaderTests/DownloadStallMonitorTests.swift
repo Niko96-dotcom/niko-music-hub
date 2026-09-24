@@ -142,7 +142,10 @@ final class DownloadStallMonitorTests: XCTestCase {
             sourceURL: URL(string: "https://example.com")!,
             outputDirectory: FileManager.default.temporaryDirectory
         )
-        let arguments = YtDlpDownloadCommandBuilder.downloadArguments(for: request)
+        let arguments = YtDlpDownloadCommandBuilder.downloadArguments(
+            for: request,
+            partialDirectory: request.outputDirectory.appendingPathComponent(".nmh-partial-test", isDirectory: true)
+        )
         XCTAssertTrue(arguments.contains("--print"), "--print implies quiet mode")
         let templates = arguments.indices.dropLast()
             .filter { arguments[$0] == "--progress-template" }

@@ -323,6 +323,91 @@ final class YtDlpDownloaderTests: XCTestCase {
         XCTAssertTrue(YtDlpDownloader.verifiedRegularContainedOutputs([fifoURL], in: outputDir).isEmpty)
         XCTAssertNil(YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: fifoURL.path, in: outputDir))
     }
+
+    func testDownloadRoutesPartialsToPerRunTempDirectory() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-partial-args-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let runner = CapturingRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+
+        _ = try await downloader.download(request) { _ in }
+
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        let pathValues = arguments.indices.filter { arguments[$0] == "-P" }.map { arguments[$0 + 1] }
+        XCTAssertEqual(pathValues.count, 2)
+        XCTAssertTrue(pathValues.contains("home:\(outputDir.path)"))
+        let tempValue = try XCTUnwrap(pathValues.first(where: { $0.hasPrefix("temp:") }))
+        let tempURL = URL(fileURLWithPath: String(tempValue.dropFirst("temp:".count)))
+        XCTAssertEqual(tempURL.deletingLastPathComponent().path, outputDir.path)
+        XCTAssertTrue(tempURL.lastPathComponent.hasPrefix(".nmh-partial-"))
+        let outputFlagIndex = try XCTUnwrap(arguments.firstIndex(of: "-o"))
+        XCTAssertEqual(arguments[outputFlagIndex + 1], "%(title)s [%(id)s].%(ext)s")
+        XCTAssertTrue(arguments[outputFlagIndex + 1].contains("%(id)s"))
+    }
+
+    func testFailedDownloadCleansUpPartialDirectoryAndKeepsUnrelatedFiles() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-partial-fail-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let keepURL = outputDir.appendingPathComponent("keep.txt")
+        FileManager.default.createFile(atPath: keepURL.path, contents: Data("keep".utf8))
+        let runner = PartialWritingCancellationRunner()
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+        let messages = LockedStringArray()
+        do {
+            _ = try await downloader.download(request) { messages.append($0) }
+            XCTFail("Expected download to throw")
+        } catch {
+            // Expected: cancellation surfaces as a thrown download error.
+        }
+
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        let tempValue = try XCTUnwrap(arguments.indices.filter { arguments[$0] == "-P" }.map { arguments[$0 + 1] }.first(where: { $0.hasPrefix("temp:") }))
+        let tempPath = String(tempValue.dropFirst("temp:".count))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempPath))
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: outputDir.path)
+        XCTAssertTrue(remaining.filter { $0.hasPrefix(".nmh-partial-") }.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keepURL.path))
+        XCTAssertEqual(messages.values().filter { $0 == DownloaderCopy.partialCleanup }.count, 1)
+    }
+
+    func testSuccessfulDownloadRemovesPartialDirectoryAndKeepsFinalOutput() async throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ytdlp-partial-success-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let finalURL = outputDir.appendingPathComponent("final-\(UUID().uuidString).mp4")
+        let runner = PartialSuccessRunner(outputFileURL: finalURL)
+        let downloader = YtDlpDownloader(runner: runner)
+        let request = DownloadRequest(
+            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
+            sourceURL: URL(string: "https://example.com")!,
+            outputDirectory: outputDir
+        )
+
+        let result = try await downloader.download(request) { _ in }
+
+        XCTAssertEqual(result.outputURLs, [finalURL.standardizedFileURL])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: finalURL.path))
+        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
+        let tempValue = try XCTUnwrap(arguments.indices.filter { arguments[$0] == "-P" }.map { arguments[$0 + 1] }.first(where: { $0.hasPrefix("temp:") }))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: String(tempValue.dropFirst("temp:".count))))
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: outputDir.path)
+        XCTAssertTrue(remaining.filter { $0.hasPrefix(".nmh-partial-") }.isEmpty)
+    }
 }
 
 private struct NonZeroExitRunner: ExternalProcessRunning {
@@ -419,5 +504,53 @@ private final class StreamingDestinationRunner: StreamingExternalProcessRunning,
         onStandardOutput("NIKO_MUSIC_HUB_FILE:\(outputURL.path)\n")
         FileManager.default.createFile(atPath: outputURL.path, contents: Data("download".utf8))
         return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+    }
+}
+
+private final class PartialWritingCancellationRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: ExternalProcessRequest?
+
+    var lastRequest: ExternalProcessRequest? {
+        lock.withLock { request }
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        lock.withLock {
+            self.request = request
+        }
+        for index in request.arguments.indices where request.arguments[index] == "-P" {
+            guard index + 1 < request.arguments.count else { continue }
+            let value = request.arguments[index + 1]
+            guard value.hasPrefix("temp:") else { continue }
+            let partialURL = URL(fileURLWithPath: String(value.dropFirst("temp:".count)), isDirectory: true)
+            FileManager.default.createFile(
+                atPath: partialURL.appendingPathComponent("x.part").path,
+                contents: Data("partial".utf8)
+            )
+        }
+        throw CancellationError()
+    }
+}
+
+private final class PartialSuccessRunner: ExternalProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: ExternalProcessRequest?
+    let outputFileURL: URL
+
+    init(outputFileURL: URL) {
+        self.outputFileURL = outputFileURL
+    }
+
+    var lastRequest: ExternalProcessRequest? {
+        lock.withLock { request }
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        lock.withLock {
+            self.request = request
+        }
+        FileManager.default.createFile(atPath: outputFileURL.path, contents: Data("download".utf8))
+        return .init(exitCode: 0, standardOutput: "NIKO_MUSIC_HUB_FILE:\(outputFileURL.path)\n", standardError: "")
     }
 }

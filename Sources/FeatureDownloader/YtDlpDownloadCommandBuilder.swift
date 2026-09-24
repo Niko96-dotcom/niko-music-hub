@@ -8,8 +8,7 @@ enum YtDlpDownloadCommandBuilder {
         "postprocess:\(DownloadActivityPhase.postProcessPrefix)%(progress.status)s:%(progress.postprocessor)s"
     static let filePrintMarker = "after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s"
 
-    static func downloadArguments(for request: DownloadRequest) -> [String] {
-        let outputPath = request.outputDirectory.appendingPathComponent(request.outputTemplate).path
+    static func downloadArguments(for request: DownloadRequest, partialDirectory: URL) -> [String] {
         let formatArgs = YtDlpFormatArgumentBuilder.arguments(for: request.formatSelection)
 
         var args: [String] = [
@@ -36,7 +35,9 @@ enum YtDlpDownloadCommandBuilder {
             "--progress-template", progressTemplate,
             "--progress-template", postProcessTemplate,
             "--print", filePrintMarker,
-            "-o", outputPath,
+            "-P", "home:\(request.outputDirectory.path)",
+            "-P", "temp:\(partialDirectory.path)",
+            "-o", request.outputTemplate,
             request.sourceURL.absoluteString,
         ])
         return args

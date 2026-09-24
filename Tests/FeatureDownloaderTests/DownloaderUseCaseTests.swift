@@ -235,7 +235,10 @@ final class DownloaderUseCaseTests: XCTestCase {
             outputDirectory: URL(fileURLWithPath: "/tmp/out"),
             playlistMode: .playlist
         )
-        let args = YtDlpDownloadCommandBuilder.downloadArguments(for: request)
+        let args = YtDlpDownloadCommandBuilder.downloadArguments(
+            for: request,
+            partialDirectory: request.outputDirectory.appendingPathComponent(".nmh-partial-test", isDirectory: true)
+        )
         XCTAssertFalse(args.contains("--no-playlist"))
         XCTAssertTrue(args.contains("--max-downloads"))
     }
