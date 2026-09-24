@@ -400,10 +400,33 @@ PLIST
   local sign_identity
   sign_identity="${NMH_SIGNING_IDENTITY:-}"
   if [[ -z "$sign_identity" ]]; then
+    # Dev builds share the release bundle identifier, and macOS privacy grants
+    # (Screen & System Audio Recording, Microphone, Documents) are keyed by that
+    # identifier plus the signature's designated requirement. An ad-hoc dev build
+    # has a cdhash requirement that changes on every build, so any dev run that
+    # touches a privacy prompt rebinds the grant away from the installed app and
+    # the user gets asked again although the switch shows "on". Prefer a stable
+    # certificate: Apple Development, else this team's Developer ID (the same
+    # requirement as the shipped app). Ad-hoc stays the last resort.
     sign_identity="$(
       /usr/bin/security find-identity -v -p codesigning 2>/dev/null \
         | awk '/Apple Development:/ && $0 !~ /REVOKED|EXPIRED/ { print $2; exit }'
     )"
+    if [[ -z "$sign_identity" ]]; then
+      sign_identity="$(
+        /usr/bin/security find-identity -v -p codesigning 2>/dev/null \
+          | awk '/Developer ID Application:/ && $0 !~ /REVOKED|EXPIRED/ { print $2; exit }'
+      )"
+    fi
+    # A real identity needs Apple's timestamp service. Offline, fall back to
+    # ad-hoc so local builds never break (privacy prompts may then reappear).
+    if [[ -n "$sign_identity" ]]; then
+      if ! nmh_sign_bundle "$sign_identity" 2>/dev/null; then
+        echo "warning: stable dev signing failed (offline?); falling back to ad-hoc" >&2
+        nmh_sign_bundle "-"
+      fi
+      return
+    fi
   fi
   nmh_sign_bundle "${sign_identity:--}"
 }
