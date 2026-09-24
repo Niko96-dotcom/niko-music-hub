@@ -6,6 +6,7 @@ import Foundation
 public enum InAppJobCancelTarget: Equatable, Sendable {
     case download
     case stemSeparation
+    case conversion
     case vaultTransfer
     case scan
 }
@@ -16,6 +17,7 @@ public struct InAppJobActivity: Equatable, Sendable {
     /// Covers file separations and the YouTube-to-stems workflow; both run as one
     /// `JobRunner` job under the stem tool.
     public static let stemSeparationToolID = ToolFeatureID("stem-separation")
+    public static let converterToolID = ToolFeatureID("wav-converter")
     public static let archiveBrowserToolID = ToolFeatureID("archive-browser")
 
     public let jobs: [ShellJobStatus]
@@ -26,6 +28,7 @@ public struct InAppJobActivity: Equatable, Sendable {
 
     public var hasDownload: Bool { !jobs(for: .download).isEmpty }
     public var hasStemSeparation: Bool { !jobs(for: .stemSeparation).isEmpty }
+    public var hasConversion: Bool { !jobs(for: .conversion).isEmpty }
     public var hasActiveVaultTransfer: Bool { !jobs(for: .vaultTransfer).isEmpty }
     public var isScanning: Bool { !jobs(for: .scan).isEmpty }
 
@@ -35,6 +38,8 @@ public struct InAppJobActivity: Equatable, Sendable {
             jobs.filter { $0.sourceToolID == Self.downloaderToolID }
         case .stemSeparation:
             jobs.filter { $0.sourceToolID == Self.stemSeparationToolID }
+        case .conversion:
+            jobs.filter { $0.id == ShellJobExtraSourceID.converter }
         case .vaultTransfer:
             jobs.filter { $0.id == ShellJobExtraSourceID.vaultTransfer }
         case .scan:
@@ -56,6 +61,9 @@ public enum InAppJobCancelRouting {
         if selectedToolID == InAppJobActivity.stemSeparationToolID {
             return activity.hasStemSeparation ? .stemSeparation : nil
         }
+        if selectedToolID == InAppJobActivity.converterToolID {
+            return activity.hasConversion ? .conversion : nil
+        }
         if selectedToolID == InAppJobActivity.archiveBrowserToolID {
             return nil
         }
@@ -68,6 +76,7 @@ public enum InAppJobCancelRouting {
     public static func foremost(_ activity: InAppJobActivity) -> InAppJobCancelTarget? {
         if activity.hasDownload { return .download }
         if activity.hasStemSeparation { return .stemSeparation }
+        if activity.hasConversion { return .conversion }
         if activity.hasActiveVaultTransfer { return .vaultTransfer }
         if activity.isScanning { return .scan }
         return nil

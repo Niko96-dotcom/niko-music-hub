@@ -1,11 +1,12 @@
 import AppCore
 import SwiftUI
 
-/// Esc / ⌘. cancel the foremost in-app download, stem separation, vault transfer, or archive scan (NMH-009).
+/// Esc / ⌘. cancel the foremost in-app download, stem separation, conversion, vault transfer,
+/// or archive scan (NMH-009).
 /// The routing policy is `InAppJobCancelRouting` in AppCore.
 ///
 /// State comes from `ShellJobStatusCenter` (the one observable job list —
-/// downloads, stem separations, archive scan, vault transfer) and the selected tool from the main
+/// downloads, stem separations, conversions, archive scan, vault transfer) and the selected tool from the main
 /// window's focused scene value, so the items refresh when a job starts or
 /// ends and Esc only routes while the main window is key.
 struct HubCancelCommands: Commands {

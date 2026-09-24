@@ -570,15 +570,27 @@ public actor HelperToolInstaller {
         )
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source.path)
         removeQuarantine(at: source)
-        if fileManager.fileExists(atPath: destination.path) {
-            do {
-                _ = try fileManager.replaceItemAt(destination, withItemAt: source)
-            } catch {
-                try fileManager.removeItem(at: destination)
-                try fileManager.moveItem(at: source, to: destination)
+        // POSIX rename atomically replaces an existing regular file on the same
+        // volume; staging lives under the managed root so this holds. The existing
+        // destination is never deleted before the replacement is in place.
+        if rename(source.path, destination.path) != 0 {
+            let renameErrno = errno
+            guard renameErrno == EXDEV else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(renameErrno))
             }
-        } else {
-            try fileManager.moveItem(at: source, to: destination)
+            let tempName = destination.lastPathComponent + ".nmh-new-" + UUID().uuidString
+            let tempURL = destination.deletingLastPathComponent().appendingPathComponent(tempName)
+            do {
+                try fileManager.copyItem(at: source, to: tempURL)
+                if rename(tempURL.path, destination.path) != 0 {
+                    let secondErrno = errno
+                    try? fileManager.removeItem(at: tempURL)
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(secondErrno))
+                }
+            } catch {
+                try? fileManager.removeItem(at: tempURL)
+                throw error
+            }
         }
         try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destination.path)
         removeQuarantine(at: destination)

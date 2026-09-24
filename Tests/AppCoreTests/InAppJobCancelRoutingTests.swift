@@ -52,6 +52,55 @@ final class InAppJobCancelRoutingTests: XCTestCase {
         )
     }
 
+    func testEscapeCancelsConversionWhileConverterPaneIsSelected() {
+        let activity = InAppJobActivity(jobs: [converterJob()])
+        let converterToolID = ToolFeatureID("wav-converter")
+
+        XCTAssertEqual(
+            InAppJobCancelRouting.escapeTarget(selectedToolID: converterToolID, activity),
+            .conversion
+        )
+        XCTAssertEqual(activity.jobs(for: .conversion).map(\.id), [converterJob().id])
+    }
+
+    func testEscapeOnConverterPaneIgnoresOtherJobs() {
+        let converterToolID = ToolFeatureID("wav-converter")
+
+        XCTAssertNil(
+            InAppJobCancelRouting.escapeTarget(
+                selectedToolID: converterToolID,
+                InAppJobActivity(jobs: [vaultJob()])
+            )
+        )
+        XCTAssertNil(
+            InAppJobCancelRouting.escapeTarget(
+                selectedToolID: converterToolID,
+                InAppJobActivity(jobs: [stemJob()])
+            )
+        )
+    }
+
+    func testCommandPeriodPrefersConversionOverVault() {
+        XCTAssertEqual(
+            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [converterJob()])),
+            .conversion
+        )
+        XCTAssertEqual(
+            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [converterJob(), vaultJob()])),
+            .conversion
+        )
+        XCTAssertEqual(
+            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [downloadJob(), converterJob()])),
+            .download
+        )
+    }
+
+    func testConversionJobsFilterReturnsOnlyConverterJob() {
+        let activity = InAppJobActivity(jobs: [downloadJob(), converterJob(), vaultJob(), stemJob()])
+
+        XCTAssertEqual(activity.jobs(for: .conversion).map(\.id), [converterJob().id])
+    }
+
     func testEscapeRoutesCancelThroughShellJobCenterToJobRunner() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
@@ -86,6 +135,10 @@ final class InAppJobCancelRoutingTests: XCTestCase {
 
     private func downloadJob() -> ShellJobStatus {
         ShellJobStatus(id: "download", title: "Track", sourceToolID: "downloader")
+    }
+
+    private func converterJob() -> ShellJobStatus {
+        ShellJobStatusCopy.converterStatus(isConverting: true, filename: "a.mp3", percent: 0.4)!
     }
 
     private func vaultJob() -> ShellJobStatus {
