@@ -65,7 +65,7 @@ final class ProjectVaultPolishTests: XCTestCase {
     }
 
     func testLegacyCopyOnlyNeverGainsRemovalThroughUpgrade() {
-        var beta = VaultSettings(
+        let beta = VaultSettings(
             isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
             rolloutStage: .privateBeta, independentBackupConfirmed: true
         )
@@ -73,7 +73,7 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(beta))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(beta))
 
-        var disabled = VaultSettings(isEnabled: false, activeRootID: UUID(), archiveRootID: UUID())
+        let disabled = VaultSettings(isEnabled: false, activeRootID: UUID(), archiveRootID: UUID())
         XCTAssertEqual(disabled.spaceIntent, .keepCopy)
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(disabled))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(disabled))
@@ -81,7 +81,7 @@ final class ProjectVaultPolishTests: XCTestCase {
 
     func testFreeSpaceIntentOrLegacyFriendsPermitsRemovalWithBackup() {
         let roots = (active: UUID(), archive: UUID())
-        var legacy = VaultSettings(
+        let legacy = VaultSettings(
             isEnabled: true, activeRootID: roots.active, archiveRootID: roots.archive,
             rolloutStage: .friends, independentBackupConfirmed: true
         )
@@ -105,7 +105,7 @@ final class ProjectVaultPolishTests: XCTestCase {
     }
 
     func testExplicitKeepCopyWithFriendsNeverAuthorizesRemoval() throws {
-        var stored = VaultSettings(
+        let stored = VaultSettings(
             isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
             rolloutStage: .friends, spaceIntent: .keepCopy, independentBackupConfirmed: true
         )

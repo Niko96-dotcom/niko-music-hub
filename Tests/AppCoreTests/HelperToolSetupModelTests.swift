@@ -160,7 +160,7 @@ private final class ExecutablePathSet: @unchecked Sendable {
     private var paths: Set<String> = []
 
     func insert(_ path: String) {
-        lock.withLock { paths.insert(path) }
+        lock.withLock { _ = paths.insert(path) }
     }
 
     func contains(_ path: String) -> Bool {

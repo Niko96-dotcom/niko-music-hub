@@ -1,4 +1,5 @@
 import AppCore
+import os
 import XCTest
 
 final class OutputHandoffTests: XCTestCase {
@@ -120,12 +121,14 @@ final class OutputHandoffTests: XCTestCase {
         )
 
         let expectation = self.expectation(description: "load dragged file URL")
-        var loadedLastPathComponent: String?
+        let loaded = OSAllocatedUnfairLock<String?>(initialState: nil)
         provider.loadObject(ofClass: NSURL.self) { nsURL, _ in
-            loadedLastPathComponent = ((nsURL as? NSURL) as URL?)?.lastPathComponent
+            let name = ((nsURL as? NSURL) as URL?)?.lastPathComponent
+            loaded.withLock { $0 = name }
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 5.0)
+        let loadedLastPathComponent = loaded.withLock { $0 }
         XCTAssertEqual(loadedLastPathComponent, "Some Take - 44100Hz 24bit.wav")
     }
 
