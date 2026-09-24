@@ -63,7 +63,7 @@ enum SystemAudioCaptureProbeTapEvent: Sendable {
 protocol SystemAudioCaptureProbeTap: AnyObject, Sendable {
     func start(onEvent: @escaping @Sendable (SystemAudioCaptureProbeTapEvent) -> Void) async throws
     func stop() async
-    /// The probe gave up (deadline or cancellation) before the tone started. Callable from
+    /// The probe gave up (deadline or cancellation) before the tone was running. Callable from
     /// any thread; must lift the mute without waiting for a start that may be stuck.
     func abandon()
 }
@@ -117,16 +117,16 @@ struct SystemAudioCapturePermissionProbe: Sendable {
         let latch = ProbeToneLatch()
         let tap = makeTap()
         // Not awaited: after a deadline it only finishes cleanup, and the latch stops it
-        // from ever starting the tone.
+        // from ever letting the tone run.
         Task.detached { [self] in
             await observe(tap: tap, latch: latch, recorder: recorder, gate: gate)
         }
-        // Giving up before the tone started lifts the mute at once, even while a HAL
-        // call inside the tap's start is stuck. Once the tone runs, the tap is already
-        // up, so `observe` stops the tone and then the tap itself.
+        // Giving up before the tone was running lifts the mute at once, even while a HAL
+        // call inside the tap's start or the tone's start is stuck. Once the tone is
+        // running, the tap is already up, so `observe` stops the tone and then the tap itself.
         let giveUp: @Sendable (String) -> Void = { stage in
             gate.resolve(Outcome(verdict: .inconclusive, evidence: recorder.snapshot(), stage: stage))
-            if latch.abandonUnlessToneStarted() { tap.abandon() }
+            if latch.abandonUnlessToneRunning() { tap.abandon() }
         }
         let deadline = timing.deadline
         let timer = Task.detached {
@@ -192,6 +192,11 @@ struct SystemAudioCapturePermissionProbe: Sendable {
             await tap.stop()
             return
         }
+        guard latch.toneStartReturned() else {
+            tone.stop()
+            await tap.stop()
+            return
+        }
         let windowEnds = clock.now.advanced(by: timing.observationWindow)
         while clock.now < windowEnds, !gate.isResolved, !recorder.snapshot().tapDeliveredNonZeroSample {
             try? await Task.sleep(for: timing.pollInterval)
@@ -253,25 +258,37 @@ private final class ProbeEvidenceRecorder: @unchecked Sendable {
     }
 }
 
-/// Decides, atomically, between "the tone starts" and "the probe gave up first".
+/// Decides, atomically, between "the tone runs" and "the probe gave up first".
 private final class ProbeToneLatch: @unchecked Sendable {
+    private enum State { case idle, starting, running, abandoned }
     private let lock = NSLock()
-    private var toneStarted = false
-    private var abandoned = false
+    private var state = State.idle
 
     func beginTone() -> Bool {
         lock.withLock {
-            guard !abandoned else { return false }
-            toneStarted = true
+            guard state == .idle else { return false }
+            state = .starting
             return true
         }
     }
 
-    func abandonUnlessToneStarted() -> Bool {
+    func toneStartReturned() -> Bool {
         lock.withLock {
-            guard !toneStarted else { return false }
-            abandoned = true
+            guard state == .starting else { return false }
+            state = .running
             return true
+        }
+    }
+
+    func abandonUnlessToneRunning() -> Bool {
+        lock.withLock {
+            switch state {
+            case .idle, .starting:
+                state = .abandoned
+                return true
+            case .running, .abandoned:
+                return false
+            }
         }
     }
 }

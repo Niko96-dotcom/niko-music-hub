@@ -422,6 +422,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         let result = try await session.stop()
 
         XCTAssertEqual(probe.callCount, 1)
+        XCTAssertFalse(result.silentBecauseCaptureWasBlocked)
         XCTAssertGreaterThan(result.frameCount, 0)
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
@@ -437,6 +438,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         let result = try await session.stop()
 
         XCTAssertEqual(probe.callCount, 1)
+        XCTAssertFalse(result.silentBecauseCaptureWasBlocked)
         XCTAssertGreaterThan(result.frameCount, 0)
     }
 

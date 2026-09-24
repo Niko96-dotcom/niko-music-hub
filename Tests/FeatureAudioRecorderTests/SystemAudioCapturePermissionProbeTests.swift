@@ -79,6 +79,23 @@ final class SystemAudioCapturePermissionProbeTests: XCTestCase {
         try scenario.assertOrder("tone.stop", before: "tap.stop")
     }
 
+    func testHungToneStartLiftsTheMuteAtTheDeadline() async throws {
+        let scenario = ProbeScenario()
+        var probe = scenario.probe(tap: FakeProbeTap(scenario: scenario, script: .echoesTone), hangToneOnStart: true)
+        probe.timing.deadline = .milliseconds(300)
+        defer { scenario.releaseHangs() }
+
+        let started = ContinuousClock.now
+        let outcome = try await scenario.run(probe, timeout: 2)
+
+        XCTAssertEqual(outcome.verdict, .inconclusive)
+        XCTAssertLessThan(started.duration(to: .now), .seconds(1))
+        try await waitUntil { scenario.logged("tap.abandon") }
+        scenario.releaseHangs()
+        try await waitUntil { scenario.logged("tone.stop") && scenario.logged("tap.stop") }
+        try scenario.assertOrder("tone.stop", before: "tap.stop")
+    }
+
     func testTapStartFailureNeverPlaysTheTone() async throws {
         let scenario = ProbeScenario()
         let probe = scenario.probe(tap: FakeProbeTap(scenario: scenario, start: .fail, script: .echoesTone))
@@ -121,12 +138,13 @@ final class ProbeScenario: @unchecked Sendable {
     private var toneStart: ContinuousClock.Instant?
     private var hung: [CheckedContinuation<Void, Never>] = []
     private var released = false
+    private let hangSemaphore = DispatchSemaphore(value: 0)
 
-    func probe(tap: FakeProbeTap) -> SystemAudioCapturePermissionProbe {
+    func probe(tap: FakeProbeTap, hangToneOnStart: Bool = false) -> SystemAudioCapturePermissionProbe {
         SystemAudioCapturePermissionProbe(
             timing: SystemAudioCapturePermissionProbe.Timing(),
             makeTap: { tap },
-            makeTone: { FakeProbeTone(scenario: self) }
+            makeTone: { FakeProbeTone(scenario: self, hangOnStart: hangToneOnStart) }
         )
     }
 
@@ -198,6 +216,14 @@ final class ProbeScenario: @unchecked Sendable {
             return hung
         }
         pending.forEach { $0.resume() }
+        hangSemaphore.signal()
+    }
+
+    /// Blocking wait for `releaseHangs()` usable from the synchronous tone start.
+    func waitForHangReleaseSync() {
+        hangSemaphore.wait()
+        // Re-signal so a second waiter (or a repeated release check) still observes release.
+        hangSemaphore.signal()
     }
 }
 
@@ -292,15 +318,20 @@ final class FakeProbeTap: SystemAudioCaptureProbeTap, @unchecked Sendable {
 
 final class FakeProbeTone: SystemAudioCaptureProbeTone, @unchecked Sendable {
     private let scenario: ProbeScenario
+    private let hangOnStart: Bool
     private let lock = NSLock()
     private var renderer: Task<Void, Never>?
 
-    init(scenario: ProbeScenario) { self.scenario = scenario }
+    init(scenario: ProbeScenario, hangOnStart: Bool = false) {
+        self.scenario = scenario
+        self.hangOnStart = hangOnStart
+    }
 
     func prepare() throws { scenario.log("tone.prepare") }
 
     func start(onRender: @escaping @Sendable (Double) -> Void) throws {
         scenario.log("tone.start")
+        if hangOnStart { scenario.waitForHangReleaseSync() }
         scenario.setToneOn(true)
         // Like a real engine, the first quantum renders immediately.
         if scenario.renderTick() { onRender(0.01) }
