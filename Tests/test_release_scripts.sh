@@ -12,6 +12,9 @@ trap 'rm -rf "$TMP"; rm -f "$DIRTY_PROBE"' EXIT
 # Keep them deterministic when the surrounding public release command has
 # valid signing/notary/UAT credentials in its environment.
 unset NMH_DEVELOPER_ID_APPLICATION NMH_NOTARY_PROFILE NMH_RELEASE_UAT_EVIDENCE
+# The parent runner's output belongs to its checkout, not these nested fixtures.
+# Each output-path test below supplies its own override explicitly.
+unset NMH_RELEASE_DIR NMH_RELEASE_LOG
 
 assert_fail() {
   local name="$1"

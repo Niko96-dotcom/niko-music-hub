@@ -1832,6 +1832,79 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.statusMessage?.contains("restore retry stopped safely") == true)
     }
 
+    func testLaunchRecoveryScanPreservesRestoreRetryStatus() async throws {
+        let fixture = try ProjectVaultViewModelFixture()
+        defer { fixture.cleanUp() }
+        let restoreID = UUID()
+        let snapshot = try fixture.legacyReviewSnapshot(restoreID: restoreID)
+        let recoveryGate = ScanReleaseGate()
+        let retryGate = ScanReleaseGate()
+        let scanGate = ScanReleaseGate()
+        defer {
+            recoveryGate.release()
+            retryGate.release()
+            scanGate.release()
+        }
+        let runtime = RecordingProjectVaultRuntime(
+            snapshots: [snapshot],
+            restoreRetryGate: retryGate,
+            recoveryGate: recoveryGate
+        )
+        let scannedSong = Song(
+            folderPath: fixture.root.appendingPathComponent("Active/Recovered Song"),
+            originalFolderName: "Recovered Song",
+            displayTitle: "Recovered Song"
+        )
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: fixture.settingsStore),
+            projectVaultRuntime: runtime,
+            runtime: MusicHubRuntimeEnvironment(environment: [:]),
+            scanOverride: { _ in
+                await scanGate.waitForRelease()
+                return ScanResult(songs: [scannedSong])
+            }
+        )
+        viewModel.scannedSongs = [fixture.song]
+        viewModel.songs = [fixture.song]
+        viewModel.filteredSongs = [fixture.song]
+        for _ in 0..<100 where !recoveryGate.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(recoveryGate.isWaiting)
+        await viewModel.refreshProjectVaultSnapshots()
+
+        viewModel.retryReviewedProjectVaultRestore(for: fixture.song)
+        for _ in 0..<100 where !retryGate.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(retryGate.isWaiting)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+
+        recoveryGate.release()
+        for _ in 0..<100 where !scanGate.isWaiting {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(scanGate.isWaiting)
+        XCTAssertEqual(viewModel.statusMessage, "Retrying this preserved Project Vault restore…")
+
+        retryGate.release()
+        for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(fixture.song.id) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(viewModel.projectVaultBusySongIDs.contains(fixture.song.id))
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault restore retry completed and verified.")
+
+        scanGate.release()
+        for _ in 0..<100 where viewModel.isScanning {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.scannedSongs.map(\.id), [scannedSong.id])
+        XCTAssertEqual(viewModel.statusMessage, "Project Vault restore retry completed and verified.")
+        let completedRetryIDs = await runtime.restoreRetryIDs()
+        XCTAssertEqual(completedRetryIDs, [restoreID])
+    }
+
     func testArchiveTransferBindingFailureSnapshotPresentsNonActionableIntegrityReview() async throws {
         let fixture = try ProjectVaultViewModelFixture()
         defer { fixture.cleanUp() }
@@ -4279,6 +4352,7 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     private var restoreRetryCalls: [UUID] = []
     private var didRetry = false
     private let snapshotError: ProjectVaultRuntimeError?
+    private let recoveryGate: ScanReleaseGate?
     private var recoveryCalls = 0
 
     init(
@@ -4292,7 +4366,8 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         restoreFailureSnapshots: [ProjectVaultRuntimeSnapshot] = [],
         restoreRetryGate: ScanReleaseGate? = nil,
         restoreRetryError: ProjectVaultRuntimeError? = nil,
-        snapshotError: ProjectVaultRuntimeError? = nil
+        snapshotError: ProjectVaultRuntimeError? = nil,
+        recoveryGate: ScanReleaseGate? = nil
     ) {
         snapshotValues = snapshots
         self.retryFailureState = retryFailureState
@@ -4305,6 +4380,7 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         self.restoreRetryGate = restoreRetryGate
         self.restoreRetryError = restoreRetryError
         self.snapshotError = snapshotError
+        self.recoveryGate = recoveryGate
     }
 
     func snapshots() async throws -> [ProjectVaultRuntimeSnapshot] {
@@ -4433,7 +4509,10 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         return restore
     }
 
-    func recoverAtLaunch() async { recoveryCalls += 1 }
+    func recoverAtLaunch() async {
+        recoveryCalls += 1
+        await recoveryGate?.waitForRelease()
+    }
 
     func recoveryCallCount() -> Int { recoveryCalls }
 

@@ -27,8 +27,8 @@ extension ArchiveBrowserViewModel {
         await projectVaultRuntime.recoverAtLaunch()
         await refreshProjectVaultSnapshots()
         // Recovery can create an Active folder after the initial scan completed.
-        // Refresh explicitly even when filesystem observation is unavailable.
-        if hadPendingRestore { await scan() }
+        // Refresh even without filesystem observation, preserving any newer Vault action's status.
+        if hadPendingRestore { await scanInBackground() }
     }
 
     /// Applies a Project Vault setup change to the already-mounted Archive Browser.

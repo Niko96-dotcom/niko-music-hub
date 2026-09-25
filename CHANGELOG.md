@@ -3,7 +3,7 @@
 ## 1.7.2 - 2026-09-25
 
 - Make Project Vault restore retries respect Emergency Stop, preserve Keep Local during interrupted recovery, and require verified durability before removing an Active copy.
-- Stop cancelled and outdated archive scans from replacing newer results, keep preview caches bounded, and improve project-version detection, exclusions, and search relevance.
+- Stop cancelled and outdated archive scans from replacing newer results, keep automatic recovery scans from replacing active Vault progress, keep preview caches bounded, and improve project-version detection, exclusions, and search relevance.
 - Save song notes and collaborator changes consistently across archives, preserve identity-review decisions, and refresh plug-in results and analytics when projects change.
 - Keep Output Inbox updates atomic, preserve recordings when inbox handoff fails, normalize recording filenames, and reject invalid tempo taps.
 - Keep recorder controls, recent outputs, and stem inputs usable in narrow windows, preserve converter preset alignment, and make inbox visibility controls reflect the selected state.
