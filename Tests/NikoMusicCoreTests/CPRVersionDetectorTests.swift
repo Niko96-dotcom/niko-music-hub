@@ -26,4 +26,67 @@ final class CPRVersionDetectorTests: XCTestCase {
     func testParsesVersionNumberFromFilename() {
         XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Neon Hook v3.cpr"), 3)
     }
+
+    func testIgnoresBareYearAndTimestampTokens() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 2024.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 1998.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 175705.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song mix.cpr"))
+    }
+
+    func testRetainsSmallBareVersions() {
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Radio-04.cpr"), 4)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song_12.cpr"), 12)
+    }
+
+    func testPrefersExplicitVersionOverDateSuffix() {
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v3 2024.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v3 2024-09-04.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v3 [2026-09-04 175705].cpr"), 3)
+    }
+
+    func testRetainsLargeExplicitVersion() {
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v175705.cpr"), 175705)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v99.cpr"), 99)
+    }
+
+    func testDateOnlySuffixIsNotVersion() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 2026-09-04.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 2026-09-04 175705.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song [2026-09-04 175705].cpr"))
+    }
+
+    func testSmallBareVersionBeforeDateSuffix() {
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 2026-09-04.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 175705.cpr"), 3)
+    }
+
+    func testExplicitVersionWithDateInAnyCase() {
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v3 2026-09-04.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song V3 2026-09-04.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song V3.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song v3 175705.cpr"), 3)
+    }
+
+    func testCompactDateAndTimestampSuffixesAreNotVersions() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 20260904.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 2026-09-04 175705.cpr"))
+    }
+
+    func testNonTrailingDateIsNotVersion() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 2026-09-04 mix.cpr"))
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 2026-09-04 mix.cpr"), 3)
+    }
+
+    func testPrefixDateIsNotVersion() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "2026-09-04 Song.cpr"))
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "2026-09-04 Song 3.cpr"), 3)
+    }
+
+    func testBracketDateWithTrailingWordIsNotVersion() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song [2026-09-04] mix.cpr"))
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 [2026-09-04] mix.cpr"), 3)
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song [2026-09-04 175705] mix.cpr"))
+    }
 }

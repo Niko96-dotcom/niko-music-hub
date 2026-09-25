@@ -31,7 +31,10 @@ struct HubViewCommands: Commands {
             }
             .keyboardShortcut("s", modifiers: [.command, .option])
 
-            Button(session.showOutputInbox ? "Hide Output Inbox" : "Show Output Inbox") {
+            // The label follows the user's intent (`inboxUserWantsVisible`), not the
+            // width-derived state: the toggle flips intent, so an effective-state
+            // label would offer "Show" while intent is on and switch intent off.
+            Button(session.inboxUserWantsVisible ? "Hide Output Inbox" : "Show Output Inbox") {
                 session.toggleOutputInbox()
             }
             .keyboardShortcut("i", modifiers: [.command, .option])

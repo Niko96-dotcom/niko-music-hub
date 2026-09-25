@@ -43,6 +43,12 @@ final class ArchiveScanOrchestrator {
         let generation: UInt64
     }
 
+    private struct IncrementalRequest {
+        let id: UInt64
+        let roots: [URL]
+        let generation: UInt64
+    }
+
     private weak var host: (any ArchiveScanHost)?
     private var activeScanGeneration: UInt64?
     /// Owns the async full-scan request rather than only its generation marker, so
@@ -51,6 +57,23 @@ final class ArchiveScanOrchestrator {
     private var pendingIncrementalPaths: Set<String> = []
     private var fullRescanPending = false
     private var userCancelRequested = false
+    /// Monotonic id for each incremental batch. The in-flight batch owns `isScanning`
+    /// via `activeIncrementalGeneration`.
+    private var nextIncrementalGeneration: UInt64 = 0
+    private var activeIncrementalGeneration: UInt64?
+    /// Retains the in-flight incremental filesystem operation so user cancel and
+    /// root replacement stop its detached scan (via `withTaskCancellationHandler`
+    /// in `performIncrementalScanDetached`), not merely suppress publication.
+    /// Cleared only by its owner (id match) so a newer batch is never dropped.
+    /// A new scan never awaits an old task: cancellation is fire-and-forget and
+    /// the watermark below remains the defense against a noncooperative batch.
+    private var activeIncrementalTask: Task<ArchiveCatalogCoordinator.IncrementalFilesystemApplyResult?, Error>?
+    private var activeIncrementalTaskID: UInt64?
+    /// High-water mark of user-canceled incremental batches. A cancel records the
+    /// in-flight batch id here — never by clearing a shared boolean the held scan may
+    /// not have observed yet — so the resumed batch still knows it was canceled while
+    /// a newer batch (larger id) started afterwards is unaffected.
+    private var canceledIncrementalThrough: UInt64 = 0
 
     init(host: any ArchiveScanHost) {
         self.host = host
@@ -59,10 +82,30 @@ final class ArchiveScanOrchestrator {
     func cancelActiveScan() {
         userCancelRequested = true
         activeFullScanTask?.cancel()
-        if activeScanGeneration == nil, let host, host.isScanning {
-            host.isScanning = false
-            host.setStatusMessage(CancelCopy.scanCanceled)
-            userCancelRequested = false
+        activeIncrementalTask?.cancel()
+        if activeScanGeneration != nil {
+            // A full scan owns `isScanning`; it consumes `userCancelRequested` itself.
+            return
+        }
+        if let canceled = activeIncrementalGeneration {
+            canceledIncrementalThrough = max(canceledIncrementalThrough, canceled)
+            activeIncrementalGeneration = nil
+            pendingIncrementalPaths.removeAll()
+            fullRescanPending = false
+            if let host, host.isScanning {
+                host.isScanning = false
+                host.setStatusMessage(CancelCopy.scanCanceled)
+            }
+        } else {
+            // No tracked owner: drop queued (but unstarted) watcher work so a drain
+            // that has not run yet cannot start canceled work. `isScanning` is
+            // released so replacement work can start immediately.
+            pendingIncrementalPaths.removeAll()
+            fullRescanPending = false
+            if let host, host.isScanning {
+                host.isScanning = false
+                host.setStatusMessage(CancelCopy.scanCanceled)
+            }
         }
     }
 
@@ -71,6 +114,10 @@ final class ArchiveScanOrchestrator {
         activeFullScanTask?.cancel()
         activeFullScanTask = nil
         activeScanGeneration = nil
+        activeIncrementalTask?.cancel()
+        activeIncrementalTask = nil
+        activeIncrementalTaskID = nil
+        activeIncrementalGeneration = nil
         pendingIncrementalPaths.removeAll()
         fullRescanPending = false
     }
@@ -275,58 +322,115 @@ final class ArchiveScanOrchestrator {
             return
         }
         guard !pendingIncrementalPaths.isEmpty else { return }
+        // Snapshot roots/generation BEFORE the batch can park at the test hold, so a
+        // root change during the hold is detectable when the batch resumes.
+        nextIncrementalGeneration &+= 1
+        let request = IncrementalRequest(
+            id: nextIncrementalGeneration,
+            roots: host.roots,
+            generation: host.rootGeneration
+        )
         let batch = pendingIncrementalPaths
         pendingIncrementalPaths.removeAll(keepingCapacity: true)
-        await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) })
+        await rescanChangedPaths(batch.map { URL(fileURLWithPath: $0) }, request: request)
     }
 
-    private func rescanChangedPaths(_ changedPaths: [URL]) async {
+    private func rescanChangedPaths(_ changedPaths: [URL], request: IncrementalRequest) async {
         guard let host else { return }
-        guard !host.roots.isEmpty, !changedPaths.isEmpty, !host.isScanning else { return }
+        guard !request.roots.isEmpty, !changedPaths.isEmpty, !host.isScanning else { return }
+        activeIncrementalGeneration = request.id
         host.isScanning = true
         defer {
-            // Full scans own `isScanning` via `activeScanGeneration`; a stale incremental
-            // completion must not clear the flag while a newer full scan is still running.
-            if activeScanGeneration == nil {
+            // Only the owning batch clears `isScanning` or chains another drain: a
+            // canceled (or root-replaced) batch must not clear a newer scan's state
+            // or drain work it did not queue. Full scans own `isScanning` via
+            // `activeScanGeneration`; a stale incremental completion must not clear
+            // the flag while a newer full scan is still running either.
+            let isOwner = activeIncrementalGeneration == request.id
+            if isOwner {
+                activeIncrementalGeneration = nil
+            }
+            if isOwner, activeScanGeneration == nil {
                 host.isScanning = false
             }
+            // The task handle uses its own id check so a stale completion never
+            // clears a newer batch's handle, while a canceled batch without a
+            // successor still releases its own handle.
+            if activeIncrementalTaskID == request.id {
+                activeIncrementalTask = nil
+                activeIncrementalTaskID = nil
+            }
             host.diagnostics.log(.info, "Incremental archive rescan finished")
-            Task { await drainPendingIncrementalRescan() }
+            if isOwner {
+                Task { await drainPendingIncrementalRescan() }
+            }
         }
 
         if let hold = host.incrementalRescanHold {
             await hold()
         }
-        if userCancelRequested {
-            host.setStatusMessage(CancelCopy.scanCanceled)
-            userCancelRequested = false
+        // A user cancel (or root replacement) while held released ownership above;
+        // the watermark survives so this resumed batch still knows it was canceled.
+        // The cancel already published its status synchronously, so discard quietly.
+        guard canceledIncrementalThrough < request.id else { return }
+        guard host.rootGeneration == request.generation,
+              host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths else {
+            host.diagnostics.log(.info, "Incremental archive rescan discarded: roots changed while it ran")
             return
         }
 
-        let rootsSnapshot = host.roots
-        let generationSnapshot = host.rootGeneration
         do {
-            guard let update = try await host.catalog.applyIncrementalFilesystemUpdate(
-                changedPaths: changedPaths,
-                roots: rootsSnapshot,
-                existingSongs: host.scannedSongs,
-                collaborators: host.collaborators,
-                priorDiagnostics: host.scanDiagnostics
-            ) else { return }
+            // Retain the actual filesystem operation so cancel/root-change reaches
+            // its `withTaskCancellationHandler` and stops the detached scan.
+            // Pending watcher coalescing and root generation checks below are
+            // unchanged; the watermark remains the defense for noncooperative work.
+            let catalogSnapshot = host.catalog
+            let changedSnapshot = changedPaths
+            let rootsSnapshot = request.roots
+            let existingSnapshot = host.scannedSongs
+            let collaboratorsSnapshot = host.collaborators
+            let priorSnapshot = host.scanDiagnostics
+            let operationTask = Task { @MainActor () throws -> ArchiveCatalogCoordinator.IncrementalFilesystemApplyResult? in
+                try await catalogSnapshot.applyIncrementalFilesystemUpdate(
+                    changedPaths: changedSnapshot,
+                    roots: rootsSnapshot,
+                    existingSongs: existingSnapshot,
+                    collaborators: collaboratorsSnapshot,
+                    priorDiagnostics: priorSnapshot
+                )
+            }
+            activeIncrementalTask = operationTask
+            activeIncrementalTaskID = request.id
+            // A cancel or root replacement landing between the pre-scan guards and
+            // the handle retain still stops I/O instead of running stale work.
+            if canceledIncrementalThrough >= request.id
+                || host.rootGeneration != request.generation
+                || host.roots.standardizedArchivePaths != request.roots.standardizedArchivePaths {
+                operationTask.cancel()
+            }
+            guard let update = try await withTaskCancellationHandler(operation: {
+                try await operationTask.value
+            }, onCancel: {
+                operationTask.cancel()
+            }) else { return }
 
-            guard host.rootGeneration == generationSnapshot,
-                  host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else {
-                host.diagnostics.log(.info, "Incremental archive rescan discarded: roots changed while it ran")
+            guard canceledIncrementalThrough < request.id,
+                  activeIncrementalGeneration == request.id,
+                  host.rootGeneration == request.generation,
+                  host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths else {
+                host.diagnostics.log(.info, "Incremental archive rescan discarded: superseded while it ran")
                 return
             }
 
-            host.applyCatalogScanUpdate(update.catalogApplyResult, roots: rootsSnapshot)
+            host.applyCatalogScanUpdate(update.catalogApplyResult, roots: request.roots)
             host.diagnostics.log(.info, "Incremental archive rescan updated \(update.incrementalSongCount) song(s)")
         } catch is CancellationError {
             return
         } catch {
-            guard host.rootGeneration == generationSnapshot,
-                  host.roots.standardizedArchivePaths == rootsSnapshot.standardizedArchivePaths else { return }
+            guard canceledIncrementalThrough < request.id,
+                  activeIncrementalGeneration == request.id,
+                  host.rootGeneration == request.generation,
+                  host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths else { return }
             host.setBackgroundStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
             host.diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }

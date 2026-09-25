@@ -113,11 +113,52 @@ public struct StemSeparationView: View {
     }
 
     private var fileIntakeContent: some View {
+        ViewThatFits(in: .horizontal) {
+            fileWideRow
+            fileCompactRow
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Drop an audio file or choose a file to separate")
+        .accessibilityHint("Accepts WAV, AIFF, MP3, M4A, or FLAC.")
+    }
+
+    /// Wide file route: description flexes, buttons keep intrinsic width.
+    /// `fixedSize(horizontal:)` on the buttons keeps the horizontal candidate
+    /// honest — it only fits when the full labels fit without wrapping.
+    private var fileWideRow: some View {
         HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            fileDescription(isCompact: false)
+            chooseFileButton
+                .fixedSize(horizontal: true, vertical: false)
+            if viewModel.droppedFileURL != nil {
+                clearFileButton
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    /// Compact file route: same single row with a concise empty-state title.
+    /// Buttons stay fixed-size so the basename truncates instead of the
+    /// buttons wrapping; the full format hint stays in the visible caption
+    /// and in the outer accessibility label/hint.
+    private var fileCompactRow: some View {
+        HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            fileDescription(isCompact: true)
+            chooseFileButton
+                .fixedSize(horizontal: true, vertical: false)
+            if viewModel.droppedFileURL != nil {
+                clearFileButton
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    private func fileDescription(isCompact: Bool) -> some View {
+        HStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            Image(systemName: viewModel.droppedFileURL == nil ? "arrow.down.document" : "waveform")
+                .font(HubDesignSystem.Typography.body().weight(.medium))
+                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             if let fileURL = viewModel.droppedFileURL {
-                Image(systemName: "waveform")
-                    .font(HubDesignSystem.Typography.body().weight(.medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fileURL.lastPathComponent)
                         .font(HubDesignSystem.Typography.body())
@@ -127,47 +168,61 @@ public struct StemSeparationView: View {
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .help(fileURL.path)
             } else {
-                Image(systemName: "arrow.down.document")
-                    .font(HubDesignSystem.Typography.body().weight(.medium))
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Drop an audio file here")
+                    Text(isCompact ? "Drop audio file here" : "Drop an audio file here")
                         .font(HubDesignSystem.Typography.body())
+                        .lineLimit(1)
                     Text("WAV, AIFF, MP3, M4A, FLAC")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            HubLabeledButton(
-                icon: "folder",
-                label: "Choose File",
-                style: .secondary,
-                isEnabled: !viewModel.isRunning
-            ) {
-                viewModel.selectFile()
-            }
-            if viewModel.droppedFileURL != nil {
-                HubLabeledButton(
-                    icon: "xmark",
-                    label: "Clear",
-                    style: .ghost,
-                    isEnabled: !viewModel.isRunning
-                ) {
-                    viewModel.clearSelection()
-                }
-            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Drop an audio file or choose a file to separate")
-        .accessibilityHint("Accepts WAV, AIFF, MP3, M4A, or FLAC.")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var chooseFileButton: some View {
+        HubLabeledButton(
+            icon: "folder",
+            label: "Choose File",
+            style: .secondary,
+            isEnabled: !viewModel.isRunning
+        ) {
+            viewModel.selectFile()
+        }
+    }
+
+    private var clearFileButton: some View {
+        HubLabeledButton(
+            icon: "xmark",
+            label: "Clear",
+            style: .ghost,
+            isEnabled: !viewModel.isRunning
+        ) {
+            viewModel.clearSelection()
+        }
     }
 
     private var youtubeRow: some View {
+        ViewThatFits(in: .horizontal) {
+            youtubeWideRow
+            youtubeCompactRows
+        }
+        .opacity(viewModel.isRunning ? 0.6 : 1)
+        .disabled(viewModel.isRunning)
+    }
+
+    /// Wide YouTube route (unchanged design): field flexes, download button
+    /// keeps intrinsic width so this candidate only fits when the full
+    /// "Download & Separate" label fits without compression.
+    private var youtubeWideRow: some View {
         HStack(spacing: HubDesignSystem.Spacing.controlGap) {
             Image(systemName: "play.rectangle")
                 .font(HubDesignSystem.Typography.body().weight(.medium))
@@ -187,6 +242,7 @@ public struct StemSeparationView: View {
             ) {
                 viewModel.startYouTubeSeparation()
             }
+            .fixedSize(horizontal: true, vertical: false)
 
             if !viewModel.youtubeURLText.isEmpty {
                 HubIconButton(
@@ -199,8 +255,46 @@ public struct StemSeparationView: View {
                 }
             }
         }
-        .opacity(viewModel.isRunning ? 0.6 : 1)
-        .disabled(viewModel.isRunning)
+    }
+
+    /// Compact YouTube route: URL field keeps ~full row on top, the download
+    /// action sits on its own second row. Visible label shortens to
+    /// "Download" with the full purpose kept in the accessibility label.
+    private var youtubeCompactRows: some View {
+        VStack(spacing: HubDesignSystem.Spacing.inlineGap) {
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                Image(systemName: "play.rectangle")
+                    .font(HubDesignSystem.Typography.body().weight(.medium))
+                    .foregroundStyle(.tertiary)
+
+                HubQuietTextField("Paste a YouTube link…", text: $viewModel.youtubeURLText)
+                    .disabled(viewModel.isRunning)
+                    .onSubmit {
+                        submitPrimaryStemJob()
+                    }
+
+                if !viewModel.youtubeURLText.isEmpty {
+                    HubIconButton(
+                        systemImage: "xmark.circle.fill",
+                        accessibilityLabel: "Clear YouTube URL",
+                        help: "Clear the URL field",
+                        isEnabled: !viewModel.isRunning
+                    ) {
+                        viewModel.clearYouTubeURL()
+                    }
+                }
+            }
+            HubLabeledButton(
+                icon: "arrow.down.circle",
+                label: "Download",
+                style: viewModel.primaryIntake == .youtube ? .primary : .secondary,
+                isEnabled: viewModel.canStartYouTube
+            ) {
+                viewModel.startYouTubeSeparation()
+            }
+            .accessibilityLabel("Download & Separate")
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 
     private var resultsSection: some View {

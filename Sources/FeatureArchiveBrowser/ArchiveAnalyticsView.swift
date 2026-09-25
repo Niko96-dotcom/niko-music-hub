@@ -120,7 +120,10 @@ struct ArchiveAnalyticsView: View {
                         )
                     }
                 }
-                .frame(maxHeight: 96, alignment: .bottom)
+                // No outer maxHeight cap: the peak 84pt bar plus the two label
+                // rows and spacing needs ~117pt. Capping at 96pt clipped the
+                // count label into the section above. The column sizes to its
+                // content; typography and accessibility labels are unchanged.
             }
         }
     }
@@ -267,7 +270,7 @@ private struct ArchiveAnalyticsFractionBar: View {
                     .fill(HubDesignSystem.Palette.textPrimary.opacity(0.06))
                 Capsule(style: .continuous)
                     .fill(tint.opacity(0.65))
-                    .frame(width: max(4, proxy.size.width * fraction.clamped01))
+                    .frame(width: fraction <= 0 ? 0 : max(4, proxy.size.width * fraction.clamped01))
             }
         }
     }

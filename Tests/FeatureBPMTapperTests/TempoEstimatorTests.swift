@@ -154,6 +154,69 @@ final class TempoEstimatorTests: XCTestCase {
         XCTAssertEqual(finalEstimate.status, .stableEstimate)
     }
 
+    func testBackwardTimestampDoesNotRewindAnchorAndNextTapRecovers() throws {
+        var estimator = TempoEstimator()
+        _ = estimator.tap(at: 0.0)
+        _ = estimator.tap(at: 0.5)
+        let before = estimator.tap(at: 1.0)
+        XCTAssertEqual(try XCTUnwrap(before.bpm), 120.0, accuracy: 0.001)
+
+        let rewound = estimator.tap(at: 0.2)
+        XCTAssertFalse(rewound.intervalAccepted)
+        XCTAssertEqual(rewound.status, .outlierIgnored)
+        XCTAssertEqual(rewound.tapCount, before.tapCount)
+        XCTAssertEqual(rewound.acceptedIntervalCount, before.acceptedIntervalCount)
+        XCTAssertEqual(rewound.bpm, before.bpm)
+
+        let zeroTap = estimator.tap(at: 1.0)
+        XCTAssertFalse(zeroTap.intervalAccepted)
+        XCTAssertEqual(zeroTap.tapCount, before.tapCount)
+        XCTAssertEqual(zeroTap.acceptedIntervalCount, before.acceptedIntervalCount)
+
+        // Anchor is still 1.0, so the next even tap is a clean 0.5s interval.
+        let recovered = estimator.tap(at: 1.5)
+        XCTAssertTrue(recovered.intervalAccepted)
+        XCTAssertEqual(try XCTUnwrap(recovered.bpm), 120.0, accuracy: 0.001)
+        XCTAssertEqual(recovered.tapCount, before.tapCount + 1)
+        XCTAssertEqual(recovered.acceptedIntervalCount, before.acceptedIntervalCount + 1)
+        XCTAssertEqual(recovered.status, .firstEstimate)
+    }
+
+    func testNonFiniteTimestampDoesNotPoisonStateAndNextTapRecovers() throws {
+        var estimator = TempoEstimator()
+        _ = estimator.tap(at: 0.0)
+        _ = estimator.tap(at: 0.5)
+        let before = estimator.tap(at: 1.0)
+        XCTAssertEqual(try XCTUnwrap(before.bpm), 120.0, accuracy: 0.001)
+
+        for bad in [Double.nan, Double.infinity, -Double.infinity] {
+            let ignored = estimator.tap(at: bad)
+            XCTAssertFalse(ignored.intervalAccepted)
+            XCTAssertEqual(ignored.tapCount, before.tapCount)
+            XCTAssertEqual(ignored.acceptedIntervalCount, before.acceptedIntervalCount)
+            XCTAssertEqual(ignored.bpm, before.bpm)
+        }
+
+        let recovered = estimator.tap(at: 1.5)
+        XCTAssertTrue(recovered.intervalAccepted)
+        XCTAssertEqual(try XCTUnwrap(recovered.bpm), 120.0, accuracy: 0.001)
+        XCTAssertEqual(recovered.tapCount, before.tapCount + 1)
+        XCTAssertEqual(recovered.acceptedIntervalCount, before.acceptedIntervalCount + 1)
+    }
+
+    func testNonFiniteFirstTapLeavesEstimatorIdle() {
+        var estimator = TempoEstimator()
+        let ignored = estimator.tap(at: Double.nan)
+        XCTAssertFalse(ignored.intervalAccepted)
+        XCTAssertEqual(ignored.tapCount, 0)
+        XCTAssertEqual(ignored.acceptedIntervalCount, 0)
+        XCTAssertNil(ignored.bpm)
+
+        let first = estimator.tap(at: 10.0)
+        XCTAssertEqual(first.status, .waitingForSecondTap)
+        XCTAssertEqual(first.tapCount, 1)
+    }
+
     func testCleanTapAfterOutlierKeepsRunAlive() throws {
         var estimator = TempoEstimator()
         _ = estimator.tap(at: 0.0)

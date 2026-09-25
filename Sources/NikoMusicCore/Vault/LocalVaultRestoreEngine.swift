@@ -484,7 +484,7 @@ public actor LocalVaultRestoreEngine {
         } catch is VaultTransferInterruption {
             throw VaultTransferInterruption()
         } catch is CancellationError {
-            record.error = "Transfer stopped. Files already copied stay in the archive. The Active Projects folder is not deleted."
+            record.error = "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
             try persist(&record)
             throw CancellationError()
         } catch {

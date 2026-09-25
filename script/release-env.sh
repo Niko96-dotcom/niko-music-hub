@@ -227,6 +227,20 @@ nmh_git_build_number() {
   git -C "$NMH_RELEASE_ROOT" rev-list --count HEAD
 }
 
+# Resolve any commit-ish (full/short SHA, HEAD, ref, historical commit) to its
+# canonical full SHA, verifying it is an actual commit object (not blob/tree).
+# Rejects missing objects before any evidence is trusted. Uses --verify with
+# end-of-options safe input so option-like values cannot escape.
+nmh_resolve_commit() {
+  local input="${1:?missing commit}"
+  local full=""
+  full="$(git -C "$NMH_RELEASE_ROOT" rev-parse --verify --end-of-options "$input^{commit}" 2>/dev/null)" || {
+    echo "unknown commit object: $input" >&2
+    return 1
+  }
+  printf '%s\n' "$full"
+}
+
 nmh_release_tag() {
   printf 'v%s\n' "$(nmh_release_version)"
 }

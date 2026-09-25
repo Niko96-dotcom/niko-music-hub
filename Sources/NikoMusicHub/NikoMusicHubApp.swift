@@ -22,6 +22,10 @@ struct NikoMusicHubApp: App {
         // AppKit from adding its 🌐F-only duplicate to the View menu. Must be
         // registered before NSApplication builds the menu bar.
         UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
+        // Bridge `-ui-tool <id>` (`open --args`) into the environment BEFORE the
+        // composition resolves the launch selection once; applying it any later
+        // (e.g. in `applicationWillFinishLaunching`) never takes effect.
+        UILaunchTool.applyFromLaunchArguments()
         let composition = AppComposition.make()
         self.composition = composition
         _appearanceController = StateObject(wrappedValue: composition.appearanceController)
@@ -162,7 +166,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        UILaunchTool.applyFromLaunchArguments()
         #if DEBUG
         if BookmarkRelaunchProofCommands.runIfRequested() {
             return

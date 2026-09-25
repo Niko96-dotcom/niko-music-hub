@@ -6,6 +6,23 @@ import XCTest
 #if DEBUG
 @MainActor
 final class ArchiveUserFlowTests: XCTestCase {
+    func testAbletonFlowFiltersOnlyAbletonSongsAndRejectsNonMatch() throws {
+        let run = try ArchiveUserFlowSmoke.runAbletonFlow(context: TestToolContext.make())
+        guard case .abletonFlow(let evidence) = run.evidence else {
+            XCTFail("expected ableton flow evidence, got \(run.evidence)")
+            return
+        }
+        XCTAssertTrue(evidence.groupsCorrect, "expected 3 songs with mixed .cpr+.als plus Cubase-only song: \(evidence)")
+        XCTAssertTrue(evidence.openedAbleton, "\(evidence)")
+        XCTAssertTrue(evidence.openedCubase, "\(evidence)")
+        XCTAssertTrue(evidence.manualMainPersists, "\(evidence)")
+        XCTAssertTrue(evidence.searchFindsAbleton, "ableton query must match exactly the 2 .als songs: \(evidence)")
+        XCTAssertTrue(evidence.searchExcludesCubaseOnly, "ableton query must exclude the Cubase-only song: \(evidence)")
+        XCTAssertTrue(evidence.nonMatchingQueryEmpty, "non-matching query must return no songs: \(evidence)")
+        XCTAssertTrue(evidence.archiveUnchanged, "\(evidence)")
+        XCTAssertTrue(run.isValid, "\(evidence)")
+    }
+
     func testFixtureUserFlowScanSearchOpenDryRunLeavesArchiveUnchanged() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

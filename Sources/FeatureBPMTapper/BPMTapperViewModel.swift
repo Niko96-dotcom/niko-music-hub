@@ -35,6 +35,11 @@ public final class BPMTapperViewModel: ObservableObject {
     private var estimator: TempoEstimator
     private let historyStore: any BPMHistoryStore
     private let clipboard: any BPMClipboardWriting
+    // Sleep-inclusive monotonic source for default taps. ContinuousClock keeps
+    // advancing across sleep (unlike ProcessInfo.systemUptime, which only
+    // counts awake time) while staying monotonic across wall-clock steps, so a
+    // lid-close longer than the pause threshold starts a fresh run.
+    private var monotonicNow: () -> TimeInterval
 
     public var displayedBPM: Double? {
         guard let rawBPM else { return nil }
@@ -49,6 +54,7 @@ public final class BPMTapperViewModel: ObservableObject {
         self.estimator = estimator
         self.historyStore = historyStore
         self.clipboard = clipboard
+        monotonicNow = { Self.sleepInclusiveNow() }
         rawBPM = nil
         tapCount = 0
         statusText = ""
@@ -56,11 +62,41 @@ public final class BPMTapperViewModel: ObservableObject {
         hasStartedRun = false
     }
 
-    public func recordTap(at timestamp: TimeInterval = Date().timeIntervalSinceReferenceDate) {
+    /// Sleep-inclusive monotonic now, in seconds on an arbitrary process-local
+    /// epoch. Differences match elapsed wall time including sleep, which is
+    /// what the pause-reset threshold must observe.
+    nonisolated internal static func sleepInclusiveNow() -> TimeInterval {
+        let duration = continuousEpoch.duration(to: ContinuousClock().now)
+        let components = duration.components
+        return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1_000_000_000_000_000_000.0
+    }
+
+    private nonisolated static let continuousEpoch: ContinuousClock.Instant = ContinuousClock().now
+
+    /// Deterministic seam for tests: proves pause semantics of the default
+    /// `recordTap()` path without sleeping the host or stepping the clock.
+    internal func setMonotonicNowForTesting(_ provider: @escaping () -> TimeInterval) {
+        monotonicNow = provider
+    }
+
+    /// Default tap path: uses the sleep-inclusive monotonic clock so a sleep
+    /// longer than the pause threshold starts a fresh run.
+    public func recordTap() {
+        recordTap(at: monotonicNow())
+    }
+
+    public func recordTap(at timestamp: TimeInterval) {
         let estimate = estimator.tap(at: timestamp)
+        applyTapEstimate(estimate)
+    }
+
+    private func applyTapEstimate(_ estimate: TempoEstimate) {
         rawBPM = estimate.bpm
         tapCount = estimate.tapCount
-        hasStartedRun = true
+        // Ignored (invalid/non-forward) taps never start a run on their own.
+        if estimate.tapCount > 0 {
+            hasStartedRun = true
+        }
         clearTransientMessages()
         applyStatus(from: estimate.status)
     }

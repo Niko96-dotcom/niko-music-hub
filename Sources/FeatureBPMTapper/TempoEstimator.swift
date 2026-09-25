@@ -79,12 +79,28 @@ public struct TempoEstimator: Sendable {
     }
 
     public mutating func tap(at timestamp: TimeInterval) -> TempoEstimate {
+        // Non-finite wall-clock glitches must never poison the anchor.
+        guard timestamp.isFinite else {
+            guard lastAcceptedTimestamp != nil else {
+                return makeEstimate(status: .idle, intervalAccepted: false)
+            }
+            return makeEstimate(status: .outlierIgnored, intervalAccepted: false)
+        }
         guard let previousTimestamp = lastAcceptedTimestamp else {
             startRun(at: timestamp)
             return makeEstimate(status: .waitingForSecondTap, intervalAccepted: true)
         }
 
+        // Zero/backward timestamps are not forward progress: ignore them
+        // without rewinding the anchor or touching count/tempo.
+        guard timestamp > previousTimestamp else {
+            return makeEstimate(status: .outlierIgnored, intervalAccepted: false)
+        }
+
         let interval = timestamp - previousTimestamp
+        guard interval.isFinite else {
+            return makeEstimate(status: .outlierIgnored, intervalAccepted: false)
+        }
         guard interval <= configuration.pauseResetThreshold else {
             startRun(at: timestamp)
             return makeEstimate(status: .longPauseReset, intervalAccepted: true)

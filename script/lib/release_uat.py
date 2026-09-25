@@ -14,8 +14,8 @@ stays schema_version int 1 with exactly the ten required checks; no
 new schema is introduced and pending/failed requirements are not
 weakened.
 
-Strict types: schema_version must be int 1 (not "1", not True),
-hardened_runtime must be boolean True (not "true", not 1), all other
+Strict types: schema_version must be exact int 1 (not "1", not True,
+not 1.0), hardened_runtime must be boolean True (not "true", not 1), all other
 identity fields must be exact strings. Placeholder/blank/whitespace
 approved_by and machine values (TODO, TODO_*, REPLACE_WITH_*, empty)
 are rejected coherently.
@@ -62,10 +62,11 @@ def validate_uat(
     impersonates a human. Schema, exact ten-check, and fail-closed
     (pending/failed reject) semantics are unchanged.
     """
-    # schema_version must be int 1, not string "1" and not bool True
-    # (True == 1 in Python, so exclude bools explicitly).
+    # schema_version must be exact int 1: type(schema) is int and
+    # schema == 1. Rejects "1", True/False (bool is not int), and 1.0
+    # (float; 1.0 == 1 in Python, so an equality-only check would pass it).
     schema = payload.get("schema_version")
-    if schema != 1 or isinstance(schema, bool):
+    if type(schema) is not int or schema != 1:
         raise SystemExit(
             f"release UAT evidence needs schema_version=1 (UAT schema_version mismatch: {schema!r} != 1)"
         )

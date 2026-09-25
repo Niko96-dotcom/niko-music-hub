@@ -42,7 +42,13 @@ if [[ -n "$EXPECTED_COMMIT_OVERRIDE" ]]; then
 else
   COMMIT="$(nmh_git_commit)"
 fi
-EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 "$COMMIT" 2>/dev/null || printf '%s' "$COMMIT" | cut -c1-12)"
+# Resolve --commit to its canonical full SHA, verifying it is an actual commit
+# object (not blob/tree/missing). Rejects unknown objects before evidence.
+COMMIT="$(nmh_resolve_commit "$COMMIT")" || exit 1
+EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 --verify --end-of-options "$COMMIT" 2>/dev/null)" || {
+  echo "unknown commit object: $COMMIT" >&2
+  exit 1
+}
 CANONICAL_BUILD_ID="$VERSION+$EXPECTED_SHORT_COMMIT"
 if [[ -n "$EXPECTED_BUILD_ID_OVERRIDE" ]]; then
   [[ "$EXPECTED_BUILD_ID_OVERRIDE" == "$CANONICAL_BUILD_ID" ]] || { echo "explicit --expected-build-id '$EXPECTED_BUILD_ID_OVERRIDE' does not match canonical $CANONICAL_BUILD_ID for commit $COMMIT" >&2; exit 1; }

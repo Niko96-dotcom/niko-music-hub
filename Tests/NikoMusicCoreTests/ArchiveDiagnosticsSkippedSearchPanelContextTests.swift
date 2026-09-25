@@ -35,6 +35,74 @@ final class ArchiveDiagnosticsSkippedSearchPanelContextTests: XCTestCase {
         )
     }
 
+    func testQueryLineMatchesExport_exactOneSucceedsWithTrailingNewline() {
+        let export = "active_skipped_search\nskipped_search_query=LOOSE_FILE.txt\nskipped_search_matches=1\n"
+        XCTAssertTrue(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "LOOSE_FILE.txt",
+                matchCount: 1
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_rejectsLongerMatchCountPrefix() {
+        let export = "active_skipped_search\nskipped_search_query=LOOSE_FILE.txt\nskipped_search_matches=10\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "LOOSE_FILE.txt",
+                matchCount: 1
+            )
+        )
+        let singleExport = "active_skipped_search\nskipped_search_query=LOOSE_FILE.txt\nskipped_search_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: singleExport,
+                query: "LOOSE_FILE.txt",
+                matchCount: 10
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_rejectsQueryPrefixMismatch() {
+        let export = "active_skipped_search\nskipped_search_query=LOOSE_FILE.txt\nskipped_search_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "LOOSE_FILE",
+                matchCount: 1
+            )
+        )
+        let shortExport = "active_skipped_search\nskipped_search_query=LOOSE_FILE\nskipped_search_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: shortExport,
+                query: "LOOSE_FILE.txt",
+                matchCount: 1
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_acceptsCRLFNewlines() {
+        let export = "active_skipped_search\r\nskipped_search_query=LOOSE_FILE.txt\r\nskipped_search_matches=1\r\n"
+        XCTAssertTrue(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "LOOSE_FILE.txt",
+                matchCount: 1
+            )
+        )
+        let mismatchCRLF = "active_skipped_search\r\nskipped_search_query=LOOSE_FILE.txt\r\nskipped_search_matches=10\r\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
+                in: mismatchCRLF,
+                query: "LOOSE_FILE.txt",
+                matchCount: 1
+            )
+        )
+    }
+
     func testMatchLinesMatchExport() {
         let export = """
         skipped_search_match label=LOOSE_FILE.txt kind=nonFolderAtRoot summary=LOOSE → skipped label

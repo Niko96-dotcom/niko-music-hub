@@ -233,7 +233,7 @@ public struct AudioConverterView: View {
                 accessibilityLabel: "Remove file",
                 help: "Remove this file from the batch",
                 role: .destructive,
-                isEnabled: !viewModel.isConverting || row.state != .converting
+                isEnabled: !viewModel.isConverting
             ) { viewModel.removeRow(id: row.id) }
         }
         .accessibilityElement(children: .combine)
@@ -265,7 +265,10 @@ public struct AudioConverterView: View {
             .accessibilityLabel("Edit Preset")
             .accessibilityValue(viewModel.presetSummaryText)
         }
-        if presetEditorVisible {
+        // The editor reserves its layout space when collapsed so the pinned
+        // primary action never moves; hidden controls leave focus,
+        // accessibility, and hit-testing while keeping their height.
+        Group {
             HubInspectorGroup("Sample rate") {
                 HubSegmentedChoice("Sample rate", selection: sampleRateSelection, options: [
                     .init(44100, label: "44.1 kHz"),
@@ -292,6 +295,10 @@ public struct AudioConverterView: View {
                 .disabled(viewModel.isConverting)
             }
         }
+        .opacity(presetEditorVisible ? 1 : 0)
+        .disabled(!presetEditorVisible)
+        .allowsHitTesting(presetEditorVisible)
+        .accessibilityHidden(!presetEditorVisible)
     }
 
     private var presetValueSummary: some View {

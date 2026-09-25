@@ -35,6 +35,74 @@ final class ArchiveDiagnosticsSearchPanelContextTests: XCTestCase {
         )
     }
 
+    func testQueryLineMatchesExport_exactOneSucceedsWithTrailingNewline() {
+        let export = "active_search\nsearch_query=neon hk\nsearch_matches=1\n"
+        XCTAssertTrue(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "neon hk",
+                matchCount: 1
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_rejectsLongerMatchCountPrefix() {
+        let export = "active_search\nsearch_query=neon hk\nsearch_matches=10\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "neon hk",
+                matchCount: 1
+            )
+        )
+        let singleExport = "active_search\nsearch_query=neon hk\nsearch_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: singleExport,
+                query: "neon hk",
+                matchCount: 10
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_rejectsQueryPrefixMismatch() {
+        let export = "active_search\nsearch_query=neon hk\nsearch_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "neon",
+                matchCount: 1
+            )
+        )
+        let shortExport = "active_search\nsearch_query=neon\nsearch_matches=1\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: shortExport,
+                query: "neon hk",
+                matchCount: 1
+            )
+        )
+    }
+
+    func testQueryLineMatchesExport_acceptsCRLFNewlines() {
+        let export = "active_search\r\nsearch_query=neon hk\r\nsearch_matches=1\r\n"
+        XCTAssertTrue(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: export,
+                query: "neon hk",
+                matchCount: 1
+            )
+        )
+        let mismatchCRLF = "active_search\r\nsearch_query=neon hk\r\nsearch_matches=10\r\n"
+        XCTAssertFalse(
+            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
+                in: mismatchCRLF,
+                query: "neon hk",
+                matchCount: 1
+            )
+        )
+    }
+
     func testMatchLinesMatchExport() {
         let export = """
         search_match title=Neon Hook summary=neon → title; hk → fuzzy title

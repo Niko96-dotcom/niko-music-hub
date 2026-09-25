@@ -1824,6 +1824,55 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
 
         XCTAssertTrue(violations.isEmpty, violations.joined(separator: "\n"))
     }
+
+    func testCancellationPersistsRestoreStoppedMessageAndRetrySucceedsWithSourceIntact() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let archiveBefore = try fixture.snapshot(at: fixture.generation)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let cancelled = LocalVaultRestoreEngine(
+            activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .verifyingActiveStaging { throw CancellationError() }
+            },
+            writeAdmission: allowRestoreWrites)
+        do {
+            _ = try await cancelled.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("Expected CancellationError seam")
+        } catch is CancellationError {}
+        let persisted = try XCTUnwrap(try store.recoverableRestoreRecords().first)
+        XCTAssertNil(persisted.completedAt)
+        XCTAssertNil(persisted.failureReason)
+        XCTAssertEqual(
+            persisted.error,
+            "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
+        )
+        XCTAssertFalse(persisted.error?.contains("Active Projects folder is not deleted") == true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: persisted.stagingURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: persisted.destinationURL.path))
+        XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
+        try VaultManifestBuilder().verify(fixture.manifest, at: fixture.generation)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        let retry = LocalVaultRestoreEngine(
+            activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites)
+        let completed = try await retry.retryRestore(id: persisted.id)
+        XCTAssertNotNil(completed.completedAt)
+        XCTAssertEqual(workspace.opened.count, 1)
+        try VaultManifestBuilder().verify(fixture.manifest, at: completed.destinationURL)
+        XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
+    }
 }
 
 private let allowRestoreWrites: LocalVaultTransferEngine.WriteAdmission = { _, operation in

@@ -94,15 +94,24 @@ public struct MissingAudioReport: Equatable, Sendable {
         maximumRetainedCount: Int = .max
     ) -> [String] {
         guard maximumRetainedCount > 0 else { return [] }
+        if Task.isCancelled { return [] }
         var isDirectory: ObjCBool = false
         let folder = song.folderPath.standardizedFileURL
         guard fileManager.fileExists(atPath: folder.path, isDirectory: &isDirectory),
-              isDirectory.boolValue,
-              let enumerator = fileManager.enumerator(
-                at: folder,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-              ) else {
+              isDirectory.boolValue else {
+            return []
+        }
+        // Same song-base contract as the live scan: the base itself must never be
+        // followed through a symlink, and every entry is resolved through the
+        // pinned descriptor. Rejected entries (links, outside resolutions) are
+        // skipped along with their descendants; a changed base discards the walk.
+        let paths = EnumeratedPathResolver(folder: folder, fileManager: fileManager, baseKind: .songFolder)
+        guard paths.songBaseValidity == .valid else { return [] }
+        guard let enumerator = fileManager.enumerator(
+            at: folder,
+            includingPropertiesForKeys: EnumeratedPathResolver.prefetchedKeys,
+            options: [.skipsHiddenFiles]
+        ) else {
             return []
         }
         // Referenced = preview candidates whose filename signals a real preview/main-mix role
@@ -116,6 +125,20 @@ public struct MissingAudioReport: Equatable, Sendable {
         )
         var orphans: [String] = []
         for case let fileURL as URL in enumerator {
+            if Task.isCancelled { return [] }
+            let entry = paths.observe(fileURL, level: enumerator.level)
+            if paths.encounteredBaseSwap { return [] }
+            let resolution = paths.resolve(entry)
+            if paths.encounteredBaseSwap { return [] }
+            // Only entries derived from the enumeration (link-free ancestry plus an
+            // on-disk NoFollow check) are accepted. Links, anything below a link,
+            // and entries that fell back to the full resolution are rejected, and a
+            // rejected directory's descendants are skipped. Foundation does not
+            // descend into stable dir links, so this mainly guards swap races.
+            guard resolution.isContained, resolution.canonicalPath != nil else {
+                enumerator.skipDescendants()
+                continue
+            }
             let ext = fileURL.pathExtension.lowercased()
             guard Self.audioExtensions.contains(ext) else { continue }
             let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
@@ -126,6 +149,8 @@ public struct MissingAudioReport: Equatable, Sendable {
                 if orphans.count == maximumRetainedCount { break }
             }
         }
+        if Task.isCancelled { return [] }
+        if paths.encounteredBaseSwap || paths.isSongBaseChanged() { return [] }
         return orphans.sorted()
     }
 }

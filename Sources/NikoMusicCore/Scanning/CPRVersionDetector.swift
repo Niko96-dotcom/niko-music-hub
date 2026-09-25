@@ -231,16 +231,63 @@ public struct ProjectVersionDetector: @unchecked Sendable {
     }
 
     static func parseVersionNumber(from fileName: String) -> Int? {
+        // Pass 1: explicit vN wins, even when a date/year suffix follows. Reuse the
+        // established PreviewFilenameParser explicit-version behavior (case-insensitive
+        // vN, last wins), with the legacy token scan as fallback so a version after a
+        // parenthesized tag (e.g. "Song (mix) v3.cpr") is still found.
+        if let explicit = PreviewFilenameParser.parseVersionNumber(from: fileName) {
+            return explicit
+        }
         let stem = (fileName as NSString).deletingPathExtension
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = stem.split { $0 == " " || $0 == "_" || $0 == "-" }.map(String.init)
+        // No digit-length cap: a large explicit version is preserved.
         for part in parts.reversed() {
-            let digits = part.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-            if let value = Int(digits), value > 0 {
+            guard part.count >= 2 else { continue }
+            let first = part.first!
+            guard first == "v" || first == "V" else { continue }
+            let digits = String(part.dropFirst())
+            guard !digits.isEmpty, digits.allSatisfy({ $0.isNumber }),
+                  let value = Int(digits), value > 0 else { continue }
+            return value
+        }
+        // Pass 2: small bare integers only, after removing complete recognized
+        // date segments wherever they sit so the day/month of "Song 2026-09-04
+        // mix" are not read as versions. Isolated small numbers stay versions
+        // ("Song 3" => 3); only full date-anchored segments are excluded, so an
+        // ambiguous bare number like "Song 04" is still version 4. Bare 4+ digit
+        // tokens are years, dates or timestamps, never versions.
+        let versionScope = Self.scopeWithoutRecognizedDates(from: stem)
+        let bareParts = versionScope.split { $0 == " " || $0 == "_" || $0 == "-" }.map(String.init)
+        for part in bareParts.reversed() {
+            guard !part.isEmpty, part.allSatisfy({ $0.isNumber }) else { continue }
+            guard part.count < 4 else { continue }
+            if let value = Int(part), value > 0 {
                 return value
             }
         }
         return nil
+    }
+
+    /// Removes complete recognized date segments wherever they sit in the stem,
+    /// not only trailing, so a non-trailing date's day is never a version hint.
+    /// Scope is deliberately narrow: bracketed ISO-ish dates and unbracketed
+    /// YYYY-MM-DD (with -/_ separators). Years, compact dates, timestamps and
+    /// clock times need no stripping: bare 4+ digit tokens are already excluded
+    /// as versions and times contain colons.
+    private static func scopeWithoutRecognizedDates(from stem: String) -> String {
+        var result = stem
+        result = result.replacingOccurrences(
+            of: #"[\[\(]\s*\d{4}[-_]\d{1,2}[-_]\d{1,2}(\s+\d{1,6}([:\-]\d{2}){0,2})?\s*[\]\)]"#,
+            with: " ",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: #"(19|20)\d{2}[-_]\d{1,2}[-_]\d{1,2}"#,
+            with: " ",
+            options: .regularExpression
+        )
+        return result
     }
 }
 

@@ -51,55 +51,107 @@ public struct AudioRecorderView: View {
         permissionSection
         incompatibleSection
         errorSection
+        handoffWarningSection
     }
 
     @ViewBuilder
     private var saveConfirmationBanner: some View {
         if viewModel.showSaveConfirmation, let url = viewModel.lastRecordedURL {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-                HStack(spacing: HubDesignSystem.Spacing.controlGap) {
-                    Label("Recording saved", systemImage: "checkmark.circle.fill")
-                        .font(HubDesignSystem.Typography.body())
-                        .foregroundStyle(HubDesignSystem.Colors.success)
-
-                    Spacer(minLength: 8)
-
-                    HubLabeledButton(
-                        icon: "folder",
-                        label: "Reveal",
-                        style: .secondary
-                    ) {
-                        context.fileActions.revealInFinder(url)
-                    }
-
-                    HubLabeledButton(
-                        icon: "arrow.up.forward.app",
-                        label: "Open",
-                        style: .secondary
-                    ) {
-                        NSWorkspace.shared.open(url)
-                    }
-
-                    HubLabeledButton(
-                        icon: "xmark",
-                        label: "Dismiss",
-                        style: .ghost
-                    ) {
-                        viewModel.dismissSaveConfirmation()
-                    }
-                }
-
-                if let warning = viewModel.handoffWarningMessage {
-                    Label(warning, systemImage: "exclamationmark.triangle.fill")
-                        .font(HubDesignSystem.Typography.bodySmall())
-                        .foregroundStyle(HubDesignSystem.Colors.warning)
-                        .fixedSize(horizontal: false, vertical: true)
+                // Narrow-main-column adaptation: at the 1020pt minimum width
+                // the recorder column is ~300pt, so the wide row reports its
+                // genuine unconstrained ideal (fixedSize labels/buttons) and
+                // ViewThatFits falls through to the stacked arrangement
+                // instead of crushing the text and wrapping buttons tall.
+                ViewThatFits(in: .horizontal) {
+                    saveBannerWideRow(for: url)
+                    saveBannerNarrowStack(for: url)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(maxWidth: HubToolLayout.maxContentWidth)
         }
+    }
+
+    @ViewBuilder
+    private var handoffWarningSection: some View {
+        if viewModel.showSaveConfirmation, viewModel.lastRecordedURL != nil,
+           let warning = viewModel.handoffWarningMessage {
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .font(HubDesignSystem.Typography.bodySmall())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: HubToolLayout.maxContentWidth, alignment: .leading)
+        }
+    }
+
+    private var saveStatusLabel: some View {
+        Label("Recording saved", systemImage: "checkmark.circle.fill")
+            .font(HubDesignSystem.Typography.body())
+            .foregroundStyle(HubDesignSystem.Colors.success)
+    }
+
+    private func saveBannerRevealButton(for url: URL) -> some View {
+        HubLabeledButton(
+            icon: "folder",
+            label: "Reveal",
+            style: .secondary
+        ) {
+            context.fileActions.revealInFinder(url)
+        }
+    }
+
+    private func saveBannerOpenButton(for url: URL) -> some View {
+        HubLabeledButton(
+            icon: "arrow.up.forward.app",
+            label: "Open",
+            style: .secondary
+        ) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private var saveBannerDismissButton: some View {
+        HubLabeledButton(
+            icon: "xmark",
+            label: "Dismiss",
+            style: .ghost
+        ) {
+            viewModel.dismissSaveConfirmation()
+        }
+    }
+
+    private func saveBannerWideRow(for url: URL) -> some View {
+        HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+            saveStatusLabel
+                .fixedSize(horizontal: true, vertical: false)
+
+            Spacer(minLength: 8)
+
+            saveBannerRevealButton(for: url)
+                .fixedSize(horizontal: true, vertical: false)
+
+            saveBannerOpenButton(for: url)
+                .fixedSize(horizontal: true, vertical: false)
+
+            saveBannerDismissButton
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    private func saveBannerNarrowStack(for url: URL) -> some View {
+        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
+            saveStatusLabel
+
+            HStack(spacing: HubDesignSystem.Spacing.controlGap) {
+                saveBannerRevealButton(for: url)
+                saveBannerOpenButton(for: url)
+            }
+
+            saveBannerDismissButton
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var header: some View {

@@ -55,7 +55,7 @@ extension ArchiveBrowserViewModel {
             throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
         }
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: songs)
-        try data.write(to: destination)
+        try data.write(to: destination, options: .atomic)
         lastIndexExportPath = destination.path
         setStatusMessage("Exported index JSON (\(songs.count) songs).")
         diagnostics.scoped(to: .archive).log(.info, "Exported archive index (\(songs.count) songs)")

@@ -45,7 +45,13 @@ else
   COMMIT="$(nmh_git_commit)"
 fi
 TAG="v$VERSION"
-EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 "$COMMIT" 2>/dev/null || printf '%s' "$COMMIT" | cut -c1-12)"
+# Resolve --commit to its canonical full SHA, verifying it is an actual commit
+# object (not blob/tree/missing). Rejects unknown objects before evidence.
+COMMIT="$(nmh_resolve_commit "$COMMIT")" || exit 1
+EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 --verify --end-of-options "$COMMIT" 2>/dev/null)" || {
+  echo "unknown commit object: $COMMIT" >&2
+  exit 1
+}
 CANONICAL_BUILD_ID="$VERSION+$EXPECTED_SHORT_COMMIT"
 if [[ -n "$EXPECTED_BUILD_ID_OVERRIDE" ]]; then
   [[ "$EXPECTED_BUILD_ID_OVERRIDE" == "$CANONICAL_BUILD_ID" ]] || { echo "explicit --expected-build-id '$EXPECTED_BUILD_ID_OVERRIDE' does not match canonical $CANONICAL_BUILD_ID for commit $COMMIT" >&2; exit 1; }
@@ -107,10 +113,16 @@ approval_raw, approval = load_bytes(approval_path)
 manifest_raw, manifest = load_bytes(manifest_path)
 uat_raw, uat = load_bytes(uat_path)
 
+# Strict types (no coercion): schema_version must be exact int 1
+# (type is int; rejects True and 1.0 since True == 1 and 1.0 == 1),
+# release_approved must be `is True` (rejects 1, 1.0, "true").
+approval_schema = approval.get("schema_version")
+if type(approval_schema) is not int or approval_schema != 1:
+    raise SystemExit(f"approval schema_version mismatch: {approval_schema!r} != 1")
+if approval.get("release_approved") is not True:
+    raise SystemExit(f"approval release_approved mismatch: {approval.get('release_approved')!r} != True")
 expected = {
-    "schema_version": 1,
     "product": "Niko Music Hub",
-    "release_approved": True,
     "version": version,
     "bundle_id": bundle_id,
     "tag": tag,
@@ -239,7 +251,16 @@ for gate in gates:
             f"(overridable: {sorted(overridable_gates)!r})"
         )
 has_override = "emergency-override" in results
-if bool(release.get("emergency_override")) != has_override:
+# Strict boolean: emergency_override must be exactly True/False (is-checks;
+# 1/0 and "true" must not coerce via bool()).
+_emergency_override = release.get("emergency_override")
+if _emergency_override is True:
+    _emergency_flag = True
+elif _emergency_override is False:
+    _emergency_flag = False
+else:
+    raise SystemExit(f"approval emergency_override must be boolean True/False (was {_emergency_override!r})")
+if _emergency_flag != has_override:
     raise SystemExit("approval emergency_override flag does not match gate results")
 if has_override and not release.get("emergency_reason"):
     raise SystemExit("approval emergency override requires a recorded reason")

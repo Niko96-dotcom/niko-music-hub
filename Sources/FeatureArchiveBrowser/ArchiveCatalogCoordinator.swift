@@ -125,6 +125,15 @@ struct SongMetadataRepairResult {
     var failedSongIDs: [String] = []
 }
 
+/// Minimal internal seam for the incremental-cancel regression: awaited at the
+/// start of the actual filesystem operation (after the orchestrator pre-scan
+/// hold) so a test can park the batch while its I/O is in flight. Production
+/// leaves `hold` nil. Reference type so the value-type coordinator can expose
+/// it through a `let` catalog.
+final class ArchiveIncrementalTestProbe {
+    var hold: (() async -> Void)?
+}
+
 /// Scan, cache, and metadata merge/persist for the archive catalog. Owned by ``ArchiveBrowserViewModel``;
 /// browse/UI orchestration stays in the view model.
 @MainActor
@@ -135,6 +144,8 @@ struct ArchiveCatalogCoordinator {
     let diagnostics: Diagnostics
     private let settingsStore: SettingsStore?
     private let integrity: SongMetadataIntegrityState
+    /// Narrow internal test seam (see `ArchiveIncrementalTestProbe`).
+    let incrementalTestProbe = ArchiveIncrementalTestProbe()
 
     init(
         archiveIndexStore: (any ArchiveIndexStoring)?,
@@ -278,6 +289,9 @@ struct ArchiveCatalogCoordinator {
         priorDiagnostics: ArchiveScanDiagnostics?
     ) async throws -> IncrementalFilesystemApplyResult? {
         let scannedAt = Date()
+        if let hold = incrementalTestProbe.hold {
+            await hold()
+        }
         let incremental = try await performIncrementalScanDetached(
             changedPaths: changedPaths,
             roots: roots,

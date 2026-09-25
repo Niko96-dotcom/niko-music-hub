@@ -60,8 +60,8 @@ struct HubShellTitleBarControls: View {
 
             HubIconButton(
                 systemImage: "sidebar.trailing",
-                accessibilityLabel: session.showOutputInbox ? "Hide output inbox" : "Show output inbox",
-                help: session.showOutputInbox ? "Hides the Output Inbox" : "Shows the Output Inbox",
+                accessibilityLabel: session.inboxUserWantsVisible ? "Hide output inbox" : "Show output inbox",
+                help: inboxHelp,
                 controlSize: Self.buttonSize,
                 glyphSize: Self.glyphSize,
                 action: { session.toggleOutputInbox() }
@@ -70,6 +70,17 @@ struct HubShellTitleBarControls: View {
         .padding(.leading, HubShellLayout.titleBarLeadingInset)
         .padding(.trailing, HubShellLayout.titleBarTrailingInset)
         .frame(height: HubShellLayout.titleBarHeight)
+    }
+
+    /// Labels follow the user's intent (`inboxUserWantsVisible`), not the
+    /// width-derived state: `toggleOutputInbox()` flips intent, so a label
+    /// driven by the effective state would offer "Show" while intent is on
+    /// and switch intent off. Only the auto-hidden case (intent on, column
+    /// collapsed by narrow width) needs an explanatory help.
+    private var inboxHelp: String {
+        guard session.inboxUserWantsVisible else { return "Shows the Output Inbox" }
+        if session.showOutputInbox { return "Hides the Output Inbox" }
+        return "Output Inbox is hidden while the window is narrow"
     }
 }
 

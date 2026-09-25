@@ -152,6 +152,30 @@ def init_fixture_repo(base: pathlib.Path) -> pathlib.Path:
     )
     (repo / "SPARKLE_PUBLIC_ED_KEY").write_text(REAL_SNAPSHOT_KEY + "\n", encoding="utf-8")
     (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    # Strict validators resolve --commit against their own repository root
+    # (NMH_RELEASE_ROOT derived from BASH_SOURCE). The fixture-only commit does
+    # not exist in the real ROOT tree, so copy the actual validator files
+    # byte-identical into the fixture before its commit and invoke validators
+    # from the fixture. No gate is weakened; the pinned SHA still proves
+    # exact fixture provenance.
+    for rel in (
+        "script/validate-release-uat.sh",
+        "script/validate-release-approval.sh",
+        "script/release-env.sh",
+        "script/lib/release_gates.sh",
+        "script/lib/release_uat.py",
+    ):
+        src = ROOT / rel
+        assert src.is_file(), f"real tree missing {rel}"
+        dst = repo / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(src), str(dst))
+    for rel in (
+        "script/validate-release-uat.sh",
+        "script/validate-release-approval.sh",
+        "script/release-env.sh",
+    ):
+        (repo / rel).chmod(0o755)
     run_cmd(["git", "-C", str(repo), "add", "."])
     run_cmd(["git", "-C", str(repo), "commit", "-qm", "pinned"])
     return repo
@@ -372,11 +396,15 @@ class PipelineProvenanceTests(unittest.TestCase):
             self.assertNotEqual(sha_file(original), frozen_sha_before)
 
             # Frozen bytes are unchanged and still validate with the pinned API.
+            # Invoke the fixture-copy validator so the fixture-only commit
+            # resolves in the validator's own repository.
             self.assertEqual(sha_file(frozen), frozen_sha_before)
+            fixture_uat_validator = repo / "script" / "validate-release-uat.sh"
+            self.assertTrue(fixture_uat_validator.is_file())
             valid = run_cmd(
                 [
                     "bash",
-                    str(UAT_VALIDATOR),
+                    str(fixture_uat_validator),
                     "--evidence",
                     str(frozen),
                     "--commit",
@@ -413,10 +441,14 @@ class PipelineProvenanceTests(unittest.TestCase):
             approval = base / "approval.json"
             generate_approval(approval, artifact.name, artifact_sha, manifest, frozen, pinned)
 
+            # Invoke the fixture-copy validator so the fixture-only commit
+            # resolves in the validator's own repository.
+            fixture_approval_validator = repo / "script" / "validate-release-approval.sh"
+            self.assertTrue(fixture_approval_validator.is_file())
             good = run_cmd(
                 [
                     "bash",
-                    str(APPROVAL_VALIDATOR),
+                    str(fixture_approval_validator),
                     "--approval",
                     str(approval),
                     "--artifact",
@@ -442,7 +474,7 @@ class PipelineProvenanceTests(unittest.TestCase):
             bad = run_cmd(
                 [
                     "bash",
-                    str(APPROVAL_VALIDATOR),
+                    str(fixture_approval_validator),
                     "--approval",
                     str(approval),
                     "--artifact",

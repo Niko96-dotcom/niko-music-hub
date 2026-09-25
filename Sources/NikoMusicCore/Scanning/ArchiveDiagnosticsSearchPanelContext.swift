@@ -16,8 +16,15 @@ public enum ArchiveDiagnosticsSearchPanelContext: Sendable {
         query: String,
         matchCount: Int
     ) -> Bool {
-        exportText.contains("search_query=\(query)")
-            && exportText.contains("search_matches=\(matchCount)")
+        let lines = normalizedExportLines(exportText)
+        return lines.contains("search_query=\(query)")
+            && lines.contains("search_matches=\(matchCount)")
+    }
+
+    private static func normalizedExportLines(_ text: String) -> [String] {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
     }
 
     public static func matchLinesMatchExport(

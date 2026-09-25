@@ -755,6 +755,36 @@ PY
 assert_fail uat-lax-hardened-string "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 assert_contains "$TMP/uat-lax-hardened-string.err" "hardened"
 write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["schema_version"] = 1.0
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-lax-schema-float "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-lax-schema-float.err" "schema_version"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["schema_version"] = True
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-lax-schema-bool "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-lax-schema-bool.err" "schema_version"
+write_valid_uat
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["tested_build"]["hardened_runtime"] = 1
+path.write_text(json.dumps(payload))
+PY
+assert_fail uat-lax-hardened-int "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
+assert_contains "$TMP/uat-lax-hardened-int.err" "hardened"
+write_valid_uat
 assert_pass uat-valid-after-placeholder "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
 
 echo "== approval record binds exact artifact, manifest, UAT, and gates =="
@@ -951,6 +981,86 @@ build_valid_approval "$APPROVAL"
 assert_fail approval-lax-hardened-string "$ROOT/script/validate-release-approval.sh" \
   --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
 assert_contains "$TMP/approval-lax-hardened-string.err" "hardened"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+
+echo "== final validator rejects coerced schema/approved types (strict) =="
+# schema_version True (bool) must not coerce to 1; rehash outer approval so
+# only the strict type gate can fail.
+write_valid_uat
+build_valid_approval "$APPROVAL"
+/usr/bin/python3 - "$APPROVAL" <<'PY'
+import hashlib, json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["schema_version"] = True
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-lax-schema-bool "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-schema-bool.err" "schema_version"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+/usr/bin/python3 - "$APPROVAL" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["schema_version"] = 1.0
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-lax-schema-float "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-schema-float.err" "schema_version"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+/usr/bin/python3 - "$APPROVAL" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["release_approved"] = 1
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-lax-approved-int "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-approved-int.err" "release_approved"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+/usr/bin/python3 - "$APPROVAL" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["release_approved"] = 1.0
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-lax-approved-float "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-approved-float.err" "release_approved"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+/usr/bin/python3 - "$APPROVAL" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["release_approval"]["emergency_override"] = 1
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+assert_fail approval-lax-emergency-int "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-lax-emergency-int.err" "emergency_override"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+# UAT float schema through the final validator (same bytes hashed + checked).
+/usr/bin/python3 - "$UAT" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["schema_version"] = 1.0
+path.write_text(json.dumps(payload))
+PY
+build_valid_approval "$APPROVAL"
+assert_fail approval-rejects-uat-float-schema "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT"
+assert_contains "$TMP/approval-rejects-uat-float-schema.err" "schema_version"
 write_valid_uat
 build_valid_approval "$APPROVAL"
 
@@ -1170,6 +1280,503 @@ assert_fail approval-override-flag-mismatch "$ROOT/script/validate-release-appro
 assert_contains "$TMP/approval-override-flag-mismatch.err" "emergency_override flag does not match"
 build_valid_approval "$APPROVAL"
 
+
+echo "== validators reject unresolved and non-commit objects =="
+MISSING_COMMIT="0000000000000000000000000000000000000000"
+MISSING_SHORT="000000000000"
+MISSING_BUILD_ID="$(cat "$ROOT/VERSION")+$MISSING_SHORT"
+TREE_SHA="$(git -C "$ROOT" rev-parse HEAD^{tree})"
+TREE_SHORT="$(git -C "$ROOT" rev-parse --short=12 "$TREE_SHA")"
+TREE_BUILD_ID="$(cat "$ROOT/VERSION")+$TREE_SHORT"
+BLOB_SHA="$(git -C "$ROOT" rev-parse HEAD:VERSION)"
+BLOB_SHORT="$(git -C "$ROOT" rev-parse --short=12 "$BLOB_SHA")"
+BLOB_BUILD_ID="$(cat "$ROOT/VERSION")+$BLOB_SHORT"
+write_missing_uat() {
+  _wmu_commit="$1"
+  _wmu_build="$2"
+  write_valid_uat
+  /usr/bin/python3 - "$UAT" "$_wmu_commit" "$_wmu_build" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["commit"] = sys.argv[2]
+payload["tested_build"]["build_id"] = sys.argv[3]
+path.write_text(json.dumps(payload))
+PY
+}
+write_missing_uat "$MISSING_COMMIT" "$MISSING_BUILD_ID"
+assert_fail uat-missing-commit "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$MISSING_COMMIT" --expected-build-id "$MISSING_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/uat-missing-commit.err" "unknown commit object"
+write_missing_uat "$TREE_SHA" "$TREE_BUILD_ID"
+assert_fail uat-tree-not-commit "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$TREE_SHA" --expected-build-id "$TREE_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/uat-tree-not-commit.err" "unknown commit object"
+write_missing_uat "$BLOB_SHA" "$BLOB_BUILD_ID"
+assert_fail uat-blob-not-commit "$ROOT/script/validate-release-uat.sh" --evidence "$UAT" --commit "$BLOB_SHA" --expected-build-id "$BLOB_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/uat-blob-not-commit.err" "unknown commit object"
+write_valid_uat
+build_valid_approval "$APPROVAL"
+build_missing_approval() {
+  _bma_commit="$1"
+  _bma_build="$2"
+  write_missing_uat "$_bma_commit" "$_bma_build"
+  "$ROOT/script/generate-release-record.py" manifest \
+    --output "$APPROVAL_MANIFEST" \
+    --version "$(cat "$ROOT/VERSION")" \
+    --bundle-id "$EXPECTED_BUNDLE_ID" \
+    --tag "v$(cat "$ROOT/VERSION")" \
+    --commit "$_bma_commit" \
+    --build-id "$_bma_build" \
+    --build-number 1 \
+    --architectures "$EXPECTED_ARCHITECTURES" \
+    --minimum-macos "$EXPECTED_MIN_MACOS" \
+    --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+    --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+    --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+    --created-utc 2026-07-13T12:00:00Z \
+    --signing-identity "$TEST_SIGNING_IDENTITY" \
+    --validation-status passed \
+    --public-release
+  build_valid_approval "$APPROVAL"
+  /usr/bin/python3 - "$APPROVAL_MANIFEST" "$APPROVAL" "$UAT" "$_bma_commit" <<'PY'
+import hashlib, json, pathlib, sys
+manifest_path = pathlib.Path(sys.argv[1])
+approval_path = pathlib.Path(sys.argv[2])
+uat_path = pathlib.Path(sys.argv[3])
+commit = sys.argv[4]
+manifest = json.loads(manifest_path.read_text())
+manifest["commit"] = commit
+manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+approval = json.loads(approval_path.read_text())
+approval["commit"] = commit
+approval["manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+approval["uat_evidence"]["sha256"] = hashlib.sha256(uat_path.read_bytes()).hexdigest()
+approval_path.write_text(json.dumps(approval, indent=2, sort_keys=True) + "\n")
+PY
+}
+# Note: build_valid_approval hardcodes CURRENT_COMMIT; the python fixup above
+# rebinds manifest+approval to the missing/non-commit with rehashed outer
+# hashes so the only failure is the commit-object gate.
+build_missing_approval "$MISSING_COMMIT" "$MISSING_BUILD_ID"
+assert_fail approval-missing-commit "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$MISSING_COMMIT" --expected-build-id "$MISSING_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/approval-missing-commit.err" "unknown commit object"
+build_missing_approval "$TREE_SHA" "$TREE_BUILD_ID"
+assert_fail approval-tree-not-commit "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$TREE_SHA" --expected-build-id "$TREE_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/approval-tree-not-commit.err" "unknown commit object"
+build_missing_approval "$BLOB_SHA" "$BLOB_BUILD_ID"
+assert_fail approval-blob-not-commit "$ROOT/script/validate-release-approval.sh" \
+  --approval "$APPROVAL" --artifact "$APPROVAL_ARTIFACT" --manifest "$APPROVAL_MANIFEST" --uat "$UAT" \
+  --commit "$BLOB_SHA" --expected-build-id "$BLOB_BUILD_ID" --expected-signing-identity "$TEST_SIGNING_IDENTITY"
+assert_contains "$TMP/approval-blob-not-commit.err" "unknown commit object"
+write_valid_uat
+"$ROOT/script/generate-release-record.py" manifest \
+  --output "$APPROVAL_MANIFEST" \
+  --version "$(cat "$ROOT/VERSION")" \
+  --bundle-id "$EXPECTED_BUNDLE_ID" \
+  --tag "v$(cat "$ROOT/VERSION")" \
+  --commit "$CURRENT_COMMIT" \
+  --build-id "$EXPECTED_BUILD_ID" \
+  --build-number 1 \
+  --architectures "$EXPECTED_ARCHITECTURES" \
+  --minimum-macos "$EXPECTED_MIN_MACOS" \
+  --artifact "$(basename "$APPROVAL_ARTIFACT")" \
+  --artifact-size "$(stat -f%z "$APPROVAL_ARTIFACT")" \
+  --artifact-sha256 "$APPROVAL_ARTIFACT_SHA" \
+  --created-utc 2026-07-13T12:00:00Z \
+  --signing-identity "$TEST_SIGNING_IDENTITY" \
+  --validation-status passed \
+  --public-release
+build_valid_approval "$APPROVAL"
+ARTIFACT_COMMIT_DIR="$TMP/artifact-commit-fixture"
+mkdir -p "$ARTIFACT_COMMIT_DIR"
+printf 'dummy-artifact-bytes' >"$ARTIFACT_COMMIT_DIR/NikoMusicHub-$(cat "$ROOT/VERSION").dmg"
+printf '{"schema_version":1}' >"$ARTIFACT_COMMIT_DIR/manifest.json"
+assert_fail artifact-missing-commit "$ROOT/script/validate-release-artifact.sh" \
+  --artifact "$ARTIFACT_COMMIT_DIR/NikoMusicHub-$(cat "$ROOT/VERSION").dmg" --manifest "$ARTIFACT_COMMIT_DIR/manifest.json" \
+  --commit "$MISSING_COMMIT" --expected-build-id "$MISSING_BUILD_ID"
+assert_contains "$TMP/artifact-missing-commit.err" "unknown commit object"
+assert_fail artifact-tree-not-commit "$ROOT/script/validate-release-artifact.sh" \
+  --artifact "$ARTIFACT_COMMIT_DIR/NikoMusicHub-$(cat "$ROOT/VERSION").dmg" --manifest "$ARTIFACT_COMMIT_DIR/manifest.json" \
+  --commit "$TREE_SHA" --expected-build-id "$TREE_BUILD_ID"
+assert_contains "$TMP/artifact-tree-not-commit.err" "unknown commit object"
+assert_fail artifact-blob-not-commit "$ROOT/script/validate-release-artifact.sh" \
+  --artifact "$ARTIFACT_COMMIT_DIR/NikoMusicHub-$(cat "$ROOT/VERSION").dmg" --manifest "$ARTIFACT_COMMIT_DIR/manifest.json" \
+  --commit "$BLOB_SHA" --expected-build-id "$BLOB_BUILD_ID"
+assert_contains "$TMP/artifact-blob-not-commit.err" "unknown commit object"
+
+echo "== install-local destination guard stays fail-closed =="
+assert_fail install-nonapp "$ROOT/script/install-local.sh" --app-path "$TMP/not-an-app-dir"
+assert_contains "$TMP/install-nonapp.err" ".app"
+assert_fail install-relative-app "$ROOT/script/install-local.sh" --app-path "relative/Name.app"
+assert_contains "$TMP/install-relative-app.err" "must be absolute"
+LINK_TARGET="$TMP/link-target"
+mkdir -p "$LINK_TARGET"
+ln -sfn "$LINK_TARGET" "$TMP/Link.app"
+assert_fail install-symlink-dest "$ROOT/script/install-local.sh" --app-path "$TMP/Link.app"
+assert_contains "$TMP/install-symlink-dest.err" "symlink"
+WRONG_BUNDLE_DIR="$TMP/Wrong.app"
+mkdir -p "$WRONG_BUNDLE_DIR/Contents"
+cat >"$WRONG_BUNDLE_DIR/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.example.Wrong</string>
+</dict></plist>
+PLIST
+assert_fail install-wrong-bundle "$ROOT/script/install-local.sh" --app-path "$WRONG_BUNDLE_DIR"
+assert_contains "$TMP/install-wrong-bundle.err" "does not match canonical"
+assert_contains "$ROOT/script/install-local.sh" 'mktemp -d'
+assert_not_contains "$ROOT/script/install-local.sh" '.installing.$$'
+assert_not_contains "$ROOT/script/install-local.sh" '.previous.$$'
+assert_contains "$ROOT/script/install-local.sh" 'must be a .app bundle'
+assert_contains "$ROOT/script/install-local.sh" 'must not be a symlink'
+assert_contains "$ROOT/script/install-local.sh" 'does not match canonical'
+assert_contains "$ROOT/script/install-local.sh" 'INSTALL_SUCCESS'
+assert_contains "$ROOT/script/install-local.sh" 'MOVED_ORIGINAL'
+assert_contains "$ROOT/script/install-local.sh" 'INSTALLED_CANDIDATE'
+assert_contains "$ROOT/script/install-local.sh" 'rollback restore failed'
+assert_contains "$ROOT/script/install-local.sh" 'temp dir retained'
+assert_contains "$ROOT/script/install-local.sh" 'rollback blocked; candidate cleanup failed'
+assert_contains "$ROOT/script/install-local.sh" 'candidate cleanup failed; candidate preserved'
+assert_contains "$ROOT/script/install-local.sh" 'nmh_check_existing_destination() {'
+assert_contains "$ROOT/script/install-local.sh" 'nmh_check_existing_destination || exit 1'
+assert_order 'nmh_check_existing_destination || exit 1' 'nmh_build_bundle' "$ROOT/script/install-local.sh"
+assert_order 'nmh_check_existing_destination || exit 1' 'mv "$APP_PATH" "$BACKUP_PATH"' "$ROOT/script/install-local.sh"
+# The pre-replace (second) destination check must run after the stop and before
+# the first mv. line_number/assert_order above select the FIRST (prebuild) call,
+# so assert the second call structurally here; production invokes the helper
+# twice (prebuild and pre-replace).
+/usr/bin/python3 - "$ROOT/script/install-local.sh" <<'PY'
+import pathlib
+import sys
+lines = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+def find_all(needle):
+    return [i + 1 for i, line in enumerate(lines) if needle in line]
+stop = find_all('nmh_stop_app_binary "$TARGET_APP_BINARY" true')
+checks = find_all('nmh_check_existing_destination || exit 1')
+mvs = find_all('mv "$APP_PATH" "$BACKUP_PATH"')
+assert len(checks) == 2, f"expected exactly 2 destination checks, got {checks}"
+assert len(stop) == 1, f"expected exactly 1 stop call, got {stop}"
+assert mvs, "expected at least 1 mv of APP_PATH to BACKUP_PATH"
+assert checks[0] < stop[0] < checks[1] < mvs[0], (
+    f"expected prebuild check {checks[0]} < stop {stop[0]} < "
+    f"pre-replace check {checks[1]} < mv {mvs[0]}"
+)
+PY
+
+echo "== install-local rollback preserves originals (fixture) =="
+CLEANUP_FN="$(awk '/^cleanup\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/install-local.sh")"
+[[ -n "$CLEANUP_FN" ]] || {
+  echo "could not extract cleanup() from install-local.sh" >&2
+  exit 1
+}
+ROLLBACK_FIX="$TMP/install-rollback-fail"
+ROLLBACK_APP="$ROLLBACK_FIX/Candidate.app"
+ROLLBACK_TMP="$ROLLBACK_FIX/.nmh-install.test"
+ROLLBACK_BACKUP="$ROLLBACK_TMP/backup.app"
+ROLLBACK_STAGING="$ROLLBACK_TMP/staging.app"
+mkdir -p "$ROLLBACK_BACKUP/Contents" "$ROLLBACK_APP/Contents" "$ROLLBACK_STAGING"
+printf 'original' >"$ROLLBACK_BACKUP/Contents/marker"
+printf 'bad-candidate' >"$ROLLBACK_APP/Contents/marker"
+(
+  set +e
+  eval "$CLEANUP_FN"
+  mv() {
+    echo "stub mv failure" >&2
+    return 1
+  }
+  APP_PATH="$ROLLBACK_APP"
+  INSTALL_TMP="$ROLLBACK_TMP"
+  BACKUP_PATH="$ROLLBACK_BACKUP"
+  STAGING_PATH="$ROLLBACK_STAGING"
+  INSTALL_SUCCESS=false
+  MOVED_ORIGINAL=true
+  INSTALLED_CANDIDATE=true
+  (exit 3)
+  cleanup >"$TMP/rollback-restore-fail.out" 2>"$TMP/rollback-restore-fail.err"
+  echo "$?" >"$TMP/rollback-restore-fail.status"
+)
+[[ "$(cat "$TMP/rollback-restore-fail.status")" == "3" ]] || {
+  echo "rollback restore failure must preserve exit 3" >&2
+  exit 1
+}
+[[ -d "$ROLLBACK_BACKUP" ]] || {
+  echo "failed rollback must retain the surviving original bundle" >&2
+  exit 1
+}
+[[ "$(cat "$ROLLBACK_BACKUP/Contents/marker")" == "original" ]] || {
+  echo "failed rollback must not mutate the surviving original" >&2
+  exit 1
+}
+[[ -d "$ROLLBACK_TMP" ]] || {
+  echo "failed rollback must retain the temp dir for recovery" >&2
+  exit 1
+}
+[[ ! -e "$ROLLBACK_STAGING" ]] || {
+  echo "failed rollback must still clear staging" >&2
+  exit 1
+}
+assert_contains "$TMP/rollback-restore-fail.err" "rollback restore failed"
+assert_contains "$TMP/rollback-restore-fail.err" "$ROLLBACK_BACKUP"
+
+echo "== install-local rm failure never nests backup inside leftover candidate =="
+NEST_FIX="$TMP/install-rollback-nest"
+NEST_APP="$NEST_FIX/Candidate.app"
+NEST_TMP="$NEST_FIX/.nmh-install.test"
+NEST_BACKUP="$NEST_TMP/backup.app"
+NEST_STAGING="$NEST_FIX/.nmh-install.test/staging.app"
+mkdir -p "$NEST_BACKUP/Contents" "$NEST_APP/Contents" "$NEST_TMP"
+printf 'original' >"$NEST_BACKUP/Contents/marker"
+printf 'leftover-candidate' >"$NEST_APP/Contents/marker"
+MV_CALLED="$TMP/nest-mv-called"
+rm -f "$MV_CALLED"
+(
+  set +e
+  eval "$CLEANUP_FN"
+  # Local stub rm failure: refuse to remove the candidate directory so the
+  # leftover remains. A real BSD mv would then nest backup.app inside it and
+  # return 0; cleanup must NOT call mv at all in this state.
+  rm() {
+    case "$*" in
+      *"$NEST_APP"*) echo "stub rm failure (leaving $NEST_APP)" >&2; return 1 ;;
+    esac
+    command rm "$@"
+  }
+  mv() {
+    touch "$MV_CALLED"
+    echo "MUST NOT CALL mv when APP_PATH still exists (would nest backup)" >&2
+    # Emulate the dangerous BSD success so the test would catch a nest.
+    mkdir -p "$NEST_APP/backup.app"
+    return 0
+  }
+  APP_PATH="$NEST_APP"
+  INSTALL_TMP="$NEST_TMP"
+  BACKUP_PATH="$NEST_BACKUP"
+  STAGING_PATH="$NEST_STAGING"
+  mkdir -p "$STAGING_PATH"
+  INSTALL_SUCCESS=false
+  MOVED_ORIGINAL=true
+  INSTALLED_CANDIDATE=true
+  (exit 3)
+  cleanup >"$TMP/rollback-nest.out" 2>"$TMP/rollback-nest.err"
+  echo "$?" >"$TMP/rollback-nest.status"
+  unset -f rm mv
+)
+[[ "$(cat "$TMP/rollback-nest.status")" == "3" ]] || {
+  echo "rm-failure rollback must preserve exit 3" >&2
+  exit 1
+}
+[[ ! -e "$MV_CALLED" ]] || {
+  echo "cleanup called mv while APP_PATH still existed (would nest backup.app)" >&2
+  exit 1
+}
+[[ -d "$NEST_BACKUP" ]] || {
+  echo "rm-failure rollback must leave the backup untouched at $NEST_BACKUP" >&2
+  exit 1
+}
+[[ "$(cat "$NEST_BACKUP/Contents/marker")" == "original" ]] || {
+  echo "rm-failure rollback must not mutate the backup" >&2
+  exit 1
+}
+[[ -d "$NEST_APP" ]] || {
+  echo "rm-failure rollback must not auto-delete the orphan candidate" >&2
+  exit 1
+}
+[[ -d "$NEST_TMP" ]] || {
+  echo "rm-failure rollback must retain the temp dir for recovery" >&2
+  exit 1
+}
+[[ ! -e "$NEST_APP/backup.app" ]] || {
+  echo "backup was nested inside the leftover candidate" >&2
+  exit 1
+}
+assert_contains "$TMP/rollback-nest.err" "rollback blocked"
+assert_contains "$TMP/rollback-nest.err" "$NEST_APP"
+assert_contains "$TMP/rollback-nest.err" "$NEST_BACKUP"
+
+echo "== install-local first-install failure removes only the candidate =="
+FIRST_FIX="$TMP/install-first-fail"
+FIRST_APP="$FIRST_FIX/New.app"
+FIRST_TMP="$FIRST_FIX/.nmh-install.test"
+FIRST_BACKUP="$FIRST_TMP/backup.app"
+FIRST_STAGING="$FIRST_TMP/staging.app"
+mkdir -p "$FIRST_APP/Contents" "$FIRST_TMP" "$FIRST_STAGING"
+printf 'candidate' >"$FIRST_APP/Contents/marker"
+(
+  set +e
+  eval "$CLEANUP_FN"
+  APP_PATH="$FIRST_APP"
+  INSTALL_TMP="$FIRST_TMP"
+  BACKUP_PATH="$FIRST_BACKUP"
+  STAGING_PATH="$FIRST_STAGING"
+  INSTALL_SUCCESS=false
+  MOVED_ORIGINAL=false
+  INSTALLED_CANDIDATE=true
+  (exit 5)
+  cleanup >"$TMP/first-install-fail.out" 2>"$TMP/first-install-fail.err"
+  echo "$?" >"$TMP/first-install-fail.status"
+)
+[[ "$(cat "$TMP/first-install-fail.status")" == "5" ]] || {
+  echo "first-install failure must preserve exit 5" >&2
+  exit 1
+}
+[[ ! -e "$FIRST_APP" ]] || {
+  echo "first-install failure must remove the candidate it installed" >&2
+  exit 1
+}
+[[ ! -e "$FIRST_TMP" ]] || {
+  echo "first-install failure must clean its temp dir" >&2
+  exit 1
+}
+
+echo "== install-local first-install rm failure preserves candidate (fixture) =="
+FIRST_STUCK_FIX="$TMP/install-first-stuck"
+FIRST_STUCK_APP="$FIRST_STUCK_FIX/New.app"
+FIRST_STUCK_TMP="$FIRST_STUCK_FIX/.nmh-install.test"
+FIRST_STUCK_BACKUP="$FIRST_STUCK_TMP/backup.app"
+FIRST_STUCK_STAGING="$FIRST_STUCK_TMP/staging.app"
+mkdir -p "$FIRST_STUCK_APP/Contents" "$FIRST_STUCK_TMP" "$FIRST_STUCK_STAGING"
+printf 'stuck-candidate' >"$FIRST_STUCK_APP/Contents/marker"
+(
+  set +e
+  eval "$CLEANUP_FN"
+  rm() {
+    case "$*" in
+      *"$FIRST_STUCK_APP"*) echo "stub rm failure (leaving $FIRST_STUCK_APP)" >&2; return 1 ;;
+    esac
+    command rm "$@"
+  }
+  APP_PATH="$FIRST_STUCK_APP"
+  INSTALL_TMP="$FIRST_STUCK_TMP"
+  BACKUP_PATH="$FIRST_STUCK_BACKUP"
+  STAGING_PATH="$FIRST_STUCK_STAGING"
+  INSTALL_SUCCESS=false
+  MOVED_ORIGINAL=false
+  INSTALLED_CANDIDATE=true
+  (exit 5)
+  cleanup >"$TMP/first-stuck.out" 2>"$TMP/first-stuck.err"
+  echo "$?" >"$TMP/first-stuck.status"
+  unset -f rm
+)
+[[ "$(cat "$TMP/first-stuck.status")" == "5" ]] || {
+  echo "stuck first-install failure must preserve exit 5 (not claim cleanup success)" >&2
+  exit 1
+}
+[[ -d "$FIRST_STUCK_APP" ]] || {
+  echo "stuck first-install must preserve the leftover candidate path" >&2
+  exit 1
+}
+assert_contains "$TMP/first-stuck.err" "candidate cleanup failed"
+assert_contains "$TMP/first-stuck.err" "$FIRST_STUCK_APP"
+[[ -d "$FIRST_STUCK_TMP" ]] || {
+  echo "stuck first-install must retain the temp dir for recovery" >&2
+  exit 1
+}
+
+echo "== install-local staging failure never deletes an uninstalled destination =="
+NOINSTALL_FIX="$TMP/install-no-install"
+NOINSTALL_APP="$NOINSTALL_FIX/Existing.app"
+NOINSTALL_TMP="$NOINSTALL_FIX/.nmh-install.test"
+NOINSTALL_BACKUP="$NOINSTALL_TMP/backup.app"
+NOINSTALL_STAGING="$NOINSTALL_TMP/staging.app"
+mkdir -p "$NOINSTALL_APP/Contents" "$NOINSTALL_TMP" "$NOINSTALL_STAGING"
+printf 'original' >"$NOINSTALL_APP/Contents/marker"
+(
+  set +e
+  eval "$CLEANUP_FN"
+  APP_PATH="$NOINSTALL_APP"
+  INSTALL_TMP="$NOINSTALL_TMP"
+  BACKUP_PATH="$NOINSTALL_BACKUP"
+  STAGING_PATH="$NOINSTALL_STAGING"
+  INSTALL_SUCCESS=false
+  MOVED_ORIGINAL=false
+  INSTALLED_CANDIDATE=false
+  (exit 7)
+  cleanup >"$TMP/no-install.out" 2>"$TMP/no-install.err"
+  echo "$?" >"$TMP/no-install.status"
+)
+[[ "$(cat "$TMP/no-install.status")" == "7" ]] || {
+  echo "staging failure must preserve exit 7" >&2
+  exit 1
+}
+[[ -d "$NOINSTALL_APP" ]] || {
+  echo "cleanup must not delete a destination it never installed" >&2
+  exit 1
+}
+[[ "$(cat "$NOINSTALL_APP/Contents/marker")" == "original" ]] || {
+  echo "cleanup must not mutate an uninstalled destination" >&2
+  exit 1
+}
+
+echo "== install-local pre-replace identity re-check (fixture) =="
+DEST_FN="$(awk '/^nmh_check_existing_destination\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$ROOT/script/install-local.sh")"
+[[ -n "$DEST_FN" ]] || {
+  echo "could not extract nmh_check_existing_destination() from install-local.sh" >&2
+  exit 1
+}
+# Helper is the small shared check called both prebuild and pre-replace; the
+# script must call it twice (before the long build and immediately before the
+# first mv), with no bypass flag.
+[[ "$(grep -c 'nmh_check_existing_destination || exit 1' "$ROOT/script/install-local.sh")" == "2" ]] || {
+  echo "install-local.sh must call nmh_check_existing_destination both prebuild and pre-replace" >&2
+  exit 1
+}
+assert_not_contains "$ROOT/script/install-local.sh" "NMH_SKIP_DESTINATION_CHECK"
+assert_not_contains "$ROOT/script/install-local.sh" "--skip-destination-check"
+# Simulate a destination swapped to a foreign bundle between phases: the
+# re-check must fail and leave the tree unchanged.
+SWAP_FIX="$TMP/install-swap"
+SWAP_APP="$SWAP_FIX/Swapped.app"
+mkdir -p "$SWAP_APP/Contents"
+cat >"$SWAP_APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.example.Evil</string>
+</dict></plist>
+PLIST
+printf 'evil' >"$SWAP_APP/Contents/marker"
+(
+  set +e
+  eval "$DEST_FN"
+  APP_PATH="$SWAP_APP"
+  NMH_CANONICAL_BUNDLE_ID="$EXPECTED_BUNDLE_ID"
+  nmh_check_existing_destination >"$TMP/swap-foreign.out" 2>"$TMP/swap-foreign.err"
+  echo "$?" >"$TMP/swap-foreign.status"
+)
+[[ "$(cat "$TMP/swap-foreign.status")" != "0" ]] || {
+  echo "swapped foreign bundle must be rejected by the pre-replace check" >&2
+  exit 1
+}
+assert_contains "$TMP/swap-foreign.err" "does not match canonical"
+[[ "$(cat "$SWAP_APP/Contents/marker")" == "evil" ]] || {
+  echo "failed identity check must leave the swapped tree unchanged" >&2
+  exit 1
+}
+# Simulate a destination swapped to a symlink between phases.
+SYMLINK_FIX="$TMP/install-swap-symlink"
+SYMLINK_TARGET="$SYMLINK_FIX/target"
+SYMLINK_APP="$SYMLINK_FIX/Swapped.app"
+mkdir -p "$SYMLINK_TARGET"
+ln -sfn "$SYMLINK_TARGET" "$SYMLINK_APP"
+(
+  set +e
+  eval "$DEST_FN"
+  APP_PATH="$SYMLINK_APP"
+  NMH_CANONICAL_BUNDLE_ID="$EXPECTED_BUNDLE_ID"
+  nmh_check_existing_destination >"$TMP/swap-symlink.out" 2>"$TMP/swap-symlink.err"
+  echo "$?" >"$TMP/swap-symlink.status"
+)
+[[ "$(cat "$TMP/swap-symlink.status")" != "0" ]] || {
+  echo "swapped symlink destination must be rejected by the pre-replace check" >&2
+  exit 1
+}
+assert_contains "$TMP/swap-symlink.err" "must be a .app directory"
+[[ -L "$SYMLINK_APP" ]] || {
+  echo "failed symlink check must leave the symlink unchanged" >&2
+  exit 1
+}
 
 echo "== release notes are current-section only =="
 NOTES="$TMP/release-notes.md"

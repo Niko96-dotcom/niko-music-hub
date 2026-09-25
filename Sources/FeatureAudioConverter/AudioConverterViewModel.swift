@@ -117,8 +117,10 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public func removeRow(id: UUID) {
+        // The immutable admitted batch still processes removed rows: hiding a
+        // pending output stalls visible progress, so all removal waits.
+        guard !isConverting else { return }
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-        if isConverting && rows[index].state == .converting { return }
         rows.remove(at: index)
         refreshStatusText()
     }

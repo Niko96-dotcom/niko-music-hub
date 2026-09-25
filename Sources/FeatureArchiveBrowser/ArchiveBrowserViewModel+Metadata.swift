@@ -48,9 +48,33 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Single-commit title/aliases/note edit shared by the autosave flush and
+    /// metadata undo. Normalizes exactly like the single-field updaters, then
+    /// goes through the one existing applyMetadataMerge/commit path so a
+    /// three-field save persists/replaces/recomputes the catalog once instead
+    /// of three times. Unrelated stored fields are preserved by the merge.
+    func applySongNotes(
+        for song: Song,
+        virtualTitle: String,
+        aliasesText: String,
+        appNote: String
+    ) {
+        let trimmedTitle = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNote = appNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let aliases = aliasesText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        applyMetadataMerge(for: song) { metadata, _ in
+            metadata.virtualTitle = trimmedTitle.isEmpty ? nil : trimmedTitle
+            metadata.aliases = aliases
+            metadata.appNote = trimmedNote.isEmpty ? nil : trimmedNote
+        }
+    }
+
     /// NMH-048: autosave unsaved title/aliases/note drafts when the selected
     /// song changes. Looks up the previous song by id and applies the same
-    /// merge as Save. No-op if the song disappeared.
+    /// merge as Save in a single commit. No-op if the song disappeared.
     func flushMetadataDrafts(
         songID: String,
         virtualTitle: String,
@@ -58,9 +82,7 @@ extension ArchiveBrowserViewModel {
         appNote: String
     ) {
         guard let song = songs.first(where: { $0.id == songID }) else { return }
-        updateVirtualTitle(for: song, title: virtualTitle)
-        updateAliases(for: song, aliasesText: aliases)
-        updateAppNote(for: song, note: appNote)
+        applySongNotes(for: song, virtualTitle: virtualTitle, aliasesText: aliases, appNote: appNote)
     }
 
     /// NMH-048: last few recorded workflow status transitions for the detail
@@ -111,11 +133,12 @@ extension ArchiveBrowserViewModel {
         let currentTitle = song.virtualTitle
         let currentAliases = song.aliases
         let currentNote = song.appNote
-        updateVirtualTitle(for: song, title: previousVirtualTitle ?? "")
-        guard let refreshed = songs.first(where: { $0.id == songID }) else { return }
-        updateAliases(for: refreshed, aliasesText: previousAliases.joined(separator: ", "))
-        guard let refreshedNote = songs.first(where: { $0.id == songID }) else { return }
-        updateAppNote(for: refreshedNote, note: previousAppNote ?? "")
+        applySongNotes(
+            for: song,
+            virtualTitle: previousVirtualTitle ?? "",
+            aliasesText: previousAliases.joined(separator: ", "),
+            appNote: previousAppNote ?? ""
+        )
         registerMetadataUndo(
             songID: songID,
             previousVirtualTitle: currentTitle,

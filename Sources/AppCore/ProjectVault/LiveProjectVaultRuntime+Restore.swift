@@ -79,6 +79,7 @@ extension LiveProjectVaultRuntime {
         defer { releaseMutationLease(lease) }
         let configuration = try configuration()
         let settings = try settingsStore.loadSettings()
+        guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
         let engine = LocalVaultRestoreEngine(
             activeRoot: configuration.active.url,
             archiveRoot: configuration.archive.url,
@@ -117,7 +118,7 @@ extension LiveProjectVaultRuntime {
     /// so a later archive observes Keep Local before it can remove the copy.
     /// Metadata-only: the Vault generation, catalog rows, and song metadata
     /// are untouched, and workflow status never changes here.
-    private func persistRestoredKeepLocal(projectID: ProjectID, destinationURL: URL) {
+    func persistRestoredKeepLocal(projectID: ProjectID, destinationURL: URL) {
         let keys = keepLocalKeys(projectID: projectID, destinationURL: destinationURL)
         try? settingsStore.updateSettings { settings in
             settings.vault.keepLocalProjectIDs.formUnion(keys)
@@ -190,7 +191,7 @@ extension LiveProjectVaultRuntime {
     /// safely contained, pins only the project identity (conservative) and lets
     /// the engine report invalidDestination with its existing protections.
     /// Never unpins on failure; settings errors propagate to abort the restore.
-    private func prePersistRestoreProtection(projectID: ProjectID, relativePath: String, activeRoot: URL) throws {
+    func prePersistRestoreProtection(projectID: ProjectID, relativePath: String, activeRoot: URL) throws {
         if let destination = safeRestoreDestinationURL(relativePath: relativePath, activeRoot: activeRoot) {
             try persistRestoredKeepLocalThrowing(projectID: projectID, destinationURL: destination)
         } else {
@@ -203,7 +204,7 @@ extension LiveProjectVaultRuntime {
 
     /// Fail-closed pre-persist for retry by already-stored destination URL.
     /// Pins only a safely contained Active path plus the project identity.
-    private func prePersistRestoreProtection(projectID: ProjectID, destinationURL: URL, activeRoot: URL) throws {
+    func prePersistRestoreProtection(projectID: ProjectID, destinationURL: URL, activeRoot: URL) throws {
         if let safe = safeContainedRestoreDestination(destinationURL, activeRoot: activeRoot) {
             try persistRestoredKeepLocalThrowing(projectID: projectID, destinationURL: safe)
         } else {
@@ -218,7 +219,7 @@ extension LiveProjectVaultRuntime {
     /// DAW-open failure) that still restored a verified local copy. Failures
     /// without a verified destination pin nothing; settings errors never mask
     /// the original restore error.
-    private func persistKeepLocalForVerifiedDestination(projectID: ProjectID) {
+    func persistKeepLocalForVerifiedDestination(projectID: ProjectID) {
         guard let latest = try? transferStore.recoverableRestoreRecords()
             .filter({ $0.projectID == projectID && $0.failureReason == nil })
             .max(by: { $0.updatedAt < $1.updatedAt }),

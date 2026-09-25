@@ -121,6 +121,53 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
         notifyChanged()
     }
 
+    /// Locked load-check-patch-save for an async BPM estimate.
+    ///
+    /// Under the store lock the current row for `id` is reloaded; the write
+    /// is skipped (returning `false`, no save, no notify, no resurrection)
+    /// when the row is missing (trimmed/removed while estimating), its status
+    /// is not `.available`, its file URL differs from `expectedFileURL`, or
+    /// the file itself is currently gone (`regularFileExists`, the same
+    /// existence check the availability pass uses). Otherwise only the
+    /// supplied `bpmMetadata` entries are merged — every other field,
+    /// including newer status-adjacent metadata written concurrently, is
+    /// preserved — then the inbox is saved and a change is notified.
+    public func patchBPMMetadata(id: UUID, expectedFileURL: URL, bpmMetadata: [String: String]) throws -> Bool {
+        let (applied, recovered) = try lock.withLock {
+            let (loaded, recovered) = try loadItemsOrRecover()
+            var items = loaded
+            guard let index = items.firstIndex(where: { $0.id == id }) else {
+                return (false, recovered)
+            }
+            let current = items[index]
+            guard current.status == .available else {
+                return (false, recovered)
+            }
+            guard current.fileURL.standardizedFileURL == expectedFileURL.standardizedFileURL else {
+                return (false, recovered)
+            }
+            guard regularFileExists(at: current.fileURL) else {
+                return (false, recovered)
+            }
+            var patched = current
+            for (key, value) in bpmMetadata {
+                patched.metadata[key] = value
+            }
+            items[index] = patched
+            try save(items)
+            return (true, recovered)
+        }
+        // A quarantined corrupt payload mutates disk even when the patch
+        // itself is skipped (no save, no resurrection). Notify outside the
+        // lock so the refresh model reloads and drains the pending warning.
+        // Normal stale skips without recovery stay quiet. Return value is
+        // still whether the keys were merged and saved.
+        if applied || recovered {
+            notifyChanged()
+        }
+        return applied
+    }
+
     public func refreshAvailability() throws {
         let changed = try lock.withLock {
             let (items, recovered) = try loadItemsOrRecover()

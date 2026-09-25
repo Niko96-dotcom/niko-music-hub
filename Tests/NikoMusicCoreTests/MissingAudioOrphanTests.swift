@@ -72,4 +72,98 @@ final class MissingAudioOrphanTests: XCTestCase {
         XCTAssertEqual(summary.noCPR, ["Song", "Second Song"])
         XCTAssertTrue(summary.orphanAudioBySongID.isEmpty)
     }
+
+    func testSymlinkedSongRootYieldsNoOrphans() throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubOrphanLinkRoot-\(UUID().uuidString)", isDirectory: true)
+        let outside = base.appendingPathComponent("Outside", isDirectory: true)
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: outside.appendingPathComponent("secret.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        try FileManager.default.createSymbolicLink(atPath: songFolder.path, withDestinationPath: outside.path)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let song = Song(folderPath: songFolder, originalFolderName: "Song", displayTitle: "Song")
+        let report = ArchiveIntelligence.missingAudioReport(songs: [song])
+        XCTAssertNil(report.orphanAudioBySongID[song.id])
+    }
+
+    func testNestedSymlinksDoNotLeakOutsideNames() throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubOrphanNested-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        let outside = base.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songFolder.appendingPathComponent("orphan.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: outside.appendingPathComponent("secret.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        try FileManager.default.createSymbolicLink(
+            atPath: songFolder.appendingPathComponent("LinkedDir").path,
+            withDestinationPath: outside.path
+        )
+        try FileManager.default.createSymbolicLink(
+            atPath: songFolder.appendingPathComponent("Escape.wav").path,
+            withDestinationPath: outside.appendingPathComponent("secret.wav").path
+        )
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let song = Song(folderPath: songFolder, originalFolderName: "Song", displayTitle: "Song")
+        let report = ArchiveIntelligence.missingAudioReport(songs: [song])
+        let orphans = try XCTUnwrap(report.orphanAudioBySongID[song.id])
+        XCTAssertTrue(orphans.contains("orphan.wav"))
+        XCTAssertFalse(orphans.contains("secret.wav"))
+        XCTAssertFalse(orphans.contains("Escape.wav"))
+    }
+
+    func testSwappedSongBaseIsRejected() throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubOrphanSwap-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        let outside = base.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: outside.appendingPathComponent("secret.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        // Simulate a swap between enumeration and report: replace the real folder
+        // with a link to outside before the report walks it.
+        try FileManager.default.removeItem(at: songFolder)
+        try FileManager.default.createSymbolicLink(atPath: songFolder.path, withDestinationPath: outside.path)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let song = Song(folderPath: songFolder, originalFolderName: "Song", displayTitle: "Song")
+        let report = ArchiveIntelligence.missingAudioReport(songs: [song])
+        XCTAssertNil(report.orphanAudioBySongID[song.id])
+    }
+
+    func testCancelledEnumerationReturnsEmpty() async throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubOrphanCancel-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = base.appendingPathComponent("Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songFolder.appendingPathComponent("orphan.wav").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let song = Song(folderPath: songFolder, originalFolderName: "Song", displayTitle: "Song")
+        let task = Task<MissingAudioReport, Never> {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return ArchiveIntelligence.missingAudioReport(songs: [song])
+        }
+        task.cancel()
+        let report = await task.value
+        XCTAssertTrue(report.orphanAudioBySongID.isEmpty)
+    }
 }

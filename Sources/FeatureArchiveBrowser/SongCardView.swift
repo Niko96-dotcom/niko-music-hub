@@ -95,7 +95,7 @@ struct SongCardView: View {
                                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                                     .padding(.horizontal, 5)
                                     .padding(.vertical, 2)
-                                    .background(HubDesignSystem.Palette.selection, in: Capsule())
+                                    .background(HubDesignSystem.Palette.selection, in: RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .help(isRetryAction || isFreeUpSpaceAction

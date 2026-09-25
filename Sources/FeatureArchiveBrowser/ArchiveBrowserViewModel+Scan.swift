@@ -10,14 +10,18 @@ extension ArchiveBrowserViewModel {
     }
 
     func scan() async {
+        // A fresh scan ends every "until the next scan" dismissal.
+        dismissedCollaboratorSuggestionIDs.removeAll()
         await scanOrchestrator.scan()
     }
 
     func scanInBackground() async {
+        dismissedCollaboratorSuggestionIDs.removeAll()
         await scanOrchestrator.scanInBackground()
     }
 
     func scanSync() {
+        dismissedCollaboratorSuggestionIDs.removeAll()
         scanOrchestrator.scanSync()
     }
 
@@ -69,6 +73,7 @@ extension ArchiveBrowserViewModel {
         archivedProjectCount = 0
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []
+        dismissedCollaboratorSuggestionIDs.removeAll()
         duplicateSongHints = []
         missingAudioReport = nil
         mixdownBPMBySongID = [:]

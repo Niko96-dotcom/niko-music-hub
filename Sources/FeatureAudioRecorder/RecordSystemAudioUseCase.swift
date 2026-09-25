@@ -87,12 +87,23 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     public func generateOutputFilename(override: String?, now: () -> Date = Date.init) -> String {
-        if let override = override, !override.isEmpty {
-            let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
-            let basename = URL(fileURLWithPath: trimmed).lastPathComponent
-            return basename.isEmpty ? defaultOutputFilename(now: now) : ensureWAVExtension(basename)
+        guard let override else {
+            return defaultOutputFilename(now: now)
         }
-        return defaultOutputFilename(now: now)
+        let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.allSatisfy({ $0 == "." }) else {
+            return defaultOutputFilename(now: now)
+        }
+        // Lexical basename only: never resolve `.`/`..` against the CWD.
+        // `NSString.lastPathComponent` splits on `/` without normalization,
+        // so `../..` yields `..` (rejected) while `../Outside.mp3` yields
+        // `Outside.mp3` (kept inside the output directory by the caller).
+        let basename = (trimmed as NSString).lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !basename.isEmpty, !basename.allSatisfy({ $0 == "." }), basename != "/" else {
+            return defaultOutputFilename(now: now)
+        }
+        return ensureWAVExtension(basename)
     }
 
     private func defaultOutputFilename(now: () -> Date = Date.init) -> String {
@@ -103,10 +114,51 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     private func ensureWAVExtension(_ filename: String) -> String {
-        let url = URL(fileURLWithPath: filename)
-        guard url.pathExtension.isEmpty else { return filename }
-        return "\(filename).wav"
+        // The capture pipeline always writes WAV; the free-text name must end
+        // in .wav so the extension never misdescribes the bytes.
+        // Strip trailing dots first so "Take.wav." resolves to "Take.wav"
+        // instead of "Take.wav.wav" ("take." -> "take.wav", not "take..wav").
+        // All extension handling is lexical (no URL normalization) so dot
+        // segments can never resolve against the CWD.
+        var base = filename
+        while base.hasSuffix(".") { base.removeLast() }
+        guard !base.isEmpty else { return "\(filename).wav" }
+        if base.lowercased().hasSuffix(".wav") {
+            return base
+        }
+        let ext = Self.lexicalPathExtension(base)
+        if !ext.isEmpty, Self.replaceableAudioExtensions.contains(ext.lowercased()) {
+            let stem = Self.lexicalDeletingPathExtension(base)
+            guard !stem.isEmpty, stem != ".", stem != ".." else {
+                return "\(base).wav"
+            }
+            return "\(stem).wav"
+        }
+        return "\(base).wav"
     }
+
+    /// Lexical extension: substring after the last `.`, ignoring a leading
+    /// dot so hidden files like `.take` (and `.mp3`) have no extension and
+    /// append `.wav` instead of resolving to the CWD name.
+    private static func lexicalPathExtension(_ filename: String) -> String {
+        guard let lastDot = filename.lastIndex(of: ".") else { return "" }
+        if lastDot == filename.startIndex { return "" }
+        let after = filename.index(after: lastDot)
+        guard after != filename.endIndex else { return "" }
+        // Basenames carry no `/`, but stay lexical if one ever appears.
+        if filename[after...].contains("/") { return "" }
+        return String(filename[after...])
+    }
+
+    private static func lexicalDeletingPathExtension(_ filename: String) -> String {
+        let ext = lexicalPathExtension(filename)
+        guard !ext.isEmpty else { return filename }
+        return String(filename.dropLast(ext.count + 1))
+    }
+
+    private static let replaceableAudioExtensions: Set<String> = [
+        "mp3", "m4a", "mp4", "aiff", "aif", "aifc", "flac", "ogg", "oga", "opus", "wma", "aac", "caf",
+    ]
 
     private func resolveFilenameCollision(url: URL) -> URL {
         guard FileManager.default.fileExists(atPath: url.path) else {

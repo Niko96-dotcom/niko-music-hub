@@ -14,7 +14,7 @@ struct OutputInboxInspectorView: View {
     @State private var hoveredItemID: OutputInboxItem.ID?
     @State private var settingsError: String?
     @State private var inboxError: String?
-    @State private var analyzingItemID: OutputInboxItem.ID?
+    @State private var analyzingItemIDs: Set<OutputInboxItem.ID> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(context: ToolContext) {
@@ -303,7 +303,7 @@ struct OutputInboxInspectorView: View {
             Text("BPM \(bpm)\(item.metadata["bpmConfidence"].map { " (\($0))" } ?? "")")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-        } else if analyzingItemID == item.id {
+        } else if analyzingItemIDs.contains(item.id) {
             Text("Analyzing BPM…")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
@@ -376,25 +376,41 @@ struct OutputInboxInspectorView: View {
 
     private func analyzeBPM(for item: OutputInboxItem) {
         guard isAudioItem(item), item.status == .available else { return }
-        analyzingItemID = item.id
+        // Per-item in-flight set: concurrent analyses of different rows must not
+        // clear each other's indicator, and a duplicate tap on the same row is refused.
+        guard !analyzingItemIDs.contains(item.id) else { return }
+        analyzingItemIDs.insert(item.id)
         let itemID = item.id
-        Task {
+        let fileURL = item.fileURL
+        // MainActor task (UI updates stay on the main actor) awaiting one detached
+        // estimate: the blocking analysis never blocks the main thread, and the
+        // detached child is the only hop — no nested re-dispatch is needed.
+        Task { @MainActor in
             let estimate = await Task.detached(priority: .utility) {
-                MixdownBPMEstimator.estimate(url: item.fileURL)
+                MixdownBPMEstimator.estimate(url: fileURL)
             }.value
-            await MainActor.run {
-                analyzingItemID = nil
-                guard let estimate else { return }
-                var updated = item
-                updated.metadata["bpm"] = String(format: "%.1f", estimate.bpm)
-                updated.metadata["bpmConfidence"] = estimate.confidence
-                do {
-                    try context.outputInboxStore.updateItem(updated)
+            analyzingItemIDs.remove(itemID)
+            guard let estimate else { return }
+            // Atomic store-side merge: the inbox may have refreshed,
+            // trimmed, or rewritten the row while estimating, and the `items`
+            // snapshot above is not write authority. The store reloads the
+            // row under its lock and skips when it is gone, unavailable, or
+            // pointing at a different file; only the BPM keys are merged.
+            let bpmMetadata = [
+                "bpm": String(format: "%.1f", estimate.bpm),
+                "bpmConfidence": estimate.confidence,
+            ]
+            do {
+                let applied = try context.outputInboxStore.patchBPMMetadata(
+                    id: itemID,
+                    expectedFileURL: fileURL,
+                    bpmMetadata: bpmMetadata
+                )
+                if applied {
                     requestInboxRefresh()
-                } catch {
-                    inboxError = error.localizedDescription
                 }
-                _ = itemID
+            } catch {
+                inboxError = error.localizedDescription
             }
         }
     }

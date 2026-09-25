@@ -96,7 +96,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
-                ForEach(searchContext.matches, id: \.displayTitle) { match in
+                ForEach(Array(searchContext.matches.enumerated()), id: \.offset) { _, match in
                     let matchLine = ArchiveDiagnosticsSearchPanelContext.panelMatchLine(
                         displayTitle: match.displayTitle,
                         summary: match.summary
@@ -183,7 +183,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 Text("Short preview files (not the main mix)")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                ForEach(tooShortBreakdowns, id: \.displayTitle) { breakdown in
+                ForEach(Array(tooShortBreakdowns.enumerated()), id: \.offset) { _, breakdown in
                     Text("• \(breakdown.panelDisplayLine)")
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
@@ -264,7 +264,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 Text("Songs with warnings (\(displaySongWarnings.count))")
                     .font(HubDesignSystem.Typography.caption())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                ForEach(displaySongWarnings.prefix(5), id: \.displayTitle) { summary in
+                ForEach(Array(displaySongWarnings.prefix(5).enumerated()), id: \.offset) { _, summary in
                     Text("• \(summary.displayTitle)")
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)

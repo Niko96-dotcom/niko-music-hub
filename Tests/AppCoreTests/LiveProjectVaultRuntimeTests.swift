@@ -92,6 +92,75 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: preserved.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
     }
 
+    func testRecoverInterruptedArchivePrePinsKeepLocalAndRefusesRearchive() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        var record = try XCTUnwrap(snapshot.transfer)
+        record.state = .recoveryRequired
+        record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try fixture.transferStore().save(record)
+        let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
+        try Data("surviving partial contents".utf8).write(to: fixture.project.appendingPathComponent(projectFile.relativePath))
+        let restored = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
+        XCTAssertNotNil(restored.completedAt)
+        try VaultManifestBuilder().verify(before, at: restored.destinationURL)
+        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        XCTAssertTrue(pinned.contains(restored.projectID.description))
+        XCTAssertTrue(pinned.contains(restored.destinationURL.standardizedFileURL.resolvingSymlinksInPath().path))
+        do {
+            _ = try await runtime.captureArchiveAuthorization(
+                for: fixture.song, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+            XCTFail("recovered copy must stay pinned until Keep Local is explicitly cleared")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restored.destinationURL.path))
+        let preserved = try XCTUnwrap(try fixture.transferStore().record(id: record.id)?.preservedActiveCopies?.last)
+        XCTAssertEqual(try Data(contentsOf: preserved.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
+    }
+
+    func testRecoverInterruptedArchiveSettingsFailureFailsClosedBeforeBytesMove() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let archiver = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let before = try VaultManifestBuilder().build(at: fixture.project)
+        let snapshot = try await archiver.archive(song: fixture.song, trigger: .backupCopy)
+        var record = try XCTUnwrap(snapshot.transfer)
+        record.state = .recoveryRequired
+        record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try fixture.transferStore().save(record)
+        let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
+        try Data("surviving partial contents".utf8).write(to: fixture.project.appendingPathComponent(projectFile.relativePath))
+        let generation = try XCTUnwrap(try fixture.transferStore().record(id: record.id)?.destinationURL)
+        let failingSettings = RecoveryFailingSettingsStore(wrapping: fixture.settingsStore)
+        failingSettings.failUpdates = true
+        let recorder = RuntimeRecordingOpener()
+        let restorer = try LiveProjectVaultRuntime(
+            settingsStore: failingSettings,
+            transferStore: fixture.transferStore(),
+            catalogStore: fixture.catalogStore(),
+            projectOpener: recorder,
+            activityProbe: ClearProbe(),
+            capacityProbe: FixedCapacityProbe(snapshot: .safe),
+            archiveProviderFactory: { LocalFolderArchiveStorage(root: $0) }
+        )
+        do {
+            _ = try await restorer.recoverInterruptedArchive(snapshot: snapshot)
+            XCTFail("Keep Local write failure must fail closed before recovery moves bytes")
+        } catch is RecoveryFailingSettingsStore.KeepLocalWriteFailure {}
+        XCTAssertTrue(recorder.opened.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: fixture.project.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
+        XCTAssertNil(try fixture.transferStore().record(id: record.id)?.preservedActiveCopies)
+        XCTAssertEqual(try fixture.transferStore().record(id: record.id)?.state, .recoveryRequired)
+        XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
+        try VaultManifestBuilder().verify(before, at: generation)
+    }
+
     func testInterruptedRemovalRecoveryReportsUncertainActivityAsUncertainty() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -3214,6 +3283,38 @@ private extension LiveProjectVaultRuntimeTests {
 private struct RuntimeNoopVaultProjectOpener: VaultProjectOpening {
     func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
         nil
+    }
+}
+
+private final class RuntimeRecordingOpener: VaultProjectOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [URL] = []
+    var opened: [URL] { lock.withLock { stored } }
+    func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
+        lock.withLock { stored.append(projectURL) }
+        return nil
+    }
+    func openProject(at projectURL: URL, allowedRoot: URL, selectedRelativePath: String?) throws -> MusicItemOpener.OpenResult? {
+        lock.withLock { stored.append(projectURL) }
+        return nil
+    }
+}
+
+private final class RecoveryFailingSettingsStore: SettingsStore, @unchecked Sendable {
+    struct KeepLocalWriteFailure: Error {}
+    private let lock = NSLock()
+    private let wrapped: UserDefaultsSettingsStore
+    private var _failUpdates = false
+    init(wrapping: UserDefaultsSettingsStore) { self.wrapped = wrapping }
+    var failUpdates: Bool {
+        get { lock.withLock { _failUpdates } }
+        set { lock.withLock { _failUpdates = newValue } }
+    }
+    func loadSettings() throws -> AppSettings { try wrapped.loadSettings() }
+    func saveSettings(_ settings: AppSettings) throws { try wrapped.saveSettings(settings) }
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
+        if failUpdates { throw KeepLocalWriteFailure() }
+        try wrapped.updateSettings(update)
     }
 }
 

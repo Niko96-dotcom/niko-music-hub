@@ -360,6 +360,76 @@ final class AudioConverterViewModelTests: XCTestCase {
         )
     }
 
+    func testRemoveRowRefusedWhileBatchActiveAndAllowedAfterCompletion() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.m4a", in: directory)
+        let second = try makeFile(named: "Second.m4a", in: directory)
+        let gate = ConversionBlockGate()
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await gate.signalEntered()
+                await gate.waitForRelease()
+            }
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+        let firstID = try XCTUnwrap(viewModel.rows.first(where: { $0.sourceURL == first })?.id)
+        let secondID = try XCTUnwrap(viewModel.rows.first(where: { $0.sourceURL == second })?.id)
+
+        let conversionTask = Task { await viewModel.convertQueuedRows() }
+        await gate.waitForEntered()
+        XCTAssertTrue(viewModel.isConverting)
+
+        // Both the in-flight row and the still-queued row must stay visible.
+        viewModel.removeRow(id: secondID)
+        XCTAssertEqual(viewModel.rows.count, 2, "Queued removal must be refused while a batch is active")
+        viewModel.removeRow(id: firstID)
+        XCTAssertEqual(viewModel.rows.count, 2, "In-flight removal must be refused while a batch is active")
+
+        await gate.release()
+        let outcomes = await conversionTask.value
+        await drainMainQueue()
+
+        XCTAssertEqual(outcomes.count, 2)
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .verified])
+        XCTAssertFalse(viewModel.isConverting)
+
+        viewModel.removeRow(id: secondID)
+        XCTAssertEqual(viewModel.rows.count, 1)
+        XCTAssertEqual(viewModel.rows.first?.sourceURL, first)
+    }
+
+    func testRemoveRowAllowedAfterCancel() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.m4a", in: directory)
+        let second = try makeFile(named: "Second.m4a", in: directory)
+        let converter = RecordingViewModelConverter { request in
+            try await Task.sleep(for: .seconds(5))
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+        let secondID = try XCTUnwrap(viewModel.rows.first(where: { $0.sourceURL == second })?.id)
+
+        let conversionTask = Task { await viewModel.convertQueuedRows() }
+        try await waitUntil { viewModel.isConverting }
+        viewModel.removeRow(id: secondID)
+        XCTAssertEqual(viewModel.rows.count, 2, "Queued removal must be refused while a batch is active")
+
+        viewModel.cancelConversion()
+        _ = await conversionTask.value
+        await drainMainQueue()
+        XCTAssertFalse(viewModel.isConverting)
+
+        viewModel.removeRow(id: secondID)
+        XCTAssertEqual(viewModel.rows.count, 1, "Removal must be allowed after cancel")
+    }
+
     func testStartConversionSetsBusySynchronouslyAndRejectsDuplicateStarts() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -16,8 +16,15 @@ public enum ArchiveDiagnosticsSkippedSearchPanelContext: Sendable {
         query: String,
         matchCount: Int
     ) -> Bool {
-        exportText.contains("skipped_search_query=\(query)")
-            && exportText.contains("skipped_search_matches=\(matchCount)")
+        let lines = normalizedExportLines(exportText)
+        return lines.contains("skipped_search_query=\(query)")
+            && lines.contains("skipped_search_matches=\(matchCount)")
+    }
+
+    private static func normalizedExportLines(_ text: String) -> [String] {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
     }
 
     public static func matchLinesMatchExport(

@@ -65,10 +65,33 @@ REQUIRED_CHECKS = [
     "e2e_user_smoke",
 ]
 
-# Fixed fake commit; validators fall back to first-12 chars when the sha is
-# not in the local repo, so the canonical build id is deterministic.
-FAKE_COMMIT = "0123456789abcdef0123456789abcdef01234567"
-FAKE_SHORT = FAKE_COMMIT[:12]
+# Use the actual HEAD commit so validators resolve a real commit object.
+# Invented SHAs are rejected by the commit-object gate; fixtures must be real
+# commits, never invented SHAs.
+def _real_head_commit() -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _real_head_short() -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "--short=12", "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+FAKE_COMMIT = _real_head_commit()
+FAKE_SHORT = _real_head_short()
 CANONICAL_BUILD_ID = f"{VERSION}+{FAKE_SHORT}"
 TEST_IDENTITY = "Developer ID Application: Release Test (TEAM)"
 OTHER_IDENTITY = "Developer ID Application: Release Test (OTHER)"
@@ -103,18 +126,23 @@ def sha_file(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_uat(path: pathlib.Path, signing_identity: str = TEST_IDENTITY) -> None:
+def write_uat(
+    path: pathlib.Path,
+    signing_identity: str = TEST_IDENTITY,
+    commit: str | None = None,
+    build_id: str | None = None,
+) -> None:
     payload = {
         "schema_version": 1,
         "version": VERSION,
-        "commit": FAKE_COMMIT,
+        "commit": commit if commit is not None else FAKE_COMMIT,
         "bundle_id": BUNDLE_ID,
         "status": "approved",
         "approved_by": "Release Test",
         "approved_at_utc": TIMESTAMP,
         "machine": "arm64 macOS test machine",
         "tested_build": {
-            "build_id": CANONICAL_BUILD_ID,
+            "build_id": build_id if build_id is not None else CANONICAL_BUILD_ID,
             "build_configuration": "release",
             "signing_identity": signing_identity,
             "hardened_runtime": True,
@@ -122,6 +150,32 @@ def write_uat(path: pathlib.Path, signing_identity: str = TEST_IDENTITY) -> None
         "checks": {name: "passed" for name in REQUIRED_CHECKS},
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+MISSING_COMMIT = "0" * 40
+MISSING_BUILD_ID = f"{VERSION}+{'0' * 12}"
+
+
+def tree_commit() -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD^{tree}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def blob_commit() -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD:VERSION"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
 
 
 def mutate_json(path: pathlib.Path, mutate) -> None:
@@ -136,6 +190,8 @@ def generate_manifest(
     artifact_sha: str,
     artifact_size: int,
     signing_identity: str = TEST_IDENTITY,
+    commit: str | None = None,
+    build_id: str | None = None,
 ) -> None:
     result = run_cmd(
         [
@@ -151,9 +207,9 @@ def generate_manifest(
             "--tag",
             f"v{VERSION}",
             "--commit",
-            FAKE_COMMIT,
+            commit if commit is not None else FAKE_COMMIT,
             "--build-id",
-            CANONICAL_BUILD_ID,
+            build_id if build_id is not None else CANONICAL_BUILD_ID,
             "--build-number",
             "1",
             "--architectures",
@@ -194,6 +250,7 @@ def generate_approval(
     gate_results: dict[str, str] | None = None,
     emergency_reason: str = "",
     uat_approved_by: str = "Release Test",
+    commit: str | None = None,
 ) -> None:
     results = gate_results or {}
     args = [
@@ -209,7 +266,7 @@ def generate_approval(
         "--tag",
         f"v{VERSION}",
         "--commit",
-        FAKE_COMMIT,
+        commit if commit is not None else FAKE_COMMIT,
         "--artifact",
         artifact_name,
         "--artifact-sha256",
@@ -646,6 +703,64 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("hardened", result.stderr)
 
+    def test_uat_rejects_bool_and_float_schema(self) -> None:
+        # Strict schema: type(schema) is int and schema == 1. Bool True and
+        # float 1.0 both equal 1 in Python but must not pass.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            for bad in (True, False, 1.0, 0.0):
+                uat = tmp / "uat.json"
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=bad: payload.__setitem__("schema_version", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"schema_version={bad!r}")
+                self.assertIn("schema_version", result.stderr)
+            # Exact int 1 still passes (control).
+            uat = tmp / "uat.json"
+            write_uat(uat)
+            result = run_cmd(uat_args(uat))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_approval_rejects_coerced_schema_and_approved(self) -> None:
+        # Approval schema_version True/1.0 and release_approved 1/1.0 coerce
+        # to 1/True with != checks; strict type/is checks must reject them.
+        # Mutate the approval JSON directly (outer hash is over the same
+        # bytes the validator reads, so no rehash indirection is needed for
+        # these top-level approval fields).
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            for bad in (True, 1.0):
+                artifact, manifest, uat, approval = build_valid_bundle(tmp)
+                mutate_json(
+                    approval, lambda payload, value=bad: payload.__setitem__("schema_version", value)
+                )
+                result = run_cmd(approval_args(approval, artifact, manifest, uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"schema_version={bad!r}")
+                self.assertIn("schema_version", result.stderr)
+            for bad in (1, 1.0, "true"):
+                artifact, manifest, uat, approval = build_valid_bundle(tmp)
+                mutate_json(
+                    approval, lambda payload, value=bad: payload.__setitem__("release_approved", value)
+                )
+                result = run_cmd(approval_args(approval, artifact, manifest, uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"release_approved={bad!r}")
+                self.assertIn("release_approved", result.stderr)
+            for bad in (1, 0, "true", "false"):
+                artifact, manifest, uat, approval = build_valid_bundle(tmp)
+                mutate_json(
+                    approval,
+                    lambda payload, value=bad: payload["release_approval"].__setitem__(
+                        "emergency_override", value
+                    ),
+                )
+                result = run_cmd(approval_args(approval, artifact, manifest, uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"emergency_override={bad!r}")
+                self.assertIn("emergency_override", result.stderr)
+            # Control: exact int 1 + True still passes.
+            artifact, manifest, uat, approval = build_valid_bundle(tmp)
+            result = run_cmd(approval_args(approval, artifact, manifest, uat))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
     def test_approval_rejects_template_machine_rehashed(self) -> None:
         _, machine_sentinel = template_sentinels()
         with tempfile.TemporaryDirectory() as raw:
@@ -765,6 +880,110 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("manifest tag mismatch", result.stderr)
             self.assertNotIn("approval manifest_sha256 mismatch", result.stderr)
+
+    def test_uat_rejects_missing_commit_object_with_matching_build_id(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            write_uat(uat, commit=MISSING_COMMIT, build_id=MISSING_BUILD_ID)
+            result = run_cmd(
+                uat_args(uat, ["--commit", MISSING_COMMIT, "--expected-build-id", MISSING_BUILD_ID])
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unknown commit object", result.stderr)
+
+    def test_uat_rejects_noncommit_object_with_matching_build_id(self) -> None:
+        for noncommit in (tree_commit(), blob_commit()):
+            short = noncommit[:12]
+            build_id = f"{VERSION}+{short}"
+            with tempfile.TemporaryDirectory() as raw:
+                tmp = pathlib.Path(raw)
+                uat = tmp / "uat.json"
+                write_uat(uat, commit=noncommit, build_id=build_id)
+                result = run_cmd(
+                    uat_args(uat, ["--commit", noncommit, "--expected-build-id", build_id])
+                )
+                self.assertNotEqual(result.returncode, 0, msg=f"noncommit={noncommit}")
+                self.assertIn("unknown commit object", result.stderr)
+
+    def test_approval_rejects_missing_commit_object_with_matching_build_id(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            artifact = tmp / f"NikoMusicHub-{VERSION}.dmg"
+            artifact.write_bytes(b"provenance-fixture-artifact-bytes")
+            artifact_sha = sha_file(artifact)
+            manifest = tmp / f"NikoMusicHub-{VERSION}-manifest.json"
+            generate_manifest(
+                manifest,
+                artifact.name,
+                artifact_sha,
+                artifact.stat().st_size,
+                commit=MISSING_COMMIT,
+                build_id=MISSING_BUILD_ID,
+            )
+            uat = tmp / "uat.json"
+            write_uat(uat, commit=MISSING_COMMIT, build_id=MISSING_BUILD_ID)
+            approval = tmp / f"NikoMusicHub-{VERSION}-release-approval.json"
+            generate_approval(
+                approval,
+                artifact.name,
+                artifact_sha,
+                manifest.name,
+                sha_file(manifest),
+                uat.name,
+                sha_file(uat),
+                commit=MISSING_COMMIT,
+            )
+            result = run_cmd(
+                approval_args(
+                    approval,
+                    artifact,
+                    manifest,
+                    uat,
+                    ["--commit", MISSING_COMMIT, "--expected-build-id", MISSING_BUILD_ID],
+                )
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unknown commit object", result.stderr)
+
+    def test_approval_rejects_noncommit_object_with_matching_build_id(self) -> None:
+        for noncommit in (tree_commit(), blob_commit()):
+            short = noncommit[:12]
+            build_id = f"{VERSION}+{short}"
+            with tempfile.TemporaryDirectory() as raw:
+                tmp = pathlib.Path(raw)
+                artifact = tmp / f"NikoMusicHub-{VERSION}.dmg"
+                artifact.write_bytes(b"provenance-fixture-artifact-bytes")
+                artifact_sha = sha_file(artifact)
+                manifest = tmp / f"NikoMusicHub-{VERSION}-manifest.json"
+                generate_manifest(
+                    manifest,
+                    artifact.name,
+                    artifact_sha,
+                    artifact.stat().st_size,
+                    commit=noncommit,
+                    build_id=build_id,
+                )
+                uat = tmp / "uat.json"
+                write_uat(uat, commit=noncommit, build_id=build_id)
+                approval = tmp / f"NikoMusicHub-{VERSION}-release-approval.json"
+                generate_approval(
+                    approval,
+                    artifact.name,
+                    artifact_sha,
+                    manifest.name,
+                    sha_file(manifest),
+                    uat.name,
+                    sha_file(uat),
+                    commit=noncommit,
+                )
+                result = run_cmd(
+                    approval_args(
+                        approval, artifact, manifest, uat, ["--commit", noncommit, "--expected-build-id", build_id]
+                    )
+                )
+                self.assertNotEqual(result.returncode, 0, msg=f"noncommit={noncommit}")
+                self.assertIn("unknown commit object", result.stderr)
 
 
 if __name__ == "__main__":

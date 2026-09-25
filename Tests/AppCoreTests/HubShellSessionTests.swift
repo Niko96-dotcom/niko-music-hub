@@ -104,6 +104,30 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertEqual(store.bool(forKey: HubShellSession.inboxVisibleKey), false)
     }
 
+    func testToggleInboxWhileNarrowFlipsIntentNotEffectiveState() throws {
+        let store = try makeIsolatedStore()
+        let session = HubShellSession(preferences: store)
+
+        session.setOutputInboxVisible(true)
+        session.applyWindowWidth(900)
+        // Narrow: intent on, column auto-hidden. The toggle (and its label) act
+        // on intent, so pressing it must switch intent off — never re-assert on.
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertFalse(session.showOutputInbox)
+
+        session.toggleOutputInbox()
+        XCTAssertFalse(session.inboxUserWantsVisible)
+        XCTAssertFalse(session.showOutputInbox)
+
+        session.toggleOutputInbox()
+        XCTAssertTrue(session.inboxUserWantsVisible)
+        XCTAssertFalse(session.showOutputInbox)
+
+        session.applyWindowWidth(1280)
+        XCTAssertTrue(session.showOutputInbox)
+        XCTAssertTrue(session.inboxUserWantsVisible)
+    }
+
     func testShowMenuBarExtraDefaultsOnWithoutSettingsStore() throws {
         let store = try makeIsolatedStore()
         let session = HubShellSession(preferences: store)

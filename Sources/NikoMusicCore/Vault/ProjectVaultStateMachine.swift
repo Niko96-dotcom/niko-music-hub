@@ -51,6 +51,7 @@ public struct VaultRemovalEvidence: Codable, Equatable, Sendable {
 
     public var permitsActiveCopyRemoval: Bool {
         manifestVerified && metadataPersisted
+            && (archiveDurability == .verifiedLocal || archiveDurability == .syncedToProvider)
     }
 }
 

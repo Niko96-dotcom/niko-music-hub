@@ -50,7 +50,11 @@ extension ArchiveBrowserViewModel {
                 maximumRetainedOrphanAudioPaths: 0
             )
             guard let self, !Task.isCancelled else { return }
-            self.pendingCollaboratorSuggestions = suggestions
+            // Dismissals live until the next scan / result reset: filter at
+            // apply time against the live set so even a refresh scheduled
+            // before the dismiss cannot reinsert it.
+            let dismissed = self.dismissedCollaboratorSuggestionIDs
+            self.pendingCollaboratorSuggestions = suggestions.filter { !dismissed.contains($0.id) }
             self.duplicateSongHints = duplicates
             self.missingAudioReport = missing
         }

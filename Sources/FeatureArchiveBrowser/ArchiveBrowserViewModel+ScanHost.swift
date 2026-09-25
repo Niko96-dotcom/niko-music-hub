@@ -34,6 +34,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         // filtered out — browse recompute will clear filtered-out selections next).
         reconcileSelectedSong(requireVisibleInFilteredList: false)
         var invalidatedSelectedSongAnalysis = false
+        var didInvalidateCPRPluginSummary = false
         for song in uniqueIncomingSongs {
             let previewIDChanged = previousPreviewBySongID[song.id] != song.mainPreviewCandidateID
             let previewModifiedAtChanged = previousPreviewModifiedAtBySongID[song.id] != mainPreviewModifiedAt(for: song)
@@ -47,6 +48,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
                let previousCPR = previousCPRBySongID[song.id],
                previousCPR.path != currentCPR.path || previousCPR.modifiedAt != currentCPR.modifiedAt {
                 invalidateCPRPluginSummary(for: previousCPR.path)
+                didInvalidateCPRPluginSummary = true
                 if previousCPR.path != currentCPR.path {
                     invalidateCPRPluginSummary(for: currentCPR.path)
                 }
@@ -54,6 +56,16 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         }
         if invalidatedSelectedSongAnalysis, let selectedSong {
             refreshMixdownAnalysis(for: selectedSong)
+        }
+        // CPR summaries share one load task: invalidating ANY changed CPR
+        // cancels a pending selected load too, which would otherwise leave an
+        // expanded plugins section on "Loading plugin list..." with no new
+        // refresh. Restart the selected summary when needed after
+        // invalidations. `refresh` is a no-op for a cached summary or a song
+        // without a CPR, so cache hits are preserved and unrelated scans do
+        // no extra work (gated on an actual invalidation).
+        if didInvalidateCPRPluginSummary, pluginsSectionExpanded, let selectedSong {
+            refreshCPRPluginSummary(for: selectedSong)
         }
         // Drop analysis for songs that disappeared.
         let remainingIDs = Set(songs.map(\.id))

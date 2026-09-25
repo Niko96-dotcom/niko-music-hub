@@ -231,6 +231,71 @@ final class ArchiveMiniPlayerMetadataCacheTests: XCTestCase {
         player.forceStop()
     }
 
+    func testMetadataCachesEvictOldestEntryBeyondCap() {
+        ArchivePreviewPlayer.clearMetadataCaches()
+        defer { ArchivePreviewPlayer.clearMetadataCaches() }
+        let limit = ArchivePreviewPlayer.metadataCacheLimit
+        XCTAssertGreaterThan(limit, 0)
+        let revision = Date(timeIntervalSince1970: 2_000_000)
+        for index in 0 ..< limit + 1 {
+            let url = URL(fileURLWithPath: "/tmp/preview-cache-evict-\(index).wav")
+            ArchivePreviewPlayer.storeCachedHookForTests(Double(index), url: url, modifiedAt: revision)
+            ArchivePreviewPlayer.storeCachedDurationForTests(Double(index), url: url, modifiedAt: revision)
+        }
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookEntryCountForTests, limit)
+        XCTAssertEqual(ArchivePreviewPlayer.cachedDurationEntryCountForTests, limit)
+        // FIFO: the first-inserted entry is evicted while the newest and a middle
+        // entry survive with their values intact.
+        let firstURL = URL(fileURLWithPath: "/tmp/preview-cache-evict-0.wav")
+        XCTAssertNil(ArchivePreviewPlayer.cachedHookForTests(url: firstURL, modifiedAt: revision))
+        XCTAssertNil(ArchivePreviewPlayer.cachedDurationForTests(url: firstURL, modifiedAt: revision))
+        let newestURL = URL(fileURLWithPath: "/tmp/preview-cache-evict-\(limit).wav")
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookForTests(url: newestURL, modifiedAt: revision), Double(limit))
+        XCTAssertEqual(ArchivePreviewPlayer.cachedDurationForTests(url: newestURL, modifiedAt: revision), Double(limit))
+        let middleURL = URL(fileURLWithPath: "/tmp/preview-cache-evict-1.wav")
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookForTests(url: middleURL, modifiedAt: revision), 1)
+        XCTAssertEqual(ArchivePreviewPlayer.cachedDurationForTests(url: middleURL, modifiedAt: revision), 1)
+    }
+
+    func testMetadataCacheReadsDoNotAffectEvictionOrder() {
+        // Documents FIFO (not LRU): repeated reads of the oldest entry do not rescue it.
+        ArchivePreviewPlayer.clearMetadataCaches()
+        defer { ArchivePreviewPlayer.clearMetadataCaches() }
+        let limit = ArchivePreviewPlayer.metadataCacheLimit
+        let revision = Date(timeIntervalSince1970: 3_000_000)
+        for index in 0 ..< limit {
+            let url = URL(fileURLWithPath: "/tmp/preview-cache-fifo-\(index).wav")
+            ArchivePreviewPlayer.storeCachedHookForTests(Double(index), url: url, modifiedAt: revision)
+        }
+        let oldestURL = URL(fileURLWithPath: "/tmp/preview-cache-fifo-0.wav")
+        for _ in 0 ..< 10 {
+            _ = ArchivePreviewPlayer.cachedHookForTests(url: oldestURL, modifiedAt: revision)
+        }
+        let overflowURL = URL(fileURLWithPath: "/tmp/preview-cache-fifo-overflow.wav")
+        ArchivePreviewPlayer.storeCachedHookForTests(-1, url: overflowURL, modifiedAt: revision)
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookEntryCountForTests, limit)
+        XCTAssertNil(ArchivePreviewPlayer.cachedHookForTests(url: oldestURL, modifiedAt: revision))
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookForTests(url: overflowURL, modifiedAt: revision), -1)
+    }
+
+    func testMetadataCacheUpdateAndInvalidationKeepBoundedEntries() {
+        ArchivePreviewPlayer.clearMetadataCaches()
+        defer { ArchivePreviewPlayer.clearMetadataCaches() }
+        let url = URL(fileURLWithPath: "/tmp/preview-cache-revise.wav")
+        let firstRevision = Date(timeIntervalSince1970: 4_000_000)
+        let secondRevision = Date(timeIntervalSince1970: 4_000_010)
+        ArchivePreviewPlayer.storeCachedHookForTests(8, url: url, modifiedAt: firstRevision)
+        // Re-storing the same path updates in place instead of consuming another slot.
+        ArchivePreviewPlayer.storeCachedHookForTests(9, url: url, modifiedAt: secondRevision)
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookEntryCountForTests, 1)
+        // Revision validation still applies: only the stored revision reads back.
+        XCTAssertNil(ArchivePreviewPlayer.cachedHookForTests(url: url, modifiedAt: firstRevision))
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookForTests(url: url, modifiedAt: secondRevision), 9)
+        ArchivePreviewPlayer.invalidateMetadataCaches(for: url)
+        XCTAssertEqual(ArchivePreviewPlayer.cachedHookEntryCountForTests, 0)
+        XCTAssertNil(ArchivePreviewPlayer.cachedHookForTests(url: url, modifiedAt: secondRevision))
+    }
+
     private func waitForHook(
         on player: ArchivePreviewPlayer,
         attempts: Int = 150

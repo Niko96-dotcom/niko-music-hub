@@ -31,7 +31,14 @@ final class ArchiveBoardEdgeAutoScroller {
         }
 
         let requestedDirection: Direction = target > leadingColumnIndex ? .right : .left
-        guard requestedDirection != direction || task == nil else { return }
+        if let current = direction, current == requestedDirection, task != nil {
+            // The live leading lane moved (scroll animation, manual scroll)
+            // while held at the edge. Rebase the private cursor without firing
+            // another immediate scroll; the 280ms timer drives stepping so
+            // pointer-move churn cannot cause a rapid repeated-advance loop.
+            nextColumnIndex = leadingColumnIndex
+            return
+        }
 
         stop()
         direction = requestedDirection

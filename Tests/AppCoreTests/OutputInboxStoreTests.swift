@@ -351,6 +351,242 @@ final class OutputInboxStoreTests: XCTestCase {
         }
     }
 
+    func testPatchBPMMetadataAppliesKeysAndPreservesUnrelatedFields() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("bpm.wav")
+        try Data("audio".utf8).write(to: file)
+        let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+        let item = OutputInboxItem(
+            fileURL: file,
+            sourceToolID: "dev-tool",
+            status: .available,
+            metadata: ["kind": "sample"]
+        )
+        try store.addItem(item)
+
+        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let applied = try store.patchBPMMetadata(
+            id: item.id,
+            expectedFileURL: file,
+            bpmMetadata: ["bpm": "120.0", "bpmConfidence": "high"]
+        )
+
+        XCTAssertTrue(applied, "matching available row must be patched")
+        wait(for: [posted], timeout: 1.0)
+        let row = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        XCTAssertEqual(row.metadata["bpm"], "120.0")
+        XCTAssertEqual(row.metadata["bpmConfidence"], "high")
+        XCTAssertEqual(row.metadata["kind"], "sample", "unrelated fields must survive the patch")
+        XCTAssertEqual(row.status, .available)
+        XCTAssertEqual(row.fileURL.standardizedFileURL, file.standardizedFileURL)
+    }
+
+    func testPatchBPMMetadataSkipsRemovedRowWithoutResurrection() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("trimmed.wav")
+        try Data("audio".utf8).write(to: file)
+        let storeURL = directory.appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+        let item = OutputInboxItem(fileURL: file, sourceToolID: "dev-tool", status: .available)
+        try store.addItem(item)
+
+        // Simulate a trim/refresh that dropped the row while estimating.
+        try JSONEncoder().encode([OutputInboxItem]()).write(to: storeURL, options: .atomic)
+
+        let silent = expectation(forNotification: .outputInboxDidChange, object: nil)
+        silent.isInverted = true
+        let applied = try store.patchBPMMetadata(
+            id: item.id,
+            expectedFileURL: file,
+            bpmMetadata: ["bpm": "120.0"]
+        )
+
+        XCTAssertFalse(applied, "stale input after trim/removal must skip")
+        wait(for: [silent], timeout: 0.1)
+        XCTAssertNil(
+            try store.listItems().first(where: { $0.id == item.id }),
+            "a removed row must never come back"
+        )
+    }
+
+    func testPatchBPMMetadataSkipsWhenUnavailable() throws {
+        for status in [OutputInboxItemStatus.pending, .missing, .failed] {
+            let directory = temporaryDirectory()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            // The file exists so only the status gate is under test.
+            let file = directory.appendingPathComponent("row.wav")
+            try Data("audio".utf8).write(to: file)
+            let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+            let item = OutputInboxItem(fileURL: file, sourceToolID: "dev-tool", status: status)
+            try store.addItem(item)
+
+            let applied = try store.patchBPMMetadata(
+                id: item.id,
+                expectedFileURL: file,
+                bpmMetadata: ["bpm": "120.0"]
+            )
+
+            XCTAssertFalse(applied, "status \(status) must skip the BPM write")
+            let row = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+            XCTAssertNil(row.metadata["bpm"], "skipped write must not touch metadata")
+        }
+    }
+
+    func testPatchBPMMetadataSkipsWhenURLChanged() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let oldFile = directory.appendingPathComponent("old.wav")
+        let newFile = directory.appendingPathComponent("new.wav")
+        try Data("audio".utf8).write(to: oldFile)
+        try Data("audio".utf8).write(to: newFile)
+        let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+        let item = OutputInboxItem(fileURL: oldFile, sourceToolID: "dev-tool", status: .available)
+        try store.addItem(item)
+
+        // The row was rebound to a different file while estimating.
+        var rebound = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        rebound.fileURL = newFile
+        try store.updateItem(rebound)
+
+        let applied = try store.patchBPMMetadata(
+            id: item.id,
+            expectedFileURL: oldFile,
+            bpmMetadata: ["bpm": "120.0"]
+        )
+
+        XCTAssertFalse(applied, "stale expected URL must skip")
+        let row = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        XCTAssertEqual(row.fileURL.standardizedFileURL, newFile.standardizedFileURL)
+        XCTAssertNil(row.metadata["bpm"])
+    }
+
+    func testPatchBPMMetadataSkipsWhenFileGone() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("vanished.wav")
+        try Data("audio".utf8).write(to: file)
+        let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+        let item = OutputInboxItem(fileURL: file, sourceToolID: "dev-tool", status: .available)
+        try store.addItem(item)
+        try FileManager.default.removeItem(at: file)
+
+        let applied = try store.patchBPMMetadata(
+            id: item.id,
+            expectedFileURL: file,
+            bpmMetadata: ["bpm": "120.0"]
+        )
+
+        XCTAssertFalse(applied, "a file that disappeared mid-estimate must skip")
+        let row = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        XCTAssertNil(row.metadata["bpm"])
+    }
+
+    func testPatchBPMMetadataPreservesConcurrentMetadataWrites() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("live.wav")
+        try Data("audio".utf8).write(to: file)
+        let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+        let item = OutputInboxItem(
+            fileURL: file,
+            sourceToolID: "dev-tool",
+            status: .available,
+            metadata: ["kind": "sample"]
+        )
+        try store.addItem(item)
+
+        // A concurrent writer refreshes the row while the estimate is in flight.
+        var newer = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        newer.metadata["session"] = "live"
+        newer.metadata["note"] = "newer"
+        try store.updateItem(newer)
+
+        let applied = try store.patchBPMMetadata(
+            id: item.id,
+            expectedFileURL: file,
+            bpmMetadata: ["bpm": "128.5", "bpmConfidence": "medium"]
+        )
+
+        XCTAssertTrue(applied)
+        let row = try XCTUnwrap(try store.listItems().first(where: { $0.id == item.id }))
+        XCTAssertEqual(row.metadata["bpm"], "128.5")
+        XCTAssertEqual(row.metadata["bpmConfidence"], "medium")
+        XCTAssertEqual(row.metadata["session"], "live", "newer unrelated fields must survive")
+        XCTAssertEqual(row.metadata["note"], "newer")
+        XCTAssertEqual(row.metadata["kind"], "sample")
+    }
+
+    func testPatchBPMMetadataPropagatesStoreFailures() throws {
+        // A directory at the storage path is an I/O failure, not bad JSON.
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+
+        XCTAssertThrowsError(
+            try store.patchBPMMetadata(
+                id: UUID(),
+                expectedFileURL: storeURL,
+                bpmMetadata: ["bpm": "120.0"]
+            ),
+            "real I/O failures must throw, never silently skip"
+        )
+    }
+
+    func testPatchBPMMetadataNotifiesWhenCorruptPayloadQuarantined() throws {
+        let badBytes = Data("{corrupt-patch".utf8)
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("inbox.json")
+        try badBytes.write(to: storeURL)
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+        let missingID = UUID()
+        let expectedFile = directory.appendingPathComponent("ghost.wav")
+
+        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let applied = try store.patchBPMMetadata(
+            id: missingID,
+            expectedFileURL: expectedFile,
+            bpmMetadata: ["bpm": "120.0"]
+        )
+
+        XCTAssertFalse(applied, "a corrupt payload has no row to patch")
+        wait(for: [posted], timeout: 1.0)
+        let quarantineURL = try XCTUnwrap(store.lastQuarantineURL, "quarantine must be recorded")
+        XCTAssertEqual(try Data(contentsOf: quarantineURL), badBytes, "quarantine bytes must be preserved")
+        XCTAssertNil(
+            try store.listItems().first(where: { $0.id == missingID }),
+            "a quarantined inbox must not resurrect a row"
+        )
+        XCTAssertEqual(try store.listItems(), [], "recovered inbox stays empty")
+        XCTAssertNotNil(store.takeCorruptionWarning(), "pending warning must be available for the refresh model")
+        XCTAssertNil(store.takeCorruptionWarning(), "warning is one-shot")
+    }
+
+    func testPatchBPMMetadataDefaultSkipsWithoutWriting() throws {
+        struct NoopStore: OutputInboxStore {
+            func listItems() throws -> [OutputInboxItem] { [] }
+            func addItem(_ item: OutputInboxItem) throws {}
+            func updateItem(_ item: OutputInboxItem) throws {}
+            func refreshAvailability() throws {}
+        }
+        let store = NoopStore()
+        let applied = try store.patchBPMMetadata(
+            id: UUID(),
+            expectedFileURL: URL(fileURLWithPath: "/tmp/noop.wav"),
+            bpmMetadata: ["bpm": "120.0"]
+        )
+        XCTAssertFalse(applied, "the safe default must skip, never list+upsert")
+    }
+
     private func makeStore() throws -> JSONOutputInboxStore {
         let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
         return JSONOutputInboxStore(storageURL: storeURL)

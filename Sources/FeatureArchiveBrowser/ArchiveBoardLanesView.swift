@@ -84,13 +84,18 @@ struct ArchiveBoardLanesView: View {
             viewportWidth: boardViewportWidth,
             leadingColumnIndex: leadingIndex,
             columnCount: columns.count
-        ) { targetIndex, direction in
+        ) { targetIndex, _ in
             guard columns.indices.contains(targetIndex) else { return }
             let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
             let scroll = {
+                // Both logical directions pin the policy target with `.leading`:
+                // the target is always the live leading lane ± 1, so pinning its
+                // leading edge moves exactly one lane. `.trailing` on the left
+                // pinned the target to the viewport's right edge, jumping a full
+                // viewport. `.leading` adapts to RTL automatically.
                 scrollProxy.scrollTo(
                     columns[targetIndex].id,
-                    anchor: direction == .right ? .leading : .trailing
+                    anchor: .leading
                 )
             }
             if duration == 0 {

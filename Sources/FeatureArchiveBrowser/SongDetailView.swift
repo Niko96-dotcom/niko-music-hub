@@ -667,9 +667,19 @@ struct SongDetailView: View {
     }
 
     private var pluginsSection: some View {
-        SongPluginsSection(
+        let summary = viewModel.cprPluginSummary(for: liveSong)
+        // Loading only when a read can still complete: a latest CPR exists but
+        // its summary has not arrived. No-project stays on the quiet empty line
+        // instead of a perpetual loading state; a finished empty read is also
+        // not loading. Refresh is requested on expand (see `onChange` above),
+        // matching `ArchiveCPRPluginCoordinator.refresh` (no-op without a CPR
+        // or with a cached summary), so this never claims loading when no job
+        // can run.
+        let isLoading = liveSong.effectiveLatestCPR != nil && summary == nil
+        return SongPluginsSection(
             isExpanded: viewModel.pluginsSectionExpanded,
-            pluginNames: viewModel.cprPluginSummary(for: liveSong)?.pluginNames
+            pluginNames: summary?.pluginNames,
+            isLoading: isLoading
         )
     }
 
@@ -756,9 +766,12 @@ struct SongDetailView: View {
         let previousTitle = song.virtualTitle
         let previousAliases = song.aliases
         let previousNote = song.appNote
-        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
-        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
-        viewModel.updateAppNote(for: song, note: appNoteDraft)
+        viewModel.applySongNotes(
+            for: song,
+            virtualTitle: virtualTitleDraft,
+            aliasesText: aliasesDraft,
+            appNote: appNoteDraft
+        )
         syncedVirtualTitle = virtualTitleDraft
         syncedAliases = aliasesDraft
         syncedAppNote = appNoteDraft

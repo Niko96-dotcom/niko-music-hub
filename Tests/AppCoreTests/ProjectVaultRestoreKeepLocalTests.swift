@@ -90,6 +90,39 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
         XCTAssertEqual(catalog.record.workflowState, .done)
     }
 
+    func testStoppedRetryRestoreRefusesBeforePinsCopyOrOpen() async throws {
+        let fixture = try RestoreKeepLocalFixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings()
+        let failing = try fixture.runtime(opener: RestoreFailingOpener())
+        let authorization = try await failing.captureArchiveAuthorization(
+            for: fixture.song, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
+        let archived = try await failing.archive(song: fixture.song, trigger: .manual, authorization: authorization)
+        do {
+            _ = try await failing.restoreAndOpen(snapshot: archived)
+            XCTFail("Expected the DAW open to fail")
+        } catch {}
+        let failed = try XCTUnwrap(try fixture.transferStore().recoverableRestoreRecords().first { $0.projectID == archived.record.id })
+        try VaultManifestBuilder().verify(failed.manifest, at: failed.destinationURL)
+        let destinationBefore = try fixture.transferStore().restoreRecord(id: failed.id)
+        let pinsBefore = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        let recorder = RestoreRecordingOpener()
+        let stopped = try fixture.runtime(opener: recorder)
+        do {
+            _ = try await stopped.retryRestore(id: failed.id)
+            XCTFail("Emergency Stop must refuse retry before pins, copy, or open")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .emergencyStop)
+        }
+        XCTAssertTrue(recorder.seenSelections.isEmpty)
+        let persisted = try XCTUnwrap(try fixture.transferStore().restoreRecord(id: failed.id))
+        XCTAssertNil(persisted.completedAt)
+        XCTAssertEqual(persisted.destinationURL, try XCTUnwrap(destinationBefore?.destinationURL))
+        try VaultManifestBuilder().verify(failed.manifest, at: failed.destinationURL)
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, pinsBefore)
+    }
+
     func testDawOpenFailureKeepsVerifiedCopyPinnedWithRetryOpen() async throws {
         let fixture = try RestoreKeepLocalFixture()
         defer { fixture.cleanup() }

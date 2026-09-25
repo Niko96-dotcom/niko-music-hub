@@ -726,6 +726,263 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         )
     }
 
+    func testAdoptedPendingLinkReplacesStoredKeepSeparateForSamePair() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-identity-pair-\(UUID().uuidString).sqlite")
+        defer { removeDatabase(at: databaseURL) }
+        let store = try SQLiteProjectCatalogStore(databaseURL: databaseURL)
+        let existingID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!)
+        let candidateID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!)
+        let otherExisting = ProjectID(rawValue: UUID(uuidString: "cccccccc-cccc-cccc-cccc-cccccccccccc")!)
+        let otherCandidate = ProjectID(rawValue: UUID(uuidString: "dddddddd-dddd-dddd-dddd-dddddddddddd")!)
+        let rootID = UUID(uuidString: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")!
+        func entry(for id: ProjectID, title: String) -> ProjectCatalogEntry {
+            ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: id,
+                    canonicalTitle: title,
+                    locations: [ProjectLocation(rootID: rootID, relativePath: title, kind: .active)]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: title, cubaseFiles: [])
+            )
+        }
+        let oldReview = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "old evidence",
+            resolution: .keepSeparate
+        )
+        let unrelated = ProjectIdentityReview(
+            existingProjectID: otherExisting,
+            candidateProjectID: otherCandidate,
+            reason: "unrelated",
+            resolution: .keepSeparate
+        )
+        let initialEntries = [
+            entry(for: existingID, title: "Same Song"),
+            entry(for: candidateID, title: "Same Song copy"),
+            entry(for: otherExisting, title: "Other Song"),
+        ]
+        try store.apply(ProjectCatalogReconciliation(
+            entries: initialEntries,
+            reviews: [oldReview, unrelated],
+            metadataMigrations: [:]
+        ))
+
+        let viewModel = ProjectIdentityReviewViewModel(reviews: [], catalogStore: store)
+        XCTAssertEqual(viewModel.reviews.count, 2)
+
+        let newReview = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "new evidence"
+        )
+        viewModel.adopt(newReview)
+        let adoptedPair = viewModel.reviews.filter {
+            Set([$0.existingProjectID, $0.candidateProjectID]) == Set([existingID, candidateID])
+        }
+        XCTAssertEqual(adoptedPair.count, 1)
+        XCTAssertEqual(adoptedPair.first?.id, newReview.id)
+        XCTAssertEqual(Set(viewModel.pendingReviews.map(\.id)), Set([newReview.id]))
+
+        XCTAssertTrue(viewModel.resolve(newReview.id, as: .link))
+
+        let stored = try store.loadReviews()
+        let pairMatches = stored.filter {
+            Set([$0.existingProjectID, $0.candidateProjectID]) == Set([existingID, candidateID])
+        }
+        XCTAssertEqual(pairMatches.count, 1, "expected single stored row for pair, got \(stored)")
+        XCTAssertEqual(pairMatches.first?.id, newReview.id)
+        XCTAssertEqual(pairMatches.first?.resolution, .link)
+        XCTAssertEqual(Set(stored.map(\.id)), Set([newReview.id, unrelated.id]))
+        XCTAssertEqual(
+            try store.loadReviews().first(where: { $0.id == unrelated.id })?.resolution,
+            .keepSeparate
+        )
+        XCTAssertEqual(
+            Set(try store.loadEntries().map(\.record.id)),
+            Set(initialEntries.map(\.record.id))
+        )
+        let inMemoryPair = viewModel.reviews.filter {
+            Set([$0.existingProjectID, $0.candidateProjectID]) == Set([existingID, candidateID])
+        }
+        XCTAssertEqual(inMemoryPair.count, 1)
+        XCTAssertEqual(inMemoryPair.first?.resolution, .link)
+        XCTAssertTrue(viewModel.pendingReviews.isEmpty)
+
+        let conflictRoot = UUID()
+        let conflictLocation = ProjectLocation(rootID: conflictRoot, relativePath: "Same Folder", kind: .active)
+        let conflictEvidence = ProjectIdentityEvidence(
+            folderName: "Same Folder",
+            cubaseFiles: [ProjectFileIdentity(name: "Same.cpr", byteCount: 10, modifiedAt: .distantPast)]
+        )
+        func conflictEntry(for id: ProjectID) -> ProjectCatalogEntry {
+            ProjectCatalogEntry(
+                record: ProjectRecord(id: id, canonicalTitle: "Same Folder", locations: [conflictLocation]),
+                evidence: conflictEvidence
+            )
+        }
+        let observation = ProjectCatalogObservation(
+            canonicalTitle: "Same Folder",
+            location: conflictLocation,
+            evidence: conflictEvidence
+        )
+        let oldResult = try ProjectCatalogReconciler().reconcile(
+            existing: [conflictEntry(for: existingID), conflictEntry(for: candidateID)],
+            existingReviews: [oldReview],
+            observations: [observation]
+        )
+        XCTAssertEqual(oldResult.entries.count, 2)
+        let latestResult = try ProjectCatalogReconciler().reconcile(
+            existing: [conflictEntry(for: existingID), conflictEntry(for: candidateID)],
+            existingReviews: stored,
+            observations: [observation]
+        )
+        XCTAssertEqual(latestResult.entries.count, 1)
+        XCTAssertEqual(latestResult.entries.first?.record.id, existingID)
+    }
+
+    func testAdoptedPendingLinkReplacesStoredKeepSeparateForReversedPair() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-identity-reversed-\(UUID().uuidString).sqlite")
+        defer { removeDatabase(at: databaseURL) }
+        let store = try SQLiteProjectCatalogStore(databaseURL: databaseURL)
+        let firstID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!)
+        let secondID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!)
+        let otherExisting = ProjectID(rawValue: UUID(uuidString: "cccccccc-cccc-cccc-cccc-cccccccccccc")!)
+        let otherCandidate = ProjectID(rawValue: UUID(uuidString: "dddddddd-dddd-dddd-dddd-dddddddddddd")!)
+        let rootID = UUID(uuidString: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")!
+        func entry(for id: ProjectID, title: String) -> ProjectCatalogEntry {
+            ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: id,
+                    canonicalTitle: title,
+                    locations: [ProjectLocation(rootID: rootID, relativePath: title, kind: .active)]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: title, cubaseFiles: [])
+            )
+        }
+        let oldReview = ProjectIdentityReview(
+            existingProjectID: firstID,
+            candidateProjectID: secondID,
+            reason: "old evidence",
+            resolution: .keepSeparate
+        )
+        let unrelated = ProjectIdentityReview(
+            existingProjectID: otherExisting,
+            candidateProjectID: otherCandidate,
+            reason: "unrelated",
+            resolution: .keepSeparate
+        )
+        try store.apply(ProjectCatalogReconciliation(
+            entries: [entry(for: firstID, title: "Same Song"), entry(for: secondID, title: "Same Song copy")],
+            reviews: [oldReview, unrelated],
+            metadataMigrations: [:]
+        ))
+
+        let viewModel = ProjectIdentityReviewViewModel(reviews: [], catalogStore: store)
+        // New pending arrives with the ids in the opposite order.
+        let newReview = ProjectIdentityReview(
+            existingProjectID: secondID,
+            candidateProjectID: firstID,
+            reason: "new evidence"
+        )
+        viewModel.adopt(newReview)
+        XCTAssertEqual(
+            viewModel.reviews.filter {
+                Set([$0.existingProjectID, $0.candidateProjectID]) == Set([firstID, secondID])
+            }.count,
+            1
+        )
+
+        XCTAssertTrue(viewModel.resolve(newReview.id, as: .link))
+
+        let stored = try store.loadReviews()
+        let pairMatches = stored.filter {
+            Set([$0.existingProjectID, $0.candidateProjectID]) == Set([firstID, secondID])
+        }
+        XCTAssertEqual(pairMatches.count, 1, "reversed pair must collapse to one row, got \(stored)")
+        XCTAssertEqual(pairMatches.first?.id, newReview.id)
+        XCTAssertEqual(pairMatches.first?.resolution, .link)
+        XCTAssertNotNil(stored.first { $0.id == unrelated.id })
+
+        let conflictRoot = UUID()
+        let conflictLocation = ProjectLocation(rootID: conflictRoot, relativePath: "Same Folder", kind: .active)
+        let conflictEvidence = ProjectIdentityEvidence(
+            folderName: "Same Folder",
+            cubaseFiles: [ProjectFileIdentity(name: "Same.cpr", byteCount: 10, modifiedAt: .distantPast)]
+        )
+        func conflictEntry(for id: ProjectID) -> ProjectCatalogEntry {
+            ProjectCatalogEntry(
+                record: ProjectRecord(id: id, canonicalTitle: "Same Folder", locations: [conflictLocation]),
+                evidence: conflictEvidence
+            )
+        }
+        let observation = ProjectCatalogObservation(
+            canonicalTitle: "Same Folder",
+            location: conflictLocation,
+            evidence: conflictEvidence
+        )
+        let latestResult = try ProjectCatalogReconciler().reconcile(
+            existing: [conflictEntry(for: firstID), conflictEntry(for: secondID)],
+            existingReviews: stored,
+            observations: [observation]
+        )
+        XCTAssertEqual(latestResult.entries.count, 1)
+        XCTAssertEqual(latestResult.entries.first?.record.id, secondID)
+    }
+
+    func testAdoptedPendingResolveFailureKeepsPendingAndAllowsRetry() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-identity-retry-\(UUID().uuidString).sqlite")
+        defer { removeDatabase(at: databaseURL) }
+        let store = try SQLiteProjectCatalogStore(databaseURL: databaseURL)
+        let existingID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!)
+        let candidateID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!)
+        let rootID = UUID(uuidString: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")!
+        let oldReview = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "old evidence",
+            resolution: .keepSeparate
+        )
+        try store.apply(ProjectCatalogReconciliation(
+            entries: [ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: existingID,
+                    canonicalTitle: "Same Song",
+                    locations: [ProjectLocation(rootID: rootID, relativePath: "Same Song", kind: .active)]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: "Same Song", cubaseFiles: [])
+            )],
+            reviews: [oldReview],
+            metadataMigrations: [:]
+        ))
+
+        let viewModel = ProjectIdentityReviewViewModel(reviews: [], catalogStore: store)
+        let newReview = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "new evidence"
+        )
+        viewModel.adopt(newReview)
+        viewModel.persistenceOverride = { _, _ in throw NSError(domain: "nmh-test", code: 1) }
+
+        XCTAssertFalse(viewModel.resolve(newReview.id, as: .link))
+        XCTAssertEqual(viewModel.pendingReviews.map(\.id), [newReview.id])
+        let storedAfterFailure = try store.loadReviews()
+        XCTAssertEqual(storedAfterFailure.count, 1)
+        XCTAssertEqual(storedAfterFailure.first?.id, oldReview.id)
+        XCTAssertEqual(storedAfterFailure.first?.resolution, .keepSeparate)
+
+        viewModel.persistenceOverride = nil
+        XCTAssertTrue(viewModel.resolve(newReview.id, as: .link))
+        let storedAfterRetry = try store.loadReviews()
+        XCTAssertEqual(storedAfterRetry.count, 1)
+        XCTAssertEqual(storedAfterRetry.first?.id, newReview.id)
+        XCTAssertEqual(storedAfterRetry.first?.resolution, .link)
+    }
+
     private func seedDuplicateCatalogEntries(on fixture: FriendsWorkflowFixture, projectIDs: [ProjectID]) throws {
         let cpr = fixture.project.appendingPathComponent("Friends Workflow Song.cpr")
         let attributes = try FileManager.default.attributesOfItem(atPath: cpr.path)

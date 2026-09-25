@@ -85,6 +85,40 @@ final class ProjectVaultStateMachineTests: XCTestCase {
         }
     }
 
+    func testActiveRemovalPermitsOnlyVerifiedLocalAndSyncedToProvider() throws {
+        let durabilities: [VaultDurability] = [.verifiedLocal, .syncedToProvider, .independentlyBackedUp]
+        for durability in durabilities {
+            for manifestVerified in [false, true] {
+                for metadataPersisted in [false, true] {
+                    let evidence = VaultRemovalEvidence(
+                        manifestVerified: manifestVerified,
+                        archiveDurability: durability,
+                        metadataPersisted: metadataPersisted
+                    )
+                    let expected = manifestVerified && metadataPersisted
+                        && (durability == .verifiedLocal || durability == .syncedToProvider)
+                    XCTAssertEqual(
+                        evidence.permitsActiveCopyRemoval,
+                        expected,
+                        "durability=\(durability) manifest=\(manifestVerified) metadata=\(metadataPersisted)"
+                    )
+                    if expected {
+                        XCTAssertEqual(
+                            try machine.applying(.beginRemovingActiveCopy(evidence), to: .archiveVerified),
+                            .removingActiveCopy,
+                            "durability=\(durability)"
+                        )
+                    } else {
+                        XCTAssertThrowsError(
+                            try machine.applying(.beginRemovingActiveCopy(evidence), to: .archiveVerified),
+                            "durability=\(durability) manifest=\(manifestVerified) metadata=\(metadataPersisted) must stay fail-closed"
+                        ) { XCTAssertEqual($0 as? VaultTransitionError, .removalNotProven) }
+                    }
+                }
+            }
+        }
+    }
+
     func testNoStateCanAdvanceDirectlyToDestructiveOrPromotionStates() {
         let guardedDestinations: Set<VaultTransferState> = [
             .removingActiveCopy, .promotingArchiveGeneration, .promotingActiveCopy

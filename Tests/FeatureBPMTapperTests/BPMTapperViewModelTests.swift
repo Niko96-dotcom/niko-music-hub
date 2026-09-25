@@ -1,5 +1,5 @@
-import FeatureBPMTapper
 import XCTest
+@testable import FeatureBPMTapper
 
 @MainActor
 final class BPMTapperViewModelTests: XCTestCase {
@@ -71,5 +71,52 @@ final class BPMTapperViewModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), previousBPM, accuracy: 0.001)
         XCTAssertEqual(viewModel.statusText, "Uneven tap ignored")
         XCTAssertEqual(viewModel.statusKind, .outlierIgnored)
+    }
+
+    func testDefaultRecordTapUsesInjectedSleepInclusiveClockForPauseReset() {
+        let viewModel = BPMTapperViewModel()
+        var now: TimeInterval = 100.0
+        viewModel.setMonotonicNowForTesting { now }
+
+        viewModel.recordTap()
+        now = 100.5
+        viewModel.recordTap()
+        XCTAssertEqual(viewModel.tapCount, 2)
+
+        // Sleep-inclusive gap longer than the 2.5s pause threshold (for
+        // example, lid closed) must start a fresh run without sleeping host.
+        now = 104.0
+        viewModel.recordTap()
+
+        XCTAssertNil(viewModel.rawBPM)
+        XCTAssertEqual(viewModel.tapCount, 1)
+        XCTAssertEqual(viewModel.statusKind, .longPauseReset)
+    }
+
+    func testSleepInclusiveNowIsFiniteAndMonotonic() {
+        let first = BPMTapperViewModel.sleepInclusiveNow()
+        let second = BPMTapperViewModel.sleepInclusiveNow()
+        XCTAssertTrue(first.isFinite)
+        XCTAssertTrue(second.isFinite)
+        XCTAssertGreaterThanOrEqual(second, first)
+    }
+
+    func testNonFiniteAndBackwardTapsLeaveRunUnchanged() throws {
+        let viewModel = BPMTapperViewModel()
+        viewModel.recordTap(at: 0.0)
+        viewModel.recordTap(at: 0.5)
+        viewModel.recordTap(at: 1.0)
+        let bpm = try XCTUnwrap(viewModel.rawBPM)
+        let count = viewModel.tapCount
+
+        for bad in [Double.nan, Double.infinity, -Double.infinity, 0.2] {
+            viewModel.recordTap(at: bad)
+            XCTAssertEqual(viewModel.tapCount, count)
+            XCTAssertEqual(viewModel.rawBPM, bpm)
+        }
+
+        viewModel.recordTap(at: 1.5)
+        XCTAssertEqual(viewModel.tapCount, count + 1)
+        XCTAssertEqual(try XCTUnwrap(viewModel.rawBPM), 120.0, accuracy: 0.001)
     }
 }

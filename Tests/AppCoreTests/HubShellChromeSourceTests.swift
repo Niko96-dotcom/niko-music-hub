@@ -183,6 +183,55 @@ final class HubShellChromeSourceTests: XCTestCase {
         )
     }
 
+    func testInboxToggleLabelsFollowUserIntent() throws {
+        let titleBar = try shellSource("HubShellTitleBarControls.swift")
+        let menu = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubViewCommands.swift")
+
+        // Labels follow intent (`inboxUserWantsVisible`), not the width-derived
+        // state: the toggle flips intent, so an effective-state label would offer
+        // "Show" while intent is on and switch intent off when narrow.
+        XCTAssertTrue(titleBar.contains("inboxUserWantsVisible ? \"Hide output inbox\""))
+        XCTAssertTrue(menu.contains("inboxUserWantsVisible ? \"Hide Output Inbox\""))
+        XCTAssertFalse(titleBar.contains("showOutputInbox ? \"Hide output inbox\""))
+        XCTAssertFalse(menu.contains("showOutputInbox ? \"Hide Output Inbox\""))
+        XCTAssertTrue(titleBar.contains("toggleOutputInbox()"))
+        XCTAssertTrue(menu.contains("toggleOutputInbox()"))
+        // Only the auto-hidden case (intent on, column collapsed) gets an explanation.
+        XCTAssertTrue(titleBar.contains("hidden while the window is narrow"))
+
+        let session = try SourceTestSupport.read("Sources/AppCore/Shell/HubShellSession.swift")
+        XCTAssertTrue(session.contains("setOutputInboxVisible(!inboxUserWantsVisible)"))
+    }
+
+    func testOutputInboxBPMAnalysisTracksInFlightItemsIndividually() throws {
+        let source = try shellSource("OutputInboxInspectorView.swift")
+
+        // Per-item in-flight set: concurrent analyses must not overwrite/clear
+        // each other's indicator, and duplicate same-item work is refused.
+        XCTAssertTrue(source.contains("analyzingItemIDs: Set<OutputInboxItem.ID>"))
+        XCTAssertTrue(source.contains("analyzingItemIDs.contains(item.id)"))
+        XCTAssertTrue(source.contains("analyzingItemIDs.insert(item.id)"))
+        XCTAssertTrue(source.contains("analyzingItemIDs.remove(itemID)"))
+        XCTAssertFalse(source.contains("analyzingItemID = item.id"))
+        XCTAssertFalse(source.contains("analyzingItemID = nil"))
+
+        // UI updates stay MainActor without redundant detached/MainActor.run nesting.
+        XCTAssertTrue(source.contains("Task { @MainActor in"))
+        XCTAssertTrue(source.contains("Task.detached(priority: .utility)"))
+        XCTAssertFalse(source.contains("MainActor.run"))
+
+        // The BPM write must be an atomic store-side merge, never a UI-snapshot
+        // read + `updateItem` upsert: the snapshot may be stale (trimmed row,
+        // newer status/metadata) and `updateItem` re-adds unknown ids.
+        // Behavioral proof lives in OutputInboxStoreTests (patchBPMMetadata).
+        XCTAssertTrue(source.contains("patchBPMMetadata("))
+        XCTAssertTrue(source.contains("expectedFileURL:"))
+        XCTAssertTrue(source.contains("bpmMetadata"))
+        XCTAssertFalse(source.contains("items.first(where:"), "inbox snapshot must not be write authority for BPM")
+        XCTAssertFalse(source.contains(".updateItem("), "BPM path must not upsert a stale row")
+        XCTAssertFalse(source.contains("var updated = item"))
+    }
+
     private func shellSource(_ filename: String) throws -> String {
         try String(
             contentsOfFile: "Sources/NikoMusicHub/AppShell/\(filename)",

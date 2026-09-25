@@ -13,6 +13,12 @@ extension LiveProjectVaultRuntime {
               transfer.id == requested.id, transfer.state == .recoveryRequired else {
             throw ProjectVaultRuntimeError.unavailable
         }
+        // Fail closed Keep Local pin before any materialization or before
+        // recovery sets the partial Active folder aside. Reuses the shared
+        // restore helper so ordinary, linked, retry, and recovery paths pin
+        // the same validated destination; a settings-write failure aborts
+        // before any bytes move and never reports an unpinned restore.
+        try prePersistRestoreProtection(projectID: transfer.projectID, relativePath: transfer.sourceURL.lastPathComponent, activeRoot: configuration.active.url)
         let activity = activityProbe
         let store = settingsStore
         let provider = archiveProvider(root: configuration.archive.url)
@@ -41,9 +47,16 @@ extension LiveProjectVaultRuntime {
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
-        return try await restore.restoreAndOpen(
-            projectID: verified.projectID, destinationRelativePath: verified.sourceURL.lastPathComponent
-        )
+        do {
+            let record = try await restore.restoreAndOpen(
+                projectID: verified.projectID, destinationRelativePath: verified.sourceURL.lastPathComponent
+            )
+            persistRestoredKeepLocal(projectID: record.projectID, destinationURL: record.destinationURL)
+            return record
+        } catch {
+            persistKeepLocalForVerifiedDestination(projectID: verified.projectID)
+            throw error
+        }
     }
 
     public func retry(snapshot: ProjectVaultRuntimeSnapshot) async throws -> ProjectVaultRuntimeSnapshot {

@@ -29,8 +29,14 @@ final class ArchivePreviewPlayer: ObservableObject {
     private let metadataRevisionLoader: MetadataRevisionLoader
 
     /// Shared hook/duration caches so list + detail don't re-scan the same mixdown.
+    /// Both are bounded FIFO maps: auditioning many distinct files evicts the
+    /// oldest-inserted entry instead of growing without bound. Lookups stay O(1);
+    /// eviction work happens only on insert, never on lookup.
+    internal static let metadataCacheLimit = 512
     private static var hookCache: [String: CachedTime] = [:]
     private static var durationCache: [String: CachedTime] = [:]
+    private static var hookInsertionOrder: [String] = []
+    private static var durationInsertionOrder: [String] = []
 
     private struct CachedTime {
         let modifiedAt: Date
@@ -48,12 +54,34 @@ final class ArchivePreviewPlayer: ObservableObject {
     static func clearMetadataCaches() {
         hookCache.removeAll()
         durationCache.removeAll()
+        hookInsertionOrder.removeAll()
+        durationInsertionOrder.removeAll()
     }
 
     static func invalidateMetadataCaches(for url: URL) {
         let key = url.standardizedFileURL.path
         hookCache.removeValue(forKey: key)
         durationCache.removeValue(forKey: key)
+        // Invalidations are rare (never on lookup); keep the order queues exact.
+        hookInsertionOrder.removeAll { $0 == key }
+        durationInsertionOrder.removeAll { $0 == key }
+    }
+
+    /// Test seams for the bounded-cache contract. Internal (not public product API):
+    /// they exercise cap, FIFO eviction, and revision validation without audio I/O.
+    internal static var cachedHookEntryCountForTests: Int { hookCache.count }
+    internal static var cachedDurationEntryCountForTests: Int { durationCache.count }
+    internal static func storeCachedHookForTests(_ value: Double, url: URL, modifiedAt: Date) {
+        store(value, for: url, modifiedAt: modifiedAt, in: &hookCache, order: &hookInsertionOrder)
+    }
+    internal static func storeCachedDurationForTests(_ value: Double, url: URL, modifiedAt: Date) {
+        store(value, for: url, modifiedAt: modifiedAt, in: &durationCache, order: &durationInsertionOrder)
+    }
+    internal static func cachedHookForTests(url: URL, modifiedAt: Date) -> Double? {
+        cachedValue(in: hookCache, url: url, modifiedAt: modifiedAt)
+    }
+    internal static func cachedDurationForTests(url: URL, modifiedAt: Date) -> Double? {
+        cachedValue(in: durationCache, url: url, modifiedAt: modifiedAt)
     }
 
     private static func cachedValue(
@@ -70,10 +98,18 @@ final class ArchivePreviewPlayer: ObservableObject {
         _ value: Double,
         for url: URL,
         modifiedAt: Date,
-        in cache: inout [String: CachedTime]
+        in cache: inout [String: CachedTime],
+        order: inout [String]
     ) {
         let key = url.standardizedFileURL.path
+        if cache[key] == nil {
+            order.append(key)
+        }
         cache[key] = CachedTime(modifiedAt: modifiedAt, value: value)
+        while cache.count > metadataCacheLimit, !order.isEmpty {
+            let oldest = order.removeFirst()
+            cache.removeValue(forKey: oldest)
+        }
     }
 
     /// A missing revision is intentionally not represented by a sentinel date. Treating an
@@ -342,10 +378,10 @@ final class ArchivePreviewPlayer: ObservableObject {
         guard !Task.isCancelled, activeURL == url else { return }
 
         if cachedDuration == nil, let loadedDuration {
-            Self.store(loadedDuration, for: url, modifiedAt: modifiedAt, in: &Self.durationCache)
+            Self.store(loadedDuration, for: url, modifiedAt: modifiedAt, in: &Self.durationCache, order: &Self.durationInsertionOrder)
         }
         if cachedHook == nil, let hook {
-            Self.store(hook, for: url, modifiedAt: modifiedAt, in: &Self.hookCache)
+            Self.store(hook, for: url, modifiedAt: modifiedAt, in: &Self.hookCache, order: &Self.hookInsertionOrder)
         }
         applyMetadata(
             duration: cachedDuration ?? loadedDuration,

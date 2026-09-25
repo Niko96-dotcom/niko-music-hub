@@ -228,26 +228,27 @@ enum MusicSearchMatcher {
     ) -> Bool {
         guard !needle.isEmpty else { return true }
         guard haystack.count >= needle.count else { return false }
-        // The upper bound already stops once the remaining haystack is shorter
-        // than the needle. Only starts at the first element can match, and a
-        // greedy match that runs out of haystack proves no later start can
-        // succeed (its match positions could only be later, leaving less room).
+        // Each start searches only its 2*needle.count window. A greedy match inside
+        // the window ends earliest for that start, so the minimum over starts is the
+        // true minimum window. Never return false for one over-bound or missing
+        // window: a later start can still succeed.
         for start in 0...(haystack.count - needle.count) {
             guard haystack[start] == needle[0] else { continue }
+            let windowEnd = min(haystack.count, start + bound)
+            guard windowEnd - start >= needle.count else { continue }
             var cursor = start
             var matched = true
             for element in needle {
-                while cursor < haystack.count, haystack[cursor] != element {
+                while cursor < windowEnd, haystack[cursor] != element {
                     cursor += 1
                 }
-                if cursor >= haystack.count {
+                if cursor >= windowEnd {
                     matched = false
                     break
                 }
                 cursor += 1
             }
-            if !matched { return false }
-            if cursor - start <= bound {
+            if matched {
                 return true
             }
         }

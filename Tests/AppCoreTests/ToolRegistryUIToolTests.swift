@@ -50,6 +50,42 @@ final class ToolRegistryUIToolTests: XCTestCase {
             ToolFeatureID("archive-browser")
         )
     }
+
+    func testUILaunchToolAppliesBeforeCompositionResolvesSelection() throws {
+        let app = try String(
+            contentsOfFile: "Sources/NikoMusicHub/NikoMusicHubApp.swift",
+            encoding: .utf8
+        )
+        let tool = try String(
+            contentsOfFile: "Sources/NikoMusicHub/AppShell/UILaunchTool.swift",
+            encoding: .utf8
+        )
+
+        // The `-ui-tool` bridge must run before the composition resolves the
+        // launch selection once in `NikoMusicHubApp.init`; anything later never
+        // takes effect (the shell only reads `selectedToolID` afterwards).
+        let apply = try XCTUnwrap(app.range(of: "UILaunchTool.applyFromLaunchArguments()"))
+        let make = try XCTUnwrap(app.range(of: "AppComposition.make()"))
+        XCTAssertLessThan(
+            apply.lowerBound,
+            make.lowerBound,
+            "UILaunchTool must apply -ui-tool before AppComposition.make() resolves selection"
+        )
+
+        // The late redundant mutation in `applicationWillFinishLaunching` is gone.
+        let delegateStart = try XCTUnwrap(app.range(of: "func applicationWillFinishLaunching"))
+        let delegateTail = String(app[delegateStart.lowerBound...])
+        let delegateEnd = delegateTail.range(of: "\n    func ")?.lowerBound ?? delegateTail.endIndex
+        XCTAssertFalse(
+            String(delegateTail[..<delegateEnd]).contains("UILaunchTool"),
+            "applicationWillFinishLaunching must not re-apply -ui-tool after composition"
+        )
+
+        // The bridge still maps `-ui-tool <id>` onto the environment seam the
+        // registry resolution reads (`ToolRegistry.initialToolID`).
+        XCTAssertTrue(tool.contains("firstIndex(of: \"-ui-tool\")"))
+        XCTAssertTrue(tool.contains("setenv(\"NIKO_MUSIC_HUB_UI_TOOL\""))
+    }
 }
 
 private struct StubLaunchFeature: ToolFeature {

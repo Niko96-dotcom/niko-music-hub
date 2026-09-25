@@ -3611,6 +3611,282 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isScanning)
     }
 
+    func testCanceledIncrementalCannotOverwriteNewerScan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubCanceledIncremental-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        // Only the first incremental batch parks; later batches pass through so a
+        // newer scan can complete while the canceled one is still held.
+        let hold = FirstIncrementalHoldGate()
+        let watcher = TestArchiveRootWatcher()
+        let diagnostics = CapturingDiagnostics()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore, diagnostics: diagnostics),
+            archiveRootWatcher: watcher,
+            scanOverride: nil,
+            incrementalRescanHold: { await hold.hold() }
+        )
+
+        try await waitUntil("launch scan applied") {
+            Set(viewModel.songs.map(\.displayTitle)) == ["Song A"] && !viewModel.isScanning
+        }
+
+        // Park the first incremental rescan at its hold with a real on-disk change.
+        let songB = root.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        let songBCPR = songB.appendingPathComponent("Song B.cpr")
+        FileManager.default.createFile(atPath: songBCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [songBCPR])
+        try await waitUntil("incremental rescan parked at its hold") { hold.isHeld }
+        XCTAssertTrue(viewModel.isScanning)
+
+        // Cancel preserves the old catalog and publishes the canceled status.
+        viewModel.cancelScan()
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusBaseMessage, CancelCopy.scanCanceled)
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A"])
+
+        // A newer incremental scan for a different change completes while the old one
+        // is still held. Its batch id is larger, so the earlier cancel cannot touch it.
+        let songC = root.appendingPathComponent("Song C", isDirectory: true)
+        try FileManager.default.createDirectory(at: songC, withIntermediateDirectories: true)
+        let songCCPR = songC.appendingPathComponent("Song C.cpr")
+        FileManager.default.createFile(atPath: songCCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [songCCPR])
+        try await waitUntil("newer incremental rescan applied") {
+            Set(viewModel.songs.map(\.displayTitle)) == ["Song A", "Song C"]
+        }
+        XCTAssertFalse(viewModel.isScanning)
+        let freshStatus = viewModel.statusMessage
+
+        // The stale canceled completion must not publish, fail, clear newer state,
+        // or drain canceled pending events.
+        hold.release()
+        try await waitUntil("stale incremental rescan finished") {
+            diagnostics.lines.filter { $0.contains("Incremental archive rescan finished") }.count >= 2
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(
+            Set(viewModel.songs.map(\.displayTitle)),
+            ["Song A", "Song C"],
+            "Stale canceled completion must not overwrite the newer scan's catalog"
+        )
+        XCTAssertEqual(viewModel.statusMessage, freshStatus)
+    }
+
+    func testCancelDuringIncrementalFilesystemUpdateStopsIO() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubCancelDuringIO-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let diagnostics = CapturingDiagnostics()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore, diagnostics: diagnostics),
+            archiveRootWatcher: watcher,
+            scanOverride: nil
+        )
+
+        try await waitUntil("launch scan applied") {
+            Set(viewModel.songs.map(\.displayTitle)) == ["Song A"] && !viewModel.isScanning
+        }
+
+        // Park the first batch inside the actual catalog filesystem operation
+        // (after the pre-scan hold window). Later batches pass through so a
+        // newer scan can complete while the canceled one is still held.
+        let operationHold = FirstIncrementalHoldGate()
+        defer { operationHold.release() }
+        var firstObservedCancelled: Bool?
+        let claimLock = NSLock()
+        var didClaimHold = false
+        viewModel.catalog.incrementalTestProbe.hold = {
+            let isFirst = claimLock.withLock {
+                if didClaimHold { return false }
+                didClaimHold = true
+                return true
+            }
+            guard isFirst else { return }
+            await operationHold.hold()
+            firstObservedCancelled = Task.isCancelled
+        }
+
+        let songB = root.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        let songBCPR = songB.appendingPathComponent("Song B.cpr")
+        FileManager.default.createFile(atPath: songBCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [songBCPR])
+        try await waitUntil("incremental operation parked in filesystem update") { operationHold.isHeld }
+        XCTAssertTrue(viewModel.isScanning)
+
+        viewModel.cancelScan()
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusBaseMessage, CancelCopy.scanCanceled)
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A"])
+
+        let songC = root.appendingPathComponent("Song C", isDirectory: true)
+        try FileManager.default.createDirectory(at: songC, withIntermediateDirectories: true)
+        let songCCPR = songC.appendingPathComponent("Song C.cpr")
+        FileManager.default.createFile(atPath: songCCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [songCCPR])
+        try await waitUntil("newer incremental rescan applied") {
+            Set(viewModel.songs.map(\.displayTitle)) == ["Song A", "Song C"]
+        }
+        XCTAssertFalse(viewModel.isScanning)
+        let freshStatus = viewModel.statusMessage
+
+        operationHold.release()
+        try await waitUntil("canceled operation observed cancellation") { firstObservedCancelled != nil }
+        XCTAssertEqual(firstObservedCancelled, true, "cancel must reach the in-flight filesystem operation")
+        try await waitUntil("stale incremental rescan finished") {
+            diagnostics.lines.filter { $0.contains("Incremental archive rescan finished") }.count >= 2
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(
+            Set(viewModel.songs.map(\.displayTitle)),
+            ["Song A", "Song C"],
+            "Late canceled completion must not apply its stale catalog"
+        )
+        XCTAssertEqual(viewModel.statusMessage, freshStatus)
+    }
+
+    func testRootReplacementDuringIncrementalFilesystemUpdateStopsIO() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let rootA = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubRootReplaceIO-A-\(UUID().uuidString)", isDirectory: true)
+        let rootB = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(".build", isDirectory: true)
+            .appendingPathComponent("NikoMusicHubRootReplaceIO-B-\(UUID().uuidString)", isDirectory: true)
+        let songA = rootA.appendingPathComponent("Song A", isDirectory: true)
+        let songR = rootB.appendingPathComponent("Song R", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: songR, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: songA.appendingPathComponent("Song A.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: songR.appendingPathComponent("Song R.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: rootA)
+            try? FileManager.default.removeItem(at: rootB)
+        }
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: rootA.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let watcher = TestArchiveRootWatcher()
+        let diagnostics = CapturingDiagnostics()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore, diagnostics: diagnostics),
+            archiveRootWatcher: watcher,
+            scanOverride: nil
+        )
+
+        try await waitUntil("launch scan applied") {
+            Set(viewModel.songs.map(\.displayTitle)) == ["Song A"] && !viewModel.isScanning
+        }
+
+        let operationHold = FirstIncrementalHoldGate()
+        defer { operationHold.release() }
+        var firstObservedCancelled: Bool?
+        let claimLock = NSLock()
+        var didClaimHold = false
+        viewModel.catalog.incrementalTestProbe.hold = {
+            let isFirst = claimLock.withLock {
+                if didClaimHold { return false }
+                didClaimHold = true
+                return true
+            }
+            guard isFirst else { return }
+            await operationHold.hold()
+            firstObservedCancelled = Task.isCancelled
+        }
+
+        let songB = rootA.appendingPathComponent("Song B", isDirectory: true)
+        try FileManager.default.createDirectory(at: songB, withIntermediateDirectories: true)
+        let songBCPR = songB.appendingPathComponent("Song B.cpr")
+        FileManager.default.createFile(atPath: songBCPR.path, contents: Data("fixture".utf8))
+        watcher.simulateFilesystemChange(paths: [songBCPR])
+        try await waitUntil("incremental operation parked in filesystem update") { operationHold.isHeld }
+        XCTAssertTrue(viewModel.isScanning)
+
+        viewModel.roots = [rootB]
+        XCTAssertFalse(viewModel.isScanning)
+
+        await viewModel.scan()
+        XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song R"])
+        XCTAssertFalse(viewModel.isScanning)
+
+        operationHold.release()
+        try await waitUntil("replaced operation observed cancellation") { firstObservedCancelled != nil }
+        XCTAssertEqual(firstObservedCancelled, true, "root replacement must reach the in-flight filesystem operation")
+        try await waitUntil("stale incremental rescan finished") {
+            diagnostics.lines.contains { $0.contains("Incremental archive rescan finished") }
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(
+            Set(viewModel.songs.map(\.displayTitle)),
+            ["Song R"],
+            "Late replaced completion must not apply its stale catalog"
+        )
+    }
+
     func testRevealInFinderAcceptsSymlinkedArchiveRoot() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
@@ -3914,6 +4190,30 @@ private func waitUntil(
             throw CancellationError()
         }
         try await Task.sleep(nanoseconds: 5_000_000)
+    }
+}
+
+/// Parks only the first incremental rescan at a gate; later batches pass through so
+/// a newer scan can complete while the canceled one is still held.
+private final class FirstIncrementalHoldGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    private let gate = ScanReleaseGate()
+
+    var isHeld: Bool { gate.isWaiting }
+
+    func hold() async {
+        let shouldWait = lock.withLock { () -> Bool in
+            calls += 1
+            return calls == 1
+        }
+        if shouldWait {
+            await gate.waitForRelease()
+        }
+    }
+
+    func release() {
+        gate.release()
     }
 }
 

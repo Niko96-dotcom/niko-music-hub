@@ -123,6 +123,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
     @Published var browseFilter: ArchiveBrowseFilter = []
     @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
+    /// Dismissed suggestion identities (`CollaboratorSuggestion.id` =
+    /// songID + collaboratorID) for the current scan. Dismissal hides a row
+    /// "until the next scan": immediate and debounced/async intelligence
+    /// refreshes filter these out at apply time, so a held older refresh can
+    /// never reinsert one. Cleared when a fresh scan starts or scan results
+    /// are cleared. Never persisted; per-instance only.
+    var dismissedCollaboratorSuggestionIDs: Set<String> = []
     @Published var pendingCollaboratorRemoval: Collaborator?
     @Published var duplicateSongHints: [DuplicateSongHint] = []
     @Published var missingAudioReport: MissingAudioReport?

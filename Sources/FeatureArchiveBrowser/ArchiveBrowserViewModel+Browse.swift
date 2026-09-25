@@ -23,6 +23,14 @@ extension ArchiveBrowserViewModel {
 
     func mutateCatalog(_ updates: () -> Void) {
         applyBrowseChange(shouldRefreshIntelligence: true, updates)
+        // Analytics stays on screen (a `switch` case, no re-appear), so a scan
+        // or status edit that lands while it is open must refresh the snapshot.
+        // Browse inputs (keystrokes, filters, sort) and selection go through
+        // other paths and stay cheap: no history read there. Outside analytics
+        // the snapshot stays lazy and is rebuilt on entry.
+        if viewMode == .analytics {
+            refreshAnalytics()
+        }
     }
 
     /// Debounced browse entry point for search text. Writes `searchQuery` directly (not via

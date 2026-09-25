@@ -38,7 +38,13 @@ BUNDLE_ID="$(nmh_bundle_id)"
 # prefix. BUILD_ID is VERSION+SHORT_COMMIT (short=12) in release-all.sh.
 # An explicit --expected-build-id must also equal that canonical value; a
 # mismatched override is rejected so it cannot mask a stale build.
-EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 "$EXPECTED_COMMIT" 2>/dev/null || printf '%s' "$EXPECTED_COMMIT" | cut -c1-12)"
+# Resolve --commit to its canonical full SHA, verifying it is an actual commit
+# object (not blob/tree/missing). Rejects unknown objects before evidence.
+EXPECTED_COMMIT="$(nmh_resolve_commit "$EXPECTED_COMMIT")" || exit 1
+EXPECTED_SHORT_COMMIT="$(git -C "$ROOT" rev-parse --short=12 --verify --end-of-options "$EXPECTED_COMMIT" 2>/dev/null)" || {
+  echo "unknown commit object: $EXPECTED_COMMIT" >&2
+  exit 1
+}
 CANONICAL_BUILD_ID="$VERSION+$EXPECTED_SHORT_COMMIT"
 if [[ -n "$EXPECTED_BUILD_ID_OVERRIDE" ]]; then
   [[ "$EXPECTED_BUILD_ID_OVERRIDE" == "$CANONICAL_BUILD_ID" ]] || { echo "explicit --expected-build-id '$EXPECTED_BUILD_ID_OVERRIDE' does not match canonical $CANONICAL_BUILD_ID for commit $EXPECTED_COMMIT" >&2; exit 1; }
