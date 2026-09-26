@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.3 - 2026-09-26
+
+- Open Stem Separation faster with a populated result history by loading offscreen result rows as they come into view, while preserving scrolling, file actions, and tab state.
+
 ## 1.7.2 - 2026-09-25
 
 - Make Project Vault restore retries respect Emergency Stop, preserve Keep Local during interrupted recovery, and require verified durability before removing an Active copy.

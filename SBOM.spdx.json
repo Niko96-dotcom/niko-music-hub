@@ -2,10 +2,10 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
-  "name": "Niko-Music-Hub-1.7.2-source",
-  "documentNamespace": "urn:uuid:8cc7474a-9fcf-42c5-a2db-00d3bc997681",
+  "name": "Niko-Music-Hub-1.7.3-source",
+  "documentNamespace": "urn:uuid:ce32af3d-d399-477e-9a92-40983f80db52",
   "creationInfo": {
-    "created": "2026-09-25T04:39:20Z",
+    "created": "2026-09-26T08:45:40Z",
     "creators": [
       "Tool: Niko Music Hub source-sale inventory"
     ]
@@ -14,7 +14,7 @@
     {
       "SPDXID": "SPDXRef-Package-NikoMusicHub",
       "name": "Niko Music Hub",
-      "versionInfo": "1.7.2",
+      "versionInfo": "1.7.3",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
       "licenseConcluded": "LicenseRef-Proprietary",
