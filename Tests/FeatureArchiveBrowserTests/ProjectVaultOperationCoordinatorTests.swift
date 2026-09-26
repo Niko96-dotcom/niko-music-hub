@@ -334,6 +334,113 @@ final class ProjectVaultOperationCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.isCapacityPostponed(songID: "s"))
     }
 
+    // MARK: - Missing folder validation fails closed
+
+    /// Absent `currentRootIDs` must fail without running the transfer. The
+    /// captured `rootIDs` are empty so a nil callback cannot fall back to an
+    /// empty-ID match; cleanup, failure accounting, log finish, and drain run
+    /// through the normal failure path.
+    func testMissingFolderValidationFailsClosedWithoutRunningTransfer() async throws {
+        let box = StatusBox()
+        let coordinator = ProjectVaultOperationCoordinator()
+        coordinator.currentStatusBase = { box.last }
+        coordinator.onStatus = {
+            box.last = $0
+            if let message = $0 { box.all.append(message) }
+        }
+        var didRefresh = false
+        coordinator.refreshPresentationForDispatch = { didRefresh = true }
+        coordinator.onActiveChanged = {}
+        coordinator.onLogStart = { _ in }
+        var finishes: [(label: String, succeeded: Bool, stopped: Bool)] = []
+        coordinator.onLogFinish = { label, succeeded, stopped in
+            finishes.append((label, succeeded, stopped))
+        }
+        var didDrain = false
+        coordinator.onQueueDrained = { didDrain = true }
+        XCTAssertNil(coordinator.currentRootIDs, "folder-check callback must be absent for this test")
+
+        var performRan = false
+        coordinator.enqueue(
+            songID: "a", projectKey: "key-a", songName: "A",
+            label: "Archive", startMessage: "Starting A",
+            rootIDs: [], trigger: .manual
+        ) {
+            performRan = true
+            return true
+        }
+        try await waitUntil { coordinator.isIdle && coordinator.activeOperation == nil }
+        XCTAssertTrue(didRefresh, "dispatch must refresh presentation before the folder check")
+        XCTAssertFalse(performRan, "no transfer may run without folder validation")
+        XCTAssertEqual(coordinator.queueFailures, ["A"])
+        XCTAssertTrue(coordinator.busySongIDs.isEmpty)
+        XCTAssertTrue(coordinator.pendingOperations.isEmpty)
+        XCTAssertNil(coordinator.queueTask)
+        XCTAssertEqual(finishes.count, 1)
+        XCTAssertEqual(finishes.first?.succeeded, false)
+        XCTAssertEqual(finishes.first?.stopped, false)
+        XCTAssertTrue(didDrain, "drain must run after the failed dispatch")
+        XCTAssertTrue(
+            box.all.contains(where: { $0.contains("folder validation was unavailable") }),
+            "status must explain unavailable folder validation, got: \(box.all)"
+        )
+    }
+
+    /// Removing the folder-check callback while a second request waits behind
+    /// a gated first operation must fail only the waiting request: the gated
+    /// operation already passed validation and completes, the waiter never
+    /// performs and fails closed through normal advance/drain.
+    func testRemovedFolderValidationFailsWaitingRequestBehindGatedOperation() async throws {
+        let (coordinator, box) = makeTrackedCoordinator(rootIDs: [nil, nil])
+        let gateA = Gate()
+        defer { Task { await gateA.open() } }
+        var order: [String] = []
+        var finishes: [(label: String, succeeded: Bool, stopped: Bool)] = []
+        coordinator.onLogFinish = { label, succeeded, stopped in
+            finishes.append((label, succeeded, stopped))
+        }
+        var didDrain = false
+        coordinator.onQueueDrained = { didDrain = true }
+
+        coordinator.enqueue(
+            songID: "a", projectKey: "key-a", songName: "A",
+            label: "Archive A", startMessage: "Starting A",
+            rootIDs: [nil, nil], trigger: .manual
+        ) {
+            await gateA.enterAndWait()
+            order.append("a")
+            return true
+        }
+        coordinator.enqueue(
+            songID: "b", projectKey: "key-b", songName: "B",
+            label: "Archive B", startMessage: "Starting B",
+            rootIDs: [nil, nil], trigger: .manual
+        ) {
+            order.append("b")
+            return true
+        }
+
+        // The first operation is already inside `perform`, so it passed the
+        // folder check before the callback disappears.
+        try await waitForEntry(gateA)
+        XCTAssertEqual(coordinator.pendingOperations.map(\.songID), ["b"])
+        coordinator.currentRootIDs = nil
+        await gateA.open()
+        try await waitUntil { coordinator.isIdle && coordinator.activeOperation == nil }
+        XCTAssertEqual(order, ["a"], "waiting request must never perform after validation disappears")
+        XCTAssertEqual(coordinator.queueFailures, ["B"])
+        XCTAssertTrue(coordinator.pendingOperations.isEmpty)
+        XCTAssertTrue(coordinator.busySongIDs.isEmpty)
+        XCTAssertNil(coordinator.queueTask)
+        XCTAssertTrue(didDrain, "drain must run after the queue advances past the failed waiter")
+        XCTAssertEqual(finishes.map(\.label), ["Archive A", "Archive B"])
+        XCTAssertEqual(finishes.map(\.succeeded), [true, false])
+        XCTAssertTrue(
+            box.all.contains(where: { $0.contains("folder validation was unavailable") }),
+            "status must explain unavailable folder validation, got: \(box.all)"
+        )
+    }
+
     // MARK: - Lifetime
 
     func testTeardownCancelsDelayedRetry() async throws {

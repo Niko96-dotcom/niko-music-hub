@@ -65,7 +65,12 @@ final class ProjectVaultOperationCoordinator: ObservableObject {
     var onStatus: (@MainActor (String?) -> Void)?
     /// Current footer base for post-operation per-song copies.
     var currentStatusBase: (@MainActor () -> String?)?
-    /// Fresh root IDs for dispatch-time revalidation.
+    /// Fresh root IDs for dispatch-time revalidation. Required for dispatch:
+    /// the queue fails an operation closed when this callback is missing. It
+    /// stays optional only so standalone/lifetime tests can construct the
+    /// coordinator without view-model wiring; the real app always installs it
+    /// (`ArchiveBrowserViewModel` wires it), and presentation hooks below may
+    /// remain optional.
     var currentRootIDs: (@MainActor () -> [UUID?])?
     /// Refresh the narrow presentation context before dispatch.
     var refreshPresentationForDispatch: (@MainActor () -> Void)?
@@ -166,11 +171,16 @@ final class ProjectVaultOperationCoordinator: ObservableObject {
     private func run(_ operation: QueuedOperation) async {
         refreshPresentationForDispatch?()
         let succeeded: Bool
-        if let currentRootIDs, operation.rootIDs != currentRootIDs() {
-            onStatus?("Queued request cancelled because the Project Vault folders changed.")
-            succeeded = false
+        if let currentRootIDs {
+            if operation.rootIDs != currentRootIDs() {
+                onStatus?("Queued request cancelled because the Project Vault folders changed.")
+                succeeded = false
+            } else {
+                succeeded = await operation.perform()
+            }
         } else {
-            succeeded = await operation.perform()
+            onStatus?("Queued request cancelled because Project Vault folder validation was unavailable. No project files were changed.")
+            succeeded = false
         }
         let wasStopped = Task.isCancelled || stopRequested
         if wasStopped {
