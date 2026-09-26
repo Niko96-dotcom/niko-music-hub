@@ -37,8 +37,11 @@ public struct ToolOutputShelf: View {
             if items.isEmpty {
                 HubListEmpty(emptyText)
             } else {
-                ForEach(items) { item in
-                    row(item)
+                // Defer offscreen results until they enter the page's scroll viewport.
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(items) { item in
+                        row(item)
+                    }
                 }
             }
         }
