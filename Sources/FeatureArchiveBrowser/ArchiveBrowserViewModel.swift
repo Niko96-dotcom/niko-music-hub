@@ -145,12 +145,26 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Songs whose stored details are corrupt: edits are paused and Repair
     /// Song Details is offered (mirrors the catalog's per-song gate).
     @Published var metadataRepairSongIDs: Set<String> = []
-    @Published var projectVaultBusySongIDs: Set<String> = []
-    @Published var projectVaultPendingOperations: [ProjectVaultQueuedOperation] = []
-    @Published var projectVaultActiveOperation: ProjectVaultQueuedOperation? {
-        didSet { publishShellJobStatus() }
-    }
-    @Published var projectVaultOperationMessages: [String: String] = [:]
+    /// Single owner for Vault transfer queue/retry accounting. All mutations
+    /// go through `vaultOperations`; these computed peers preserve read access
+    /// for existing views/tests with no duplicate stored state. The view model
+    /// re-emits `objectWillChange` when the coordinator publishes so SwiftUI
+    /// updates with no UI edits.
+    let vaultOperations = ProjectVaultOperationCoordinator()
+    var projectVaultBusySongIDs: Set<String> { vaultOperations.busySongIDs }
+    var projectVaultPendingOperations: [ProjectVaultOperationCoordinator.QueuedOperation] { vaultOperations.pendingOperations }
+    var projectVaultActiveOperation: ProjectVaultOperationCoordinator.QueuedOperation? { vaultOperations.activeOperation }
+    var projectVaultOperationMessages: [String: String] { vaultOperations.operationMessages }
+    var projectVaultQueueFailures: [String] { vaultOperations.queueFailures }
+    var projectVaultQueueBatchCount: Int { vaultOperations.queueBatchCount }
+    var vaultQueueStoppedIDsForBatch: Set<String> { vaultOperations.stoppedIDsForBatch }
+    var vaultQueueCanceledIDsForBatch: Set<String> { vaultOperations.canceledIDsForBatch }
+    var vaultQueueStoppedRequestCountForBatch: Int { vaultOperations.stoppedRequestCountForBatch }
+    var vaultQueueCanceledRequestCountForBatch: Int { vaultOperations.canceledRequestCountForBatch }
+    var projectVaultRetryTasks: [String: Task<Void, Never>] { vaultOperations.retryTasks }
+    var projectVaultRetryAttemptCounts: [String: Int] { vaultOperations.retryAttemptCounts }
+    var projectVaultCapacityPostponedSongIDs: Set<String> { vaultOperations.capacityPostponedSongIDs }
+    var projectVaultQueueTask: Task<Void, Never>? { vaultOperations.queueTask }
     @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
     @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
     var boundArchiveCaptureSongID: String?
@@ -209,27 +223,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         get { injectedWorkflowUndoManager ?? boundWindowUndoManager ?? ownedWorkflowUndoManager }
         set { injectedWorkflowUndoManager = newValue }
     }
-    var projectVaultQueueTask: Task<Void, Never>?
-    var projectVaultStopRequested = false
-    var projectVaultQueueFailures: [String] = []
-    var projectVaultQueueBatchCount = 0
-    /// P2 batch-stop truth: per-batch set of songIDs whose operation was
-    /// interrupted via Stop Transfer / task cancellation. Per-instance storage
-    /// (reset with the batch); stable songID binding, never titles, so an
-    /// unrelated same-title song never pollutes the count.
-    var vaultQueueStoppedIDsForBatch: Set<String> = []
-    /// P2 batch-cancel truth: per-batch set of songIDs whose queued operation
-    /// was cancelled before execution (explicit queue cancel or Undo revocation).
-    /// Per-instance storage (reset with the batch); stable songID binding, never
-    /// titles. A cancelled item never completed, so the footer computes completed
-    /// as total minus failures minus cancelled.
-    var vaultQueueCanceledIDsForBatch: Set<String> = []
-    /// P2 REQUEST-69: per-batch REQUEST counts. The ID sets above collapse
-    /// repeats (cancel B, requeue B, cancel B keeps one songID) while every
-    /// enqueue bumps `projectVaultQueueBatchCount`; footers must count requests,
-    /// not distinct songs. Stable songIDs stay right for per-song messages.
-    var vaultQueueStoppedRequestCountForBatch = 0
-    var vaultQueueCanceledRequestCountForBatch = 0
+    var vaultOperationsCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -241,9 +235,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// bound-authorization capture so settings/roots/source changes can be
     /// applied while a confirmation is still in flight.
     var projectVaultAuthCaptureProbe: (@Sendable () async -> Void)?
-    /// Bounded Done-retry delay. Production waits 60 seconds between attempts
-    /// (at most 3); tests shorten it to exercise the same-auth retry path.
-    var projectVaultDoneRetryDelay: Duration = .seconds(60)
     /// Per-song Project Vault card state prepared when catalog, snapshot, or
     /// settings inputs change. `projectVaultPresentation(for:)` is deliberately
     /// a dictionary lookup so list and board re-renders stay main-thread cheap.
@@ -257,17 +248,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// map so changing the archived-project visibility toggle can rebuild the catalog
     /// without another scan or Dropbox round trip.
     var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
-    var projectVaultRetryTasks: [String: Task<Void, Never>] = [:]
-    var projectVaultRetryAttemptCounts: [String: Int] = [:]
-    /// Done song IDs already postponed for non-retryable destination capacity.
-    /// The automatic Done path must not re-enqueue them on a later snapshots
-    /// refresh (launch recovery, settings changes, the recovery timer):
-    /// without this, a full destination is re-attempted once per refresh after
-    /// every rejection. Deliberate `archiveInProjectVault` calls bypass this
-    /// gate; success, explicit confirmation/cancel/undo
-    /// (`cancelDoneArchiveRetry`), cancel-all, and a newly persisted transfer
-    /// release it.
-    var projectVaultCapacityPostponedSongIDs: Set<String> = []
     var projectVaultRecoveryTask: Task<Void, Never>?
     var projectVaultRecoveryDeadline: Date?
     var projectVaultLastRecoveryAttemptAt: Date?
@@ -401,6 +381,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
         )
         workflowUndoTarget.viewModel = self
+        wireVaultOperationCoordinator()
         loadRootsFromSettings()
         attachNavigationHistory(context.navigationHistory)
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
@@ -417,17 +398,59 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    /// Wire the single operation owner: forward its publishes into this
+    /// observable object (views keep reading the view-model peers with no UI
+    /// edits) and inject the narrow vault callbacks. All captures are weak;
+    /// the coordinator never retains this view model.
+    private func wireVaultOperationCoordinator() {
+        vaultOperationsCancellable = vaultOperations.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        vaultOperations.onStatus = { [weak self] message in
+            self?.setProjectVaultStatusMessage(message)
+        }
+        vaultOperations.currentStatusBase = { [weak self] in
+            self?.statusBaseMessage
+        }
+        vaultOperations.currentRootIDs = { [weak self] in
+            self?.vaultQueueRootIDs ?? []
+        }
+        vaultOperations.refreshPresentationForDispatch = { [weak self] in
+            self?.refreshProjectVaultPresentationContext()
+        }
+        vaultOperations.onActiveChanged = { [weak self] in
+            self?.publishShellJobStatus()
+        }
+        vaultOperations.onLogStart = { [weak self] label in
+            self?.diagnostics.scoped(to: .vault).log(.info, "Vault operation started (label=\(label))")
+        }
+        vaultOperations.onLogFinish = { [weak self] label, succeeded, stopped in
+            self?.diagnostics.scoped(to: .vault).log(
+                succeeded && !stopped ? .info : .error,
+                "Vault operation finished (label=\(label), succeeded=\(succeeded), stopped=\(stopped))"
+            )
+        }
+        vaultOperations.onQueueDrained = { [weak self] in
+            await self?.scheduleProjectVaultRecovery()
+        }
+    }
+
     deinit {
+        // Lifetime retry/queue cancellation is owned by
+        // `ProjectVaultOperationCoordinator.deinit`, which cancels its own
+        // Sendable task handles directly (`Task.cancel()` is thread-safe, so
+        // no actor-isolated call is needed here). Releasing this view model
+        // releases the coordinator, which cancels any sleeping retry and the
+        // running queue task so no callback fires after the owner is gone.
         projectVaultAuthCaptureTask?.cancel()
         projectVaultRecoveryTask?.cancel()
-        projectVaultQueueTask?.cancel()
     }
 
     // MARK: - Helpers
 
     /// Mirrors scan and Vault-transfer activity into the shell job status center;
-    /// driven by the `isScanning` / `projectVaultActiveOperation` observers.
-    private func publishShellJobStatus() {
+    /// driven by the `isScanning` observer and the operation owner's
+    /// `onActiveChanged` hook (same timing as the former active-operation didSet).
+    func publishShellJobStatus() {
         if isScanning {
             jobStatusCenter.setExtraJob(
                 sourceID: ShellJobExtraSourceID.archiveScan,

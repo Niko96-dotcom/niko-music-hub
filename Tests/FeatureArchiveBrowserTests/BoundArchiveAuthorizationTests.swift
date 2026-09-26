@@ -240,7 +240,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         defer { fixture.cleanup() }
         let runtime = DeterministicBoundVaultRuntime()
         let viewModel = fixture.viewModel(runtime: runtime)
-        viewModel.projectVaultDoneRetryDelay = .milliseconds(20)
+        viewModel.vaultOperations.doneRetryDelay = .milliseconds(20)
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
@@ -333,7 +333,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         _ = try fixture.addSong(named: "Second Project", extension: "cpr")
         let runtime = DeterministicBoundVaultRuntime()
         let viewModel = fixture.viewModel(runtime: runtime)
-        viewModel.projectVaultDoneRetryDelay = .milliseconds(200)
+        viewModel.vaultOperations.doneRetryDelay = .milliseconds(200)
         await viewModel.scan()
         let first = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
@@ -512,7 +512,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         defer { fixture.cleanup() }
         let runtime = DeterministicBoundVaultRuntime()
         let viewModel = fixture.viewModel(runtime: runtime)
-        viewModel.projectVaultDoneRetryDelay = .milliseconds(200)
+        viewModel.vaultOperations.doneRetryDelay = .milliseconds(200)
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         runtime.archiveAuthImpl = { _, _, _ in

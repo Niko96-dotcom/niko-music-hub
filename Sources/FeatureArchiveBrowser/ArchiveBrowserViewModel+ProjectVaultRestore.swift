@@ -145,7 +145,7 @@ extension ArchiveBrowserViewModel {
         let destination = Self.vaultCanonicalPath(restore.destinationURL)
         for key in Array(projectVaultOperationMessages.keys)
             where Self.vaultCanonicalPath(URL(fileURLWithPath: key)) == destination {
-            projectVaultOperationMessages.removeValue(forKey: key)
+            vaultOperations.removeOperationMessage(forKey: key)
         }
     }
 }

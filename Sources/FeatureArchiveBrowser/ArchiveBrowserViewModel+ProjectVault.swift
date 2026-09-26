@@ -293,7 +293,7 @@ extension ArchiveBrowserViewModel {
             if transfer != nil {
                 // A persisted transfer releases any capacity postponement
                 // recorded for this song; recovery/manual review owns next steps.
-                projectVaultCapacityPostponedSongIDs.remove(song.id)
+                vaultOperations.releaseCapacityPostponement(for: song.id)
             }
             // A persisted transfer—terminal, in progress, or failed—is owned by
             // recovery/manual review. Never create another automatic generation
