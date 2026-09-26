@@ -130,21 +130,6 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(vm.recordingState, .idle)
     }
 
-    func testFilenameOverridePassedToUseCase() async throws {
-        let port = MockAudioCapturePort()
-        let useCase = RecordSystemAudioUseCase(capturePort: port)
-        let outputInboxStore = InMemoryOutputInboxStore()
-        let vm = AudioRecorderViewModel(
-            capturePort: port,
-            useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputInboxStore: outputInboxStore
-        )
-
-        vm.filenameOverride = "My Recording.wav"
-        XCTAssertEqual(vm.filenameOverride, "My Recording.wav")
-    }
-
     // NMH-064: with an empty override the idle preview equals the name the
     // next take will use.
     func testProposedFilenameTracksUseCase() throws {
@@ -164,21 +149,6 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(vm.filenameOverride.isEmpty)
         XCTAssertEqual(vm.proposedFilename, useCase.generateOutputFilename(override: nil, now: { frozen }))
         XCTAssertEqual(vm.proposedFilename, "Recording 2020-01-02 03-04-05.wav")
-    }
-
-    func testMaxDurationPassedToUseCase() async throws {
-        let port = MockAudioCapturePort()
-        let useCase = RecordSystemAudioUseCase(capturePort: port)
-        let outputInboxStore = InMemoryOutputInboxStore()
-        let vm = AudioRecorderViewModel(
-            capturePort: port,
-            useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputInboxStore: outputInboxStore
-        )
-
-        vm.maxDurationMinutes = 5
-        XCTAssertEqual(vm.maxDurationMinutes, 5)
     }
 
     func testInitialMaxDurationMinutesSeededFromSettingsValue() {

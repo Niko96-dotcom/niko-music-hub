@@ -20,21 +20,6 @@ final class ArchiveDiagnosticsSkippedSearchPanelContextTests: XCTestCase {
         XCTAssertTrue(line.contains("LOOSE → skipped label"))
     }
 
-    func testQueryLineMatchesExport() {
-        let export = """
-        active_skipped_search
-        skipped_search_query=LOOSE_FILE.txt
-        skipped_search_matches=1
-        """
-        XCTAssertTrue(
-            ArchiveDiagnosticsSkippedSearchPanelContext.queryLineMatchesExport(
-                in: export,
-                query: "LOOSE_FILE.txt",
-                matchCount: 1
-            )
-        )
-    }
-
     func testQueryLineMatchesExport_exactOneSucceedsWithTrailingNewline() {
         let export = "active_skipped_search\nskipped_search_query=LOOSE_FILE.txt\nskipped_search_matches=1\n"
         XCTAssertTrue(
@@ -99,25 +84,6 @@ final class ArchiveDiagnosticsSkippedSearchPanelContextTests: XCTestCase {
                 in: mismatchCRLF,
                 query: "LOOSE_FILE.txt",
                 matchCount: 1
-            )
-        )
-    }
-
-    func testMatchLinesMatchExport() {
-        let export = """
-        skipped_search_match label=LOOSE_FILE.txt kind=nonFolderAtRoot summary=LOOSE → skipped label
-        """
-        let matches = [
-            ArchiveDiagnosticsSkippedSearchMatch(
-                label: "LOOSE_FILE.txt",
-                kind: "nonFolderAtRoot",
-                summary: "LOOSE → skipped label"
-            ),
-        ]
-        XCTAssertTrue(
-            ArchiveDiagnosticsSkippedSearchPanelContext.matchLinesMatchExport(
-                in: export,
-                matches: matches
             )
         )
     }

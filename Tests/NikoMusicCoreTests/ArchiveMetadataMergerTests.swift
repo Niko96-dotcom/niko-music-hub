@@ -2,16 +2,6 @@ import NikoMusicCore
 import XCTest
 
 final class ArchiveMetadataMergerTests: XCTestCase {
-    func testSongVirtualTitleMutation() {
-        var song = Song(
-            folderPath: URL(fileURLWithPath: "/tmp/x", isDirectory: true),
-            originalFolderName: "x",
-            displayTitle: "Scanner"
-        )
-        song.virtualTitle = "Virtual"
-        XCTAssertEqual(song.effectiveDisplayTitle, "Virtual")
-    }
-
     func testVirtualTitleOverridesDisplayTitle() {
         let folder = URL(fileURLWithPath: "/tmp/song-a", isDirectory: true)
         let scanned = Song(

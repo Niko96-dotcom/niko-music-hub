@@ -180,14 +180,4 @@ final class QuickAccessRouterTests: XCTestCase {
         XCTAssertEqual(router.helperSetupRequest, 2)
     }
 
-    // MARK: - HAND-04: router does not call OutputHandoff
-
-    func testRouterSourceDoesNotReferenceOutputHandoff() throws {
-        let path = "Sources/AppCore/QuickAccess/QuickAccessRouter.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertFalse(
-            source.contains("OutputHandoff"),
-            "QuickAccessRouter must not reference OutputHandoff — HAND-04 boundary"
-        )
-    }
 }

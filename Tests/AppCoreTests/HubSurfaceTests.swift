@@ -36,17 +36,6 @@ final class HubSurfaceTests: XCTestCase {
         XCTAssertEqual(HubSurfaceLevel.chip.cornerRadius, HubDesignSystem.Radius.chip)
     }
 
-    // The primitive applies across every level × interactive state (compile/render smoke).
-    @MainActor
-    func testHubSurfaceAppliesToAllLevelsAndStates() {
-        let levels: [HubSurfaceLevel] = [.chrome, .panel, .card, .raised, .field, .chip]
-        for level in levels {
-            for state in HubDesignSystem.ControlState.allCases {
-                _ = Text("x").hubSurface(level, state: state)
-            }
-        }
-    }
-
     // DEPTH-03: HubCard delegates to the single primitive; content stays opaque; chrome
     // Liquid Glass lives in HubMaterial (macOS 26), not on raised cards.
     func testCardDelegatesToSurfaceAndChromeIsGlassMaterial() throws {

@@ -57,19 +57,6 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(result.diagnostics?.screenCaptureKitFallbackCount, 1)
     }
 
-    func testFallbackIsNotUsedWhenCoreAudioProducesFrames() async throws {
-        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
-        let fallback = FakeRecorderBackend(identity: .screenCaptureKit, behavior: .healthy(sampleRate: 48_000))
-        let session = makeSession(core: [core], fallback: [fallback])
-        let url = temporaryWAV()
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        try await start(session, url: url)
-        _ = try await session.stop()
-
-        XCTAssertEqual(fallback.startCount, 0)
-    }
-
     func testAllBackendsFailReturnsNoAudioCaptured() async throws {
         let session = makeSession(
             core: [

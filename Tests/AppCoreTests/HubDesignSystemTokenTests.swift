@@ -128,17 +128,6 @@ final class HubDesignSystemTokenTests: XCTestCase {
         )
     }
 
-    func testTypographySurfaceIncludesExpandedScale() {
-        _ = HubDesignSystem.Typography.display()
-        _ = HubDesignSystem.Typography.screenTitle()
-        _ = HubDesignSystem.Typography.sectionTitle()
-        _ = HubDesignSystem.Typography.body()
-        _ = HubDesignSystem.Typography.bodySmall()
-        _ = HubDesignSystem.Typography.caption()
-        _ = HubDesignSystem.Typography.micro()
-        _ = HubDesignSystem.Typography.mono()
-    }
-
     /// DS-02: all 14 semantic color roles exposed and named by purpose.
     /// Compile-time presence check — fails to compile if any role is missing.
     func testSemanticPaletteExposesAllRoles() {

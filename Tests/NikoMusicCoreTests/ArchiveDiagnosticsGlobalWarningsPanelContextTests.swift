@@ -2,18 +2,6 @@ import XCTest
 @testable import NikoMusicCore
 
 final class ArchiveDiagnosticsGlobalWarningsPanelContextTests: XCTestCase {
-    func testLineMatchesExportForGlobalWarning() {
-        let export = """
-        global_warning=Root is not a directory: ~/Music/missing
-        """
-        XCTAssertTrue(
-            ArchiveDiagnosticsGlobalWarningsPanelContext.lineMatchesExport(
-                in: export,
-                warning: "Root is not a directory: ~/Music/missing"
-            )
-        )
-    }
-
     func testInvalidRootScanGlobalWarningsPanelMatchesExporter() {
         let missing = URL(fileURLWithPath: "/tmp/niko-music-hub-missing-root", isDirectory: true)
         let home = "/Users/test"

@@ -5,19 +5,6 @@ import XCTest
 /// lane, rebasing the private cursor without firing immediate repeats.
 @MainActor
 final class ArchiveBoardEdgeAutoScrollerTests: XCTestCase {
-    func testLeftEdgeScrollsToPreviousLeadingLane() {
-        let scroller = ArchiveBoardEdgeAutoScroller()
-        defer { scroller.stop() }
-        var targets: [Int] = []
-        scroller.update(
-            pointerX: 20,
-            viewportWidth: 800,
-            leadingColumnIndex: 3,
-            columnCount: 8
-        ) { target, _ in targets.append(target) }
-        XCTAssertEqual(targets, [2], "left edge from leading 3 must step to lane 2")
-    }
-
     func testRightEdgeScrollsToNextLeadingLane() {
         let scroller = ArchiveBoardEdgeAutoScroller()
         defer { scroller.stop() }

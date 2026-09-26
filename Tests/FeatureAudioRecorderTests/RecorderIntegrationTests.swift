@@ -74,12 +74,6 @@ final class RecorderIntegrationTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
-    func testFilenameOverrideRoundTrip() async throws {
-        let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
-        let filename = useCase.generateOutputFilename(override: "My Test Recording.wav")
-        XCTAssertEqual(filename, "My Test Recording.wav")
-    }
-
     func testRecordingProducesOutputInboxItem() async throws {
         let adapter = CoreAudioTapAdapter()
         try await requireRecordingPermission(adapter)

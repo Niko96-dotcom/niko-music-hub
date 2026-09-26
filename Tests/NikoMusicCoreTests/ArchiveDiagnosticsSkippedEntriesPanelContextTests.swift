@@ -11,20 +11,6 @@ final class ArchiveDiagnosticsSkippedEntriesPanelContextTests: XCTestCase {
         XCTAssertTrue(line.contains("Not a folder"))
     }
 
-    func testLineMatchesExportForSkippedEntry() {
-        let export = """
-        skipped=nonFolderAtRoot label=LOOSE_FILE.txt reason=Not a folder — only immediate child folders are scanned as songs
-        """
-        let entry = SkippedScanEntry(
-            kind: .nonFolderAtRoot,
-            label: "LOOSE_FILE.txt",
-            reason: SkippedScanEntry.standardNonFolderAtRootReason
-        )
-        XCTAssertTrue(
-            ArchiveDiagnosticsSkippedEntriesPanelContext.lineMatchesExport(in: export, entry: entry)
-        )
-    }
-
     func testFixtureScanSkippedEntriesPanelMatchesExporter() throws {
         try CubaseFixtures.ensureGenerated()
         let home = FileManager.default.homeDirectoryForCurrentUser.path

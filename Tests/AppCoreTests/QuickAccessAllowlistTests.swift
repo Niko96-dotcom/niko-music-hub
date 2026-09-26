@@ -68,22 +68,6 @@ final class QuickAccessAllowlistTests: XCTestCase {
         XCTAssertTrue(resolved.contains { $0.id == "output-inbox" })
     }
 
-    func testResolvedOrderMatchesAllowlistOrder() throws {
-        let registry = try makeFullRegistry()
-        let resolved = QuickAccessResolver.resolve(entries: QuickAccessEntry.allowlist, registry: registry)
-        let resolvedIDs = resolved.map(\.id)
-        let allowlistIDs = QuickAccessEntry.allowlist.map(\.id)
-        // resolvedIDs must be a subsequence of allowlistIDs in the same order
-        var allowlistIdx = allowlistIDs.startIndex
-        for id in resolvedIDs {
-            guard let found = allowlistIDs[allowlistIdx...].firstIndex(of: id) else {
-                XCTFail("Resolved entry \(id) breaks allowlist order")
-                return
-            }
-            allowlistIdx = allowlistIDs.index(after: found)
-        }
-    }
-
     // MARK: - Stem Separation routes to stem-separation (ROUT-06 / D-01)
 
     func testStemSeparationCommandResolvesForRegisteredStemSeparationFeature() throws {

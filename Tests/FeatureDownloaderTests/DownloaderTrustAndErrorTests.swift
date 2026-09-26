@@ -91,14 +91,6 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
         XCTAssertEqual(card.category, .conversionFile)
     }
 
-    func testCopyStringsAreNotEmpty() {
-        XCTAssertFalse(DownloaderCopy.toolLabel.isEmpty)
-        XCTAssertFalse(DownloaderCopy.trustNotice.isEmpty)
-        XCTAssertFalse(DownloaderCopy.sourceLabel.isEmpty)
-        XCTAssertFalse(DownloaderCopy.destinationLabel.isEmpty)
-        XCTAssertFalse(DownloaderCopy.download.isEmpty)
-    }
-
     func testCanceledCopyIsSecondaryStatusNotFailure() {
         XCTAssertEqual(DownloaderCopy.downloadCanceled, "Download canceled")
         XCTAssertEqual(

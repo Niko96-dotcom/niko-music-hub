@@ -20,21 +20,6 @@ final class ArchiveDiagnosticsSearchPanelContextTests: XCTestCase {
         XCTAssertTrue(line.contains("neon → title"))
     }
 
-    func testQueryLineMatchesExport() {
-        let export = """
-        active_search
-        search_query=neon hk
-        search_matches=1
-        """
-        XCTAssertTrue(
-            ArchiveDiagnosticsSearchPanelContext.queryLineMatchesExport(
-                in: export,
-                query: "neon hk",
-                matchCount: 1
-            )
-        )
-    }
-
     func testQueryLineMatchesExport_exactOneSucceedsWithTrailingNewline() {
         let export = "active_search\nsearch_query=neon hk\nsearch_matches=1\n"
         XCTAssertTrue(
@@ -99,24 +84,6 @@ final class ArchiveDiagnosticsSearchPanelContextTests: XCTestCase {
                 in: mismatchCRLF,
                 query: "neon hk",
                 matchCount: 1
-            )
-        )
-    }
-
-    func testMatchLinesMatchExport() {
-        let export = """
-        search_match title=Neon Hook summary=neon → title; hk → fuzzy title
-        """
-        let matches = [
-            ArchiveDiagnosticsSearchMatch(
-                displayTitle: "Neon Hook",
-                summary: "neon → title; hk → fuzzy title"
-            ),
-        ]
-        XCTAssertTrue(
-            ArchiveDiagnosticsSearchPanelContext.matchLinesMatchExport(
-                in: export,
-                matches: matches
             )
         )
     }

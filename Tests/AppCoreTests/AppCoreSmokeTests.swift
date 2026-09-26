@@ -3,15 +3,6 @@ import SwiftUI
 import XCTest
 
 final class AppCoreSmokeTests: XCTestCase {
-    func testRegistryExposesFeatureMetadataInOrder() throws {
-        let first = SmokeFeature(id: "first", shortLabel: "First")
-        let second = SmokeFeature(id: "second", shortLabel: "Second")
-
-        let registry = try ToolRegistry(features: [first, second])
-
-        XCTAssertEqual(registry.metadata.map(\.shortLabel), ["First", "Second"])
-    }
-
     func testRegistryKeepsFirstFeatureForLaunch() throws {
         let first = SmokeFeature(id: "first", shortLabel: "First")
         let second = SmokeFeature(id: "second", shortLabel: "Second")

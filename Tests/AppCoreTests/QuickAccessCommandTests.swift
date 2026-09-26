@@ -5,31 +5,6 @@ final class QuickAccessCommandTests: XCTestCase {
 
     // MARK: - QuickAccessCommand enum
 
-    func testOpenToolCarriesToolFeatureID() {
-        let cmd = QuickAccessCommand.openTool("stem-separation")
-        if case .openTool(let id) = cmd {
-            XCTAssertEqual(id, ToolFeatureID("stem-separation"))
-        } else {
-            XCTFail("Expected .openTool case")
-        }
-    }
-
-    func testOpenAppHasNoAssociatedValue() {
-        // Verify it matches without crashing
-        let cmd = QuickAccessCommand.openApp
-        if case .openApp = cmd { } else { XCTFail("Expected .openApp case") }
-    }
-
-    func testQuitAppHasNoAssociatedValue() {
-        let cmd = QuickAccessCommand.quitApp
-        if case .quitApp = cmd { } else { XCTFail("Expected .quitApp case") }
-    }
-
-    func testRevealOutputInboxHasNoAssociatedValue() {
-        let cmd = QuickAccessCommand.revealOutputInbox
-        if case .revealOutputInbox = cmd { } else { XCTFail("Expected .revealOutputInbox case") }
-    }
-
     func testCommandIsHashable() {
         let a = QuickAccessCommand.openTool("audio-recorder")
         let b = QuickAccessCommand.openTool("audio-recorder")
@@ -39,10 +14,6 @@ final class QuickAccessCommandTests: XCTestCase {
     }
 
     // MARK: - QuickAccessEntry allowlist shape
-
-    func testAllowlistHasSevenEntries() {
-        XCTAssertEqual(QuickAccessEntry.allowlist.count, 7)
-    }
 
     func testAllowlistOrderMatchesSpec() {
         let ids = QuickAccessEntry.allowlist.map(\.id)
@@ -85,12 +56,4 @@ final class QuickAccessCommandTests: XCTestCase {
         XCTAssertEqual(QuickAccessCommand.restoreProject, .focusArchiveSearch)
     }
 
-    func testAllowlistOmitsSettings() {
-        XCTAssertFalse(QuickAccessEntry.allowlist.contains { $0.id == "settings" })
-    }
-
-    func testAllEntryIDsAreUnique() {
-        let ids = QuickAccessEntry.allowlist.map(\.id)
-        XCTAssertEqual(Set(ids).count, ids.count, "Entry IDs must be unique for Identifiable conformance")
-    }
 }

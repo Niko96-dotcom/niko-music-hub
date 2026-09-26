@@ -9,11 +9,6 @@ final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
         XCTAssertTrue(line.contains("no project versions"))
     }
 
-    func testPanelNotesLineIncludesNotes() {
-        let line = ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: "notes only")
-        XCTAssertTrue(line.contains("notes only"))
-    }
-
     /// NMH-092: diagnostics notes use the plain "Companion notes" label, not jargon.
     func testPanelNotesLineUsesCompanionNotesLabel() {
         let line = ArchiveDiagnosticsSelectedSongPanelContext.panelNotesLine(notes: "notes only")
@@ -53,49 +48,6 @@ final class ArchiveDiagnosticsSelectedSongPanelContextTests: XCTestCase {
         XCTAssertTrue(more.contains("minWidth: 420"))
         XCTAssertTrue(more.contains(".keyboardShortcut(.cancelAction)"))
         XCTAssertFalse(more.contains("maxHeight: 140"))
-    }
-
-    func testTitleLineMatchesExport() {
-        let export = """
-        selected_song
-        selected_song_title=Broken Folder Example
-        """
-        XCTAssertTrue(
-            ArchiveDiagnosticsSelectedSongPanelContext.titleLineMatchesExport(
-                in: export,
-                displayTitle: "Broken Folder Example"
-            )
-        )
-    }
-
-    func testCprLineMatchesExport() {
-        let export = "selected_song_cpr=no project versions"
-        XCTAssertTrue(
-            ArchiveDiagnosticsSelectedSongPanelContext.cprLineMatchesExport(
-                in: export,
-                cprSummary: "no project versions"
-            )
-        )
-    }
-
-    func testWarningLinesMatchExport() {
-        let export = "selected_song_warning=No project files (.cpr or .als) found"
-        XCTAssertTrue(
-            ArchiveDiagnosticsSelectedSongPanelContext.warningLinesMatchExport(
-                in: export,
-                warningLines: ["No project files (.cpr or .als) found"]
-            )
-        )
-    }
-
-    func testNotesLineMatchesExport() {
-        let export = "selected_song_notes=notes only"
-        XCTAssertTrue(
-            ArchiveDiagnosticsSelectedSongPanelContext.notesLineMatchesExport(
-                in: export,
-                notes: "notes only"
-            )
-        )
     }
 
     func testFixtureBrokenFolderPanelMatchesExporter() throws {

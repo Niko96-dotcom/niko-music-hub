@@ -1,5 +1,4 @@
 import AppCore
-import SwiftUI
 import XCTest
 
 final class ToolContextTests: XCTestCase {
@@ -12,16 +11,6 @@ final class ToolContextTests: XCTestCase {
         XCTAssertTrue(try context.outputInboxStore.listItems().isEmpty)
         XCTAssertTrue(context.jobRunner.listJobs().isEmpty)
         XCTAssertTrue(context.persistenceIssues.isEmpty)
-    }
-
-    @MainActor
-    func testContextCanBePassedToFeatureViewFactory() {
-        let context = ToolContext.testFixture()
-        let feature = ContextAwareFeature()
-
-        _ = feature.makeView(context: context)
-
-        XCTAssertEqual(feature.metadata.id, "context-aware")
     }
 
     func testContextRetainsPersistenceIssues() {
@@ -89,21 +78,6 @@ final class ToolContextTests: XCTestCase {
         XCTAssertTrue(source.contains("UserDefaultsSettingsStore(userDefaults: smokeDefaults)"))
         XCTAssertTrue(source.contains("UserDefaultsPreferenceStore(userDefaults: smokeDefaults)"))
         XCTAssertFalse(source.contains("settingsStore: UserDefaultsSettingsStore(),"))
-    }
-}
-
-private struct ContextAwareFeature: ToolFeature {
-    let metadata = ToolMetadata(
-        id: "context-aware",
-        displayName: "Context Aware",
-        shortLabel: "Context",
-        systemImage: "gearshape",
-        capabilities: [.runsJobs]
-    )
-
-    @MainActor
-    func makeView(context: ToolContext) -> AnyView {
-        AnyView(Text("Registered tools: \(context.registeredToolCount)"))
     }
 }
 

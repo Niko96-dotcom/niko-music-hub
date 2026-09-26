@@ -54,25 +54,9 @@ final class YtDlpDownloaderTests: XCTestCase {
         XCTAssertEqual(runner.lastRequest?.arguments.contains("-f"), true)
         XCTAssertNil(runner.lastRequest?.timeoutSeconds)
         XCTAssertEqual(runner.lastRequest?.arguments.contains("--progress"), true)
+        XCTAssertEqual(runner.lastRequest?.arguments.contains("--progress-template"), true)
         XCTAssertEqual(runner.lastRequest?.arguments.contains("--no-playlist"), true)
         XCTAssertTrue(runner.lastRequest?.arguments.contains(YtDlpDownloadCommandBuilder.progressTemplate) ?? false)
-    }
-
-    func testDownloadEmitsNIKOProgressTemplate() async throws {
-        let runner = CapturingRunner()
-        let downloader = YtDlpDownloader(runner: runner)
-        let request = DownloadRequest(
-            ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
-            sourceURL: URL(string: "https://example.com")!,
-            outputDirectory: FileManager.default.temporaryDirectory
-        )
-
-        _ = try await downloader.download(request) { _ in }
-
-        let arguments = try XCTUnwrap(runner.lastRequest?.arguments)
-        XCTAssertTrue(arguments.contains("--progress"))
-        XCTAssertTrue(arguments.contains("--progress-template"))
-        XCTAssertTrue(arguments.contains(YtDlpDownloadCommandBuilder.progressTemplate))
     }
 
     func testDownloadDoesNotForceOverwriteExistingOutputs() async throws {

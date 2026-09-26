@@ -124,20 +124,6 @@ struct DemucsMLXHealthCheckerTests {
         #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
     }
 
-    @Test
-    func availability_whenEverythingAvailable_reportsReady() async {
-        let executableURL = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
-        let checker = DemucsMLXHealthChecker(
-            runner: FakeRunner(result: .init(
-                exitCode: 0,
-                standardOutput: "htdemucs\tStandard 4-source HTDemucs\n",
-                standardError: ""
-            )),
-            locator: locator(executables: [executableURL.path])
-        )
-        let health = await checker.availability(settings: HelperToolSettings())
-        #expect(health == .ready(version: "demucs-mlx (htdemucs available)"))
-    }
 }
 
 // MARK: - Fakes

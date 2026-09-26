@@ -8,15 +8,15 @@
 
 | Requirement | Area | Deterministic evidence | Opt-in live evidence |
 |-------------|------|------------------------|----------------------|
-| CMD-01 | Progress markers | `DownloadProgressParsingTests`, `YtDlpDownloaderTests`, `DownloaderUATCoverageTests` | `script/downloader_live_smoke.sh` greps `NIKO_PROGRESS:` |
+| CMD-01 | Progress markers | `DownloadProgressParsingTests`, `YtDlpDownloaderTests` | `script/downloader_live_smoke.sh` greps `NIKO_PROGRESS:` |
 | CMD-02 | No fixed 90s kill | `YtDlpDownloaderTests.testDownloadAppliesBoundedNetworkRetries` | Live download runs without total timeout |
 | CMD-03 | Stall detection | `DownloadStallMonitorTests`, stall integration in `YtDlpDownloaderTests` | — |
 | CMD-04 | Format-aware simulate | `DownloaderUseCaseTests`, `YtDlpDownloadCommandBuilder` | Live smoke uses audio-only format |
 | CMD-05 | UTF-8 output collection | `YtDlpOutputCollectorTests` | — |
-| HLTH-01–04 | Helper health | `YtDlpHealthCheckerTests`, `YtDlpVersionPolicyTests`, `DownloaderUATCoverageTests` | Live smoke uses stripped `PATH` |
+| HLTH-01–04 | Helper health | `YtDlpHealthCheckerTests`, `YtDlpVersionPolicyTests` | Live smoke uses stripped `PATH` |
 | OUT-01–03 | Structured output | `DownloaderUseCaseTests.testCompletedDownloadSetsStructuredOutputURLs` | Live smoke output file on disk |
-| HAND-01–05 | Media handoff | `OutputHandoffTests`, `DownloaderUATCoverageTests` | — |
-| UAT-01 | Deterministic matrix | `DownloaderUATCoverageTests`, `DownloaderHelperToolResolverTests` | — |
+| HAND-01–05 | Media handoff | `OutputHandoffTests` | — |
+| UAT-01 | Deterministic matrix | `DownloadProgressParsingTests`, `DownloadStallMonitorTests`, `YtDlpHealthCheckerTests`, `OutputHandoffTests`, `DownloaderHelperToolResolverTests` | — |
 | UAT-02 | Beyond 18s live path | `DownloaderLiveIntegrationTests` (skipped in CI) | `script/downloader_live_smoke.sh` duration > 18s |
 | UAT-03 | Stripped helper path | `DownloaderHelperToolResolverTests` | Live smoke `PATH=/usr/bin:/bin` + `--ffmpeg-location` |
 | UAT-04 | Documented evidence | This file | Operator log from live smoke when run |

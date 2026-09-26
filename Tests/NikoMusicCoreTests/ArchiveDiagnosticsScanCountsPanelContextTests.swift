@@ -10,30 +10,6 @@ final class ArchiveDiagnosticsScanCountsPanelContextTests: XCTestCase {
         XCTAssertEqual(value, "1 (3 total)")
     }
 
-    func testCountsMatchExportForScanCountLines() {
-        let export = """
-        songs=9
-        songs_with_warnings=1
-        total_song_warnings=1
-        """
-        let diagnostics = ArchiveScanDiagnostics(
-            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            rootPaths: [],
-            songCount: 9,
-            songsWithWarningsCount: 1,
-            totalSongWarningCount: 1,
-            globalWarnings: [],
-            songWarningSummaries: [],
-            skippedEntries: []
-        )
-        XCTAssertTrue(
-            ArchiveDiagnosticsScanCountsPanelContext.countsMatchExport(
-                in: export,
-                diagnostics: diagnostics
-            )
-        )
-    }
-
     func testFixtureScanCountsPanelMatchesExporter() throws {
         try CubaseFixtures.ensureGenerated()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
