@@ -64,7 +64,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 
 - `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, `OutputInbox`, `SettingsStore` (`UserDefaultsSettingsStore`).
 - Shell jobs: `ShellJobStatusCenter`, `CancelCopy`.
-- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, admission/capacity/activity probes, transfer/catalog SQLite stores.
+- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
 - Shared UI: `ToolHeaderBlock`, hub design tokens (see `docs/design-contract.md`).
 
 ### `FeatureArchiveBrowser` (SwiftUI feature)
