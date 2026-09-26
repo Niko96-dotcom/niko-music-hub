@@ -61,10 +61,16 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: try fixture.runtime())
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
-        let staleRetry = Task<Void, Never> { try? await Task.sleep(for: .seconds(60)) }
+        viewModel.vaultOperations.doneRetryDelay = .milliseconds(20)
+        XCTAssertTrue(viewModel.vaultOperations.scheduleRetry(for: song.id) {})
+        try await waitUntil { viewModel.projectVaultRetryTasks[song.id] == nil }
+        XCTAssertTrue(viewModel.vaultOperations.scheduleRetry(for: song.id) {})
+        try await waitUntil { viewModel.projectVaultRetryTasks[song.id] == nil }
+        viewModel.vaultOperations.doneRetryDelay = .seconds(60)
+        XCTAssertTrue(viewModel.vaultOperations.scheduleRetry(for: song.id) {})
+        XCTAssertEqual(viewModel.projectVaultRetryAttemptCounts[song.id], 3)
+        let staleRetry = try XCTUnwrap(viewModel.projectVaultRetryTasks[song.id])
         defer { staleRetry.cancel() }
-        viewModel.projectVaultRetryTasks[song.id] = staleRetry
-        viewModel.projectVaultRetryAttemptCounts[song.id] = 3
 
         viewModel.requestArchiveNow(for: song)
         try await waitUntil { viewModel.pendingArchiveConfirmation != nil }

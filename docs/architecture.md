@@ -1,30 +1,34 @@
 # Architecture — Niko Music Hub
 
-Last verified: 2026-05-25
+Last verified: 2026-09-26
 
 ## Principles
 
-1. **Seed, don't rewrite** — `OutsideCubaseHub` Swift spine stays; add modules, then rename.
-2. **Port behavior, not stacks** — Cubase archive logic from `docs/reference/cubase-file-orga/SPEC.md`, never Electron/npm.
+1. **Maintain the shipped product** — extend and harden existing modules; no re-bootstrapping.
+2. **Native Swift port** — Cubase archive behavior from `reference/cubase-file-orga/`, never Electron/npm.
 3. **Feature symmetry** — Archive browser registers via the same `ToolFeature` protocol as BPM/converter/recorder/downloader.
 4. **Pure core** — `NikoMusicCore` has no SwiftUI/AppKit imports.
-5. **Read-only archives** — Domain layer enforces path safety before any open/reveal.
+5. **Local-first, read-only archives** — domain path safety before any open/reveal; no music-file mutation outside an explicit Vault transfer.
 
-## Target module graph
+## Current module graph
 
 ```text
 NikoMusicHub (executable)
-├── AppComposition
-├── AppShell/                    # existing 3-column shell
-├── FeatureArchiveBrowser      # NEW — SwiftUI browse/search/detail/play
-├── FeatureBPMTapper             # unchanged role
+├── AppComposition / AppShell
+├── FeatureArchiveBrowser      # archive browse/search/detail/play + Project Vault UI
+├── FeatureBPMTapper
 ├── FeatureAudioConverter
 ├── FeatureAudioRecorder
 ├── FeatureDownloader
-├── AppCore                      # ToolFeature, registry, jobs, inbox, settings
-└── NikoMusicCore                # NEW — scan, rank, search, open safety
-    └── NikoMusicCoreSelfTest    # NEW — CLI fixture + real-root smoke
+├── FeatureStemSeparation      # narrow exception below
+├── AppUpdates                 # isolated Sparkle updater
+├── AppCore                    # ToolFeature, registry, jobs, inbox, settings, Vault runtime
+└── NikoMusicCore              # scan, rank, search, open safety, catalog helpers
 ```
+
+- `FeatureArchiveBrowser` depends on `AppCore` and `NikoMusicCore` only.
+- Feature modules stay independent except the documented Stem Separation → Downloader exception.
+- Composition: [`AppComposition`](../Sources/NikoMusicHub/AppComposition.swift) registers all features; the archive is the default home. Shared tool wiring flows through [`ToolContext`](../Sources/AppCore/Services/ToolContext.swift).
 
 ## Existing feature dependency: Stem Separation → Downloader
 
@@ -47,202 +51,46 @@ justifies the migration; duplicating the downloader would create two safety path
 
 ### `NikoMusicCore` (pure Swift)
 
-No UI. Owns archive domain and safety.
+Archive domain and safety. No SwiftUI/AppKit.
 
-| Area | Types / services | Notes |
-|------|------------------|-------|
-| Domain | `Song`, `ProjectVersion` (CPR), `PreviewCandidate`, `StoredMusicRoot`, `ScanResult` | App-owned model; no SQLite requirement in v0.1 — in-memory + JSON cache OK |
-| Scanning | `CubaseArchiveScanner`, `CPRVersionDetector`, `PreviewCandidateDetector`, `SongTitleResolver` | One child folder = one song; recurse for `.cpr` and audio |
-| Search | `MusicSearchIndex` | In-memory index; fields per spec §10 |
-| Opening | `MusicItemOpener` | Reveal/open latest CPR; supports `dryRun: Bool` for tests |
-| Safety | `PathSafety`, `ReadOnlyArchivePolicy` | Reject paths outside declared roots; block writes under archive roots |
+- Domain: `Song`, `ProjectVersion`, `PreviewCandidate`, `StoredMusicRoot`, `ScanResult`.
+- Scanning: `CubaseArchiveScanner`, `CPRVersionDetector`, `PreviewCandidateDetector`, `SongTitleResolver`.
+- Search: `MusicSearchIndex`; ranking: `PreviewConfidenceRanker`.
+- Opening: `MusicItemOpener` with dry-run support for tests.
+- Safety: `PathSafety`, `ReadOnlyArchivePolicy`.
+- Catalog helpers: `SongCatalogDeduplicator`, `ArchiveMetadataMerger`.
 
-Dependency rule: `NikoMusicCore` depends only on Foundation (and possibly AVFoundation later for duration — optional v0.1).
+### `AppCore` (shared)
 
-### `AppCore` (existing — preserve)
+- `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, `OutputInbox`, `SettingsStore` (`UserDefaultsSettingsStore`).
+- Shell jobs: `ShellJobStatusCenter`, `CancelCopy`.
+- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
+- Shared UI: `ToolHeaderBlock`, hub design tokens (see `docs/design-contract.md`).
 
-Keep and extend minimally:
+### `FeatureArchiveBrowser` (SwiftUI feature)
 
-- `ToolFeature` / `ToolRegistry` / `ToolContext`
-- `JobRunner`, `OutputInbox`, `SettingsStore`
-- Shared components (`ToolHeaderBlock`, `StandardErrorCard`, etc.)
+- [`ArchiveBrowserFeature.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserFeature.swift): `ToolFeature` conformance (`archive-browser`).
+- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): roots, browse, selection, scan host, metadata, Vault presentation/confirmations.
+- Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
+- Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift).
+- Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 
-Do **not** fold archive scanning into `AppCore`; inject a `ArchiveService` or store protocol from `FeatureArchiveBrowser` if needed.
+## Persistence, services, composition
 
-### `FeatureArchiveBrowser` (new)
+- Settings: `UserDefaultsSettingsStore` owns `AppSettings` (music roots, vault bindings, Keep Local pins). Vault presentation reads settings only at explicit boundaries (`refreshProjectVaultPresentationContext`).
+- Archive persistence (production `AppComposition.swift:74-126`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `AppCore`. Scans reconcile through `ArchiveCatalogCoordinator`.
+- Song metadata: `SongUserMetadataStoring` SQLite rows (titles, aliases, notes, workflow status, collaborators); per-song merge/commit path with corrupt-row gating.
+- Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
+- Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).
+- Runtime composition: `LiveProjectVaultRuntime` is built with settings/transfer/catalog stores plus storage-provider, opener, activity/capacity probes; injected into the archive view model as `ProjectVaultOperating`.
+- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions, then passes the same `ToolContext` values to the shell and features.
 
-SwiftUI feature module.
+## Project Vault operation ownership
 
-| File (planned) | Role |
-|----------------|------|
-| `ArchiveBrowserFeature.swift` | `ToolFeature` conformance, metadata id `archive-browser` |
-| `ArchiveBrowserView.swift` | Root browse + search |
-| `ArchiveBrowserViewModel.swift` | Scan state, selection, search query |
-| `SongDetailView.swift` | CPR list, previews, actions |
-| `PreviewPlayerView.swift` | AVPlayer wrapper; v0.1 simple play/pause |
-| `HubDesignSystem.Colors` (AppCore) | Shared hub accent/warning/semantic colors for archive UI |
-
-Depends on: `AppCore`, `NikoMusicCore`.
-
-### `NikoMusicHub` (rename from `OutsideCubaseHub`)
-
-- `NikoMusicHubApp.swift` — `@main`, activation policy
-- `AppComposition.swift` — register all features; archive first in list
-- Update Application Support subdirectory name
-- Update `script/build_and_run.sh` app name and bundle id
-
-## Composition wiring
-
-```swift
-// AppComposition.make() — target order
-let features: [any ToolFeature] = [
-    ArchiveBrowserFeature(),   // default home
-    BPMTapperFeature(),
-    AudioConverterFeature(),
-    AudioRecorderFeature(),
-    DownloaderFeature(),
-    // DevToolFeature() — optional, last or removed from default
-]
-```
-
-`AppShellView` default selection: `archive-browser` when present (replace today’s `wav-converter` default).
-
-`FeatureArchiveBrowser` owns an internal `NavigationSplitView` (or equivalent) for song list → detail inside the center column; the outer shell stays 3-column.
-
-`ToolContext` extension (v0.1): add optional `archiveSettings: ArchiveSettingsStore` or pass roots via `UserDefaults`/settings key — keep interface small.
-
-## Data flow
-
-```text
-User selects roots (FeatureArchiveBrowser)
-        ↓
-CubaseArchiveScanner (NikoMusicCore) — read-only filesystem walk
-        ↓
-Song[] + PreviewCandidate[] + ProjectVersion[]
-        ↓
-Preview ranker → main preview per song
-        ↓
-MusicSearchIndex.build(songs)
-        ↓
-SwiftUI list/cards ← query filter
-        ↓
-User: Play preview → AVPlayer(url)
-User: Open latest → MusicItemOpener → NSWorkspace / dry-run log
-```
-
-## Metadata persistence (v0.1)
-
-Electron used SQLite. Swift v0.1:
-
-- **In-memory** scan results per session only
-- **No** `archive-cache.json` in v0.1 (deferred — avoids persistence scope creep)
-- Manual rescan clears/rebuilds in-memory index
-
-Milestone 2+ can add virtual titles, collaborator overrides — same store, schema versioning later.
-
-## Preview ranking (port from spec)
-
-Implement `PreviewConfidenceRanker` with SPEC §8 steps 1–6 for v0.2 preview picking:
-
-1. Role confidence (full mix > instrumental > stems)
-2. Location (`Mixdown` folder boost)
-3. Filename semantics (positive/negative tokens)
-4. Parsed version number from filename (tiebreak only; listed in `confidenceReasons`)
-5. Extension preference (`wav` > `flac` > `aiff` > `m4a` > `mp3`; tiebreak only)
-6. Duration plausibility (penalize very short; boost typical song length from WAV header)
-7. Recency (modification date, small tiebreak)
-
-Defer: chorus/loudness preview start, manual overrides.
-
-Output: `mainPreviewCandidateID` per song + `confidenceReasons[]` for debug UI.
-
-## CPR selection
-
-`CPRVersionDetector`:
-
-- Collect all `*.cpr` under song folder (exclude `.bak` from main list by default)
-- `latestCPR` = argmax `contentModificationDate`
-- Expose full sorted list on detail view
-
-## Search index
-
-`MusicSearchIndex` indexes per spec §10 searchable fields:
-
-- Display title (resolved from folder name in v0.1)
-- Original folder name
-- CPR filenames
-- Preview filenames
-- Scan warnings (e.g. missing CPR)
-
-v0.1 skips: aliases, collaborator names, sidecar song notes (no metadata layer yet).
-
-## Safety architecture
-
-```swift
-ReadOnlyArchivePolicy.enforce {
-  // allowed: read, enumerate, metadata stat
-  // denied: write, delete, move, create under archiveRoot
-}
-PathSafety.resolve(userPath, allowedRoots: settings.roots) -> URL?
-```
-
-`MusicItemOpener.openLatestCPR(song, dryRun:)`:
-
-- `dryRun == true`: append to diagnostics/log file; no `NSWorkspace.open`
-- `dryRun == false`: `NSWorkspace.shared.open(cprURL)` or reveal-in-Finder variant for E2E
-
-## Testing architecture
-
-| Layer | Test home |
-|-------|-----------|
-| Core scanner/ranker/search | `Tests/NikoMusicCoreTests/` + fixtures under `Fixtures/CubaseArchive/` |
-| Feature VM/UI logic | `Tests/FeatureArchiveBrowserTests/` |
-| Registry integration | extend `Tests/AppCoreTests/FeatureRegistryTests.swift` |
-| CLI smoke | `NikoMusicCoreSelfTest` |
-| User E2E | `script/e2e_user_smoke.sh` + env vars `NIKO_MUSIC_HUB_FIXTURE_ROOT`, `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` |
-
-### Fixture layout (planned)
-
-```text
-Fixtures/CubaseArchive/
-  Neon Hook/
-    Neon Hook.cpr
-    Mixdown/Neon Hook v3.wav
-    Ideas/Neon Hook topline.mid
-  Broken Folder Example/
-    notes.txt          # no CPR — scan warning
-  Second Song/
-    ...
-```
-
-## Rename map (executor slice 5)
-
-| From | To |
-|------|-----|
-| Package `OutsideCubaseHub` | `NikoMusicHub` |
-| Target `OutsideCubaseHub` | `NikoMusicHub` |
-| `OutsideCubaseHubApp` | `NikoMusicHubApp` |
-| `dist/OutsideCubaseHub.app` | `dist/NikoMusicHub.app` |
-| Bundle id `local.outside-cubase-hub.app` | `com.niko96.NikoMusicHub` |
-| App Support `Outside Cubase Hub` | `Niko Music Hub` |
-
-Use mechanical rename + test run; avoid drive-by refactors in feature modules.
-
-## What stays unchanged
-
-- Feature module boundaries for BPM/converter/recorder/downloader
-- `JobRunner` / output inbox handoff patterns
-- FFmpeg / yt-dlp / CoreAudio integration code paths
-- CI skip list for recorder hardware tests
-
-## Anti-patterns (reject in review)
-
-- Importing React/Electron types or copying TS scanner code verbatim
-- SQLite + chokidar as v0.1 requirements
-- Single god-module `AppCore+Archive`
-- Writing scan caches into music folders
-- Hermes parallel workers or Locus env dependencies
-
+- [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift) is the single MainActor owner for queue state, the running task/stop flag, per-request batch accounting, delayed retry tasks/attempts, and capacity postponement. It exposes intentional operations (`enqueue`, `cancelQueued`, `cancelAllPending`, `confirmStopActiveTransfer`, `revokeDoneWork`, `cancelDoneRetry`/`cancelPendingRetry`, `scheduleRetry`, `noteSuccessfulTransfer`, capacity note/release) and read-only state.
+- [`ArchiveBrowserViewModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift) forwards queue/retry/accounting reads for existing views/tests with no duplicate stored state, re-emits the coordinator's publishes for SwiftUI, and injects narrow callbacks (status setter/base, root IDs, presentation refresh, shell-job publish, vault logging, drain-to-recovery). All coordinator captures of the view model are weak.
+- Metadata Undo (`revokeBoundDoneWork` in [`ArchiveBrowserViewModel+Metadata.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift)) owns only capture/dialog presentation and delegates queue/retry/stop mutations to `revokeDoneWork`.
+- Queue execution stays serial with duplicate prevention by song and canonical project identity, captured root revalidation before dispatch, truthful per-request stop/cancel counts, bounded Done retries (at most 3, same token downgraded copy-only), postponed non-retryable capacity until explicit reset, and shell-job publication/lifetime cancellation preserved.
 
 ## Shell navigation and tool-page scaffold (2026-09)
 
@@ -265,3 +113,41 @@ Use mechanical rename + test run; avoid drive-by refactors in feature modules.
 - Cancel copy is truthful about the removal boundary: stopping before verification keeps Active;
   at/after removal the fate is uncertain, partial copies are never claimed verified, and review
   stays via Restore & Open / Recover Verified Project.
+
+## Safety architecture
+
+Read-only archive writes are denied via
+[`ReadOnlyArchivePolicy.enforceNoWrite(at:archiveRoots:)`](../Sources/NikoMusicCore/Safety/ReadOnlyArchivePolicy.swift)
+(and the single-root `enforceNoWrite(at:archiveRoot:)` overload):
+
+```swift
+try ReadOnlyArchivePolicy().enforceNoWrite(at: outputURL, archiveRoots: archiveRoots)
+// throws ReadOnlyArchivePolicyError.writeDenied when outputURL resolves
+// equal to or inside any protected archive root (symlinks resolved)
+```
+
+Prospective paths are gated with
+[`PathSafety.resolve(_:allowedRoots:)`](../Sources/NikoMusicCore/Safety/PathSafety.swift):
+
+```swift
+let resolved = try PathSafety().resolve(userPath, allowedRoots: settings.roots)
+```
+
+[`MusicItemOpener.openLatestCPR(for:dryRun:allowedRoots:)` / `revealLatestCPR(for:dryRun:allowedRoots:)`](../Sources/NikoMusicCore/Opening/MusicItemOpener.swift):
+
+- `dryRun == true`: append to diagnostics/log file; no `NSWorkspace.open`
+- `dryRun == false`: `NSWorkspace.shared.open(cprURL)` or reveal-in-Finder variant for E2E
+
+Vault destinations are restore/review handles, never generic filesystem authority; authorization checks, path safety, and actual file operations live in the runtime/engine and are unchanged by UI refactors.
+
+## Testing architecture
+
+| Layer | Test home |
+|-------|-----------|
+| Core scanner/ranker/search | `Tests/NikoMusicCoreTests/` + fixtures under `Fixtures/CubaseArchive/` |
+| Feature VM/UI logic + Vault operation owner | `Tests/FeatureArchiveBrowserTests/` (`ProjectVaultOperationCoordinatorTests`, `BoundArchiveAuthorizationTests`, `ProjectVaultQueueLivePhaseTests`, `ArchiveWorkflowUndoWiringTests`) |
+| Registry integration | `Tests/AppCoreTests/FeatureRegistryTests.swift` |
+| User E2E | `script/e2e_user_smoke.sh` + env vars `NIKO_MUSIC_HUB_FIXTURE_ROOT`, `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` |
+
+- Fixture-backed Vault tests use `FriendsWorkflowFixture` (temporary Active/Archive roots, `LiveProjectVaultRuntime` with safe probes); no real music data.
+- Fake-runtime timing uses deterministic entry gates plus bounded polling; no blanket timeout increases.

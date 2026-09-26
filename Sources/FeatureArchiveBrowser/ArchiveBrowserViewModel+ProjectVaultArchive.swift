@@ -6,11 +6,10 @@ extension ArchiveBrowserViewModel {
     /// Cancels a bounded Done retry without reusing its approval. Also releases
     /// any recorded capacity postponement so a fresh explicit Done (or undo +
     /// re-Done) resumes normal automatic behavior; a still-full destination
-    /// simply records it again on the next rejection.
+    /// simply records it again on the next rejection. Owned by
+    /// `ProjectVaultOperationCoordinator`.
     func cancelDoneArchiveRetry(for songID: String) {
-        projectVaultRetryTasks.removeValue(forKey: songID)?.cancel()
-        projectVaultRetryAttemptCounts.removeValue(forKey: songID)
-        projectVaultCapacityPostponedSongIDs.remove(songID)
+        vaultOperations.cancelDoneRetry(for: songID)
     }
     // MARK: - Bound authorization (final contract)
     //
@@ -271,8 +270,7 @@ extension ArchiveBrowserViewModel {
         boundArchiveCaptureSongID = nil
         // An explicit user confirmation restarts the bounded Done-retry budget and
         // supersedes any timer-driven retry that is still waiting for this song.
-        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        vaultOperations.cancelPendingRetry(for: song.id)
         if pending.trigger == .workflowDone {
             let previous = song.workflowStatus
             if song.workflowStatus != .done {
@@ -314,8 +312,7 @@ extension ArchiveBrowserViewModel {
         pendingArchiveConfirmation = nil
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
-        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        vaultOperations.cancelPendingRetry(for: song.id)
         let previous = song.workflowStatus
         if song.workflowStatus != .done {
             commitWorkflowStatus(.done, for: song)
@@ -345,8 +342,7 @@ extension ArchiveBrowserViewModel {
             pendingArchiveConfirmation = nil
             projectVaultAuthCaptureTask = nil
             boundArchiveCaptureSongID = nil
-            projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-            projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+            vaultOperations.cancelPendingRetry(for: song.id)
             let previous = song.workflowStatus
             if song.workflowStatus != .done {
                 commitWorkflowStatus(.done, for: song)
@@ -367,8 +363,7 @@ extension ArchiveBrowserViewModel {
         pendingArchiveConfirmation = nil
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
-        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        vaultOperations.cancelPendingRetry(for: song.id)
         let previous = song.workflowStatus
         if song.workflowStatus != .done {
             commitWorkflowStatus(.done, for: song)
@@ -400,8 +395,7 @@ extension ArchiveBrowserViewModel {
         pendingArchiveConfirmation = nil
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
-        projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-        projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
+        vaultOperations.cancelPendingRetry(for: song.id)
         let previous = song.workflowStatus
         if song.workflowStatus != .done {
             commitWorkflowStatus(.done, for: song)
@@ -470,9 +464,7 @@ extension ArchiveBrowserViewModel {
                         try await projectVaultRuntime.archive(song: currentSong, trigger: trigger)
                     }
                 }
-                model.projectVaultRetryTasks.removeValue(forKey: song.id)?.cancel()
-                model.projectVaultRetryAttemptCounts.removeValue(forKey: song.id)
-                model.projectVaultCapacityPostponedSongIDs.remove(song.id)
+                model.vaultOperations.noteSuccessfulTransfer(for: song.id)
                 model.cacheProjectVaultSnapshot(snapshot)
                 model.rebuildProjectVaultPresentationCache()
                 await model.refreshProjectVaultSnapshots()
@@ -521,7 +513,7 @@ extension ArchiveBrowserViewModel {
                             // recovery timer) do not immediately re-attempt a
                             // destination known to be full. Deliberate manual
                             // attempts bypass that gate and re-record on failure.
-                            model.projectVaultCapacityPostponedSongIDs.insert(song.id)
+                            model.vaultOperations.noteCapacityPostponed(songID: song.id)
                         }
                     }
                     return false
@@ -549,22 +541,18 @@ extension ArchiveBrowserViewModel {
     }
 
     private func scheduleDoneArchiveRetry(for song: Song, authorization: ProjectVaultArchiveAuthorization? = nil) {
-        let attemptCount = projectVaultRetryAttemptCounts[song.id, default: 0]
-        guard projectVaultRetryTasks[song.id] == nil, attemptCount < 3 else { return }
-        projectVaultRetryAttemptCounts[song.id] = attemptCount + 1
         // Bounded retries retain the same confirmation-time token but NEVER
         // reuse a destructive approval: the same bound value is downgraded to
         // copy-only (every binding field preserved, no new removal token
         // minted), so a delayed retry can only ever produce a verified copy
         // even when live settings later become permissive. A nil authorization
-        // stays on the copy-only path.
+        // stays on the copy-only path. Task/attempt bookkeeping is owned by
+        // `ProjectVaultOperationCoordinator`.
         let retryAuthorization = authorization?.downgradedToCopyOnly()
-        let retryDelay = projectVaultDoneRetryDelay
-        projectVaultRetryTasks[song.id] = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: retryDelay)
-            guard let self, !Task.isCancelled else { return }
-            self.projectVaultRetryTasks.removeValue(forKey: song.id)
-            guard let current = self.songs.first(where: { $0.id == song.id }),
+        let songID = song.id
+        vaultOperations.scheduleRetry(for: songID) { [weak self] in
+            guard let self,
+                  let current = self.songs.first(where: { $0.id == songID }),
                   current.workflowStatus == .done else { return }
             self.archiveInProjectVault(current, trigger: .workflowDone, authorization: retryAuthorization)
         }
