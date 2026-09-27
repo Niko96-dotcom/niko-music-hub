@@ -702,7 +702,84 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(finished.state, .failed)
         XCTAssertNil(finished.failureReason)
         XCTAssertEqual(finished.outputFileURLs, [fileURL])
+        XCTAssertEqual(finished.message, "The retry finished without new files. Files from the earlier attempt were kept.")
         XCTAssertEqual(downloader.attemptCount, 2)
+    }
+
+    func testSingleEmptySuccessFailsWithOutputNotFound() async throws {
+        let useCase = DownloaderUseCase(
+            downloader: SuccessfulDownloader(outputs: []),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore(),
+            locator: ytDlpLocator()
+        )
+        let sourceURL = URL(string: "https://example.com/watch?v=empty")!
+
+        do {
+            _ = try await useCase.download(
+                url: sourceURL,
+                options: DownloadJobOptions(
+                    sourceURL: sourceURL,
+                    outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                    retries: 2
+                ),
+                progress: JobProgress(updateHandler: { _, _ in }, logHandler: { _ in })
+            )
+            XCTFail("Expected outputNotFound")
+        } catch let error as DownloadUseCaseError {
+            XCTAssertEqual(error, .outputNotFound)
+            XCTAssertEqual(error.localizedDescription, "No output files found after download.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testRetrySuccessReturnsOnlyFinalAttemptOutputs() async throws {
+        let m4aURL = URL(fileURLWithPath: "/tmp/out/retry-\(UUID().uuidString).m4a")
+        let wavURL = URL(fileURLWithPath: "/tmp/out/retry-\(UUID().uuidString).wav")
+        let useCase = DownloaderUseCase(
+            downloader: FreshM4aThenFreshWavDownloader(m4aURL: m4aURL, wavURL: wavURL),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: SpyJobRunner(),
+            settingsStore: FixtureSettingsStore(),
+            locator: ytDlpLocator()
+        )
+        let sourceURL = URL(string: "https://example.com/watch?v=retry-format")!
+
+        let outputs = try await useCase.download(
+            url: sourceURL,
+            options: DownloadJobOptions(
+                sourceURL: sourceURL,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out"),
+                retries: 2
+            ),
+            progress: JobProgress(updateHandler: { _, _ in }, logHandler: { _ in })
+        )
+        XCTAssertEqual(outputs, [wavURL])
+    }
+
+    func testRetrySuccessKeepsAllAttemptsOnJobWhileReturningFinalAttempt() async throws {
+        let m4aURL = URL(fileURLWithPath: "/tmp/out/retry-job-\(UUID().uuidString).m4a")
+        let wavURL = URL(fileURLWithPath: "/tmp/out/retry-job-\(UUID().uuidString).wav")
+        let jobRunner = JobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: FreshM4aThenFreshWavDownloader(m4aURL: m4aURL, wavURL: wavURL),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: AvailableVersionRunner(),
+            locator: ytDlpLocator()
+        )
+        let url = URL(string: "https://example.com/watch?v=retry-format")!
+        let job = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(sourceURL: url, outputDirectory: URL(fileURLWithPath: "/tmp/out"), retries: 2)
+        )
+        let finished = try await waitForJob(job.id, in: jobRunner)
+        XCTAssertEqual(finished.state, .completed)
+        XCTAssertNil(finished.failureReason)
+        XCTAssertEqual(Set(finished.outputFileURLs), Set([m4aURL, wavURL]))
     }
 
     func testNonzeroExitWithoutFailureIsFailClosed() async throws {
@@ -1192,6 +1269,56 @@ private final class FreshFailureThenEmptySuccessDownloader: DownloadRunning, @un
         }
         return DownloadResult(
             outputs: [],
+            sourceURL: request.sourceURL,
+            exitCode: 0,
+            standardError: ""
+        )
+    }
+}
+
+/// Attempt 1: retryable failure with a fresh m4a; attempt 2: exit-0 success
+/// with only a fresh wav. Success must return only the final attempt while
+/// the Job keeps both files.
+private final class FreshM4aThenFreshWavDownloader: DownloadRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let m4aURL: URL
+    private let wavURL: URL
+    private var storedAttemptCount = 0
+
+    var attemptCount: Int {
+        lock.withLock { storedAttemptCount }
+    }
+
+    init(m4aURL: URL, wavURL: URL) {
+        self.m4aURL = m4aURL
+        self.wavURL = wavURL
+    }
+
+    func download(
+        _ request: DownloadRequest,
+        progressHandler: @escaping @Sendable (String) -> Void
+    ) async throws -> DownloadResult {
+        let attempt = lock.withLock { () -> Int in
+            storedAttemptCount += 1
+            return storedAttemptCount
+        }
+        if attempt == 1 {
+            let outputs = [VerifiedDownloadOutput(url: m4aURL, isAlreadyExisting: false)]
+            return DownloadResult(
+                outputs: outputs,
+                sourceURL: request.sourceURL,
+                exitCode: 1,
+                standardError: "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+                failure: DownloadFailure(
+                    kind: .processFailed,
+                    message: "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+                    isRetryable: true,
+                    outputs: outputs
+                )
+            )
+        }
+        return DownloadResult(
+            outputs: [VerifiedDownloadOutput(url: wavURL, isAlreadyExisting: false)],
             sourceURL: request.sourceURL,
             exitCode: 0,
             standardError: ""

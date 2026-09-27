@@ -35,6 +35,9 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
     /// Pure skip: only verified pre-existing outputs, nothing newly written.
     case alreadyDownloaded
     case outputNotFound
+    /// Retry exited 0 with zero outputs after an earlier attempt produced
+    /// verified files; those files stay published on the job.
+    case retryProducedNoOutput
 
     public var errorDescription: String? {
         switch self {
@@ -48,6 +51,8 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
             return DownloaderCopy.alreadyExistsInInbox
         case .outputNotFound:
             return "No output files found after download."
+        case .retryProducedNoOutput:
+            return "The retry finished without new files. Files from the earlier attempt were kept."
         }
     }
 }
@@ -61,7 +66,7 @@ extension DownloadUseCaseError: JobFailureReasonProviding {
             return .downloaderHelperUnavailable
         case .alreadyDownloaded:
             return .downloadAlreadyExists
-        case .failed, .unsupportedURL, .outputNotFound:
+        case .failed, .unsupportedURL, .outputNotFound, .retryProducedNoOutput:
             return nil
         }
     }
@@ -262,13 +267,29 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                 // an earlier retryable attempt may have produced outputs, but a
                 // final exit-0 with zero outputs must still fail (previously an
                 // empty final output meant failure). Accumulated outputs were
-                // already published, so the failed Job keeps them.
+                // already published, so the failed Job keeps them. With
+                // accumulated outputs the failure names the kept retry files
+                // instead of claiming none were found.
                 if result.outputs.isEmpty {
-                    throw DownloadUseCaseError.outputNotFound
+                    throw accumulated.isEmpty
+                        ? DownloadUseCaseError.outputNotFound
+                        : DownloadUseCaseError.retryProducedNoOutput
+                }
+
+                // Success returns only the current attempt's outputs, in
+                // order, so a later format is not shadowed by an earlier
+                // attempt's file. Fresh provenance wins per path so an
+                // earlier fresh write is not re-reported as a pure skip.
+                let freshPaths = Set(accumulated.filter { !$0.isAlreadyExisting }.map { $0.url.standardizedFileURL.path })
+                let currentOutputs = result.outputs.map { output -> VerifiedDownloadOutput in
+                    if output.isAlreadyExisting, freshPaths.contains(output.url.standardizedFileURL.path) {
+                        return VerifiedDownloadOutput(url: output.url, isAlreadyExisting: false)
+                    }
+                    return output
                 }
 
                 return DownloadResult(
-                    outputs: accumulated,
+                    outputs: currentOutputs,
                     sourceURL: url,
                     exitCode: result.exitCode,
                     standardError: result.standardError,
