@@ -1480,6 +1480,101 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         XCTAssertEqual(workspace.opened.count, 1)
     }
 
+    func testCancelDuringRetainedStagingCheckKeepsStagingBindingAndDoesNotRotate() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        var archive = fixture.archiveRecord
+        archive.state = .archivedOnlineOnly
+        archive.durability = .syncedToProvider
+        try store.save(archive)
+        let restoreID = UUID()
+        let staging = fixture.active
+            .appendingPathComponent(".niko-staging", isDirectory: true)
+            .appendingPathComponent(fixture.projectID.description, isDirectory: true)
+            .appendingPathComponent(restoreID.uuidString.lowercased(), isDirectory: true)
+        try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: fixture.generation, to: staging)
+        let restore = VaultRestoreRecord(
+            id: restoreID,
+            projectID: fixture.projectID,
+            archiveGenerationURL: fixture.generation,
+            stagingURL: staging,
+            destinationURL: fixture.active.appendingPathComponent("Recovered/Cancelled Staging", isDirectory: true),
+            manifest: fixture.manifest,
+            archiveTransferID: archive.id,
+            archiveTransferState: archive.state,
+            requiresArchiveMaterialization: true,
+            phase: .copyingToActiveStaging
+        )
+        try store.saveRestore(restore)
+        let hook = CancelOnHashHook(below: staging)
+        hook.arm()
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let engine = LocalVaultRestoreEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID,
+            resolver: store,
+            store: store,
+            projectionStore: store,
+            provider: OfflineRestoreProviderSpy(),
+            catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites,
+            manifestBuilder: VaultManifestBuilder(contentHasher: hook.hash)
+        )
+
+        _ = await Task { await engine.recoverAtLaunch() }.value
+
+        XCTAssertTrue(hook.cancelled, "the hook must cancel inside the retained-staging check")
+        XCTAssertEqual(hook.hashesAfterCancel, 0)
+        let persisted = try XCTUnwrap(store.restoreRecord(id: restoreID))
+        XCTAssertEqual(persisted.stagingURL, staging, "a stopped check is no reason to abandon a complete staging copy")
+        XCTAssertNil(persisted.completedAt)
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: staging.deletingLastPathComponent().path)
+        XCTAssertEqual(siblings, [staging.lastPathComponent])
+        try VaultManifestBuilder().verify(fixture.manifest, at: staging)
+        XCTAssertTrue(workspace.opened.isEmpty)
+    }
+
+    func testCancelDuringFinalDestinationCheckIsNotAnIntegrityMismatch() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let destination = fixture.active.appendingPathComponent("Restored", isDirectory: true)
+        let hook = CancelOnHashHook(below: destination)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .openingInCubase { hook.arm() }
+            }, writeAdmission: allowRestoreWrites,
+            manifestBuilder: VaultManifestBuilder(contentHasher: hook.hash))
+
+        let restore = Task { try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored") }
+        do {
+            _ = try await restore.value
+            XCTFail("a restore cancelled during the final check must throw CancellationError")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+
+        XCTAssertTrue(hook.cancelled, "the hook must cancel inside the final destination check")
+        XCTAssertEqual(hook.hashesAfterCancel, 0)
+        let persisted = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        XCTAssertNotEqual(persisted.failureReason, .activeDestinationIntegrityMismatch)
+        XCTAssertNil(persisted.completedAt)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        try VaultManifestBuilder().verify(fixture.manifest, at: destination)
+    }
+
     func testCopyingRecoveryWithPartialStagingPreservesItAndRebuildsOnceAtFreshManagedPath() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }

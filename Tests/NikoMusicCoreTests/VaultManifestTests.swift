@@ -189,6 +189,64 @@ final class VaultManifestTests: XCTestCase {
         }
     }
 
+    func testBuildAndVerifyThrowCancellationBetweenFilesAndChunks() async throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for name in ["a.wav", "b.wav", "c.wav"] {
+            try Data(name.utf8).write(to: root.appendingPathComponent(name))
+        }
+        let manifest = try VaultManifestBuilder().build(at: root)
+
+        // A Task cancelled before it starts hashes nothing.
+        for operation in ["build", "verify"] {
+            let hasher = CancelOnHashHook(below: root)
+            let builder = VaultManifestBuilder(contentHasher: hasher.hash)
+            let outcome = await Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                if operation == "build" {
+                    _ = try builder.build(at: root)
+                } else {
+                    try builder.verify(manifest, at: root)
+                }
+            }.result
+            XCTAssertThrowsError(try outcome.get(), operation) { XCTAssertTrue($0 is CancellationError, "\(operation): \($0)") }
+            XCTAssertEqual(hasher.hashedCount, 0, "\(operation) must not hash after cancel")
+        }
+
+        // Cancelling while file 1 is hashed stops before file 2.
+        for operation in ["build", "verify", "verifyArchive"] {
+            let hasher = CancelOnHashHook(below: root)
+            hasher.arm()
+            let builder = VaultManifestBuilder(contentHasher: hasher.hash)
+            let outcome = await Task {
+                switch operation {
+                case "build": _ = try builder.build(at: root)
+                case "verify": try builder.verify(manifest, at: root)
+                default: try builder.verifyArchive(manifest, at: root)
+                }
+            }.result
+            XCTAssertThrowsError(try outcome.get(), operation) { XCTAssertTrue($0 is CancellationError, "\(operation): \($0)") }
+            XCTAssertEqual(hasher.hashedCount, 1, "\(operation) must stop before the next file")
+        }
+
+        // The read loop itself checks cancellation, so one multi-GB file
+        // cannot hold a cancelled transfer until its last chunk.
+        let large = root.appendingPathComponent("large.wav")
+        try Data(repeating: 0x5a, count: 3 * 1_048_576).write(to: large)
+        let chunkLog = HashedChunkLog()
+        let hashOutcome = await Task {
+            try VaultManifestBuilder.hashRegularFile(at: large, afterChunk: { hashed in
+                chunkLog.append(hashed)
+                withUnsafeCurrentTask { $0?.cancel() }
+            })
+        }.result
+        XCTAssertThrowsError(try hashOutcome.get()) { XCTAssertTrue($0 is CancellationError, "\($0)") }
+        XCTAssertEqual(chunkLog.values, [1_048_576], "no chunk may be read after the one that saw the cancel")
+        let uncancelled = try VaultManifestBuilder.hashRegularFile(at: large)
+        XCTAssertEqual(uncancelled.byteCount, 3 * 1_048_576)
+    }
+
     private func temporaryRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vault-manifest-\(UUID().uuidString)", isDirectory: true)
     }
@@ -204,4 +262,12 @@ private final class VaultManifestHashSpy: @unchecked Sendable {
         lock.withLock { storedOpenedURLs.append(url) }
         return (0, "unexpected")
     }
+}
+
+private final class HashedChunkLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [Int64] = []
+
+    var values: [Int64] { lock.withLock { stored } }
+    func append(_ value: Int64) { lock.withLock { stored.append(value) } }
 }

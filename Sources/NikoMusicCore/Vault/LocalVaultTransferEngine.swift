@@ -1154,6 +1154,9 @@ public actor LocalVaultTransferEngine {
             guard identityAfterVerification == expectedSourceIdentity else {
                 throw LocalVaultTransferError.sourceMutated
             }
+        } catch is CancellationError {
+            // Hashing stops on cancel. A stopped check is not a changed source.
+            throw CancellationError()
         } catch {
             throw LocalVaultTransferError.sourceMutated
         }
