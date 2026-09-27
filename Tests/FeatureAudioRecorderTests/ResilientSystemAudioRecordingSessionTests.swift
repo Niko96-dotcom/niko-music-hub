@@ -352,7 +352,9 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         let ended = expectation(description: "capture ended on the write error")
         let writers = FailingPCMWriterFactory(failOnWrite: 2)
         let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
-        let session = makeSession(core: [core], fallback: [], writerFactory: writers.make)
+        // The take is digital silence, but a failed write skips the permission probe.
+        let probe = PermissionProbeStub(.blocked)
+        let session = makeSession(core: [core], fallback: [], probe: probe, writerFactory: writers.make)
         let url = temporaryWAV()
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -374,6 +376,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             XCTAssertTrue(message.contains("The disk is full."), message)
         }
         XCTAssertEqual(writers.writeAttempts, 2)
+        XCTAssertEqual(probe.callCount, 0)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 

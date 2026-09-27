@@ -158,7 +158,8 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         // no nonzero sample is ever examined, and the probe never deletes anything: a
         // blocked verdict keeps the silent file and only adds the permission card, so even
         // a wrong verdict loses nothing.
-        let captureBlocked = pipeline.containsOnlyDigitalSilence
+        // A failed write already decided the outcome; don't hold the UI in .stopping for the probe.
+        let captureBlocked = pipeline.writeFailure == nil && pipeline.containsOnlyDigitalSilence
             ? await captureIsBlockedByPermission()
             : false
         do {
@@ -218,6 +219,8 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         pipeline: RecorderPCMWriterPipeline,
         diagnostics: RecorderSessionDiagnostics
     ) async -> Bool {
+        // A write that failed during a rebuild's teardown is caught here, not after a timeout.
+        guard pipeline.writeFailure == nil else { return false }
         generation += 1
         let backendGeneration = generation
         let gate = RecorderReadinessGate()
