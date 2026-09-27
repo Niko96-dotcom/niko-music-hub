@@ -69,9 +69,9 @@ extension LiveProjectVaultRuntime {
             return matches
         }
 
-        mutating func hasUsableArchiveGeneration(_ transfer: VaultTransferRecord) async -> Bool {
+        mutating func hasUsableArchiveGeneration(_ transfer: VaultTransferRecord) async throws -> Bool {
             if let cached = terminalUsability[transfer.id] { return cached }
-            let isUsable = await LiveProjectVaultRuntime.hasUsableArchiveGeneration(
+            let isUsable = try await LiveProjectVaultRuntime.hasUsableArchiveGeneration(
                 transfer,
                 provider: provider,
                 manifestBuilder: archiveManifestBuilder
@@ -253,7 +253,7 @@ extension LiveProjectVaultRuntime {
                 $0.record.id == persistedSourceTransfer.projectID
             }),
            try reuseCheck.matchesCurrentSource(persistedSourceTransfer),
-           await reuseCheck.hasUsableArchiveGeneration(persistedSourceTransfer) {
+           try await reuseCheck.hasUsableArchiveGeneration(persistedSourceTransfer) {
              let entry = try ensureCatalogEntry(for: song, configuration: configuration)
             try validateCatalogBinding(authorization, entry: entry)
             return try await reuseVerifiedTerminal(
@@ -269,7 +269,7 @@ extension LiveProjectVaultRuntime {
         if let latest {
             if VaultTransferOwnershipPolicy.isVerifiedTerminal(latest.state),
                try reuseCheck.matchesCurrentSource(latest),
-               await reuseCheck.hasUsableArchiveGeneration(latest) {
+               try await reuseCheck.hasUsableArchiveGeneration(latest) {
                 return try await reuseVerifiedTerminal(
                     latest,
                     entry: entry,
@@ -535,11 +535,13 @@ extension LiveProjectVaultRuntime {
         }
     }
 
-    private static func hasUsableArchiveGeneration(
+    /// A cancelled check throws instead of answering "not usable", which would
+    /// start a fresh transfer for a project that already has a verified copy.
+    static func hasUsableArchiveGeneration(
         _ transfer: VaultTransferRecord,
         provider: any ArchiveStorageProvider,
         manifestBuilder: VaultManifestBuilder
-    ) async -> Bool {
+    ) async throws -> Bool {
         guard VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state),
               let manifestID = transfer.manifestID,
               let manifest = transfer.manifest,
@@ -553,6 +555,8 @@ extension LiveProjectVaultRuntime {
             do {
                 try manifestBuilder.verifyArchive(manifest, at: transfer.destinationURL)
                 return true
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 return false
             }
@@ -571,6 +575,8 @@ extension LiveProjectVaultRuntime {
                 case .unknown:
                     return false
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 return false
             }

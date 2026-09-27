@@ -357,6 +357,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
 
         var entries: [VaultManifest.Entry] = []
         while let url = enumerator.nextObject() as? URL {
+            try Task.checkCancellation()
             let metadata = try metadata(at: url, keys: keys)
             let values = metadata.values
             let relativePath = try Self.relativePath(of: url, below: root)
@@ -427,6 +428,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         guard expectedStructure == actualStructure else { throw VaultManifestError.mismatch }
 
         for (expectedEntry, actualEntry) in zip(expectedEntries, actual) where expectedEntry.type == .regularFile {
+            try Task.checkCancellation()
             let hashed = try contentHasher(actualEntry.url)
             guard hashed.byteCount == expectedEntry.byteCount,
                   hashed.sha256 == expectedEntry.sha256 else {
@@ -528,6 +530,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
 
         var inventory: [VerificationInventoryEntry] = []
         while let url = enumerator.nextObject() as? URL {
+            try Task.checkCancellation()
             let values: URLResourceValues
             do {
                 values = try url.resourceValues(forKeys: keys)
@@ -574,8 +577,18 @@ public struct VaultManifestBuilder: @unchecked Sendable {
 
     /// Cubase projects routinely contain multi-gigabyte audio. Hash through one
     /// reusable POSIX buffer so Foundation does not accumulate autoreleased
-    /// `NSData` chunks on a long-lived Swift concurrency worker.
+    /// `NSData` chunks on a long-lived Swift concurrency worker. Each chunk
+    /// checks for cancellation, so a stopped transfer does not hash on to the
+    /// end of a multi-gigabyte file.
     static func hashRegularFile(at url: URL) throws -> (byteCount: Int64, sha256: String) {
+        try hashRegularFile(at: url, afterChunk: { _ in })
+    }
+
+    /// `afterChunk` receives the bytes hashed so far; tests use it to cancel mid-file.
+    static func hashRegularFile(
+        at url: URL,
+        afterChunk: (Int64) -> Void
+    ) throws -> (byteCount: Int64, sha256: String) {
         let descriptor = try Self.openForReading(url)
         defer { Darwin.close(descriptor) }
 
@@ -583,6 +596,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         var hasher = SHA256()
         var byteCount: Int64 = 0
         while true {
+            try Task.checkCancellation()
             let readCount = buffer.withUnsafeMutableBytes { bytes in
                 Darwin.read(descriptor, bytes.baseAddress, bytes.count)
             }
@@ -597,6 +611,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
             buffer.withUnsafeBytes { bytes in
                 hasher.update(bufferPointer: UnsafeRawBufferPointer(rebasing: bytes.prefix(readCount)))
             }
+            afterChunk(byteCount)
         }
         let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         return (byteCount, digest)

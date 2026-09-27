@@ -524,6 +524,9 @@ public actor LocalVaultRestoreEngine {
             do {
                 try manifestBuilder.verify(record.manifest, at: record.stagingURL)
                 return
+            } catch is CancellationError {
+                // A stopped check says nothing about the staging tree.
+                throw CancellationError()
             } catch {
                 // A process can die after creating only part of the staging tree.
                 // Preserve those bytes as recovery evidence, bind this same restore
@@ -656,6 +659,8 @@ public actor LocalVaultRestoreEngine {
             // manifest identity at the final synchronous Catalog/Open boundary.
             try validate(record)
             try manifestBuilder.verify(record.manifest, at: record.destinationURL)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             record.failureReason = .activeDestinationIntegrityMismatch
             record.error = "The restored folder couldn’t be confirmed before opening (\(error)). Nothing was opened."
