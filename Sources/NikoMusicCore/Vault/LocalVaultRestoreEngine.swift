@@ -246,19 +246,27 @@ public actor LocalVaultRestoreEngine {
 
     @discardableResult
     public func recoverAtLaunch() async -> [VaultRestoreRecord] {
+        await recoverAtLaunchReport()?.records ?? []
+    }
+
+    /// `recoverAtLaunch()` plus the journal rows it could not decode, or nil
+    /// when reconciliation failed (nothing is recovered then). Undecodable rows
+    /// are never rewritten, and reconciliation holds every restore of the
+    /// project they belong to; other projects still recover.
+    public func recoverAtLaunchReport() async -> VaultJournalReadReport<VaultRestoreRecord>? {
         // Reconciliation is a persistence barrier: every legacy duplicate loser
         // is terminally retired before any owner can reach a provider or byte
         // side effect. A failed transaction yields no executable records.
-        guard let records = try? store.reconcileRestoreRecordsForRecovery() else { return [] }
+        guard let journal = try? store.reconcileRestoreRecordsForRecoveryReport() else { return nil }
         var results: [VaultRestoreRecord] = []
-        for record in records where record.failureReason == nil {
+        for record in journal.records where record.failureReason == nil {
             do {
                 results.append(try await execute(record, requiresArchiveTransferBinding: true))
             }
             catch is VaultTransferInterruption { results.append((try? store.restoreRecord(id: record.id)) ?? record) }
             catch { results.append((try? store.restoreRecord(id: record.id)) ?? record) }
         }
-        return results
+        return VaultJournalReadReport(records: results, unreadableRows: journal.unreadableRows)
     }
 
     @discardableResult

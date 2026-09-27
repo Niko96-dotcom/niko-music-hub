@@ -98,13 +98,21 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
     }
 
     public func recoverableRecords() throws -> [VaultTransferRecord] {
+        try recoverableTransfers(reportingUnreadable: false).records
+    }
+
+    public func recoverableRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord> {
+        try recoverableTransfers(reportingUnreadable: true)
+    }
+
+    private func recoverableTransfers(reportingUnreadable: Bool) throws -> VaultJournalReadReport<VaultTransferRecord> {
         let terminal = [VaultTransferState.archiveVerified, .archivedLocal, .archivedOnlineOnly, .readyLocal, .openingInCubase, .recoveryRequired, .superseded]
         let placeholders = terminal.map { _ in "?" }.joined(separator: ",")
-        return try query("SELECT record FROM vault_transfers WHERE state NOT IN (\(placeholders)) ORDER BY updated_at;", bind: { statement in
+        return try queryReport("SELECT record,id,state FROM vault_transfers WHERE state NOT IN (\(placeholders)) ORDER BY updated_at;", bind: { statement in
             for (offset, state) in terminal.enumerated() {
                 sqlite3_bind_text(statement, Int32(offset + 1), state.rawValue, -1, vaultTransferSQLiteTransient)
             }
-        })
+        }, reportingUnreadable: reportingUnreadable)
     }
 
     public func verifiedArchiveGeneration(projectID: ProjectID) throws -> VaultTransferRecord? {
@@ -123,6 +131,10 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
 
     public func allTransferRecords() throws -> [VaultTransferRecord] {
         try query("SELECT record FROM vault_transfers ORDER BY updated_at DESC;", bind: { _ in })
+    }
+
+    public func allTransferRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord> {
+        try queryReport("SELECT record,id,state FROM vault_transfers ORDER BY updated_at DESC;", bind: { _ in }, reportingUnreadable: true)
     }
 
     public func compareAndSetProjectionSupplement(
@@ -221,6 +233,19 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
     }
 
     public func reconcileRestoreRecordsForRecovery() throws -> [VaultRestoreRecord] {
+        try reconcileRestores(reportingUnreadable: false).records
+    }
+
+    /// An undecodable row is never rewritten. Unless its `phase` column says
+    /// `superseded`, it fences its `project_id` (every project when that column
+    /// is empty): any conflict component holding a restore of a fenced project
+    /// is neither retired nor returned, since the unreadable row may be the one
+    /// that should win.
+    public func reconcileRestoreRecordsForRecoveryReport() throws -> VaultJournalReadReport<VaultRestoreRecord> {
+        try reconcileRestores(reportingUnreadable: true)
+    }
+
+    private func reconcileRestores(reportingUnreadable: Bool) throws -> VaultJournalReadReport<VaultRestoreRecord> {
         try database.withConnection { db in
             try Self.execute("BEGIN IMMEDIATE;", on: db)
             var committed = false
@@ -228,7 +253,22 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
                 if !committed { _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil) }
             }
 
-            let candidates = try restoreRecords(on: db).filter {
+            let journal = try decodedRecords(
+                on: db,
+                sql: "SELECT record,id,phase,project_id FROM vault_restores ORDER BY updated_at DESC;",
+                as: VaultRestoreRecord.self,
+                reportingUnreadable: reportingUnreadable ? .restores : nil
+            )
+            let fencingRows = journal.unreadableRows.filter {
+                $0.state != VaultRestorePhase.superseded.rawValue
+            }
+            // A row without a readable project fences every restore.
+            let fencesAll = fencingRows.contains { ($0.projectID ?? "").isEmpty }
+            let fencedProjects = Set(fencingRows.compactMap(\.projectID))
+            func isFenced(_ record: VaultRestoreRecord) -> Bool {
+                fencesAll || fencedProjects.contains(record.projectID.description)
+            }
+            let candidates = journal.records.filter {
                 $0.completedAt == nil
                     && $0.phase != .superseded
                     && $0.supersededBy == nil
@@ -258,6 +298,9 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
             }
             var winners: [VaultRestoreRecord] = []
             for component in components.values {
+                // A held restore still conflicts with other projects' restores
+                // (shared destination or generation), so its whole component waits.
+                guard !component.contains(where: isFenced) else { continue }
                 guard let winner = component.max(by: Self.isOlderRestoreCandidate) else { continue }
                 for loser in component where loser.id != winner.id {
                     var retired = loser
@@ -271,11 +314,23 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
 
             try Self.execute("COMMIT;", on: db)
             committed = true
-            return winners.sorted(by: Self.isOlderRestoreCandidate)
+            return VaultJournalReadReport(
+                records: winners.sorted(by: Self.isOlderRestoreCandidate),
+                unreadableRows: journal.unreadableRows
+            )
         }
     }
 
     private func query(_ sql: String, bind: (OpaquePointer?) -> Void) throws -> [VaultTransferRecord] {
+        try queryReport(sql, bind: bind, reportingUnreadable: false).records
+    }
+
+    /// With `reportingUnreadable`, the SQL must select `record,id,state`.
+    private func queryReport(
+        _ sql: String,
+        bind: (OpaquePointer?) -> Void,
+        reportingUnreadable: Bool
+    ) throws -> VaultJournalReadReport<VaultTransferRecord> {
         let step = stepForTesting ?? { sqlite3_step($0) }
         return try database.withConnection { db in
             var statement: OpaquePointer?
@@ -284,18 +339,55 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
                 throw SQLiteArchiveDatabase.StoreError.prepare(Self.message(db))
             }
             bind(statement)
-            var records: [VaultTransferRecord] = []
-            while true {
-                switch step(statement) {
-                case SQLITE_ROW:
-                    records.append(try decodedRecord(VaultTransferRecord.self, from: statement))
-                case SQLITE_DONE:
-                    return records
-                default:
-                    throw SQLiteArchiveDatabase.StoreError.step(Self.message(db))
+            return try stepRecords(
+                statement,
+                on: db,
+                as: VaultTransferRecord.self,
+                step: step,
+                reportingUnreadable: reportingUnreadable ? .transfers : nil
+            )
+        }
+    }
+
+    /// Reads every row of a prepared statement whose column 0 is the `record`
+    /// blob. With a journal to report, columns 1 and 2 must be the row's `id`
+    /// and `state`/`phase` (and column 3 a restore's `project_id`), and a blob
+    /// that fails to decode is reported instead of failing the read. A failed
+    /// step always throws.
+    private func stepRecords<T: Decodable & Sendable>(
+        _ statement: OpaquePointer?,
+        on db: OpaquePointer?,
+        as type: T.Type,
+        step: (OpaquePointer?) -> Int32,
+        reportingUnreadable journal: VaultJournalUnreadableRow.Journal?
+    ) throws -> VaultJournalReadReport<T> {
+        var report = VaultJournalReadReport<T>(records: [])
+        while true {
+            switch step(statement) {
+            case SQLITE_ROW:
+                do {
+                    report.records.append(try decodedRecord(type, from: statement))
+                } catch let error as SQLiteArchiveDatabase.StoreError {
+                    guard let journal, case .decode = error else { throw error }
+                    report.unreadableRows.append(VaultJournalUnreadableRow(
+                        journal: journal,
+                        id: Self.text(statement, column: 1),
+                        state: Self.text(statement, column: 2),
+                        projectID: journal == .restores ? Self.text(statement, column: 3) : nil,
+                        reason: String(describing: error)
+                    ))
                 }
+            case SQLITE_DONE:
+                return report
+            default:
+                throw SQLiteArchiveDatabase.StoreError.step(Self.message(db))
             }
         }
+    }
+
+    private static func text(_ statement: OpaquePointer?, column: Int32) -> String {
+        guard let text = sqlite3_column_text(statement, column) else { return "" }
+        return String(cString: text)
     }
 
     private func decodedRecord<T: Decodable>(_ type: T.Type, from statement: OpaquePointer?) throws -> T {
@@ -381,30 +473,25 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
     }
 
     private func transferRecords(on db: OpaquePointer) throws -> [VaultTransferRecord] {
-        try decodedRecords(on: db, sql: "SELECT record FROM vault_transfers ORDER BY updated_at DESC;", as: VaultTransferRecord.self)
+        try decodedRecords(on: db, sql: "SELECT record FROM vault_transfers ORDER BY updated_at DESC;", as: VaultTransferRecord.self).records
     }
 
     private func restoreRecords(on db: OpaquePointer) throws -> [VaultRestoreRecord] {
-        try decodedRecords(on: db, sql: "SELECT record FROM vault_restores ORDER BY updated_at DESC;", as: VaultRestoreRecord.self)
+        try decodedRecords(on: db, sql: "SELECT record FROM vault_restores ORDER BY updated_at DESC;", as: VaultRestoreRecord.self).records
     }
 
-    private func decodedRecords<T: Decodable>(on db: OpaquePointer, sql: String, as: T.Type) throws -> [T] {
+    private func decodedRecords<T: Decodable & Sendable>(
+        on db: OpaquePointer,
+        sql: String,
+        as type: T.Type,
+        reportingUnreadable journal: VaultJournalUnreadableRow.Journal? = nil
+    ) throws -> VaultJournalReadReport<T> {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
             throw SQLiteArchiveDatabase.StoreError.prepare(Self.message(db))
         }
-        var records: [T] = []
-        while true {
-            switch sqlite3_step(statement) {
-            case SQLITE_ROW:
-                records.append(try decodedRecord(T.self, from: statement))
-            case SQLITE_DONE:
-                return records
-            default:
-                throw SQLiteArchiveDatabase.StoreError.step(Self.message(db))
-            }
-        }
+        return try stepRecords(statement, on: db, as: type, step: { sqlite3_step($0) }, reportingUnreadable: journal)
     }
 
     private static func execute(_ sql: String, on db: OpaquePointer) throws {

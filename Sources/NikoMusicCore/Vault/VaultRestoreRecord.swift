@@ -161,6 +161,11 @@ public protocol VaultRestoreStoring: Sendable {
     func restoreRecord(id: UUID) throws -> VaultRestoreRecord?
     func recoverableRestoreRecords() throws -> [VaultRestoreRecord]
     func reconcileRestoreRecordsForRecovery() throws -> [VaultRestoreRecord]
+    /// Launch-recovery twin of `reconcileRestoreRecordsForRecovery()`: a row
+    /// whose blob cannot be decoded is reported instead of failing the read,
+    /// and every restore of its project is held (neither retired nor returned).
+    /// A failed statement or transaction still throws.
+    func reconcileRestoreRecordsForRecoveryReport() throws -> VaultJournalReadReport<VaultRestoreRecord>
 }
 
 public enum VaultRestoreClaimResult: Equatable, Sendable {
@@ -176,6 +181,10 @@ public extension VaultRestoreStoring {
 
     func reconcileRestoreRecordsForRecovery() throws -> [VaultRestoreRecord] {
         try recoverableRestoreRecords()
+    }
+
+    func reconcileRestoreRecordsForRecoveryReport() throws -> VaultJournalReadReport<VaultRestoreRecord> {
+        VaultJournalReadReport(records: try reconcileRestoreRecordsForRecovery())
     }
 }
 

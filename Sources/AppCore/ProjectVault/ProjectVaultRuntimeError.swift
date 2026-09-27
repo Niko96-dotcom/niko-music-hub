@@ -25,6 +25,10 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case sourceInventoryIncomplete(title: String, reason: String)
     /// The catalog cannot say which entry this project is; nothing was recorded.
     case identityAmbiguous(title: String, reason: String)
+    /// A transfer or restore journal row could not be decoded (a damaged blob,
+    /// or a newer app version's row). Snapshots stay unavailable; launch
+    /// recovery still reads the other rows.
+    case journalRecordsUnreadable
 
     public var errorDescription: String? {
         switch self {
@@ -46,6 +50,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .noVerifiedArchive: "There’s no verified Vault copy yet."
         case .sourceUnavailable(let title): "The project folder for “\(title)” is not available in Active Projects. Rescan the archive, then retry. Nothing was changed."
         case .sourceInventoryIncomplete(let title, let reason): "Project Vault could not read every project file for “\(title)”: \(reason). Rescan the archive, then retry. Nothing was changed."
+        case .journalRecordsUnreadable: "Some Project Vault records couldn’t be read. They were left as they are."
         case .identityAmbiguous(let title, let reason): "Project Vault cannot tell whether “\(title)” is the same project as one already in your library. \(reason) Choose Link if these are the same project. Choose Keep Separate if they are different projects. Nothing is archived until you choose."
         }
     }

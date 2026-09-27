@@ -22,6 +22,102 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent(".niko-staging").path))
     }
 
+    func testRestoreLaunchRecoveryContinuesPastUndecodableRestoreRow() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let interrupted = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .verifyingActiveStaging { throw VaultTransferInterruption() }
+            }, writeAdmission: allowRestoreWrites)
+        do {
+            _ = try await interrupted.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("Expected interruption")
+        } catch is VaultTransferInterruption {}
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        let unreadableID = UUID()
+        try UndecodableVaultJournalRow.insertRestore(
+            id: unreadableID,
+            projectID: ProjectID(),
+            phase: VaultRestorePhase.copyingToActiveStaging.rawValue,
+            databaseURL: fixture.databaseURL
+        )
+
+        let recovery = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites)
+        let reportResult = await recovery.recoverAtLaunchReport()
+        let report = try XCTUnwrap(reportResult)
+
+        XCTAssertEqual(report.records.map(\.id), [pending.id])
+        XCTAssertNotNil(report.records.first?.completedAt)
+        XCTAssertEqual(report.unreadableRows.map(\.id), [unreadableID.uuidString])
+        XCTAssertEqual(report.unreadableRows.first?.journal, .restores)
+        try VaultManifestBuilder().verify(fixture.manifest, at: pending.destinationURL)
+        try VaultManifestBuilder().verify(fixture.manifest, at: fixture.generation)
+        XCTAssertEqual(workspace.opened.count, 1)
+        // Idempotent: the completed restore is not replayed and the bad row is
+        // still only reported.
+        let againResult = await recovery.recoverAtLaunchReport()
+        let again = try XCTUnwrap(againResult)
+        XCTAssertTrue(again.records.isEmpty)
+        XCTAssertEqual(again.unreadableRows.map(\.id), [unreadableID.uuidString])
+        XCTAssertEqual(workspace.opened.count, 1)
+    }
+
+    func testRestoreLaunchRecoveryHoldsProjectOfUndecodableRestoreRow() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let interrupted = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            faultInjector: { point, _ in
+                if point == .verifyingActiveStaging { throw VaultTransferInterruption() }
+            }, writeAdmission: allowRestoreWrites)
+        do {
+            _ = try await interrupted.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("Expected interruption")
+        } catch is VaultTransferInterruption {}
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        // The unreadable row belongs to the same project and may be the restore
+        // that should win, so the readable one must not run or be retired.
+        let unreadableID = UUID()
+        try UndecodableVaultJournalRow.insertRestore(
+            id: unreadableID,
+            projectID: fixture.projectID,
+            phase: VaultRestorePhase.promotingActiveCopy.rawValue,
+            databaseURL: fixture.databaseURL
+        )
+
+        let recovery = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: VaultRestoreResolver(record: fixture.archiveRecord),
+            store: store, projectionStore: store, provider: LocalFolderArchiveStorage(root: fixture.archive),
+            catalog: VaultRestoreCatalogSpy(events: events), projectOpener: SafeVaultProjectOpener(workspace: workspace),
+            writeAdmission: allowRestoreWrites)
+        let reportResult = await recovery.recoverAtLaunchReport()
+        let report = try XCTUnwrap(reportResult)
+
+        XCTAssertTrue(report.records.isEmpty)
+        XCTAssertEqual(report.unreadableRows.map(\.id), [unreadableID.uuidString])
+        XCTAssertEqual(report.unreadableRows.first?.projectID, fixture.projectID.description)
+        XCTAssertEqual(try store.restoreRecord(id: pending.id), pending)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: pending.destinationURL.path))
+        XCTAssertTrue(workspace.opened.isEmpty)
+    }
+
     func testSelectedManagedVersionSurvivesRetryOpenAndRejectsInvalidSelection() async throws {
         let fixture = try VaultRestoreFixture(projectFiles: ["Versions/Chosen.als", "Newest.cpr"])
         defer { fixture.remove() }

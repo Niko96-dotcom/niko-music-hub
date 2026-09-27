@@ -212,6 +212,11 @@ public protocol VaultTransferStoring: Sendable {
     func record(id: UUID) throws -> VaultTransferRecord?
     func recoverableRecords() throws -> [VaultTransferRecord]
     func allTransferRecords() throws -> [VaultTransferRecord]
+    /// Launch-recovery reads. Unlike `recoverableRecords()` and
+    /// `allTransferRecords()`, a row whose blob cannot be decoded is reported
+    /// instead of failing the whole read. A failed statement still throws.
+    func recoverableRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord>
+    func allTransferRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord>
     /// Strict explicit barrier for recovery evidence before destructive removal.
     /// Production SQLite enforces the journal/file/dir barrier and throws on
     /// any failure. The default is fail-closed for stores that cannot prove
@@ -242,6 +247,14 @@ public extension VaultTransferStoring {
 
     func allTransferRecords() throws -> [VaultTransferRecord] {
         try recoverableRecords()
+    }
+
+    func recoverableRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord> {
+        VaultJournalReadReport(records: try recoverableRecords())
+    }
+
+    func allTransferRecordsReport() throws -> VaultJournalReadReport<VaultTransferRecord> {
+        VaultJournalReadReport(records: try allTransferRecords())
     }
 
     func proveRecoveryPersistence() throws {

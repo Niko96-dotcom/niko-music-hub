@@ -1197,6 +1197,44 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    func testLaunchRecoveryWithUndecodableJournalRowPublishesHealthWarning() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        var interrupted = try fixture.failedDurabilityRecord()
+        interrupted.state = .removingActiveCopy
+        interrupted.error = nil
+        try fixture.transferStore().save(interrupted)
+        let unreadableTransferID = UUID()
+        let unreadableRestoreID = UUID()
+        try fixture.exec("""
+            INSERT INTO vault_transfers(id,state,updated_at,record)
+                VALUES('\(unreadableTransferID.uuidString)','removingActiveCopy',300,X'6E6F742D6A736F6E');
+            INSERT INTO vault_restores(id,project_id,phase,updated_at,record)
+                VALUES('\(unreadableRestoreID.uuidString)','\(ProjectID().description)','copyingToActiveStaging',300,X'6E6F742D6A736F6E');
+            """)
+        let runtime = try fixture.runtime()
+        do {
+            _ = try await runtime.snapshots()
+            XCTFail("snapshots must stay fail-closed on an unreadable row")
+        } catch ProjectVaultRuntimeError.journalRecordsUnreadable {}
+
+        await runtime.recoverAtLaunch()
+
+        XCTAssertEqual(try fixture.transferStore().record(id: interrupted.id)?.state, .recoveryRequired)
+        let rows = await runtime.unreadableJournalRows()
+        XCTAssertEqual(rows.map(\.journal), [.transfers, .restores])
+        XCTAssertEqual(rows.map(\.id), [unreadableTransferID.uuidString, unreadableRestoreID.uuidString])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        // The warning describes the latest recovery read, so it clears once the
+        // journal reads cleanly again.
+        try fixture.exec("DELETE FROM vault_transfers WHERE id='\(unreadableTransferID.uuidString)'; DELETE FROM vault_restores WHERE id='\(unreadableRestoreID.uuidString)';")
+        await runtime.recoverAtLaunch()
+        let cleared = await runtime.unreadableJournalRows()
+        XCTAssertTrue(cleared.isEmpty)
+    }
+
     func testEmergencyStopPreventsPersistedArchiveRecovery() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -3271,6 +3309,14 @@ private extension LiveProjectVaultRuntimeTests {
 
         func catalogStore() throws -> SQLiteProjectCatalogStore {
             try SQLiteProjectCatalogStore(database: database)
+        }
+
+        func exec(_ sql: String) throws {
+            try database.withConnection { db in
+                guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+                    throw SQLiteArchiveDatabase.StoreError.exec(String(cString: sqlite3_errmsg(db)))
+                }
+            }
         }
 
         func cleanup() {

@@ -72,6 +72,55 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.archive.appendingPathComponent("generations").path))
     }
 
+    func testLaunchRecoveryNormalizesReadableRowsWhenAnotherRowIsUndecodable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        let now = Date(timeIntervalSince1970: 29_000)
+        var record = try failedDurabilityRecord(fixture: fixture, retryCount: 0, updatedAt: now)
+        record.state = .removingActiveCopy
+        record.error = nil
+        try store.save(record)
+        // A retryable copy for another project: normally resumed at launch.
+        let retryable = try failedDurabilityRecord(fixture: fixture, retryCount: 0, updatedAt: now)
+        try store.save(retryable)
+        let unreadableID = UUID()
+        try UndecodableVaultJournalRow.insertTransfer(
+            id: unreadableID,
+            state: VaultTransferState.removingActiveCopy.rawValue,
+            databaseURL: fixture.databaseURL
+        )
+        let sourceBefore = try fixture.snapshotSource()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            now: { now },
+            writeAdmission: allowVaultWrites,
+            removalAdmission: { _ in XCTFail("launch recovery must not reach removal admission") }
+        )
+
+        let reportResult = await engine.recoverAtLaunchReport()
+        let report = try XCTUnwrap(reportResult)
+
+        let normalized = try XCTUnwrap(report.records.first { $0.id == record.id })
+        XCTAssertEqual(normalized.state, .recoveryRequired)
+        XCTAssertEqual(normalized.error?.origin, .removingActiveCopy)
+        // The unreadable row could own either project, so no copy is resumed.
+        XCTAssertEqual(try store.record(id: retryable.id), retryable)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: retryable.destinationURL.path))
+        XCTAssertEqual(report.unreadableRows.map(\.id), [unreadableID.uuidString])
+        XCTAssertEqual(report.unreadableRows.first?.journal, .transfers)
+        XCTAssertEqual(report.unreadableRows.first?.state, VaultTransferState.removingActiveCopy.rawValue)
+        XCTAssertEqual(try store.record(id: record.id)?.state, .recoveryRequired)
+        XCTAssertEqual(try fixture.snapshotSource(), sourceBefore)
+        // The undecodable row is reported, never rewritten.
+        XCTAssertEqual(try store.allTransferRecordsReport().unreadableRows.map(\.id), [unreadableID.uuidString])
+        let again = await engine.recoverAtLaunch()
+        XCTAssertEqual(again.map(\.id), [retryable.id], "recoveryRequired is stable; the copy stays held")
+        XCTAssertEqual(try store.record(id: retryable.id), retryable)
+    }
+
     func testExplicitRemovalRecoveryPreservesCompleteAndPartialActiveCopies() async throws {
         for sourceState in ["complete", "partial", "missing"] {
             let fixture = try Fixture()

@@ -33,6 +33,7 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
     private var mutationFileLease: ProjectVaultMutationFileLease?
     var recoveryTask: (id: UUID, task: Task<Void, Never>)?
     var pendingIdentityReview: ProjectIdentityReview?
+    var lastUnreadableJournalRows: [VaultJournalUnreadableRow] = []
 
     // MARK: - Init
 
