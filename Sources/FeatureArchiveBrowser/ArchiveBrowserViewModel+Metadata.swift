@@ -2,102 +2,74 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
-// MARK: - Metadata
+// MARK: - Metadata (delegates to ArchiveMetadataEditingCoordinator)
+//
+// Real mutation/gate/persistence ordering, notes/status undo, repair IDs, and
+// delayed index persistence live in `ArchiveMetadataEditingCoordinator`. This
+// extension keeps thin semantic delegates plus intentionally retained VM
+// integration: user-created folder operation (`createNewSong`), root
+// authorization via `NewSongFolderCreator`, preview cache/audio-analysis
+// invalidation and view selection/playback, and Done authorization capture and
+// revoke (`revokeBoundDoneWork` + Vault queue). `replaceSong` stays here as the
+// catalog/selection applier invoked through the coordinator's
+// `applyReplacement` callback. Read-only peers (`metadataRepairSongIDs`,
+// `workflowUndoManager`, `indexPersistTask`) live in the primary view-model
+// file with no writable forwards.
 
 extension ArchiveBrowserViewModel {
-    /// Manager currently driving an undo/redo, so the inverse re-registers on
-    /// the same stack that drove it (window-bound while active, owned or
-    /// injected otherwise). Falls back to `workflowUndoManager` for fresh
-    /// edits. Without this, an undo running after unbind would register its
-    /// redo on the owned stack while the undo came from the window manager.
-    var activeWorkflowUndoManager: UndoManager? {
-        let candidates: [UndoManager?] = [
-            injectedWorkflowUndoManager,
-            boundWindowUndoManager,
-            ownedWorkflowUndoManager,
-        ]
-        for candidate in candidates {
-            if let manager = candidate, manager.isUndoing || manager.isRedoing {
-                return manager
-            }
-        }
-        return workflowUndoManager
-    }
-
     func updateVirtualTitle(for song: Song, title: String) {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.virtualTitle = trimmed.isEmpty ? nil : trimmed
-        }
+        metadataEditing.updateVirtualTitle(for: song, title: title)
     }
 
     func updateAppNote(for song: Song, note: String) {
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.appNote = trimmed.isEmpty ? nil : trimmed
-        }
+        metadataEditing.updateAppNote(for: song, note: note)
     }
 
     func updateAliases(for song: Song, aliasesText: String) {
-        let aliases = aliasesText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.aliases = aliases
-        }
+        metadataEditing.updateAliases(for: song, aliasesText: aliasesText)
     }
 
-    /// Single-commit title/aliases/note edit shared by the autosave flush and
-    /// metadata undo. Normalizes exactly like the single-field updaters, then
-    /// goes through the one existing applyMetadataMerge/commit path so a
-    /// three-field save persists/replaces/recomputes the catalog once instead
-    /// of three times. Unrelated stored fields are preserved by the merge.
+    /// Single-commit title/aliases/note edit. Normalization happens once in
+    /// the owner; this stays a thin delegate so autosave and undo share one
+    /// commit path.
     func applySongNotes(
         for song: Song,
         virtualTitle: String,
         aliasesText: String,
         appNote: String
     ) {
-        let trimmedTitle = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedNote = appNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        let aliases = aliasesText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.virtualTitle = trimmedTitle.isEmpty ? nil : trimmedTitle
-            metadata.aliases = aliases
-            metadata.appNote = trimmedNote.isEmpty ? nil : trimmedNote
-        }
+        metadataEditing.applySongNotes(
+            for: song,
+            virtualTitle: virtualTitle,
+            aliasesText: aliasesText,
+            appNote: appNote
+        )
     }
 
-    /// NMH-048: autosave unsaved title/aliases/note drafts when the selected
-    /// song changes. Looks up the previous song by id and applies the same
-    /// merge as Save in a single commit. No-op if the song disappeared.
+    /// NMH-048: autosave unsaved drafts when the selected song changes.
     func flushMetadataDrafts(
         songID: String,
         virtualTitle: String,
         aliases: String,
         appNote: String
     ) {
-        guard let song = songs.first(where: { $0.id == songID }) else { return }
-        applySongNotes(for: song, virtualTitle: virtualTitle, aliasesText: aliases, appNote: appNote)
+        metadataEditing.flushMetadataDrafts(
+            songID: songID,
+            virtualTitle: virtualTitle,
+            aliases: aliases,
+            appNote: appNote
+        )
     }
 
     /// NMH-048: last few recorded workflow status transitions for the detail
     /// pane, newest last. Empty when the store does not record history.
     func statusHistory(for song: Song, limit: Int = 5) -> [WorkflowStatusChange] {
-        guard let reader = catalog.songMetadataStore as? WorkflowStatusHistoryReading else {
-            return []
-        }
-        let all = (try? reader.statusHistory(forSongID: song.id)) ?? []
-        return Array(all.suffix(limit))
+        metadataEditing.statusHistory(for: song, limit: limit)
     }
 
-    /// NMH-048: metadata commits (Save, Return, autosave flush) are undoable
-    /// as a single "Edit Song Notes" step. Only music-adjacent SQLite values
-    /// are restored; music files are never written.
+    /// NMH-048: metadata commits are undoable as a single "Edit Song Notes"
+    /// step. Only music-adjacent SQLite values are restored; music files are
+    /// never written.
     func registerMetadataUndo(
         songID: String,
         previousVirtualTitle: String?,
@@ -105,45 +77,11 @@ extension ArchiveBrowserViewModel {
         previousAppNote: String?,
         actionName: String = "Edit Song Notes"
     ) {
-        guard let undoManager = activeWorkflowUndoManager else { return }
-        undoManager.registerUndo(withTarget: workflowUndoTarget) { target in
-            MainActor.assumeIsolated {
-                target.undoMetadata(
-                    songID: songID,
-                    previousVirtualTitle: previousVirtualTitle,
-                    previousAliases: previousAliases,
-                    previousAppNote: previousAppNote,
-                    actionName: actionName
-                )
-            }
-        }
-        if !undoManager.isUndoing, !undoManager.isRedoing {
-            undoManager.setActionName(actionName)
-        }
-    }
-
-    func undoMetadata(
-        songID: String,
-        previousVirtualTitle: String?,
-        previousAliases: [String],
-        previousAppNote: String?,
-        actionName: String = "Edit Song Notes"
-    ) {
-        guard let song = songs.first(where: { $0.id == songID }) else { return }
-        let currentTitle = song.virtualTitle
-        let currentAliases = song.aliases
-        let currentNote = song.appNote
-        applySongNotes(
-            for: song,
-            virtualTitle: previousVirtualTitle ?? "",
-            aliasesText: previousAliases.joined(separator: ", "),
-            appNote: previousAppNote ?? ""
-        )
-        registerMetadataUndo(
+        metadataEditing.registerMetadataUndo(
             songID: songID,
-            previousVirtualTitle: currentTitle,
-            previousAliases: currentAliases,
-            previousAppNote: currentNote,
+            previousVirtualTitle: previousVirtualTitle,
+            previousAliases: previousAliases,
+            previousAppNote: previousAppNote,
             actionName: actionName
         )
     }
@@ -153,7 +91,7 @@ extension ArchiveBrowserViewModel {
         for song: Song,
         registerUndo: Bool = true
     ) {
-        updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
+        metadataEditing.applyWorkflowStatus(status, for: song, registerUndo: registerUndo)
     }
 
     func updateWorkflowStatus(
@@ -161,30 +99,11 @@ extension ArchiveBrowserViewModel {
         status: ProjectWorkflowStatus?,
         registerUndo: Bool = true
     ) {
-        guard canMutateWorkflowStatus(for: song) else { return }
-        let previous = songs.first(where: { $0.id == song.id })?.workflowStatus ?? song.workflowStatus
-        guard previous != status else { return }
-        if status == .done, canArchiveInProjectVault(song) {
-            requestWorkflowDoneArchive(for: song)
-            return
-        }
-        commitWorkflowStatus(status, for: song)
-        if previous == .done, status != .done {
-            revokeBoundDoneWork(for: song.id)
-        }
-        if registerUndo {
-            registerWorkflowStatusUndo(
-                songID: song.id,
-                previousStatus: previous,
-                actionName: "Change Workflow Status"
-            )
-        }
+        metadataEditing.updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
     }
 
     func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) {
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.workflowStatus = status
-        }
+        metadataEditing.commitWorkflowStatus(status, for: song)
     }
 
     func registerWorkflowStatusUndo(
@@ -192,40 +111,9 @@ extension ArchiveBrowserViewModel {
         previousStatus: ProjectWorkflowStatus?,
         actionName: String
     ) {
-        guard let undoManager = activeWorkflowUndoManager else { return }
-        undoManager.registerUndo(withTarget: workflowUndoTarget) { target in
-            MainActor.assumeIsolated {
-                target.undoWorkflowStatus(
-                    songID: songID,
-                    previousStatus: previousStatus,
-                    actionName: actionName
-                )
-            }
-        }
-        if !undoManager.isUndoing, !undoManager.isRedoing {
-            undoManager.setActionName(actionName)
-        }
-    }
-
-    func undoWorkflowStatus(
-        songID: String,
-        previousStatus: ProjectWorkflowStatus?,
-        actionName: String
-    ) {
-        guard let song = songs.first(where: { $0.id == songID }) else { return }
-        let currentStatus = song.workflowStatus
-        let leavingDone = currentStatus == .done && previousStatus != .done
-        commitWorkflowStatus(previousStatus, for: song)
-        if leavingDone {
-            revokeBoundDoneWork(for: songID)
-            if let live = songs.first(where: { $0.id == songID }),
-               !FileManager.default.fileExists(atPath: live.folderPath.path) {
-                setProjectVaultStatusMessage("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
-            }
-        }
-        registerWorkflowStatusUndo(
+        metadataEditing.registerWorkflowStatusUndo(
             songID: songID,
-            previousStatus: currentStatus,
+            previousStatus: previousStatus,
             actionName: actionName
         )
     }
@@ -237,7 +125,9 @@ extension ArchiveBrowserViewModel {
     /// always needs a fresh confirmation. Other songs are untouched. Queue,
     /// retry, and stop mutations are owned by
     /// `ProjectVaultOperationCoordinator`; this method only owns the
-    /// capture/dialog presentation before delegating.
+    /// capture/dialog presentation before delegating. Retained in the view
+    /// model: Done authorization capture and revoke belong to VM/Vault; the
+    /// metadata owner requests this through its `revokeDoneWork` callback.
     func revokeBoundDoneWork(for songID: String) {
         cancelBoundArchiveCapture(for: songID)
         if pendingArchiveConfirmation?.songID == songID {
@@ -245,6 +135,8 @@ extension ArchiveBrowserViewModel {
         }
         vaultOperations.revokeDoneWork(songID: songID)
     }
+
+    // MARK: - Retained preview / CPR / hidden integration
 
     func setManualMainPreview(for song: Song, candidateID: String) {
         guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
@@ -332,10 +224,10 @@ extension ArchiveBrowserViewModel {
     }
 
     func assignCollaborators(to song: Song, collaboratorIDs: [String]) {
-        applyMetadataMerge(for: song) { metadata, _ in
-            metadata.collaboratorIDs = collaboratorIDs
-        }
+        metadataEditing.assignCollaborators(to: song, collaboratorIDs: collaboratorIDs)
     }
+
+    // MARK: - Retained user-created folder operation
 
     func createNewSong(request: NewSongRequest) throws -> Song {
         var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)
@@ -375,142 +267,43 @@ extension ArchiveBrowserViewModel {
         return created
     }
 
+    // MARK: - Core delegates (owned by the coordinator)
+
     func applyMetadataMerge(
         for song: Song,
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) {
-        guard !blocksGenericProjectVaultFileActions(for: song) else { return }
-        // Fail-closed (M1): refuse before building/persisting defaulted values.
-        // No SQLite write and no in-memory replacement on refusal; good rows
-        // are unaffected because the gate is per-song (or global only after a
-        // failed whole-load). No full-table read here.
-        if let blockWarning = catalog.metadataEditBlockWarning(for: song.id) {
-            recordPersistenceWarning(blockWarning)
-            return
-        }
-        guard let merged = ArchiveSongMetadataEditor.mergedSongAfterEdit(
-            for: song,
-            in: songs,
-            collaborators: collaborators,
-            rankingRefresh: rankingRefresh,
-            mutate: mutate
-        ) else { return }
-        commitSongMetadataUpdate(merged)
-    }
-
-    func commitSongMetadataUpdate(_ updated: Song) {
-        // Backstop for direct callers: the same gate as applyMetadataMerge so a
-        // stale caller cannot replace in-memory state and then hit the store
-        // with defaulted values. Refusal leaves catalog and SQLite untouched.
-        if let blockWarning = catalog.metadataEditBlockWarning(for: updated.id) {
-            recordPersistenceWarning(blockWarning)
-            return
-        }
-        // Persist before replacing in-memory state. If the row turned corrupt
-        // after the last load, the store backstop refuses the write and records
-        // the corruption; the post-write gate check below then keeps the
-        // in-memory catalog (and the scheduled index snapshot, which reads live
-        // catalog state at fire time) unchanged. An ordinary storage failure is
-        // not corruption-blocked, so the visible edit is still retained with a
-        // warning (see testMetadataSaveFailureIsVisibleWithoutDiscardingEdit).
-        let warning = catalog.persistUserMetadata(for: [updated])
-        if let warning, catalog.metadataEditBlockWarning(for: updated.id) != nil {
-            recordPersistenceWarning(warning)
-            syncMetadataRepairState()
-            return
-        }
-        replaceSong(updated)
-        if let warning {
-            recordPersistenceWarning(warning)
-        }
-        scheduleDebouncedIndexPersist()
+        metadataEditing.applyMetadataMerge(for: song, rankingRefresh: rankingRefresh, mutate: mutate)
     }
 
     /// Coalesce full-catalog JSON index writes while the user edits metadata.
     func scheduleDebouncedIndexPersist() {
-        scheduleIndexPersist(afterNanoseconds: 500_000_000)
+        metadataEditing.scheduleDebouncedIndexPersist()
     }
 
-    /// Serialized off-main-actor index-snapshot persist. Reads live catalog state at fire time so a
-    /// later scan cannot be overwritten by a stale snapshot, and chains on the previous persist task
-    /// so writes land in schedule order even when an older write is still in flight. Only the cache
-    /// snapshot goes through here — the metadata store stays synchronous (and authoritative), so a
-    /// stale in-flight snapshot can never clobber a fresh edit.
+    /// Serialized off-main-actor index-snapshot persist. Reads live catalog
+    /// state at fire time; only the cache snapshot goes through here — the
+    /// metadata store stays synchronous and authoritative.
     func scheduleIndexPersist(afterNanoseconds delay: UInt64) {
-        guard !roots.isEmpty else { return }
-        let previous = indexPersistTask
-        previous?.cancel()
-        let generation = rootGeneration
-        indexPersistTask = Task { @MainActor [weak self] in
-            _ = await previous?.value
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: delay)
-            }
-            guard let self, !Task.isCancelled else { return }
-            guard !self.roots.isEmpty, self.rootGeneration == generation else { return }
-            if let warning = await self.catalog.persistCachedIndexDetached(
-                roots: self.roots,
-                songs: self.scannedSongs,
-                scannedAt: self.scanDiagnostics?.scannedAt ?? Date()
-            ) {
-                self.recordPersistenceWarning(warning)
-            }
-        }
+        metadataEditing.scheduleIndexPersist(afterNanoseconds: delay)
     }
 
     /// Mirrors the catalog's corrupt-row gate for the views, limited to songs
     /// in the current catalog.
     func syncMetadataRepairState() {
-        let present = Set(scannedSongs.map(\.id)).union(songs.map(\.id))
-        let ids = catalog.corruptSongIDs().intersection(present)
-        if ids != metadataRepairSongIDs {
-            metadataRepairSongIDs = ids
-        }
+        metadataEditing.syncRepairState()
     }
 
-    /// Explicit Repair Song Details (D2). The store backs up each raw row and
-    /// resets only the lists that can't be read; everything else is kept. The
-    /// repaired rows are re-read and merged back into the live catalog, which
-    /// unblocks their edits.
+    /// Explicit Repair Song Details (D2). Merges exact reloaded rows back
+    /// into the live catalog and updates the integrity warning.
     func repairSongMetadata(songIDs: [String]) {
-        guard !songIDs.isEmpty else { return }
-        let result = catalog.repairSongMetadata(songIDs: songIDs)
-        let collaboratorsByID = Dictionary(uniqueKeysWithValues: collaborators.map { ($0.id, $0) })
-        var repairedNames: [String] = []
-        for songID in songIDs {
-            guard let metadata = result.reloaded[songID] else { continue }
-            let current = songs.first(where: { $0.id == songID }) ?? scannedSongs.first(where: { $0.id == songID })
-            guard let current else { continue }
-            let merged = ArchiveMetadataMerger.merge(
-                scanned: current,
-                metadata: metadata,
-                collaboratorsByID: collaboratorsByID
-            )
-            replaceSong(merged)
-            repairedNames.append(SongMetadataIntegrityCopy.name(of: merged))
-        }
-        syncMetadataRepairState()
-        if let current = persistenceWarningMessage, SongMetadataIntegrityCopy.isIntegrityWarning(current) {
-            persistenceWarningMessage = catalog.metadataIntegrityWarning()
-        }
-        var parts: [String] = []
-        if !repairedNames.isEmpty {
-            parts.append(SongMetadataIntegrityCopy.repaired(names: repairedNames, cleared: result.clearedLists))
-        }
-        if !result.failedSongIDs.isEmpty {
-            let failedNames = result.failedSongIDs.map { id in
-                songs.first(where: { $0.id == id }).map(SongMetadataIntegrityCopy.name(of:))
-                    ?? SongMetadataIntegrityCopy.folderName(for: id)
-            }
-            parts.append(SongMetadataIntegrityCopy.repairFailed(names: failedNames))
-        }
-        setStatusMessage(parts.joined(separator: " "))
-        if !repairedNames.isEmpty {
-            scheduleIndexPersist(afterNanoseconds: 0)
-        }
+        metadataEditing.repairSongMetadata(songIDs: songIDs)
     }
 
+    /// Catalog/selection applier. Retained here as VM integration; invoked by
+    /// the coordinator through `applyReplacement` so browse recompute and
+    /// selection stay with the view model.
     func replaceSong(_ updated: Song) {
         mutateCatalog {
             if let index = songs.firstIndex(where: { $0.id == updated.id }) {

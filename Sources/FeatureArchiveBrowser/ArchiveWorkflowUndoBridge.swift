@@ -3,23 +3,24 @@ import Foundation
 import NikoMusicCore
 import SwiftUI
 
-/// Weak proxy that breaks the viewModel → UndoManager → target → viewModel
+/// Weak proxy that breaks the coordinator → UndoManager → target → coordinator
 /// retain cycle.
 ///
 /// `UndoManager.registerUndo(withTarget:)` retains its target until the stack
-/// is cleared. Registering with the view model itself would therefore pin the
-/// view model forever. The view model owns both the stack and this target; the
-/// stack retains only the target, which points back weakly.
+/// is cleared. Registering with the coordinator itself would therefore pin it
+/// forever. The coordinator owns both the stack and this target; the stack
+/// retains only the target, which points back weakly. The target never retains
+/// the view model.
 @MainActor
 final class ArchiveWorkflowUndoTarget: NSObject {
-    weak var viewModel: ArchiveBrowserViewModel?
+    weak var coordinator: ArchiveMetadataEditingCoordinator?
 
     func undoWorkflowStatus(
         songID: String,
         previousStatus: ProjectWorkflowStatus?,
         actionName: String
     ) {
-        viewModel?.undoWorkflowStatus(
+        coordinator?.undoWorkflowStatus(
             songID: songID,
             previousStatus: previousStatus,
             actionName: actionName
@@ -33,7 +34,7 @@ final class ArchiveWorkflowUndoTarget: NSObject {
         previousAppNote: String?,
         actionName: String
     ) {
-        viewModel?.undoMetadata(
+        coordinator?.undoMetadata(
             songID: songID,
             previousVirtualTitle: previousVirtualTitle,
             previousAliases: previousAliases,
@@ -47,8 +48,8 @@ final class ArchiveWorkflowUndoTarget: NSObject {
 ///
 /// SwiftUI's key window (`AppKitWindow`) answers `undo:` itself, ahead of any
 /// responder spliced into `window.nextResponder`. The primary route is
-/// therefore binding: the bridge view publishes the window's existing
-/// `undoManager` to `viewModel.boundWindowUndoManager` while this pane is
+/// therefore binding: the bridge view binds the window's existing
+/// `undoManager` via `bindWindowUndoManager` while this pane is
 /// active, so workflow registrations land on the manager the window's own
 /// `undo:` drives. This responder is the fallback for windows without a
 /// manager: it sits after the field editor, hosting views, and the window,
@@ -176,7 +177,7 @@ final class ArchiveWorkflowUndoBridgeView: NSView {
             // Scrub its registrations from the old window manager first so a
             // later window undo cannot revert this pane while another tool
             // shows (the shell keeps panes mounted and only flips isActive).
-            clearBoundWindowUndoManager(for: self.viewModel)
+            self.viewModel?.unbindWindowUndoManager()
         }
         self.viewModel = viewModel
         self.isActive = isActive
@@ -215,28 +216,23 @@ final class ArchiveWorkflowUndoBridgeView: NSView {
         attachedWindow = nil
         savedNextResponder = nil
         // Unbind: registrations after this resolve to the owned stack again.
-        // Scrub this view model's actions from the window-owned manager first
+        // Scrub this owner's actions from the window-owned manager first
         // so a later window undo cannot revert this pane (or cancel a Project
         // Vault transfer) while another tool shows. Only our target is
         // removed; other targets (e.g. text editing) are left intact.
-        clearBoundWindowUndoManager(for: viewModel)
+        viewModel?.unbindWindowUndoManager()
     }
 
-    /// Primary native route: publish the window's EXISTING undo manager (when
+    /// Primary native route: bind the window's EXISTING undo manager (when
     /// the window provides one) as the registration target while this pane is
-    /// active. Inactive or windowless → nil → the owned stack. Never creates
+    /// active. Inactive or windowless → unbound → the owned stack. Never creates
     /// a manager, never touches the delegate, never forces focus.
     private func bindWindowUndoManager() {
         guard let viewModel else { return }
         if isActive, let windowManager = window?.undoManager {
-            if viewModel.boundWindowUndoManager !== windowManager {
-                // Replacing the binding (nil or a different window): scrub the
-                // old manager first so stale actions cannot fire cross-tool.
-                clearBoundWindowUndoManager(for: viewModel)
-                viewModel.boundWindowUndoManager = windowManager
-            }
+            viewModel.bindWindowUndoManager(windowManager)
         } else {
-            clearBoundWindowUndoManager(for: viewModel)
+            viewModel.unbindWindowUndoManager()
         }
     }
 
@@ -265,19 +261,7 @@ final class ArchiveWorkflowUndoBridgeView: NSView {
     private func detachFromStaleWindow() {
         if attachedWindow != nil { detach() }
         chainResponder.hostWindow = nil
-        clearBoundWindowUndoManager(for: viewModel)
-    }
-
-    /// Scrub only this view model's registrations from the previously bound
-    /// window manager, leaving other targets (e.g. text editing) intact.
-    /// Must run before clearing or replacing the binding.
-    private func clearBoundWindowUndoManager(for viewModel: ArchiveBrowserViewModel?) {
-        guard let viewModel, let oldManager = viewModel.boundWindowUndoManager else {
-            viewModel?.boundWindowUndoManager = nil
-            return
-        }
-        oldManager.removeAllActions(withTarget: viewModel.workflowUndoTarget)
-        viewModel.boundWindowUndoManager = nil
+        viewModel?.unbindWindowUndoManager()
     }
 }
 

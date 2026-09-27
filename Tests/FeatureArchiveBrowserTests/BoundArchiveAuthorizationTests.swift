@@ -347,7 +347,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         }
 
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestArchiveNow(for: first)
         try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
@@ -397,7 +397,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         }
 
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestArchiveNow(for: first)
         try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
@@ -452,7 +452,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         viewModel.applyWorkflowStatus(.prod, for: song)
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
 
         let gate = CaptureGate()
         viewModel.projectVaultAuthCaptureProbe = { await gate.enterAndWait() }
@@ -522,7 +522,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
             return DeterministicBoundVaultRuntime.makeSnapshot(for: song)
         }
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestWorkflowDoneArchive(for: song)
         try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
@@ -779,7 +779,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // Prepare an Undo-revocable Done for the queued song without going
         // through capture: commit Done, then register its Undo step.
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
         viewModel.commitWorkflowStatus(.done, for: second)
         viewModel.registerWorkflowStatusUndo(songID: second.id, previousStatus: nil, actionName: "Mark Done")
 
@@ -902,7 +902,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let first = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
         viewModel.commitWorkflowStatus(.done, for: second)
         viewModel.registerWorkflowStatusUndo(songID: second.id, previousStatus: nil, actionName: "Mark Done")
 

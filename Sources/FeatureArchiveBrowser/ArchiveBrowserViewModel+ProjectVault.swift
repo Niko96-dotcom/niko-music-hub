@@ -7,7 +7,7 @@ extension ArchiveBrowserViewModel {
     /// archive scanner never walks the Dropbox root. Verified generations and explicitly
     /// linked archive folders are projected from the catalog when the user asks to see them.
     var canBrowseArchivedProjects: Bool {
-        projectVaultRuntime != nil && projectVaultPresentationContext != nil
+        projectVaultRuntime != nil && vaultObservation.context != nil
     }
 
     func recoverProjectVaultAndRefresh() async {
@@ -68,6 +68,9 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Archived visibility toggle rebuilds the catalog from the retained
+    /// snapshot list without another scan or round trip. Showing refreshes
+    /// snapshots for liveness; hiding never scans.
     func setShowArchivedProjects(_ isShown: Bool) {
         guard showArchivedProjects != isShown else {
             if isShown {
@@ -101,54 +104,11 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    /// Project Vault destinations are restore/review handles, never generic
-    /// filesystem authority. Source-path cards also stay non-actionable while a
-    /// destructive or binding review owns the project, even if the source path
-    /// happens to reappear before the next catalog rebuild.
+    /// Thin delegate to the observation owner, which holds the snapshot
+    /// index and bound-generation gating. Preserves existing callers in
+    /// non-migrated files with no duplicate logic here.
     func blocksGenericProjectVaultFileActions(for song: Song) -> Bool {
-        guard let snapshot = projectVaultSnapshot(for: song) else {
-            return false
-        }
-        let songPath = Self.vaultCanonicalPath(song.folderPath)
-        if let linked = linkedArchive(for: snapshot), songPath == Self.vaultCanonicalPath(linked.url) {
-            return true
-        }
-        if let restore = snapshot.restore,
-           restore.projectID == snapshot.record.id,
-           restore.completedAt == nil,
-           songPath == Self.vaultCanonicalPath(restore.destinationURL) {
-            return true
-        }
-        guard let transfer = snapshot.transfer else { return false }
-        let isSourcePath = songPath == Self.vaultCanonicalPath(transfer.sourceURL)
-        let isDestinationPath = songPath == Self.vaultCanonicalPath(transfer.destinationURL)
-        guard isSourcePath || isDestinationPath else { return false }
-
-        let terminalDestinationBlocks = isDestinationPath && [
-            VaultTransferState.archiveVerified,
-            .archivedLocal,
-            .archivedOnlineOnly,
-        ].contains(transfer.state)
-        let restoreBlocks = snapshot.restore.map {
-            $0.failureReason == .archiveTransferBindingUnavailable
-                || $0.failureReason == .activeDestinationIntegrityMismatch
-                || $0.phase == .superseded
-                || $0.supersededBy != nil
-        } ?? false
-        let incompletePostPromotionRestoreBlocks = snapshot.restore.map {
-            guard $0.completedAt == nil else { return false }
-            return $0.phase == .persistingActiveLocation || $0.phase == .openingInCubase
-        } ?? false
-        let destructiveRecoveryBlocks = transfer.state == .recoveryRequired
-            && (transfer.error?.origin == .removingActiveCopy
-                || transfer.error?.origin == .evictingProviderCache)
-        let supersededTransferBlocks = transfer.state == .superseded
-            || transfer.supersededBy != nil
-        return terminalDestinationBlocks
-            || restoreBlocks
-            || incompletePostPromotionRestoreBlocks
-            || destructiveRecoveryBlocks
-            || supersededTransferBlocks
+        vaultObservation.blocksGenericFileActions(for: song)
     }
 
     func canMutateWorkflowStatus(for song: Song) -> Bool {
@@ -187,6 +147,12 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Snapshot refresh orchestration. Runtime execution and user-visible
+    /// status stay here; snapshot/index/count/card storage and derivation
+    /// live in `ArchiveVaultObservation`. Fail-closed semantics preserved:
+    /// unavailable runtime clears to empty with no warning, while an
+    /// unreadable journal preserves the current presentation and records the
+    /// persistence fault.
     @discardableResult
     func refreshProjectVaultSnapshots() async -> Bool {
         guard let projectVaultRuntime else { return false }
@@ -196,29 +162,33 @@ extension ArchiveBrowserViewModel {
                 persistenceWarningMessage = nil
                 statusMessage = combinedStatusMessage(base: statusBaseMessage)
             }
-            projectVaultSnapshots = snapshots
             if statusBaseMessage == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
                !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {
                 setProjectVaultStatusMessage(nil)
             }
-            projectVaultSnapshotsByPath.removeAll()
-            snapshots.forEach(cacheProjectVaultSnapshot)
-            archivedProjectCount = archivedOnlySnapshots(from: snapshots).count
+            vaultObservation.stageSnapshots(snapshots)
             rebuildProjectVaultCatalog()
-            rebuildProjectVaultPresentationCache()
+            // Refresh cards even when catalog values stayed unchanged. A
+            // changed catalog also prebuilds cards in `songs.willSet`, before
+            // publishing the new songs.
+            vaultObservation.rebuildCards(for: songs, notifyWhenChanged: false)
+            // Single coalesced publish for the whole refresh (snapshots,
+            // catalog, cards); silent builds above never publish.
+            // `enqueueDone` may enqueue and publish separately through the
+            // operation owner, preserving existing timing.
+            objectWillChange.send()
             enqueueDoneVaultProjectsIfNeeded()
             await scheduleProjectVaultRecovery()
             return true
         } catch ProjectVaultRuntimeError.unavailable {
-            cancelProjectVaultRecovery()
-            projectVaultSnapshots = []
-            projectVaultSnapshotsByPath.removeAll()
-            archivedProjectCount = 0
+            vaultObservation.cancelRecovery()
+            vaultObservation.stageSnapshots([])
             rebuildProjectVaultCatalog()
-            rebuildProjectVaultPresentationCache()
+            vaultObservation.rebuildCards(for: songs, notifyWhenChanged: false)
+            objectWillChange.send()
             return false
         } catch {
-            cancelProjectVaultRecovery()
+            vaultObservation.cancelRecovery()
             recordProjectVaultReadFailure(error, context: "Project Vault state refresh failed")
             return false
         }
@@ -236,42 +206,27 @@ extension ArchiveBrowserViewModel {
         recordPersistenceWarning(Self.projectVaultReadFailureMessage)
     }
 
+    /// Recovery scheduling orchestration. Fetches the due date from the
+    /// runtime (execution stays here) and delegates timer lifecycle,
+    /// deduplication, and 30-second backoff to the observation owner with
+    /// narrow weak callbacks. The owner never retains this view model.
     func scheduleProjectVaultRecovery() async {
-        guard projectVaultBusySongIDs.isEmpty else { return }
-        guard let projectVaultRuntime,
-              let due = try? await projectVaultRuntime.nextAutomaticRecoveryDate() else {
-            cancelProjectVaultRecovery()
+        guard let projectVaultRuntime else {
+            vaultObservation.cancelRecovery()
             return
         }
-        // A busy mutation lease or unavailable provider can leave the due date
-        // unchanged. Back off locally instead of spinning on an overdue record.
-        let deadline = max(due, projectVaultLastRecoveryAttemptAt?.addingTimeInterval(30) ?? due)
-        guard projectVaultRecoveryDeadline != deadline else { return }
-        cancelProjectVaultRecovery()
-        projectVaultRecoveryDeadline = deadline
-        projectVaultRecoveryTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
-            } catch { return }
-            guard let self, !Task.isCancelled else { return }
-            guard self.projectVaultBusySongIDs.isEmpty else {
-                self.projectVaultRecoveryTask = nil
-                self.projectVaultRecoveryDeadline = nil
-                return
+        guard projectVaultBusySongIDs.isEmpty else { return }
+        let due = try? await projectVaultRuntime.nextAutomaticRecoveryDate()
+        vaultObservation.scheduleRecovery(
+            isBusy: { [weak self] in self?.projectVaultBusySongIDs.isEmpty == false },
+            dueDate: due,
+            recover: { [projectVaultRuntime] in
+                await projectVaultRuntime.recoverAtLaunch()
+            },
+            didRecover: { [weak self] in
+                await self?.refreshProjectVaultSnapshots()
             }
-            self.projectVaultLastRecoveryAttemptAt = Date()
-            await projectVaultRuntime.recoverAtLaunch()
-            guard !Task.isCancelled else { return }
-            self.projectVaultRecoveryTask = nil
-            self.projectVaultRecoveryDeadline = nil
-            await self.refreshProjectVaultSnapshots()
-        }
-    }
-
-    private func cancelProjectVaultRecovery() {
-        projectVaultRecoveryTask?.cancel()
-        projectVaultRecoveryTask = nil
-        projectVaultRecoveryDeadline = nil
+        )
     }
 
     private func enqueueDoneVaultProjectsIfNeeded() {
@@ -288,7 +243,10 @@ extension ArchiveBrowserViewModel {
             // record no failure, and leave the footer alone. Explicit manual
             // archiving still runs runtime admission and reports its actionable
             // Keep Local error; only the automatic path is quieted here.
-            if isIntentionalKeepLocalForAutomaticDoneSkip(song) { continue }
+            // Gating lives in the observation owner (pin OR over all key
+            // forms, runtime pin, presentation pin, and catalog Active-location
+            // matches); this loop stays as composition.
+            if vaultObservation.isIntentionalKeepLocalSkip(for: song) { continue }
             let transfer = projectVaultSnapshot(for: song)?.transfer
             if transfer != nil {
                 // A persisted transfer releases any capacity postponement
@@ -318,55 +276,5 @@ extension ArchiveBrowserViewModel {
         guard let presented = identityReviewPresentation,
               let bound = presented.song else { return false }
         return bound.id == song.id
-    }
-
-    /// Keep Local detection for the automatic Done path, using the same
-    /// identity/path keys as the snapshot and presentation logic: the catalog
-    /// project ID, the song ID, and the transfer source path in raw,
-    /// standardized, and resolved form, plus the runtime `pinned` flag (which
-    /// already agrees with what removal admission would refuse) and the
-    /// prepared presentation pin. Every source is OR-ed; a settings-only
-    /// check never clears a runtime pin.
-    private func isIntentionalKeepLocalForAutomaticDoneSkip(_ song: Song) -> Bool {
-        guard let context = projectVaultPresentationContext else { return false }
-        let keepLocal = context.keepLocalProjectIDs
-        if keepLocal.contains(song.id) { return true }
-        let songPathKeys: Set<String> = [
-            song.folderPath.path,
-            song.folderPath.standardizedFileURL.path,
-            song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
-            Self.vaultCanonicalPath(song.folderPath),
-        ]
-        if !keepLocal.isDisjoint(with: songPathKeys) { return true }
-        if let snapshot = projectVaultSnapshot(for: song) {
-            if snapshot.record.pinned { return true }
-            if keepLocal.contains(snapshot.record.id.description) { return true }
-            if Self.isKeepLocalPinned(context: context, snapshot: snapshot, song: song) { return true }
-        }
-        if projectVaultPresentation(for: song)?.isKeepLocal == true { return true }
-        return snapshotsContainKeepLocalMatch(for: song, context: context, keepLocal: keepLocal)
-    }
-
-    /// Catalog snapshots that are not path-cached (no transfer, no linked
-    /// archive) still carry the runtime pin and record ID. Match them to the
-    /// song by canonical Active location so a Keep Local pin stored under the
-    /// catalog project ID also skips the automatic Done copy.
-    private func snapshotsContainKeepLocalMatch(
-        for song: Song,
-        context: ProjectVaultPresentationContext,
-        keepLocal: Set<String>
-    ) -> Bool {
-        guard let activeRoot = context.activeRoot else { return false }
-        let songPath = Self.vaultCanonicalPath(song.folderPath)
-        let activeBase = activeRoot.fallbackURL.standardizedFileURL.resolvingSymlinksInPath()
-        for snapshot in projectVaultSnapshots {
-            guard snapshot.record.pinned || keepLocal.contains(snapshot.record.id.description) else { continue }
-            for location in snapshot.record.locations
-                where location.kind == .active && location.rootID == activeRoot.id {
-                let candidate = activeBase.appendingPathComponent(location.relativePath, isDirectory: true)
-                if Self.vaultCanonicalPath(candidate) == songPath { return true }
-            }
-        }
-        return false
     }
 }

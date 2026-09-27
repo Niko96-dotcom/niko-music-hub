@@ -70,9 +70,9 @@ Archive domain and safety. No SwiftUI/AppKit.
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 
 - [`ArchiveBrowserFeature.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserFeature.swift): `ToolFeature` conformance (`archive-browser`).
-- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): roots, browse, selection, scan host, metadata, Vault presentation/confirmations.
+- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): roots, browse, selection, scan host, and integration with metadata/Vault owners.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
-- Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift).
+- Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 
 ## Persistence, services, composition
@@ -89,8 +89,40 @@ Archive domain and safety. No SwiftUI/AppKit.
 
 - [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift) is the single MainActor owner for queue state, the running task/stop flag, per-request batch accounting, delayed retry tasks/attempts, and capacity postponement. It exposes intentional operations (`enqueue`, `cancelQueued`, `cancelAllPending`, `confirmStopActiveTransfer`, `revokeDoneWork`, `cancelDoneRetry`/`cancelPendingRetry`, `scheduleRetry`, `noteSuccessfulTransfer`, capacity note/release) and read-only state.
 - [`ArchiveBrowserViewModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift) forwards queue/retry/accounting reads for existing views/tests with no duplicate stored state, re-emits the coordinator's publishes for SwiftUI, and injects narrow callbacks (status setter/base, root IDs, presentation refresh, shell-job publish, vault logging, drain-to-recovery). All coordinator captures of the view model are weak.
-- Metadata Undo (`revokeBoundDoneWork` in [`ArchiveBrowserViewModel+Metadata.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift)) owns only capture/dialog presentation and delegates queue/retry/stop mutations to `revokeDoneWork`.
+- The Done revocation bridge (`revokeBoundDoneWork` in [`ArchiveBrowserViewModel+Metadata.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift)) owns only capture/dialog presentation and delegates queue/retry/stop mutations to `revokeDoneWork`.
 - Queue execution stays serial with duplicate prevention by song and canonical project identity, captured root revalidation before dispatch, truthful per-request stop/cancel counts, bounded Done retries (at most 3, same token downgraded copy-only), postponed non-retryable capacity until explicit reset, and shell-job publication/lifetime cancellation preserved.
+
+## Project Vault observation ownership
+
+[`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) owns the prepared settings context, provider health, runtime snapshots and canonical path index, immutable card cache, archived count, and automatic-recovery task/deadline/backoff.
+
+- Settings enter through `refreshContext(settings:songs:)`. Card reads use the prepared map without loading settings. `rebuildCards(for:)` derives the map before comparing values.
+- Normal refresh uses `stageSnapshots(_:)`, projects the catalog, then refreshes cards. A changed catalog also prebuilds cards in `songs.willSet` before publishing songs. The operation-scoped phase poller uses `applyPolledSnapshots(_:songs:)`, which reuses staging and publishes a changed snapshot once; unchanged snapshots are a no-op.
+- Snapshot/path validation, Keep Local pins, and generic-action blocking live beside their inputs. Archive projection may inspect filesystem paths and load metadata; it reports metadata-read failures through the supplied warning callback. It does not initiate scans or reload settings.
+- `scheduleRecovery` / `cancelRecovery` own deadline deduplication, busy checks, the 30-second backoff, and cancellation on deinitialization. Runtime execution and subsequent refresh enter through callbacks with weak view-model captures.
+- The view model retains runtime refresh orchestration, status composition, archived-visibility choice, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and a weak `objectWillChange` subscription connect the owner to existing views.
+
+## Archive metadata editing ownership
+
+[`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) owns edit validation and persistence ordering, notes/status undo, repair-song IDs, and delayed index persistence. It holds no catalog copy. The required immutable `ArchiveMetadataEditingHost` supplies live inputs and narrow mutation callbacks together; weak view-model captures and absent-input checks prevent edits after the host disappears.
+
+- Notes and ordinary workflow commands pass through the per-song integrity gate and authoritative metadata persistence before requesting a catalog replacement. Late corruption refuses replacement; ordinary storage failure retains the visible edit with a warning. `ArchiveCatalogCoordinator` retains the store and integrity-reporting machinery.
+- Owned, injected, and weak window-bound undo managers live in the editing owner. Explicit bind/unbind methods scrub only this owner's registrations. The weak undo target routes inverses back to the driving manager; native window behavior remains in `ArchiveWorkflowUndoBridge`.
+- `scheduleIndexPersist` serializes behind its predecessor, reads live songs when firing, and checks the captured root generation. Root reset cancels but retains an in-flight predecessor so its detached write cannot overwrite a newer snapshot. Deinitialization cancels pending work.
+- `repairSongMetadata` reloads and merges repaired rows and updates the repair-ID projection. Status and integrity-warning callbacks remain part of the view model's footer composition.
+
+The remaining ownership is intentional:
+
+| Owner | Retained responsibility and boundary |
+| --- | --- |
+| View model: catalog/browse | `songs` / `scannedSongs`, selected shelf/filter/search state, prepared search index, catalog replacement and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
+| View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
+| View model: UI integration | Selection/navigation, playback and preview-analysis invalidation, collaborator/intelligence projections, exports and status composition. |
+| View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
+| `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
+| `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
+
+The metadata extension retains the user-created-folder flow and the catalog/selection applier, plus preview/playback integration. It delegates editing and undo commands through the owner API; bound Done and ordinary status commits keep their existing distinct authorization paths.
 
 ## Shell navigation and tool-page scaffold (2026-09)
 
