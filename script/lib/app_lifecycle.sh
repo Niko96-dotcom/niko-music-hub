@@ -303,7 +303,7 @@ nmh_build_bundle() {
   # otherwise the bundle silently ships a stale binary (burned us on 2026-07-02).
   (
     cd "$NMH_ROOT_DIR" || exit 1
-    nmh_swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME"
+    nmh_swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME" --explicit-target-dependency-import-check error
   )
   build_dir="$(
     cd "$NMH_ROOT_DIR" || exit 1

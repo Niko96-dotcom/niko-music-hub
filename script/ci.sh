@@ -12,7 +12,7 @@ echo "== generate deterministic fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
 
 echo "== swift build =="
-swift build
+swift build --explicit-target-dependency-import-check error
 
 echo "== swift test (local deterministic gate) =="
 # The always-on Mac reports system-audio permission as authorized but cannot reliably
