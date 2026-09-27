@@ -28,6 +28,7 @@ NikoMusicHub (executable)
 
 - `FeatureArchiveBrowser` depends on `AppCore` and `NikoMusicCore` only.
 - Feature modules stay independent except the documented Stem Separation → Downloader exception.
+- Guarded ([ADR 020](decisions/020-module-boundary-checks.md)): the product builds pass `--explicit-target-dependency-import-check error`, and `ModuleBoundarySourceTests` pins Core's framework imports and the feature→feature edges. A new edge changes this document and that test in the same commit.
 - Composition: [`AppComposition`](../Sources/NikoMusicHub/AppComposition.swift) registers all features; the archive is the default home. Shared tool wiring flows through [`ToolContext`](../Sources/AppCore/Services/ToolContext.swift).
 
 ## Existing feature dependency: Stem Separation → Downloader
