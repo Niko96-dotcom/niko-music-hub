@@ -89,13 +89,16 @@ public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
 
     private let maximumCapturedOutputBytes: Int
     private let terminationGraceSeconds: TimeInterval
+    private let processGroups: LiveProcessGroupRegistry
 
     public init(
         maximumCapturedOutputBytes: Int = defaultMaximumCapturedOutputBytes,
-        terminationGraceSeconds: TimeInterval = 0.25
+        terminationGraceSeconds: TimeInterval = 0.25,
+        processGroups: LiveProcessGroupRegistry = .shared
     ) {
         self.maximumCapturedOutputBytes = max(1, maximumCapturedOutputBytes)
         self.terminationGraceSeconds = max(0, terminationGraceSeconds)
+        self.processGroups = processGroups
     }
 
     public func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
@@ -112,6 +115,7 @@ public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
             request: request,
             maximumCapturedOutputBytes: maximumCapturedOutputBytes,
             terminationGraceSeconds: terminationGraceSeconds,
+            processGroups: processGroups,
             onStandardOutput: onStandardOutput,
             onStandardError: onStandardError
         )
@@ -123,6 +127,74 @@ public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
     }
 }
 
+/// Process-wide set of the helper process groups that are running right now (ADR-019).
+///
+/// Every `FoundationExternalProcessRunner` starts its helper as the leader of a new
+/// process group, so helpers outlive the app unless something signals them. The runner
+/// records each group on spawn and forgets it as soon as the leader is reaped, so a
+/// reap never signals a PID the system has handed out again. The app delegate calls
+/// `reapLiveProcessGroups()` from `applicationWillTerminate`.
+public final class LiveProcessGroupRegistry: @unchecked Sendable {
+    public static let shared = LiveProcessGroupRegistry()
+
+    private let lock = NSLock()
+    private var groups: Set<pid_t> = []
+    private var hasReaped = false
+
+    public init() {}
+
+    public var liveGroupIDs: Set<pid_t> {
+        lock.withLock { groups }
+    }
+
+    func insert(_ groupID: pid_t) {
+        let reaped = lock.withLock { () -> Bool in
+            groups.insert(groupID)
+            return hasReaped
+        }
+        // A helper spawned after the reap snapshot (the app is exiting) would be missed.
+        if reaped {
+            _ = kill(-groupID, SIGKILL)
+        }
+    }
+
+    func remove(_ groupID: pid_t) {
+        lock.withLock { _ = groups.remove(groupID) }
+    }
+
+    /// Sends SIGTERM to every live group, waits up to `graceSeconds` for the groups to
+    /// empty, then sends SIGKILL to each group that still has members. Blocks the caller
+    /// for at most the grace period. A group whose leader exits during the grace period
+    /// still gets the SIGKILL, so a descendant that ignores TERM does not survive it.
+    /// A helper spawned after this call gets SIGKILL at once. Returns the groups that
+    /// were signalled.
+    @discardableResult
+    public func reapLiveProcessGroups(graceSeconds: TimeInterval = 1) -> Set<pid_t> {
+        let targets = lock.withLock { () -> Set<pid_t> in
+            hasReaped = true
+            return groups
+        }
+        guard !targets.isEmpty else { return [] }
+        for groupID in targets {
+            _ = kill(-groupID, SIGTERM)
+        }
+        let grace = graceSeconds.isFinite ? min(max(0, graceSeconds), 60) : 0
+        let deadline = ContinuousClock.now + .seconds(grace)
+        var remaining = targets
+        while true {
+            remaining = remaining.filter { kill(-$0, 0) == 0 }
+            if remaining.isEmpty || ContinuousClock.now >= deadline {
+                break
+            }
+            usleep(10_000)
+        }
+        for groupID in remaining {
+            _ = kill(-groupID, SIGKILL)
+        }
+        return targets
+    }
+}
+
 private final class POSIXProcessExecution: @unchecked Sendable {
     private enum Stream {
         case standardOutput
@@ -131,6 +203,7 @@ private final class POSIXProcessExecution: @unchecked Sendable {
 
     private let request: ExternalProcessRequest
     private let terminationGraceSeconds: TimeInterval
+    private let processGroups: LiveProcessGroupRegistry
     private let onStandardOutput: @Sendable (String) -> Void
     private let onStandardError: @Sendable (String) -> Void
     private let standardOutput: BoundedProcessData
@@ -156,11 +229,13 @@ private final class POSIXProcessExecution: @unchecked Sendable {
         request: ExternalProcessRequest,
         maximumCapturedOutputBytes: Int,
         terminationGraceSeconds: TimeInterval,
+        processGroups: LiveProcessGroupRegistry,
         onStandardOutput: @escaping @Sendable (String) -> Void,
         onStandardError: @escaping @Sendable (String) -> Void
     ) {
         self.request = request
         self.terminationGraceSeconds = terminationGraceSeconds
+        self.processGroups = processGroups
         self.onStandardOutput = onStandardOutput
         self.onStandardError = onStandardError
         self.standardOutput = BoundedProcessData(limit: maximumCapturedOutputBytes)
@@ -282,6 +357,10 @@ private final class POSIXProcessExecution: @unchecked Sendable {
             throw launchError(spawnStatus)
         }
 
+        // The child leads its own group (`setpgroup(0)`), so its PID is the group ID.
+        // Recorded before the wait starts, so the removal in `waitForExit` always follows.
+        processGroups.insert(childPID)
+
         setNonBlocking(standardOutputPipe[0])
         setNonBlocking(standardErrorPipe[0])
         let outputSource = makeReadSource(descriptor: standardOutputPipe[0], stream: .standardOutput)
@@ -385,6 +464,9 @@ private final class POSIXProcessExecution: @unchecked Sendable {
         repeat {
             waitedPID = waitpid(processID, &status, 0)
         } while waitedPID == -1 && errno == EINTR
+        // The leader is reaped (or can no longer be waited for), so its PID may be
+        // reused from here on: never signal this group from the registry again.
+        processGroups.remove(processID)
 
         guard waitedPID == processID else {
             finish(

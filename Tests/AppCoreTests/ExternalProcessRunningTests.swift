@@ -438,6 +438,124 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertEqual(result.termination, .signaled(signal: SIGKILL))
     }
 
+    /// ADR-019: the registry holds the group of a running helper and forgets it once the
+    /// helper's leader is reaped, so a later reap never signals a reused PID.
+    func testLiveProcessGroupRegistryTracksRunningHelperAndForgetsFinishedOne() async throws {
+        let registry = LiveProcessGroupRegistry()
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05, processGroups: registry)
+        let sleeper = Task.detached {
+            try await runner.run(
+                ExternalProcessRequest(executableURL: URL(fileURLWithPath: "/bin/sleep"), arguments: ["30"])
+            )
+        }
+        defer { sleeper.cancel() }
+
+        let sleeperGroup = try await waitForSingleLiveGroup(in: registry)
+        XCTAssertEqual(kill(-sleeperGroup, 0), 0, "The registered group must be a live process group")
+
+        let result = try await runner.run(
+            ExternalProcessRequest(executableURL: URL(fileURLWithPath: "/usr/bin/true"), arguments: [])
+        )
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(registry.liveGroupIDs, [sleeperGroup], "A finished helper's group must be forgotten")
+
+        sleeper.cancel()
+        _ = try? await sleeper.value
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !registry.liveGroupIDs.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(registry.liveGroupIDs, [], "A cancelled helper's group must be forgotten once reaped")
+    }
+
+    /// ADR-019: at app termination the reaper sends TERM, then KILL after the grace period,
+    /// to every live group, including a descendant that ignores TERM, and the pending run
+    /// returns a typed signal termination.
+    func testReapLiveProcessGroupsKillsRunningHelperAndItsChildren() async throws {
+        let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
+        let pidFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("process-reap-\(UUID().uuidString).pid")
+        defer { try? FileManager.default.removeItem(at: pidFile) }
+        let registry = LiveProcessGroupRegistry()
+        let runner = FoundationExternalProcessRunner(processGroups: registry)
+        let script = """
+        $child=fork();
+        if ($child == 0) {
+          $SIG{TERM}='IGNORE';
+          open($fh, '>', $ARGV[0]) or die $!;
+          print $fh $$;
+          close($fh);
+          sleep 30;
+          exit 0;
+        }
+        sleep 30;
+        """
+        let helper = Task.detached {
+            try await runner.run(
+                ExternalProcessRequest(executableURL: perlURL, arguments: ["-e", script, pidFile.path])
+            )
+        }
+        defer { helper.cancel() }
+
+        let group = try await waitForSingleLiveGroup(in: registry)
+        let pidDeadline = ContinuousClock.now + .seconds(5)
+        while (try? String(contentsOf: pidFile, encoding: .utf8))?.isEmpty ?? true, ContinuousClock.now < pidDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let descendantPID = try XCTUnwrap(pid_t(String(contentsOf: pidFile, encoding: .utf8)))
+
+        let signalled = registry.reapLiveProcessGroups(graceSeconds: 0.2)
+        XCTAssertEqual(signalled, [group])
+
+        let result = try await helper.value
+        guard case .signaled = result.termination else {
+            return XCTFail("Expected a typed signal termination, got \(result.termination)")
+        }
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while kill(-group, 0) == 0 || kill(descendantPID, 0) == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let groupStatus = kill(-group, 0)
+        let groupErrno = errno
+        XCTAssertEqual(groupStatus, -1, "The helper's process group survived the reap")
+        XCTAssertEqual(groupErrno, ESRCH)
+        let descendantStatus = kill(descendantPID, 0)
+        let descendantErrno = errno
+        XCTAssertEqual(descendantStatus, -1, "The TERM-ignoring descendant survived the reap")
+        XCTAssertEqual(descendantErrno, ESRCH)
+        XCTAssertEqual(registry.liveGroupIDs, [])
+    }
+
+    /// A helper spawned after the reap (the app is exiting) is killed at once instead of orphaned.
+    func testHelperSpawnedAfterReapIsKilledImmediately() async throws {
+        let registry = LiveProcessGroupRegistry()
+        XCTAssertEqual(registry.reapLiveProcessGroups(graceSeconds: 0), [])
+        let runner = FoundationExternalProcessRunner(processGroups: registry)
+
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sleep"),
+                arguments: ["30"],
+                timeoutSeconds: 10
+            )
+        )
+
+        XCTAssertEqual(result.termination, .signaled(signal: SIGKILL))
+        XCTAssertEqual(registry.liveGroupIDs, [])
+    }
+
+    private func waitForSingleLiveGroup(in registry: LiveProcessGroupRegistry) async throws -> pid_t {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while registry.liveGroupIDs.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let groups = registry.liveGroupIDs
+        XCTAssertEqual(groups.count, 1, "Expected exactly one live helper group, got \(groups)")
+        return try XCTUnwrap(groups.first)
+    }
+
     func testNoShellExecutionStringsAppearInRunnerSource() throws {
         let source = try String(
             contentsOfFile: "Sources/AppCore/Services/ExternalProcessRunning.swift",
