@@ -68,7 +68,11 @@ final class ArchiveVaultObservation: ObservableObject {
     /// then rebuilds the card map. The render path itself never calls
     /// `SettingsStore`. `settings` is the already-loaded snapshot (nil when
     /// the load failed); `songs` is the current catalog for card prebuild.
-    /// Returns true when context, health, or cards changed.
+    /// A health change always publishes, even for a silent refresh, so the
+    /// sidebar provider status never goes stale mid-transfer. Context-only or
+    /// cards-only changes stay silent when `notifyWhenChanged` is false.
+    /// Publishes at most once per call. Returns true when context, health,
+    /// or cards changed.
     @discardableResult
     func refreshContext(
         settings: AppSettings?,
@@ -88,7 +92,7 @@ final class ArchiveVaultObservation: ObservableObject {
         }
         let cardsChanged = rebuildCards(for: songs, notifyWhenChanged: false)
         let changed = contextChanged || healthChanged || cardsChanged
-        if changed, notifyWhenChanged {
+        if healthChanged || (changed && notifyWhenChanged) {
             objectWillChange.send()
         }
         return changed
@@ -121,12 +125,11 @@ final class ArchiveVaultObservation: ObservableObject {
 
     /// Stages list/index/count without touching cards. Normal refresh stages,
     /// rebuilds the catalog, then rebuilds cards once for the final songs.
-    /// Returns true when the list or count changed.
+    /// Full-refresh path: also updates the archived count. Returns true when
+    /// the list or count changed.
     @discardableResult
     func stageSnapshots(_ nextSnapshots: [ProjectVaultRuntimeSnapshot]) -> Bool {
-        let listChanged = nextSnapshots != snapshots
-        snapshots = nextSnapshots
-        rebuildPathIndex()
+        let listChanged = storeSnapshotsAndRebuildIndex(nextSnapshots)
         let nextCount = archivedOnlySnapshots(from: nextSnapshots).count
         let countChanged = nextCount != archivedCount
         if countChanged {
@@ -136,18 +139,29 @@ final class ArchiveVaultObservation: ObservableObject {
     }
 
     /// Atomic poller update. No-op when the list is unchanged (no rebuild, no
-    /// publish); otherwise reuses the intentional stage path for
-    /// list/index/count, rebuilds cards once, and publishes once.
+    /// publish); otherwise updates the list, rebuilds the path index, rebuilds
+    /// cards once, and publishes once. Leaves `archivedCount` unchanged; the
+    /// count changes only in the full-refresh path (`stageSnapshots`).
     @discardableResult
     func applyPolledSnapshots(
         _ nextSnapshots: [ProjectVaultRuntimeSnapshot],
         songs: [Song]
     ) -> Bool {
         guard nextSnapshots != snapshots else { return false }
-        _ = stageSnapshots(nextSnapshots)
+        _ = storeSnapshotsAndRebuildIndex(nextSnapshots)
         _ = rebuildCards(for: songs, notifyWhenChanged: false)
         objectWillChange.send()
         return true
+    }
+
+    /// Stores the snapshot list and rebuilds the path index. Shared by the
+    /// full-refresh and poll paths; the archived count stays with the
+    /// full-refresh path. Returns true when the list changed.
+    private func storeSnapshotsAndRebuildIndex(_ nextSnapshots: [ProjectVaultRuntimeSnapshot]) -> Bool {
+        let listChanged = nextSnapshots != snapshots
+        snapshots = nextSnapshots
+        rebuildPathIndex()
+        return listChanged
     }
 
     /// Root-change path (`clearRootBoundArchiveState`): clears the list,
