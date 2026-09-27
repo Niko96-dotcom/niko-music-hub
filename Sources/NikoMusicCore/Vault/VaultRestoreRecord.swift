@@ -39,6 +39,9 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
     public var error: String?
     public var failureReason: VaultRestoreFailureReason?
     public var supersededBy: UUID?
+    /// Set when the person stopped this restore. Launch recovery leaves a
+    /// stopped restore for an explicit retry instead of resuming it.
+    public var stoppedAt: Date?
 
     public var reviewGenerationURL: URL? {
         failureReason == .legacyProjectionEvidenceUnavailable ? archiveGenerationURL : nil
@@ -80,6 +83,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         self.error = nil
         self.failureReason = nil
         self.supersededBy = nil
+        self.stoppedAt = nil
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -87,7 +91,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         case linkedArchiveLocation, selectedProjectRelativePath
         case manifest, archiveTransferID, archiveTransferState, requiresArchiveMaterialization
         case projectionSupplement, phase, catalogLocationPersisted
-        case completedAt, createdAt, updatedAt, error, failureReason, supersededBy
+        case completedAt, createdAt, updatedAt, error, failureReason, supersededBy, stoppedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -124,6 +128,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
             forKey: .failureReason
         )
         supersededBy = try values.decodeIfPresent(UUID.self, forKey: .supersededBy)
+        stoppedAt = try values.decodeIfPresent(Date.self, forKey: .stoppedAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -148,6 +153,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         try values.encodeIfPresent(error, forKey: .error)
         try values.encodeIfPresent(failureReason, forKey: .failureReason)
         try values.encodeIfPresent(supersededBy, forKey: .supersededBy)
+        try values.encodeIfPresent(stoppedAt, forKey: .stoppedAt)
     }
 }
 

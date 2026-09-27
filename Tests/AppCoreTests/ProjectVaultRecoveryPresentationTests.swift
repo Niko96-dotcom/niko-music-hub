@@ -40,6 +40,24 @@ final class ProjectVaultRecoveryPresentationTests: XCTestCase {
         XCTAssertEqual(explanations.count, 6)
     }
 
+    func testStoppedRestoreSaysStoppedInsteadOfAStageFailure() {
+        let record = ProjectRecord(canonicalTitle: "Fixture", locations: [])
+        for phase in VaultRestorePhase.allCases where phase != .superseded {
+            var restore = makeRestore(projectID: record.id, phase: phase)
+            restore.error = "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
+            restore.stoppedAt = Date()
+            let presentation = ProjectVaultCardPresentation(record: record, restore: restore)
+            let retry = phase == .openingInCubase ? "Retry Open" : "Retry Restore"
+            XCTAssertEqual(presentation.state, .needsAttention)
+            XCTAssertEqual(presentation.retryRestoreID, restore.id)
+            XCTAssertEqual(presentation.primaryActionLabel, retry)
+            XCTAssertEqual(
+                presentation.explanation,
+                "The restore was stopped. Every copy was kept. Choose \(retry) to continue."
+            )
+        }
+    }
+
     func testProgressReportsStageAndTotalScopeWithoutCompletionPercentage() {
         let entry = VaultManifest.Entry(relativePath: "Fixture.cpr", type: .regularFile,
             byteCount: 1024, modifiedAt: Date(), sha256: nil)

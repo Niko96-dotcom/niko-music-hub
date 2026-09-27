@@ -256,6 +256,8 @@ public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
                 root: canonicalLocation,
                 expectedItems: expectedItems
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw FileProviderArchiveStorageError.materializationUnavailable
         }

@@ -259,9 +259,11 @@ public actor LocalVaultRestoreEngine {
         // side effect. A failed transaction yields no executable records.
         guard let journal = try? store.reconcileRestoreRecordsForRecoveryReport() else { return nil }
         var results: [VaultRestoreRecord] = []
-        for record in journal.records where record.failureReason == nil {
+        // A stopped restore waits for an explicit retry: resuming it here would
+        // download the Vault copy and open the project nobody asked for.
+        for record in journal.records where record.failureReason == nil && record.stoppedAt == nil {
             do {
-                results.append(try await execute(record, requiresArchiveTransferBinding: true))
+                results.append(try await execute(record, requiresArchiveTransferBinding: true, resumedAtLaunch: true))
             }
             catch is VaultTransferInterruption { results.append((try? store.restoreRecord(id: record.id)) ?? record) }
             catch { results.append((try? store.restoreRecord(id: record.id)) ?? record) }
@@ -286,9 +288,11 @@ public actor LocalVaultRestoreEngine {
 
     private func execute(
         _ initial: VaultRestoreRecord,
-        requiresArchiveTransferBinding: Bool
+        requiresArchiveTransferBinding: Bool,
+        resumedAtLaunch: Bool = false
     ) async throws -> VaultRestoreRecord {
         var record = initial
+        record.stoppedAt = nil
         do {
             try validateSelection(record.selectedProjectRelativePath, manifest: record.manifest)
             try validateArchiveGeneration(record.archiveGenerationURL, linkedLocation: record.linkedArchiveLocation)
@@ -493,6 +497,9 @@ public actor LocalVaultRestoreEngine {
             throw VaultTransferInterruption()
         } catch is CancellationError {
             record.error = "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
+            // Launch recovery was not started by the person, so a stop there
+            // (quit) leaves it to resume on the next launch.
+            if !resumedAtLaunch { record.stoppedAt = now() }
             try persist(&record)
             throw CancellationError()
         } catch {

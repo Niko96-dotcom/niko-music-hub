@@ -11,6 +11,7 @@ private actor StubFileProviderArchiveService: FileProviderArchiveServicing {
         case uploadTimeout
         case cancelled
         case materializationUnavailable
+        case materializeCancelled
         case evictionUnavailable
     }
 
@@ -62,6 +63,7 @@ private actor StubFileProviderArchiveService: FileProviderArchiveServicing {
         if behavior == .materializationUnavailable {
             throw FileProviderArchiveStorageError.lookupUnavailable
         }
+        if behavior == .materializeCancelled { throw CancellationError() }
     }
 
     func evict(root: URL) throws {
@@ -662,6 +664,28 @@ final class FileProviderArchiveStorageTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? FileProviderArchiveStorageError, .materializationUnavailable)
         }
+    }
+
+    func testManifestMaterializeRethrowsCancellation() async throws {
+        let service = StubFileProviderArchiveService(.materializeCancelled)
+        let storage = FileProviderArchiveStorage(root: root, service: service)
+        let manifest = VaultManifest(entries: [
+            .init(
+                relativePath: "Expected/Song.cpr",
+                type: .regularFile,
+                byteCount: 42,
+                modifiedAt: .distantPast,
+                sha256: "fixture"
+            ),
+        ])
+        do {
+            try await storage.materialize(root, manifest: manifest)
+            XCTFail("a cancelled download must not finish")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "a stopped download is not a provider failure: \(error)")
+        }
+        let materializationRequests = await service.materializationRequests
+        XCTAssertEqual(materializationRequests.count, 1)
     }
 
     func testEvictionFailureClearlyDegradesToUnsupported() async throws {
