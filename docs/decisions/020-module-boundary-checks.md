@@ -23,9 +23,9 @@ real tree, test targets included.
 ## Decision
 
 1. The product builds pass `--explicit-target-dependency-import-check error`:
-   `script/ci.sh` and `nmh_build_bundle` in `script/lib/app_lifecycle.sh` (dev
-   bundle, E2E smoke, local install and the release bundle). `dev.sh check` runs
-   `ci.sh`, so it follows. `Tests/test_release_scripts.sh` pins the bundle build
+   `script/ci.sh` (with the test targets) and `nmh_build_bundle` in
+   `script/lib/app_lifecycle.sh` (dev bundle, E2E smoke, local install and the
+   release bundle). `dev.sh check` runs `ci.sh`, so it follows. `Tests/test_release_scripts.sh` pins the bundle build
    line with the flag.
 2. `ModuleBoundarySourceTests.testNikoMusicCoreImportsOnlyAllowedFrameworks`
    pins Core's imports to Foundation, Darwin, SQLite3, AVFoundation, CryptoKit
@@ -37,7 +37,10 @@ real tree, test targets included.
    documented. Adding an edge means changing `docs/architecture.md` and this
    test in the same commit, like the design contract.
 4. `ModuleBoundarySourceTests.testProductBuildsUseStrictTargetImportCheck`
-   fails if a `swift build` command line in those two scripts drops the flag.
+   fails if any command in those two scripts that runs `swift build` (or
+   `nmh_swift build`) drops the flag, after stripping shell comments and
+   splitting `;`, `&&` and `||` chains. `--show-bin-path` only prints a path and
+   is exempt.
 
 ## Options
 
@@ -52,8 +55,9 @@ real tree, test targets included.
 - Boundary regressions fail locally with a clear message in `ci.sh`, the dev
   bundle and E2E.
 - The flag adds no measurable time to an incremental build.
-- `swift test` itself still builds without the flag; `ci.sh` runs the strict
-  `swift build` first, so a violation fails the gate before the tests run.
+- `ci.sh`'s strict build includes the test targets (`--build-tests`), so a
+  test target's undeclared import fails the gate too. `swift test` then reuses
+  that build.
 - The benchmark scripts build single targets for timing and stay as they are.
 
 ## Open
@@ -62,3 +66,9 @@ real tree, test targets included.
   should get the same flag. It is a release script and was left for the owner;
   the release bundle itself is already built through `nmh_build_bundle`.
 - Pinning the `@unchecked Sendable` count per module (optional) is not done.
+- The import scan is line-based: an import written after a block comment on the
+  same line (`/* x */ import SwiftUI`) is not seen, and an `import` line inside
+  a block comment or multi-line string would fail it falsely. Neither exists
+  today; strip comments and strings first if either shows up.
+- The documented edge list lives in the test constant; the test does not parse
+  `docs/architecture.md`, so the two are kept in step by review.

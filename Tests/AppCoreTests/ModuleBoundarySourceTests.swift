@@ -52,18 +52,23 @@ final class ModuleBoundarySourceTests: XCTestCase {
 
     func testProductBuildsUseStrictTargetImportCheck() throws {
         for script in ["script/ci.sh", "script/lib/app_lifecycle.sh"] {
-            let buildLines = try SourceTestSupport.read(script)
+            let buildCommands = try SourceTestSupport.read(script)
                 .components(separatedBy: .newlines)
+                // Drop shell comments, so a flag written after `#` does not count.
+                .map { $0.replacingOccurrences(of: #"(^|\s)#.*$"#, with: "", options: .regularExpression) }
+                // Check every command on a line (`a; b`, `a && b`, `a || b`), wherever it sits
+                // (`if ! swift build`, `(cd x && nmh_swift build ...)`).
+                .flatMap { $0.components(separatedBy: CharacterSet(charactersIn: ";&|")) }
                 .map { $0.trimmingCharacters(in: .whitespaces) }
-                // Command lines only (optionally behind env assignments or the nmh_swift wrapper).
-                .filter { $0.range(of: #"^(?:[A-Z_]+=\S+\s+)*(?:nmh_)?swift build\b"#, options: .regularExpression) != nil }
+                .filter { !$0.hasPrefix("echo ") && !$0.hasPrefix("printf ") }
+                .filter { $0.range(of: #"\b(?:nmh_)?swift\s+build\b"#, options: .regularExpression) != nil }
                 // --show-bin-path only prints the build directory; it compiles nothing.
                 .filter { !$0.contains("--show-bin-path") }
-            XCTAssertFalse(buildLines.isEmpty, "No swift build line found in \(script)")
-            for line in buildLines {
+            XCTAssertFalse(buildCommands.isEmpty, "No swift build command found in \(script)")
+            for command in buildCommands {
                 XCTAssertTrue(
-                    line.contains(Self.strictImportCheckFlag),
-                    "\(script) builds without \(Self.strictImportCheckFlag): \(line)"
+                    command.contains(Self.strictImportCheckFlag),
+                    "\(script) builds without \(Self.strictImportCheckFlag): \(command)"
                 )
             }
         }
@@ -72,10 +77,11 @@ final class ModuleBoundarySourceTests: XCTestCase {
     // MARK: - Helpers
 
     /// Top-level module names of every `import` statement in the file, including attributed
-    /// (`@preconcurrency import X`), kind (`import struct X.Y`) and submodule (`import X.Y`) forms.
+    /// (`@preconcurrency import X`), access-level (`public import X`), kind (`import struct X.Y`),
+    /// submodule (`import X.Y`) and `;`-separated forms.
     private func importedModules(in path: String) throws -> [String] {
         let source = try String(contentsOfFile: path, encoding: .utf8)
-        let pattern = #"^\s*(?:@\w+(?:\([^)]*\))?\s+)*import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)"#
+        let pattern = #"(?:^|;)[ \t]*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|package|internal|fileprivate|private)\s+)?import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)"#
         let regex = try NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
         return regex.matches(in: source, range: NSRange(source.startIndex..., in: source)).compactMap { match in
             Range(match.range(at: 1), in: source).map { String(source[$0]) }
