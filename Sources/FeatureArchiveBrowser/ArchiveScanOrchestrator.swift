@@ -422,6 +422,9 @@ final class ArchiveScanOrchestrator {
                 return
             }
 
+            // The metadata load behind a discarded batch never reaches the edit
+            // gate: only an accepted batch's songs become the ones edits merge into.
+            host.catalog.recordMetadataLoad(update.metadataLoad)
             host.applyCatalogScanUpdate(update.catalogApplyResult, roots: request.roots)
             host.diagnostics.log(.info, "Incremental archive rescan updated \(update.incrementalSongCount) song(s)")
         } catch is CancellationError {

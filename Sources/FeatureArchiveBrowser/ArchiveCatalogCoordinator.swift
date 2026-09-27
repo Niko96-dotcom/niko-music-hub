@@ -29,6 +29,15 @@ final class SongMetadataIntegrityState: @unchecked Sendable {
         lock.withLock { loadFailed = true }
     }
 
+    func record(_ outcome: SongMetadataLoadOutcome) {
+        switch outcome {
+        case .loaded(let corruptSongIDs, let names):
+            recordLoadSuccess(corruptSongIDs: corruptSongIDs, names: names)
+        case .failed:
+            recordLoadFailure()
+        }
+    }
+
     func recordCorrupt(songIDs: [String], names newNames: [String: String] = [:]) {
         lock.withLock {
             corruptIDs.formUnion(songIDs)
@@ -63,6 +72,14 @@ final class SongMetadataIntegrityState: @unchecked Sendable {
     func name(for songID: String) -> String {
         lock.withLock { names[songID] } ?? SongMetadataIntegrityCopy.folderName(for: songID)
     }
+}
+
+/// What one full metadata load learned for the edit gate. Work the scan
+/// orchestrator can still discard (incremental rescans) carries this back and
+/// records it only once the batch is accepted (ENG-03).
+enum SongMetadataLoadOutcome: Sendable, Equatable {
+    case loaded(corruptSongIDs: [String], names: [String: String])
+    case failed
 }
 
 /// Plain-language copy for song-detail integrity. Songs are named by display
@@ -199,6 +216,9 @@ struct ArchiveCatalogCoordinator {
         let scannedAt: Date
         /// Metadata-load degradation observed while merging (never a persist request).
         let persistenceWarning: String?
+        /// Not yet recorded: the orchestrator passes it to `recordMetadataLoad`
+        /// only after its discard and root-generation guards accept the batch.
+        let metadataLoad: SongMetadataLoadOutcome?
 
         var statusMessage: String {
             if incrementalSongCount == 1, let firstUpdatedTitle {
@@ -316,7 +336,9 @@ struct ArchiveCatalogCoordinator {
             )
         }.value
         let uniqueMerged = SongCatalogDeduplicator.uniqueByID(merged)
-        let withMetadata = mergeUserMetadataWithReport(into: uniqueMerged, collaborators: collaborators)
+        // The orchestrator can still discard this batch, so the load outcome
+        // goes back to it instead of reopening edits here (ENG-03).
+        let withMetadata = mergeUserMetadataDeferringIntegrity(into: uniqueMerged, collaborators: collaborators)
         let mergedResult = ScanResult(
             songs: withMetadata.songs,
             globalWarnings: incremental.result.globalWarnings,
@@ -329,7 +351,8 @@ struct ArchiveCatalogCoordinator {
             incrementalSongCount: incremental.result.songs.count,
             firstUpdatedTitle: incremental.result.songs.first?.displayTitle,
             scannedAt: scannedAt,
-            persistenceWarning: withMetadata.persistenceWarning
+            persistenceWarning: withMetadata.persistenceWarning,
+            metadataLoad: withMetadata.metadataLoad
         )
     }
 
@@ -486,23 +509,43 @@ struct ArchiveCatalogCoordinator {
         into scanned: [Song],
         collaborators: [Collaborator]
     ) -> (songs: [Song], persistenceWarning: String?) {
-        guard songMetadataStore != nil || collaboratorStore != nil else { return (scanned, nil) }
+        let merged = mergeUserMetadataDeferringIntegrity(into: scanned, collaborators: collaborators)
+        recordMetadataLoad(merged.metadataLoad)
+        return (merged.songs, merged.persistenceWarning)
+    }
+
+    /// Records a load outcome in the edit gate. Nil (no metadata store) is a no-op.
+    func recordMetadataLoad(_ outcome: SongMetadataLoadOutcome?) {
+        guard let outcome else { return }
+        integrity.record(outcome)
+    }
+
+    /// Merge without touching the edit gate; the caller records `metadataLoad`
+    /// once the result is known to be applied.
+    func mergeUserMetadataDeferringIntegrity(
+        into scanned: [Song],
+        collaborators: [Collaborator]
+    ) -> (songs: [Song], persistenceWarning: String?, metadataLoad: SongMetadataLoadOutcome?) {
+        guard songMetadataStore != nil || collaboratorStore != nil else { return (scanned, nil, nil) }
         var metadata: [String: SongUserMetadata] = [:]
         var warning: String? = nil
+        var outcome: SongMetadataLoadOutcome?
         if let songMetadataStore {
             switch loadMetadataReport(songMetadataStore) {
             case .success(let report):
                 metadata = report.metadata
                 let names = Self.names(for: scanned, ids: report.corruptSongIDs)
-                integrity.recordLoadSuccess(corruptSongIDs: report.corruptSongIDs, names: names)
+                outcome = .loaded(corruptSongIDs: report.corruptSongIDs, names: names)
                 if !report.corruptSongIDs.isEmpty {
-                    warning = SongMetadataIntegrityCopy.corrupt(report.corruptSongIDs.map { integrity.name(for: $0) })
+                    warning = SongMetadataIntegrityCopy.corrupt(
+                        report.corruptSongIDs.map { names[$0] ?? integrity.name(for: $0) }
+                    )
                     diagnostics.log(.error, "Song metadata skipped corrupt rows for: \(report.corruptSongIDs.sorted().joined(separator: ", "))")
                 }
             case .failure(let error):
                 diagnostics.log(.error, "Song metadata load failed: \(error)")
                 metadata = [:]
-                integrity.recordLoadFailure()
+                outcome = .failed
                 warning = SongMetadataIntegrityCopy.loadFailedScan
             }
         }
@@ -512,7 +555,7 @@ struct ArchiveCatalogCoordinator {
             metadataByID: metadata,
             collaboratorsByID: map
         )
-        return (songs, warning)
+        return (songs, warning, outcome)
     }
 
     /// Tolerant full read, shared by every metadata merge.

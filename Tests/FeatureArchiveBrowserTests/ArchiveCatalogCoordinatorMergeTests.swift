@@ -414,6 +414,52 @@ final class ArchiveCatalogCoordinatorMetadataSafetyTests: XCTestCase {
         XCTAssertEqual(try store.loadAllWithReport().metadata[badID]?.appNote, "post-repair edit")
     }
 
+    /// ENG-03 (T9): an incremental apply can still be discarded by the
+    /// orchestrator, so its successful metadata load must not reopen edits
+    /// that a failed load blocked. Only the commit updates the gate.
+    func testIncrementalApplyDoesNotClearLoadFailureBlockUntilCommitted() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-incremental-gate-\(UUID().uuidString)", isDirectory: true)
+        let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cpr = songFolder.appendingPathComponent("Song A.cpr")
+        FileManager.default.createFile(atPath: cpr.path, contents: Data("fixture".utf8))
+        let songID = songFolder.standardizedFileURL.path
+        let store = FailThenSucceedMetadataSafetyStore(metadata: [
+            songID: SongUserMetadata(songID: songID, virtualTitle: "Stored Title", appNote: "stored note"),
+        ])
+        let coordinator = ArchiveCatalogCoordinator(
+            archiveIndexStore: nil,
+            songMetadataStore: store,
+            collaboratorStore: nil,
+            diagnostics: CapturingDiagnostics()
+        )
+        let song = Song(folderPath: songFolder, originalFolderName: "Song A", displayTitle: "Song A")
+        _ = coordinator.applyFullScanResult(result: ScanResult(songs: [song]), roots: [root], collaborators: [], scannedAt: Date())
+        XCTAssertNotNil(coordinator.metadataEditBlockWarning(for: songID), "a failed load blocks edits")
+
+        let update = try await coordinator.applyIncrementalFilesystemUpdate(
+            changedPaths: [cpr],
+            roots: [root],
+            existingSongs: [song],
+            collaborators: [],
+            priorDiagnostics: nil
+        )
+        let applied = try XCTUnwrap(update, "the incremental must reach the metadata merge")
+        XCTAssertEqual(store.loadCallCount, 2)
+        XCTAssertEqual(applied.songs.first?.virtualTitle, "Stored Title")
+        XCTAssertNotNil(
+            coordinator.metadataEditBlockWarning(for: songID),
+            "an uncommitted incremental must leave the load-failure block in place"
+        )
+
+        // The orchestrator commits the load only once it accepts the batch.
+        XCTAssertEqual(applied.metadataLoad, .loaded(corruptSongIDs: [], names: [:]))
+        coordinator.recordMetadataLoad(applied.metadataLoad)
+        XCTAssertNil(coordinator.metadataEditBlockWarning(for: songID), "a committed successful load reopens edits")
+    }
+
     // MARK: - Helpers
 
     private func executeSafetySQL(_ sql: String, databaseURL: URL) throws {
@@ -483,6 +529,34 @@ private final class ThrowingMetadataSafetyStore: SongUserMetadataStoring, @unche
     func upsertAll(_ metadata: [SongUserMetadata]) throws {
         lock.withLock { recordedUpserts += 1 }
     }
+}
+
+/// First load throws, every later load succeeds (ENG-03).
+private final class FailThenSucceedMetadataSafetyStore: SongUserMetadataStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private let metadata: [String: SongUserMetadata]
+    private var loads = 0
+
+    init(metadata: [String: SongUserMetadata]) {
+        self.metadata = metadata
+    }
+
+    var loadCallCount: Int {
+        lock.withLock { loads }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] {
+        let isFirst = lock.withLock {
+            loads += 1
+            return loads == 1
+        }
+        if isFirst { throw MetadataSafetyStoreError.loadFailed }
+        return metadata
+    }
+
+    func upsert(_ metadata: SongUserMetadata) throws {}
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {}
 }
 
 private final class RecordingMetadataSafetyStore: SongUserMetadataStoring, @unchecked Sendable {
