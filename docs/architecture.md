@@ -1,6 +1,6 @@
 # Architecture — Niko Music Hub
 
-Last verified: 2026-09-26
+Last verified: 2026-09-27
 
 ## Principles
 
@@ -22,8 +22,8 @@ NikoMusicHub (executable)
 ├── FeatureDownloader
 ├── FeatureStemSeparation      # narrow exception below
 ├── AppUpdates                 # isolated Sparkle updater
-├── AppCore                    # ToolFeature, registry, jobs, inbox, settings, Vault runtime
-└── NikoMusicCore              # scan, rank, search, open safety, catalog helpers
+├── AppCore                    # shared shell kit + Project Vault runtime (see below)
+└── NikoMusicCore              # scan, rank, search, open safety, persistence, Vault engines
 ```
 
 - `FeatureArchiveBrowser` depends on `AppCore` and `NikoMusicCore` only.
@@ -60,13 +60,25 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Opening: `MusicItemOpener` with dry-run support for tests.
 - Safety: `PathSafety`, `ReadOnlyArchivePolicy`.
 - Catalog helpers: `SongCatalogDeduplicator`, `ArchiveMetadataMerger`.
+- `Vault/`: the Project Vault engines (`LocalVaultTransferEngine`, `LocalVaultRestoreEngine`, `VaultManifest`,
+  archive storage providers, the transfer state machine and automation rules).
+- `Persistence/`: the SQLite stores (`SQLiteArchiveDatabase` and the index, metadata, collaborator, catalog and
+  Vault transfer stores).
+- `Browse/` (filters, sort, smart shelves, health report), `Intelligence/` (archive intelligence, index export),
+  `Preview/` (mixdown BPM/key estimation, hook locator).
 
 ### `AppCore` (shared)
 
-- `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, `OutputInbox`, `SettingsStore` (`UserDefaultsSettingsStore`).
-- Shell jobs: `ShellJobStatusCenter`, `CancelCopy`.
+`AppCore` holds two things: the shared shell kit, and (until it gets its own target) the Project Vault runtime.
+
+- Shell kit: `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, the Output Inbox (`OutputInbox/`),
+  `SettingsStore` (`UserDefaultsSettingsStore`), diagnostics, `HelperTools/` (helper locator, installer, Set Up
+  model), `Archive/` (FSEvents archive-root watcher), `Audio/` (WAV output spec and verification), `QuickAccess/`
+  (router, menu bar model), `Navigation/` (`HubNavigationHistory`).
+- Shell jobs and quit: `ShellJobStatusCenter`, `CancelCopy`, `HubTerminationCoordinator` (see
+  [Running work and quit](#running-work-and-quit)).
 - Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
-- Shared UI: `ToolHeaderBlock`, hub design tokens (see `docs/design-contract.md`).
+- Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
 
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 
@@ -83,8 +95,8 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Song metadata: `SongUserMetadataStoring` SQLite rows (titles, aliases, notes, workflow status, collaborators); per-song merge/commit path with corrupt-row gating.
 - Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
 - Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).
-- Runtime composition: `LiveProjectVaultRuntime` is built with settings/transfer/catalog stores plus storage-provider, opener, activity/capacity probes; injected into the archive view model as `ProjectVaultOperating`.
-- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions, then passes the same `ToolContext` values to the shell and features.
+- Runtime composition: `LiveProjectVaultRuntime` is built with the settings, transfer and catalog stores and a project opener; storage providers and activity/capacity probes use their production defaults. It is injected into the archive view model as `ProjectVaultOperating`.
+- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions. It builds two `ToolContext` values over those same services: one for the archive view model, built before the registry, and a final one for the shell and features that also carries a registry-failure persistence issue.
 
 ## Project Vault operation ownership
 
@@ -147,6 +159,19 @@ The metadata extension retains the user-created-folder flow and the catalog/sele
   at/after removal the fate is uncertain, partial copies are never claimed verified, and review
   stays via Restore & Open / Recover Verified Project.
 
+## Running work and quit
+
+[ADR 019](decisions/019-running-work-and-quit.md) has the full contract.
+
+- Every tool registers work that must not be cut off with `ShellJobStatusCenter` (runner jobs, plus extra sources
+  with `blocksQuit`; recorder takes and helper installs register unlisted). `quitBlockingWork` is the one list quit
+  reads.
+- `applicationShouldTerminate` asks `HubTerminationCoordinator`: nothing running quits at once; otherwise one alert
+  names the work, and on confirm every cancel runs and the delegate returns `.terminateLater`. The coordinator
+  replies once the work has unwound or after 5 s.
+- `applicationWillTerminate` reaps helper process groups that are still alive (`LiveProcessGroupRegistry`: SIGTERM,
+  up to 1 s, then SIGKILL).
+
 ## Safety architecture
 
 Read-only archive writes are denied via
@@ -168,8 +193,9 @@ let resolved = try PathSafety().resolve(userPath, allowedRoots: settings.roots)
 
 [`MusicItemOpener.openLatestCPR(for:dryRun:allowedRoots:)` / `revealLatestCPR(for:dryRun:allowedRoots:)`](../Sources/NikoMusicCore/Opening/MusicItemOpener.swift):
 
-- `dryRun == true`: append to diagnostics/log file; no `NSWorkspace.open`
-- `dryRun == false`: `NSWorkspace.shared.open(cprURL)` or reveal-in-Finder variant for E2E
+- `dryRun == true`: writes a `[dry-run]` line to the injected log and opens nothing (E2E uses this).
+- `dryRun == false`: calls the injected `WorkspaceOpening` (`open` or `revealInFinder`). Core never imports AppKit;
+  the app and feature targets supply the `NSWorkspace`-backed opener.
 
 Vault destinations are restore/review handles, never generic filesystem authority; authorization checks, path safety, and actual file operations live in the runtime/engine and are unchanged by UI refactors.
 
