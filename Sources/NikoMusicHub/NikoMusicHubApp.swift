@@ -139,6 +139,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
 
+    /// Helpers run in their own process groups and would outlive the app (ADR-019).
+    func applicationWillTerminate(_ notification: Notification) {
+        LiveProcessGroupRegistry.shared.reapLiveProcessGroups()
+    }
+
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         HubDockMenu.make(
             registry: services?.registry ?? ToolRegistry(),
