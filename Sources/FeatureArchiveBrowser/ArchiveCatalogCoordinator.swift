@@ -413,8 +413,10 @@ struct ArchiveCatalogCoordinator {
                 merged.append(updated)
             } else if fileManager.fileExists(atPath: song.folderPath.path),
                       (try? fileManager.attributesOfItem(atPath: song.folderPath.path)[.type]) as? FileAttributeType
-                        != .typeSymbolicLink {
-                // A folder now replaced by a symlink is skipped by scans, as a full scan does.
+                        != .typeSymbolicLink,
+                      !isListingDenied(song.folderPath, fileManager: fileManager) {
+                // A folder now replaced by a symlink, or one the scan may no longer list, is
+                // skipped by scans, as a full scan does (ENG-13).
                 merged.append(song)
             }
         }
@@ -426,6 +428,19 @@ struct ArchiveCatalogCoordinator {
 
         merged.sort { $0.displayTitle.localizedCaseInsensitiveCompare($1.displayTitle) == .orderedAscending }
         return merged
+    }
+
+    /// True when listing the folder fails for lack of permission. Any other failure keeps
+    /// the existing song, as before.
+    nonisolated private static func isListingDenied(_ folder: URL, fileManager: FileManager) -> Bool {
+        do {
+            _ = try fileManager.contentsOfDirectory(atPath: folder.path)
+            return false
+        } catch let error as NSError {
+            if error.domain == NSCocoaErrorDomain, error.code == NSFileReadNoPermissionError { return true }
+            let posix = (error.userInfo[NSUnderlyingErrorKey] as? NSError) ?? error
+            return posix.domain == NSPOSIXErrorDomain && (posix.code == Int(EACCES) || posix.code == Int(EPERM))
+        }
     }
 
     private static func affectedSongIDs(

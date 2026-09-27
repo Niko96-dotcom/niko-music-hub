@@ -381,12 +381,22 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         case .valid:
             break
         }
+        // A folder that opens but cannot be listed (e.g. mode 0400) enumerates no entries and
+        // reports why only here. Such a song is skipped, never shown as having no projects.
+        // Errors on nested folders keep the existing behavior: that subtree is left out.
+        let songBasePath = folder.standardizedFileURL.path
+        var songBaseListingError: Error?
         guard let enumerator = fileManager.enumerator(
             at: folder,
             includingPropertiesForKeys: EnumeratedPathResolver.prefetchedKeys,
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles],
+            errorHandler: { url, error in
+                guard url.standardizedFileURL.path == songBasePath else { return true }
+                songBaseListingError = error
+                return false
+            }
         ) else {
-            return ([], [])
+            throw ScanError.songBaseUnlistable(underlying: nil)
         }
         var versions: [ProjectVersion] = []
         var previewMatches: [PreviewCandidateDetector.Match] = []
@@ -426,6 +436,9 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         if paths.encounteredBaseSwap {
             throw ScanError.songBaseLeavesBase(folder.path)
         }
+        if let songBaseListingError {
+            throw ScanError.songBaseUnlistable(underlying: songBaseListingError)
+        }
         if let previewError { throw previewError }
         return (versions.sorted(by: ProjectVersionDetector.newestFirst), previewMatches)
     }
@@ -438,6 +451,9 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         /// The song folder vanished or is not a directory. Both scans keep the existing
         /// vanished/not-directory behavior (silent drop in incremental, unscannable in full).
         case songBaseUnavailable(String)
+        /// The song folder opened but its entries could not be listed. Both scans report it
+        /// as an unscannable folder rather than a song with no project files.
+        case songBaseUnlistable(underlying: Error?)
 
         var errorDescription: String? {
             switch self {
@@ -445,6 +461,10 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 "Song folder is a symbolic link or was replaced: \(path)"
             case .songBaseUnavailable(let path):
                 "Song folder vanished or is not a directory: \(path)"
+            case .songBaseUnlistable(let underlying):
+                // No path: the skipped entry's label names the folder, and the full and
+                // incremental scans can reach it through differently spelled roots.
+                underlying?.localizedDescription ?? "Song folder could not be listed"
             }
         }
     }

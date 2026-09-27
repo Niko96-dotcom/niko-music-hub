@@ -119,6 +119,28 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         XCTAssertEqual(merged.map(\.displayTitle), ["Song A"])
     }
 
+    func testMergeIncrementalScanDropsAffectedSongWhoseFolderCannotBeListed() throws {
+        let root = try makeMergeTestRoot()
+        let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
+        let song = makeFolderSong(folder: songFolder, title: "Song A")
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        try fileManager.setAttributes([.posixPermissions: 0o400], ofItemAtPath: songFolder.path)
+        defer {
+            try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: songFolder.path)
+            try? fileManager.removeItem(at: root)
+        }
+
+        let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
+            existing: [song],
+            incremental: ScanResult(songs: []),
+            affectedSongIDs: [songFolder.standardizedFileURL.path],
+            fileManager: fileManager
+        )
+
+        XCTAssertTrue(merged.isEmpty)
+    }
+
     private func makeMergeTestRoot() throws -> URL {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent(".build", isDirectory: true)

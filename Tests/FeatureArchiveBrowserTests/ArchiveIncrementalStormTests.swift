@@ -82,6 +82,35 @@ final class ArchiveIncrementalStormTests: XCTestCase {
         XCTAssertFalse(incremental.skippedEntries.isEmpty)
     }
 
+    func testIncrementalRescanOfUnlistableSongFolderReportsSkipped() throws {
+        let unlistable = archive.songFolders[0]
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: unlistable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unlistable.path) }
+
+        let full = try MusicArchiveScanner().scan(roots: [archive.root])
+        let incremental = try MusicArchiveScanner().scanIncremental(
+            resolution: ArchiveSongFolderResolver.resolve(changedPaths: [unlistable], roots: [archive.root]),
+            roots: [archive.root]
+        )
+
+        XCTAssertTrue(incremental.songs.isEmpty)
+        let skipped = try XCTUnwrap(incremental.skippedEntries.first { $0.label == unlistable.lastPathComponent })
+        XCTAssertEqual(skipped.kind, .unreadableChild)
+        XCTAssertTrue(skipped.reason.contains("Could not scan folder"), skipped.reason)
+        XCTAssertEqual(incremental.skippedEntries, full.skippedEntries.filter { $0.label == unlistable.lastPathComponent })
+    }
+
+    func testSongFolderThatBecomesUnlistableLeavesCatalogLikeFullScan() async throws {
+        let unlistable = archive.songFolders[2]
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: unlistable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unlistable.path) }
+
+        let merged = try await applyDelivered(["\(unlistable.path)/Song 0002 v3.cpr"])
+
+        assertMatchesFullScan(merged)
+        XCTAssertFalse(merged.contains { $0.id == unlistable.standardizedFileURL.path })
+    }
+
     // MARK: - Helpers
 
     /// Feeds raw FSEvents paths through the real watcher (default 1,024-path budget), then
