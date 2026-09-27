@@ -21,12 +21,16 @@ behavior into Swift modules instead.
 
 ## Architecture
 
-- `NikoMusicCore`: pure Swift domain/scanning/search/opening safety. No SwiftUI, no AppKit UI.
-- `AppCore`: shared tool registry, settings, jobs, output inbox, diagnostics.
+- `NikoMusicCore`: pure Swift domain/scanning/search/opening safety, SQLite persistence and the Project Vault
+  engines. No SwiftUI, no AppKit UI.
+- `AppCore`: the shared shell kit (tool registry, context, settings, jobs and quit, output inbox, diagnostics,
+  shared components, helper tools) and, until it gets its own target, the Project Vault runtime.
 - `FeatureArchiveBrowser`: SwiftUI feature registered through the same `ToolFeature` boundary as the
   other tools.
 - Feature modules stay independent: `FeatureBPMTapper`, `FeatureAudioConverter`,
-  `FeatureAudioRecorder`, `FeatureDownloader`, `FeatureStemSeparation`.
+  `FeatureAudioRecorder`, `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is
+  Stem Separation → Downloader; `ModuleBoundarySourceTests` and the strict import check in `./script/ci.sh`
+  enforce the edges (`docs/decisions/020-module-boundary-checks.md`).
 - App target is `NikoMusicHub`; bundle identity is fixed in `BUNDLE_ID`.
 
 Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
@@ -65,8 +69,9 @@ Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
 
 Guarded by `Tests/AppCoreTests/SwiftUIStateOwnershipSourceTests.swift`. The short version:
 
-- The `App` observes only scene-structural state: `MenuBarExtraState` (is the extra inserted) and
-  `AppAppearanceController`. It never observes `HubShellSession` — any publish there would re-evaluate
+- The `App` observes only scene-structural state: `MenuBarExtraState` (is the extra inserted),
+  `AppAppearanceController` and `HubFullScreenState` (is the key window full screen, for the ⌃⌘F
+  item). It never observes `HubShellSession` — any publish there would re-evaluate
   every scene and re-init the shell (the old "LAUNCH-HANG" loops).
 - `HubShellSession` is the single owner of the selected tool and panel visibility, and records
   `HubNavigationHistory` itself. The launch tool is resolved once in `AppComposition` before any scene

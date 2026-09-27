@@ -13,7 +13,7 @@ This script:
 3. Runs the app with `NIKO_MUSIC_HUB_E2E_SMOKE=1` (CLI hook — not pgrep-only)
 4. Drives the same `ArchiveUserFlowSmoke` path as unit tests: fixture root → scan → fuzzy search **neon hk** → dry-run open latest CPR
 5. Asserts stdout includes user-flow markers, search match explainability (`search_match_summary`), CPR path, dry-run log, read-only write-probe, and unchanged fixture tree
-6. Launches the real `.app` bundle through `./script/build_and_run.sh --verify`, captures `.build/e2e-public-ui.png`, dumps the macOS accessibility tree, and asserts the normal first-run UI is clean
+6. Builds the `.app` bundle, launches its binary directly (by PID, with an isolated `NIKO_MUSIC_HUB_SETTINGS_SUITE`), captures `.build/e2e-public-ui.png`, dumps the macOS accessibility tree, and asserts the normal first-run UI is clean
 
 The public first-run UI smoke requires the Set Up sheet (helper tools + music archive rows) over the empty archive board, and rejects prototype/community-hostile strings such as `Outside Cubase`, `Dev Tool`, fixture roots, `/var/folders`, and exposed scan diagnostics.
 
@@ -50,7 +50,7 @@ When truncation applies, exports also include:
 
 After the fixture scan, the diagnostics panel lists **Skipped at roots** entries (`LOOSE_FILE.txt`, `README.md` on the generated fixture). Smoke asserts each panel line matches an export `skipped=kind label=… reason=…` row via `diagnostics_panel_skipped_entries_lines_match=` and `skipped_entries=2`.
 
-Smoke compares the exported `song=` / `warning=` rows with the fixture's expected warning lines (`Broken Folder Example: No CPR project files found`). The observed rows are logged as `diagnostics_export_song_warning_lines=`; this checks exported content, not rendered panel text.
+Smoke compares the exported `song=` / `warning=` rows with the fixture's expected warning lines (`Broken Folder Example: No project files (.cpr or .als) found`). The observed rows are logged as `diagnostics_export_song_warning_lines=`; this checks exported content, not rendered panel text.
 
 The **Songs** and **Song warnings** count rows match export `songs=`, `songs_with_warnings=`, and `total_song_warnings=` via `diagnostics_panel_scan_counts_match=` (panel values `diagnostics_panel_scan_counts_songs=` / `diagnostics_panel_scan_counts_song_warnings=`).
 
@@ -71,7 +71,7 @@ Fixture fuzzy/active searches all use the same **Active search** panel section (
 | **nts nly** (sidecar notes) | `diagnostics_panel_notes_search_*` |
 | **brkn fld** (folder) | `diagnostics_panel_folder_search_*` |
 | **neohkv2** (CPR file) | `diagnostics_panel_cpr_search_*` |
-| **ranking lab v3 mx** (preview file) | `diagnostics_panel_preview_search_*` |
+| **lab song v3 mx** (preview file) | `diagnostics_panel_preview_search_*` |
 
 Each pair: `*_query_line_match=` and `*_match_lines_match=` (panel lines match export `search_query=` / `search_matches=` / `search_match title=… summary=…`).
 

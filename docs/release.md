@@ -158,7 +158,8 @@ git fixture, stubbed side effects, live-source and original-UAT mutation between
 ## Version Bump
 
 1. Edit `VERSION`.
-2. Update `CHANGELOG.md`.
+2. Update `CHANGELOG.md`: rename the `## Unreleased` section (if any) to the dated `## <version> - YYYY-MM-DD`
+   heading. Release-note extraction and `release-version-verify.sh` read only that dated heading.
 3. Run `NMH_PREVIOUS_VERSION=<old-version> ./script/release-version-verify.sh`.
 4. Run `./script/ci.sh` and `./script/e2e_user_smoke.sh`.
 

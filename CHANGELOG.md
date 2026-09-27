@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Ask before quitting while a download, stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
+- Stop helper processes such as yt-dlp, FFmpeg and stem separation that are still running when the app quits, instead of leaving them behind.
+- Re-check the Active project folder after the final verification before freeing space, and never follow symbolic links while hashing, so a file saved during a long verification is no longer removed without a copy.
+- Resume every readable Project Vault record at launch and report the ones that cannot be read, instead of skipping all recovery when one record is damaged.
+- Keep a song's saved title, notes and status when it is edited after a discarded rescan.
+- Make Stop take effect while a large project is being hashed, report a stop during copy, verify or restore as a stop rather than a failure, and leave a stopped iCloud restore for Retry instead of reopening it at the next launch.
+- Refuse to write Export Index, Export Diagnostics or a New Song folder into the Project Vault archive folder.
+- Stop a recording and show the error as soon as writing to disk fails, instead of reporting it only after Stop.
+- Report a song folder that cannot be listed as skipped instead of showing it with no project files.
+- Check module boundaries in the local build (internal).
+
 ## 1.7.3 - 2026-09-26
 
 - Open Stem Separation faster with a populated result history by loading offscreen result rows as they come into view, while preserving scrolling, file actions, and tab state.

@@ -57,14 +57,21 @@ finish.
      schedules no recovery (`projectVaultStoppedForQuit`): the stopped operation's
      snapshot refresh would otherwise start a Done auto-archive that the exit cuts
      off.
-   - A second quit request while the wait runs returns `.terminateLater` and waits
-     for the same reply.
+   - While the reply is pending, AppKit does not ask the delegate again: a quit
+     Apple Event (the Dock's Quit) or ⌘Q waits for the reply, and an in-process
+     `NSApp.terminate` exits at once (checked with a scratch AppKit program). The
+     delegate's `isStoppingWork` branch is a guard that AppKit never reaches today.
    - The coordinator replies (`NSApp.reply(toApplicationShouldTerminate: true)`)
      once `hasUnfinishedQuitBlockingWork` is false or after 5 s. A cancelled runner
      job counts as unfinished until its operation has returned
      (`JobRunning.hasUnfinishedWork`), so helper teardown and partial-file cleanup
      get to run. The deadline stops a cancel that never finishes from blocking quit;
      the process-group backstop below still reaps any helper left after it.
+   - The reply and the quit cancels run as main-actor tasks. Every quit trigger
+     today (the ⌘Q menu item, the menu bar extra, Dock and logout Apple Events,
+     Sparkle) is run-loop driven, so they run. Do not call `NSApp.terminate` from
+     inside a `Task` or a `DispatchQueue.main.async` block: the main queue stays
+     busy with that block, the reply never runs and quit hangs.
    - The delegate no longer reads the Vault queue count; the Vault reaches quit
      through the center like every other tool.
 3. **Process-group backstop (implemented).** `LiveProcessGroupRegistry.shared`

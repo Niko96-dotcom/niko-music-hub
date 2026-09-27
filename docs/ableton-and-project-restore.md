@@ -2,7 +2,7 @@
 
 ## Song folders
 
-Choose an archive root containing your song folders. Each immediate child folder is one song. The scanner finds Cubase `.cpr` and Ableton Live `.als` files recursively inside it, including DAW-specific subfolders. Separate folders remain separate songs even if their project files are identical. Vault cannot reuse a transfer to remove a different Active folder, or reuse a generation from a previously configured Vault root.
+Choose an archive root containing your song folders. Each immediate child folder is one song; a folder that opens but cannot be listed is reported as skipped instead of shown without projects. The scanner finds Cubase `.cpr` and Ableton Live `.als` files recursively inside it, including DAW-specific subfolders. Separate folders remain separate songs even if their project files are identical. Vault cannot reuse a transfer to remove a different Active folder, or reuse a generation from a previously configured Vault root.
 
 ```text
 Music/                         ← choose this as the archive root
@@ -39,7 +39,7 @@ Automatic preview selection checks full-song suitability before scores, versions
 
 **Create Backup Copy** verifies a Vault copy and keeps the song in Active Projects. Use this when you want another copy without removing the local project.
 
-Existing archive folders explicitly linked to a catalog identity also appear under **Show archived projects**. Their details report whether files are local, online-only, or downloading, and offer **Show in Finder**. Linking preserves the project ID, original evidence, historical locations and user metadata. It does not create a verified Vault generation or enable **Restore & Open**; that action requires a managed, verified backup. File availability comes from the files inside the folder, since a locally present Dropbox folder may contain online-only audio and project files.
+Existing archive folders explicitly linked to a catalog identity also appear under **Show archived projects**. Their details report whether files are local, online-only, or downloading, and offer **Show in Finder**. Linking preserves the project ID, original evidence, historical locations and user metadata. It does not create a verified Vault generation. **Restore & Open** still works for a linked folder: it builds a fresh content manifest and copies the folder into Active Projects (see [Restoring linked historical archives](linked-archive-restore.md)). File availability comes from the files inside the folder, since a locally present Dropbox folder may contain online-only audio and project files.
 
 Manual archiving requires Project Vault enabled, independent backup confirmation, Keep Local off, and Emergency Stop off. It can run after a save without waiting for the automatic inactivity window. Private beta limits automatic archiving to copies; it does not convert an explicit Archive Now request into a copy-only success. If removal is blocked, the app reports the reason and keeps the Active project.
 
@@ -47,7 +47,7 @@ Manual archiving requires Project Vault enabled, independent backup confirmation
 
 Archive, backup, restore, and retry requests for different songs share one queue and run in the order requested. Repeated clicks for a song already running or waiting are ignored. Song details show the running action or queue position and let you cancel a waiting request. Safety settings and configured folders are checked again before execution. A failed request is marked for attention, and the next song continues.
 
-Waiting requests remain queued while Niko Music Hub is open; they are not saved across quitting the app. If requests are running or waiting, Quit asks you to keep Music Hub open or explicitly cancel waiting requests and quit. Transfers that already started retain durable recovery records.
+Waiting requests remain queued while Niko Music Hub is open; they are not saved across quitting the app. If requests are running or waiting, Quit asks you to keep Music Hub open or stop them and quit (**Stop and Quit**), together with any other running work such as downloads or recordings; it then waits up to 5 seconds for them to stop. Transfers that already started retain durable recovery records.
 
 ## Restore in the UI
 
