@@ -33,7 +33,7 @@ struct NikoMusicHubApp: App {
         appDelegate.services = HubAppDelegateServices(
             registry: composition.registry,
             router: composition.router,
-            pendingVaultOperationCount: composition.pendingVaultOperationCount
+            termination: composition.termination
         )
     }
 
@@ -120,23 +120,37 @@ struct NikoMusicHubApp: App {
 struct HubAppDelegateServices {
     let registry: ToolRegistry
     let router: QuickAccessRouter
-    let pendingVaultOperationCount: @MainActor () -> Int
+    let termination: HubTerminationCoordinator
 }
 
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     var services: HubAppDelegateServices?
 
+    /// Running work is in the job center (ADR-019). On confirm the coordinator
+    /// cancels it and replies once it has unwound or its deadline passes;
+    /// `.terminateLater` keeps the run loop, so main-actor cancels still run.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let count = services?.pendingVaultOperationCount() ?? 0
-        guard count > 0 else { return .terminateNow }
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Project Vault still has \(count) request(s) to finish"
-        alert.informativeText = "Keep Music Hub open to finish the queue. Quitting cancels waiting requests and interrupts the running transfer, which may need recovery when you reopen the app. Existing recovery records are kept."
-        alert.addButton(withTitle: "Keep Music Hub Open")
-        alert.addButton(withTitle: "Quit and Cancel Waiting Requests")
-        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        guard let termination = services?.termination else { return .terminateNow }
+        if termination.isStoppingWork { return .terminateLater }
+        switch termination.decision() {
+        case .terminateNow:
+            return .terminateNow
+        case .waitForCancelledWork:
+            break
+        case .ask(let prompt):
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = prompt.title
+            alert.informativeText = prompt.message
+            alert.addButton(withTitle: prompt.keepOpenButton)
+            alert.addButton(withTitle: prompt.quitButton)
+            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        }
+        termination.cancelRunningWork {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     /// Helpers run in their own process groups and would outlive the app (ADR-019).

@@ -78,6 +78,16 @@ extension ArchiveBrowserViewModel {
         vaultOperations.confirmStopActiveTransfer()
     }
 
+    /// Confirmed quit (ADR-019): the quit alert already asked, so cancel every
+    /// waiting request and stop the running transfer without the stop sheet.
+    func stopProjectVaultWorkForQuit() {
+        projectVaultStoppedForQuit = true
+        vaultObservation.cancelRecovery()
+        cancelPendingProjectVaultOperations()
+        pendingStopTransferConfirmation = false
+        vaultOperations.confirmStopActiveTransfer()
+    }
+
     func cancelPendingProjectVaultOperations() {
         cancelBoundArchiveCapture()
         vaultOperations.cancelAllPending()
@@ -95,6 +105,9 @@ extension ArchiveBrowserViewModel {
         trigger: ProjectVaultArchiveTrigger? = nil,
         perform: @escaping @MainActor (ArchiveBrowserViewModel) async -> Bool
     ) {
+        // After quit stopped the Vault, a refresh from the stopped operation
+        // must not queue new work (a Done auto-archive) that the exit cuts off.
+        guard !projectVaultStoppedForQuit else { return }
         // Refresh the narrow settings context so the captured rootIDs match
         // live settings. A stale capture (e.g. from init before songs were
         // assigned) would otherwise abort the poll/dispatch below even though
@@ -187,6 +200,11 @@ extension ArchiveBrowserViewModel {
             cancel: { [weak self] in
                 Task { @MainActor in
                     self?.requestStopActiveProjectVaultTransfer()
+                }
+            },
+            quitCancel: { [weak self] in
+                Task { @MainActor in
+                    self?.stopProjectVaultWorkForQuit()
                 }
             }
         )

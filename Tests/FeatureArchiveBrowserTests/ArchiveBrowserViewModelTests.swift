@@ -4120,6 +4120,86 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertNil(viewModel.mixdownBPMBySongID[cacheKey])
     }
+    /// ENG-04 / ADR-019 (T17): queued and running Vault operations reach quit through
+    /// the job center, and quit's cancel stops them without the stop-transfer sheet.
+    func testPendingVaultOperationsAppearAsBlockingWork() async throws {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        defer { viewModel.vaultOperations.cancelForTeardown() }
+        let center = viewModel.jobStatusCenter
+        let rootIDs = viewModel.vaultQueueRootIDs
+        final class RanFlag: @unchecked Sendable { var secondRan = false }
+        let ran = RanFlag()
+        viewModel.vaultOperations.enqueue(
+            songID: "quit-a", projectKey: "quit-a-key", songName: "Running Song",
+            label: "Archive", startMessage: "Archiving Running Song",
+            rootIDs: rootIDs, trigger: .manual
+        ) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            return false
+        }
+        viewModel.vaultOperations.enqueue(
+            songID: "quit-b", projectKey: "quit-b-key", songName: "Waiting Song",
+            label: "Archive", startMessage: "Archiving Waiting Song",
+            rootIDs: rootIDs, trigger: .manual
+        ) {
+            ran.secondRan = true
+            return true
+        }
+        try await waitUntil("the first operation is active") { viewModel.projectVaultActiveOperation?.songID == "quit-a" }
+
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.vaultTransfer])
+        XCTAssertTrue(center.hasUnfinishedQuitBlockingWork)
+
+        center.cancelAllForQuit()
+        try await waitUntil("the Vault queue drains") {
+            viewModel.projectVaultBusySongIDs.isEmpty && !center.hasUnfinishedQuitBlockingWork
+        }
+        XCTAssertFalse(ran.secondRan, "a waiting request must be cancelled, not run, on quit")
+        XCTAssertFalse(viewModel.pendingStopTransferConfirmation, "quit must not open the stop sheet")
+        XCTAssertTrue(viewModel.projectVaultStoppedForQuit, "the drained queue must not schedule recovery during quit")
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+    }
+
+    /// Review finding: the stopped operation's snapshot refresh re-runs the Done
+    /// auto-archive; after quit stopped the Vault it must queue nothing.
+    func testVaultRefusesNewOperationsAfterQuitStop() {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        defer { viewModel.vaultOperations.cancelForTeardown() }
+        viewModel.stopProjectVaultWorkForQuit()
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/fixture-only/Done Song"),
+            originalFolderName: "Done Song",
+            displayTitle: "Done Song",
+            workflowStatus: .done
+        )
+
+        viewModel.enqueueProjectVaultOperation(for: song, label: "Archive", startMessage: "Archiving…") { _ in true }
+
+        XCTAssertNil(viewModel.projectVaultActiveOperation)
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
+        XCTAssertFalse(viewModel.jobStatusCenter.hasUnfinishedQuitBlockingWork)
+    }
+
+    func testArchiveScanDoesNotBlockQuit() {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.isScanning = true
+        viewModel.publishShellJobStatus()
+
+        XCTAssertTrue(viewModel.jobStatusCenter.jobs.contains { $0.id == ShellJobExtraSourceID.archiveScan })
+        XCTAssertTrue(viewModel.jobStatusCenter.quitBlockingWork.isEmpty)
+        viewModel.isScanning = false
+    }
 
 }
 

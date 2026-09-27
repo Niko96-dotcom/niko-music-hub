@@ -1,6 +1,6 @@
 # Decision: One registry of running work, and a quit contract that reads it
 
-**Status:** Accepted — process-group backstop implemented; job registry and quit prompt pending  
+**Status:** Accepted — process-group backstop and quit prompt implemented; recorder takes and helper installs not yet registered  
 **Date:** 2026-09-27  
 **Deciders:** Niko Music Hub owner + implementation  
 **Scope:** App termination, helper processes, `ShellJobStatusCenter`
@@ -28,10 +28,35 @@ finish.
    silently. Recorder takes (cancel = finalize the file) and helper installs
    register there too. A `listed` flag on `ShellJobStatus` separates "shown in the
    jobs strip" from "counts at quit".
-2. Quit: nothing registered → `.terminateNow`. Otherwise one alert naming the
-   work (the Vault keeps its recovery copy). On confirm, call every cancel action
-   and return `.terminateLater`, so the run loop and main-actor cancels keep
-   running; reply when the registry is empty or after a short deadline.
+2. **Quit prompt (implemented).** `HubTerminationCoordinator` (AppCore) reads
+   `ShellJobStatusCenter.quitBlockingWork`: every unfinished `JobRunner` job
+   (downloads, stems) plus the extra sources whose `ShellJobStatus.blocksQuit`
+   is set (the converter and the Project Vault queue; the read-only archive scan
+   sets it to `false`).
+   - Nothing registered and nothing unwinding → `.terminateNow`. A job cancelled
+     earlier from the jobs strip leaves the list at once while its cleanup still
+     runs; quit then waits for it without asking (`.waitForCancelledWork`).
+   - Otherwise one `NSAlert` names the work ("Keep Music Hub Open" first, then
+     "Stop and Quit"); a Vault entry adds that existing recovery records are kept.
+   - On confirm `cancelAllForQuit()` calls every cancel. An extra source can
+     register a separate `quitCancel`: the Vault's jobs-strip cancel only opens
+     its stop sheet, so its quit cancel cancels the waiting requests and stops the
+     running transfer directly. The delegate returns `.terminateLater`, so the run
+     loop and main-actor cancels keep running.
+   - After that stop the archive view model queues no new Vault operation and
+     schedules no recovery (`projectVaultStoppedForQuit`): the stopped operation's
+     snapshot refresh would otherwise start a Done auto-archive that the exit cuts
+     off.
+   - A second quit request while the wait runs returns `.terminateLater` and waits
+     for the same reply.
+   - The coordinator replies (`NSApp.reply(toApplicationShouldTerminate: true)`)
+     once `hasUnfinishedQuitBlockingWork` is false or after 5 s. A cancelled runner
+     job counts as unfinished until its operation has returned
+     (`JobRunning.hasUnfinishedWork`), so helper teardown and partial-file cleanup
+     get to run. The deadline stops a cancel that never finishes from blocking quit;
+     the process-group backstop below still reaps any helper left after it.
+   - The delegate no longer reads the Vault queue count; the Vault reaches quit
+     through the center like every other tool.
 3. **Process-group backstop (implemented).** `LiveProcessGroupRegistry.shared`
    holds the process-group IDs of helpers that are running right now:
    - The runner records the group right after `posix_spawn` succeeds and forgets
@@ -68,9 +93,12 @@ puts the process backstop at the one helper spawn point.
   The runner's own cancel and timeout paths still signal the whole group.
 - A helper spawned after `applicationWillTerminate` has reaped gets SIGKILL as soon
   as it is recorded; the app is exiting at that point.
-- Still open: items 1 and 2 (the quit prompt reading the center, `.terminateLater`,
-  and registering recorder takes and helper installs). The deadline for
-  `.terminateLater` needs a value; a hung recorder stop must not block quit forever.
+- Quit asks whenever a download, stem separation, conversion or Vault operation is
+  running, and waits at most 5 s after confirm. The wait polls every 50 ms on the
+  main actor; nothing blocks the main thread.
+- Still open: recorder takes and helper installs do not register yet (item 1, the
+  `listed` flag). Until they do, a recording or `uv` install at quit is not asked
+  about; the backstop still reaps an install's helper.
 
 ## Tests
 
@@ -78,3 +106,10 @@ puts the process backstop at the one helper spawn point.
 - `ExternalProcessRunningTests.testReapLiveProcessGroupsKillsRunningHelperAndItsChildren`
 - `ExternalProcessRunningTests.testHelperSpawnedAfterReapIsKilledImmediately`
 - `HubTerminationSourceTests.testAppDelegateReapsHelpersOnWillTerminate`
+- `HubTerminationSourceTests.testAppDelegateDefersQuitToCoordinator`
+- `HubTerminationCoordinatorTests` (no work, a running download asks, confirm
+  cancels and waits for the unwind, a download cancelled earlier is waited for
+  without asking, the deadline, a single reply)
+- `ArchiveBrowserViewModelTests.testVaultRefusesNewOperationsAfterQuitStop`
+- `ArchiveBrowserViewModelTests.testPendingVaultOperationsAppearAsBlockingWork`
+- `ArchiveBrowserViewModelTests.testArchiveScanDoesNotBlockQuit`

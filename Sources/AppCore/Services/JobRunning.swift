@@ -22,6 +22,10 @@ public protocol JobRunning: Sendable {
 
     /// Current non-terminal snapshot, then subsequent changes.
     func allUpdates() -> AsyncStream<[Job]>
+
+    /// True while any job's operation is still running, including a cancelled
+    /// job that has not unwound yet (quit waits for this, ADR-019).
+    var hasUnfinishedWork: Bool { get }
 }
 
 public extension JobRunning {
@@ -57,6 +61,12 @@ public extension JobRunning {
 
     func snapshot() -> [Job] {
         listJobs().filter { !$0.state.isTerminal }
+    }
+
+    /// Test doubles only: the snapshot cannot see a cancelled job that is still
+    /// unwinding. A real runner overrides this (see `JobRunner`).
+    var hasUnfinishedWork: Bool {
+        !snapshot().isEmpty
     }
 
     /// Compatibility stream for lightweight test doubles. `JobRunner` notifies on each publish.

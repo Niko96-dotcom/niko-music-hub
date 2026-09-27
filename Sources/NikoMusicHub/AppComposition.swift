@@ -22,7 +22,8 @@ struct AppComposition {
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
     let archiveViewModel: ArchiveBrowserViewModel
-    let pendingVaultOperationCount: @MainActor () -> Int
+    /// Quit reads the job center, where the Vault queue registers too (ADR-019).
+    let termination: HubTerminationCoordinator
 
     @MainActor
     static func make() -> AppComposition {
@@ -296,7 +297,7 @@ struct AppComposition {
             appearanceController: appearanceController,
             updateController: updateController,
             archiveViewModel: archiveViewModel,
-            pendingVaultOperationCount: { archiveViewModel.pendingProjectVaultOperationCount }
+            termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter)
         )
     }
 

@@ -21,6 +21,7 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
     private var runnerJobs: [ShellJobStatus] = []
     private var extraJobs: [String: ShellJobStatus] = [:]
     private var extraCancels: [String: @Sendable () -> Void] = [:]
+    private var extraQuitCancels: [String: @Sendable () -> Void] = [:]
     private var observeTask: Task<Void, Never>?
 
     public init(jobRunner: any JobRunning) {
@@ -36,10 +37,13 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
         observeTask?.cancel()
     }
 
+    /// `quitCancel` replaces `cancel` when quit stops the work (ADR-019); pass it
+    /// when the jobs-strip cancel only asks for confirmation.
     public func setExtraJob(
         sourceID: String,
         status: ShellJobStatus?,
-        cancel: (@Sendable () -> Void)? = nil
+        cancel: (@Sendable () -> Void)? = nil,
+        quitCancel: (@Sendable () -> Void)? = nil
     ) {
         lock.withLock {
             if let status {
@@ -47,9 +51,13 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
                 if let cancel {
                     extraCancels[sourceID] = cancel
                 }
+                if let quitCancel {
+                    extraQuitCancels[sourceID] = quitCancel
+                }
             } else {
                 extraJobs.removeValue(forKey: sourceID)
                 extraCancels.removeValue(forKey: sourceID)
+                extraQuitCancels.removeValue(forKey: sourceID)
             }
         }
         republish()
@@ -65,6 +73,40 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
         }
         if let uuid = UUID(uuidString: id) {
             jobRunner.cancelJob(id: uuid)
+        }
+    }
+
+    // MARK: - Quit (ADR-019)
+
+    /// Work quit must not cut off silently: every unfinished runner job plus the
+    /// extra sources that block quit. Read under the locks, not from `jobs`,
+    /// which a background update publishes one main-queue hop later.
+    public var quitBlockingWork: [ShellJobStatus] {
+        let runner = jobRunner.snapshot().map(ShellJobStatus.fromJob)
+        let extras = lock.withLock {
+            extraJobs.keys.sorted().compactMap { extraJobs[$0] }.filter(\.blocksQuit)
+        }
+        return runner + extras
+    }
+
+    /// True until cancelled work has unwound: a runner job reads as cancelled
+    /// at once, but its operation (helper teardown, partial-file cleanup) is
+    /// still running until the runner reports it finished.
+    public var hasUnfinishedQuitBlockingWork: Bool {
+        if jobRunner.hasUnfinishedWork { return true }
+        return lock.withLock { extraJobs.values.contains(where: \.blocksQuit) }
+    }
+
+    /// Confirmed quit: cancel every runner job and every extra source, through
+    /// its quit cancel where it registered one (the Vault's jobs-strip cancel
+    /// only opens its stop sheet).
+    public func cancelAllForQuit() {
+        let extras = lock.withLock {
+            extraJobs.keys.sorted().compactMap { extraQuitCancels[$0] ?? extraCancels[$0] }
+        }
+        extras.forEach { $0() }
+        for job in jobRunner.snapshot() {
+            jobRunner.cancelJob(id: job.id)
         }
     }
 

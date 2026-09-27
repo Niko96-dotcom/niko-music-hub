@@ -253,6 +253,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var boundArchiveCaptureSongID: String?
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
     @Published var pendingStopTransferConfirmation = false
+    /// Set once quit has stopped the Vault queue (ADR-019): no new operation is
+    /// queued and no recovery is scheduled for the exiting app to cut off.
+    var projectVaultStoppedForQuit = false
     @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
     /// Sidebar Project Vault provider status (NMH-057). Owned by
     /// `ArchiveVaultObservation`; this read-only peer preserves the existing
@@ -360,8 +363,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         get { searchInput.query }
         set { searchInput.query = newValue }
     }
-
-    public var pendingProjectVaultOperationCount: Int { projectVaultBusySongIDs.count }
 
     var showsSidebarMorePanel: Bool {
         !roots.isEmpty
@@ -558,7 +559,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 status: ShellJobStatus(
                     id: ShellJobExtraSourceID.archiveScan,
                     title: ShellJobStatusCopy.scanningArchive,
-                    cancelActionID: ShellJobExtraSourceID.archiveScan
+                    cancelActionID: ShellJobExtraSourceID.archiveScan,
+                    blocksQuit: false
                 ),
                 cancel: { [weak self] in
                     Task { @MainActor in
@@ -582,6 +584,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 cancel: { [weak self] in
                     Task { @MainActor in
                         self?.requestStopActiveProjectVaultTransfer()
+                    }
+                },
+                quitCancel: { [weak self] in
+                    Task { @MainActor in
+                        self?.stopProjectVaultWorkForQuit()
                     }
                 }
             )
