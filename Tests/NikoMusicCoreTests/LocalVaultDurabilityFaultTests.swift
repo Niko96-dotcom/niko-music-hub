@@ -492,6 +492,122 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
         XCTAssertEqual(try store.record(id: verified.id)?.state, .archiveVerified)
     }
 
+    // MARK: - Final source verification window
+
+    func testRemovalRefusesWhenAHashedFileChangesBeforeDelete() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let project = fixture.source.appendingPathComponent("Artist Song.cpr")
+        let savedBytes = Data("cubase-project saved during the final check".utf8)
+        let hook = SourceHashHook(source: fixture.source, trigger: "Audio/take.wav") {
+            try savedBytes.write(to: project)
+            try FileManager.default.setAttributes(
+                [.modificationDate: Date().addingTimeInterval(10)],
+                ofItemAtPath: project.path
+            )
+        }
+
+        let outcome = try await removeWithSourceHashHook(fixture: fixture, hook: hook)
+
+        XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
+        XCTAssertGreaterThanOrEqual(hook.armedSourceHashCount, 2, "the project file was hashed before the change")
+        XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
+        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
+        XCTAssertEqual(try? Data(contentsOf: project), savedBytes, "the Active copy keeps the new save")
+    }
+
+    func testRemovalRefusesWhenAHashedFileIsRewrittenInPlaceWithTheSameSize() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let project = fixture.source.appendingPathComponent("Artist Song.cpr")
+        let original = try Data(contentsOf: project)
+        let savedBytes = Data(original.reversed())
+        XCTAssertNotEqual(savedBytes, original)
+        let hook = SourceHashHook(source: fixture.source, trigger: "Audio/take.wav") {
+            let handle = try FileHandle(forWritingTo: project)
+            defer { try? handle.close() }
+            try handle.write(contentsOf: savedBytes)
+        }
+
+        let outcome = try await removeWithSourceHashHook(fixture: fixture, hook: hook)
+
+        XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
+        XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
+        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(try? Data(contentsOf: project), savedBytes, "an in-place save keeps the Active copy")
+    }
+
+    func testRemovalRefusesWhenAFileIsCreatedAfterTheInventory() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let created = fixture.source.appendingPathComponent("c.wav")
+        let createdBytes = Data("synced take".utf8)
+        let hook = SourceHashHook(source: fixture.source, trigger: "Audio/take.wav") {
+            try createdBytes.write(to: created)
+        }
+
+        let outcome = try await removeWithSourceHashHook(fixture: fixture, hook: hook)
+
+        XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
+        XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
+        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
+        XCTAssertEqual(try? Data(contentsOf: created), createdBytes, "a file with no Vault copy stays in Active")
+    }
+
+    func testRemovalRefusesWhenActiveFileBecomesSymlinkDuringFinalVerify() async throws {
+        let fixture = try FaultFixture()
+        defer { fixture.remove() }
+        let take = fixture.source.appendingPathComponent("Audio/take.wav")
+        let outside = fixture.root.appendingPathComponent("outside-take.wav")
+        try FileManager.default.copyItem(at: take, to: outside)
+        let hook = SourceHashHook(source: fixture.source, trigger: "Artist Song.cpr") {
+            try FileManager.default.removeItem(at: take)
+            try FileManager.default.createSymbolicLink(at: take, withDestinationURL: outside)
+        }
+
+        let outcome = try await removeWithSourceHashHook(fixture: fixture, hook: hook)
+
+        XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
+        XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
+        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.appendingPathComponent("Artist Song.cpr").path))
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: take.path), outside.path)
+    }
+
+    private func removeWithSourceHashHook(
+        fixture: FaultFixture,
+        hook: SourceHashHook
+    ) async throws -> (error: Error?, persisted: VaultTransferRecord) {
+        let store = FaultInMemoryStore()
+        let engine = try LocalVaultTransferEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.archive,
+            store: store,
+            provider: CountingFaultBarrierProvider(
+                durability: .verifiedLocal,
+                waitsForDurability: false
+            ),
+            writeAdmission: allowFaultWrites,
+            // Arm only after the first evidence check, so the hook fires in the
+            // final source verify right before the destructive remove.
+            removalAdmission: { _ in hook.arm() },
+            manifestBuilder: VaultManifestBuilder(contentHasher: hook.hash)
+        )
+        let verified = try await engine.archive(projectID: ProjectID(), sourceURL: fixture.source)
+        var removalError: Error?
+        do {
+            _ = try await engine.removeActiveCopy(after: verified)
+            XCTFail("a source changed during the final verify must not be removed")
+        } catch {
+            removalError = error
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.path), "the Active copy must be kept")
+        return (removalError, try XCTUnwrap(store.record(id: verified.id)))
+    }
+
     func testSurvivorRetirementPreservesLastRecoverableWhenUnproven() async throws {
         for caseName in ["missing", "corrupt", "unproven"] {
             let fixture = try FaultFixture()
@@ -1326,6 +1442,50 @@ private struct FaultFixture {
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
+}
+
+/// Fires `action` once, when the armed hasher reaches `trigger` below the
+/// source (Active) root, then delegates to the real hash. Archive-side hashes
+/// and anything before `arm()` pass straight through.
+private final class SourceHashHook: @unchecked Sendable {
+    private let lock = NSLock()
+    private let sourcePrefix: String
+    private let triggerPath: String
+    private let action: @Sendable () throws -> Void
+    private var armed = false
+    private var storedFired = false
+    private var storedArmedSourceHashCount = 0
+
+    init(source: URL, trigger: String, action: @escaping @Sendable () throws -> Void) {
+        // The manifest enumerator reports firmlinked paths (/private/var/...),
+        // which `resolvingSymlinksInPath()` would strip again.
+        let resolvedSource = source.withUnsafeFileSystemRepresentation { path in
+            path.flatMap { Darwin.realpath($0, nil) }.map { pointer in
+                defer { free(pointer) }
+                return String(cString: pointer)
+            }
+        } ?? source.path
+        sourcePrefix = resolvedSource + "/"
+        triggerPath = sourcePrefix + trigger
+        self.action = action
+    }
+
+    var fired: Bool { lock.withLock { storedFired } }
+    var armedSourceHashCount: Int { lock.withLock { storedArmedSourceHashCount } }
+
+    func arm() { lock.withLock { armed = true } }
+
+    func hash(_ url: URL) throws -> (byteCount: Int64, sha256: String) {
+        let shouldFire = lock.withLock { () -> Bool in
+            guard armed, url.path.hasPrefix(sourcePrefix) else { return false }
+            storedArmedSourceHashCount += 1
+            guard !storedFired, url.path == triggerPath else { return false }
+            storedFired = true
+            return true
+        }
+        if shouldFire { try action() }
+        return try VaultManifestBuilder.hashRegularFile(at: url)
+    }
 }
 
 private let allowFaultWrites: LocalVaultTransferEngine.WriteAdmission = { _, operation in

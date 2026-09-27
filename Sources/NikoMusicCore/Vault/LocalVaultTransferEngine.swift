@@ -161,7 +161,8 @@ public actor LocalVaultTransferEngine {
         removalAdmission: @escaping RemovalAdmission = { _ in
             throw LocalVaultTransferError.removalAdmissionRequired
         },
-        volumeIdentifier: VolumeIdentifier? = nil
+        volumeIdentifier: VolumeIdentifier? = nil,
+        manifestBuilder: VaultManifestBuilder? = nil
     ) throws {
         let active = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
         let archive = archiveRoot.standardizedFileURL.resolvingSymlinksInPath()
@@ -175,7 +176,7 @@ public actor LocalVaultTransferEngine {
         self.store = store
         self.provider = provider ?? LocalFolderArchiveStorage(root: archive, fileManager: fileManager)
         self.fileManager = fileManager
-        self.manifestBuilder = VaultManifestBuilder(fileManager: fileManager)
+        self.manifestBuilder = manifestBuilder ?? VaultManifestBuilder(fileManager: fileManager)
         self.faultInjector = faultInjector
         self.now = now
         self.recoveryPolicy = recoveryPolicy
@@ -1125,7 +1126,10 @@ public actor LocalVaultTransferEngine {
             guard identityBeforeVerification == expectedSourceIdentity else {
                 throw LocalVaultTransferError.sourceMutated
             }
-            try manifestBuilder.verify(manifest, at: persisted.sourceURL)
+            // Hashing takes seconds to minutes and removal follows right after,
+            // so the source must not have changed at all while it was hashed.
+            // What is left is the short metadata-only re-inventory itself.
+            try manifestBuilder.verify(manifest, at: persisted.sourceURL, requireUnchangedWhileHashing: true)
             let identityAfterVerification = try Self.sourceFileSystemIdentity(at: persisted.sourceURL)
             guard identityAfterVerification == expectedSourceIdentity else {
                 throw LocalVaultTransferError.sourceMutated

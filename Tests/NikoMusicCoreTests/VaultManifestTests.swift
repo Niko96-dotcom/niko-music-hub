@@ -131,6 +131,64 @@ final class VaultManifestTests: XCTestCase {
         XCTAssertTrue(hashSpy.openedURLs.isEmpty)
     }
 
+    func testVerifyRejectsRegularFileSwappedForSymlinkDuringHashing() throws {
+        let root = temporaryRoot()
+        let outside = temporaryRoot().appendingPathExtension("wav")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let first = root.appendingPathComponent("a.wav")
+        let swapped = root.appendingPathComponent("b.wav")
+        try Data("first take".utf8).write(to: first)
+        try Data("second take".utf8).write(to: swapped)
+        try Data("second take".utf8).write(to: outside)
+        let manifest = try VaultManifestBuilder().build(at: root)
+        let verifier = VaultManifestBuilder(contentHasher: { url in
+            if url.lastPathComponent == "a.wav",
+               (try? swapped.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true {
+                try FileManager.default.removeItem(at: swapped)
+                try FileManager.default.createSymbolicLink(at: swapped, withDestinationURL: outside)
+            }
+            return try VaultManifestBuilder.hashRegularFile(at: url)
+        })
+
+        XCTAssertThrowsError(try verifier.verify(manifest, at: root)) { error in
+            guard case VaultManifestError.unsupportedSymbolicLink = error else {
+                return XCTFail("expected the swapped link to be refused, got \(error)")
+            }
+        }
+        XCTAssertEqual(
+            try FileManager.default.destinationOfSymbolicLink(atPath: swapped.path),
+            outside.path,
+            "the swap must have happened between inventory and hash"
+        )
+    }
+
+    func testVerifyRejectsFIFOSwappedInDuringHashingWithoutBlocking() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let swapped = root.appendingPathComponent("b.wav")
+        try Data("first take".utf8).write(to: root.appendingPathComponent("a.wav"))
+        try Data("second take".utf8).write(to: swapped)
+        let manifest = try VaultManifestBuilder().build(at: root)
+        let verifier = VaultManifestBuilder(contentHasher: { url in
+            if url.lastPathComponent == "a.wav" {
+                try FileManager.default.removeItem(at: swapped)
+                XCTAssertEqual(mkfifo(swapped.path, 0o600), 0)
+            }
+            return try VaultManifestBuilder.hashRegularFile(at: url)
+        })
+
+        XCTAssertThrowsError(try verifier.verify(manifest, at: root)) { error in
+            guard case VaultManifestError.unsupportedFileType = error else {
+                return XCTFail("expected the FIFO to be refused, got \(error)")
+            }
+        }
+    }
+
     private func temporaryRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("vault-manifest-\(UUID().uuidString)", isDirectory: true)
     }
