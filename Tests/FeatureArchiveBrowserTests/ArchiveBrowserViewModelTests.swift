@@ -3462,6 +3462,57 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(Set(viewModel.songs.map(\.displayTitle)), ["Song A", "Song B", "Song C"])
     }
 
+    /// ENG-03 (T10): the metadata load fails, then a watcher rescan loads it
+    /// successfully but is cancelled from inside that load and discarded. The
+    /// visible songs still carry defaults, so a note edit must stay refused and
+    /// the stored row must survive untouched.
+    func testEditAfterDiscardedIncrementalRescanIsRefusedAndStoredRowSurvives() async throws {
+        let fixture = try await FailedMetadataLoadFixture.launch()
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.viewModel
+
+        // The successful load runs inside the incremental's main-actor merge;
+        // cancelling there makes the orchestrator discard the batch afterwards.
+        fixture.metadataStore.onSuccessfulLoad { [weak viewModel] in viewModel?.cancelScan() }
+        fixture.watcher.simulateFilesystemChange(paths: [fixture.cpr])
+        // `cancelScan` clears `isScanning` inside the load, so wait for the
+        // orchestrator itself to reach its discard guard before editing.
+        try await waitUntil("orchestrator discarded the incremental") {
+            fixture.diagnostics.lines.contains("Incremental archive rescan discarded: superseded while it ran")
+        }
+        XCTAssertNil(viewModel.songs.first?.virtualTitle, "the discarded batch must not replace visible songs")
+
+        let visible = try XCTUnwrap(viewModel.songs.first)
+        viewModel.updateAppNote(for: visible, note: "edit after discard")
+
+        XCTAssertNotNil(
+            viewModel.catalog.metadataEditBlockWarning(for: fixture.songID),
+            "a discarded incremental must not reopen edits"
+        )
+        XCTAssertEqual(fixture.metadataStore.upsertCount, 0, "the refused edit must not reach the store")
+        XCTAssertEqual(try fixture.sqlite.loadAll()[fixture.songID], fixture.storedRow, "the stored row must be unchanged")
+    }
+
+    /// ENG-03 companion: an accepted incremental records its successful load,
+    /// so the stored details appear and edits reopen.
+    func testAcceptedIncrementalRescanReopensEditsAfterFailedLoad() async throws {
+        let fixture = try await FailedMetadataLoadFixture.launch()
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.viewModel
+
+        fixture.watcher.simulateFilesystemChange(paths: [fixture.cpr])
+        try await waitUntil("incremental applied") { viewModel.songs.first?.virtualTitle == "Stored Title" }
+        XCTAssertNil(viewModel.catalog.metadataEditBlockWarning(for: fixture.songID))
+
+        let visible = try XCTUnwrap(viewModel.songs.first)
+        viewModel.updateAppNote(for: visible, note: "edit after accept")
+        let stored = try XCTUnwrap(try fixture.sqlite.loadAll()[fixture.songID])
+        XCTAssertEqual(stored.appNote, "edit after accept")
+        XCTAssertEqual(stored.virtualTitle, "Stored Title")
+        XCTAssertEqual(stored.aliases, ["Stored Alias"])
+        XCTAssertEqual(stored.workflowStatus, .prod)
+    }
+
     func testPendingIncrementalPathsDrainAfterFullScan() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -4683,6 +4734,139 @@ private final class SequencedReportMetadataStore: SongUserMetadataStoring, SongU
     func upsert(_ metadata: SongUserMetadata) throws {}
 
     func upsertAll(_ metadata: [SongUserMetadata]) throws {}
+}
+
+/// ENG-03: a one-song archive whose launch scan hit a failed metadata load,
+/// so edits are blocked and the visible song carries defaults while SQLite
+/// holds a real row.
+@MainActor
+private struct FailedMetadataLoadFixture {
+    let root: URL
+    let cpr: URL
+    let songID: String
+    let sqlite: SQLiteSongUserMetadataStore
+    let storedRow: SongUserMetadata
+    let metadataStore: FailFirstLoadMetadataStore
+    let watcher: TestArchiveRootWatcher
+    let diagnostics: CapturingDiagnostics
+    let viewModel: ArchiveBrowserViewModel
+
+    static func launch() async throws -> FailedMetadataLoadFixture {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vm-failed-load-incremental-\(UUID().uuidString)", isDirectory: true)
+        let songA = root.appendingPathComponent("Song A", isDirectory: true)
+        try FileManager.default.createDirectory(at: songA, withIntermediateDirectories: true)
+        let cpr = songA.appendingPathComponent("Song A.cpr")
+        FileManager.default.createFile(atPath: cpr.path, contents: Data("fixture".utf8))
+        let songID = songA.standardizedFileURL.path
+
+        let sqlite = try SQLiteSongUserMetadataStore(databaseURL: root.appendingPathComponent("metadata.sqlite"))
+        try sqlite.upsert(SongUserMetadata(
+            songID: songID,
+            virtualTitle: "Stored Title",
+            aliases: ["Stored Alias"],
+            appNote: "stored note",
+            workflowStatus: .prod
+        ))
+        let storedRow = try XCTUnwrap(try sqlite.loadAll()[songID])
+        let metadataStore = FailFirstLoadMetadataStore(wrapping: sqlite)
+
+        try settingsStore.updateSettings { settings in
+            settings.archiveRoots = [StoredArchiveRoot(path: root.path)]
+            settings.archiveOnboardingCompleted = true
+        }
+        let watcher = TestArchiveRootWatcher()
+        let diagnostics = CapturingDiagnostics()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore, diagnostics: diagnostics),
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                ScanResult(songs: [Song(folderPath: songA, originalFolderName: "Song A", displayTitle: "Song A")])
+            }
+        )
+        try await waitUntil("launch scan applied") { !viewModel.isScanning && !viewModel.songs.isEmpty }
+        XCTAssertEqual(metadataStore.loadCallCount, 1)
+        XCTAssertNil(viewModel.songs.first?.virtualTitle, "a failed load leaves defaults on screen")
+        XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: songID))
+        return FailedMetadataLoadFixture(
+            root: root, cpr: cpr, songID: songID, sqlite: sqlite, storedRow: storedRow,
+            metadataStore: metadataStore, watcher: watcher, diagnostics: diagnostics, viewModel: viewModel
+        )
+    }
+
+    func cleanUp() {
+        try? FileManager.default.removeItem(at: root)
+    }
+}
+
+/// Wraps a real SQLite store: the first load throws, later loads succeed and
+/// run `onSuccessfulLoad` once on the main actor (ENG-03).
+private final class FailFirstLoadMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, @unchecked Sendable {
+    private let lock = NSLock()
+    private let wrapped: SQLiteSongUserMetadataStore
+    private var loads = 0
+    private var upserts = 0
+    private var successHook: (@MainActor () -> Void)?
+
+    init(wrapping wrapped: SQLiteSongUserMetadataStore) {
+        self.wrapped = wrapped
+    }
+
+    var loadCallCount: Int {
+        lock.withLock { loads }
+    }
+
+    var upsertCount: Int {
+        lock.withLock { upserts }
+    }
+
+    /// Runs once, on the next successful load.
+    func onSuccessfulLoad(_ hook: @escaping @MainActor () -> Void) {
+        lock.withLock { successHook = hook }
+    }
+
+    func loadAll() throws -> [String: SongUserMetadata] {
+        try loadAllWithReport().metadata
+    }
+
+    func loadAllWithReport() throws -> SongUserMetadataLoadReport {
+        let isFirst = lock.withLock {
+            loads += 1
+            return loads == 1
+        }
+        if isFirst { throw FailFirstLoadError.loadFailed }
+        let report = try wrapped.loadAllWithReport()
+        let hook = lock.withLock {
+            defer { successHook = nil }
+            return successHook
+        }
+        if let hook {
+            MainActor.assumeIsolated { hook() }
+        }
+        return report
+    }
+
+    func upsert(_ metadata: SongUserMetadata) throws {
+        lock.withLock { upserts += 1 }
+        try wrapped.upsert(metadata)
+    }
+
+    func upsertAll(_ metadata: [SongUserMetadata]) throws {
+        lock.withLock { upserts += 1 }
+        try wrapped.upsertAll(metadata)
+    }
+
+    private enum FailFirstLoadError: Error {
+        case loadFailed
+    }
 }
 
 /// Index store that blocks the next cache load until released, so a full scan
