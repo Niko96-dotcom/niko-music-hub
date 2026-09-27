@@ -36,7 +36,6 @@ enum ArchiveBrowseProjection {
         _ state: ArchiveBrowseState,
         searchIndex: MusicSearchIndex? = nil
     ) -> ArchiveBrowseResult {
-        let onShelf = shelfSongs(from: state)
         let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let searched: [Song]
@@ -44,11 +43,13 @@ enum ArchiveBrowseProjection {
         let skippedMatches: [SkippedEntrySearchResult]
 
         if trimmed.isEmpty {
-            searched = onShelf
+            // Empty queries never touch the search index: derive/filter/sort the live shelf.
+            searched = shelfSongs(from: state)
             summaries = [:]
             skippedMatches = []
         } else {
-            let index = searchIndex ?? MusicSearchIndex(songs: onShelf)
+            // Pre-scoped index avoids re-deriving the shelf (?? RHS is lazy).
+            let index = searchIndex ?? MusicSearchIndex(songs: shelfSongs(from: state))
             let results = index.searchResults(state.searchQuery)
             searched = results.map(\.song)
             summaries = Dictionary(uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) })

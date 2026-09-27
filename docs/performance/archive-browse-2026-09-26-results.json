@@ -1,0 +1,1643 @@
+{
+  "metadata": {
+    "baseline_commit": "43877d4609fee6229c19fbce0be202fba4a2c754",
+    "baseline_source_sha256": "25d25b604317427a9df960813c662db43d94245b378461e283ad96b3ab72cf17",
+    "candidate_source_sha256": "cea84de55d9a5ee441ee18e027ae96f4e7a177176a7585bec39d66bd0ccb78c0",
+    "driver_sha256": "4161ece21dd24a8a24b4ad926ae4a11fcfcffa7c94965cc13689501296b089b3",
+    "before_binary_sha256": "0857f5bc99ae34a07ad065984442e91b2d0c7d8b4ad0fe7906d446b399913ec6",
+    "after_binary_sha256": "7f563003c3805744a9e8e390ff73247f592272400e1d77bac35fa619090e49f7",
+    "compiler": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)\nTarget: arm64-apple-macosx26.0",
+    "order": [
+      "before-1",
+      "after-1",
+      "after-2",
+      "before-2"
+    ],
+    "scales": [
+      1000,
+      10000
+    ],
+    "same_release_core_objects": true,
+    "candidate_diff": "diff --git a/Sources/FeatureArchiveBrowser/ArchiveBrowseProjection.swift b/Sources/FeatureArchiveBrowser/ArchiveBrowseProjection.swift\nindex 0bf4478c..a0651ec5 100644\n--- a/Sources/FeatureArchiveBrowser/ArchiveBrowseProjection.swift\n+++ b/Sources/FeatureArchiveBrowser/ArchiveBrowseProjection.swift\n@@ -36,7 +36,6 @@ enum ArchiveBrowseProjection {\n         _ state: ArchiveBrowseState,\n         searchIndex: MusicSearchIndex? = nil\n     ) -> ArchiveBrowseResult {\n-        let onShelf = shelfSongs(from: state)\n         let trimmed = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)\n \n         let searched: [Song]\n@@ -44,11 +43,13 @@ enum ArchiveBrowseProjection {\n         let skippedMatches: [SkippedEntrySearchResult]\n \n         if trimmed.isEmpty {\n-            searched = onShelf\n+            // Empty queries never touch the search index: derive/filter/sort the live shelf.\n+            searched = shelfSongs(from: state)\n             summaries = [:]\n             skippedMatches = []\n         } else {\n-            let index = searchIndex ?? MusicSearchIndex(songs: onShelf)\n+            // Pre-scoped index avoids re-deriving the shelf (?? RHS is lazy).\n+            let index = searchIndex ?? MusicSearchIndex(songs: shelfSongs(from: state))\n             let results = index.searchResults(state.searchQuery)\n             searched = results.map(\\.song)\n             summaries = Dictionary(uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) })\n"
+  },
+  "summary": {
+    "1000": {
+      "empty_control_allSongs": {
+        "before_ms": 3.677146,
+        "after_ms": 3.7492915,
+        "reduction_percent": -1.961997157578188,
+        "before_range_ms": [
+          3.358209,
+          3.906833
+        ],
+        "after_range_ms": [
+          3.4115,
+          4.219917
+        ],
+        "digest": "b7e8d090430cfe2a",
+        "filtered_count": 900,
+        "shelf_count": 900
+      },
+      "search_all_neon": {
+        "before_ms": 9.931416500000001,
+        "after_ms": 9.8008125,
+        "reduction_percent": 1.3150591358241925,
+        "before_range_ms": [
+          9.510916,
+          10.690708
+        ],
+        "after_range_ms": [
+          9.400917,
+          10.047583
+        ],
+        "digest": "7e0737bcbb1e7877",
+        "filtered_count": 100,
+        "shelf_count": 900
+      },
+      "search_by_collaborator_neon": {
+        "before_ms": 5.498042,
+        "after_ms": 4.3110415,
+        "reduction_percent": 21.589513139404904,
+        "before_range_ms": [
+          5.2605,
+          5.84525
+        ],
+        "after_range_ms": [
+          4.072292,
+          4.415334
+        ],
+        "digest": "bed8c5dfd5af1a28",
+        "filtered_count": 33,
+        "shelf_count": 300
+      },
+      "search_quiet_songs_neon": {
+        "before_ms": 14.285250000000001,
+        "after_ms": 11.095083500000001,
+        "reduction_percent": 22.33189128646681,
+        "before_range_ms": [
+          13.571667,
+          15.076542
+        ],
+        "after_range_ms": [
+          10.676791,
+          11.474
+        ],
+        "digest": "2adeac67e735a7aa",
+        "filtered_count": 86,
+        "shelf_count": 772
+      },
+      "search_recent_bounce_neon": {
+        "before_ms": 17.9933335,
+        "after_ms": 13.6644375,
+        "reduction_percent": 24.058332492975797,
+        "before_range_ms": [
+          17.378208,
+          19.586458
+        ],
+        "after_range_ms": [
+          13.188166,
+          13.907542
+        ],
+        "digest": "7e0737bcbb1e7877",
+        "filtered_count": 100,
+        "shelf_count": 900
+      },
+      "search_recent_cpr_neon": {
+        "before_ms": 17.503771,
+        "after_ms": 13.401604500000001,
+        "reduction_percent": 23.435901326634124,
+        "before_range_ms": [
+          16.788792,
+          18.907625
+        ],
+        "after_range_ms": [
+          12.752041,
+          15.048125
+        ],
+        "digest": "7e0737bcbb1e7877",
+        "filtered_count": 100,
+        "shelf_count": 900
+      }
+    },
+    "10000": {
+      "empty_control_allSongs": {
+        "before_ms": 41.236937499999996,
+        "after_ms": 41.0010415,
+        "reduction_percent": 0.5720502401518002,
+        "before_range_ms": [
+          39.219417,
+          48.529333
+        ],
+        "after_range_ms": [
+          38.118125,
+          48.29325
+        ],
+        "digest": "16893e2d28f4b6f6",
+        "filtered_count": 9000,
+        "shelf_count": 9000
+      },
+      "search_all_neon": {
+        "before_ms": 103.0224795,
+        "after_ms": 100.844604,
+        "reduction_percent": 2.1139808618176326,
+        "before_range_ms": [
+          100.795375,
+          123.670334
+        ],
+        "after_range_ms": [
+          99.042333,
+          102.731333
+        ],
+        "digest": "6ff4e7928c2fa89",
+        "filtered_count": 1000,
+        "shelf_count": 9000
+      },
+      "search_by_collaborator_neon": {
+        "before_ms": 68.15727100000001,
+        "after_ms": 50.6034585,
+        "reduction_percent": 25.7548640701885,
+        "before_range_ms": [
+          66.364667,
+          80.735041
+        ],
+        "after_range_ms": [
+          49.322458,
+          52.5095
+        ],
+        "digest": "8ab7d98e2ba90e14",
+        "filtered_count": 333,
+        "shelf_count": 3000
+      },
+      "search_quiet_songs_neon": {
+        "before_ms": 160.8370625,
+        "after_ms": 124.3487915,
+        "reduction_percent": 22.686481854889628,
+        "before_range_ms": [
+          155.594917,
+          170.494709
+        ],
+        "after_range_ms": [
+          121.548541,
+          136.632583
+        ],
+        "digest": "c96196b4f59dcbdf",
+        "filtered_count": 857,
+        "shelf_count": 7715
+      },
+      "search_recent_bounce_neon": {
+        "before_ms": 180.581333,
+        "after_ms": 145.510625,
+        "reduction_percent": 19.42100405250635,
+        "before_range_ms": [
+          174.622834,
+          205.374542
+        ],
+        "after_range_ms": [
+          137.757833,
+          180.837042
+        ],
+        "digest": "6ff4e7928c2fa89",
+        "filtered_count": 1000,
+        "shelf_count": 9000
+      },
+      "search_recent_cpr_neon": {
+        "before_ms": 178.99933299999998,
+        "after_ms": 139.49452100000002,
+        "reduction_percent": 22.069809612083844,
+        "before_range_ms": [
+          172.486375,
+          181.719833
+        ],
+        "after_range_ms": [
+          136.824167,
+          186.097834
+        ],
+        "digest": "6ff4e7928c2fa89",
+        "filtered_count": 1000,
+        "shelf_count": 9000
+      }
+    }
+  },
+  "runs": {
+    "1000": {
+      "before-1": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 1000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "b7e8d090430cfe2a",
+            "filtered_count": 900,
+            "first_ms": 5.215208,
+            "max_ms": 3.70325,
+            "median_ms": 3.536834,
+            "min_ms": 3.358209,
+            "query": "",
+            "samples_ms": [
+              3.480125,
+              3.70325,
+              3.489083,
+              3.646625,
+              3.358209,
+              3.536834,
+              3.651042
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 14.4845,
+            "max_ms": 9.983291,
+            "median_ms": 9.781417,
+            "min_ms": 9.510916,
+            "query": "neon",
+            "samples_ms": [
+              9.666875,
+              9.781417,
+              9.510916,
+              9.7655,
+              9.983291,
+              9.886833,
+              9.976
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "warm_index_init_ms": 18.205792,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "bed8c5dfd5af1a28",
+            "filtered_count": 33,
+            "first_ms": 5.535334,
+            "max_ms": 5.795583,
+            "median_ms": 5.508042,
+            "min_ms": 5.360416,
+            "query": "neon",
+            "samples_ms": [
+              5.360416,
+              5.551625,
+              5.470375,
+              5.4525,
+              5.524042,
+              5.508042,
+              5.795583
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 300,
+            "warm_index_init_ms": 5.947625,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 16.5965,
+            "max_ms": 18.907625,
+            "median_ms": 16.939541,
+            "min_ms": 16.788792,
+            "query": "neon",
+            "samples_ms": [
+              16.934459,
+              16.788792,
+              17.132583,
+              18.907625,
+              17.452583,
+              16.81375,
+              16.939541
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.265,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 17.009667,
+            "max_ms": 19.586458,
+            "median_ms": 18.545625,
+            "min_ms": 17.378208,
+            "query": "neon",
+            "samples_ms": [
+              17.378208,
+              19.26725,
+              18.151708,
+              18.545625,
+              17.496166,
+              19.347292,
+              19.586458
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.306334,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "2adeac67e735a7aa",
+            "filtered_count": 86,
+            "first_ms": 14.175708,
+            "max_ms": 15.076542,
+            "median_ms": 14.552167,
+            "min_ms": 13.571667,
+            "query": "neon",
+            "samples_ms": [
+              15.076542,
+              15.050041,
+              14.552167,
+              14.664208,
+              13.868542,
+              13.850541,
+              13.571667
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 772,
+            "warm_index_init_ms": 15.092166,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 41811968,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 1000,
+        "warmup_rounds": 2
+      },
+      "after-1": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 1000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "b7e8d090430cfe2a",
+            "filtered_count": 900,
+            "first_ms": 5.013417,
+            "max_ms": 3.930166,
+            "median_ms": 3.785625,
+            "min_ms": 3.709166,
+            "query": "",
+            "samples_ms": [
+              3.7895,
+              3.709166,
+              3.73525,
+              3.785625,
+              3.869291,
+              3.763333,
+              3.930166
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 12.177541,
+            "max_ms": 9.863458,
+            "median_ms": 9.728084,
+            "min_ms": 9.400917,
+            "query": "neon",
+            "samples_ms": [
+              9.764875,
+              9.728084,
+              9.847833,
+              9.5165,
+              9.701792,
+              9.863458,
+              9.400917
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "warm_index_init_ms": 18.457375,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "bed8c5dfd5af1a28",
+            "filtered_count": 33,
+            "first_ms": 4.090833,
+            "max_ms": 4.335291,
+            "median_ms": 4.249583,
+            "min_ms": 4.072292,
+            "query": "neon",
+            "samples_ms": [
+              4.072292,
+              4.308583,
+              4.249583,
+              4.249583,
+              4.335291,
+              4.150291,
+              4.328
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 300,
+            "warm_index_init_ms": 5.738875,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 13.341708,
+            "max_ms": 15.048125,
+            "median_ms": 13.493917,
+            "min_ms": 13.368334,
+            "query": "neon",
+            "samples_ms": [
+              15.048125,
+              13.493917,
+              13.532833,
+              13.44825,
+              13.434875,
+              13.368334,
+              13.520958
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.278791,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 13.337542,
+            "max_ms": 13.907542,
+            "median_ms": 13.675584,
+            "min_ms": 13.188166,
+            "query": "neon",
+            "samples_ms": [
+              13.84225,
+              13.845375,
+              13.659917,
+              13.668958,
+              13.188166,
+              13.675584,
+              13.907542
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 900,
+            "warm_index_init_ms": 18.159958,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "2adeac67e735a7aa",
+            "filtered_count": 86,
+            "first_ms": 11.187459,
+            "max_ms": 11.474,
+            "median_ms": 11.127958,
+            "min_ms": 11.014125,
+            "query": "neon",
+            "samples_ms": [
+              11.164208,
+              11.097875,
+              11.127958,
+              11.474,
+              11.191958,
+              11.092292,
+              11.014125
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 772,
+            "warm_index_init_ms": 15.089875,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 41222144,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 1000,
+        "warmup_rounds": 2
+      },
+      "after-2": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 1000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "b7e8d090430cfe2a",
+            "filtered_count": 900,
+            "first_ms": 3.914,
+            "max_ms": 4.219917,
+            "median_ms": 3.645291,
+            "min_ms": 3.4115,
+            "query": "",
+            "samples_ms": [
+              4.066542,
+              4.219917,
+              3.4115,
+              3.645291,
+              3.64775,
+              3.604833,
+              3.529625
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 12.105959,
+            "max_ms": 10.047583,
+            "median_ms": 9.855625,
+            "min_ms": 9.757959,
+            "query": "neon",
+            "samples_ms": [
+              10.047583,
+              9.815833,
+              9.873709,
+              9.785792,
+              9.886042,
+              9.855625,
+              9.757959
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "warm_index_init_ms": 18.207541,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "bed8c5dfd5af1a28",
+            "filtered_count": 33,
+            "first_ms": 4.331041,
+            "max_ms": 4.415334,
+            "median_ms": 4.333917,
+            "min_ms": 4.230333,
+            "query": "neon",
+            "samples_ms": [
+              4.344583,
+              4.381875,
+              4.230333,
+              4.415334,
+              4.333917,
+              4.3135,
+              4.272375
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 300,
+            "warm_index_init_ms": 5.604375,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 13.599625,
+            "max_ms": 13.443666,
+            "median_ms": 13.169583,
+            "min_ms": 12.752041,
+            "query": "neon",
+            "samples_ms": [
+              13.443666,
+              12.810041,
+              13.313,
+              12.752041,
+              13.231042,
+              13.169583,
+              13.019667
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.53725,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 13.590958,
+            "max_ms": 13.832292,
+            "median_ms": 13.577083,
+            "min_ms": 13.390583,
+            "query": "neon",
+            "samples_ms": [
+              13.577083,
+              13.629166,
+              13.422916,
+              13.390583,
+              13.832292,
+              13.692625,
+              13.454
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.389458,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "2adeac67e735a7aa",
+            "filtered_count": 86,
+            "first_ms": 11.01725,
+            "max_ms": 11.24125,
+            "median_ms": 11.004708,
+            "min_ms": 10.676791,
+            "query": "neon",
+            "samples_ms": [
+              10.946666,
+              11.24125,
+              11.151375,
+              10.808583,
+              11.004708,
+              10.676791,
+              11.0685
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 772,
+            "warm_index_init_ms": 14.780584,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 43302912,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 1000,
+        "warmup_rounds": 2
+      },
+      "before-2": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 1000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "b7e8d090430cfe2a",
+            "filtered_count": 900,
+            "first_ms": 3.331,
+            "max_ms": 3.906833,
+            "median_ms": 3.839125,
+            "min_ms": 3.416042,
+            "query": "",
+            "samples_ms": [
+              3.781209,
+              3.721875,
+              3.866167,
+              3.840417,
+              3.839125,
+              3.416042,
+              3.906833
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 12.258667,
+            "max_ms": 10.690708,
+            "median_ms": 10.084334,
+            "min_ms": 9.6885,
+            "query": "neon",
+            "samples_ms": [
+              10.690708,
+              10.136792,
+              10.095125,
+              10.013,
+              10.084334,
+              9.801417,
+              9.6885
+            ],
+            "shelf": "all",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.973958,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "bed8c5dfd5af1a28",
+            "filtered_count": 33,
+            "first_ms": 5.638666,
+            "max_ms": 5.84525,
+            "median_ms": 5.488042,
+            "min_ms": 5.2605,
+            "query": "neon",
+            "samples_ms": [
+              5.454167,
+              5.488042,
+              5.350916,
+              5.2605,
+              5.84525,
+              5.795875,
+              5.598583
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 300,
+            "warm_index_init_ms": 5.847375,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 16.604458,
+            "max_ms": 18.817792,
+            "median_ms": 17.710708,
+            "min_ms": 17.280291,
+            "query": "neon",
+            "samples_ms": [
+              17.770083,
+              17.710708,
+              17.563583,
+              17.554959,
+              17.280291,
+              17.755541,
+              18.817792
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.4915,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "7e0737bcbb1e7877",
+            "filtered_count": 100,
+            "first_ms": 17.026708,
+            "max_ms": 18.237875,
+            "median_ms": 17.888,
+            "min_ms": 17.819375,
+            "query": "neon",
+            "samples_ms": [
+              17.840625,
+              18.237875,
+              17.978625,
+              17.888,
+              17.845625,
+              18.008042,
+              17.819375
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 900,
+            "warm_index_init_ms": 17.603959,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "2adeac67e735a7aa",
+            "filtered_count": 86,
+            "first_ms": 14.034375,
+            "max_ms": 14.577166,
+            "median_ms": 14.254333,
+            "min_ms": 13.965209,
+            "query": "neon",
+            "samples_ms": [
+              13.965209,
+              14.316167,
+              14.2435,
+              14.254333,
+              14.577166,
+              14.378583,
+              14.153708
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 772,
+            "warm_index_init_ms": 15.790583,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 41402368,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 1000,
+        "warmup_rounds": 2
+      }
+    },
+    "10000": {
+      "before-1": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 10000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "16893e2d28f4b6f6",
+            "filtered_count": 9000,
+            "first_ms": 43.36275,
+            "max_ms": 48.529333,
+            "median_ms": 41.407583,
+            "min_ms": 40.704166,
+            "query": "",
+            "samples_ms": [
+              41.355375,
+              41.003666,
+              42.866042,
+              41.407583,
+              43.753291,
+              48.529333,
+              40.704166
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 109.806083,
+            "max_ms": 123.670334,
+            "median_ms": 103.308084,
+            "min_ms": 102.331958,
+            "query": "neon",
+            "samples_ms": [
+              103.308084,
+              103.04025,
+              102.331958,
+              103.004709,
+              105.358084,
+              123.670334,
+              119.506
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 182.601833,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "8ab7d98e2ba90e14",
+            "filtered_count": 333,
+            "first_ms": 68.378583,
+            "max_ms": 68.141542,
+            "median_ms": 67.674458,
+            "min_ms": 66.364667,
+            "query": "neon",
+            "samples_ms": [
+              67.856083,
+              66.494666,
+              67.757208,
+              67.674458,
+              68.141542,
+              66.831125,
+              66.364667
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 3000,
+            "warm_index_init_ms": 58.0055,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 176.37525,
+            "max_ms": 180.566708,
+            "median_ms": 179.366,
+            "min_ms": 176.09475,
+            "query": "neon",
+            "samples_ms": [
+              180.566708,
+              176.09475,
+              178.282625,
+              180.040791,
+              179.161666,
+              179.366,
+              180.327917
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 172.143708,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 202.365417,
+            "max_ms": 205.374542,
+            "median_ms": 183.6025,
+            "min_ms": 182.363125,
+            "query": "neon",
+            "samples_ms": [
+              182.363125,
+              183.364542,
+              183.6025,
+              183.278625,
+              197.298459,
+              205.374542,
+              192.06475
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 180.125541,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "c96196b4f59dcbdf",
+            "filtered_count": 857,
+            "first_ms": 162.219875,
+            "max_ms": 165.348875,
+            "median_ms": 160.570125,
+            "min_ms": 157.271459,
+            "query": "neon",
+            "samples_ms": [
+              158.015917,
+              160.570125,
+              163.769416,
+              165.348875,
+              161.306375,
+              159.693666,
+              157.271459
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 7715,
+            "warm_index_init_ms": 154.561459,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 299646976,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 10000,
+        "warmup_rounds": 2
+      },
+      "after-1": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 10000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "16893e2d28f4b6f6",
+            "filtered_count": 9000,
+            "first_ms": 39.665791,
+            "max_ms": 44.344334,
+            "median_ms": 41.175417,
+            "min_ms": 38.31525,
+            "query": "",
+            "samples_ms": [
+              39.258416,
+              42.385833,
+              39.79725,
+              38.31525,
+              41.548459,
+              41.175417,
+              44.344334
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 107.932792,
+            "max_ms": 101.515542,
+            "median_ms": 100.801375,
+            "min_ms": 99.042333,
+            "query": "neon",
+            "samples_ms": [
+              101.515542,
+              100.807625,
+              99.755917,
+              100.881583,
+              100.801375,
+              99.042333,
+              100.568167
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 178.663083,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "8ab7d98e2ba90e14",
+            "filtered_count": 333,
+            "first_ms": 52.509459,
+            "max_ms": 52.5095,
+            "median_ms": 51.257375,
+            "min_ms": 49.896541,
+            "query": "neon",
+            "samples_ms": [
+              51.655542,
+              51.292375,
+              51.039292,
+              51.257375,
+              52.5095,
+              49.896541,
+              50.849792
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 3000,
+            "warm_index_init_ms": 57.433584,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 135.593958,
+            "max_ms": 186.097834,
+            "median_ms": 140.77925,
+            "min_ms": 137.201459,
+            "query": "neon",
+            "samples_ms": [
+              138.705375,
+              140.77925,
+              140.283667,
+              142.583166,
+              186.097834,
+              144.406084,
+              137.201459
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 171.950333,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 147.051875,
+            "max_ms": 180.837042,
+            "median_ms": 150.373209,
+            "min_ms": 143.684458,
+            "query": "neon",
+            "samples_ms": [
+              180.837042,
+              177.035792,
+              150.08575,
+              150.373209,
+              148.418334,
+              143.684458,
+              171.95175
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 179.583125,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "c96196b4f59dcbdf",
+            "filtered_count": 857,
+            "first_ms": 130.933667,
+            "max_ms": 128.278584,
+            "median_ms": 123.133542,
+            "min_ms": 121.548541,
+            "query": "neon",
+            "samples_ms": [
+              123.133542,
+              121.548541,
+              121.879583,
+              123.230125,
+              122.59275,
+              123.402917,
+              128.278584
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 7715,
+            "warm_index_init_ms": 176.196917,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 298745856,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 10000,
+        "warmup_rounds": 2
+      },
+      "after-2": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 10000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "16893e2d28f4b6f6",
+            "filtered_count": 9000,
+            "first_ms": 42.407375,
+            "max_ms": 48.29325,
+            "median_ms": 40.826666,
+            "min_ms": 38.118125,
+            "query": "",
+            "samples_ms": [
+              38.8615,
+              40.826666,
+              46.5685,
+              40.675,
+              38.118125,
+              48.29325,
+              42.93575
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 102.957667,
+            "max_ms": 102.731333,
+            "median_ms": 101.317708,
+            "min_ms": 100.519208,
+            "query": "neon",
+            "samples_ms": [
+              100.723875,
+              101.943583,
+              102.731333,
+              102.068083,
+              100.519208,
+              101.317708,
+              100.969792
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 176.940375,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "8ab7d98e2ba90e14",
+            "filtered_count": 333,
+            "first_ms": 49.480375,
+            "max_ms": 50.860334,
+            "median_ms": 50.211333,
+            "min_ms": 49.322458,
+            "query": "neon",
+            "samples_ms": [
+              49.322458,
+              50.357125,
+              50.860334,
+              50.003041,
+              50.291167,
+              50.103792,
+              50.211333
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 3000,
+            "warm_index_init_ms": 57.947083,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 137.918541,
+            "max_ms": 141.246,
+            "median_ms": 137.979459,
+            "min_ms": 136.824167,
+            "query": "neon",
+            "samples_ms": [
+              138.397875,
+              137.979459,
+              141.246,
+              137.805125,
+              137.376583,
+              136.824167,
+              140.457875
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 175.818625,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 143.001541,
+            "max_ms": 146.020292,
+            "median_ms": 139.802333,
+            "min_ms": 137.757833,
+            "query": "neon",
+            "samples_ms": [
+              138.733042,
+              139.705333,
+              145.000958,
+              137.757833,
+              139.802333,
+              140.685208,
+              146.020292
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 176.650959,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "c96196b4f59dcbdf",
+            "filtered_count": 857,
+            "first_ms": 126.729042,
+            "max_ms": 136.632583,
+            "median_ms": 127.606,
+            "min_ms": 123.950333,
+            "query": "neon",
+            "samples_ms": [
+              127.606,
+              126.759625,
+              124.74725,
+              123.950333,
+              136.632583,
+              132.017083,
+              128.910833
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 7715,
+            "warm_index_init_ms": 154.015083,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 294928384,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 10000,
+        "warmup_rounds": 2
+      },
+      "before-2": {
+        "budgets": "Host-specific guidance only, not a universal SLA. Coordinator validates medians on the exact host/config in this report.",
+        "build_config": "release",
+        "fixture": {
+          "collaborator_ids": "collab-0/1/2 (byCollaborator uses collab-1)",
+          "ignored_fraction": "1/10 (showHiddenSongs=false)",
+          "method": "synthetic deterministic in-memory catalog; fixture-only paths, no real files; fixed epoch anchors (no wall-clock) so digests are stable across A/B runs",
+          "old_cpr_anchor": 1000000000,
+          "old_cpr_days": "0-108 after anchor (2001, always quiet when unfinished; safely far from threshold)",
+          "previews_per_song": 6,
+          "query": "neon",
+          "query_coverage": "matches Neon Hook subset; every 10th song hidden removes half the Neon group, so roughly 1/9 of visible songs match",
+          "recent_cpr_anchor": 1200000000,
+          "recent_cpr_days": "5-21 before anchor (2008, always quiet when unfinished; safely far from 30-day threshold)",
+          "songs": 10000,
+          "status": "cycled ProjectWorkflowStatus.allCases",
+          "versions_per_song": 4,
+          "warnings_aliases_notes": "warnings every 4th, aliases all, appNote every 3rd, sidecar every 5th"
+        },
+        "host": {
+          "cpu_count": 18,
+          "os": "Version 26.5.2 (Build 25F84)",
+          "physical_memory_bytes": 51539607552
+        },
+        "measured_rounds": 7,
+        "metrics": [
+          {
+            "digest": "16893e2d28f4b6f6",
+            "filtered_count": 9000,
+            "first_ms": 40.385083,
+            "max_ms": 43.999958,
+            "median_ms": 40.978542,
+            "min_ms": 39.219417,
+            "query": "",
+            "samples_ms": [
+              43.999958,
+              42.996959,
+              39.219417,
+              39.717459,
+              41.1185,
+              40.978542,
+              40.07175
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "workflow": "empty_control_allSongs"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 105.451334,
+            "max_ms": 104.067833,
+            "median_ms": 102.791625,
+            "min_ms": 100.795375,
+            "query": "neon",
+            "samples_ms": [
+              102.046333,
+              102.913917,
+              104.067833,
+              103.214125,
+              102.791625,
+              100.795375,
+              101.629
+            ],
+            "shelf": "all",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 175.6695,
+            "workflow": "search_all_neon"
+          },
+          {
+            "digest": "8ab7d98e2ba90e14",
+            "filtered_count": 333,
+            "first_ms": 68.600667,
+            "max_ms": 80.735041,
+            "median_ms": 69.896458,
+            "min_ms": 68.173,
+            "query": "neon",
+            "samples_ms": [
+              68.173,
+              80.735041,
+              70.230208,
+              69.481584,
+              69.896458,
+              69.461958,
+              70.482333
+            ],
+            "shelf": "by_collaborator",
+            "shelf_count": 3000,
+            "warm_index_init_ms": 56.178792,
+            "workflow": "search_by_collaborator_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 192.876875,
+            "max_ms": 181.719833,
+            "median_ms": 176.738,
+            "min_ms": 172.486375,
+            "query": "neon",
+            "samples_ms": [
+              172.486375,
+              176.343,
+              179.915875,
+              176.738,
+              174.710584,
+              178.837,
+              181.719833
+            ],
+            "shelf": "recent_cpr",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 177.064459,
+            "workflow": "search_recent_cpr_neon"
+          },
+          {
+            "digest": "6ff4e7928c2fa89",
+            "filtered_count": 1000,
+            "first_ms": 185.112083,
+            "max_ms": 178.799541,
+            "median_ms": 176.175833,
+            "min_ms": 174.622834,
+            "query": "neon",
+            "samples_ms": [
+              178.799541,
+              176.175833,
+              176.533416,
+              177.925334,
+              175.287333,
+              174.622834,
+              175.991709
+            ],
+            "shelf": "recent_bounce",
+            "shelf_count": 9000,
+            "warm_index_init_ms": 175.501708,
+            "workflow": "search_recent_bounce_neon"
+          },
+          {
+            "digest": "c96196b4f59dcbdf",
+            "filtered_count": 857,
+            "first_ms": 164.306833,
+            "max_ms": 170.494709,
+            "median_ms": 161.104,
+            "min_ms": 155.594917,
+            "query": "neon",
+            "samples_ms": [
+              159.610833,
+              170.494709,
+              167.526333,
+              161.104,
+              159.578958,
+              155.594917,
+              162.948958
+            ],
+            "shelf": "quiet_songs",
+            "shelf_count": 7715,
+            "warm_index_init_ms": 149.433042,
+            "workflow": "search_quiet_songs_neon"
+          }
+        ],
+        "peak_rss_bytes": 300662784,
+        "scope": "Full production shelf derivation + warm MusicSearchIndex.sync(from:) + ArchiveBrowseProjection.project(state, searchIndex:) for nonempty queries across allSongs/byCollaborator/recentCPRActivity/recentlyBounced/quietSongs plus empty-query control. Digests cover full ordered Song values, summaries, skipped matches and isSearching via sorted-keys JSON outside timing. Same driver runs for baseline and candidate; coordinator compares digests A/B/B/A at small/large scales.",
+        "songs": 10000,
+        "warmup_rounds": 2
+      }
+    }
+  },
+  "baseline_ui_context": {
+    "source_commit": "43877d4609fee6229c19fbce0be202fba4a2c754",
+    "command": "./script/benchmark_archive_ui.sh 10000 --versions 4 --search-only",
+    "report": {
+      "heartbeat_interval_ms": 2,
+      "hosting_sizing_options": "none; fixture window owns its size",
+      "measured_iterations": 15,
+      "metrics": [
+        {
+          "max_ms": 101.68020833225455,
+          "median_ms": 93.25191666721366,
+          "min_ms": 91.26308333361521,
+          "samples_ms": [
+            91.26308333361521,
+            95.59354165685363,
+            101.68020833225455,
+            92.32250000059139,
+            97.17583333258517,
+            93.25191666721366,
+            91.94595832377672
+          ],
+          "workflow": "board_maximum_main_runloop_gap"
+        },
+        {
+          "max_ms": 100.2074580000003,
+          "median_ms": 92.32650000000042,
+          "min_ms": 90.49345899999972,
+          "samples_ms": [
+            90.89620899999984,
+            94.31304200000001,
+            100.2074580000003,
+            90.49345899999972,
+            95.65283300000038,
+            92.32650000000042,
+            90.67299999999977
+          ],
+          "workflow": "board_maximum_main_runloop_cpu_work"
+        },
+        {
+          "max_ms": 369.20766667753924,
+          "median_ms": 360.1538333314238,
+          "min_ms": 354.5636249909876,
+          "samples_ms": [
+            361.48349998984486,
+            359.8082916723797,
+            367.8924999985611,
+            354.5636249909876,
+            369.20766667753924,
+            359.47308332833927,
+            360.1538333314238
+          ],
+          "workflow": "board_debounced_search_latency"
+        },
+        {
+          "max_ms": 42.49933332903311,
+          "median_ms": 39.87375000724569,
+          "min_ms": 38.013458339264616,
+          "samples_ms": [
+            42.49933332903311,
+            38.013458339264616,
+            38.88250001182314,
+            39.30504166055471,
+            39.87375000724569,
+            41.853750008158386,
+            40.14150000875816
+          ],
+          "workflow": "list_maximum_main_runloop_gap"
+        },
+        {
+          "max_ms": 40.38362500000048,
+          "median_ms": 37.75545800000035,
+          "min_ms": 36.99091699999979,
+          "samples_ms": [
+            40.38362500000048,
+            37.639958999999834,
+            36.99091699999979,
+            37.25733300000034,
+            37.75545800000035,
+            40.13624999999976,
+            38.06799999999999
+          ],
+          "workflow": "list_maximum_main_runloop_cpu_work"
+        },
+        {
+          "max_ms": 310.6824583373964,
+          "median_ms": 307.06991667102557,
+          "min_ms": 300.0003750057658,
+          "samples_ms": [
+            310.6824583373964,
+            300.0003750057658,
+            307.06991667102557,
+            301.4594166743336,
+            307.98204166057985,
+            308.0400833277963,
+            306.3317499909317
+          ],
+          "workflow": "list_debounced_search_latency"
+        }
+      ],
+      "scope": "Synchronous main-thread mutation + NSHostingView layout + display + CATransaction flush. Not GPU presentation or input-to-photon latency. No audio playback.",
+      "search_measured_iterations": 7,
+      "search_warmups": 3,
+      "song_count": 10000,
+      "versions_per_song": 4,
+      "warmup_iterations": 3,
+      "window_points": [
+        1440,
+        900
+      ]
+    },
+    "purpose": "Baseline context only; no candidate comparison and no UI improvement claim."
+  }
+}

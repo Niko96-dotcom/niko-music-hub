@@ -131,4 +131,120 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertTrue(body.contains("Skipped folders (1)"))
         XCTAssertTrue(body.contains("Settings → Archive"))
     }
+
+    // MARK: - Single-shelf-pass parity (scoped index vs standalone fallback)
+
+    func testScopedIndexMatchesStandaloneAcrossShelvesHiddenFiltersAndQueries() {
+        let catalog = makeParityCatalog()
+        let filters: [ArchiveBrowseFilter] = [[], [.hasWarnings, .hasStems]]
+        for shelf in ArchiveSmartShelf.allCases {
+            for showHidden in [false, true] {
+                for filter in filters {
+                    for query in ["neon", "missing"] {
+                        let state = ArchiveBrowseState(
+                            songs: catalog,
+                            showHiddenSongs: showHidden,
+                            selectedShelf: shelf,
+                            selectedCollaboratorID: shelf == .byCollaborator ? "collab-1" : nil,
+                            searchQuery: query,
+                            browseFilter: filter,
+                            sortMode: .recentCPR,
+                            skippedScanEntries: []
+                        )
+                        let standalone = ArchiveBrowseProjection.project(state)
+                        let scoped = MusicSearchIndex(songs: ArchiveBrowseProjection.shelfSongs(from: state))
+                        XCTAssertEqual(
+                            ArchiveBrowseProjection.project(state, searchIndex: scoped),
+                            standalone,
+                            "mismatch shelf=\(shelf) hidden=\(showHidden) filter=\(filter.rawValue) query=\(query)"
+                        )
+                    }
+                }
+            }
+        }
+        // byCollaborator without an ID yields an empty shelf in both paths.
+        let nilCollab = ArchiveBrowseState(
+            songs: catalog,
+            showHiddenSongs: true,
+            selectedShelf: .byCollaborator,
+            selectedCollaboratorID: nil,
+            searchQuery: "neon",
+            browseFilter: [],
+            sortMode: .recentCPR,
+            skippedScanEntries: []
+        )
+        XCTAssertEqual(
+            ArchiveBrowseProjection.project(nilCollab, searchIndex: MusicSearchIndex(songs: ArchiveBrowseProjection.shelfSongs(from: nilCollab))),
+            ArchiveBrowseProjection.project(nilCollab)
+        )
+    }
+
+    func testEmptyQueryIgnoresStaleNarrowSuppliedIndex() {
+        let catalog = makeParityCatalog()
+        let stale = Song(
+            folderPath: URL(fileURLWithPath: "/fixture-only/stale-only"),
+            originalFolderName: "Stale Only",
+            displayTitle: "Stale Only"
+        )
+        let state = ArchiveBrowseState(
+            songs: catalog,
+            showHiddenSongs: false,
+            selectedShelf: .allSongs,
+            selectedCollaboratorID: nil,
+            searchQuery: "   ",
+            browseFilter: [.hasWarnings],
+            sortMode: .titleAZ,
+            skippedScanEntries: []
+        )
+        XCTAssertEqual(
+            ArchiveBrowseProjection.project(state, searchIndex: MusicSearchIndex(songs: [stale])),
+            ArchiveBrowseProjection.project(state)
+        )
+    }
+
+    // MARK: - Fixtures
+
+    private func makeParityCatalog() -> [Song] {
+        let now = Date()
+        func song(
+            _ name: String,
+            daysAgo: Double,
+            stems: Bool,
+            warnings: [String],
+            status: ProjectWorkflowStatus?,
+            collab: String?,
+            hidden: Bool
+        ) -> Song {
+            let folder = URL(fileURLWithPath: "/fixture-only/\(name)")
+            let version = ProjectVersion(
+                filePath: folder.appendingPathComponent("\(name).cpr"),
+                fileName: "\(name).cpr",
+                modifiedAt: now.addingTimeInterval(-daysAgo * 86_400)
+            )
+            let preview = PreviewCandidate(
+                filePath: folder.appendingPathComponent("\(name).wav"),
+                fileName: "\(name).wav",
+                folderRole: stems ? .stems : .mixdown,
+                modifiedAt: now.addingTimeInterval(-daysAgo * 86_400),
+                detectedRole: stems ? .stems : .mainMix
+            )
+            return Song(
+                folderPath: folder,
+                originalFolderName: name,
+                displayTitle: name,
+                projectVersions: [version],
+                previewCandidates: [preview],
+                scanWarnings: warnings,
+                collaboratorIDs: collab.map { [$0] } ?? [],
+                workflowStatus: status,
+                isIgnored: hidden
+            )
+        }
+        return [
+            song("Neon Alpha", daysAgo: 5, stems: true, warnings: ["missing preview"], status: .prod, collab: "collab-1", hidden: false),
+            song("Neon Beta", daysAgo: 100, stems: false, warnings: [], status: .song, collab: "collab-2", hidden: false),
+            song("Ocean Drive", daysAgo: 6, stems: false, warnings: ["missing preview"], status: .done, collab: "collab-1", hidden: false),
+            song("Hidden Neon Outtake", daysAgo: 90, stems: true, warnings: ["missing preview"], status: .prod, collab: "collab-1", hidden: true),
+        ]
+    }
 }
