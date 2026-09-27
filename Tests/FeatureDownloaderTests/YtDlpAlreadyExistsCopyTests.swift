@@ -1,10 +1,12 @@
 @testable import FeatureDownloader
+import Darwin
 import Foundation
 import XCTest
 
 /// NMH-141 (TOOL-30): yt-dlp `--no-overwrites` skip must read as an
 /// informational inbox status, not a generic network failure.
-/// String/unit only; no network.
+/// Adapter provenance only; no network. Presentation reads the typed
+/// `VerifiedDownloadOutput.isAlreadyExisting` flag, never log text.
 final class YtDlpAlreadyExistsCopyTests: XCTestCase {
     func testAlreadyExistsCopyString() {
         XCTAssertEqual(
@@ -13,166 +15,176 @@ final class YtDlpAlreadyExistsCopyTests: XCTestCase {
         )
     }
 
-    func testAlreadyDownloadedLineMapsToInboxCopy() {
-        XCTAssertEqual(
-            YtDlpDownloader.alreadyExistsCopy(
-                for: "[download] /tmp/out/Some Title [abc123].mp4 has already been downloaded"
-            ),
-            DownloaderCopy.alreadyExistsInInbox
-        )
-        XCTAssertNil(
-            YtDlpDownloader.alreadyExistsCopy(
-                for: "[download]  42.5% of 10.00MiB at 1.00MiB/s ETA 00:05"
-            )
-        )
-    }
-
-    func testAlreadyDownloadedMarkerDetection() {
+    func testAlreadyDownloadedMarkerShape() {
         XCTAssertTrue(
-            YtDlpDownloader.containsAlreadyDownloadedMarker(
+            YtDlpDownloader.isAlreadyDownloadedMarkerLine(
                 "[download] relative/final.mp4 has already been downloaded"
             )
         )
         XCTAssertFalse(
-            YtDlpDownloader.containsAlreadyDownloadedMarker(
+            YtDlpDownloader.isAlreadyDownloadedMarkerLine(
                 "[download] Destination: /tmp/out/final.mp4"
             )
         )
-    }
-
-    @MainActor
-    func testViewModelDetectsSkipFromLogs() {
-        XCTAssertTrue(
-            DownloaderViewModel.isAlreadyDownloadedSkip(
-                logEntries: ["[download] /tmp/out/Title [abc].mp4 has already been downloaded"],
-                message: "No output files found after download."
-            )
-        )
         XCTAssertFalse(
-            DownloaderViewModel.isAlreadyDownloadedSkip(
-                logEntries: ["ERROR: unable to download video data: HTTP Error 403: Forbidden"],
-                message: "Download failed: ERROR: unable to download video data: HTTP Error 403: Forbidden"
+            YtDlpDownloader.isAlreadyDownloadedMarkerLine(
+                "NIKO_MUSIC_HUB_FILE:/tmp/out/final.mp4"
             )
         )
     }
 
-    // D1: marker alone is not sufficient; verification requires an existing
-    // regular file within the output root. Fake marker paths with real
-    // disposable files: valid, absent, directory, outside, symlink escape.
-    @MainActor
-    func testVerifiedOutputsRequireExistingRegularContainedFile() throws {
-        let outputDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("already-exists-verify-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+    // Provenance passthrough: verification preserves the adapter flag for a
+    // valid contained regular file and rejects everything else. Never
+    // overwrites; only filters.
+    func testVerifiedCollectedOutputsPreservesProvenanceForValidContainedFile() throws {
+        let outputDir = try makeDisposableDirectory(prefix: "already-exists-provenance")
         defer { try? FileManager.default.removeItem(at: outputDir) }
-        let valid = outputDir.appendingPathComponent("valid-\(UUID().uuidString).mp4")
-        FileManager.default.createFile(atPath: valid.path, contents: Data("x".utf8))
+        let fileURL = try makeExistingFile(named: "valid-\(UUID().uuidString).mp4", in: outputDir)
 
-        let validOutputs = DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] \(valid.path) has already been downloaded"],
-            message: "No output files found after download.",
-            outputDirectory: outputDir
+        let existing = YtDlpDownloader.verifiedCollectedOutputs(
+            [YtDlpCollectedOutput(url: fileURL, isAlreadyExisting: true)],
+            in: outputDir
         )
-        XCTAssertEqual(validOutputs, [valid.standardizedFileURL])
+        XCTAssertEqual(existing.count, 1)
+        XCTAssertEqual(existing.first?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(existing.first?.isAlreadyExisting, true)
+
+        let fresh = YtDlpDownloader.verifiedCollectedOutputs(
+            [YtDlpCollectedOutput(url: fileURL, isAlreadyExisting: false)],
+            in: outputDir
+        )
+        XCTAssertEqual(fresh.count, 1)
+        XCTAssertEqual(fresh.first?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(fresh.first?.isAlreadyExisting, false)
+    }
+
+    // Equivalent containment coverage for the unprovenanced helper: only an
+    // existing regular file inside the output root verifies.
+    func testVerifiedRegularContainedOutputsRequiresExistingRegularContainedFile() throws {
+        let outputDir = try makeDisposableDirectory(prefix: "already-exists-verify")
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let valid = try makeExistingFile(named: "valid-\(UUID().uuidString).mp4", in: outputDir)
+        XCTAssertEqual(
+            YtDlpDownloader.verifiedRegularContainedOutputs([valid], in: outputDir),
+            [valid.standardizedFileURL]
+        )
 
         let missing = outputDir.appendingPathComponent("missing-\(UUID().uuidString).mp4")
-        XCTAssertTrue(DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] \(missing.path) has already been downloaded"],
-            message: "No output files found after download.",
-            outputDirectory: outputDir
-        ).isEmpty, "absent path must not verify")
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedRegularContainedOutputs([missing], in: outputDir).isEmpty,
+            "absent path must not verify"
+        )
 
         let subdir = outputDir.appendingPathComponent("subdir-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
-        XCTAssertTrue(DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] \(subdir.path) has already been downloaded"],
-            message: "No output files found after download.",
-            outputDirectory: outputDir
-        ).isEmpty, "directory must not verify")
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedRegularContainedOutputs([subdir], in: outputDir).isEmpty,
+            "directory must not verify"
+        )
 
-        // Arbitrary non-marker logs never verify, even when they name a real file.
-        XCTAssertTrue(DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] Destination: \(valid.path)"],
-            message: "No output files found after download.",
-            outputDirectory: outputDir
-        ).isEmpty, "non-marker log paths must not verify")
+        let outsideDir = try makeDisposableDirectory(prefix: "already-exists-out")
+        defer { try? FileManager.default.removeItem(at: outsideDir) }
+        let outsideFile = try makeExistingFile(named: "outside-\(UUID().uuidString).mp4", in: outsideDir)
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedRegularContainedOutputs([outsideFile], in: outputDir).isEmpty,
+            "outside path must not verify"
+        )
     }
 
-    @MainActor
-    func testVerifiedOutputsRejectOutsideAndSymlinkEscape() throws {
-        let outputDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("already-exists-outside-\(UUID().uuidString)", isDirectory: true)
-        let outsideDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("already-exists-out-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
-        defer {
-            try? FileManager.default.removeItem(at: outputDir)
-            try? FileManager.default.removeItem(at: outsideDir)
-        }
-        let outsideFile = outsideDir.appendingPathComponent("outside-\(UUID().uuidString).mp4")
-        FileManager.default.createFile(atPath: outsideFile.path, contents: Data("x".utf8))
-        XCTAssertTrue(DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] \(outsideFile.path) has already been downloaded"],
-            message: "No output files found after download.",
-            outputDirectory: outputDir
-        ).isEmpty, "outside path must not verify")
+    func testVerifiedCollectedOutputsRejectsSymlinkEscapeFIFOAndScratch() throws {
+        let outputDir = try makeDisposableDirectory(prefix: "already-exists-safety")
+        defer { try? FileManager.default.removeItem(at: outputDir) }
 
-        let baseDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("already-exists-link-\(UUID().uuidString)", isDirectory: true)
+        // Symlink escape: link inside output root resolving outside must not verify.
+        let baseDir = try makeDisposableDirectory(prefix: "already-exists-link-base")
+        defer { try? FileManager.default.removeItem(at: baseDir) }
         let linkOutput = baseDir.appendingPathComponent("output", isDirectory: true)
         let linkOutside = baseDir.appendingPathComponent("outside", isDirectory: true)
         try FileManager.default.createDirectory(at: linkOutput, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: linkOutside, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: baseDir) }
-        let secret = linkOutside.appendingPathComponent("secret-\(UUID().uuidString).mp4")
-        FileManager.default.createFile(atPath: secret.path, contents: Data("x".utf8))
+        let secret = try makeExistingFile(named: "secret-\(UUID().uuidString).mp4", in: linkOutside)
         let linkURL = linkOutput.appendingPathComponent("link")
         do {
             try FileManager.default.createSymbolicLink(atPath: linkURL.path, withDestinationPath: linkOutside.path)
         } catch {
             throw XCTSkip("Symlinks are not supported on this platform.")
         }
-        let escape = linkURL.appendingPathComponent(secret.lastPathComponent).path
-        XCTAssertTrue(DownloaderViewModel.verifiedAlreadyDownloadedOutputs(
-            logEntries: ["[download] \(escape) has already been downloaded"],
-            message: "No output files found after download.",
-            outputDirectory: linkOutput
-        ).isEmpty, "symlink escape must not verify")
-    }
-
-    func testVerifiedAlreadyDownloadedOutputHelper() throws {
-        let outputDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("already-exists-helper-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: outputDir) }
-        let valid = outputDir.appendingPathComponent("valid-\(UUID().uuidString).mp4")
-        FileManager.default.createFile(atPath: valid.path, contents: Data("x".utf8))
-        XCTAssertEqual(
-            YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: valid.path, in: outputDir),
-            valid.standardizedFileURL
+        let escape = linkURL.appendingPathComponent(secret.lastPathComponent)
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedCollectedOutputs(
+                [YtDlpCollectedOutput(url: escape, isAlreadyExisting: true)],
+                in: linkOutput
+            ).isEmpty,
+            "symlink escape must not verify"
         )
-        XCTAssertNil(YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: "", in: outputDir))
-        XCTAssertNil(YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: "~/\(valid.lastPathComponent)", in: outputDir))
-        XCTAssertNil(YtDlpDownloader.verifiedAlreadyDownloadedOutput(
-            for: outputDir.appendingPathComponent("missing-\(UUID().uuidString).mp4").path,
-            in: outputDir
-        ))
+
+        // FIFO must not verify as a regular file.
+        let fifoURL = outputDir.appendingPathComponent("pipe-\(UUID().uuidString).mp4")
+        guard fifoURL.path.withCString({ mkfifo($0, 0o644) }) == 0 else {
+            throw XCTSkip("mkfifo is not supported on this platform.")
+        }
+        XCTAssertFalse(YtDlpDownloader.isExistingRegularFile(at: fifoURL))
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedCollectedOutputs(
+                [YtDlpCollectedOutput(url: fifoURL, isAlreadyExisting: true)],
+                in: outputDir
+            ).isEmpty,
+            "FIFO must not verify"
+        )
+
+        // Per-run scratch must never verify, even when the file exists.
+        let scratchDir = outputDir.appendingPathComponent(".nmh-partial-leftover", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratchDir, withIntermediateDirectories: true)
+        let scratchFile = try makeExistingFile(named: "fragment-\(UUID().uuidString).mp4", in: scratchDir)
+        XCTAssertTrue(YtDlpDownloader.isPartialScratchURL(scratchFile))
+        XCTAssertTrue(
+            YtDlpDownloader.verifiedCollectedOutputs(
+                [YtDlpCollectedOutput(url: scratchFile, isAlreadyExisting: false)],
+                in: outputDir
+            ).isEmpty,
+            ".nmh-partial files must never verify"
+        )
     }
 
-    // D1: outcome contract — a real ERROR alongside a marker must stay a failure.
-    @MainActor
-    func testRealErrorDetectionForMixedMarkerAndFailure() {
-        XCTAssertFalse(DownloaderViewModel.hasRealDownloadError(
-            logEntries: ["[download] /tmp/out/a.mp4 has already been downloaded"],
-            message: "No output files found after download."
-        ))
-        XCTAssertTrue(DownloaderViewModel.hasRealDownloadError(
-            logEntries: [
-                "[download] /tmp/out/a.mp4 has already been downloaded",
-                "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+    // Typed result conveniences: outputURLs unions provenance, fresh/existing split it.
+    func testDownloadResultProvenanceConveniences() {
+        let freshURL = URL(fileURLWithPath: "/tmp/out/fresh-\(UUID().uuidString).mp4")
+        let existingURL = URL(fileURLWithPath: "/tmp/out/existing-\(UUID().uuidString).mp4")
+        let result = DownloadResult(
+            outputs: [
+                VerifiedDownloadOutput(url: freshURL, isAlreadyExisting: false),
+                VerifiedDownloadOutput(url: existingURL, isAlreadyExisting: true),
             ],
-            message: "Download failed: ERROR: unable to download video data: HTTP Error 403: Forbidden"
-        ))
+            sourceURL: URL(string: "https://example.com/playlist?list=abc")!,
+            exitCode: 1,
+            standardError: "ERROR: [youtube] abc: Video unavailable",
+            failure: DownloadFailure(
+                kind: .processFailed,
+                message: "ERROR: [youtube] abc: Video unavailable",
+                isRetryable: false,
+                outputs: [
+                    VerifiedDownloadOutput(url: freshURL, isAlreadyExisting: false),
+                    VerifiedDownloadOutput(url: existingURL, isAlreadyExisting: true),
+                ]
+            )
+        )
+        XCTAssertEqual(result.outputURLs, [freshURL, existingURL])
+        XCTAssertEqual(result.freshOutputURLs, [freshURL])
+        XCTAssertEqual(result.alreadyExistingOutputURLs, [existingURL])
+    }
+
+    // MARK: - Disposable fixtures (unique roots, always cleaned up)
+
+    private func makeDisposableDirectory(prefix: String) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func makeExistingFile(named name: String, in directory: URL) throws -> URL {
+        let url = directory.appendingPathComponent(name)
+        try Data("download".utf8).write(to: url)
+        return url
     }
 }

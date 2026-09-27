@@ -41,6 +41,40 @@ struct YouTubeStemSeparationWorkflowTests {
     }
 
     @Test
+    func startJob_typedHelperFailureWithChangedWording_marksJobFailedWithReason() async throws {
+        let runner = JobRunner()
+        let inbox = FakeOutputInboxStore()
+        let backend = MockStemSeparationBackend()
+        let customWording = "custom demucs helper blown up (code 9) XYZ"
+        backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: inbox,
+            jobRunner: runner
+        )
+        let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: downloader,
+            stemService: service,
+            jobRunner: runner
+        )
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sourceURL = URL(string: "https://www.youtube.com/watch?v=test")!
+
+        let job = workflow.startJob(
+            request: YouTubeStemSeparationRequest(sourceURL: sourceURL, outputRootURL: root, preset: .fast4)
+        )
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .failed)
+        #expect(finished.message == customWording)
+        #expect(finished.failureReason == .helperUnavailable)
+        #expect(inbox.items.isEmpty)
+    }
+
+    @Test
     func startJob_rejectsArchiveOutputBeforeCreatingDownloadDirectoryOrLaunchingDownloader() async throws {
         let fileManager = FileManager.default
         let base = fileManager.temporaryDirectory

@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 
 public struct StemSeparationRequest: Equatable, Sendable {
@@ -37,6 +38,6 @@ public struct StemSeparationBackendRequest: Equatable, Sendable {
 
 public enum StemSeparationResult: Equatable, Sendable {
     case success(outputFolderURL: URL, stems: [StemOutput])
-    case failed(message: String)
+    case failed(message: String, reason: JobFailureReason? = nil)
     case canceled
 }

@@ -29,7 +29,11 @@ public struct DownloadJobOptions: Sendable {
 public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
     case ytDlpUnavailable(String)
     case unsupportedURL(String)
-    case downloadFailed(String)
+    /// Typed external failure from the adapter contract (kind, retryability,
+    /// and kept verified outputs travel in the payload; never parsed text).
+    case failed(DownloadFailure)
+    /// Pure skip: only verified pre-existing outputs, nothing newly written.
+    case alreadyDownloaded
     case outputNotFound
 
     public var errorDescription: String? {
@@ -38,10 +42,27 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
             return "yt-dlp is required. \(message)"
         case let .unsupportedURL(message):
             return "This URL is not supported or yt-dlp could not access it. \(message)"
-        case let .downloadFailed(message):
-            return "Download failed: \(message)"
+        case let .failed(failure):
+            return "Download failed: \(failure.message)"
+        case .alreadyDownloaded:
+            return DownloaderCopy.alreadyExistsInInbox
         case .outputNotFound:
             return "No output files found after download."
+        }
+    }
+}
+
+extension DownloadUseCaseError: JobFailureReasonProviding {
+    public var jobFailureReason: JobFailureReason? {
+        switch self {
+        case .ytDlpUnavailable:
+            // Downloader-tool-specific helper signal; Stems demucs setup keys
+            // only on `helperUnavailable`.
+            return .downloaderHelperUnavailable
+        case .alreadyDownloaded:
+            return .downloadAlreadyExists
+        case .failed, .unsupportedURL, .outputNotFound:
+            return nil
         }
     }
 }
@@ -111,14 +132,27 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         do {
             let result = try await simulateRunner.run(simulateRequest)
             if result.exitCode != 0 {
-                throw DownloadUseCaseError.downloadFailed(Self.ytDlpFailureMessage(from: result))
+                throw DownloadUseCaseError.failed(DownloadFailure(
+                    kind: .processFailed,
+                    message: Self.ytDlpFailureMessage(from: result),
+                    isRetryable: false,
+                    outputs: []
+                ))
             }
             let title = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
             simulateTitle = title.isEmpty ? Self.fallbackJobTitle(for: url) : title
         } catch let error as DownloadUseCaseError {
             throw error
         } catch {
-            throw DownloadUseCaseError.downloadFailed(error.localizedDescription)
+            if error is CancellationError {
+                throw error
+            }
+            throw DownloadUseCaseError.failed(DownloadFailure(
+                kind: .processFailed,
+                message: error.localizedDescription,
+                isRetryable: false,
+                outputs: []
+            ))
         }
 
         let capturedUseCase = self
@@ -129,23 +163,38 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             title: "Download: \(simulateTitle)",
             sourceToolID: ToolFeatureID("downloader")
         ) { progress in
-            try await capturedUseCase.downloadWithRetry(
+            let result = try await capturedUseCase.downloadResultWithRetry(
                 url: capturedURL,
                 options: capturedOptions,
                 progress: progress
             )
+            // Terminal Download-pane presentation only: an all-existing typed
+            // outcome surfaces as the Job's informational skip reason.
+            // Direct download() below returns these URLs as success instead.
+            if result.freshOutputURLs.isEmpty, !result.alreadyExistingOutputURLs.isEmpty {
+                throw DownloadUseCaseError.alreadyDownloaded
+            }
+            progress.update(progress: 1, message: "Downloaded")
         }
 
         return job
     }
 
+    /// Direct download for programmatic consumers (e.g. Stems): pre-existing
+    /// verified outputs return as success so the workflow continues. Never
+    /// throws `alreadyDownloaded`; that mapping lives only in the
+    /// `simulateAndEnqueue` Job closure above.
     @discardableResult
     public func download(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws -> [URL] {
-        try await downloadWithRetry(url: url, options: options, progress: progress)
+        let result = try await downloadResultWithRetry(url: url, options: options, progress: progress)
+        return result.outputURLs
     }
 
-    @discardableResult
-    private func downloadWithRetry(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws -> [URL] {
+    /// Typed retry core: accumulates deduped verified outputs (fresh wins)
+    /// across attempts, retains them on final failure, and returns the typed
+    /// outcome. Callers map provenance to presentation.
+    private func downloadResultWithRetry(url: URL, options: DownloadJobOptions, progress: JobProgress) async throws -> DownloadResult {
+        var accumulated: [VerifiedDownloadOutput] = []
         var lastError: Error?
 
         for attempt in 0..<options.retries {
@@ -173,29 +222,87 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                     }
                 }
 
-                if result.exitCode != 0 {
-                    let message = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
-                    throw DownloadUseCaseError.downloadFailed(
-                        message.isEmpty ? "yt-dlp exited with code \(result.exitCode)." : message
-                    )
+                // Fail-closed: nonzero exit can never be success, even when a
+                // custom conformer returns nil failure. No presentation-text
+                // retry inference: conservative non-retryable.
+                let effectiveFailure: DownloadFailure? = {
+                    if let failure = result.failure { return failure }
+                    if result.exitCode != 0 {
+                        let trimmed = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let message = trimmed.isEmpty
+                            ? "yt-dlp exited with code \(result.exitCode)."
+                            : trimmed
+                        return DownloadFailure(
+                            kind: .processFailed,
+                            message: message,
+                            isRetryable: false,
+                            outputs: result.outputs
+                        )
+                    }
+                    return nil
+                }()
+
+                // Accumulate across attempts so a retryable failure that
+                // produced a good file never loses it to a later empty
+                // attempt. Fresh provenance wins (a later skip of the same
+                // file stays fresh).
+                accumulated = Self.mergingAccumulated(accumulated, with: result.outputs)
+                Self.publishVerifiedOutputs(accumulated, progress: progress)
+
+                // Typed adapter outcome: verified outputs are kept on the
+                // (failed) job even when the run did not fully succeed, so a
+                // partial playlist still exposes completed items.
+                if let failure = effectiveFailure {
+                    var merged = failure
+                    merged.outputs = accumulated
+                    throw DownloadUseCaseError.failed(merged)
                 }
 
-                if result.outputURLs.isEmpty {
+                // Success requires verified outputs from the current attempt:
+                // an earlier retryable attempt may have produced outputs, but a
+                // final exit-0 with zero outputs must still fail (previously an
+                // empty final output meant failure). Accumulated outputs were
+                // already published, so the failed Job keeps them.
+                if result.outputs.isEmpty {
                     throw DownloadUseCaseError.outputNotFound
                 }
 
-                progress.setOutputFileURLs(result.outputURLs)
-                for outputURL in result.outputURLs {
-                    progress.log("Output file: \(outputURL.path)")
-                }
-                progress.update(progress: 1, message: "Downloaded")
-
-                return result.outputURLs
+                return DownloadResult(
+                    outputs: accumulated,
+                    sourceURL: url,
+                    exitCode: result.exitCode,
+                    standardError: result.standardError,
+                    failure: nil
+                )
             } catch {
-                lastError = error
-
-                if !Self.isRetryable(error: error) {
+                // Adapter-thrown typed failures carry salvaged verified
+                // outputs; merge them so the failed job keeps partial
+                // playlist success. Cancellation propagates unchanged.
+                if error is CancellationError {
                     throw error
+                }
+                let normalized: Error
+                if let downloadError = error as? DownloadError,
+                   case let .failed(failure) = downloadError {
+                    accumulated = Self.mergingAccumulated(accumulated, with: failure.outputs)
+                    Self.publishVerifiedOutputs(accumulated, progress: progress)
+                    var merged = failure
+                    merged.outputs = accumulated
+                    normalized = DownloadUseCaseError.failed(merged)
+                } else if let useCaseError = error as? DownloadUseCaseError,
+                          case let .failed(failure) = useCaseError {
+                    accumulated = Self.mergingAccumulated(accumulated, with: failure.outputs)
+                    Self.publishVerifiedOutputs(accumulated, progress: progress)
+                    var merged = failure
+                    merged.outputs = accumulated
+                    normalized = DownloadUseCaseError.failed(merged)
+                } else {
+                    normalized = error
+                }
+                lastError = normalized
+
+                if !Self.isRetryable(error: normalized) {
+                    throw normalized
                 }
 
                 if attempt < options.retries - 1 {
@@ -206,33 +313,75 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             }
         }
 
-        throw lastError ?? DownloadUseCaseError.downloadFailed("Unknown error after \(options.retries) retries")
+        throw lastError ?? DownloadUseCaseError.failed(DownloadFailure(
+            kind: .processFailed,
+            message: "Unknown error after \(options.retries) retries",
+            isRetryable: false,
+            outputs: accumulated
+        ))
+    }
+
+    /// Deduped merge keyed by standardized path; fresh wins so a later skip
+    /// of the same file never downgrades an earlier fresh write (and vice
+    /// versa an earlier skip upgraded by a later fresh write).
+    private static func mergingAccumulated(
+        _ base: [VerifiedDownloadOutput],
+        with additional: [VerifiedDownloadOutput]
+    ) -> [VerifiedDownloadOutput] {
+        var ordered = base
+        var indexByKey: [String: Int] = [:]
+        for (index, output) in ordered.enumerated() {
+            indexByKey[output.url.standardizedFileURL.path] = index
+        }
+        for output in additional {
+            let key = output.url.standardizedFileURL.path
+            if let index = indexByKey[key] {
+                if ordered[index].isAlreadyExisting, !output.isAlreadyExisting {
+                    ordered[index] = VerifiedDownloadOutput(
+                        url: ordered[index].url,
+                        isAlreadyExisting: false
+                    )
+                }
+            } else {
+                indexByKey[key] = ordered.count
+                ordered.append(output)
+            }
+        }
+        return ordered
+    }
+
+    /// Publishes verified adapter outputs to the job (flat: the job carries
+    /// structured URLs, provenance was already consumed for the typed policy).
+    private static func publishVerifiedOutputs(_ outputs: [VerifiedDownloadOutput], progress: JobProgress) {
+        let urls = outputs.map(\.url)
+        progress.setOutputFileURLs(urls)
+        for outputURL in urls {
+            progress.log("Output file: \(outputURL.path)")
+        }
     }
 
     static func parseProgress(from line: String) -> Double? {
         DownloaderProgressParsing.parseNormalizedProgress(from: line)
     }
 
-    static func isRetryableForTesting(error: Error) -> Bool {
-        isRetryable(error: error)
-    }
-
     private static func isRetryable(error: Error) -> Bool {
-        let message = error.localizedDescription.lowercased()
-        let retryablePatterns = [
-            "http error 403",
-            "http error 5",
-            "connection reset",
-            "connection timed out",
-            "timed out",
-            "socket timeout",
-            "read timed out",
-            "temporary failure",
-            "timeout",
-            "errno 54",
-            "errno 60",
-        ]
-        return retryablePatterns.contains { message.contains($0) }
+        // Typed recovery only: retryability arrives explicitly from the
+        // adapter contract. Unknown/internal messages — even ones mentioning
+        // timeouts or 403s — fail closed.
+        if error is CancellationError {
+            return false
+        }
+        if let useCaseError = error as? DownloadUseCaseError {
+            if case let .failed(failure) = useCaseError {
+                return failure.isRetryable
+            }
+            return false
+        }
+        if let downloadError = error as? DownloadError,
+           case let .failed(failure) = downloadError {
+            return failure.isRetryable
+        }
+        return false
     }
 
     private static func fallbackJobTitle(for url: URL) -> String {

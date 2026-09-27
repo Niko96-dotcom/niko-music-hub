@@ -110,7 +110,10 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
             } catch {
                 outcome = BatchAudioConversionOutcome(
                     file: file,
-                    status: .failed(message: failureMessage(for: error)),
+                    status: .failed(
+                        message: failureMessage(for: error),
+                        category: failureCategory(for: error)
+                    ),
                     fileProgress: 1,
                     overallProgress: overallProgress(completed: index + 1, total: files.count)
                 )
@@ -184,6 +187,11 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         return error.localizedDescription
     }
 
+    /// Semantic category from the thrown error case, never from message text.
+    private func failureCategory(for error: Error) -> AudioConversionFailureCategory? {
+        (error as? AudioConversionError)?.failureCategory
+    }
+
     private func handoffFailureMessage(for error: Error) -> String {
         "Verified WAV ready, but Output Inbox could not save the handoff. \(failureMessage(for: error))"
     }
@@ -226,7 +234,7 @@ public enum BatchAudioConversionStatus: Equatable, Sendable {
     case converting
     case verified(ConversionResult)
     case verifiedWithHandoffWarning(ConversionResult, message: String)
-    case failed(message: String)
+    case failed(message: String, category: AudioConversionFailureCategory?)
     case skipped
     case canceled
 }

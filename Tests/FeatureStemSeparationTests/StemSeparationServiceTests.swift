@@ -123,6 +123,76 @@ struct StemSeparationServiceTests {
     }
 
     @Test
+    func startJob_typedHelperFailureWithChangedWording_marksJobFailedWithReason() async throws {
+        let backend = MockStemSeparationBackend()
+        let customWording = "custom demucs helper blown up (code 9) XYZ"
+        backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
+
+        let input = makeInputFile()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let (service, runner, _) = makeService(backend: backend)
+        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .failed)
+        #expect(finished.message == customWording)
+        #expect(finished.failureReason == .helperUnavailable)
+    }
+
+    @Test
+    func startJob_untypedSameMissingBody_hasNilReason() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .failed(message: StemSeparationHelperCopy.missingBody)
+
+        let input = makeInputFile()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let (service, runner, _) = makeService(backend: backend)
+        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .failed)
+        #expect(finished.message == StemSeparationHelperCopy.missingBody)
+        #expect(finished.failureReason == nil)
+    }
+
+    @Test
+    func startJob_actualMissingExecutableBackend_marksJobFailedWithHelperReason() async throws {
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
+        let backend = DemucsMLXBackend(
+            settings: HelperToolSettings(),
+            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
+        )
+        let runner = JobRunner()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: runner
+        )
+        let input = makeInputFile()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .failed)
+        #expect(finished.message == StemSeparationHelperCopy.missingBody)
+        #expect(finished.failureReason == .helperUnavailable)
+    }
+
+    @Test
     func startJob_missingStems_marksJobFailed() async throws {
         let backend = MockStemSeparationBackend()
         backend.filesToWrite = [(.vocals, "vocals.wav")]

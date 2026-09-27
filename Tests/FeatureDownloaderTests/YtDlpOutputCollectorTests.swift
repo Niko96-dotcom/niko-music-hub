@@ -372,4 +372,90 @@ final class YtDlpOutputCollectorTests: XCTestCase {
 
         XCTAssertTrue(try collector.finish().isEmpty)
     }
+
+    func testSkipPlusFinalPathPrintStaysExisting() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collector-skip-final-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileURL = outputDir.appendingPathComponent("track-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+        collector.consume("[download] \(fileURL.path) has already been downloaded\n")
+        collector.consume("NIKO_MUSIC_HUB_FILE:\(fileURL.path)\n")
+        let collected = try collector.finishCollecting()
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(collected.first?.isAlreadyExisting, true)
+    }
+
+    func testFreshDestinationPlusRepeatedSkipStaysFresh() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collector-fresh-skip-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileURL = outputDir.appendingPathComponent("track-\(UUID().uuidString).mp4")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+        collector.consume("[download] Destination: \(fileURL.path)\n")
+        collector.consume("NIKO_MUSIC_HUB_FILE:\(fileURL.path)\n")
+        collector.consume("[download] \(fileURL.path) has already been downloaded\n")
+        let collected = try collector.finishCollecting()
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first?.isAlreadyExisting, false)
+    }
+
+    func testNormalizedAliasesMergeProvenanceFreshWins() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collector-alias-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileName = "track-\(UUID().uuidString).mp4"
+        let fileURL = outputDir.appendingPathComponent(fileName)
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+        // Same normalized file via absolute skip marker then relative fresh destination.
+        collector.consume("[download] \(fileURL.path) has already been downloaded\n")
+        collector.consume("[download] Destination: \(fileName)\n")
+        let collected = try collector.finishCollecting()
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(collected.first?.isAlreadyExisting, false, "fresh alias must upgrade skip")
+    }
+
+    func testNormalizedDuplicateRawPathsDoNotExceedLimit() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("collector-alias-limit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileURL = outputDir.appendingPathComponent("track.mp4")
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in },
+            maximumCandidatePaths: 2
+        )
+        // Many distinct raw strings, one normalized key: must not exceed.
+        collector.consume("[download] Destination: track.mp4\n")
+        collector.consume("[download] Destination: ./track.mp4\n")
+        collector.consume("[download] Destination: sub/../track.mp4\n")
+        collector.consume("[download] \(fileURL.path) has already been downloaded\n")
+        collector.consume("NIKO_MUSIC_HUB_FILE:\(fileURL.path)\n")
+        let collected = try collector.finishCollecting()
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first?.isAlreadyExisting, false)
+    }
 }

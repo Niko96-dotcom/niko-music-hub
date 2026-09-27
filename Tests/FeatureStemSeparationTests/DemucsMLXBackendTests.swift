@@ -184,11 +184,39 @@ struct DemucsMLXBackendTests {
 
         let result = await backend.separate(request: request) { _, _ in }
 
-        guard case .failed(let message) = result else {
+        guard case let .failed(message, _) = result else {
             Issue.record("Expected failure, got \(result)")
             return
         }
         #expect(message == StemSeparationHelperCopy.missingBody)
+    }
+
+    @Test
+    func separate_missingExecutable_returnsHelperUnavailableReason() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings()
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
+        let backend = DemucsMLXBackend(
+            settings: settings,
+            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
+        )
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        guard case let .failed(_, reason) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        #expect(reason == .helperUnavailable)
     }
 
     @Test
@@ -209,7 +237,7 @@ struct DemucsMLXBackendTests {
 
         let result = await backend.separate(request: request) { _, _ in }
 
-        guard case .failed(let message) = result else {
+        guard case let .failed(message, _) = result else {
             Issue.record("Expected failure, got \(result)")
             return
         }
@@ -235,7 +263,7 @@ struct DemucsMLXBackendTests {
 
         let result = await backend.separate(request: request) { _, _ in }
 
-        guard case .failed(let message) = result else {
+        guard case let .failed(message, _) = result else {
             Issue.record("Expected failure, got \(result)")
             return
         }

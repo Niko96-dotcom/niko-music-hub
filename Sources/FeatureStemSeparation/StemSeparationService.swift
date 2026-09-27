@@ -83,9 +83,9 @@ public struct StemSeparationService: Sendable {
         case .canceled:
             progress.log("Canceled.")
             throw CancellationError()
-        case .failed(let message):
+        case let .failed(message, reason):
             progress.log("Failed: \(message)")
-            throw StemSeparationServiceError(message)
+            throw StemSeparationServiceError(message, reason: reason)
         case .success(let outputFolderURL, _):
             try await handleSuccess(
                 outputFolderURL: outputFolderURL,
@@ -195,16 +195,21 @@ public struct StemSeparationService: Sendable {
     }
 }
 
-public struct StemSeparationServiceError: LocalizedError, Equatable, Sendable {
+public struct StemSeparationServiceError: LocalizedError, Equatable, Sendable, JobFailureReasonProviding {
     public let message: String
+    public let reason: JobFailureReason?
 
-    public init(message: String) {
+    public init(message: String, reason: JobFailureReason? = nil) {
         self.message = message
+        self.reason = reason
     }
 
-    public init(_ message: String) {
+    public init(_ message: String, reason: JobFailureReason? = nil) {
         self.message = message
+        self.reason = reason
     }
 
     public var errorDescription: String? { message }
+
+    public var jobFailureReason: JobFailureReason? { reason }
 }

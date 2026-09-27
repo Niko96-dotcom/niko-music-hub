@@ -1,4 +1,5 @@
 @testable import AppCore
+import Foundation
 import XCTest
 
 final class JobRunnerTests: XCTestCase {
@@ -178,6 +179,56 @@ final class JobRunnerTests: XCTestCase {
         XCTAssertTrue(runner.listJobs().allSatisfy { $0.state.isTerminal })
     }
 
+    func testTypedReasonSurvivesArbitraryWording() async throws {
+        let runner = JobRunner()
+        let wording = "helper exploded (code 7) at /tmp/custom-helper XYZ"
+        let queued = runner.enqueue(title: "Typed", sourceToolID: "dev-tool") { _ in
+            throw TypedHelperUnavailableError(wording: wording)
+        }
+
+        let failed = try await waitForJob(queued.id, in: runner, state: .failed)
+        XCTAssertEqual(failed.message, wording)
+        XCTAssertEqual(failed.failureReason, .helperUnavailable)
+    }
+
+    func testUntypedIdenticalWordingHasNilReason() async throws {
+        let runner = JobRunner()
+        let wording = "helper exploded (code 7) at /tmp/custom-helper XYZ"
+        let queued = runner.enqueue(title: "Untyped", sourceToolID: "dev-tool") { _ in
+            throw UntypedSameWordingError(wording: wording)
+        }
+
+        let failed = try await waitForJob(queued.id, in: runner, state: .failed)
+        XCTAssertEqual(failed.message, wording)
+        XCTAssertNil(failed.failureReason)
+    }
+
+    func testLegacyPayloadWithoutReasonDecodesAsNil() throws {
+        let job = Job(sourceToolID: "dev-tool", title: "Legacy", state: .failed, message: "old failure")
+        let encoded = try JSONEncoder().encode(job)
+        var payload = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] ?? [:]
+        payload.removeValue(forKey: "failureReason")
+        let legacyData = try JSONSerialization.data(withJSONObject: payload)
+        let decoded = try JSONDecoder().decode(Job.self, from: legacyData)
+        XCTAssertNil(decoded.failureReason)
+        XCTAssertEqual(decoded.message, "old failure")
+        XCTAssertEqual(decoded.state, .failed)
+    }
+
+    func testTypedPayloadRoundtrips() throws {
+        let job = Job(
+            sourceToolID: "dev-tool",
+            title: "Typed",
+            state: .failed,
+            message: "helper exploded (code 7)",
+            failureReason: .helperUnavailable
+        )
+        let data = try JSONEncoder().encode(job)
+        let decoded = try JSONDecoder().decode(Job.self, from: data)
+        XCTAssertEqual(decoded, job)
+        XCTAssertEqual(decoded.failureReason, .helperUnavailable)
+    }
+
     private func waitForJob(
         _ id: Job.ID,
         in runner: JobRunner,
@@ -255,4 +306,15 @@ private struct LongFailureError: LocalizedError {
     var errorDescription: String? {
         String(repeating: "failure", count: 100)
     }
+}
+
+private struct TypedHelperUnavailableError: LocalizedError, JobFailureReasonProviding {
+    let wording: String
+    var errorDescription: String? { wording }
+    var jobFailureReason: JobFailureReason? { .helperUnavailable }
+}
+
+private struct UntypedSameWordingError: LocalizedError {
+    let wording: String
+    var errorDescription: String? { wording }
 }
