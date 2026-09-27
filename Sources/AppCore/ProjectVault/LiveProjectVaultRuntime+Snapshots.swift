@@ -6,8 +6,16 @@ extension LiveProjectVaultRuntime {
         let configuration = try configuration()
         var entries = try catalogStore.loadEntries()
         _ = reconcileActiveLocationAvailability(in: &entries, configuration: configuration)
-        let transfers = try transferStore.allTransferRecords()
-        let restores = try transferStore.recoverableRestoreRecords()
+        let transfers: [VaultTransferRecord]
+        let restores: [VaultRestoreRecord]
+        do {
+            transfers = try transferStore.allTransferRecords()
+            restores = try transferStore.recoverableRestoreRecords()
+        } catch SQLiteArchiveDatabase.StoreError.decode {
+            // Still fail closed: a snapshot without that row would let a Done
+            // song whose transfer is unreadable look unarchived.
+            throw ProjectVaultRuntimeError.journalRecordsUnreadable
+        }
         let generationResolver = ProjectVaultGenerationReviewResolver(
             archiveRootURL: configuration.archive.url
         )

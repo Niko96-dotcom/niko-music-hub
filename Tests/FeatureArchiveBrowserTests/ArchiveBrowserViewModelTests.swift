@@ -1625,6 +1625,22 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.statusMessage?.contains("injected journal read failure") == true, "raw errors stay in diagnostics")
     }
 
+    func testVaultRecoveryPreflightStillRecoversWhenJournalRecordsAreUnreadable() async {
+        let runtime = RecordingProjectVaultRuntime(snapshotError: .journalRecordsUnreadable)
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            projectVaultRuntime: runtime
+        )
+
+        await viewModel.recoverProjectVaultAndRefresh()
+
+        let recoveryCalls = await runtime.recoveryCallCount()
+        // init also starts one recovery pass, so count at least the explicit one.
+        XCTAssertGreaterThanOrEqual(recoveryCalls, 1, "recovery reads row by row and settles the readable records")
+        XCTAssertEqual(viewModel.persistenceWarningMessage, "Some Project Vault records couldn't be read. They were left as they are.")
+    }
+
     func testDoneProjectWithPersistedFailedTransferIsNotAutomaticallyRequeued() async throws {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("workflow-failed-transfer-\(UUID().uuidString)", isDirectory: true)

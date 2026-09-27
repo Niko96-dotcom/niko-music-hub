@@ -223,8 +223,20 @@ public actor LocalVaultTransferEngine {
     /// callers schedule any new work.
     @discardableResult
     public func recoverAtLaunch() async -> [VaultTransferRecord] {
-        guard let allRecords = try? store.allTransferRecords() else { return [] }
-        var records = (try? store.recoverableRecords()) ?? []
+        await recoverAtLaunchReport()?.records ?? []
+    }
+
+    /// `recoverAtLaunch()` plus the journal rows it could not decode, or nil
+    /// when the journal itself could not be read (nothing is recovered then).
+    /// Undecodable rows are never rewritten. `vault_transfers` has no project
+    /// column, so such a row could belong to any project: while one exists,
+    /// readable rows only get the journal-only normalization of interrupted
+    /// destructive phases, and every copy, retry and survivor retirement waits.
+    public func recoverAtLaunchReport() async -> VaultJournalReadReport<VaultTransferRecord>? {
+        guard let journal = try? store.allTransferRecordsReport(),
+              var records = try? store.recoverableRecordsReport().records else { return nil }
+        let allRecords = journal.records
+        let holdsByteWork = !journal.unreadableRows.isEmpty
         let verifiedSurvivors = Dictionary(grouping: allRecords.filter {
             VaultTransferOwnershipPolicy.isVerifiedTerminal($0.state)
         }, by: \.projectID).compactMapValues { records in
@@ -245,7 +257,7 @@ public actor LocalVaultTransferEngine {
         // `.syncedToProvider` plus live locality (fullyLocalCurrent or
         // materializationRequired) without any materialize call.
         var retiredIDs = Set<UUID>()
-        for (_, survivor) in verifiedSurvivors {
+        for (_, survivor) in verifiedSurvivors where !holdsByteWork {
             // Verification can read gigabytes. It is needed here only if this
             // generation could retire an older incomplete transfer for its song.
             guard records.contains(where: {
@@ -291,6 +303,10 @@ public actor LocalVaultTransferEngine {
         var results: [VaultTransferRecord] = []
         for var record in newestRecords {
             if needsLegacyMetadataMigration(record) {
+                guard !holdsByteWork else {
+                    results.append(record)
+                    continue
+                }
                 do {
                     try migrateLegacyMetadataFiles(&record)
                 } catch {
@@ -351,6 +367,10 @@ public actor LocalVaultTransferEngine {
                 }
                 continue
             }
+            if holdsByteWork {
+                results.append(record)
+                continue
+            }
             if record.isWaitingForProviderUpload, let due = record.nextRetryAt, due > now() {
                 results.append(record)
                 continue
@@ -376,7 +396,7 @@ public actor LocalVaultTransferEngine {
             catch is VaultTransferInterruption { results.append((try? store.record(id: record.id)) ?? record) }
             catch { results.append((try? store.record(id: record.id)) ?? record) }
         }
-        return results
+        return VaultJournalReadReport(records: results, unreadableRows: journal.unreadableRows)
     }
 
     /// Explicit user-authorized retry path for records that reached the automatic

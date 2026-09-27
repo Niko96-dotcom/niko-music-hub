@@ -119,6 +119,13 @@ extension LiveProjectVaultRuntime {
         }.min()
     }
 
+    /// Journal rows the latest launch recovery could not decode. Recovery left
+    /// them untouched; empty after a clean read. Unchanged when a recovery run
+    /// could not read one of the journals.
+    public func unreadableJournalRows() -> [VaultJournalUnreadableRow] {
+        lastUnreadableJournalRows
+    }
+
     public func recoverAtLaunch() async {
         if let recoveryTask {
             await recoveryTask.task.value
@@ -138,6 +145,7 @@ extension LiveProjectVaultRuntime {
         guard let settings = try? settingsStore.loadSettings(),
               !settings.vault.automationEmergencyStop else { return }
         let provider = archiveProvider(root: configuration.archive.url)
+        var transferReport: VaultJournalReadReport<VaultTransferRecord>?
         if let transferEngine = try? LocalVaultTransferEngine(
             activeRoot: configuration.active.url,
             archiveRoot: configuration.archive.url,
@@ -146,7 +154,7 @@ extension LiveProjectVaultRuntime {
             now: now,
             recoveryPolicy: recoveryPolicy,
             writeAdmission: makeWriteAdmission(settings: settings)
-        ) { _ = await transferEngine.recoverAtLaunch() }
+        ) { transferReport = await transferEngine.recoverAtLaunchReport() }
         let restoreEngine = LocalVaultRestoreEngine(
             activeRoot: configuration.active.url,
             archiveRoot: configuration.archive.url,
@@ -160,6 +168,9 @@ extension LiveProjectVaultRuntime {
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
-        _ = await restoreEngine.recoverAtLaunch()
+        let restoreReport = await restoreEngine.recoverAtLaunchReport()
+        if let transferReport, let restoreReport {
+            lastUnreadableJournalRows = transferReport.unreadableRows + restoreReport.unreadableRows
+        }
     }
 }

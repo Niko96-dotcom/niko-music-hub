@@ -184,6 +184,126 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
         XCTAssertEqual(try store.record(id: superseded.id), superseded)
     }
 
+    func testAllTransferRecordsSkipsUndecodableRowAndReportsIt() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let databaseURL = root.appendingPathComponent("vault.sqlite")
+        let store = try SQLiteVaultTransferStore(databaseURL: databaseURL)
+        let readable = makeRecord(root: root, state: .removingActiveCopy)
+        try store.save(readable)
+        let unreadableID = UUID()
+        try UndecodableVaultJournalRow.insertTransfer(
+            id: unreadableID,
+            state: VaultTransferState.removingActiveCopy.rawValue,
+            databaseURL: databaseURL
+        )
+
+        let all = try store.allTransferRecordsReport()
+        let recoverable = try store.recoverableRecordsReport()
+
+        XCTAssertEqual(all.records, [readable])
+        XCTAssertEqual(all.unreadableRows.count, 1)
+        let unreadable = try XCTUnwrap(all.unreadableRows.first)
+        XCTAssertEqual(unreadable.journal, .transfers)
+        XCTAssertEqual(unreadable.id, unreadableID.uuidString)
+        XCTAssertEqual(unreadable.state, VaultTransferState.removingActiveCopy.rawValue)
+        XCTAssertEqual(recoverable.records, [readable])
+        XCTAssertEqual(recoverable.unreadableRows.map(\.id), [unreadableID.uuidString])
+        // Every other reader keeps failing closed on the same row.
+        XCTAssertThrowsError(try store.allTransferRecords())
+        XCTAssertThrowsError(try store.recoverableRecords())
+        XCTAssertThrowsError(try store.claimTransfer(makeRecord(root: root, state: .activeLocal)))
+    }
+
+    func testRestoreReconciliationSkipsUndecodableRowAndReportsIt() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let databaseURL = root.appendingPathComponent("vault.sqlite")
+        let store = try SQLiteVaultTransferStore(databaseURL: databaseURL)
+        var readable = VaultRestoreRecord(
+            projectID: ProjectID(),
+            archiveGenerationURL: root.appendingPathComponent("archive/generations/project"),
+            stagingURL: root.appendingPathComponent("active/.niko-staging/project"),
+            destinationURL: root.appendingPathComponent("active/project"),
+            manifest: VaultManifest(entries: []),
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        readable.phase = .copyingToActiveStaging
+        try store.saveRestore(readable)
+        let unreadableID = UUID()
+        let unreadableProjectID = ProjectID()
+        try UndecodableVaultJournalRow.insertRestore(
+            id: unreadableID,
+            projectID: unreadableProjectID,
+            phase: VaultRestorePhase.copyingToActiveStaging.rawValue,
+            databaseURL: databaseURL
+        )
+
+        let report = try store.reconcileRestoreRecordsForRecoveryReport()
+
+        XCTAssertEqual(report.records, [readable])
+        XCTAssertEqual(report.unreadableRows, [VaultJournalUnreadableRow(
+            journal: .restores,
+            id: unreadableID.uuidString,
+            state: VaultRestorePhase.copyingToActiveStaging.rawValue,
+            projectID: unreadableProjectID.description,
+            reason: try XCTUnwrap(report.unreadableRows.first?.reason)
+        )])
+        XCTAssertThrowsError(try store.reconcileRestoreRecordsForRecovery())
+        XCTAssertThrowsError(try store.recoverableRestoreRecords())
+    }
+
+    func testRestoreReconciliationHoldsEveryConflictComponentTouchingAnUnreadableProject() throws {
+        let root = temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let databaseURL = root.appendingPathComponent("vault.sqlite")
+        let store = try SQLiteVaultTransferStore(databaseURL: databaseURL)
+        func makeRestore(projectID: ProjectID, destination: String, updatedAt: TimeInterval) -> VaultRestoreRecord {
+            var record = VaultRestoreRecord(
+                projectID: projectID,
+                archiveGenerationURL: root.appendingPathComponent("archive/generations/\(UUID().uuidString)"),
+                stagingURL: root.appendingPathComponent("active/.niko-staging/\(UUID().uuidString)"),
+                destinationURL: root.appendingPathComponent("active/\(destination)"),
+                manifest: VaultManifest(entries: []),
+                createdAt: Date(timeIntervalSince1970: 100)
+            )
+            record.phase = .copyingToActiveStaging
+            record.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            return record
+        }
+        let fencedProject = ProjectID()
+        let held = makeRestore(projectID: fencedProject, destination: "Shared", updatedAt: 200)
+        // Another project restoring into the same destination: one component.
+        let sharing = makeRestore(projectID: ProjectID(), destination: "Shared", updatedAt: 210)
+        let independent = makeRestore(projectID: ProjectID(), destination: "Elsewhere", updatedAt: 220)
+        try store.saveRestore(held)
+        try store.saveRestore(sharing)
+        try store.saveRestore(independent)
+        try UndecodableVaultJournalRow.insertRestore(
+            id: UUID(),
+            projectID: fencedProject,
+            phase: VaultRestorePhase.copyingToActiveStaging.rawValue,
+            databaseURL: databaseURL
+        )
+
+        let report = try store.reconcileRestoreRecordsForRecoveryReport()
+
+        XCTAssertEqual(report.records.map(\.id), [independent.id])
+        // Nothing in the held component was retired.
+        XCTAssertEqual(try store.restoreRecord(id: held.id), held)
+        XCTAssertEqual(try store.restoreRecord(id: sharing.id), sharing)
+
+        // A row whose project column is empty could belong to any project.
+        try UndecodableVaultJournalRow.insertRestore(
+            id: UUID(),
+            projectIDColumn: "",
+            phase: VaultRestorePhase.materializingArchive.rawValue,
+            databaseURL: databaseURL
+        )
+        XCTAssertTrue(try store.reconcileRestoreRecordsForRecoveryReport().records.isEmpty)
+        XCTAssertEqual(try store.restoreRecord(id: independent.id), independent)
+    }
+
     func testSaveUpdatesExistingRecordInsteadOfDuplicatingIt() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -244,6 +364,9 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
         }
         expectStepFailure { _ = try store.allTransferRecords() }
         expectStepFailure { _ = try store.recoverableRecords() }
+        // The recovery reports skip undecodable rows, never failed steps.
+        expectStepFailure { _ = try store.allTransferRecordsReport() }
+        expectStepFailure { _ = try store.recoverableRecordsReport() }
         expectStepFailure { _ = try store.record(id: copying.id) }
         expectStepFailure { _ = try store.verifiedArchiveGeneration(projectID: projectID) }
         // Clearing the seam restores successful reads.

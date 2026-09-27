@@ -18,6 +18,18 @@ extension ArchiveBrowserViewModel {
         } catch ProjectVaultRuntimeError.unavailable {
             await refreshProjectVaultSnapshots()
             return
+        } catch ProjectVaultRuntimeError.journalRecordsUnreadable {
+            // Launch recovery reads the journal row by row: it leaves the
+            // unreadable rows untouched and holds any work they could own, and
+            // still settles the readable ones. Presentation stays as it is.
+            recordProjectVaultReadFailure(
+                ProjectVaultRuntimeError.journalRecordsUnreadable,
+                context: "Project Vault recovery preflight found unreadable journal records"
+            )
+            await projectVaultRuntime.recoverAtLaunch()
+            // A recovered restore can create an Active folder.
+            await scanInBackground()
+            return
         } catch {
             // Recovery must not treat an unreadable transfer journal as empty.
             // Preserve the current presentation and show the persistence fault.
@@ -158,7 +170,8 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
-            if persistenceWarningMessage == Self.projectVaultReadFailureMessage {
+            if persistenceWarningMessage == Self.projectVaultReadFailureMessage
+                || persistenceWarningMessage == Self.projectVaultUnreadableRecordsMessage {
                 persistenceWarningMessage = nil
                 statusMessage = combinedStatusMessage(base: statusBaseMessage)
             }
@@ -195,6 +208,7 @@ extension ArchiveBrowserViewModel {
     }
 
     static let projectVaultReadFailureMessage = "Project Vault status couldn't be read. Nothing was changed."
+    static let projectVaultUnreadableRecordsMessage = "Some Project Vault records couldn't be read. They were left as they are."
 
     /// Plain footer copy for an unreadable Vault state; the technical detail
     /// goes to diagnostics only. While settings themselves are unreadable the
@@ -203,7 +217,11 @@ extension ArchiveBrowserViewModel {
     func recordProjectVaultReadFailure(_ error: any Error, context: String) {
         diagnostics.log(.error, "\(context): \(error)")
         if (try? settingsStore.loadSettings()) == nil { return }
-        recordPersistenceWarning(Self.projectVaultReadFailureMessage)
+        recordPersistenceWarning(
+            error as? ProjectVaultRuntimeError == .journalRecordsUnreadable
+                ? Self.projectVaultUnreadableRecordsMessage
+                : Self.projectVaultReadFailureMessage
+        )
     }
 
     /// Recovery scheduling orchestration. Fetches the due date from the
