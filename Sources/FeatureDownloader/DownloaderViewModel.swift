@@ -320,16 +320,18 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         case .completed:
             // Completed-path truthfulness: a completed job with no verified
             // contained outputs must fail rather than report Downloaded.
-            let completedVerified = YtDlpDownloader.verifiedRegularContainedOutputs(
-                observedJob.outputFileURLs,
-                in: outputDirectory
+            // Outputs arrive as structured verified URLs; only the typed
+            // outcome decides presentation, never log/message text.
+            let handoff = handOffOutputsToInbox(
+                candidateURLs: observedJob.outputFileURLs,
+                sourceURL: sourceURL,
+                outputDirectory: outputDirectory
             )
-            guard !completedVerified.isEmpty else {
+            guard !handoff.verified.isEmpty else {
                 downloadState = .failed(
                     DownloadError.outputNotFound.errorDescription ?? "No output files found after download."
                 )
                 statusMessage = nil
-                outputURLs = []
                 endDownloadProgressFeedback()
                 return true
             }
@@ -337,82 +339,34 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             statusMessage = "Downloaded"
             endDownloadProgressFeedback()
             HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.downloadComplete)
-            addToInbox(job: observedJob, sourceURL: sourceURL, outputDirectory: outputDirectory)
+            if let handoffFailure = handoff.firstFailure {
+                errorMessage = DownloaderCopy.outputInboxHandoffWarning(handoffFailure)
+            } else {
+                errorMessage = nil
+            }
             return true
         case .failed:
-            if Self.isAlreadyDownloadedSkip(logEntries: nextLogs, message: observedJob.message) {
-                // D1: the marker alone never claims completed. Only a verified
-                // existing regular file within the captured output directory
-                // (containment + symlink policy, no overwrite) may register.
-                // Captured (not current settings): a settings change during a
-                // queued download must not expose a same-name file from a
-                // different root.
-                let verified = Self.verifiedAlreadyDownloadedOutputs(
-                    logEntries: nextLogs,
-                    message: observedJob.message,
+            // Typed policy: only `.downloadAlreadyExists` may present the
+            // already-exists status, and only with verified outputs. Every
+            // other failed job stays failed while still exposing verified
+            // files. Presentation text never decides.
+            if observedJob.failureReason == .downloadAlreadyExists {
+                let handoff = handOffOutputsToInbox(
+                    candidateURLs: observedJob.outputFileURLs,
+                    sourceURL: sourceURL,
                     outputDirectory: outputDirectory
                 )
-                guard !verified.isEmpty else {
+                guard !handoff.verified.isEmpty else {
                     downloadState = .failed(observedJob.message)
                     statusMessage = nil
                     endDownloadProgressFeedback()
                     return true
                 }
-                // D1: an earlier playlist item may have said already-downloaded
-                // while a later item failed (stall, network, process error).
-                // Only the explicit already-downloaded/output-not-found outcome
-                // may report already-exists; any other failed job stays failed
-                // while still exposing verified files. Never infer success from
-                // the absence of an ERROR: substring.
-                if !Self.isExplicitSkipOutcome(logEntries: nextLogs, message: observedJob.message) {
-                    var handoffFailures: [String] = []
-                    for outputURL in verified {
-                        let item = OutputInboxItem(
-                            fileURL: outputURL,
-                            sourceToolID: Self.toolID,
-                            status: .available,
-                            metadata: ["dlSourceURL": sourceURL.absoluteString]
-                        )
-                        do {
-                            try context.outputInboxStore.addItem(item)
-                        } catch {
-                            handoffFailures.append(error.localizedDescription)
-                        }
-                    }
-                    outputURLs = verified
-                    if let firstFailure = handoffFailures.first {
-                        context.diagnostics.scoped(to: .downloader).log(.error, "Download inbox handoff failed: \(firstFailure)")
-                        downloadState = .failed(DownloaderCopy.outputInboxHandoffWarning(firstFailure))
-                    } else {
-                        downloadState = .failed(observedJob.message)
-                    }
-                    statusMessage = nil
-                    endDownloadProgressFeedback()
-                    loadRecentDownloads()
-                    return true
-                }
-                var handoffFailures: [String] = []
-                for outputURL in verified {
-                    let item = OutputInboxItem(
-                        fileURL: outputURL,
-                        sourceToolID: Self.toolID,
-                        status: .available,
-                        metadata: ["dlSourceURL": sourceURL.absoluteString]
-                    )
-                    do {
-                        try context.outputInboxStore.addItem(item)
-                    } catch {
-                        handoffFailures.append(error.localizedDescription)
-                    }
-                }
-                outputURLs = verified
-                if let firstFailure = handoffFailures.first {
-                    context.diagnostics.scoped(to: .downloader).log(.error, "Download inbox handoff failed: \(firstFailure)")
-                    downloadState = .failed(DownloaderCopy.outputInboxHandoffWarning(firstFailure))
+                if let handoffFailure = handoff.firstFailure {
+                    downloadState = .failed(DownloaderCopy.outputInboxHandoffWarning(handoffFailure))
                     statusMessage = nil
                     errorMessage = nil
                     endDownloadProgressFeedback()
-                    loadRecentDownloads()
                     return true
                 }
                 // NMH-141 (TOOL-30): yt-dlp skipped because the file already
@@ -423,10 +377,24 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 statusMessage = DownloaderCopy.alreadyExistsInInbox
                 endDownloadProgressFeedback()
                 HubAccessibilityAnnouncer.announce(DownloaderCopy.alreadyExistsInInbox)
-                loadRecentDownloads()
                 return true
             }
-            downloadState = .failed(observedJob.message)
+            let handoff = handOffOutputsToInbox(
+                candidateURLs: observedJob.outputFileURLs,
+                sourceURL: sourceURL,
+                outputDirectory: outputDirectory
+            )
+            if handoff.verified.isEmpty {
+                downloadState = .failed(observedJob.message)
+                statusMessage = nil
+                endDownloadProgressFeedback()
+                return true
+            }
+            if let handoffFailure = handoff.firstFailure {
+                downloadState = .failed(DownloaderCopy.outputInboxHandoffWarning(handoffFailure))
+            } else {
+                downloadState = .failed(observedJob.message)
+            }
             statusMessage = nil
             endDownloadProgressFeedback()
             return true
@@ -441,15 +409,24 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func addToInbox(job: Job, sourceURL: URL, outputDirectory: URL) {
-        // Completed-path truthfulness: only verified regular files contained in
-        // the captured output directory register. Never overwrites.
-        let foundURLs = YtDlpDownloader.verifiedRegularContainedOutputs(job.outputFileURLs, in: outputDirectory)
+    /// Single output-inbox handoff mechanism: verifies candidates (regular
+    /// contained files in the captured output directory, never overwriting),
+    /// attempts every verified output, updates outputURLs/recent downloads,
+    /// logs failures, and returns the verified set plus the first failure.
+    /// Caller policy stays distinct: completed downloads stay completed with
+    /// a warning; failed handoffs report failed; partial playlists stay
+    /// failed while exposing verified outputs. Metadata preserves the
+    /// captured sourceURL (not subsequently edited input).
+    private func handOffOutputsToInbox(
+        candidateURLs: [URL],
+        sourceURL: URL,
+        outputDirectory: URL
+    ) -> (verified: [URL], firstFailure: String?) {
+        let verified = YtDlpDownloader.verifiedRegularContainedOutputs(candidateURLs, in: outputDirectory)
+        outputURLs = verified
 
-        self.outputURLs = foundURLs
-
-        var handoffFailures: [String] = []
-        for outputURL in foundURLs {
+        var firstFailure: String?
+        for outputURL in verified {
             let item = OutputInboxItem(
                 fileURL: outputURL,
                 sourceToolID: Self.toolID,
@@ -459,17 +436,17 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             do {
                 try context.outputInboxStore.addItem(item)
             } catch {
-                handoffFailures.append(error.localizedDescription)
+                if firstFailure == nil {
+                    firstFailure = error.localizedDescription
+                }
             }
         }
 
-        if let firstFailure = handoffFailures.first {
+        if let firstFailure {
             context.diagnostics.scoped(to: .downloader).log(.error, "Download inbox handoff failed: \(firstFailure)")
-            errorMessage = DownloaderCopy.outputInboxHandoffWarning(firstFailure)
-        } else {
-            errorMessage = nil
         }
         loadRecentDownloads()
+        return (verified, firstFailure)
     }
 
     public func onAppear() {
@@ -577,73 +554,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             return nil
         }
         return url
-    }
-
-    /// NMH-141 (TOOL-30): true when the failed job's logs or message carry
-    /// yt-dlp's already-downloaded marker, meaning `--no-overwrites` skipped
-    /// an existing file rather than a network failure occurring. D1: the
-    /// marker alone is not sufficient to claim completed; callers must also
-    /// resolve a verified existing regular output via
-    /// `verifiedAlreadyDownloadedOutputs`.
-    static func isAlreadyDownloadedSkip(logEntries: [String], message: String) -> Bool {
-        if YtDlpDownloader.containsAlreadyDownloadedMarker(message) { return true }
-        return logEntries.contains { YtDlpDownloader.containsAlreadyDownloadedMarker($0) }
-    }
-
-    /// D1: explicit existing-output outcome contract. A real yt-dlp error
-    /// (`ERROR:` in logs or message) alongside an earlier already-downloaded
-    /// marker must not convert to success. Callers expose the verified output
-    /// (if any) AND propagate the actual failure.
-    static func hasRealDownloadError(logEntries: [String], message: String) -> Bool {
-        if message.contains("ERROR:") { return true }
-        return logEntries.contains { $0.contains("ERROR:") }
-    }
-
-    /// D1: positive skip classification. Only the explicit
-    /// already-downloaded/output-not-found outcome may report already-exists:
-    /// the job message must be the output-not-found outcome and logs must
-    /// carry no stall/download-failure signal. Any other failed message
-    /// (stall, `Download failed:`, `ERROR:`) stays failed while still
-    /// exposing verified files. Never infer success from the absence of an
-    /// `ERROR:` substring alone.
-    static func isExplicitSkipOutcome(logEntries: [String], message: String) -> Bool {
-        let skipMessage =
-            DownloadError.outputNotFound.errorDescription ?? "No output files found after download."
-        guard message == skipMessage else { return false }
-        if hasRealDownloadError(logEntries: logEntries, message: message) { return false }
-        if logEntries.contains(where: {
-            $0.contains(DownloadStallMonitor.stallErrorMessage)
-                || $0.contains(DownloadStallMonitor.postProcessingStallErrorMessage)
-        }) {
-            return false
-        }
-        if logEntries.contains(where: { $0.contains("Download failed:") }) { return false }
-        return true
-    }
-
-    /// D1: verified existing regular outputs for already-downloaded markers.
-    /// Only paths from lines carrying the marker are considered (never
-    /// arbitrary log paths), each resolved beneath `outputDirectory` for
-    /// relative paths and verified as an existing regular file contained in
-    /// the output root with symlink escapes rejected. No overwrite occurs.
-    static func verifiedAlreadyDownloadedOutputs(
-        logEntries: [String],
-        message: String,
-        outputDirectory: URL
-    ) -> [URL] {
-        var seen: Set<String> = []
-        var verified: [URL] = []
-        for line in logEntries + [message] {
-            guard YtDlpDownloader.containsAlreadyDownloadedMarker(line) else { continue }
-            for path in YtDlpDownloader.outputPathCandidates(from: line) {
-                guard let url = YtDlpDownloader.verifiedAlreadyDownloadedOutput(for: path, in: outputDirectory) else { continue }
-                let key = url.standardizedFileURL.path
-                if seen.insert(key).inserted {
-                    verified.append(url)
-                }
-            }
-        }
-        return verified
     }
 
     private func cancelOutstandingTasks() {

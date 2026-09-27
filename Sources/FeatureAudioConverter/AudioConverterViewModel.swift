@@ -236,7 +236,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 refreshStatusText()
             }
             publishShellJobStatus()
-            let failedCount = outcomes.filter { if case .failed = $0.status { true } else { false } }.count
+            let failedCount = outcomes.filter { if case .failed(_, _) = $0.status { true } else { false } }.count
             context.diagnostics.scoped(to: .converter).log(
                 .info,
                 "Conversion finished (files=\(outcomes.count), failed=\(failedCount), canceled=\(canceledCount))"
@@ -312,7 +312,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
 
     public func retryAfterChoosingFFmpeg(rowID: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == rowID }),
-              rows[index].recoveryActionTitle == AudioConverterCopy.chooseFFmpeg else {
+              rows[index].failureCategory == .helperUnavailable else {
             return
         }
 
@@ -322,14 +322,16 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             progress: 0,
             outputURL: nil,
             converterPathLabel: nil,
-            recoveryActionTitle: nil
+            recoveryActionTitle: nil,
+            failureCategory: nil,
+            hasHandoffWarning: false
         )
         refreshStatusText()
     }
 
     public func chooseFFmpegAndRetry(rowID: UUID, ffmpegURL: URL) async {
         guard rows.contains(where: {
-            $0.id == rowID && $0.recoveryActionTitle == AudioConverterCopy.chooseFFmpeg
+            $0.id == rowID && $0.failureCategory == .helperUnavailable
         }) else {
             return
         }
@@ -517,7 +519,9 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 progress: update.fileProgress,
                 outputURL: result.outputURL,
                 converterPathLabel: result.converterPath.displayName,
-                recoveryActionTitle: nil
+                recoveryActionTitle: nil,
+                failureCategory: nil,
+                hasHandoffWarning: false
             )
         case let .verifiedWithHandoffWarning(result, _):
             guard row.state == .queued || row.state == .converting else {
@@ -529,17 +533,21 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 progress: update.fileProgress,
                 outputURL: result.outputURL,
                 converterPathLabel: result.converterPath.displayName,
-                recoveryActionTitle: nil
+                recoveryActionTitle: nil,
+                failureCategory: nil,
+                hasHandoffWarning: true
             )
-        case let .failed(message):
+        case let .failed(_, category):
             guard row.state == .queued || row.state == .converting else {
                 return nil
             }
             return row.updated(
                 state: .failed,
-                statusText: visibleFailureCopy(for: message),
+                statusText: visibleFailureCopy(for: category),
                 progress: update.fileProgress,
-                recoveryActionTitle: recoveryActionTitle(for: message)
+                recoveryActionTitle: recoveryActionTitle(for: category),
+                failureCategory: category,
+                hasHandoffWarning: false
             )
         case .skipped:
             guard row.state == .queued || row.state == .converting else {
@@ -568,29 +576,30 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             state: .failed,
             statusText: message,
             progress: 1,
-            recoveryActionTitle: AudioConverterCopy.chooseFFmpeg
+            recoveryActionTitle: AudioConverterCopy.chooseFFmpeg,
+            failureCategory: .helperUnavailable,
+            hasHandoffWarning: false
         )
         statusText = message
     }
 
-    private func visibleFailureCopy(for message: String) -> String {
-        if message == AudioConverterCopy.missingFFmpeg {
+    private func visibleFailureCopy(for category: AudioConversionFailureCategory?) -> String {
+        switch category {
+        case .helperUnavailable:
             return AudioConverterCopy.missingFFmpeg
-        }
-        if message.localizedCaseInsensitiveContains("verification") {
+        case .verificationFailed:
             return AudioConverterCopy.verificationFailed
+        case nil:
+            return AudioConverterCopy.genericFailure
         }
-        return AudioConverterCopy.genericFailure
     }
 
-    private func recoveryActionTitle(for message: String) -> String? {
-        message == AudioConverterCopy.missingFFmpeg ? AudioConverterCopy.chooseFFmpeg : nil
+    private func recoveryActionTitle(for category: AudioConversionFailureCategory?) -> String? {
+        category == .helperUnavailable ? AudioConverterCopy.chooseFFmpeg : nil
     }
 
     private func refreshStatusText() {
-        if rows.contains(where: {
-            $0.state == .verified && $0.statusText == AudioConverterCopy.verifiedWithHandoffWarning
-        }) {
+        if rows.contains(where: { $0.state == .verified && $0.hasHandoffWarning }) {
             statusText = AudioConverterCopy.verifiedWithHandoffWarning
         } else if rows.contains(where: { $0.state == .verified }) {
             statusText = AudioConverterCopy.verified
@@ -655,6 +664,10 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
     public var outputURL: URL?
     public var converterPathLabel: String?
     public var recoveryActionTitle: String?
+    /// Stable recovery category driving retry; display title above is derived for the View.
+    public var failureCategory: AudioConversionFailureCategory?
+    /// True when the verified row carries an inbox handoff warning; drives summary copy.
+    public var hasHandoffWarning: Bool
 
     public init(
         id: UUID = UUID(),
@@ -666,7 +679,9 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
         progress: Double,
         outputURL: URL? = nil,
         converterPathLabel: String? = nil,
-        recoveryActionTitle: String? = nil
+        recoveryActionTitle: String? = nil,
+        failureCategory: AudioConversionFailureCategory? = nil,
+        hasHandoffWarning: Bool = false
     ) {
         self.id = id
         self.sourceURL = sourceURL
@@ -678,6 +693,8 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
         self.outputURL = outputURL
         self.converterPathLabel = converterPathLabel
         self.recoveryActionTitle = recoveryActionTitle
+        self.failureCategory = failureCategory
+        self.hasHandoffWarning = hasHandoffWarning
     }
 
     public var isConvertible: Bool {
@@ -708,7 +725,9 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
         progress: Double,
         outputURL: URL? = nil,
         converterPathLabel: String? = nil,
-        recoveryActionTitle: String? = nil
+        recoveryActionTitle: String? = nil,
+        failureCategory: AudioConversionFailureCategory? = nil,
+        hasHandoffWarning: Bool = false
     ) -> AudioConverterRow {
         AudioConverterRow(
             id: id,
@@ -720,7 +739,9 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
             progress: progress,
             outputURL: outputURL ?? self.outputURL,
             converterPathLabel: converterPathLabel ?? self.converterPathLabel,
-            recoveryActionTitle: recoveryActionTitle
+            recoveryActionTitle: recoveryActionTitle,
+            failureCategory: failureCategory,
+            hasHandoffWarning: hasHandoffWarning
         )
     }
 }

@@ -33,6 +33,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private var inboxObservationTask: Task<Void, Never>?
     private var helperToolsObservation: AnyCancellable?
     private(set) var currentJobID: Job.ID?
+    /// True while the visible error is helper-related and may be cleared when
+    /// health becomes ready. Unrelated job/validation errors set this false so
+    /// a later ready check never clears them.
+    private var helperRelatedErrorActive = false
 
     public init(
         context: ToolContext,
@@ -80,10 +84,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         let isAudio = Self.allowedDropExtensions.contains(first.pathExtension.lowercased())
         guard isAudio else {
             errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
+            helperRelatedErrorActive = false
             return false
         }
         droppedFileURL = first
         errorMessage = nil
+        helperRelatedErrorActive = false
         statusMessage = "Ready: \(first.lastPathComponent)"
         return true
     }
@@ -134,11 +140,13 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public func performDrop(info: DropInfo) -> Bool {
         guard canAcceptDrop(info: info) else {
             errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
+            helperRelatedErrorActive = false
             return false
         }
         let providers = info.itemProviders(for: [.fileURL])
         guard !providers.isEmpty else {
             errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
+            helperRelatedErrorActive = false
             return false
         }
         Task { @MainActor [weak self] in
@@ -158,6 +166,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             }
             guard !urls.isEmpty else {
                 self?.errorMessage = "That’s not an audio file. Try WAV, AIFF, MP3, M4A or FLAC."
+                self?.helperRelatedErrorActive = false
                 return
             }
             _ = self?.handleDrop(urls: urls)
@@ -192,6 +201,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         isRunning = true
         progress = 0.0
         errorMessage = nil
+        helperRelatedErrorActive = false
         statusMessage = "Starting \(selectedPreset.displayName)…"
 
         let job = service.startJob(request: request)
@@ -203,10 +213,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         guard !isRunning else { return }
         guard let sourceURL = normalizedYouTubeURL() else {
             errorMessage = "Paste a valid YouTube URL."
+            helperRelatedErrorActive = false
             return
         }
         guard let youtubeWorkflow else {
             errorMessage = "YouTube to stems is unavailable."
+            helperRelatedErrorActive = false
             return
         }
 
@@ -221,6 +233,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         isRunning = true
         progress = 0.0
         errorMessage = nil
+        helperRelatedErrorActive = false
         statusMessage = "Downloading audio…"
 
         let job = youtubeWorkflow.startJob(request: request)
@@ -305,17 +318,21 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         case .missing:
             helperNeedsSetup = true
             errorMessage = StemSeparationHelperCopy.missingBody
+            helperRelatedErrorActive = true
         case .ready:
-            if helperNeedsSetup || errorMessage == StemSeparationHelperCopy.missingBody {
+            if helperRelatedErrorActive {
                 errorMessage = nil
+                helperRelatedErrorActive = false
             }
             helperNeedsSetup = false
         case let .unusable(message):
             helperNeedsSetup = true
             errorMessage = Self.startFailureMessage(from: message)
+            helperRelatedErrorActive = true
         case .modelCacheMissing:
             helperNeedsSetup = true
             errorMessage = StemSeparationHelperCopy.missingBody
+            helperRelatedErrorActive = true
         }
     }
 
@@ -350,16 +367,21 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         switch current.state {
         case .completed:
             finish(message: "Stems ready")
+            helperRelatedErrorActive = false
             loadResults()
             return true
         case .failed:
             finish(message: current.message, error: current.message)
-            if current.message == StemSeparationHelperCopy.missingBody {
+            if current.failureReason == .helperUnavailable {
                 helperNeedsSetup = true
+                helperRelatedErrorActive = true
+            } else {
+                helperRelatedErrorActive = false
             }
             return true
         case .canceled:
             finish(message: "Canceled.")
+            helperRelatedErrorActive = false
             return true
         case .queued, .running:
             return false

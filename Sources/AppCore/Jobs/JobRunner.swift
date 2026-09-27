@@ -170,7 +170,11 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             } catch is CancellationError {
                 self.markCanceled(id: job.id)
             } catch {
-                self.markFailed(id: job.id, message: error.localizedDescription)
+                self.markFailed(
+                    id: job.id,
+                    message: error.localizedDescription,
+                    failureReason: (error as? any JobFailureReasonProviding)?.jobFailureReason
+                )
             }
         }
 
@@ -226,12 +230,13 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("completed", privacy: .public)")
     }
 
-    private func markFailed(id: Job.ID, message: String) {
+    private func markFailed(id: Job.ID, message: String, failureReason: JobFailureReason? = nil) {
         let boundedMessage = boundedText(message, maximumUTF8Bytes: maximumSnapshotTextBytes)
         mutateJob(id: id) { job in
             guard job.state == .running else { return false }
             job.state = .failed
             job.message = boundedMessage
+            job.failureReason = failureReason
             job.finishedAt = Date()
             return true
         }

@@ -75,7 +75,7 @@ public struct AudioConverterView: View {
 
     private var showsFFmpegNotice: Bool {
         viewModel.rows.contains(
-            where: { $0.recoveryActionTitle == AudioConverterCopy.chooseFFmpeg }
+            where: { $0.failureCategory == .helperUnavailable }
         )
     }
 
@@ -200,7 +200,7 @@ public struct AudioConverterView: View {
         } trailing: {
             statusDot(for: row.state)
 
-            if row.recoveryActionTitle == "Choose FFmpeg" {
+            if row.failureCategory == .helperUnavailable {
                 HubLabeledButton(
                     icon: "hammer",
                     label: "Choose FFmpeg",

@@ -92,6 +92,7 @@ final class DownloadPostProcessingStallTests: XCTestCase {
     ) async {
         do {
             let result = try await download(script: script)
+            XCTAssertNil(result.failure, file: file, line: line)
             XCTAssertEqual(result.outputURLs, [outputURL], file: file, line: line)
         } catch {
             XCTFail("Expected the download to finish, got \(error)", file: file, line: line)
@@ -122,8 +123,11 @@ final class DownloadPostProcessingStallTests: XCTestCase {
         do {
             _ = try await download(script: script)
             XCTFail("Expected a stall failure", file: file, line: line)
-        } catch let DownloadError.downloadFailed(message) {
-            XCTAssertEqual(message, expected, file: file, line: line)
+        } catch let DownloadError.failed(failure) {
+            XCTAssertEqual(failure.message, expected, file: file, line: line)
+            XCTAssertFalse(failure.isRetryable, file: file, line: line)
+        } catch {
+            XCTFail("Unexpected error: \(error)", file: file, line: line)
         }
     }
 }

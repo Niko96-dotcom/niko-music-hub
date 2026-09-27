@@ -85,9 +85,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     }
 
     private func missingFFmpegError() -> AudioConversionError {
-        .missingFFmpeg(
-            message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
-        )
+        .missingFFmpeg(message: AudioConverterCopy.missingFFmpeg)
     }
 }
 

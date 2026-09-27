@@ -423,10 +423,187 @@ struct StemSeparationViewModelTests {
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.errorMessage == "demucs-mlx could not start: boom line1")
     }
+
+    @Test
+    func localHelperFailureWithChangedWordingSetsSetup() async throws {
+        let customWording = "custom demucs helper blown up (code 9) XYZ"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = FakeSettingsStore()
+        settingsStore.stored.outputFolder = StoredFolderLocation(url: root)
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
+        let vm = StemSeparationViewModel(context: context, service: service)
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+
+        vm.startSeparation()
+        for _ in 0..<200 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.errorMessage == customWording)
+        #expect(jobRunner.listJobs().first?.failureReason == .helperUnavailable)
+    }
+
+    @Test
+    func youtubeHelperFailureWithChangedWordingSetsSetup() async throws {
+        let customWording = "custom demucs helper blown up (code 9) XYZ"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = FakeSettingsStore()
+        settingsStore.stored.outputFolder = StoredFolderLocation(url: root)
+        let inbox = FakeOutputInboxStore()
+        let runner = JobRunner()
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: service,
+            jobRunner: runner
+        )
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let localBackend = MockStemSeparationBackend()
+        localBackend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let localService = StemSeparationService(backend: localBackend, outputInboxStore: inbox, jobRunner: runner)
+        let vm = StemSeparationViewModel(context: context, service: localService, youtubeWorkflow: workflow)
+        vm.youtubeURLText = "https://youtu.be/test"
+
+        vm.startYouTubeSeparation()
+        for _ in 0..<200 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.errorMessage == customWording)
+    }
+
+    @Test
+    func untypedSameMissingBodyDoesNotSetSetup() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = FakeSettingsStore()
+        settingsStore.stored.outputFolder = StoredFolderLocation(url: root)
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .failed(message: StemSeparationHelperCopy.missingBody)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
+        let vm = StemSeparationViewModel(context: context, service: service)
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+
+        vm.startSeparation()
+        for _ in 0..<200 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(vm.errorMessage == StemSeparationHelperCopy.missingBody)
+        #expect(vm.helperNeedsSetup == false)
+        #expect(jobRunner.listJobs().first?.failureReason == nil)
+    }
+
+    @Test
+    func helperReadyClearsOnlyHelperErrorPreservesUnrelated() async throws {
+        let executable = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
+        let fixtureLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [executable.deletingLastPathComponent()],
+            isExecutable: { $0 == executable.path }
+        )
+        struct ReadyRunner: ExternalProcessRunning {
+            func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+                .init(exitCode: 0, standardOutput: "model\tinfo", standardError: "")
+            }
+        }
+        let readyChecker = DemucsMLXHealthChecker(runner: ReadyRunner(), locator: fixtureLocator)
+
+        // Helper error is cleared by ready health.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = FakeSettingsStore()
+        settingsStore.stored.outputFolder = StoredFolderLocation(url: root)
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .failed(message: "custom helper down XYZ", reason: .helperUnavailable)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
+        let vm = StemSeparationViewModel(context: context, service: service, healthChecker: readyChecker)
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+        vm.startSeparation()
+        for _ in 0..<200 where vm.isRunning {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.errorMessage == "custom helper down XYZ")
+
+        vm.refreshHelperHealth()
+        for _ in 0..<100 where vm.helperNeedsSetup == true {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        #expect(vm.helperNeedsSetup == false)
+        #expect(vm.errorMessage == nil)
+
+        // A later unrelated validation error must survive a subsequent ready check.
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.txt")])
+        let unrelated = try #require(vm.errorMessage)
+        #expect(vm.helperNeedsSetup == false)
+        vm.refreshHelperHealth()
+        for _ in 0..<40 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+            if vm.helperNeedsSetup != false { break }
+        }
+        #expect(vm.errorMessage == unrelated)
+        #expect(vm.helperNeedsSetup == false)
+    }
 }
 
 private final class FakeSettingsStore: SettingsStore, @unchecked Sendable {
-    var stored: AppSettings = .default
+    private let fixtureOutputFolder = FileManager.default.temporaryDirectory
+        .appendingPathComponent("stem-view-model-\(UUID().uuidString)", isDirectory: true)
+    var stored: AppSettings
+
+    init() {
+        stored = AppSettings(outputFolder: StoredFolderLocation(url: fixtureOutputFolder))
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: fixtureOutputFolder)
+    }
 
     func loadSettings() throws -> AppSettings { stored }
     func saveSettings(_ settings: AppSettings) throws { stored = settings }

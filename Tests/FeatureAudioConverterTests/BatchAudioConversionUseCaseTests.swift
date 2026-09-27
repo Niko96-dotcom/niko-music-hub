@@ -27,7 +27,13 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
 
         XCTAssertEqual(converter.requests.map(\.sourceURL), [missingHelperFile.sourceURL, nativeFile.sourceURL])
         XCTAssertEqual(outcomes.count, 2)
-        XCTAssertEqual(outcomes[0].status, .failed(message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."))
+        XCTAssertEqual(
+            outcomes[0].status,
+            .failed(
+                message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again.",
+                category: .helperUnavailable
+            )
+        )
         guard case .verified = outcomes[1].status else {
             return XCTFail("Expected native file to continue and verify")
         }
@@ -107,6 +113,80 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         XCTAssertEqual(item.metadata["channels"], "1")
         XCTAssertEqual(item.metadata["converter"], "FFmpeg")
         XCTAssertEqual(item.metadata["sourceType"], "m4a")
+    }
+
+    func testMissingFFmpegChangedWordingStillMapsHelperUnavailable() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = makeBatchFile(named: "Needs Helper.flac", type: .flac, in: directory)
+        let customWording = "custom helper blown up (code 9) XYZ"
+        let converter = RecordingBatchConverter { _ in
+            throw AudioConversionError.missingFFmpeg(message: customWording)
+        }
+        let useCase = makeUseCase(directory: directory, inbox: RecordingOutputInboxStore(), converter: converter)
+
+        let outcomes = try await useCase.convert(
+            files: [file],
+            stopController: StopAfterCurrentController()
+        )
+
+        XCTAssertEqual(outcomes.count, 1)
+        guard case let .failed(message, category) = outcomes[0].status else {
+            return XCTFail("Expected failed status, got \(outcomes[0].status)")
+        }
+        XCTAssertEqual(message, customWording)
+        XCTAssertEqual(category, .helperUnavailable)
+    }
+
+    func testVerificationFailedMapsSemanticCategory() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = makeBatchFile(named: "Verify.wav", type: .wav, in: directory)
+        let converter = RecordingBatchConverter { _ in
+            throw AudioConversionError.verificationFailed("checksum drift XYZ")
+        }
+        let useCase = makeUseCase(directory: directory, inbox: RecordingOutputInboxStore(), converter: converter)
+
+        let outcomes = try await useCase.convert(
+            files: [file],
+            stopController: StopAfterCurrentController()
+        )
+
+        XCTAssertEqual(outcomes.count, 1)
+        guard case let .failed(_, category) = outcomes[0].status else {
+            return XCTFail("Expected failed status, got \(outcomes[0].status)")
+        }
+        XCTAssertEqual(category, .verificationFailed)
+    }
+
+    func testGenericFailureWithHelperLookingTextHasNoHelperRecovery() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = makeBatchFile(named: "Generic.wav", type: .wav, in: directory)
+        let second = makeBatchFile(named: "HelperLook.wav", type: .wav, in: directory)
+        let converter = RecordingBatchConverter { request in
+            if request.sourceURL == first.sourceURL {
+                throw AudioConversionError.conversionFailed("verification stage exploded XYZ")
+            }
+            throw AudioConversionError.conversionFailed("FFmpeg is required — choose ffmpeg XYZ")
+        }
+        let useCase = makeUseCase(directory: directory, inbox: RecordingOutputInboxStore(), converter: converter)
+
+        let outcomes = try await useCase.convert(
+            files: [first, second],
+            stopController: StopAfterCurrentController()
+        )
+
+        XCTAssertEqual(outcomes.count, 2)
+        for outcome in outcomes {
+            guard case let .failed(_, category) = outcome.status else {
+                return XCTFail("Expected failed status, got \(outcome.status)")
+            }
+            XCTAssertNil(category, "Text-matched generic failure must not gain helper recovery")
+        }
     }
 
     func testInboxAddFailureReturnsVerifiedHandoffWarning() async throws {

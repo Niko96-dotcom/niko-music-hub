@@ -268,6 +268,72 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rows.first?.statusText, "Selected FFmpeg could not be used: bad helper")
     }
 
+    func testMissingFFmpegChangedWordingShowsRecoveryAndCanonicalCopy() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Needs Helper.mp3", in: directory)
+        let converter = RecordingViewModelConverter { _ in
+            throw AudioConversionError.missingFFmpeg(message: "custom helper blown up (code 9) XYZ")
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([source])
+
+        _ = await viewModel.convertQueuedRows()
+
+        let row = try XCTUnwrap(viewModel.rows.first)
+        XCTAssertEqual(row.state, .failed)
+        XCTAssertEqual(row.failureCategory, .helperUnavailable)
+        XCTAssertEqual(row.recoveryActionTitle, AudioConverterCopy.chooseFFmpeg)
+        XCTAssertEqual(row.statusText, AudioConverterCopy.missingFFmpeg)
+    }
+
+    func testVerificationFailedShowsSemanticCopyWithoutHelperRecovery() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "Verify.wav", in: directory)
+        let converter = RecordingViewModelConverter { _ in
+            throw AudioConversionError.verificationFailed("checksum drift XYZ")
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([source])
+
+        _ = await viewModel.convertQueuedRows()
+
+        let row = try XCTUnwrap(viewModel.rows.first)
+        XCTAssertEqual(row.state, .failed)
+        XCTAssertEqual(row.failureCategory, .verificationFailed)
+        XCTAssertNil(row.recoveryActionTitle)
+        XCTAssertEqual(row.statusText, AudioConverterCopy.verificationFailed)
+    }
+
+    func testGenericFailureWithHelperLookingTextShowsGenericCopyWithoutRecovery() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "Generic.wav", in: directory)
+        let second = try makeFile(named: "HelperLook.wav", in: directory)
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                throw AudioConversionError.conversionFailed("verification stage exploded XYZ")
+            }
+            throw AudioConversionError.conversionFailed("FFmpeg is required — choose ffmpeg XYZ")
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.count, 2)
+        for row in viewModel.rows {
+            XCTAssertEqual(row.state, .failed)
+            XCTAssertNil(row.failureCategory)
+            XCTAssertNil(row.recoveryActionTitle)
+            XCTAssertEqual(row.statusText, AudioConverterCopy.genericFailure)
+        }
+    }
+
     func testStopAfterCurrentStateHandoff() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

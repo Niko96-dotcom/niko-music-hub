@@ -97,9 +97,9 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
                 settings: helperSettings
             )
         } catch DemucsMLXCommandBuilderError.missingExecutable {
-            return .failed(message: StemSeparationHelperCopy.missingBody)
+            return .failed(message: StemSeparationHelperCopy.missingBody, reason: .helperUnavailable)
         } catch {
-            return .failed(message: StemSeparationHelperCopy.missingBody)
+            return .failed(message: StemSeparationHelperCopy.missingBody, reason: .helperUnavailable)
         }
 
         let startTime = Date()
@@ -148,7 +148,7 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
             let outputFolderURL = resolvedOutputFolderURL(for: request)
             switch scanner.scan(outputFolderURL: outputFolderURL, expectedRoles: request.preset.expectedStemRoles) {
-            case .failed(let message):
+            case let .failed(message):
                 return .failed(message: message)
             case .success(let stems):
                 return .success(outputFolderURL: outputFolderURL, stems: stems)

@@ -35,6 +35,20 @@ public enum AudioConverterPath: String, Codable, Sendable {
     case ffmpeg
 }
 
+public enum AudioConversionFailureCategory: String, Sendable, Equatable, Codable {
+    case helperUnavailable
+    case verificationFailed
+
+    public var jobFailureReason: JobFailureReason? {
+        switch self {
+        case .helperUnavailable:
+            return .helperUnavailable
+        case .verificationFailed:
+            return nil
+        }
+    }
+}
+
 public struct ConversionRequest: Equatable, Sendable {
     public var sourceURL: URL
     public var outputDirectory: URL
@@ -105,5 +119,29 @@ public enum AudioConversionError: LocalizedError, Equatable, Sendable {
         case let .verificationFailed(reason):
             return "WAV verification failed: \(reason)"
         }
+    }
+
+    /// Stable recovery category derived from the error case, never from text.
+    public var failureCategory: AudioConversionFailureCategory? {
+        switch self {
+        case .missingFFmpeg:
+            return .helperUnavailable
+        case .verificationFailed:
+            return .verificationFailed
+        case .unsupportedSourceType,
+             .sourceFileMissing,
+             .unreadableSource,
+             .outputDirectoryUnavailable,
+             .unsupportedBitDepth,
+             .outputSpecMismatch,
+             .conversionFailed:
+            return nil
+        }
+    }
+}
+
+extension AudioConversionError: JobFailureReasonProviding {
+    public var jobFailureReason: JobFailureReason? {
+        failureCategory?.jobFailureReason
     }
 }
