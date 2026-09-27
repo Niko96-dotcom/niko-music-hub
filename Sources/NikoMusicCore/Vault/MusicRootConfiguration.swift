@@ -63,6 +63,15 @@ public protocol SecurityScopedBookmarkProviding: Sendable {
 
 public protocol SecurityScopedBookmarkResolving: Sendable {
     func resolveBookmark(_ data: Data) throws -> URL
+    /// Where the bookmark points now, even when it is stale. Write guards use it to
+    /// keep a moved folder protected; never use it to decide a root's identity.
+    func currentLocation(ofBookmark data: Data) -> URL?
+}
+
+public extension SecurityScopedBookmarkResolving {
+    func currentLocation(ofBookmark data: Data) -> URL? {
+        try? resolveBookmark(data)
+    }
 }
 
 public struct FoundationSecurityScopedBookmarks: SecurityScopedBookmarkProviding, SecurityScopedBookmarkResolving {
@@ -86,6 +95,16 @@ public struct FoundationSecurityScopedBookmarks: SecurityScopedBookmarkProviding
         )
         guard !isStale else { throw SecurityScopedBookmarkError.staleBookmark }
         return url.standardizedFileURL
+    }
+
+    public func currentLocation(ofBookmark data: Data) -> URL? {
+        var isStale = false
+        return (try? URL(
+            resolvingBookmarkData: data,
+            options: [.withSecurityScope, .withoutUI],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ))?.standardizedFileURL
     }
 }
 

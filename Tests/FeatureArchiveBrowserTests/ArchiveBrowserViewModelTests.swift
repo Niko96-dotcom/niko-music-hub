@@ -4201,6 +4201,174 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.isScanning = false
     }
 
+    // MARK: - ENG-10: exports and New Song never write into archive folders
+
+    func testExportsAndNewSongRefuseVaultArchiveFolderWhenVaultEnabled() throws {
+        let fixture = try VaultArchiveWriteGuardFixture()
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.makeViewModel()
+        XCTAssertFalse(
+            viewModel.roots.contains { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: fixture.vaultArchive) },
+            "precondition: the enabled Vault archive root is filtered out of the browser roots"
+        )
+
+        XCTAssertThrowsError(try viewModel.exportIndexJSON(to: fixture.vaultArchive.appendingPathComponent("index.json"))) { error in
+            XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+        }
+        XCTAssertThrowsError(try viewModel.exportDiagnostics(to: fixture.vaultArchive.appendingPathComponent("scan.txt"))) { error in
+            XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+        }
+        XCTAssertThrowsError(
+            try viewModel.createNewSong(request: NewSongRequest(name: "Vault Draft", root: fixture.vaultArchive))
+        ) { error in
+            XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .archiveRootIsReadOnly)
+        }
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: fixture.vaultArchive.path),
+            ["Existing Song"],
+            "a refused write leaves the Vault archive folder untouched"
+        )
+        XCTAssertNil(viewModel.lastIndexExportPath)
+        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+
+        // Control: the same calls into a plain folder still write.
+        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
+        XCTAssertEqual(
+            Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
+            ["index.json", "scan.txt", "Plain Draft"]
+        )
+    }
+
+    func testExportRefusesVaultArchiveFolderAtItsBookmarkedLocation() throws {
+        for stale in [false, true] {
+            let fixture = try VaultArchiveWriteGuardFixture(bookmarkedArchive: true)
+            defer { fixture.cleanUp() }
+            let viewModel = fixture.makeViewModel(staleBookmark: stale)
+
+            XCTAssertThrowsError(
+                try viewModel.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
+                "stale bookmark: \(stale)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+            }
+            XCTAssertThrowsError(
+                try viewModel.createNewSong(request: NewSongRequest(name: "Moved Draft", root: fixture.bookmarkTarget)),
+                "stale bookmark: \(stale)"
+            )
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fixture.bookmarkTarget.path), [])
+        }
+    }
+
+    func testExportIndexRefusesDestinationInsideScanRoot() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-export-scan-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        viewModel.roots = [root]
+
+        XCTAssertThrowsError(try viewModel.exportIndexJSON(to: root.appendingPathComponent("Song/index.json"))) { error in
+            XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+        XCTAssertNil(viewModel.lastIndexExportPath)
+    }
+}
+
+/// ENG-10: a Vault-on settings store whose archive root the browser filters out of `roots`.
+@MainActor
+private struct VaultArchiveWriteGuardFixture {
+    let base: URL
+    let scanRoot: URL
+    let vaultArchive: URL
+    let bookmarkTarget: URL
+    let plain: URL
+    let suiteName: String
+    let settingsStore: UserDefaultsSettingsStore
+
+    init(bookmarkedArchive: Bool = false) throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-vault-write-guard-\(UUID().uuidString)", isDirectory: true)
+        scanRoot = base.appendingPathComponent("Scan", isDirectory: true)
+        vaultArchive = base.appendingPathComponent("VaultArchive", isDirectory: true)
+        bookmarkTarget = base.appendingPathComponent("VaultArchiveMoved", isDirectory: true)
+        plain = base.appendingPathComponent("Plain", isDirectory: true)
+        for folder in [scanRoot, vaultArchive.appendingPathComponent("Existing Song", isDirectory: true), bookmarkTarget, plain] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        suiteName = "FeatureArchiveBrowserTests.VaultWriteGuard.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        settingsStore = UserDefaultsSettingsStore(userDefaults: defaults, key: "settings")
+        let archiveID = UUID()
+        let archiveRoot = StoredMusicRoot(
+            id: archiveID,
+            role: .archive,
+            displayName: "Vault Archive",
+            pathFallback: vaultArchive.path,
+            securityScopedBookmark: bookmarkedArchive ? VaultArchiveBookmarkResolver.bookmark : nil
+        )
+        let scanOnly = StoredMusicRoot(role: .scanOnly, url: scanRoot)
+        try settingsStore.updateSettings { settings in
+            settings.musicRoots = [archiveRoot, scanOnly]
+            settings.vault.isEnabled = true
+            settings.vault.archiveRootID = archiveID
+            settings.archiveOnboardingCompleted = true
+        }
+    }
+
+    func makeViewModel(staleBookmark: Bool = false) -> ArchiveBrowserViewModel {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: settingsStore),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            bookmarkProvider: VaultArchiveBookmarkResolver(target: bookmarkTarget, isStale: staleBookmark),
+            scanOverride: { _ in ScanResult() }
+        )
+        // `exportDiagnostics(to:)` returns early without a scan, so give it one.
+        viewModel.scanDiagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(),
+            rootPaths: [scanRoot.path],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+        return viewModel
+    }
+
+    func cleanUp() {
+        try? FileManager.default.removeItem(at: base)
+        UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
+    }
+}
+
+/// Models a moved Vault archive: the bookmark points at `target`, and a stale one
+/// refuses `resolveBookmark` like `FoundationSecurityScopedBookmarks` does.
+private struct VaultArchiveBookmarkResolver: SecurityScopedBookmarkProviding, SecurityScopedBookmarkResolving {
+    static let bookmark = Data([0xB7])
+    let target: URL
+    let isStale: Bool
+
+    func makeBookmark(for url: URL) throws -> Data { Data(url.path.utf8) }
+
+    func resolveBookmark(_ data: Data) throws -> URL {
+        guard data == Self.bookmark else { throw SecurityScopedBookmarkError.missingBookmark }
+        guard !isStale else { throw SecurityScopedBookmarkError.staleBookmark }
+        return target
+    }
+
+    func currentLocation(ofBookmark data: Data) -> URL? {
+        data == Self.bookmark ? target : nil
+    }
 }
 
 private struct ProjectVaultViewModelFixture {
