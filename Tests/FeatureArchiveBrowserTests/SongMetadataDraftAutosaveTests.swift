@@ -51,7 +51,7 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         let undoManager = UndoManager()
         // Separate runloop event per commit, like separate user edits.
         undoManager.groupsByEvent = false
-        harness.viewModel.workflowUndoManager = undoManager
+        harness.viewModel.bindInjectedUndoManager(undoManager)
 
         // Simulate two view commits with undo registration.
         undoManager.beginUndoGrouping()
@@ -193,7 +193,7 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         let undoManager = UndoManager()
         // Separate runloop event per commit, like separate user edits.
         undoManager.groupsByEvent = false
-        harness.viewModel.workflowUndoManager = undoManager
+        harness.viewModel.bindInjectedUndoManager(undoManager)
 
         // Second edit with undo registration, mirroring SongDetailView.
         undoManager.beginUndoGrouping()

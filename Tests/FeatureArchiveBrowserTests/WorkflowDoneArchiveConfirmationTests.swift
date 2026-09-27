@@ -140,7 +140,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .prod)
 
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
         viewModel.requestWorkflowDoneArchive(for: song)
         try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
@@ -163,7 +163,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         let undoManager = UndoManager()
-        viewModel.workflowUndoManager = undoManager
+        viewModel.bindInjectedUndoManager(undoManager)
         viewModel.applyWorkflowStatus(.waitingFeedback, for: song)
 
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .waitingFeedback)

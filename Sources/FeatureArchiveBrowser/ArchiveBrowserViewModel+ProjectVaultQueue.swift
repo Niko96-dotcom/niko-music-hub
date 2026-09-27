@@ -150,9 +150,8 @@ extension ArchiveBrowserViewModel {
                     do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
                     guard !Task.isCancelled, let self else { return }
                     // Refresh the narrow settings context so root comparisons
-                    // use live settings, not a stale capture. This only
-                    // re-reads snapshots/cache and rebuilds the presentation
-                    // map when values changed; it never enqueues another
+                    // use live settings, not a stale capture. Context refresh
+                    // only reloads prepared settings; it never enqueues another
                     // automatic generation.
                     self.refreshProjectVaultPresentationContext(notifyWhenChanged: false)
                     guard self.projectVaultActiveOperation?.songID == songID,
@@ -165,11 +164,7 @@ extension ArchiveBrowserViewModel {
                               self.projectVaultActiveOperation?.songID == songID,
                               self.projectVaultActiveOperation?.projectKey == projectKey,
                               capturedRootIDs == self.vaultQueueRootIDs else { return }
-                        guard snapshots != self.projectVaultSnapshots else { continue }
-                        self.projectVaultSnapshots = snapshots
-                        self.projectVaultSnapshotsByPath.removeAll()
-                        snapshots.forEach(self.cacheProjectVaultSnapshot)
-                        self.rebuildProjectVaultPresentationCache()
+                        self.vaultObservation.applyPolledSnapshots(snapshots, songs: self.songs)
                     } catch {
                         continue
                     }

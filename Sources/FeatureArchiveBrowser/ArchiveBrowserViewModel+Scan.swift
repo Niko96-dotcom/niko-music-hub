@@ -42,7 +42,7 @@ extension ArchiveBrowserViewModel {
         vaultOperations.clearAllOperationMessages()
         browseRefreshDriver.cancelPendingDebounce()
         intelligenceRefreshTask?.cancel()
-        indexPersistTask?.cancel()
+        metadataEditing.clearForRootChange()
         mixdownAnalysis.cancel()
         cprPlugins.cancel()
         persistenceWarningMessage = nil
@@ -65,9 +65,7 @@ extension ArchiveBrowserViewModel {
         pluginsSectionExpanded = false
         showArchivedProjects = false
         scannedSongs = []
-        projectVaultSnapshots = []
-        projectVaultSnapshotsByPath.removeAll()
-        archivedProjectCount = 0
+        vaultObservation.clearForRootChange(notifyWhenChanged: false)
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []
         dismissedCollaboratorSuggestionIDs.removeAll()
@@ -77,7 +75,8 @@ extension ArchiveBrowserViewModel {
         mixdownKeyBySongID = [:]
         cprPluginSummaryByCPRPath = [:]
         cachedSearchIndex = MusicSearchIndex()
-        metadataRepairSongIDs = []
+        // Repair IDs and delayed index persistence are owned by
+        // `ArchiveMetadataEditingCoordinator` (`clearForRootChange` above).
         setStatusMessage(nextStatusMessage)
     }
 

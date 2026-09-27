@@ -127,9 +127,9 @@ final class ArchiveWorkflowUndoWiringTests: XCTestCase {
         XCTAssertTrue(browser.contains("ArchiveWorkflowUndoBridge"))
         XCTAssertTrue(browser.contains("isActiveTool"))
 
-        let metadata = try read("Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift")
-        XCTAssertTrue(metadata.contains("withTarget: workflowUndoTarget"))
-        XCTAssertFalse(metadata.contains("withTarget: self"))
+        let coordinator = try read("Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("withTarget: undoTarget"))
+        XCTAssertFalse(coordinator.contains("withTarget: self"))
 
         let bridge = try read("Sources/FeatureArchiveBrowser/ArchiveWorkflowUndoBridge.swift")
         XCTAssertTrue(bridge.contains("window.nextResponder"))
@@ -138,7 +138,7 @@ final class ArchiveWorkflowUndoWiringTests: XCTestCase {
         // Window-manager binding is the primary native route (foreground:
         // AppKitWindow answers undo: itself); the chain responder stays only
         // as the manager-less fallback.
-        XCTAssertTrue(bridge.contains("boundWindowUndoManager"))
+        XCTAssertTrue(bridge.contains("bindWindowUndoManager"))
         XCTAssertFalse(bridge.contains("addLocalMonitorForEvents"))
         XCTAssertFalse(bridge.contains("addGlobalMonitorForEvents"))
     }
@@ -578,20 +578,21 @@ final class ArchiveWorkflowUndoWiringTests: XCTestCase {
         }
     }
 
-    /// The registration proxy holds the view model weakly, so the retaining
-    /// undo stack cannot pin the view model alive.
-    func testUndoRegistrationTargetHoldsViewModelWeakly() async throws {
+    /// The registration proxy holds the coordinator weakly, so the retaining
+    /// undo stack cannot pin the coordinator (or the view model through it)
+    /// alive.
+    func testUndoRegistrationTargetHoldsCoordinatorWeakly() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         let viewModel = fixture.viewModel(runtime: try fixture.runtime())
         await viewModel.scan()
-        XCTAssertTrue(viewModel.workflowUndoTarget.viewModel === viewModel)
+        XCTAssertTrue(viewModel.workflowUndoTarget.coordinator === viewModel.metadataEditing)
 
         let probe = ArchiveWorkflowUndoTarget()
-        probe.viewModel = viewModel
-        XCTAssertTrue(probe.viewModel === viewModel)
-        probe.viewModel = nil
-        XCTAssertNil(probe.viewModel)
+        probe.coordinator = viewModel.metadataEditing
+        XCTAssertTrue(probe.coordinator === viewModel.metadataEditing)
+        probe.coordinator = nil
+        XCTAssertNil(probe.coordinator)
     }
 
     /// Deactivation scrubs this pane's registrations from the window manager:

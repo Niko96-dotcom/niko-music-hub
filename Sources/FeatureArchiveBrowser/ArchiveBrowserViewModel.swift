@@ -3,9 +3,9 @@ import Combine
 import Foundation
 import NikoMusicCore
 
-/// Archive shell view model. Roots, browse, selection, scan, metadata, exports,
-/// collaborators, intelligence, and status live in `ArchiveBrowserViewModel+*.swift`
-/// extensions; mixdown/CPR analysis is delegated to dedicated coordinators.
+/// Archive shell composition and browse/selection state. Metadata editing,
+/// Vault observation and operations, scanning, and audio/project analysis
+/// delegate to their owners; extensions integrate their results with the UI.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
     // MARK: - Types
@@ -137,14 +137,97 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// active workspace stays calm. Turning this on exposes verified archive-only
     /// projects in their persisted workflow stage.
     @Published var showArchivedProjects = false
-    @Published var archivedProjectCount = 0
+    /// Archived count is owned by `ArchiveVaultObservation`; this read-only
+    /// peer preserves the existing view/test API with no duplicate storage.
+    /// SwiftUI updates flow through the observation bridge in
+    /// `wireVaultObservation()`.
+    var archivedProjectCount: Int { vaultObservation.archivedCount }
     @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
     @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
     @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
+    /// Single metadata-editing owner for mutation/gate/persistence ordering,
+    /// notes/status undo, repair IDs, and delayed index persistence. All
+    /// mutations go through the coordinator's intentional methods; these
+    /// computed peers preserve read access for existing views/tests with no
+    /// duplicate stored state. The view model re-emits the coordinator's
+    /// publishes for SwiftUI via `wireMetadataEditing()` with a weak capture;
+    /// the coordinator never retains this view model. The host contract is
+    /// required and immutable: built once here with weak captures, fail-closed
+    /// when the host is gone (blocked gates, nil snapshots no-op, no fake
+    /// generation).
+    private(set) lazy var metadataEditing: ArchiveMetadataEditingCoordinator = {
+        ArchiveMetadataEditingCoordinator(
+            catalog: self.catalog,
+            host: ArchiveMetadataEditingHost(
+                currentSongs: { [weak self] in self?.songs },
+                currentScannedSongs: { [weak self] in self?.scannedSongs },
+                currentCollaborators: { [weak self] in self?.collaborators },
+                currentRoots: { [weak self] in self?.roots },
+                currentGeneration: { [weak self] in self?.rootGeneration },
+                currentScanDate: { [weak self] in
+                    guard let self else { return nil }
+                    return self.scanDiagnostics?.scannedAt
+                },
+                isVaultBlocked: { [weak self] song in
+                    self?.blocksGenericProjectVaultFileActions(for: song) ?? true
+                },
+                canMutateStatus: { [weak self] song in
+                    self?.canMutateWorkflowStatus(for: song) ?? false
+                },
+                canArchive: { [weak self] song in
+                    self?.canArchiveInProjectVault(song) ?? false
+                },
+                requestDoneArchive: { [weak self] song in
+                    self?.requestWorkflowDoneArchive(for: song)
+                },
+                revokeDoneWork: { [weak self] songID in
+                    self?.revokeBoundDoneWork(for: songID)
+                },
+                applyReplacement: { [weak self] updated in
+                    self?.replaceSong(updated)
+                },
+                currentPersistenceWarning: { [weak self] in
+                    self?.persistenceWarningMessage
+                },
+                setPersistenceWarningDirect: { [weak self] warning in
+                    self?.persistenceWarningMessage = warning
+                },
+                reportWarning: { [weak self] warning in
+                    self?.recordPersistenceWarning(warning)
+                },
+                reportStatus: { [weak self] message in
+                    self?.setStatusMessage(message)
+                },
+                reportVaultStatus: { [weak self] message in
+                    self?.setProjectVaultStatusMessage(message)
+                }
+            )
+        )
+    }()
     /// Songs whose stored details are corrupt: edits are paused and Repair
-    /// Song Details is offered (mirrors the catalog's per-song gate).
-    @Published var metadataRepairSongIDs: Set<String> = []
+    /// Song Details is offered. Owned by `ArchiveMetadataEditingCoordinator`;
+    /// this read-only peer preserves the existing view/test API with no
+    /// duplicate storage.
+    var metadataRepairSongIDs: Set<String> { metadataEditing.repairSongIDs }
+    /// Delayed index-persist handle. Owned by the metadata coordinator;
+    /// read-only peer for existing tests.
+    var indexPersistTask: Task<Void, Never>? { metadataEditing.indexPersistTask }
+    /// Single observation owner for Vault settings context, health, snapshots,
+    /// path index, card cache, archived count, catalog projection inputs, and
+    /// recovery timer lifecycle. All mutations go through the observation's
+    /// intentional methods; these computed peers preserve read access for
+    /// existing views/tests with no duplicate stored state. The view model
+    /// re-emits the observation's publishes for SwiftUI via
+    /// `wireVaultObservation()` with weak captures; the observation never
+    /// retains this view model.
+    let vaultObservation = ArchiveVaultObservation()
+    /// Read-only peers for the observation owner. All Vault observation writes
+    /// go through `ArchiveVaultObservation` intentional operations.
+    var projectVaultPresentationContext: ProjectVaultPresentationContext? { vaultObservation.context }
+    var projectVaultPresentationsBySongID: [String: ProjectVaultCardPresentation] { vaultObservation.presentationsBySongID }
+    var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] { vaultObservation.snapshots }
+    var projectVaultRecoveryDeadline: Date? { vaultObservation.recoveryDeadline }
     /// Single owner for Vault transfer queue/retry accounting. All mutations
     /// go through `vaultOperations`; these computed peers preserve read access
     /// for existing views/tests with no duplicate stored state. The view model
@@ -171,13 +254,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
     @Published var pendingStopTransferConfirmation = false
     @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
-    /// Sidebar Project Vault provider status (NMH-057). Refreshed with the
-    /// card context so the render path never touches `SettingsStore`.
-    @Published var projectVaultHealth = ProjectVaultHealth(
-        providerStatus: .notConfigured,
-        lastSuccessfulVerificationAt: nil,
-        hasIndependentBackup: false
-    )
+    /// Sidebar Project Vault provider status (NMH-057). Owned by
+    /// `ArchiveVaultObservation`; this read-only peer preserves the existing
+    /// view API with no duplicate storage.
+    var projectVaultHealth: ProjectVaultHealth { vaultObservation.health }
     @Published var viewMode: ArchiveViewMode = .board {
         didSet {
             // NMH-042: board ↔ list ↔ boardDetail ↔ analytics changes layout.
@@ -201,29 +281,41 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // Updated before filteredSongs publishes, so Board uses the applied query mode.
     var isSearching = false
     var projectVaultRestoreOptionsLoading = false
-    /// Undo stack for workflow-status and metadata edits.
-    ///
-    /// SwiftUI's main window (`AppKitWindow`) answers `undo:` itself from its
-    /// own `undoManager`, so native Edit → Undo only works when registrations
-    /// land on that manager. `ArchiveWorkflowUndoBridge` binds it here as
-    /// `boundWindowUndoManager` while this pane is the active tool; otherwise
-    /// the owned stack is the fallback. Tests may inject a manager by assigning
-    /// `workflowUndoManager`. Registrations target `workflowUndoTarget` (weak
-    /// back-reference) so the undo stack cannot keep the view model alive.
-    /// Undo of Mark Done is status-only.
-    let ownedWorkflowUndoManager = UndoManager()
-    let workflowUndoTarget = ArchiveWorkflowUndoTarget()
-    var injectedWorkflowUndoManager: UndoManager?
+    /// Undo stack for workflow-status and metadata edits. Owned by
+    /// `ArchiveMetadataEditingCoordinator` (owned/injected/weak window-bound
+    /// managers plus the weak undo target). SwiftUI's main window
+    /// (`AppKitWindow`) answers `undo:` itself from its own `undoManager`, so
+    /// native Edit → Undo only works when registrations land on that manager.
+    /// `ArchiveWorkflowUndoBridge` binds it via `bindWindowUndoManager` while
+    /// this pane is the active tool; otherwise the owned stack is the
+    /// fallback. Tests inject via `bindInjectedUndoManager`. Undo of Mark
+    /// Done is status-only.
+    var workflowUndoManager: UndoManager? { metadataEditing.effectiveUndoManager }
+    var ownedWorkflowUndoManager: UndoManager { metadataEditing.ownedUndoManager }
+    var injectedWorkflowUndoManager: UndoManager? { metadataEditing.injectedUndoManager }
     /// Window-owned manager captured by the bridge lifecycle. Weak: the
     /// window owns it; when the window goes away this nils and the owned
-    /// stack resumes. Set/cleared only by `ArchiveWorkflowUndoBridgeView`
+    /// stack resumes. Set/cleared only through `bindWindowUndoManager` /
+    /// `unbindWindowUndoManager` by `ArchiveWorkflowUndoBridgeView`
     /// (attach/sync/detach) and only while this pane is the active tool.
-    weak var boundWindowUndoManager: UndoManager?
-    var workflowUndoManager: UndoManager? {
-        get { injectedWorkflowUndoManager ?? boundWindowUndoManager ?? ownedWorkflowUndoManager }
-        set { injectedWorkflowUndoManager = newValue }
+    var boundWindowUndoManager: UndoManager? { metadataEditing.boundWindowUndoManager }
+    var workflowUndoTarget: ArchiveWorkflowUndoTarget { metadataEditing.undoTarget }
+    /// Intentional window-manager binding for the native bridge. Scrubbing
+    /// removes only this owner's actions, preserving unrelated window actions.
+    func bindWindowUndoManager(_ manager: UndoManager?) {
+        metadataEditing.bindWindowUndoManager(manager)
+    }
+    func unbindWindowUndoManager() {
+        metadataEditing.unbindWindowUndoManager()
+    }
+    /// Intentional test injection. Replaces the former writable
+    /// `workflowUndoManager` alias.
+    func bindInjectedUndoManager(_ manager: UndoManager?) {
+        metadataEditing.bindInjectedUndoManager(manager)
     }
     var vaultOperationsCancellable: AnyCancellable?
+    var vaultObservationCancellable: AnyCancellable?
+    var metadataEditingCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -235,25 +327,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// bound-authorization capture so settings/roots/source changes can be
     /// applied while a confirmation is still in flight.
     var projectVaultAuthCaptureProbe: (@Sendable () async -> Void)?
-    /// Per-song Project Vault card state prepared when catalog, snapshot, or
-    /// settings inputs change. `projectVaultPresentation(for:)` is deliberately
-    /// a dictionary lookup so list and board re-renders stay main-thread cheap.
-    var projectVaultPresentationsBySongID: [String: ProjectVaultCardPresentation] = [:]
-    /// Cached separately from the card map so a catalog/snapshot update can
-    /// rebuild cards without reloading settings. Settings changes replace this
-    /// context through `refreshProjectVaultPresentationContext()`.
-    var projectVaultPresentationContext: ProjectVaultPresentationContext?
-    var projectVaultSnapshotsByPath: [String: ProjectVaultRuntimeSnapshot] = [:]
-    /// The latest runtime snapshot list is retained separately from the path lookup
-    /// map so changing the archived-project visibility toggle can rebuild the catalog
-    /// without another scan or Dropbox round trip.
-    var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] = []
-    var projectVaultRecoveryTask: Task<Void, Never>?
-    var projectVaultRecoveryDeadline: Date?
-    var projectVaultLastRecoveryAttemptAt: Date?
+    // Vault observation storage moved to `ArchiveVaultObservation`
+    // (context, health, snapshots, path index, card cache, archived count,
+    // recovery timer). Read-only peers above preserve the view API; writes
+    // go through the observation's intentional methods.
     var navigationCancellable: AnyCancellable?
     var intelligenceRefreshTask: Task<Void, Never>?
-    var indexPersistTask: Task<Void, Never>?
     /// Reused search index rebuilt from the current shelf on each browse recompute.
     /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
     /// reflecting live metadata (titles/aliases) after catalog edits.
@@ -380,8 +459,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 diagnostics.log(.info, message)
             }
         )
-        workflowUndoTarget.viewModel = self
         wireVaultOperationCoordinator()
+        wireVaultObservation()
+        wireMetadataEditing()
         loadRootsFromSettings()
         attachNavigationHistory(context.navigationHistory)
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
@@ -396,6 +476,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
         }
+    }
+
+    /// Wire the single observation owner: forward its publishes into this
+    /// observable object (views keep reading the view-model peers with no UI
+    /// edits). The capture is weak; the observation never retains this view
+    /// model. Recovery timer lifetime is owned by the observation's `deinit`.
+    private func wireVaultObservation() {
+        vaultObservationCancellable = vaultObservation.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     /// Wire the single operation owner: forward its publishes into this
@@ -434,6 +523,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    /// Wire the single metadata-editing owner: forward its publishes into this
+    /// observable object (views keep reading the view-model peers with no UI
+    /// edits). The host contract is built once in the lazy owner factory above;
+    /// this only subscribes. The capture is weak; the coordinator never retains
+    /// this view model.
+    private func wireMetadataEditing() {
+        metadataEditingCancellable = metadataEditing.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
     deinit {
         // Lifetime retry/queue cancellation is owned by
         // `ProjectVaultOperationCoordinator.deinit`, which cancels its own
@@ -441,8 +540,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // no actor-isolated call is needed here). Releasing this view model
         // releases the coordinator, which cancels any sleeping retry and the
         // running queue task so no callback fires after the owner is gone.
+        // Recovery timer lifetime is owned by `ArchiveVaultObservation.deinit`.
+        // Delayed index persistence is owned by
+        // `ArchiveMetadataEditingCoordinator.deinit`.
         projectVaultAuthCaptureTask?.cancel()
-        projectVaultRecoveryTask?.cancel()
     }
 
     // MARK: - Helpers
