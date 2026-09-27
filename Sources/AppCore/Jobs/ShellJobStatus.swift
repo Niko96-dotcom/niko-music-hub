@@ -10,6 +10,9 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     public var activityVerb: String?
     /// Tool that started a `JobRunner` job; `nil` for extra (archive) sources.
     public var sourceToolID: ToolFeatureID?
+    /// Quit asks before cutting this off (ADR-019). A background archive scan is
+    /// read-only and safe to stop, so it is shown but does not block quit.
+    public var blocksQuit: Bool
 
     public init(
         id: String,
@@ -17,7 +20,8 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         percent: Double? = nil,
         cancelActionID: String? = nil,
         activityVerb: String? = nil,
-        sourceToolID: ToolFeatureID? = nil
+        sourceToolID: ToolFeatureID? = nil,
+        blocksQuit: Bool = true
     ) {
         self.id = id
         self.title = title
@@ -25,6 +29,7 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         self.cancelActionID = cancelActionID
         self.activityVerb = activityVerb
         self.sourceToolID = sourceToolID
+        self.blocksQuit = blocksQuit
     }
 
     public var displayLine: String {

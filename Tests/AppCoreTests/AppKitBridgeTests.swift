@@ -58,7 +58,7 @@ final class AppKitBridgeTests: XCTestCase {
         let source = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
         XCTAssertTrue(source.contains("let registry: ToolRegistry"))
         XCTAssertTrue(source.contains("let router: QuickAccessRouter"))
-        XCTAssertTrue(source.contains("let pendingVaultOperationCount: @MainActor () -> Int"))
+        XCTAssertTrue(source.contains("let termination: HubTerminationCoordinator"))
         XCTAssertFalse(source.contains("static var services"))
     }
 }

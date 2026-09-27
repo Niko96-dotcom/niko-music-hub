@@ -208,6 +208,12 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         lock.withLock { tasks.count }
     }
 
+    /// A cancelled job leaves the snapshot at once; its task stays until the
+    /// operation has returned.
+    public var hasUnfinishedWork: Bool {
+        lock.withLock { !tasks.isEmpty || !nonTerminalJobsLocked().isEmpty }
+    }
+
     private func markRunning(id: Job.ID) {
         mutateJob(id: id) { job in
             guard job.state == .queued else { return false }

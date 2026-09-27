@@ -229,7 +229,7 @@ extension ArchiveBrowserViewModel {
     /// deduplication, and 30-second backoff to the observation owner with
     /// narrow weak callbacks. The owner never retains this view model.
     func scheduleProjectVaultRecovery() async {
-        guard let projectVaultRuntime else {
+        guard let projectVaultRuntime, !projectVaultStoppedForQuit else {
             vaultObservation.cancelRecovery()
             return
         }
