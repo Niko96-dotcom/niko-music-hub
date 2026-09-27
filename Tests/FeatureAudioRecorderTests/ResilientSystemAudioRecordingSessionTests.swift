@@ -346,6 +346,94 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(viewModel.recordingState, RecordingDisplayState.idle)
     }
 
+    // MARK: - Write failures (ENG-11)
+
+    func testWriteErrorMidTakeEndsTheTakeAndStopThrowsIt() async throws {
+        let ended = expectation(description: "capture ended on the write error")
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], writerFactory: writers.make)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await session.start(
+            outputURL: url,
+            preset: .cubaseDefault,
+            maxDuration: nil,
+            onLevel: { _ in },
+            onEnded: { ended.fulfill() }
+        )
+        core.emitPCM()
+        await fulfillment(of: [ended], timeout: 5)
+        core.emitPCM()
+
+        do {
+            _ = try await session.stop()
+            XCTFail("Expected the write error")
+        } catch RecorderError.writeError(let message) {
+            XCTAssertTrue(message.contains("The disk is full."), message)
+        }
+        XCTAssertEqual(writers.writeAttempts, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testWriteErrorDuringStartupFailsStartWithoutTryingOtherBackends() async throws {
+        let writers = FailingPCMWriterFactory(failOnWrite: 1)
+        let second = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let fallback = FakeRecorderBackend(identity: .screenCaptureKit, behavior: .healthy(sampleRate: 48_000))
+        let session = makeSession(
+            core: [FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100)), second],
+            fallback: [fallback],
+            timeout: .seconds(5),
+            writerFactory: writers.make
+        )
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        do {
+            try await start(session, url: url)
+            XCTFail("Expected the write error")
+        } catch RecorderError.writeError {
+            // expected: a disk failure, not "no audio" after every backend timed out
+        }
+        XCTAssertEqual(second.startCount, 0)
+        XCTAssertEqual(fallback.startCount, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @MainActor
+    func testWriteErrorEventStopsTakeWithoutUserStop() async throws {
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: core,
+            probe: PermissionProbeStub(.authorized),
+            writerFactory: writers.make
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let recording = expectation(description: "view model is recording")
+        let failed = expectation(description: "view model shows the write error")
+        var cancellable: AnyCancellable?
+        cancellable = viewModel.$recordingState.sink { state in
+            switch state {
+            case .recording: recording.fulfill()
+            case .error(.writeError): failed.fulfill()
+            default: break
+            }
+        }
+        defer { cancellable?.cancel() }
+
+        await viewModel.startRecording()
+        await fulfillment(of: [recording], timeout: 5)
+        core.emitPCM() // No stopRecording from the user or the duration limit follows.
+        await fulfillment(of: [failed], timeout: 5)
+
+        XCTAssertEqual(try inbox.listItems().count, 0)
+        XCTAssertFalse(viewModel.isCaptureActive)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        XCTAssertEqual(leftovers, [], "the failed take's file is removed")
+    }
+
     // MARK: - System-audio permission diagnosis
 
     func testDigitallySilentTakeWithBlockedProbeKeepsTheFileAndFlagsIt() async throws {
@@ -597,9 +685,10 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
     @MainActor
     private func makeViewModel(
         core: FakeRecorderBackend,
-        probe: PermissionProbeStub
+        probe: PermissionProbeStub,
+        writerFactory: RecorderPCMWriterFactory? = nil
     ) throws -> (AudioRecorderViewModel, RecordingInboxStore, URL) {
-        let session = makeSession(core: [core], fallback: [], probe: probe)
+        let session = makeSession(core: [core], fallback: [], probe: probe, writerFactory: writerFactory)
         let adapter = CoreAudioTapAdapter(sessionFactory: { session })
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("permission-card-\(UUID().uuidString)", isDirectory: true)
@@ -632,7 +721,8 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         fallback: [FakeRecorderBackend],
         timeout: Duration = .milliseconds(20),
         debounce: Duration = .milliseconds(5),
-        probe: PermissionProbeStub = PermissionProbeStub(.authorized)
+        probe: PermissionProbeStub = PermissionProbeStub(.authorized),
+        writerFactory: RecorderPCMWriterFactory? = nil
     ) -> ResilientSystemAudioRecordingSession {
         let coreQueue = BackendFactoryQueue(backends: core)
         let fallbackQueue = BackendFactoryQueue(backends: fallback)
@@ -640,7 +730,8 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             configuration: RecorderRecoveryConfiguration(startupTimeout: timeout, routeDebounce: debounce),
             coreAudioFactory: { coreQueue.next(identity: .coreAudio) },
             screenCaptureKitFactory: { fallbackQueue.next(identity: .screenCaptureKit) },
-            permissionProbe: { probe.run() }
+            permissionProbe: { probe.run() },
+            writerFactory: writerFactory ?? { try WAVRecorderWriter(outputURL: $0, preset: $1) }
         )
     }
 
