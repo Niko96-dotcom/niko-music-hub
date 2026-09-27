@@ -405,8 +405,18 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         )
     }
 
-    public func verify(_ manifest: VaultManifest, at root: URL, compareModificationTimes: Bool = false) throws {
+    /// `requireUnchangedWhileHashing` re-takes the inventory after the last
+    /// hash and fails when any entry was added, removed, replaced, resized or
+    /// rewritten meanwhile. Hashing a large project takes seconds to minutes;
+    /// callers that act destructively on a verified tree need that window closed.
+    public func verify(
+        _ manifest: VaultManifest,
+        at root: URL,
+        compareModificationTimes: Bool = false,
+        requireUnchangedWhileHashing: Bool = false
+    ) throws {
         let actual = try verificationInventory(at: root)
+        let stampsBeforeHashing = requireUnchangedWhileHashing ? try Self.stabilityStamps(of: actual) : nil
         let expectedEntries = manifest.entries.sorted { $0.relativePath < $1.relativePath }
         let expectedStructure = try expectedEntries.map {
             try Self.verificationEntry($0, compareModificationTimes: compareModificationTimes)
@@ -422,6 +432,10 @@ public struct VaultManifestBuilder: @unchecked Sendable {
                   hashed.sha256 == expectedEntry.sha256 else {
                 throw VaultManifestError.mismatch
             }
+        }
+        if let stampsBeforeHashing {
+            let stampsAfterHashing = try Self.stabilityStamps(of: verificationInventory(at: root))
+            guard stampsAfterHashing == stampsBeforeHashing else { throw VaultManifestError.mismatch }
         }
     }
 
@@ -450,6 +464,42 @@ public struct VaultManifestBuilder: @unchecked Sendable {
     private struct VerificationInventoryEntry {
         let entry: VaultManifest.Entry
         let url: URL
+    }
+
+    /// What changes when a file is rewritten, replaced or swapped. Directory
+    /// modification times are left out: Finder writing an ignored `.DS_Store`
+    /// touches them without changing any archived content.
+    private struct StabilityStamp: Equatable {
+        let relativePath: String
+        let type: VaultManifest.EntryType
+        let device: UInt64
+        let inode: UInt64
+        let byteCount: Int64
+        let modifiedSeconds: Int
+        let modifiedNanoseconds: Int
+    }
+
+    private static func stabilityStamps(of inventory: [VerificationInventoryEntry]) throws -> [StabilityStamp] {
+        try inventory.map { item in
+            var information = stat()
+            let result = item.url.withUnsafeFileSystemRepresentation { path -> Int32 in
+                guard let path else { return -1 }
+                return Darwin.lstat(path, &information)
+            }
+            guard result == 0 else { throw posixReadError(url: item.url) }
+            let format = information.st_mode & mode_t(S_IFMT)
+            let isDirectory = item.entry.type == .directory
+            guard format == mode_t(isDirectory ? S_IFDIR : S_IFREG) else { throw VaultManifestError.mismatch }
+            return StabilityStamp(
+                relativePath: item.entry.relativePath,
+                type: item.entry.type,
+                device: UInt64(information.st_dev),
+                inode: UInt64(information.st_ino),
+                byteCount: isDirectory ? 0 : Int64(information.st_size),
+                modifiedSeconds: isDirectory ? 0 : information.st_mtimespec.tv_sec,
+                modifiedNanoseconds: isDirectory ? 0 : information.st_mtimespec.tv_nsec
+            )
+        }
     }
 
     private func verificationInventory(at root: URL) throws -> [VerificationInventoryEntry] {
@@ -525,7 +575,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
     /// Cubase projects routinely contain multi-gigabyte audio. Hash through one
     /// reusable POSIX buffer so Foundation does not accumulate autoreleased
     /// `NSData` chunks on a long-lived Swift concurrency worker.
-    private static func hashRegularFile(at url: URL) throws -> (byteCount: Int64, sha256: String) {
+    static func hashRegularFile(at url: URL) throws -> (byteCount: Int64, sha256: String) {
         let descriptor = try Self.openForReading(url)
         defer { Darwin.close(descriptor) }
 
@@ -552,19 +602,47 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         return (byteCount, digest)
     }
 
+    /// The inventory already refused symlinks, but a file can be swapped for
+    /// one before it is opened. Never follow it, and hash only a regular file.
+    /// `O_NONBLOCK` keeps a swapped-in FIFO from blocking the open; it is
+    /// cleared again once the descriptor is known to be a regular file.
     private static func openForReading(_ url: URL) throws -> Int32 {
-        let descriptor = url.withUnsafeFileSystemRepresentation { path in
-            guard let path else { return Int32(-1) }
-            return Darwin.open(path, O_RDONLY | O_CLOEXEC)
+        let (descriptor, openErrno) = url.withUnsafeFileSystemRepresentation { path -> (Int32, Int32) in
+            guard let path else { return (-1, EINVAL) }
+            let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+            return (descriptor, descriptor >= 0 ? 0 : errno)
         }
-        guard descriptor >= 0 else { throw Self.posixReadError(url: url) }
+        guard descriptor >= 0 else {
+            if openErrno == ELOOP { throw VaultManifestError.unsupportedSymbolicLink(url.path) }
+            throw Self.posixError(openErrno, url: url)
+        }
+        var information = stat()
+        guard Darwin.fstat(descriptor, &information) == 0 else {
+            let error = Self.posixReadError(url: url)
+            Darwin.close(descriptor)
+            throw error
+        }
+        guard (information.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else {
+            Darwin.close(descriptor)
+            throw VaultManifestError.unsupportedFileType(url.path)
+        }
+        let flags = Darwin.fcntl(descriptor, F_GETFL)
+        guard flags >= 0, Darwin.fcntl(descriptor, F_SETFL, flags & ~O_NONBLOCK) == 0 else {
+            let error = Self.posixReadError(url: url)
+            Darwin.close(descriptor)
+            throw error
+        }
         return descriptor
     }
 
     private static func posixReadError(url: URL) -> NSError {
+        posixError(errno, url: url)
+    }
+
+    private static func posixError(_ code: Int32, url: URL) -> NSError {
         NSError(
             domain: NSPOSIXErrorDomain,
-            code: Int(errno),
+            code: Int(code),
             userInfo: [NSFilePathErrorKey: url.path]
         )
     }
