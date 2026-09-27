@@ -52,6 +52,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
     private var cancelled = false
     private var onEnded: (@Sendable () -> Void)?
     private let permissionProbe: @Sendable () async -> SystemAudioCapturePermissionVerdict
+    private let writerFactory: RecorderPCMWriterFactory
     /// A backend's start failed with an explicit authorization error (ScreenCaptureKit).
     private var backendReportedPermissionDenial = false
 
@@ -65,12 +66,14 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         },
         permissionProbe: @escaping @Sendable () async -> SystemAudioCapturePermissionVerdict = {
             await SystemAudioCapturePermissionProbe().run()
-        }
+        },
+        writerFactory: @escaping RecorderPCMWriterFactory = wavRecorderWriterFactory
     ) {
         self.configuration = configuration
         self.coreAudioFactory = coreAudioFactory
         self.screenCaptureKitFactory = screenCaptureKitFactory
         self.permissionProbe = permissionProbe
+        self.writerFactory = writerFactory
     }
 
     func start(
@@ -86,7 +89,11 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
             outputURL: outputURL,
             preset: preset,
             diagnostics: newDiagnostics,
-            onLevel: onLevel
+            makeWriter: writerFactory,
+            onLevel: onLevel,
+            onWriteError: { [weak self] _ in
+                Task { await self?.writeFailed() }
+            }
         )
         diagnostics = newDiagnostics
         pipeline = newPipeline
@@ -98,20 +105,31 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         if await startCoreAudioAttempt(pipeline: newPipeline, diagnostics: newDiagnostics) { return }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
+        try failStartIfWriteFailed(newPipeline)
 
         newDiagnostics.recordCoreAudioRebuild()
         if await startCoreAudioAttempt(pipeline: newPipeline, diagnostics: newDiagnostics) { return }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
+        try failStartIfWriteFailed(newPipeline)
 
         newDiagnostics.recordScreenCaptureKitFallback()
         if await startFallback(pipeline: newPipeline, diagnostics: newDiagnostics) { return }
         if cancelled { throw CancellationError() }
+        try failStartIfWriteFailed(newPipeline)
 
         state = .failed
         newPipeline.abort()
         if await captureIsBlockedByPermission() { throw RecorderError.permissionDenied }
         throw terminalNoAudioError(diagnostics: newDiagnostics.snapshot())
+    }
+
+    /// A failed write is a disk problem, not a capture problem: another backend would
+    /// only time out against the closed pipeline, so start ends with the write error.
+    private func failStartIfWriteFailed(_ pipeline: RecorderPCMWriterPipeline) throws {
+        guard let failure = pipeline.writeFailure else { return }
+        state = .failed
+        throw failure
     }
 
     func cancelStart() async {
@@ -140,7 +158,8 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         // no nonzero sample is ever examined, and the probe never deletes anything: a
         // blocked verdict keeps the silent file and only adds the permission card, so even
         // a wrong verdict loses nothing.
-        let captureBlocked = pipeline.containsOnlyDigitalSilence
+        // A failed write already decided the outcome; don't hold the UI in .stopping for the probe.
+        let captureBlocked = pipeline.writeFailure == nil && pipeline.containsOnlyDigitalSilence
             ? await captureIsBlockedByPermission()
             : false
         do {
@@ -200,6 +219,8 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         pipeline: RecorderPCMWriterPipeline,
         diagnostics: RecorderSessionDiagnostics
     ) async -> Bool {
+        // A write that failed during a rebuild's teardown is caught here, not after a timeout.
+        guard pipeline.writeFailure == nil else { return false }
         generation += 1
         let backendGeneration = generation
         let gate = RecorderReadinessGate()
@@ -224,8 +245,14 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
             return false
         }
         let ready = await gate.wait(timeout: configuration.startupTimeout)
-        if ready { return true }
+        // A write can fail after the first buffer opened the gate but before this resumes;
+        // its writeFailed hop then saw a starting state, so check the pipeline itself.
+        if ready, pipeline.writeFailure == nil { return true }
         if cancelled { return false } // cancelStart already performed the physical stop.
+        if pipeline.writeFailure != nil {
+            await backend.stop()
+            return false
+        }
         if !cancelled {
             diagnostics.recordStartupTimeout()
             failureReasons.append("\(backend.identity.rawValue) readiness timeout")
@@ -299,6 +326,24 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         }
     }
 
+    /// ENG-11: the pipeline already closed the take on its first failed write. End the
+    /// level stream now so the user sees the error instead of recording into nothing;
+    /// the follow-up `stop()` tears the backend down and throws the cached write error.
+    /// During a (re)start the gate is released and the start path reports the failure.
+    private func writeFailed() {
+        switch state {
+        case .runningCoreAudio, .runningScreenCaptureKit:
+            state = .failed
+            routeRecoveryTask?.cancel()
+            routeRecoveryTask = nil
+            onEnded?()
+        case .startingCoreAudio, .startingScreenCaptureKit, .rebuildingCoreAudio:
+            readinessGate?.resolve(false)
+        case .idle, .stopping, .completed, .failed:
+            break
+        }
+    }
+
     private func recoverCoreAudio() async {
         routeRecoveryTask = nil
         guard state == .runningCoreAudio,
@@ -315,6 +360,11 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
 
         if await startCoreAudioAttempt(pipeline: pipeline, diagnostics: diagnostics) { return }
         guard !cancelled else { return }
+        if pipeline.writeFailure != nil {
+            state = .failed
+            onEnded?()
+            return
+        }
         diagnostics.recordScreenCaptureKitFallback()
         if await startFallback(pipeline: pipeline, diagnostics: diagnostics) { return }
 

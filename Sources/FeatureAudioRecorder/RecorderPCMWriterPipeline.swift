@@ -13,6 +13,22 @@ struct RecorderBackendMetadata: Sendable {
     let sourceChannelCount: Int
 }
 
+/// The file side of the pipeline. `WAVRecorderWriter` is the only production writer;
+/// tests substitute one that fails on demand.
+protocol RecorderPCMWriting: AnyObject, Sendable {
+    var processingFormat: AVAudioFormat { get }
+    var writtenFrameCount: Int64 { get }
+    var currentTime: TimeInterval { get }
+    func writeBuffer(_ buffer: AVAudioPCMBuffer) throws
+    func finalize(diagnostics: RecorderDiagnostics?) throws -> RecorderResult
+}
+
+extension WAVRecorderWriter: RecorderPCMWriting {}
+
+typealias RecorderPCMWriterFactory = @Sendable (URL, AudioPreset) throws -> any RecorderPCMWriting
+
+let wavRecorderWriterFactory: RecorderPCMWriterFactory = { try WAVRecorderWriter(outputURL: $0, preset: $1) }
+
 /// One serialized conversion-and-writing boundary for the complete logical take.
 /// Backend replacement changes only the accepted generation; it never replaces the writer.
 final class RecorderPCMWriterPipeline: @unchecked Sendable {
@@ -23,26 +39,31 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    private let writer: WAVRecorderWriter
+    private let writer: any RecorderPCMWriting
     private let outputURL: URL
     private let diagnostics: RecorderSessionDiagnostics
     private let onLevel: @Sendable (RecorderAudioLevel) -> Void
+    private let onWriteError: @Sendable (RecorderError) -> Void
     private var converter: AVAudioConverter?
     private var converterSourceFormat: AVAudioFormat?
     private var acceptedGeneration = 0
     private var finalizationState: FinalizationState = .active
     private var capturedNonZeroSample = false
+    private var failedWrite: RecorderError?
 
     init(
         outputURL: URL,
         preset: AudioPreset,
         diagnostics: RecorderSessionDiagnostics,
-        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void
+        makeWriter: RecorderPCMWriterFactory = wavRecorderWriterFactory,
+        onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
+        onWriteError: @escaping @Sendable (RecorderError) -> Void = { _ in }
     ) throws {
         self.outputURL = outputURL
-        self.writer = try WAVRecorderWriter(outputURL: outputURL, preset: preset)
+        self.writer = try makeWriter(outputURL, preset)
         self.diagnostics = diagnostics
         self.onLevel = onLevel
+        self.onWriteError = onWriteError
         diagnostics.setOutputSampleRate(writer.processingFormat.sampleRate)
     }
 
@@ -120,8 +141,18 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         do {
             try writer.writeBuffer(converted)
         } catch {
+            // ENG-11: the first failed write ends the take. Later buffers are rejected by
+            // the state guard above, so the error is reported exactly once, right now.
             diagnostics.recordWriteError()
+            let failure = RecorderError.writeError(
+                "Writing to disk failed, so the recording stopped. \(error.localizedDescription) "
+                    + "Diagnostics: \(diagnostics.snapshot().summary)."
+            )
+            finalizationState = .failed(failure)
+            failedWrite = failure
             lock.unlock()
+            try? FileManager.default.removeItem(at: outputURL)
+            onWriteError(failure)
             return false
         }
         diagnostics.setWrittenFrameCount(writer.writtenFrameCount)
@@ -185,6 +216,11 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
             return
         }
         abort(error: error)
+    }
+
+    /// The write error that ended the take, if a write failed.
+    var writeFailure: RecorderError? {
+        lock.withLock { failedWrite }
     }
 
     /// True until a written buffer carried at least one nonzero sample. A take that is
