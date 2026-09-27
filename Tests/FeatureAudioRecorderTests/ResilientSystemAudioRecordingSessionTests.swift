@@ -401,6 +401,61 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    func testWriteErrorRightAfterTheFirstBufferStillFailsStart() async throws {
+        // Buffer 1 opens the readiness gate, buffer 2 fails before start resumes.
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .twoBuffers(sampleRate: 44_100))
+        let session = makeSession(core: [core], fallback: [], writerFactory: writers.make)
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        do {
+            try await start(session, url: url)
+            XCTFail("Expected the write error")
+        } catch RecorderError.writeError {
+            // expected: never report a running take whose pipeline is closed
+        }
+        XCTAssertEqual(core.stopCount, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testWriteErrorDuringRouteRecoveryEndsTheTakeWithoutFallback() async throws {
+        let ended = expectation(description: "capture ended on the write error")
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let first = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let rebuilt = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let fallback = FakeRecorderBackend(identity: .screenCaptureKit, behavior: .healthy(sampleRate: 48_000))
+        let session = makeSession(
+            core: [first, rebuilt],
+            fallback: [fallback],
+            timeout: .seconds(5),
+            debounce: .milliseconds(1),
+            writerFactory: writers.make
+        )
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try await session.start(
+            outputURL: url,
+            preset: .cubaseDefault,
+            maxDuration: nil,
+            onLevel: { _ in },
+            onEnded: { ended.fulfill() }
+        )
+        first.emitRouteChange()
+        await fulfillment(of: [ended], timeout: 5)
+
+        do {
+            _ = try await session.stop()
+            XCTFail("Expected the write error")
+        } catch RecorderError.writeError {
+            // expected
+        }
+        XCTAssertEqual(rebuilt.startCount, 1)
+        XCTAssertEqual(fallback.startCount, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     @MainActor
     func testWriteErrorEventStopsTakeWithoutUserStop() async throws {
         let writers = FailingPCMWriterFactory(failOnWrite: 2)
@@ -731,7 +786,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             coreAudioFactory: { coreQueue.next(identity: .coreAudio) },
             screenCaptureKitFactory: { fallbackQueue.next(identity: .screenCaptureKit) },
             permissionProbe: { probe.run() },
-            writerFactory: writerFactory ?? { try WAVRecorderWriter(outputURL: $0, preset: $1) }
+            writerFactory: writerFactory ?? wavRecorderWriterFactory
         )
     }
 
@@ -769,6 +824,7 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
     enum Behavior {
         case healthy(sampleRate: Double, frames: AVAudioFrameCount = 256)
         case audible(sampleRate: Double, frames: AVAudioFrameCount = 256)
+        case twoBuffers(sampleRate: Double)
         case structuralNoData
         case waitForExternalPCM
         case startFailure
@@ -813,6 +869,10 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
             onPCM()
         case .audible(let rate, let frames):
             emitPCM(sampleRate: rate, frames: frames, amplitude: 0.25)
+            onPCM()
+        case .twoBuffers(let rate):
+            emitPCM(sampleRate: rate)
+            emitPCM(sampleRate: rate)
             onPCM()
         case .structuralNoData:
             callbacks.onStructuralNoData(generation)

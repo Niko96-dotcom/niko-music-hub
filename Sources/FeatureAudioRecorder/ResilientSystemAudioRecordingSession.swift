@@ -67,9 +67,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         permissionProbe: @escaping @Sendable () async -> SystemAudioCapturePermissionVerdict = {
             await SystemAudioCapturePermissionProbe().run()
         },
-        writerFactory: @escaping RecorderPCMWriterFactory = {
-            try WAVRecorderWriter(outputURL: $0, preset: $1)
-        }
+        writerFactory: @escaping RecorderPCMWriterFactory = wavRecorderWriterFactory
     ) {
         self.configuration = configuration
         self.coreAudioFactory = coreAudioFactory
@@ -244,7 +242,9 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
             return false
         }
         let ready = await gate.wait(timeout: configuration.startupTimeout)
-        if ready { return true }
+        // A write can fail after the first buffer opened the gate but before this resumes;
+        // its writeFailed hop then saw a starting state, so check the pipeline itself.
+        if ready, pipeline.writeFailure == nil { return true }
         if cancelled { return false } // cancelStart already performed the physical stop.
         if pipeline.writeFailure != nil {
             await backend.stop()

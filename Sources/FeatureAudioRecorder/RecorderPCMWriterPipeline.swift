@@ -27,6 +27,8 @@ extension WAVRecorderWriter: RecorderPCMWriting {}
 
 typealias RecorderPCMWriterFactory = @Sendable (URL, AudioPreset) throws -> any RecorderPCMWriting
 
+let wavRecorderWriterFactory: RecorderPCMWriterFactory = { try WAVRecorderWriter(outputURL: $0, preset: $1) }
+
 /// One serialized conversion-and-writing boundary for the complete logical take.
 /// Backend replacement changes only the accepted generation; it never replaces the writer.
 final class RecorderPCMWriterPipeline: @unchecked Sendable {
@@ -53,7 +55,7 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         outputURL: URL,
         preset: AudioPreset,
         diagnostics: RecorderSessionDiagnostics,
-        makeWriter: RecorderPCMWriterFactory = { try WAVRecorderWriter(outputURL: $0, preset: $1) },
+        makeWriter: RecorderPCMWriterFactory = wavRecorderWriterFactory,
         onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
         onWriteError: @escaping @Sendable (RecorderError) -> Void = { _ in }
     ) throws {
