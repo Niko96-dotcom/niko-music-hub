@@ -328,6 +328,56 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(item.fileURL.standardizedFileURL, recordedURL.standardizedFileURL)
     }
 
+    /// T15 (ADR-019): a take is work quit must not cut off, but it is not a
+    /// job, so it registers unlisted; quit's cancel stops and saves it.
+    func testActiveTakeRegistersUnlistedBlockingWorkAndCancelFinalizesWAV() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-quit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let port = WritingCapturePort(writesAudioFrames: true)
+        let inbox = InMemoryOutputInboxStore()
+        let center = ShellJobStatusCenter(jobRunner: JobRunner())
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox,
+            jobStatusCenter: center
+        )
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+
+        let work = center.quitBlockingWork
+        XCTAssertEqual(work.count, 1)
+        let take = try XCTUnwrap(work.first)
+        XCTAssertEqual(take.id, ShellJobExtraSourceID.audioRecorder)
+        XCTAssertTrue(take.blocksQuit)
+        XCTAssertFalse(take.listed)
+        XCTAssertTrue(center.jobs.isEmpty, "A take is not shown in the jobs strip")
+        guard case .ask = HubTerminationCoordinator(jobStatusCenter: center).decision() else {
+            return XCTFail("Quit must ask while a take is recording")
+        }
+
+        center.cancelAllForQuit()
+        try await waitUntil { vm.showSaveConfirmation }
+
+        XCTAssertFalse(port.recording)
+        XCTAssertEqual(vm.recordingState, .idle)
+        let recordedURL = try XCTUnwrap(vm.lastRecordedURL)
+        XCTAssertEqual(recordedURL.pathExtension.lowercased(), "wav")
+        XCTAssertGreaterThan(try AVAudioFile(forReading: recordedURL).length, 0)
+        let item = try XCTUnwrap(try inbox.listItems().first)
+        XCTAssertEqual(item.sourceToolID.rawValue, "audio-recorder")
+        XCTAssertEqual(item.status, .available)
+        XCTAssertEqual(item.fileURL.standardizedFileURL, recordedURL.standardizedFileURL)
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+        XCTAssertFalse(center.hasUnfinishedQuitBlockingWork)
+    }
+
     func testDuplicateStartsOnlyStartCaptureOnce() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-duplicate-start-\(UUID().uuidString)", isDirectory: true)

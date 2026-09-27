@@ -1,7 +1,8 @@
 import Combine
 import Foundation
 
-/// Merges `JobRunner` snapshots with converter / archive extra sources for the shell jobs row.
+/// Merges `JobRunner` snapshots with converter / archive extra sources for the shell jobs row,
+/// and is the one registry of work quit must not cut off silently (ADR-019).
 public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
     @Published public private(set) var jobs: [ShellJobStatus] = []
 
@@ -117,16 +118,23 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
         republish()
     }
 
+    /// Publishes the listed rows only; an unlisted registration (a recorder
+    /// take) leaves `jobs` unchanged and so re-evaluates no view.
     private func republish() {
         let merged = lock.withLock {
-            runnerJobs + extraJobs.keys.sorted().compactMap { extraJobs[$0] }
+            runnerJobs + extraJobs.keys.sorted().compactMap { extraJobs[$0] }.filter(\.listed)
         }
         if Thread.isMainThread {
-            self.jobs = merged
+            publish(merged)
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.jobs = merged
+                self?.publish(merged)
             }
         }
+    }
+
+    private func publish(_ merged: [ShellJobStatus]) {
+        guard merged != jobs else { return }
+        jobs = merged
     }
 }

@@ -46,7 +46,8 @@ public struct AudioRecorderFeature: ToolFeature {
                 return settings.outputFolder.url
             },
             outputInboxStore: context.outputInboxStore,
-            initialMaxDurationMinutes: RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes)
+            initialMaxDurationMinutes: RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes),
+            jobStatusCenter: context.jobStatusCenter
         )
         session.viewModel = viewModel
         return viewModel

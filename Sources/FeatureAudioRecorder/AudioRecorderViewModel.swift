@@ -55,12 +55,11 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     @Published public private(set) var recordingState: RecordingDisplayState = .idle {
         didSet {
-            let active: Bool
-            switch recordingState {
-            case .starting, .recording, .reconnecting, .stopping: active = true
-            default: active = false
-            }
+            let active = Self.isActive(recordingState)
             AudioCaptureActivity.shared.setActive(active, owner: captureActivityID)
+            if active != Self.isActive(oldValue) {
+                registerTakeForQuit(active)
+            }
         }
     }
     private let captureActivityID = UUID()
@@ -100,6 +99,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let now: @Sendable () -> Date
     private let outputURLProvider: @MainActor () -> URL
     private let outputInboxStore: any OutputInboxStore
+    private let jobStatusCenter: ShellJobStatusCenter?
     private var isStartInFlight = false
 
     public convenience init(
@@ -108,6 +108,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         outputURL: URL,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
+        jobStatusCenter: ShellJobStatusCenter? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.init(
@@ -116,6 +117,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             outputURLProvider: { outputURL },
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDurationMinutes,
+            jobStatusCenter: jobStatusCenter,
             now: now
         )
     }
@@ -126,6 +128,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         outputURLProvider: @escaping @MainActor () -> URL,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
+        jobStatusCenter: ShellJobStatusCenter? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.capturePort = capturePort
@@ -133,12 +136,14 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.now = now
         self.outputURLProvider = outputURLProvider
         self.outputInboxStore = outputInboxStore
+        self.jobStatusCenter = jobStatusCenter
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
         refreshProposedFilename()
     }
 
     deinit {
         inboxObservationTask?.cancel()
+        jobStatusCenter?.setExtraJob(sourceID: ShellJobExtraSourceID.audioRecorder, status: nil)
         let owner = captureActivityID
         Task { @MainActor in AudioCaptureActivity.shared.setActive(false, owner: owner) }
     }
@@ -274,6 +279,37 @@ public final class AudioRecorderViewModel: ObservableObject {
             return
         }
         recordingState = .permissionNeeded
+    }
+
+    private static func isActive(_ state: RecordingDisplayState) -> Bool {
+        switch state {
+        case .starting, .recording, .reconnecting, .stopping: true
+        default: false
+        }
+    }
+
+    /// ADR-019: a take is work quit must not cut off, but not a job, so it
+    /// registers unlisted from start until its file is finalized. Quit's
+    /// cancel stops the take, which saves it; quit waits for that.
+    private func registerTakeForQuit(_ active: Bool) {
+        guard let jobStatusCenter else { return }
+        guard active else {
+            jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.audioRecorder, status: nil)
+            return
+        }
+        jobStatusCenter.setExtraJob(
+            sourceID: ShellJobExtraSourceID.audioRecorder,
+            status: ShellJobStatus(
+                id: ShellJobExtraSourceID.audioRecorder,
+                title: ShellJobStatusCopy.recordingTake,
+                listed: false
+            ),
+            cancel: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.stopRecording()
+                }
+            }
+        )
     }
 
     private func presentFailure(_ recorderError: RecorderError) {

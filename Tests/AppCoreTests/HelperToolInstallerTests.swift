@@ -245,6 +245,62 @@ final class HelperToolInstallerTests: XCTestCase {
         assertNoStagingLeft(managedRoot: managedRoot)
     }
 
+    /// T16 (ADR-019): an install is quit-blocking work while it runs, whether
+    /// it finishes or quit cancels it; the cancel still removes staging.
+    @MainActor
+    func testRunningInstallRegistersBlockingWorkUntilFinishedOrCancelled() async throws {
+        do {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+            let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
+            let downloader = FakeDownloader()
+            seedDownloadAndConvert(downloader: downloader)
+            downloader.hang(url: HelperToolDownloadSources.ytDlpBinary)
+            let center = ShellJobStatusCenter(jobRunner: JobRunner())
+            let model = HelperToolSetupModel(
+                locator: locator,
+                installer: HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner()),
+                settingsProvider: { HelperToolSettings() },
+                jobStatusCenter: center
+            )
+
+            model.install(.downloadAndConvert)
+            let work = center.quitBlockingWork
+            XCTAssertEqual(work.map(\.id), [ShellJobExtraSourceID.helperInstall])
+            XCTAssertEqual(work.first?.listed, false)
+            XCTAssertTrue(center.jobs.isEmpty, "Installs show their progress in Set Up, not in the jobs strip")
+            try await Task.sleep(for: .milliseconds(100))
+            XCTAssertTrue(center.hasUnfinishedQuitBlockingWork)
+
+            center.cancelAllForQuit()
+            try await waitUntilQuitWorkDrains(center)
+            XCTAssertFalse(model.isInstalling)
+            assertNoStagingLeft(managedRoot: managedRoot)
+        }
+        do {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+            let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
+            let downloader = FakeDownloader()
+            seedDownloadAndConvert(downloader: downloader)
+            let center = ShellJobStatusCenter(jobRunner: JobRunner())
+            let model = HelperToolSetupModel(
+                locator: locator,
+                installer: HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner()),
+                settingsProvider: { HelperToolSettings() },
+                jobStatusCenter: center
+            )
+
+            model.install(.downloadAndConvert)
+            XCTAssertTrue(center.hasUnfinishedQuitBlockingWork)
+            try await waitUntilQuitWorkDrains(center)
+            XCTAssertEqual(model.states[.downloadAndConvert], .installed)
+            XCTAssertTrue(center.quitBlockingWork.isEmpty)
+        }
+    }
+
     func testFfprobeDownloadFailureLeavesManagedBinUntouched() async throws {
         // Pre-existing ffmpeg must stay byte-identical.
         do {
@@ -666,6 +722,15 @@ final class HelperToolInstallerTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private func waitUntilQuitWorkDrains(_ center: ShellJobStatusCenter) async throws {
+        for _ in 0..<200 {
+            if !center.hasUnfinishedQuitBlockingWork { return }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTFail("Timed out waiting for the install to leave the quit registry")
+    }
 
     private func makeTempRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory

@@ -25,7 +25,11 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     private let locator: HelperToolLocator
     private let installer: HelperToolInstaller
     private let settingsProvider: @MainActor () -> HelperToolSettings
+    private let jobStatusCenter: ShellJobStatusCenter?
     private var installTask: Task<Void, Never>?
+    /// Runs whose Task has not returned yet. A cancelled run still unwinds
+    /// (staging removal, helper teardown), so quit waits for it (ADR-019).
+    private var liveRunIDs: Set<UInt64> = []
     /// Identifies the run that owns `installTask`. A run cancelled by
     /// `cancelInstalls()` still finishes its Task later; without the check its
     /// completion would nil out the task of an install started after the cancel
@@ -35,11 +39,13 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     public init(
         locator: HelperToolLocator = .standard(),
         installer: HelperToolInstaller? = nil,
-        settingsProvider: @escaping @MainActor () -> HelperToolSettings
+        settingsProvider: @escaping @MainActor () -> HelperToolSettings,
+        jobStatusCenter: ShellJobStatusCenter? = nil
     ) {
         self.locator = locator
         self.installer = installer ?? HelperToolInstaller(locator: locator)
         self.settingsProvider = settingsProvider
+        self.jobStatusCenter = jobStatusCenter
     }
 
     /// Synchronous file checks only. Bundles currently installing keep their progress.
@@ -58,6 +64,7 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
         guard installTask == nil else { return }
         states[bundle] = .installing(HelperInstallProgress(phase: "Starting", fractionCompleted: nil))
         let runID = beginInstallRun()
+        registerRunForQuit(runID)
         installTask = Task { [weak self] in
             await self?.performInstall(bundle, runID: runID)
             self?.finishInstallRun(runID)
@@ -69,6 +76,7 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     public func installMissing() {
         guard installTask == nil else { return }
         let runID = beginInstallRun()
+        registerRunForQuit(runID)
         installTask = Task { [weak self] in
             await self?.performInstallMissing(runID: runID)
             self?.finishInstallRun(runID)
@@ -89,8 +97,31 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     }
 
     private func finishInstallRun(_ runID: UInt64) {
+        liveRunIDs.remove(runID)
+        if liveRunIDs.isEmpty {
+            jobStatusCenter?.setExtraJob(sourceID: ShellJobExtraSourceID.helperInstall, status: nil)
+        }
         guard installRunID == runID else { return }
         installTask = nil
+    }
+
+    /// An install counts at quit until its Task returns; its progress is shown
+    /// in Set Up, so it registers unlisted. Quit's cancel is `cancelInstalls()`.
+    private func registerRunForQuit(_ runID: UInt64) {
+        liveRunIDs.insert(runID)
+        jobStatusCenter?.setExtraJob(
+            sourceID: ShellJobExtraSourceID.helperInstall,
+            status: ShellJobStatus(
+                id: ShellJobExtraSourceID.helperInstall,
+                title: ShellJobStatusCopy.installingHelperTools,
+                listed: false
+            ),
+            cancel: { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.cancelInstalls()
+                }
+            }
+        )
     }
 
     public var isInstalling: Bool {
