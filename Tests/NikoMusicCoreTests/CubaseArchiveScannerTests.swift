@@ -263,6 +263,35 @@ final class CubaseArchiveScannerTests: XCTestCase {
         XCTAssertEqual(matches.first?.entry.label, "Unreadable Song")
     }
 
+    /// Mode 0400 lets the song folder open (`O_RDONLY`) but not list, so the walk sees no
+    /// entries. It must be skipped like a mode-000 folder, not shown as a song without projects.
+    func testSongFolderThatOpensButCannotBeListedIsSkippedNotEmpty() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let goodSong = root.appendingPathComponent("Good Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: goodSong, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: goodSong.appendingPathComponent("Good Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        let unlistable = root.appendingPathComponent("Unlistable Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: unlistable, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: unlistable.appendingPathComponent("x.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: unlistable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unlistable.path) }
+
+        let result = try CubaseArchiveScanner().scan(roots: [root])
+
+        XCTAssertEqual(result.songs.map(\.displayTitle), ["Good Song"])
+        XCTAssertFalse(result.songs.contains { $0.scanWarnings.contains("No project files (.cpr or .als) found") })
+        let skipped = try XCTUnwrap(result.skippedEntries.first { $0.label == "Unlistable Song" })
+        XCTAssertEqual(skipped.kind, .unreadableChild)
+        XCTAssertTrue(skipped.reason.contains("Could not scan folder"), skipped.reason)
+    }
+
     private func makeTemporaryRoot() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("NikoMusicHubScanner-\(UUID().uuidString)", isDirectory: true)
