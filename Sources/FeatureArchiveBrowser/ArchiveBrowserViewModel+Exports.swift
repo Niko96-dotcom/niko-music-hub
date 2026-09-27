@@ -45,11 +45,12 @@ extension ArchiveBrowserViewModel {
     /// Keeps the read-only archive guard; reveals the file on success.
     func exportIndexJSON(to destination: URL) throws {
         let policy = ReadOnlyArchivePolicy()
+        let protectedRoots = writeProtectedRoots()
         do {
-            try policy.enforceNoWrite(at: destination, archiveRoots: roots)
+            try policy.enforceNoWrite(at: destination, archiveRoots: protectedRoots)
             try policy.enforceNoWrite(
                 at: destination.deletingLastPathComponent(),
-                archiveRoots: roots
+                archiveRoots: protectedRoots
             )
         } catch ReadOnlyArchivePolicyError.writeDenied {
             throw ArchiveDiagnosticsExportError.destinationInsideArchiveRoot
@@ -109,7 +110,7 @@ extension ArchiveBrowserViewModel {
         try ArchiveDiagnosticsExporter.exportText(
             diagnostics: scanDiagnostics,
             to: destination,
-            archiveRoots: roots,
+            archiveRoots: writeProtectedRoots(),
             searchContext: activeSearchExportContext(),
             skippedSearchContext: activeSkippedSearchExportContext(),
             selectedSongContext: selectedSongExportContext()

@@ -230,7 +230,7 @@ extension ArchiveBrowserViewModel {
     // MARK: - Retained user-created folder operation
 
     func createNewSong(request: NewSongRequest) throws -> Song {
-        var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)
+        var created = try NewSongFolderCreator.create(request: request, protectedRoots: writeProtectedRoots())
         // D3: this merge adds one song and never replaces the catalog, so a
         // failed read must not pause every song's edits — only the new one's.
         let newSongMerge = catalog.mergeUserMetadataForNewSong(created, collaborators: collaborators)

@@ -4,6 +4,24 @@ import NikoMusicCore
 import XCTest
 
 final class VaultSettingsTests: XCTestCase {
+    /// ENG-10 pin: the converter, downloader, stems and recorder hand `archiveRoots` to
+    /// `OutputWriteGuard`, so it must keep the Vault archive root while Vault is on.
+    func testToolOutputGuardRootsIncludeVaultArchiveRootWhenVaultEnabled() {
+        let archive = StoredMusicRoot(role: .archive, url: URL(fileURLWithPath: "/tmp/nmh-t23/VaultArchive"))
+        let active = StoredMusicRoot(role: .active, url: URL(fileURLWithPath: "/tmp/nmh-t23/Active"))
+        let scanOnly = StoredMusicRoot(role: .scanOnly, url: URL(fileURLWithPath: "/tmp/nmh-t23/Scan"))
+        var settings = AppSettings()
+        settings.musicRoots = [archive, active, scanOnly]
+        settings.vault.archiveRootID = archive.id
+        settings.vault.activeRootID = active.id
+
+        settings.vault.isEnabled = true
+        XCTAssertTrue(settings.archiveRoots.map(\.url.path).contains(archive.fallbackURL.path))
+
+        settings.vault.isEnabled = false
+        XCTAssertEqual(settings.archiveRoots.map(\.url.path), [scanOnly.fallbackURL.path])
+    }
+
     func testVaultDefaultsAreOptInAndMatchPolicy() {
         let vault = AppSettings.default.vault
         XCTAssertFalse(vault.isEnabled)
