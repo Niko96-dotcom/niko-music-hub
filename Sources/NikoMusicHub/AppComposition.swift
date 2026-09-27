@@ -195,9 +195,12 @@ struct AppComposition {
             settingsStore: settingsStore,
             navigationHistory: navigationHistory
         )
-        let helperSetup = HelperToolSetupModel(settingsProvider: {
-            (try? settingsStore.loadSettings())?.helperTools ?? HelperToolSettings()
-        })
+        let helperSetup = HelperToolSetupModel(
+            settingsProvider: {
+                (try? settingsStore.loadSettings())?.helperTools ?? HelperToolSettings()
+            },
+            jobStatusCenter: jobStatusCenter
+        )
         helperSetup.refresh()
         // First-launch rule, decided here before any scene exists (no side
         // effects in views' init): brand-new installs see the helper-tool Set

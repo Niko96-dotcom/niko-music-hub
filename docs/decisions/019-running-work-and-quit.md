@@ -1,6 +1,6 @@
 # Decision: One registry of running work, and a quit contract that reads it
 
-**Status:** Accepted — process-group backstop and quit prompt implemented; recorder takes and helper installs not yet registered  
+**Status:** Accepted — implemented (registry incl. recorder takes and helper installs, quit prompt, process-group backstop)  
 **Date:** 2026-09-27  
 **Deciders:** Niko Music Hub owner + implementation  
 **Scope:** App termination, helper processes, `ShellJobStatusCenter`
@@ -24,15 +24,25 @@ finish.
 
 ## Decision
 
-1. `ShellJobStatusCenter` is the one registry of work that must not be cut off
-   silently. Recorder takes (cancel = finalize the file) and helper installs
-   register there too. A `listed` flag on `ShellJobStatus` separates "shown in the
-   jobs strip" from "counts at quit".
+1. **Registry (implemented).** `ShellJobStatusCenter` is the one registry of work
+   that must not be cut off silently. A `listed` flag on `ShellJobStatus`
+   separates "shown in the jobs strip" (and reachable by ⌘./Esc) from "counts at
+   quit": the center publishes only listed rows in `jobs`, while
+   `quitBlockingWork` and `hasUnfinishedQuitBlockingWork` read every row.
+   - A recorder take registers unlisted (`ShellJobExtraSourceID.audioRecorder`)
+     from `.starting` until its state leaves `.stopping`, i.e. until the file is
+     finalized and handed to the Output Inbox, or the take failed. Its cancel is
+     the normal stop, so quit saves the take the same way the Stop button does.
+     The take keeps its own controls and is not shown as a job.
+   - A helper install (`HelperToolSetupModel`) registers unlisted
+     (`ShellJobExtraSourceID.helperInstall`) while any install run's Task is
+     alive, including a run cancelled earlier that is still removing its staging
+     folder. Its cancel is `cancelInstalls()`. Its progress stays in Set Up.
 2. **Quit prompt (implemented).** `HubTerminationCoordinator` (AppCore) reads
    `ShellJobStatusCenter.quitBlockingWork`: every unfinished `JobRunner` job
    (downloads, stems) plus the extra sources whose `ShellJobStatus.blocksQuit`
-   is set (the converter and the Project Vault queue; the read-only archive scan
-   sets it to `false`).
+   is set (the converter, the Project Vault queue, a recorder take and a helper
+   install; the read-only archive scan sets it to `false`).
    - Nothing registered and nothing unwinding → `.terminateNow`. A job cancelled
      earlier from the jobs strip leaves the list at once while its cleanup still
      runs; quit then waits for it without asking (`.waitForCancelledWork`).
@@ -93,12 +103,12 @@ puts the process backstop at the one helper spawn point.
   The runner's own cancel and timeout paths still signal the whole group.
 - A helper spawned after `applicationWillTerminate` has reaped gets SIGKILL as soon
   as it is recorded; the app is exiting at that point.
-- Quit asks whenever a download, stem separation, conversion or Vault operation is
-  running, and waits at most 5 s after confirm. The wait polls every 50 ms on the
-  main actor; nothing blocks the main thread.
-- Still open: recorder takes and helper installs do not register yet (item 1, the
-  `listed` flag). Until they do, a recording or `uv` install at quit is not asked
-  about; the backstop still reaps an install's helper.
+- Quit asks whenever a download, stem separation, conversion, Vault operation,
+  recording or helper install is running, and waits at most 5 s after confirm. The
+  wait polls every 50 ms on the main actor; nothing blocks the main thread.
+- A recorder stop that takes longer than the deadline (ENG-14) is cut off by the
+  exit; the take may then be lost. A cancelled install that has not unwound by the
+  deadline may leave its folder under the managed Tools folder's `.staging`.
 
 ## Tests
 
@@ -113,3 +123,5 @@ puts the process backstop at the one helper spawn point.
 - `ArchiveBrowserViewModelTests.testVaultRefusesNewOperationsAfterQuitStop`
 - `ArchiveBrowserViewModelTests.testPendingVaultOperationsAppearAsBlockingWork`
 - `ArchiveBrowserViewModelTests.testArchiveScanDoesNotBlockQuit`
+- `AudioRecorderViewModelTests.testActiveTakeRegistersUnlistedBlockingWorkAndCancelFinalizesWAV`
+- `HelperToolInstallerTests.testRunningInstallRegistersBlockingWorkUntilFinishedOrCancelled`

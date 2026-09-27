@@ -60,12 +60,16 @@ public final class HubTerminationCoordinator {
         jobStatusCenter: ShellJobStatusCenter,
         deadline: Duration = HubTerminationCoordinator.defaultDeadline,
         pollInterval: Duration = .milliseconds(50),
-        sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+        sleep: (@Sendable (Duration) async -> Void)? = nil
     ) {
         center = jobStatusCenter
         self.deadline = deadline
         self.pollInterval = pollInterval
-        self.sleep = sleep
+        // The default lives here, not in the signature: an async closure as a
+        // default argument is emitted into every calling module, and two such
+        // copies in one test binary crashed the task allocator ("freed pointer
+        // was not the last allocation").
+        self.sleep = sleep ?? { try? await Task.sleep(for: $0) }
     }
 
     /// True once quit is confirmed; a repeated quit request then waits for the

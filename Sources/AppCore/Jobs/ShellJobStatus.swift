@@ -13,6 +13,10 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     /// Quit asks before cutting this off (ADR-019). A background archive scan is
     /// read-only and safe to stop, so it is shown but does not block quit.
     public var blocksQuit: Bool
+    /// Shown in the jobs strip and reachable by ⌘. (ADR-019). A recorder take
+    /// or a helper install counts at quit but has its own controls, so it
+    /// registers unlisted.
+    public var listed: Bool
 
     public init(
         id: String,
@@ -21,7 +25,8 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         cancelActionID: String? = nil,
         activityVerb: String? = nil,
         sourceToolID: ToolFeatureID? = nil,
-        blocksQuit: Bool = true
+        blocksQuit: Bool = true,
+        listed: Bool = true
     ) {
         self.id = id
         self.title = title
@@ -30,6 +35,7 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         self.activityVerb = activityVerb
         self.sourceToolID = sourceToolID
         self.blocksQuit = blocksQuit
+        self.listed = listed
     }
 
     public var displayLine: String {
@@ -72,6 +78,8 @@ public enum ShellJobExtraSourceID: Sendable {
     public static let converter = "wav-converter"
     public static let archiveScan = "archive-scan"
     public static let vaultTransfer = "vault-transfer"
+    public static let audioRecorder = "audio-recorder"
+    public static let helperInstall = "helper-install"
 }
 
 /// Converter reporting hook (NMH-011). Maps conversion-task state to a shell job.
@@ -94,6 +102,8 @@ public enum ShellJobStatusCopy: Sendable {
     public static let scanningArchive = "Scanning archive"
     public static let vaultTransferFallback = "Project Vault transfer"
     public static let converterFallback = "WAV Converter"
+    public static let recordingTake = "Recording system audio"
+    public static let installingHelperTools = "Installing helper tools"
     public static let converterCancelHelp =
         "Stops converting now and skips the rest. Verified WAV files are kept."
 
