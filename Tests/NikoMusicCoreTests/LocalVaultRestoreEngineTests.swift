@@ -1533,6 +1533,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let persisted = try XCTUnwrap(store.restoreRecord(id: restoreID))
         XCTAssertEqual(persisted.stagingURL, staging, "a stopped check is no reason to abandon a complete staging copy")
         XCTAssertNil(persisted.completedAt)
+        XCTAssertNil(persisted.stoppedAt, "a stop during launch recovery leaves the restore to resume next launch")
         let siblings = try FileManager.default.contentsOfDirectory(atPath: staging.deletingLastPathComponent().path)
         XCTAssertEqual(siblings, [staging.lastPathComponent])
         try VaultManifestBuilder().verify(fixture.manifest, at: staging)
@@ -2041,6 +2042,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let persisted = try XCTUnwrap(try store.recoverableRestoreRecords().first)
         XCTAssertNil(persisted.completedAt)
         XCTAssertNil(persisted.failureReason)
+        XCTAssertNotNil(persisted.stoppedAt, "a stop after the download is still a stop")
         XCTAssertEqual(
             persisted.error,
             "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
@@ -2064,6 +2066,150 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         try VaultManifestBuilder().verify(fixture.manifest, at: completed.destinationURL)
         XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
     }
+
+    /// ENG-07 (T21): stopping a cloud download is a stop, not a provider
+    /// failure, and the next launch leaves the stopped restore for an
+    /// explicit retry instead of downloading and opening it on its own.
+    func testRestoreCancelledDuringMaterializeIsStoppedNotFailedAndNotAutoRetried() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let archiveBefore = try fixture.snapshot(at: fixture.generation)
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        var onlineOnly = fixture.archiveRecord
+        onlineOnly.state = .archivedOnlineOnly
+        try store.save(onlineOnly)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let service = CancellingMaterializeService()
+        func engine() -> LocalVaultRestoreEngine {
+            LocalVaultRestoreEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive,
+                activeRootID: fixture.activeRootID, resolver: store,
+                store: store, projectionStore: store,
+                provider: FileProviderArchiveStorage(root: fixture.archive, service: service),
+                catalog: VaultRestoreCatalogSpy(events: events),
+                projectOpener: SafeVaultProjectOpener(workspace: workspace),
+                writeAdmission: allowRestoreWrites)
+        }
+
+        await service.cancelNextMaterialize()
+        do {
+            _ = try await engine().restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("a cancelled download must not finish the restore")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "a stopped download is not a provider failure: \(error)")
+        }
+        let stopped = try XCTUnwrap(try store.recoverableRestoreRecords().first)
+        XCTAssertEqual(stopped.phase, .materializingArchive)
+        XCTAssertNil(stopped.completedAt)
+        XCTAssertNil(stopped.failureReason)
+        XCTAssertNotNil(stopped.stoppedAt)
+        XCTAssertEqual(
+            stopped.error,
+            "Restore stopped. The Vault copy is kept. Copied files remain available for retry or review."
+        )
+        let attemptsAfterStop = await service.materializeAttempts
+        XCTAssertEqual(attemptsAfterStop, 1)
+
+        _ = await engine().recoverAtLaunch()
+
+        let attemptsAfterLaunch = await service.materializeAttempts
+        XCTAssertEqual(attemptsAfterLaunch, 1, "launch recovery must not restart a stopped download")
+        XCTAssertTrue(workspace.opened.isEmpty, "launch recovery must not open a stopped restore")
+        let afterLaunch = try XCTUnwrap(try store.restoreRecord(id: stopped.id))
+        XCTAssertEqual(afterLaunch.error, stopped.error)
+        XCTAssertEqual(afterLaunch.stoppedAt, stopped.stoppedAt)
+        XCTAssertNil(afterLaunch.completedAt)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: afterLaunch.destinationURL.path))
+
+        let completed = try await engine().retryRestore(id: stopped.id)
+        XCTAssertNotNil(completed.completedAt)
+        XCTAssertNil(completed.error)
+        XCTAssertNil(completed.stoppedAt)
+        XCTAssertEqual(workspace.opened.count, 1)
+        try VaultManifestBuilder().verify(fixture.manifest, at: completed.destinationURL)
+        XCTAssertEqual(try fixture.snapshot(at: fixture.generation), archiveBefore)
+    }
+
+    /// A retry that fails for another reason is an ordinary failed restore
+    /// again: the stop marker is gone and launch recovery resumes it.
+    func testRetryOfStoppedRestoreThatFailsClearsStopForLaunchRecovery() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        var onlineOnly = fixture.archiveRecord
+        onlineOnly.state = .archivedOnlineOnly
+        try store.save(onlineOnly)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let service = CancellingMaterializeService()
+        func engine(admission: @escaping LocalVaultTransferEngine.WriteAdmission = allowRestoreWrites) -> LocalVaultRestoreEngine {
+            LocalVaultRestoreEngine(
+                activeRoot: fixture.active, archiveRoot: fixture.archive,
+                activeRootID: fixture.activeRootID, resolver: store,
+                store: store, projectionStore: store,
+                provider: FileProviderArchiveStorage(root: fixture.archive, service: service),
+                catalog: VaultRestoreCatalogSpy(events: events),
+                projectOpener: SafeVaultProjectOpener(workspace: workspace),
+                writeAdmission: admission)
+        }
+        await service.cancelNextMaterialize()
+        do {
+            _ = try await engine().restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("a cancelled download must not finish the restore")
+        } catch is CancellationError {}
+        let stopped = try XCTUnwrap(try store.recoverableRestoreRecords().first)
+        XCTAssertNotNil(stopped.stoppedAt)
+
+        do {
+            _ = try await engine(admission: { _, _ in
+                throw VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity)
+            }).retryRestore(id: stopped.id)
+            XCTFail("expected the admission denial")
+        } catch {
+            XCTAssertEqual(error as? VaultWriteAdmissionError, .postponed(.insufficientArchiveCapacity))
+        }
+        let failed = try XCTUnwrap(try store.restoreRecord(id: stopped.id))
+        XCTAssertNil(failed.stoppedAt)
+        XCTAssertNotNil(failed.error)
+
+        let recovered = await engine().recoverAtLaunch()
+        XCTAssertNotNil(recovered.first { $0.id == stopped.id }?.completedAt)
+        XCTAssertEqual(workspace.opened.count, 1)
+    }
+}
+
+/// A File Provider whose files read as online-only until one materialize
+/// succeeds; `cancelNextMaterialize` makes the next download stop the way the
+/// system service does when its task is cancelled.
+private actor CancellingMaterializeService: FileProviderArchiveServicing {
+    private var cancelsNext = false
+    private var materialized = false
+    private(set) var materializeAttempts = 0
+
+    func cancelNextMaterialize() { cancelsNext = true }
+
+    func inspect(root: URL) throws {}
+
+    func currentLocality(
+        root: URL,
+        expectedItems: [FileProviderExpectedItem]
+    ) throws -> ArchiveStorageLocality {
+        materialized ? .fullyLocalCurrent : .materializationRequired
+    }
+
+    func waitForChanges(root: URL) throws {}
+
+    func materialize(root: URL, expectedItems: [FileProviderExpectedItem]) throws {
+        materializeAttempts += 1
+        if cancelsNext {
+            cancelsNext = false
+            throw CancellationError()
+        }
+        materialized = true
+    }
+
+    func evict(root: URL) throws {}
 }
 
 private let allowRestoreWrites: LocalVaultTransferEngine.WriteAdmission = { _, operation in

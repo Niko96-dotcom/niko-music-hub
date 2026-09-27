@@ -217,7 +217,11 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     }
 
     public var retryRestoreLabel: String {
-        restorePhase == .openingInCubase ? "Retry Open" : "Retry Restore"
+        Self.retryRestoreLabel(for: restorePhase)
+    }
+
+    static func retryRestoreLabel(for phase: VaultRestorePhase?) -> String {
+        phase == .openingInCubase ? "Retry Open" : "Retry Restore"
     }
 
     public var primaryActionLabel: String {
@@ -281,6 +285,10 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             retryRestoreID = restore.id
             state = .needsAttention
             primaryAction = .review
+            if restore.stoppedAt != nil {
+                explanation = "The restore was stopped. Every copy was kept. Choose \(Self.retryRestoreLabel(for: restore.phase)) to continue."
+                return
+            }
             switch restore.phase {
             case .materializingArchive:
                 explanation = "The Vault copy couldn’t finish downloading. Check the drive or your cloud connection, then choose Retry Restore. Every copy was kept."
