@@ -119,26 +119,47 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         XCTAssertEqual(merged.map(\.displayTitle), ["Song A"])
     }
 
-    func testMergeIncrementalScanDropsAffectedSongWhoseFolderCannotBeListed() throws {
+    func testMergeDropsAffectedSongTheScanRecordedAsUnusable() throws {
         let root = try makeMergeTestRoot()
         let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
         let song = makeFolderSong(folder: songFolder, title: "Song A")
         let fileManager = FileManager()
         try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
-        try fileManager.setAttributes([.posixPermissions: 0o400], ofItemAtPath: songFolder.path)
-        defer {
-            try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: songFolder.path)
-            try? fileManager.removeItem(at: root)
-        }
+        defer { try? fileManager.removeItem(at: root) }
 
+        // The folder exists with normal permissions and lists fine: the verdict comes from
+        // the scan result alone, never from a second listing by the merge.
+        let incremental = ScanResult(
+            songs: [],
+            unusableSongFolderIDs: [songFolder.standardizedFileURL.path]
+        )
         let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
             existing: [song],
-            incremental: ScanResult(songs: []),
+            incremental: incremental,
             affectedSongIDs: [songFolder.standardizedFileURL.path],
             fileManager: fileManager
         )
 
         XCTAssertTrue(merged.isEmpty)
+    }
+
+    func testMergeKeepsAffectedSongMissingFromScanWhenNotRecordedAsUnusable() throws {
+        let root = try makeMergeTestRoot()
+        let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
+        let song = makeFolderSong(folder: songFolder, title: "Song A")
+
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
+            existing: [song],
+            incremental: ScanResult(songs: [], unusableSongFolderIDs: []),
+            affectedSongIDs: [songFolder.standardizedFileURL.path],
+            fileManager: fileManager
+        )
+
+        XCTAssertEqual(merged.map(\.displayTitle), ["Song A"])
     }
 
     private func makeMergeTestRoot() throws -> URL {

@@ -10,7 +10,7 @@
 - Make Stop take effect while a large project is being hashed, report a stop during copy, verify or restore as a stop rather than a failure, and leave a stopped iCloud restore for Retry instead of reopening it at the next launch.
 - Refuse to write Export Index, Export Diagnostics or a New Song folder into the Project Vault archive folder.
 - Stop a recording and show the error as soon as writing to disk fails, instead of reporting it only after Stop.
-- Report a song folder that cannot be listed as skipped instead of showing it with no project files.
+- Report a song folder that cannot be listed as skipped instead of showing it with no project files, and leave it out of the archive the same way after a full or an automatic rescan, whatever the listing error.
 - Check module boundaries in the local build (internal).
 
 ## 1.7.3 - 2026-09-26

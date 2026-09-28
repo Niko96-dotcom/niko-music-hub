@@ -34,6 +34,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         var songs: [Song] = []
         var globalWarnings: [String] = []
         var skippedEntries: [SkippedScanEntry] = []
+        var unusableSongFolderIDs: Set<String> = []
 
         for root in roots {
             try Task.checkCancellation()
@@ -136,6 +137,9 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                     } catch is CancellationError {
                         throw CancellationError()
                     } catch {
+                        if let songBaseError = error as? ScanError, songBaseError.isSongBaseFailure {
+                            unusableSongFolderIDs.insert(child.standardizedFileURL.path)
+                        }
                         skippedEntries.append(
                             SkippedScanEntry(
                                 kind: .unreadableChild,
@@ -171,7 +175,8 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         return ScanResult(
             songs: songs,
             globalWarnings: globalWarnings,
-            skippedEntries: skippedEntries
+            skippedEntries: skippedEntries,
+            unusableSongFolderIDs: unusableSongFolderIDs
         )
     }
 
@@ -183,6 +188,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         try Task.checkCancellation()
         var songs: [Song] = []
         var skippedEntries: [SkippedScanEntry] = []
+        var unusableSongFolderIDs: Set<String> = []
 
         for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
             try Task.checkCancellation()
@@ -198,6 +204,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             } catch is CancellationError {
                 throw CancellationError()
             } catch ScanError.songBaseLeavesBase {
+                unusableSongFolderIDs.insert(folder.standardizedFileURL.path)
                 skippedEntries.append(
                     SkippedScanEntry(
                         kind: .unreadableChild,
@@ -206,8 +213,12 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                     )
                 )
             } catch ScanError.songBaseUnavailable {
+                unusableSongFolderIDs.insert(folder.standardizedFileURL.path)
                 continue
             } catch {
+                if let songBaseError = error as? ScanError, songBaseError.isSongBaseFailure {
+                    unusableSongFolderIDs.insert(folder.standardizedFileURL.path)
+                }
                 skippedEntries.append(
                     SkippedScanEntry(
                         kind: .unreadableChild,
@@ -249,7 +260,11 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             if kindOrder != .orderedSame { return kindOrder == .orderedAscending }
             return $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
         }
-        return ScanResult(songs: songs, skippedEntries: skippedEntries)
+        return ScanResult(
+            songs: songs,
+            skippedEntries: skippedEntries,
+            unusableSongFolderIDs: unusableSongFolderIDs
+        )
     }
 
     private func rootLevelSongs(from versions: [ProjectVersion]) -> [Song] {
@@ -445,15 +460,27 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
     private enum ScanError: LocalizedError {
         /// The song folder itself is a symlink or was swapped for one (or another directory)
-        /// between enumeration and use. The full scan reports it as an unscannable folder; the
-        /// incremental scan reports the existing symlink reason.
+        /// between enumeration and use. Both scans leave the song out and report it; the
+        /// incremental merge drops it via the recorded set.
         case songBaseLeavesBase(String)
-        /// The song folder vanished or is not a directory. Both scans keep the existing
-        /// vanished/not-directory behavior (silent drop in incremental, unscannable in full).
+        /// The song folder vanished or is not a directory. Both scans leave the song out
+        /// (silent drop in incremental, unscannable report in full); the incremental merge
+        /// drops it via the recorded set.
         case songBaseUnavailable(String)
-        /// The song folder opened but its entries could not be listed. Both scans report it
-        /// as an unscannable folder rather than a song with no project files.
+        /// The song folder opened but its entries could not be listed, whatever the errno
+        /// (permission EACCES/EPERM and transient EIO/ESTALE alike). Both scans leave the
+        /// song out and report it as an unscannable folder rather than a song with no
+        /// project files; the incremental merge drops it via the recorded set.
         case songBaseUnlistable(underlying: Error?)
+
+        /// One rule, decided once: any failure at the song base itself leaves the song out
+        /// of the catalog in both scans, and the incremental merge follows the recorded set.
+        var isSongBaseFailure: Bool {
+            switch self {
+            case .songBaseLeavesBase, .songBaseUnavailable, .songBaseUnlistable:
+                return true
+            }
+        }
 
         var errorDescription: String? {
             switch self {

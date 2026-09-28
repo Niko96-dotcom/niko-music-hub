@@ -290,6 +290,44 @@ final class CubaseArchiveScannerTests: XCTestCase {
         let skipped = try XCTUnwrap(result.skippedEntries.first { $0.label == "Unlistable Song" })
         XCTAssertEqual(skipped.kind, .unreadableChild)
         XCTAssertTrue(skipped.reason.contains("Could not scan folder"), skipped.reason)
+        XCTAssertEqual(result.unusableSongFolderIDs, [unlistable.standardizedFileURL.path])
+    }
+
+    /// A transient listing failure (EIO) at the song base skips the song in both scans alike:
+    /// absent song, identical "Could not scan folder" report, and the folder recorded as unusable.
+    func testTransientSongFolderListingErrorIsSkippedInFullAndIncrementalScans() throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let goodSong = root.appendingPathComponent("Good Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: goodSong, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: goodSong.appendingPathComponent("Good Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        let flakySong = root.appendingPathComponent("Flaky Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: flakySong, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: flakySong.appendingPathComponent("x.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        let expectedID = flakySong.standardizedFileURL.path
+
+        let scanner = CubaseArchiveScanner(fileManager: EIOAtSongBaseFileManager(target: flakySong))
+        let full = try scanner.scan(roots: [root])
+        XCTAssertEqual(full.songs.map(\.displayTitle), ["Good Song"])
+        let fullSkipped = try XCTUnwrap(full.skippedEntries.first { $0.label == "Flaky Song" })
+        XCTAssertEqual(fullSkipped.kind, .unreadableChild)
+        XCTAssertTrue(fullSkipped.reason.contains("Could not scan folder"), fullSkipped.reason)
+        XCTAssertEqual(full.unusableSongFolderIDs, [expectedID])
+
+        let resolution = ArchiveSongFolderResolver.resolve(changedPaths: [flakySong], roots: [root])
+        let incremental = try scanner.scanIncremental(resolution: resolution, roots: [root])
+        XCTAssertTrue(incremental.songs.isEmpty)
+        let incrementalSkipped = try XCTUnwrap(incremental.skippedEntries.first { $0.label == "Flaky Song" })
+        XCTAssertEqual(incrementalSkipped.kind, .unreadableChild)
+        XCTAssertTrue(incrementalSkipped.reason.contains("Could not scan folder"), incrementalSkipped.reason)
+        XCTAssertEqual(incrementalSkipped, fullSkipped)
+        XCTAssertEqual(incremental.unusableSongFolderIDs, [expectedID])
     }
 
     private func makeTemporaryRoot() throws -> URL {
@@ -297,5 +335,33 @@ final class CubaseArchiveScannerTests: XCTestCase {
             .appendingPathComponent("NikoMusicHubScanner-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
+    }
+}
+
+/// Injects a transient EIO at one song folder's own listing: it fires the enumeration error
+/// handler for the base URL first (as a failed base listing would), then returns the real
+/// enumerator so the walk otherwise succeeds and the recorded base error decides the outcome.
+/// Overrides `__enumerator` because that is the seam `enumerator(at:...)` dispatches through
+/// on this toolchain (see `CountingFileManager` in the archive browser tests).
+private final class EIOAtSongBaseFileManager: FileManager, @unchecked Sendable {
+    private let targetPath: String
+
+    init(target: URL) {
+        self.targetPath = target.standardizedFileURL.path
+        super.init()
+    }
+
+    override func __enumerator(
+        at url: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options mask: FileManager.DirectoryEnumerationOptions = [],
+        errorHandler handler: ((URL, Error) -> Bool)? = nil
+    ) -> FileManager.DirectoryEnumerator? {
+        if url.standardizedFileURL.path == targetPath {
+            _ = handler?(url, NSError(domain: NSPOSIXErrorDomain, code: Int(EIO)))
+        }
+        return super.__enumerator(
+            at: url, includingPropertiesForKeys: keys, options: mask, errorHandler: handler
+        )
     }
 }
