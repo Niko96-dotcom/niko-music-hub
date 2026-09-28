@@ -955,11 +955,15 @@ public actor LocalVaultTransferEngine {
             )
         }
         let sourceAfter = try manifestBuilder.build(at: record.sourceURL, id: sourceBefore.id, createdAt: sourceBefore.createdAt)
-        guard sourceBefore.entries == sourceAfter.entries else { throw LocalVaultTransferError.sourceMutated }
-        record.manifestID = sourceBefore.id
-        record.manifest = sourceBefore
-        record.totalBytes = sourceBefore.totalBytes
-        record.completedBytes = sourceBefore.totalBytes
+        guard sourceBefore.hasSameObservedContent(as: sourceAfter) else { throw LocalVaultTransferError.sourceMutated }
+        // Only allocation can differ here. Keep the after-copy value: the first
+        // clone may have trimmed preallocated blocks, and capacity projection
+        // should not count blocks the source no longer holds.
+        let manifest = sourceAfter.preparedForArchive()
+        record.manifestID = manifest.id
+        record.manifest = manifest
+        record.totalBytes = manifest.totalBytes
+        record.completedBytes = manifest.totalBytes
         try persist(&record)
     }
 
