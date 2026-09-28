@@ -58,13 +58,12 @@ real tree, test targets included.
 - `ci.sh`'s strict build includes the test targets (`--build-tests`), so a
   test target's undeclared import fails the gate too. `swift test` then reuses
   that build.
+- `script/ci-release.sh` builds with the same flag, and
+  `ModuleBoundarySourceTests` pins it there too.
 - The benchmark scripts build single targets for timing and stay as they are.
 
 ## Open
 
-- `script/ci-release.sh` (`swift build -c release --product NikoMusicHub`)
-  should get the same flag. It is a release script and was left for the owner;
-  the release bundle itself is already built through `nmh_build_bundle`.
 - Pinning the `@unchecked Sendable` count per module (optional) is not done.
 - The import scan is line-based: an import written after a block comment on the
   same line (`/* x */ import SwiftUI`) is not seen, and an `import` line inside

@@ -9,7 +9,7 @@ if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]
 fi
 
 echo "== release configuration build =="
-swift build -c release --product NikoMusicHub
+swift build -c release --product NikoMusicHub --explicit-target-dependency-import-check error
 
 echo "== release configuration tests =="
 swift test -c release \

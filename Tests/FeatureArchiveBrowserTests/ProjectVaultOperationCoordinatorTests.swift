@@ -608,20 +608,21 @@ final class ProjectVaultOperationCoordinatorTests: XCTestCase {
     /// model releases the owner and cancels any pending retry. Uses a long
     /// retry delay so init recovery settles before the timer could fire.
     func testViewModelReleaseCancelsPendingRetry() async throws {
-        weak var weakViewModel: ArchiveBrowserViewModel?
-        weak var weakOperations: ProjectVaultOperationCoordinator?
+        // The closure holds the weak references itself: capturing local `weak var`s in the
+        // escaping condition fails region-based isolation checking in release builds.
+        let released: @MainActor () -> Bool
         var fired = false
         do {
             let viewModel = ArchiveBrowserViewModel(
                 context: TestToolContext.make(),
                 archiveRootWatcher: NoopArchiveRootWatcher()
             )
-            weakViewModel = viewModel
-            weakOperations = viewModel.vaultOperations
-            viewModel.vaultOperations.doneRetryDelay = .milliseconds(200)
-            XCTAssertTrue(viewModel.vaultOperations.scheduleRetry(for: "vm-lifetime") { fired = true })
+            let operations = viewModel.vaultOperations
+            released = { [weak viewModel, weak operations] in viewModel == nil && operations == nil }
+            operations.doneRetryDelay = .milliseconds(200)
+            XCTAssertTrue(operations.scheduleRetry(for: "vm-lifetime") { fired = true })
         }
-        try await waitUntil(timeout: .seconds(5)) { weakViewModel == nil && weakOperations == nil }
+        try await waitUntil(timeout: .seconds(5)) { released() }
         try await Task.sleep(for: .milliseconds(350))
         XCTAssertFalse(fired, "pending retry must not fire after view model released")
     }
