@@ -5,6 +5,7 @@
 - Ask before quitting while a download, stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
 - Stop helper processes such as yt-dlp, FFmpeg and stem separation that are still running when the app quits, instead of leaving them behind.
 - Re-check the Active project folder after the final verification before freeing space, and never follow symbolic links while hashing, so a file saved during a long verification is no longer removed without a copy.
+- Stop the first Archive Now or backup copy of a freshly saved project from failing with "Project files changed while archiving" when nothing changed; macOS trimming unused disk space reserved for a new file no longer counts as a change.
 - Resume every readable Project Vault record at launch and report the ones that cannot be read, instead of skipping all recovery when one record is damaged.
 - Keep a song's saved title, notes and status when it is edited after a discarded rescan.
 - Make Stop take effect while a large project is being hashed, report a stop during copy, verify or restore as a stop rather than a failure, and leave a stopped iCloud restore for Retry instead of reopening it at the next launch.

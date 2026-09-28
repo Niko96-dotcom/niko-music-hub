@@ -308,6 +308,25 @@ extension VaultManifest {
                 && expected.sha256 == observed.sha256
         }
     }
+
+    /// Whether two observations of the same live tree agree on everything the
+    /// copy carries: paths, types, sizes, modification times, hashes and
+    /// extended attributes, the root folder's included. Allocation is left out:
+    /// APFS trims a file's preallocated blocks the first time the file is
+    /// cloned, so copying the source can change its allocated size without
+    /// changing a byte.
+    func hasSameObservedContent(as other: VaultManifest) -> Bool {
+        guard entries.count == other.entries.count,
+              rootExtendedAttributeBytes == other.rootExtendedAttributeBytes else { return false }
+        return zip(entries, other.entries).allSatisfy { before, after in
+            before.relativePath == after.relativePath
+                && before.type == after.type
+                && before.byteCount == after.byteCount
+                && before.modifiedAt == after.modifiedAt
+                && before.sha256 == after.sha256
+                && before.extendedAttributeBytes == after.extendedAttributeBytes
+        }
+    }
 }
 
 public struct VaultManifestBuilder: @unchecked Sendable {
