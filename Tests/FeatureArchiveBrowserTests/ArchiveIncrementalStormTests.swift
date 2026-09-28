@@ -111,6 +111,20 @@ final class ArchiveIncrementalStormTests: XCTestCase {
         XCTAssertFalse(merged.contains { $0.id == unlistable.standardizedFileURL.path })
     }
 
+    /// Mode 0o000 fails the song-base open itself (EACCES -> `.unavailable`), so the incremental
+    /// scan drops it silently. The merge must still drop it via the recorded set, now that it
+    /// never lists the folder a second time.
+    func testSongFolderThatBecomesUnopenableLeavesCatalogLikeFullScan() async throws {
+        let unopenable = archive.songFolders[1]
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unopenable.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unopenable.path) }
+
+        let merged = try await applyDelivered(["\(unopenable.path)/Song 0001 v1.cpr"])
+
+        assertMatchesFullScan(merged)
+        XCTAssertFalse(merged.contains { $0.id == unopenable.standardizedFileURL.path })
+    }
+
     // MARK: - Helpers
 
     /// Feeds raw FSEvents paths through the real watcher (default 1,024-path budget), then

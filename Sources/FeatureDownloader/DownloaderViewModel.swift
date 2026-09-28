@@ -75,6 +75,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private var stallMonitor: DownloadStallMonitor?
     private var validationGeneration: UInt64 = 0
     private var observationGeneration: UInt64 = 0
+    /// Token for the pending download start registered for quit (ADR-019). A
+    /// finishing older start only unregisters when it still matches.
+    private var downloadStartToken: UUID?
     private static let formatSelectionDefaultsKey = "downloader.formatSelection"
 
     public init(
@@ -240,8 +243,13 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         observeTask?.cancel()
         observationGeneration &+= 1
         let generation = observationGeneration
+        let startToken = UUID()
+        downloadStartToken = startToken
         let useCase = useCase
-        downloadStartTask = Task { @MainActor [weak self] in
+        let startedTask = Task { @MainActor [weak self] in
+            // Every exit path clears the pending-start entry (token-guarded so
+            // a late older start never clears a newer start's entry).
+            defer { self?.clearPendingDownloadStart(matching: startToken) }
             do {
                 let observedJob = try await useCase.simulateAndEnqueue(url: sourceURL, options: options)
                 guard !Task.isCancelled else {
@@ -261,6 +269,31 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 self?.applyStartError(error, generation: generation)
             }
         }
+        downloadStartTask = startedTask
+        // ADR-019: the title lookup runs before any runner job exists, so the
+        // pending start registers as unlisted quit-blocking work until this
+        // task finishes (the runner job then covers quit itself). The cancel
+        // only cancels this start's task, which kills the lookup helper.
+        context.jobStatusCenter.setExtraJob(
+            sourceID: ShellJobExtraSourceID.downloadStart,
+            status: ShellJobStatus(
+                id: ShellJobExtraSourceID.downloadStart,
+                title: DownloaderUseCase.fallbackJobTitle(for: sourceURL),
+                activityVerb: "Downloading",
+                sourceToolID: Self.toolID,
+                blocksQuit: true,
+                listed: false
+            ),
+            cancel: { startedTask.cancel() }
+        )
+    }
+
+    /// Removes the pending-start quit entry, but only when `token` is still
+    /// the latest start (a newer start replaced the entry).
+    private func clearPendingDownloadStart(matching token: UUID) {
+        guard downloadStartToken == token else { return }
+        downloadStartToken = nil
+        context.jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.downloadStart, status: nil)
     }
 
     private func acceptStartedJob(_ observedJob: Job, sourceURL: URL, outputDirectory: URL, generation: UInt64) {
@@ -537,6 +570,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         downloadStartTask?.cancel()
         inboxObservationTask?.cancel()
         progressFeedbackTask?.cancel()
+        context.jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.downloadStart, status: nil)
     }
 
     public var outputFolder: URL {

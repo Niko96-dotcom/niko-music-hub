@@ -1,6 +1,6 @@
 # Decision: One registry of running work, and a quit contract that reads it
 
-**Status:** Accepted — implemented (registry incl. recorder takes and helper installs, quit prompt, process-group backstop)  
+**Status:** Accepted — implemented (registry incl. recorder takes, helper installs and download starts, quit prompt, process-group backstop)  
 **Date:** 2026-09-27  
 **Deciders:** Niko Music Hub owner + implementation  
 **Scope:** App termination, helper processes, `ShellJobStatusCenter`
@@ -38,6 +38,11 @@ finish.
      (`ShellJobExtraSourceID.helperInstall`) while any install run's Task is
      alive, including a run cancelled earlier that is still removing its staging
      folder. Its cancel is `cancelInstalls()`. Its progress stays in Set Up.
+   - A download registers unlisted (`ShellJobExtraSourceID.downloadStart`) from
+     the moment Download is pressed until its runner job exists: the yt-dlp health
+     check and title lookup run before `JobRunner.enqueue`. Its cancel cancels that
+     start, which stops the lookup helper. A newer start keeps its entry when an
+     older start finishes late.
 2. **Quit prompt (implemented).** `HubTerminationCoordinator` (AppCore) reads
    `ShellJobStatusCenter.quitBlockingWork`: every unfinished `JobRunner` job
    (downloads, stems) plus the extra sources whose `ShellJobStatus.blocksQuit`
@@ -132,3 +137,5 @@ puts the process backstop at the one helper spawn point.
 - `ArchiveBrowserViewModelTests.testArchiveScanDoesNotBlockQuit`
 - `AudioRecorderViewModelTests.testActiveTakeRegistersUnlistedBlockingWorkAndCancelFinalizesWAV`
 - `HelperToolInstallerTests.testRunningInstallRegistersBlockingWorkUntilFinishedOrCancelled`
+- `DownloaderViewModelTests.testPendingDownloadStartBlocksQuitUntilItsJobIsEnqueued`
+- `DownloaderViewModelTests.testQuitDuringPendingDownloadStartCancelsLookupAndUnregisters`
