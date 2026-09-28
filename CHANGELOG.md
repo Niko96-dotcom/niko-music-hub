@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.3 - 2026-09-28
 
 - Ask before quitting while a download (from the moment Download is pressed), stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
 - Stop helper processes such as yt-dlp, FFmpeg and stem separation that are still running when the app quits, instead of leaving them behind.
@@ -12,10 +12,6 @@
 - Refuse to write Export Index, Export Diagnostics or a New Song folder into the Project Vault archive folder.
 - Stop a recording and show the error as soon as writing to disk fails, instead of reporting it only after Stop.
 - Report a song folder that cannot be listed as skipped instead of showing it with no project files, and leave it out of the archive the same way after a full or an automatic rescan, whatever the listing error.
-- Check module boundaries in the local build (internal).
-
-## 1.7.3 - 2026-09-26
-
 - Open Stem Separation faster with a populated result history by loading offscreen result rows as they come into view, while preserving scrolling, file actions, and tab state.
 
 ## 1.7.2 - 2026-09-25
