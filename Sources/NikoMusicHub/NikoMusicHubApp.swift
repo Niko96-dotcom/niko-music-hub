@@ -132,25 +132,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `.terminateLater` keeps the run loop, so main-actor cancels still run.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let termination = services?.termination else { return .terminateNow }
-        if termination.isStoppingWork { return .terminateLater }
-        switch termination.decision() {
-        case .terminateNow:
-            return .terminateNow
-        case .waitForCancelledWork:
-            break
-        case .ask(let prompt):
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = prompt.title
-            alert.informativeText = prompt.message
-            alert.addButton(withTitle: prompt.keepOpenButton)
-            alert.addButton(withTitle: prompt.quitButton)
-            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        switch termination.answerTerminateRequest(
+            confirm: Self.confirmQuit,
+            reply: { NSApp.reply(toApplicationShouldTerminate: true) }
+        ) {
+        case .now: return .terminateNow
+        case .cancel: return .terminateCancel
+        case .later: return .terminateLater
         }
-        termination.cancelRunningWork {
-            NSApp.reply(toApplicationShouldTerminate: true)
-        }
-        return .terminateLater
+    }
+
+    /// The quit alert for running work; the keep-open button comes first so
+    /// Return keeps the work.
+    private static func confirmQuit(_ prompt: HubQuitPrompt) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = prompt.title
+        alert.informativeText = prompt.message
+        alert.addButton(withTitle: prompt.keepOpenButton)
+        alert.addButton(withTitle: prompt.quitButton)
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     /// Helpers run in their own process groups and would outlive the app (ADR-019).

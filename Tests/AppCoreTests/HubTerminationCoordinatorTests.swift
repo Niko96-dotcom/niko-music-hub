@@ -209,6 +209,199 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertEqual(replies.value, 1)
     }
+
+    func testAnswerTerminateRequestWithNoWorkTerminatesNow() async throws {
+        let center = ShellJobStatusCenter(jobRunner: JobRunner())
+        let coordinator = HubTerminationCoordinator(jobStatusCenter: center)
+        var confirmCalls = 0
+        let replies = Counter()
+
+        let answer = coordinator.answerTerminateRequest(
+            confirm: { _ in
+                confirmCalls += 1
+                return true
+            },
+            reply: { replies.increment() }
+        )
+
+        XCTAssertEqual(answer, .now)
+        XCTAssertEqual(confirmCalls, 0, "nothing registered: no prompt")
+        XCTAssertFalse(coordinator.isStoppingWork)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(replies.value, 0, "nothing cancelled: no reply")
+    }
+
+    func testAnswerTerminateRequestDeclinedKeepsWork() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+            try await Task.sleep(for: .seconds(30))
+        }
+        defer { runner.cancelJob(id: job.id) }
+        let coordinator = HubTerminationCoordinator(jobStatusCenter: center)
+        var confirmCalls = 0
+        var seenPrompt: HubQuitPrompt?
+        let replies = Counter()
+
+        let answer = coordinator.answerTerminateRequest(
+            confirm: { prompt in
+                confirmCalls += 1
+                seenPrompt = prompt
+                return false
+            },
+            reply: { replies.increment() }
+        )
+
+        XCTAssertEqual(answer, .cancel)
+        XCTAssertEqual(confirmCalls, 1)
+        let prompt = try XCTUnwrap(seenPrompt)
+        XCTAssertTrue(prompt.work.map(\.id).contains(job.id.uuidString))
+        XCTAssertTrue(prompt.message.contains("Downloading “Track Mix”"), prompt.message)
+        XCTAssertNotEqual(runner.job(id: job.id)?.state, .canceled, "declined quit must not cancel")
+        XCTAssertFalse(coordinator.isStoppingWork)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(replies.value, 0, "declined quit schedules no reply")
+    }
+
+    func testAnswerTerminateRequestConfirmedCancelsAndRepliesOnce() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+            try await Task.sleep(for: .seconds(30))
+        }
+        let coordinator = HubTerminationCoordinator(
+            jobStatusCenter: center,
+            deadline: .seconds(30),
+            pollInterval: .milliseconds(10)
+        )
+        let confirmCalls = Counter()
+        let replies = Counter()
+        let replied = expectation(description: "reply")
+
+        let answer = coordinator.answerTerminateRequest(
+            confirm: { _ in
+                confirmCalls.increment()
+                return true
+            },
+            reply: {
+                replies.increment()
+                replied.fulfill()
+            }
+        )
+
+        XCTAssertEqual(answer, .later)
+        XCTAssertEqual(confirmCalls.value, 1)
+        XCTAssertEqual(runner.job(id: job.id)?.state, .canceled)
+        await fulfillment(of: [replied], timeout: 10)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(replies.value, 1)
+    }
+
+    func testSecondAnswerWhileWaitingDoesNotAskAgain() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let started = Flag()
+        let release = Flag()
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+            started.mark()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {
+                while !release.isMarked {
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
+                throw error
+            }
+        }
+        defer { runner.cancelJob(id: job.id) }
+        while !started.isMarked {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let coordinator = HubTerminationCoordinator(
+            jobStatusCenter: center,
+            deadline: .seconds(30),
+            pollInterval: .milliseconds(10)
+        )
+        let confirmCalls = Counter()
+        let replies = Counter()
+        let replied = expectation(description: "reply")
+
+        let first = coordinator.answerTerminateRequest(
+            confirm: { _ in
+                confirmCalls.increment()
+                return true
+            },
+            reply: {
+                replies.increment()
+                replied.fulfill()
+            }
+        )
+        XCTAssertEqual(first, .later)
+        XCTAssertEqual(confirmCalls.value, 1)
+        XCTAssertTrue(coordinator.isStoppingWork)
+
+        let second = coordinator.answerTerminateRequest(
+            confirm: { _ in
+                confirmCalls.increment()
+                return true
+            },
+            reply: { replies.increment() }
+        )
+        XCTAssertEqual(second, .later)
+        XCTAssertEqual(confirmCalls.value, 1, "a second quit while waiting must not ask again")
+
+        release.mark()
+        await fulfillment(of: [replied], timeout: 10)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(replies.value, 1, "reply must run exactly once per confirmed quit")
+    }
+
+    func testAnswerTerminateRequestWithUnwindingWorkWaitsWithoutAsking() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let started = Flag()
+        let release = Flag()
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+            started.mark()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {
+                while !release.isMarked {
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
+                throw error
+            }
+        }
+        while !started.isMarked {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        center.cancel(id: job.id.uuidString)
+        let coordinator = HubTerminationCoordinator(
+            jobStatusCenter: center,
+            deadline: .seconds(30),
+            pollInterval: .milliseconds(10)
+        )
+
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+        XCTAssertEqual(coordinator.decision(), .waitForCancelledWork)
+
+        let confirmCalls = Counter()
+        let replied = expectation(description: "reply")
+        let answer = coordinator.answerTerminateRequest(
+            confirm: { _ in
+                confirmCalls.increment()
+                return true
+            },
+            reply: { replied.fulfill() }
+        )
+        XCTAssertEqual(answer, .later)
+        XCTAssertEqual(confirmCalls.value, 0, "unwinding work waits without asking")
+
+        try await Task.sleep(for: .milliseconds(50))
+        release.mark()
+        await fulfillment(of: [replied], timeout: 10)
+        XCTAssertEqual(coordinator.decision(), .terminateNow)
+    }
 }
 
 private final class Flag: @unchecked Sendable {

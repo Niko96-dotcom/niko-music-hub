@@ -17,8 +17,9 @@ final class HubTerminationSourceTests: XCTestCase {
         )
     }
 
-    /// ENG-04: quit reads the job center through the coordinator, cancels on confirm and
-    /// replies later, so main-actor cancels and helper cleanup can still run.
+    /// ENG-04: the delegate is a thin AppKit adapter over the coordinator's
+    /// answerTerminateRequest; the quit behaviour itself is tested in
+    /// HubTerminationCoordinatorTests.
     func testAppDelegateDefersQuitToCoordinator() throws {
         let source = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
 
@@ -27,15 +28,10 @@ final class HubTerminationSourceTests: XCTestCase {
             "AppDelegate must implement applicationShouldTerminate"
         )
         let body = String(source[shouldTerminate.upperBound...].prefix(1_500))
-        XCTAssertTrue(body.contains("termination.decision()"), "quit must ask the termination coordinator")
-        XCTAssertTrue(
-            body.contains("if termination.isStoppingWork { return .terminateLater }"),
-            "a repeated quit waits for the pending reply instead of asking again"
-        )
-        XCTAssertTrue(body.contains("termination.cancelRunningWork"), "confirm must cancel the running work")
-        XCTAssertTrue(body.contains("case .waitForCancelledWork:"), "work still unwinding from an earlier cancel is waited for")
+        XCTAssertTrue(body.contains("termination.answerTerminateRequest("), "quit must ask the termination coordinator")
+        XCTAssertTrue(body.contains("case .later"), "the coordinator answer maps to a terminate reply")
+        XCTAssertTrue(body.contains("return .terminateLater"), "a confirmed quit must defer, not block the main thread")
         XCTAssertTrue(body.contains("NSApp.reply(toApplicationShouldTerminate: true)"))
-        XCTAssertTrue(body.contains("return .terminateLater"), "confirm must defer the quit, not block the main thread")
         XCTAssertFalse(source.contains("pendingVaultOperationCount"), "the Vault queue reaches quit through the job center")
         XCTAssertTrue(source.contains("let termination: HubTerminationCoordinator"))
     }

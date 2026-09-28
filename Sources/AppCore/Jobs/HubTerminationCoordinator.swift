@@ -76,6 +76,27 @@ public final class HubTerminationCoordinator {
     /// pending reply instead of asking again.
     public var isStoppingWork: Bool { waitTask != nil }
 
+    /// The delegate's answer without AppKit (ADR-019).
+    public enum TerminateAnswer: Equatable, Sendable { case now, cancel, later }
+
+    /// The delegate's whole applicationShouldTerminate decision (ADR-019), without AppKit.
+    public func answerTerminateRequest(
+        confirm: (HubQuitPrompt) -> Bool,
+        reply: @escaping @MainActor () -> Void
+    ) -> TerminateAnswer {
+        if isStoppingWork { return .later }
+        switch decision() {
+        case .terminateNow:
+            return .now
+        case .waitForCancelledWork:
+            break
+        case .ask(let prompt):
+            guard confirm(prompt) else { return .cancel }
+        }
+        cancelRunningWork(thenReply: reply)
+        return .later
+    }
+
     public func decision() -> Decision {
         let work = center.quitBlockingWork
         if !work.isEmpty { return .ask(HubQuitPrompt(work: work)) }
