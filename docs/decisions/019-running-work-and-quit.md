@@ -53,11 +53,12 @@ finish.
      runs; quit then waits for it without asking (`.waitForCancelledWork`).
    - Otherwise one `NSAlert` names the work ("Keep Music Hub Open" first, then
      "Stop and Quit"); a Vault entry adds that existing recovery records are kept.
-   - On confirm `cancelAllForQuit()` calls every cancel. An extra source can
-     register a separate `quitCancel`: the Vault's jobs-strip cancel only opens
-     its stop sheet, so its quit cancel cancels the waiting requests and stops the
-     running transfer directly. The delegate returns `.terminateLater`, so the run
-     loop and main-actor cancels keep running.
+   - On confirm `answerTerminateRequest` runs `cancelAllForQuit()`, which calls
+     every cancel. An extra source can register a separate `quitCancel`: the
+     Vault's jobs-strip cancel only opens its stop sheet, so its quit cancel
+     cancels the waiting requests and stops the running transfer directly. The
+     delegate maps the `.later` answer to `.terminateLater`, so the run loop and
+     main-actor cancels keep running.
    - After that stop the archive view model queues no new Vault operation and
      schedules no recovery (`projectVaultStoppedForQuit`): the stopped operation's
      snapshot refresh would otherwise start a Done auto-archive that the exit cuts
@@ -65,8 +66,9 @@ finish.
    - While the reply is pending, AppKit does not ask the delegate again: a quit
      Apple Event (the Dock's Quit) or ⌘Q waits for the reply, and an in-process
      `NSApp.terminate` exits at once (checked with a scratch AppKit program). The
-     delegate's `isStoppingWork` branch is a guard that AppKit never reaches today.
-   - The coordinator replies (`NSApp.reply(toApplicationShouldTerminate: true)`)
+     `isStoppingWork` check in `answerTerminateRequest` is a guard that AppKit
+     never reaches today.
+   - The coordinator calls the delegate's reply (`NSApp.reply(toApplicationShouldTerminate: true)`)
      once `hasUnfinishedQuitBlockingWork` is false or after 5 s. A cancelled runner
      job counts as unfinished until its operation has returned
      (`JobRunning.hasUnfinishedWork`), so helper teardown and partial-file cleanup
