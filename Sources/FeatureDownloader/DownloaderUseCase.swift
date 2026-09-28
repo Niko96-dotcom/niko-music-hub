@@ -405,7 +405,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         return false
     }
 
-    private static func fallbackJobTitle(for url: URL) -> String {
+    static func fallbackJobTitle(for url: URL) -> String {
         let path = url.path
         if path == "/watch" || path.isEmpty || url.lastPathComponent == "watch" {
             return url.host ?? "media"

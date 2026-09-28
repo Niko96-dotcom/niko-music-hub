@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Ask before quitting while a download, stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
+- Ask before quitting while a download (from the moment Download is pressed), stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
 - Stop helper processes such as yt-dlp, FFmpeg and stem separation that are still running when the app quits, instead of leaving them behind.
 - Re-check the Active project folder after the final verification before freeing space, and never follow symbolic links while hashing, so a file saved during a long verification is no longer removed without a copy.
 - Resume every readable Project Vault record at launch and report the ones that cannot be read, instead of skipping all recovery when one record is damaged.

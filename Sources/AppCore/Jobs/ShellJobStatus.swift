@@ -80,6 +80,7 @@ public enum ShellJobExtraSourceID: Sendable {
     public static let vaultTransfer = "vault-transfer"
     public static let audioRecorder = "audio-recorder"
     public static let helperInstall = "helper-install"
+    public static let downloadStart = "download-start"
 }
 
 /// Converter reporting hook (NMH-011). Maps conversion-task state to a shell job.

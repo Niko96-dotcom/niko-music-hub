@@ -164,7 +164,7 @@ The metadata extension retains the user-created-folder flow and the catalog/sele
 [ADR 019](decisions/019-running-work-and-quit.md) has the full contract.
 
 - Every tool registers work that must not be cut off with `ShellJobStatusCenter` (runner jobs, plus extra sources
-  with `blocksQuit`; recorder takes and helper installs register unlisted). `quitBlockingWork` is the one list quit
+  with `blocksQuit`; recorder takes, helper installs and a download's title lookup register unlisted). `quitBlockingWork` is the one list quit
   reads.
 - `applicationShouldTerminate` asks `HubTerminationCoordinator`: nothing running quits at once; otherwise one alert
   names the work, and on confirm every cancel runs and the delegate returns `.terminateLater`. The coordinator

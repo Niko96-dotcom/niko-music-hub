@@ -1010,15 +1010,143 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertTrue(inbox.items.isEmpty)
     }
 
+    func testPendingDownloadStartBlocksQuitUntilItsJobIsEnqueued() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let useCase = GatedDownloaderUseCase(runner: runner)
+        let viewModel = makeViewModel(
+            useCase: useCase,
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore(),
+            jobStatusCenter: center
+        )
+        defer {
+            for job in runner.snapshot() { runner.cancelJob(id: job.id) }
+        }
+        defer { useCase.release() }
+        viewModel.urlText = "https://example.com/watch"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+
+        // Synchronous: the pending start is registered before startDownload returns.
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        let pending = try XCTUnwrap(center.quitBlockingWork.first)
+        XCTAssertFalse(pending.listed)
+        XCTAssertTrue(pending.blocksQuit)
+        XCTAssertEqual(pending.displayLine, "Downloading “example.com”")
+        XCTAssertTrue(center.hasUnfinishedQuitBlockingWork)
+        XCTAssertTrue(center.jobs.isEmpty)
+
+        let coordinator = HubTerminationCoordinator(jobStatusCenter: center)
+        let decision = coordinator.decision()
+        guard case let .ask(prompt) = decision else {
+            XCTFail("A pending download start must ask before quitting, got \(decision)")
+            return
+        }
+        XCTAssertTrue(prompt.message.contains("Downloading “example.com”"), prompt.message)
+
+        useCase.release()
+        try await waitUntil { viewModel.job != nil }
+        let runningJob = try XCTUnwrap(viewModel.job)
+        XCTAssertTrue(center.quitBlockingWork.map(\.id).contains(runningJob.id.uuidString))
+        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart))
+    }
+
+    func testQuitDuringPendingDownloadStartCancelsLookupAndUnregisters() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let useCase = GatedDownloaderUseCase(runner: runner)
+        let viewModel = makeViewModel(
+            useCase: useCase,
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore(),
+            jobStatusCenter: center
+        )
+        defer { useCase.release() }
+        viewModel.urlText = "https://example.com/watch"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+
+        center.cancelAllForQuit()
+
+        try await waitUntil { center.hasUnfinishedQuitBlockingWork == false }
+        XCTAssertTrue(useCase.sawCancellation)
+        XCTAssertTrue(runner.snapshot().isEmpty)
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+    }
+
+    func testFailedDownloadStartUnregistersPendingEntry() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let useCase = GatedDownloaderUseCase(runner: runner, failure: .ytDlpUnavailable("x"))
+        let viewModel = makeViewModel(
+            useCase: useCase,
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore(),
+            jobStatusCenter: center
+        )
+        defer { useCase.release() }
+        viewModel.urlText = "https://example.com/watch"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+
+        useCase.release()
+        try await waitUntil { viewModel.downloadState != .downloading }
+        XCTAssertEqual(viewModel.downloadState, .failed("yt-dlp is required. x"))
+        XCTAssertTrue(center.quitBlockingWork.isEmpty)
+    }
+
+    func testNewerStartKeepsItsPendingEntryWhenOlderStartFinishesLate() async throws {
+        let runner = JobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        let useCase = GatedDownloaderUseCase(runner: runner)
+        let viewModel = makeViewModel(
+            useCase: useCase,
+            jobRunner: runner,
+            outputInboxStore: RecordingOutputInboxStore(),
+            jobStatusCenter: center
+        )
+        defer {
+            for job in runner.snapshot() { runner.cancelJob(id: job.id) }
+        }
+        defer { useCase.release() }
+        viewModel.urlText = "https://example.com/watch"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+
+        viewModel.cancelDownload()
+        XCTAssertEqual(viewModel.downloadState, .canceled)
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        try await waitUntil { useCase.callCount == 2 }
+
+        // Let the cancelled older start unwind; it must not clear the newer entry.
+        try await waitUntil { useCase.sawCancellation }
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+
+        useCase.release()
+        try await waitUntil { viewModel.job != nil }
+        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart))
+    }
+
     private func makeViewModel(
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
-        useCase: FakeDownloaderUseCase,
+        useCase: any DownloaderUseCaseRunning,
         jobRunner: any JobRunning,
         outputInboxStore: any OutputInboxStore,
+        jobStatusCenter: ShellJobStatusCenter? = nil,
         preferences: any PreferenceStore = UserDefaultsPreferenceStore(),
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
+        let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: FixtureSettingsStore(settings: AppSettings(
@@ -1029,7 +1157,8 @@ final class DownloaderViewModelTests: XCTestCase {
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: FixtureDiagnostics(),
+            jobStatusCenter: center
         )
         return DownloaderViewModel(
             context: context,
@@ -1135,6 +1264,127 @@ private final class FakeDownloaderUseCase: DownloaderUseCaseRunning, @unchecked 
             try? await Task.sleep(for: delay)
         }
         return job
+    }
+}
+
+/// Pending-start gate: suspends `simulateAndEnqueue` until the test releases
+/// it, and throws `CancellationError` when the waiting start is cancelled
+/// (pane Cancel, clearInput, or quit-cancel). On release it enqueues a
+/// long-running job on the real runner (or throws the injected failure).
+private final class GatedDownloaderUseCase: DownloaderUseCaseRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private let runner: JobRunner
+    private let failure: DownloadUseCaseError?
+    private var released = false
+    private var waiters: [DownloadStartWaiterBox] = []
+    private var storedCallCount = 0
+    private var storedSawCancellation = false
+
+    init(runner: JobRunner, failure: DownloadUseCaseError? = nil) {
+        self.runner = runner
+        self.failure = failure
+    }
+
+    var callCount: Int { lock.downloaderTestWithLock { storedCallCount } }
+    var sawCancellation: Bool { lock.downloaderTestWithLock { storedSawCancellation } }
+
+    func release() {
+        let boxes = lock.downloaderTestWithLock { () -> [DownloadStartWaiterBox] in
+            released = true
+            let boxes = waiters
+            waiters.removeAll()
+            return boxes
+        }
+        for box in boxes {
+            box.take()?.resume()
+        }
+    }
+
+    func simulateAndEnqueue(url: URL, options: DownloadJobOptions) async throws -> Job {
+        lock.downloaderTestWithLock { storedCallCount += 1 }
+        do {
+            try await waitForRelease()
+        } catch {
+            lock.downloaderTestWithLock { storedSawCancellation = true }
+            throw error
+        }
+        if let failure {
+            throw failure
+        }
+        return runner.enqueue(title: "Download: gated", sourceToolID: ToolFeatureID("downloader")) { _ in
+            try await Task.sleep(for: .seconds(30))
+        }
+    }
+
+    private func waitForRelease() async throws {
+        // A start cancelled before it reaches the gate must not park at all.
+        try Task.checkCancellation()
+        let box = DownloadStartWaiterBox()
+        let alreadyReleased = lock.downloaderTestWithLock { () -> Bool in
+            if released { return true }
+            waiters.append(box)
+            return false
+        }
+        guard !alreadyReleased else { return }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                if let alreadyCancelled = box.park(continuation) {
+                    removeBox(box)
+                    alreadyCancelled.resume(throwing: CancellationError())
+                }
+            }
+        } onCancel: {
+            removeBox(box)
+            if let waiter = box.cancel() {
+                waiter.resume(throwing: CancellationError())
+            }
+        }
+    }
+
+    private func removeBox(_ box: DownloadStartWaiterBox) {
+        lock.downloaderTestWithLock {
+            waiters.removeAll { $0 === box }
+        }
+    }
+}
+
+/// One parked waiter on a `GatedDownloaderUseCase` gate. The box lets the
+/// task's own cancellation handler resume exactly its continuation: a bare
+/// continuation cannot find itself in `onCancel`.
+private final class DownloadStartWaiterBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var cancelled = false
+
+    /// Parks the continuation, unless already cancelled (then the caller
+    /// resumes the returned continuation immediately with `CancellationError`).
+    func park(_ waiter: CheckedContinuation<Void, Error>) -> CheckedContinuation<Void, Error>? {
+        lock.downloaderTestWithLock {
+            if cancelled {
+                return waiter
+            }
+            continuation = waiter
+            return nil
+        }
+    }
+
+    /// Takes the waiter on the release path; nil when already cancelled.
+    func take() -> CheckedContinuation<Void, Error>? {
+        lock.downloaderTestWithLock {
+            let waiter = continuation
+            continuation = nil
+            return waiter
+        }
+    }
+
+    /// Cancels the waiter; nil when already released or never parked.
+    func cancel() -> CheckedContinuation<Void, Error>? {
+        lock.downloaderTestWithLock {
+            cancelled = true
+            let waiter = continuation
+            continuation = nil
+            return waiter
+        }
     }
 }
 
