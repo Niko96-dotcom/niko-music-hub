@@ -81,7 +81,7 @@ public final class HubTerminationCoordinator {
 
     /// The delegate's whole applicationShouldTerminate decision (ADR-019), without AppKit.
     public func answerTerminateRequest(
-        confirm: (HubQuitPrompt) -> Bool,
+        confirm: @MainActor (HubQuitPrompt) -> Bool,
         reply: @escaping @MainActor () -> Void
     ) -> TerminateAnswer {
         if isStoppingWork { return .later }
