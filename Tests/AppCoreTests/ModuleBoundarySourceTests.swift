@@ -51,7 +51,7 @@ final class ModuleBoundarySourceTests: XCTestCase {
     }
 
     func testProductBuildsUseStrictTargetImportCheck() throws {
-        for script in ["script/ci.sh", "script/lib/app_lifecycle.sh"] {
+        for script in ["script/ci.sh", "script/ci-release.sh", "script/lib/app_lifecycle.sh"] {
             let buildCommands = try SourceTestSupport.read(script)
                 .components(separatedBy: .newlines)
                 // Drop shell comments, so a flag written after `#` does not count.
