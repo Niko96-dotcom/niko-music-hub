@@ -46,8 +46,9 @@ finish.
 2. **Quit prompt (implemented).** `HubTerminationCoordinator` (AppCore) reads
    `ShellJobStatusCenter.quitBlockingWork`: every unfinished `JobRunner` job
    (downloads, stems) plus the extra sources whose `ShellJobStatus.blocksQuit`
-   is set (the converter, the Project Vault queue, a recorder take and a helper
-   install; the read-only archive scan sets it to `false`).
+   is set (the converter, the Project Vault queue, a recorder take, a helper
+   install and a pending download start; the read-only archive scan sets it to
+   `false`).
    - Nothing registered and nothing unwinding → `.terminateNow`. A job cancelled
      earlier from the jobs strip leaves the list at once while its cleanup still
      runs; quit then waits for it without asking (`.waitForCancelledWork`).
