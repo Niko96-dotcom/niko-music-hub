@@ -450,16 +450,35 @@ struct ArchiveCatalogCoordinator {
         // Song.id is the standardized song-folder path; resolver returns folder URLs.
         var ids = Set(resolution.songFolders.map { $0.standardizedFileURL.path })
 
+        // `standardizedFileURL` only strips the `/private` alias while the path exists, so a
+        // folder that was just removed or renamed away standardizes to `/private/tmp/...`
+        // while the song scanned before it vanished carries the `/tmp/...` id. Match on the
+        // alias-stable spelling and report the song's own id, which is what the merge compares.
+        let folderKeys = Set(ids.map(Self.aliasStablePath))
+        for song in existing where folderKeys.contains(Self.aliasStablePath(song.id)) {
+            ids.insert(song.id)
+        }
+
         guard !resolution.rootsForRootLevelScan.isEmpty else { return ids }
 
-        let rootPaths = Set(resolution.rootsForRootLevelScan.map { $0.standardizedFileURL.path })
+        let rootPaths = Set(resolution.rootsForRootLevelScan.map { Self.aliasStablePath($0.standardizedFileURL.path) })
         for song in existing {
-            let songPath = song.folderPath.standardizedFileURL.path
+            let songPath = Self.aliasStablePath(song.folderPath.standardizedFileURL.path)
             for rootPath in rootPaths where isRootLevelCPRPath(songPath, ofRoot: rootPath) {
                 ids.insert(song.id)
             }
         }
         return ids
+    }
+
+    /// Path spelling that does not depend on whether the file still exists: drops the
+    /// `/private` prefix of the `/tmp`, `/var` and `/etc` aliases.
+    private static func aliasStablePath(_ path: String) -> String {
+        for alias in ["/private/tmp", "/private/var", "/private/etc"]
+        where path == alias || path.hasPrefix(alias + "/") {
+            return String(path.dropFirst("/private".count))
+        }
+        return path
     }
 
     private static func isRootLevelCPRPath(_ path: String, ofRoot rootPath: String) -> Bool {
