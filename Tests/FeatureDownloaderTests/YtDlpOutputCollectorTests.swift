@@ -269,16 +269,28 @@ final class YtDlpOutputCollectorTests: XCTestCase {
         XCTAssertTrue(try collector.finish().isEmpty)
     }
 
+    /// The collector rejects a leading `~` lexically and never expands it, so no real
+    /// home is involved. To keep the negative case meaningful, an existing, collectable
+    /// file sits at `<outputDir>/~/<name>`: without the tilde guard, `~/<name>` would be
+    /// read as a relative path, resolve inside the output directory and be accepted.
     func testTildePathIsRejected() throws {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        let fileName = "collector-tilde-\(UUID().uuidString).mp4"
-        let homeFile = homeDir.appendingPathComponent(fileName)
-        FileManager.default.createFile(atPath: homeFile.path, contents: Data("x".utf8))
-        defer { try? FileManager.default.removeItem(at: homeFile) }
         let outputDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("collector-tilde-out-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        let literalTildeDir = outputDir.appendingPathComponent("~", isDirectory: true)
+        try FileManager.default.createDirectory(at: literalTildeDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: outputDir) }
+        let fileName = "collector-tilde-\(UUID().uuidString).mp4"
+        let existingFile = literalTildeDir.appendingPathComponent(fileName)
+        XCTAssertTrue(FileManager.default.createFile(atPath: existingFile.path, contents: Data("x".utf8)))
+
+        // Control: the very same existing file is accepted through its absolute path.
+        let control = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+        control.consume("NIKO_MUSIC_HUB_FILE:\(existingFile.path)\n")
+        XCTAssertEqual(try control.finish(), [existingFile.standardizedFileURL])
 
         let collector = YtDlpOutputCollector(
             outputDirectory: outputDir,
