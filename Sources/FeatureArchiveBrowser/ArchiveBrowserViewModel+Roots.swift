@@ -355,9 +355,12 @@ extension ArchiveBrowserViewModel {
     }
 
     /// Folders an index/diagnostics export or a New Song must stay out of: the
-    /// browsed roots plus the enabled Vault archive root, which `roots` leaves out
-    /// (ENG-10). Both its stored path and its bookmarked location, stale or not,
-    /// are protected, so a moved archive folder stays covered.
+    /// browsed roots plus the configured Vault archive root, which `roots` leaves out
+    /// (ENG-10). It stays protected whether or not Vault is switched on: turning the
+    /// switch off drops the archive from browsing but does not make its retained
+    /// generations writable. The Active root is not added, so a New Song can still
+    /// be created there. Both the archive's stored path and its bookmarked location,
+    /// stale or not, are protected, so a moved archive folder stays covered.
     func writeProtectedRoots() -> [URL] {
         let settings: AppSettings
         do {
@@ -366,8 +369,7 @@ extension ArchiveBrowserViewModel {
             diagnostics.log(.warning, "Write guard could not read Vault settings: \(error)")
             return roots
         }
-        guard settings.vault.isEnabled,
-              let archiveRoot = settings.musicRoots.first(where: { $0.id == settings.vault.archiveRootID })
+        guard let archiveRoot = settings.musicRoots.first(where: { $0.id == settings.vault.archiveRootID })
         else { return roots }
         var protected = roots + [archiveRoot.fallbackURL]
         if let bookmark = archiveRoot.securityScopedBookmark,

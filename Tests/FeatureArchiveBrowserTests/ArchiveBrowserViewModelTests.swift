@@ -4261,6 +4261,104 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
     }
 
+    /// T-001: switching Vault off drops the archive from browsing but must not make
+    /// its retained generations writable by index export, diagnostics export or New Song.
+    func testExportsAndNewSongRefuseConfiguredArchiveFolderWhenVaultIsOff() throws {
+        let fixture = try VaultArchiveWriteGuardFixture(vaultEnabled: false)
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.makeViewModel()
+        XCTAssertFalse(
+            viewModel.roots.contains { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: fixture.vaultArchive) },
+            "precondition: with Vault off the archive root is not browsed"
+        )
+        try FileManager.default.createDirectory(at: fixture.generation, withIntermediateDirectories: true)
+        let before = try Self.snapshot(of: fixture.vaultArchive)
+
+        // The archive itself, a generation-like subfolder and a symlink alias of the archive.
+        for folder in [fixture.vaultArchive, fixture.generation, fixture.archiveAlias] {
+            XCTAssertThrowsError(
+                try viewModel.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
+                "index export into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+            }
+            XCTAssertThrowsError(
+                try viewModel.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
+                "diagnostics export into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+            }
+            XCTAssertThrowsError(
+                try viewModel.createNewSong(request: NewSongRequest(name: "Vault Draft", root: folder)),
+                "New Song into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .archiveRootIsReadOnly)
+            }
+        }
+        XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), before, "a refused write leaves the archive untouched")
+        XCTAssertNil(viewModel.lastIndexExportPath)
+        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+    }
+
+    /// T-001 positive control: Active and plain folders stay writable with Vault off.
+    func testExportsAndNewSongStillWriteToActiveAndPlainFoldersWhenVaultIsOff() throws {
+        let fixture = try VaultArchiveWriteGuardFixture(vaultEnabled: false)
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.makeViewModel()
+
+        let activeSong = try viewModel.createNewSong(request: NewSongRequest(name: "Active Draft", root: fixture.active))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: activeSong.folderPath.path))
+        _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
+        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        XCTAssertEqual(
+            Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
+            ["index.json", "scan.txt", "Plain Draft"]
+        )
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: fixture.active.path),
+            ["Active Draft"]
+        )
+    }
+
+    func testExportRefusesConfiguredArchiveFolderAtItsBookmarkedLocationWhenVaultIsOff() throws {
+        for stale in [false, true] {
+            let fixture = try VaultArchiveWriteGuardFixture(bookmarkedArchive: true, vaultEnabled: false)
+            defer { fixture.cleanUp() }
+            let viewModel = fixture.makeViewModel(staleBookmark: stale)
+
+            XCTAssertThrowsError(
+                try viewModel.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
+                "stale bookmark: \(stale)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+            }
+            XCTAssertThrowsError(
+                try viewModel.exportDiagnostics(to: fixture.bookmarkTarget.appendingPathComponent("scan.txt")),
+                "stale bookmark: \(stale)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
+            }
+            XCTAssertThrowsError(
+                try viewModel.createNewSong(request: NewSongRequest(name: "Moved Draft", root: fixture.bookmarkTarget)),
+                "stale bookmark: \(stale)"
+            )
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fixture.bookmarkTarget.path), [])
+        }
+    }
+
+    /// Relative path -> file bytes (nil for directories), so any created or changed entry shows.
+    private static func snapshot(of directory: URL) throws -> [String: Data?] {
+        let manager = FileManager.default
+        var result: [String: Data?] = [:]
+        for case let url as URL in try XCTUnwrap(manager.enumerator(at: directory, includingPropertiesForKeys: nil)) {
+            var isDirectory: ObjCBool = false
+            manager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+            result[url.path] = isDirectory.boolValue ? .some(nil) : .some(try Data(contentsOf: url))
+        }
+        return result
+    }
+
     func testExportIndexRefusesDestinationInsideScanRoot() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("nmh-export-scan-root-\(UUID().uuidString)", isDirectory: true)
@@ -4288,10 +4386,13 @@ private struct VaultArchiveWriteGuardFixture {
     let vaultArchive: URL
     let bookmarkTarget: URL
     let plain: URL
+    let active: URL
+    let archiveAlias: URL
+    let generation: URL
     let suiteName: String
     let settingsStore: UserDefaultsSettingsStore
 
-    init(bookmarkedArchive: Bool = false) throws {
+    init(bookmarkedArchive: Bool = false, vaultEnabled: Bool = true) throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
         base = FileManager.default.temporaryDirectory
@@ -4300,9 +4401,16 @@ private struct VaultArchiveWriteGuardFixture {
         vaultArchive = base.appendingPathComponent("VaultArchive", isDirectory: true)
         bookmarkTarget = base.appendingPathComponent("VaultArchiveMoved", isDirectory: true)
         plain = base.appendingPathComponent("Plain", isDirectory: true)
-        for folder in [scanRoot, vaultArchive.appendingPathComponent("Existing Song", isDirectory: true), bookmarkTarget, plain] {
+        active = base.appendingPathComponent("Active", isDirectory: true)
+        archiveAlias = base.appendingPathComponent("ArchiveAlias", isDirectory: true)
+        generation = vaultArchive.appendingPathComponent("generations/project-1/generation-1", isDirectory: true)
+        for folder in [
+            scanRoot, vaultArchive.appendingPathComponent("Existing Song", isDirectory: true),
+            bookmarkTarget, plain, active
+        ] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         }
+        try FileManager.default.createSymbolicLink(at: archiveAlias, withDestinationURL: vaultArchive)
         suiteName = "FeatureArchiveBrowserTests.VaultWriteGuard.\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -4316,9 +4424,11 @@ private struct VaultArchiveWriteGuardFixture {
             securityScopedBookmark: bookmarkedArchive ? VaultArchiveBookmarkResolver.bookmark : nil
         )
         let scanOnly = StoredMusicRoot(role: .scanOnly, url: scanRoot)
+        let activeRoot = StoredMusicRoot(role: .active, url: active)
         try settingsStore.updateSettings { settings in
-            settings.musicRoots = [archiveRoot, scanOnly]
-            settings.vault.isEnabled = true
+            settings.musicRoots = [archiveRoot, activeRoot, scanOnly]
+            settings.vault.isEnabled = vaultEnabled
+            settings.vault.activeRootID = activeRoot.id
             settings.vault.archiveRootID = archiveID
             settings.archiveOnboardingCompleted = true
         }
