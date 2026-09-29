@@ -58,8 +58,48 @@ if "NikoMusicHubCLI" not in products or "NikoMusicHubCLI" not in targets:
 FIXTURE_ROOT="$(pwd)/Fixtures/CubaseArchive"
 OUT="$(mktemp -t niko-cli-index.XXXXXX.json)"
 swift run NikoMusicHubCLI export-index --roots "$FIXTURE_ROOT" --output "$OUT"
-/usr/bin/python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT"
+# Expected facts are written down from script/fixtures/generate_cubase_archive_fixtures.sh
+# (8 CPR song folders + "Broken Folder Example"), not recomputed from the export itself.
+/usr/bin/python3 - "$OUT" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1]))
+songs = data.get("songs")
+if not isinstance(songs, list):
+    print("CLI export smoke: missing songs array", file=sys.stderr)
+    sys.exit(1)
+if not (data.get("songCount") == 9 == len(songs)):
+    print(f"CLI export smoke: songCount={data.get('songCount')!r} rows={len(songs)}, expected 9 and 9", file=sys.stderr)
+    sys.exit(1)
+neon = [song for song in songs if song.get("displayTitle") == "Neon Hook"]
+if len(neon) != 1:
+    print(f"CLI export smoke: expected exactly one Neon Hook row, found {len(neon)}", file=sys.stderr)
+    sys.exit(1)
+latest = (neon[0].get("latestCPR") or {}).get("fileName")
+if latest != "Neon Hook.cpr":
+    print(f"CLI export smoke: Neon Hook latestCPR={latest!r}, expected 'Neon Hook.cpr'", file=sys.stderr)
+    sys.exit(1)
+preview = neon[0].get("mainPreviewCandidateID") or ""
+if not preview.endswith("/Neon Hook/Mixdown/Neon Hook v3.wav"):
+    print(f"CLI export smoke: Neon Hook mainPreviewCandidateID={preview!r}", file=sys.stderr)
+    sys.exit(1)
+PY
 rm -f "$OUT"
+
+echo "== NikoMusicHubCLI refuses export into the archive root =="
+fixture_digest() {
+  (cd "$FIXTURE_ROOT" && find . | LC_ALL=C sort && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256) | shasum -a 256
+}
+FIXTURE_BEFORE="$(fixture_digest)"
+if swift run NikoMusicHubCLI export-index --roots "$FIXTURE_ROOT" --output "$FIXTURE_ROOT/cli-export-must-be-refused.json"; then
+  echo "CLI export smoke: export-index wrote into the archive root" >&2
+  exit 1
+fi
+if [[ "$(fixture_digest)" != "$FIXTURE_BEFORE" ]]; then
+  echo "CLI export smoke: fixture archive changed after a refused export" >&2
+  exit 1
+fi
 
 echo "== release engineering regression gate =="
 ./script/release-version-verify.sh
