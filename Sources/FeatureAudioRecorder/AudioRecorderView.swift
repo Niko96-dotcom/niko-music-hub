@@ -493,6 +493,17 @@ public struct AudioRecorderView: View {
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
+        case .settingsUnreadable:
+            return AppErrorCard(
+                category: .conversionFile,
+                label: "Settings Couldn’t Be Read",
+                icon: "gearshape.trianglebadge.exclamationmark",
+                body: error.errorDescription ?? "",
+                recoveryActions: [
+                    AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain),
+                    AppErrorCard.RecoveryAction(label: "Dismiss", style: .secondary, action: .dismiss)
+                ]
+            )
         case .verificationFailed:
             return AppErrorCard(
                 category: .conversionFile,

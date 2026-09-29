@@ -30,21 +30,14 @@ public struct AudioRecorderFeature: ToolFeature {
             return viewModel
         }
         let capturePort = CoreAudioTapAdapter()
-        let useCase = RecordSystemAudioUseCase(
-            capturePort: capturePort,
-            archiveRootsProvider: {
-                let settings = (try? context.settingsStore.loadSettings()) ?? .default
-                return settings.outputProtectedRoots
-            }
-        )
+        let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
+        // Display-only value: tolerant of unreadable settings. Anything that
+        // gates a write goes through `destinationProvider` below.
         let settings = (try? context.settingsStore.loadSettings()) ?? .default
         let viewModel = AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: useCase,
-            outputURLProvider: {
-                let settings = (try? context.settingsStore.loadSettings()) ?? .default
-                return settings.outputFolder.url
-            },
+            destinationProvider: { try RecordingDestination.load(from: context.settingsStore) },
             outputInboxStore: context.outputInboxStore,
             initialMaxDurationMinutes: RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes),
             jobStatusCenter: context.jobStatusCenter

@@ -47,6 +47,30 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
     return markers.contains { lowered.contains($0) }
 }
 
+/// Where a take goes and which roots stay write-protected, read together from
+/// one settings snapshot. `protectedRoots == nil` defers to the use case's own
+/// provider (used by tests and the smoke harness with no settings store).
+public struct RecordingDestination: Sendable {
+    public let folder: URL
+    public let protectedRoots: [URL]?
+
+    public init(folder: URL, protectedRoots: [URL]? = nil) {
+        self.folder = folder
+        self.protectedRoots = protectedRoots
+    }
+
+    /// One throwing settings read. `loadSettings()` returns defaults when
+    /// nothing was ever saved (first run) and throws when saved data is
+    /// unreadable; that error is passed on rather than replaced by defaults.
+    public static func load(from settingsStore: any SettingsStore) throws -> RecordingDestination {
+        let settings = try settingsStore.loadSettings()
+        return RecordingDestination(
+            folder: settings.outputFolder.url,
+            protectedRoots: settings.outputProtectedRoots
+        )
+    }
+}
+
 @MainActor
 public final class AudioRecorderViewModel: ObservableObject {
     public static let toolID = ToolFeatureID("audio-recorder")
@@ -97,7 +121,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
     private let now: @Sendable () -> Date
-    private let outputURLProvider: @MainActor () -> URL
+    private let destinationProvider: @MainActor () throws -> RecordingDestination
     private let outputInboxStore: any OutputInboxStore
     private let jobStatusCenter: ShellJobStatusCenter?
     private var isStartInFlight = false
@@ -114,7 +138,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.init(
             capturePort: capturePort,
             useCase: useCase,
-            outputURLProvider: { outputURL },
+            destinationProvider: { RecordingDestination(folder: outputURL) },
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDurationMinutes,
             jobStatusCenter: jobStatusCenter,
@@ -125,7 +149,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     public init(
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
-        outputURLProvider: @escaping @MainActor () -> URL,
+        destinationProvider: @escaping @MainActor () throws -> RecordingDestination,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
@@ -134,7 +158,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.capturePort = capturePort
         self.useCase = useCase
         self.now = now
-        self.outputURLProvider = outputURLProvider
+        self.destinationProvider = destinationProvider
         self.outputInboxStore = outputInboxStore
         self.jobStatusCenter = jobStatusCenter
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
@@ -184,11 +208,23 @@ public final class AudioRecorderViewModel: ObservableObject {
             ? TimeInterval(maxDurationMinutes * 60)
             : nil
 
+        // One settings snapshot supplies both the folder and its protected
+        // roots. Unreadable settings must never fall back to defaults: those
+        // carry no protected roots, so the guard would allow everything.
+        let destination: RecordingDestination
+        do {
+            destination = try destinationProvider()
+        } catch {
+            presentFailure(.settingsUnreadable)
+            return
+        }
+
         let config = RecordSystemAudioUseCase.Config(
-            outputURL: outputURLProvider(),
+            outputURL: destination.folder,
             preset: .cubaseDefault,
             maxDuration: maxDuration,
-            filenameOverride: filenameOverride.isEmpty ? nil : filenameOverride
+            filenameOverride: filenameOverride.isEmpty ? nil : filenameOverride,
+            protectedRoots: destination.protectedRoots
         )
         let fileURL: URL
         do {

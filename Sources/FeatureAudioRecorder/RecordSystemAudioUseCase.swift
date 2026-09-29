@@ -8,17 +8,22 @@ public final class RecordSystemAudioUseCase: Sendable {
         public let preset: AudioPreset
         public let maxDuration: TimeInterval?
         public let filenameOverride: String?
+        /// Protected roots from the same settings snapshot as `outputURL`.
+        /// When nil the use case falls back to its `archiveRootsProvider`.
+        public let protectedRoots: [URL]?
 
         public init(
             outputURL: URL,
             preset: AudioPreset,
             maxDuration: TimeInterval? = 1800,
-            filenameOverride: String? = nil
+            filenameOverride: String? = nil,
+            protectedRoots: [URL]? = nil
         ) {
             self.outputURL = outputURL
             self.preset = preset
             self.maxDuration = maxDuration
             self.filenameOverride = filenameOverride
+            self.protectedRoots = protectedRoots
         }
     }
 
@@ -43,22 +48,22 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     public func prepareOutputURL(config: Config) throws -> URL {
-        try validateOutputLocation(config.outputURL)
+        try validateOutputLocation(config.outputURL, protectedRoots: config.protectedRoots)
         let finalURL = resolvedOutputURL(config: config)
-        try ensureOutputDirectoryExists(for: finalURL)
+        try ensureOutputDirectoryExists(for: finalURL, protectedRoots: config.protectedRoots)
         return finalURL
     }
 
-    private func validateOutputLocation(_ outputFolder: URL) throws {
+    private func validateOutputLocation(_ outputFolder: URL, protectedRoots: [URL]?) throws {
         try OutputWriteGuard().validateCanWriteOutput(
             to: outputFolder,
-            archiveRoots: archiveRootsProvider()
+            archiveRoots: protectedRoots ?? archiveRootsProvider()
         )
     }
 
-    public func ensureOutputDirectoryExists(for fileURL: URL) throws {
+    public func ensureOutputDirectoryExists(for fileURL: URL, protectedRoots: [URL]? = nil) throws {
         let outputDirectory = fileURL.deletingLastPathComponent()
-        try validateOutputLocation(outputDirectory)
+        try validateOutputLocation(outputDirectory, protectedRoots: protectedRoots)
         do {
             try FileManager.default.createDirectory(
                 at: outputDirectory,
