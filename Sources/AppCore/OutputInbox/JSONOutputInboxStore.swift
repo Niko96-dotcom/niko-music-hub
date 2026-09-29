@@ -79,32 +79,50 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     }
 
     public func addItem(_ item: OutputInboxItem) throws {
+        try addItems([item])
+    }
+
+    /// Records every item in ONE lock hold, one load, one save and one change
+    /// notification. `save` writes the whole file atomically, so a failure
+    /// leaves the stored inbox exactly as it was: none of the batch is
+    /// recorded. Each item follows the `addItem` rule: a row with the same
+    /// standardized file URL and source tool is updated in place (its `id` and
+    /// `createdAt` are kept) instead of duplicated, so a retried batch never
+    /// doubles rows.
+    public func addItems(_ newItems: [OutputInboxItem]) throws {
+        guard !newItems.isEmpty else { return }
         try lock.withLock {
             // Same-call recovery: a corrupt file is quarantined above, then
-            // the new item is recorded on the resulting empty inbox.
+            // the new items are recorded on the resulting empty inbox.
             let (loaded, _) = try loadItemsOrRecover()
             var items = loaded
-            if let index = items.firstIndex(where: { existing in
-                existing.fileURL.standardizedFileURL == item.fileURL.standardizedFileURL
-                    && existing.sourceToolID == item.sourceToolID
-            }) {
-                let existing = items[index]
-                items[index] = OutputInboxItem(
-                    id: existing.id,
-                    fileURL: item.fileURL.standardizedFileURL,
-                    sourceToolID: item.sourceToolID,
-                    createdAt: existing.createdAt,
-                    status: item.status,
-                    metadata: item.metadata
-                )
-            } else {
-                var item = item
-                item.fileURL = item.fileURL.standardizedFileURL
-                items.append(item)
+            for item in newItems {
+                merge(item, into: &items)
             }
             try save(items)
         }
         notifyChanged()
+    }
+
+    private func merge(_ item: OutputInboxItem, into items: inout [OutputInboxItem]) {
+        if let index = items.firstIndex(where: { existing in
+            existing.fileURL.standardizedFileURL == item.fileURL.standardizedFileURL
+                && existing.sourceToolID == item.sourceToolID
+        }) {
+            let existing = items[index]
+            items[index] = OutputInboxItem(
+                id: existing.id,
+                fileURL: item.fileURL.standardizedFileURL,
+                sourceToolID: item.sourceToolID,
+                createdAt: existing.createdAt,
+                status: item.status,
+                metadata: item.metadata
+            )
+        } else {
+            var item = item
+            item.fileURL = item.fileURL.standardizedFileURL
+            items.append(item)
+        }
     }
 
     public func updateItem(_ item: OutputInboxItem) throws {

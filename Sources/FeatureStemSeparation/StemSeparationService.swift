@@ -111,8 +111,16 @@ public struct StemSeparationService: Sendable {
         case .success(let scannedStems):
             progress.log("Found \(scannedStems.count) stems.")
             let stems = renamedWithTitle(scannedStems, title: title)
+            do {
+                try addInboxItems(stems: stems)
+            } catch {
+                // Stem files stay where they are; only the inbox handoff failed.
+                progress.log("Inbox handoff failed: \(error.localizedDescription)")
+                throw StemSeparationServiceError(
+                    "Stems were saved to \(outputFolderURL.path), but couldn't be added to the Output Inbox."
+                )
+            }
             progress.setOutputFileURLs(stems.map(\.fileURL))
-            try addInboxItems(stems: stems)
         }
     }
 
@@ -138,8 +146,9 @@ public struct StemSeparationService: Sendable {
     }
 
     private func addInboxItems(stems: [StemOutput]) throws {
-        for stem in stems {
-            let item = OutputInboxItem(
+        // One store write: a failure leaves no rows, never half a set.
+        let items = stems.map { stem in
+            OutputInboxItem(
                 fileURL: stem.fileURL,
                 sourceToolID: Self.toolID,
                 status: .available,
@@ -148,8 +157,8 @@ public struct StemSeparationService: Sendable {
                     "displayName": stem.role.displayName
                 ]
             )
-            try outputInboxStore.addItem(item)
         }
+        try outputInboxStore.addItems(items)
     }
 
     private func createDirectory(at url: URL) throws {

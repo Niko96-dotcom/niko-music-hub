@@ -3,6 +3,10 @@ import Foundation
 public protocol OutputInboxStore: Sendable {
     func listItems() throws -> [OutputInboxItem]
     func addItem(_ item: OutputInboxItem) throws
+    /// Records a whole set of rows as one unit: either every item is stored or,
+    /// when this throws, none of them is. Real stores must override this with a
+    /// single write; the default below is not atomic.
+    func addItems(_ items: [OutputInboxItem]) throws
     func updateItem(_ item: OutputInboxItem) throws
     /// Atomically patches BPM metadata keys for one row.
     ///
@@ -30,6 +34,15 @@ public protocol OutputInboxStore: Sendable {
 }
 
 public extension OutputInboxStore {
+    /// NON-atomic fallback for fakes only: it loops `addItem`, so a failure
+    /// part-way leaves the earlier rows behind. Every real store must override
+    /// `addItems` with one write.
+    func addItems(_ items: [OutputInboxItem]) throws {
+        for item in items {
+            try addItem(item)
+        }
+    }
+
     func loadRefreshedItems() throws -> [OutputInboxItem] {
         try refreshAvailability()
         return try listItems()

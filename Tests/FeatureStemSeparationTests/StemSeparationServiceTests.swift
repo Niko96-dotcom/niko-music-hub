@@ -122,6 +122,66 @@ struct StemSeparationServiceTests {
         #expect(runner.job(id: job.id)?.state == .failed)
     }
 
+    @Test(arguments: [StemSeparationPreset.fast4, .experimental6])
+    func startJob_publishesCompleteSetToRealInboxInOneWrite(preset: StemSeparationPreset) async throws {
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = preset.expectedStemRoles.map { ($0, "\($0.rawValue).wav") }
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let inbox = try makeRealInbox()
+        let runner = JobRunner()
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        let job = service.startJob(request: StemSeparationRequest(
+            inputURL: makeInputFile(), outputRootURL: root, preset: preset, title: "Neon Hook"
+        ))
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .completed)
+        #expect(finished.outputFileURLs.count == preset.expectedStemRoles.count)
+        let rows = try inbox.listItems()
+        #expect(rows.count == preset.expectedStemRoles.count)
+        #expect(Set(rows.map { $0.metadata["role"] ?? "" }) == Set(preset.expectedStemRoles.map(\.rawValue)))
+    }
+
+    @Test
+    func startJob_failedInboxWrite_leavesNoRowsKeepsFilesAndNamesFolder_thenRetryPublishesSetOnce() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let inbox = FailingBatchInboxStore(underlying: try makeRealInbox())
+        let runner = JobRunner()
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let request = StemSeparationRequest(inputURL: makeInputFile(), outputRootURL: root, preset: .fast4)
+
+        let failedJob = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: failedJob)
+
+        let failed = try #require(runner.job(id: failedJob.id))
+        let folder = try #require(backend.requests.first?.outputFolderURL)
+        #expect(failed.state == .failed)
+        #expect(failed.outputFileURLs.isEmpty)
+        #expect(failed.message.contains(folder.path))
+        #expect(inbox.singleAddCalls == 0)
+        #expect(try inbox.listItems().isEmpty)
+        let survivors = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(survivors.count == 4)
+
+        inbox.failBatches = false
+        for _ in 0..<2 {
+            let job = service.startJob(request: request)
+            try await waitUntilFinished(runner: runner, job: job)
+            #expect(runner.job(id: job.id)?.state == .completed)
+        }
+        // Each run separates into its own folder; the failed run left no rows behind,
+        // so two successful runs hold exactly one row per stem each.
+        let rows = try inbox.listItems()
+        #expect(rows.count == 8)
+        #expect(Set(rows.map(\.fileURL)).count == 8)
+    }
+
     @Test
     func startJob_typedHelperFailureWithChangedWording_marksJobFailedWithReason() async throws {
         let backend = MockStemSeparationBackend()
@@ -394,6 +454,41 @@ struct StemSeparationServiceTests {
             Issue.record("The process runner did not receive the demucs output directory.")
         }
     }
+}
+
+private func makeRealInbox() throws -> JSONOutputInboxStore {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("StemInboxTests-\(UUID().uuidString)", isDirectory: true)
+    return JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+}
+
+/// Delegates to a real store but can refuse whole-batch writes, like a failed save.
+private final class FailingBatchInboxStore: OutputInboxStore, @unchecked Sendable {
+    struct Refused: Error {}
+    private let underlying: JSONOutputInboxStore
+    private let lock = NSLock()
+    private var refuse = true
+    private var singleCalls = 0
+
+    init(underlying: JSONOutputInboxStore) { self.underlying = underlying }
+
+    var failBatches: Bool {
+        get { lock.withLock { refuse } }
+        set { lock.withLock { refuse = newValue } }
+    }
+    var singleAddCalls: Int { lock.withLock { singleCalls } }
+
+    func listItems() throws -> [OutputInboxItem] { try underlying.listItems() }
+    func addItem(_ item: OutputInboxItem) throws {
+        lock.withLock { singleCalls += 1 }
+        try underlying.addItem(item)
+    }
+    func addItems(_ items: [OutputInboxItem]) throws {
+        if failBatches { throw Refused() }
+        try underlying.addItems(items)
+    }
+    func updateItem(_ item: OutputInboxItem) throws { try underlying.updateItem(item) }
+    func refreshAvailability() throws { try underlying.refreshAvailability() }
 }
 
 private func makeInputFile() -> URL {

@@ -20,6 +20,90 @@ final class OutputInboxStoreTests: XCTestCase {
         XCTAssertEqual(items[0].metadata["kind"], "sample")
     }
 
+    func testAddItemsPersistsWholeBatchWithOneNotification() throws {
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+        let urls = try (1...4).map { try makeExistingFile(named: "batch-\($0).wav") }
+        let batch = urls.map {
+            OutputInboxItem(fileURL: $0, sourceToolID: "dev-tool", status: .available)
+        }
+        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        posted.assertForOverFulfill = true
+
+        try store.addItems(batch)
+
+        wait(for: [posted], timeout: 1.0)
+        let fresh = JSONOutputInboxStore(storageURL: storeURL)
+        XCTAssertEqual(Set(try fresh.listItems().map(\.fileURL)), Set(urls.map(\.standardizedFileURL)))
+        XCTAssertEqual(try fresh.listItems().count, 4)
+    }
+
+    func testAddItemsUpsertsExistingRowsKeepingIdentity() throws {
+        let store = try makeStore()
+        let existingURL = try makeExistingFile(named: "already.wav")
+        let newURL = try makeExistingFile(named: "new.wav")
+        let original = OutputInboxItem(
+            fileURL: existingURL,
+            sourceToolID: "dev-tool",
+            createdAt: Date(timeIntervalSince1970: 100),
+            status: .pending,
+            metadata: ["version": "old"]
+        )
+        try store.addItem(original)
+
+        try store.addItems([
+            OutputInboxItem(
+                fileURL: existingURL,
+                sourceToolID: "dev-tool",
+                createdAt: Date(timeIntervalSince1970: 900),
+                status: .available,
+                metadata: ["version": "new"]
+            ),
+            OutputInboxItem(fileURL: newURL, sourceToolID: "dev-tool", status: .available)
+        ])
+
+        let items = try store.listItems()
+        XCTAssertEqual(items.count, 2)
+        let merged = try XCTUnwrap(items.first { $0.fileURL == existingURL.standardizedFileURL })
+        XCTAssertEqual(merged.id, original.id)
+        XCTAssertEqual(merged.createdAt, original.createdAt)
+        XCTAssertEqual(merged.status, .available)
+        XCTAssertEqual(merged.metadata["version"], "new")
+    }
+
+    func testAddItemsFailedSaveLeavesStoredInboxUnchanged() throws {
+        let directory = temporaryDirectory()
+        let storeURL = directory.appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
+        let keptURL = try makeExistingFile(named: "kept.wav")
+        try store.addItem(OutputInboxItem(fileURL: keptURL, sourceToolID: "dev-tool", status: .available))
+        let before = try Data(contentsOf: storeURL)
+        let batch = try (1...3).map {
+            OutputInboxItem(
+                fileURL: try makeExistingFile(named: "lost-\($0).wav"),
+                sourceToolID: "dev-tool",
+                status: .available
+            )
+        }
+
+        // A read-only storage folder makes the atomic write fail after the load.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+        }
+        XCTAssertThrowsError(try store.addItems(batch))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+
+        XCTAssertEqual(try Data(contentsOf: storeURL), before, "a failed batch must not touch the stored file")
+        let fresh = JSONOutputInboxStore(storageURL: storeURL)
+        XCTAssertEqual(try fresh.listItems().map(\.fileURL), [keptURL.standardizedFileURL])
+
+        try fresh.addItems(batch)
+        XCTAssertEqual(try fresh.listItems().count, 4, "retry records the full batch exactly once")
+        try fresh.addItems(batch)
+        XCTAssertEqual(try fresh.listItems().count, 4, "a repeated batch never duplicates rows")
+    }
+
     func testUpdatesExistingItem() throws {
         let store = try makeStore()
         var item = OutputInboxItem(
