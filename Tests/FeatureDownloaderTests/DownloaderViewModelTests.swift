@@ -1130,7 +1130,68 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart))
     }
 
+    // B-002: every configured music root stays write-protected for downloads while the
+    // Vault switch is OFF. The real settings projection feeds the real view-model guard;
+    // the use case is a spy that must never be reached.
+    func testVaultOffRefusesArchiveOutputAndAliasBeforeEnqueue() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+
+        for destination in fixture.refusedDestinations {
+            let job = Job(sourceToolID: "downloader", title: "Download")
+            let useCase = FakeDownloaderUseCase(job: job)
+            let jobRunner = StaticJobRunner(job: job)
+            let viewModel = makeViewModel(
+                settings: fixture.settings(outputFolder: destination.url),
+                useCase: useCase,
+                jobRunner: jobRunner,
+                outputInboxStore: RecordingOutputInboxStore()
+            )
+            viewModel.urlText = "https://example.com/first"
+            viewModel.downloadState = .readyToDownload
+
+            viewModel.startDownload()
+            try await Task.sleep(for: .milliseconds(50))
+
+            guard case .failed(let message) = viewModel.downloadState else {
+                return XCTFail("\(destination.label): expected .failed but got \(viewModel.downloadState)")
+            }
+            XCTAssertTrue(message.contains("music archive root"), destination.label)
+            XCTAssertEqual(useCase.callCount, 0, destination.label)
+            XCTAssertNil(viewModel.job, destination.label)
+            XCTAssertEqual(try fixture.archiveSnapshot(), before, destination.label)
+        }
+    }
+
+    func testVaultOffAdmitsOrdinaryOutputFolderNextToProtectedArchive() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let useCase = FakeDownloaderUseCase(job: job)
+        let suiteName = "vault-off-downloader-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let viewModel = makeViewModel(
+            settings: fixture.settings(outputFolder: fixture.ordinaryOutput),
+            useCase: useCase,
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            preferences: UserDefaultsPreferenceStore(userDefaults: defaults)
+        )
+        viewModel.urlText = "https://example.com/first"
+        viewModel.downloadState = .readyToDownload
+
+        viewModel.startDownload()
+
+        XCTAssertEqual(viewModel.downloadState, .downloading)
+        try await waitUntil { useCase.callCount == 1 }
+        XCTAssertEqual(try fixture.archiveSnapshot(), before)
+    }
+
     private func makeViewModel(
+        settings: AppSettings? = nil,
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
         useCase: any DownloaderUseCaseRunning,
         jobRunner: any JobRunning,
@@ -1143,7 +1204,7 @@ final class DownloaderViewModelTests: XCTestCase {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         let context = ToolContext(
             registeredToolCount: 1,
-            settingsStore: FixtureSettingsStore(settings: AppSettings(
+            settingsStore: FixtureSettingsStore(settings: settings ?? AppSettings(
                 outputFolder: StoredFolderLocation(url: outputFolder),
                 helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
             )),

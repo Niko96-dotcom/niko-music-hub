@@ -1,5 +1,6 @@
 import AppCore
 import FeatureAudioConverter
+import NikoMusicCore
 import XCTest
 
 final class BatchAudioConversionUseCaseTests: XCTestCase {
@@ -212,6 +213,73 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         XCTAssertEqual(result.outputURL.pathExtension, "wav")
         XCTAssertTrue(message.contains("Output Inbox"))
         XCTAssertEqual(inbox.items.count, 0)
+    }
+
+    // B-002: every configured music root stays write-protected for the converter's
+    // output while the Vault switch is OFF (browsing hides the Vault roots then).
+    func testVaultOffRefusesArchiveOutputAndAliasBeforeAnyConversion() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+
+        for destination in fixture.refusedDestinations {
+            let inbox = RecordingOutputInboxStore()
+            let converter = RecordingBatchConverter { request in
+                makeResult(for: request, converterPath: .native)
+            }
+            let factoryCalls = VaultOffCallCounter()
+            let useCase = BatchAudioConversionUseCase(
+                settingsStore: FixtureSettingsStore(settings: fixture.settings(outputFolder: destination.url)),
+                outputInboxStore: inbox,
+                converterFactory: { _ in
+                    factoryCalls.increment()
+                    return converter
+                }
+            )
+            let file = BatchAudioConversionFile(sourceURL: fixture.input, sourceType: .wav)
+
+            do {
+                _ = try await useCase.convert(files: [file], stopController: StopAfterCurrentController())
+                XCTFail("\(destination.label): conversion into the retained archive must be refused")
+            } catch OutputWriteGuardError.outputInsideArchiveRoot {
+                // Expected: refused at admission.
+            }
+
+            XCTAssertEqual(converter.requests.count, 0, destination.label)
+            XCTAssertEqual(factoryCalls.value, 0, destination.label)
+            XCTAssertEqual(inbox.items.count, 0, destination.label)
+            XCTAssertEqual(try fixture.archiveSnapshot(), before, destination.label)
+        }
+    }
+
+    func testVaultOffAdmitsOrdinaryOutputFolderNextToProtectedArchive() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+        let inbox = RecordingOutputInboxStore()
+        let converter = RecordingBatchConverter { request in
+            makeResult(for: request, converterPath: .native)
+        }
+        let useCase = BatchAudioConversionUseCase(
+            settingsStore: FixtureSettingsStore(settings: fixture.settings(outputFolder: fixture.ordinaryOutput)),
+            outputInboxStore: inbox,
+            converterFactory: { _ in converter }
+        )
+
+        let outcomes = try await useCase.convert(
+            files: [BatchAudioConversionFile(sourceURL: fixture.input, sourceType: .wav)],
+            stopController: StopAfterCurrentController()
+        )
+
+        XCTAssertEqual(converter.requests.count, 1)
+        XCTAssertEqual(
+            converter.requests.first?.outputDirectory.standardizedFileURL.path,
+            fixture.ordinaryOutput.standardizedFileURL.path
+        )
+        guard case .verified = outcomes.first?.status else {
+            return XCTFail("Expected the ordinary output folder to be admitted")
+        }
+        XCTAssertEqual(try fixture.archiveSnapshot(), before)
     }
 
     private func makeUseCase(

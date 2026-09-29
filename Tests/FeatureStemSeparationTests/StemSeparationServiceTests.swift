@@ -264,6 +264,74 @@ struct StemSeparationServiceTests {
         #expect(!fileManager.fileExists(atPath: archive.appendingPathComponent("Stems", isDirectory: true).path))
     }
 
+    // B-002: every configured music root stays write-protected for stem output while the
+    // Vault switch is OFF. The provider is the real `outputProtectedRoots` projection.
+    @Test
+    func startJob_vaultOffRefusesArchiveOutputAndAliasBeforeDirectoryOrBackend() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+
+        for destination in fixture.refusedDestinations {
+            let settings = fixture.settings(outputFolder: destination.url)
+            let backend = MockStemSeparationBackend()
+            let inbox = FakeOutputInboxStore()
+            let runner = JobRunner()
+            let service = StemSeparationService(
+                backend: backend,
+                outputInboxStore: inbox,
+                jobRunner: runner,
+                archiveRootsProvider: { settings.outputProtectedRoots }
+            )
+
+            let job = service.startJob(
+                request: StemSeparationRequest(
+                    inputURL: fixture.input,
+                    outputRootURL: settings.outputFolder.url,
+                    preset: .fast4
+                )
+            )
+            try await waitUntilFinished(runner: runner, job: job)
+
+            #expect(runner.job(id: job.id)?.state == .failed, "\(destination.label)")
+            #expect(backend.requests.isEmpty, "\(destination.label)")
+            #expect(inbox.items.isEmpty, "\(destination.label)")
+            #expect(try fixture.archiveSnapshot() == before, "\(destination.label)")
+        }
+    }
+
+    @Test
+    func startJob_vaultOffAdmitsOrdinaryOutputFolderNextToProtectedArchive() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+        let settings = fixture.settings(outputFolder: fixture.ordinaryOutput)
+        let backend = MockStemSeparationBackend()
+        backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let runner = JobRunner()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: runner,
+            archiveRootsProvider: { settings.outputProtectedRoots }
+        )
+
+        let job = service.startJob(
+            request: StemSeparationRequest(
+                inputURL: fixture.input,
+                outputRootURL: settings.outputFolder.url,
+                preset: .fast4
+            )
+        )
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(backend.requests.count == 1)
+        let outputFolder = backend.requests.first?.outputFolderURL
+        #expect(outputFolder?.standardizedFileURL.path.hasPrefix(fixture.ordinaryOutput.standardizedFileURL.path) == true)
+        #expect(try fixture.archiveSnapshot() == before)
+    }
+
     @Test
     func cancelingJob_terminatesDemucsProcessRunner() async throws {
         let fileManager = FileManager.default

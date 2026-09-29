@@ -116,6 +116,51 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
     }
 
+    // B-002: every configured music root stays write-protected for recordings while the
+    // Vault switch is OFF. The real settings projection (`RecordingDestination.load`)
+    // feeds the real use case; only the capture port is a spy.
+    func testVaultOffRefusesArchiveDestinationAndAliasBeforeCaptureOrDirectory() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+
+        for destination in fixture.refusedDestinations {
+            let store = FixtureSettingsStore(settings: fixture.settings(outputFolder: destination.url))
+            let port = CountingCapturePort()
+            let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+
+            await vm.startRecording()
+
+            XCTAssertEqual(port.startedURLs, [], destination.label)
+            guard case .error(let error) = vm.recordingState else {
+                return XCTFail("\(destination.label): expected .error but got \(vm.recordingState)")
+            }
+            XCTAssertNotEqual(error, .settingsUnreadable, destination.label)
+            XCTAssertEqual(try fixture.archiveSnapshot(), before, destination.label)
+        }
+    }
+
+    func testVaultOffAdmitsOrdinaryOutputFolderNextToProtectedArchive() async throws {
+        let fixture = try VaultOffOutputFixture()
+        defer { fixture.cleanUp() }
+        let before = try fixture.archiveSnapshot()
+        let store = FixtureSettingsStore(settings: fixture.settings(outputFolder: fixture.ordinaryOutput))
+        let port = CountingCapturePort()
+        let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+
+        await vm.startRecording()
+        for _ in 0..<200 where port.startedURLs.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(port.startedURLs.count, 1)
+        XCTAssertEqual(
+            port.startedURLs.first?.deletingLastPathComponent().standardizedFileURL.path,
+            fixture.ordinaryOutput.standardizedFileURL.path
+        )
+        XCTAssertEqual(try fixture.archiveSnapshot(), before)
+    }
+
     private func makeViewModel(
         port: CountingCapturePort,
         destination: @escaping @MainActor () throws -> RecordingDestination
