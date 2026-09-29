@@ -211,7 +211,7 @@ final class HubSettingsSession: ObservableObject {
         do {
             try OutputWriteGuard().validateCanWriteOutput(
                 to: folder,
-                archiveRoots: settings.archiveRoots.map(\.url)
+                archiveRoots: settings.outputProtectedRoots
             )
         } catch {
             saveError = error.localizedDescription

@@ -53,7 +53,7 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
 
         try OutputWriteGuard().validateCanWriteOutput(
             to: settings.outputFolder.url,
-            archiveRoots: settings.archiveRoots.map(\.url)
+            archiveRoots: settings.outputProtectedRoots
         )
         let converter = converterFactory(settings)
         var outcomes: [BatchAudioConversionOutcome] = []

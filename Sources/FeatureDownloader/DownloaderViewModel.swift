@@ -210,7 +210,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         do {
             try OutputWriteGuard().validateCanWriteOutput(
                 to: settings.outputFolder.url,
-                archiveRoots: settings.archiveRoots.map(\.url)
+                archiveRoots: settings.outputProtectedRoots
             )
         } catch {
             context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")

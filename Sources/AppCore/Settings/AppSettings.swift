@@ -485,6 +485,14 @@ public struct AppSettings: Equatable, Codable, Sendable {
         }
     }
 
+    /// Folders no tool may write output into: every configured music root, whatever its
+    /// role, enabled state or the Vault switch. Browsing hides Vault roots while Vault is
+    /// off; that must not make retained archive generations writable, because a stray
+    /// output inside one breaks its manifest and blocks verified restore.
+    public var outputProtectedRoots: [URL] {
+        musicRoots.map(\.fallbackURL)
+    }
+
     /// Vault-off browsing is exactly the legacy Scan-only list. Opting in additionally
     /// exposes the selected Active and Archive locations to the read-only browser.
     public var effectiveScanRoots: [StoredMusicRoot] {

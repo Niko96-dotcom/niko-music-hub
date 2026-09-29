@@ -4,9 +4,10 @@ import NikoMusicCore
 import XCTest
 
 final class VaultSettingsTests: XCTestCase {
-    /// ENG-10 pin: the converter, downloader, stems and recorder hand `archiveRoots` to
-    /// `OutputWriteGuard`, so it must keep the Vault archive root while Vault is on.
-    func testToolOutputGuardRootsIncludeVaultArchiveRootWhenVaultEnabled() {
+    /// ENG-10 pin: the converter, downloader, stems and recorder hand `outputProtectedRoots`
+    /// to `OutputWriteGuard`. Turning Vault off hides its roots from browsing only; the
+    /// retained archive stays write-protected.
+    func testToolOutputGuardRootsKeepVaultRootsWhateverTheVaultSwitch() throws {
         let archive = StoredMusicRoot(role: .archive, url: URL(fileURLWithPath: "/tmp/nmh-t23/VaultArchive"))
         let active = StoredMusicRoot(role: .active, url: URL(fileURLWithPath: "/tmp/nmh-t23/Active"))
         let scanOnly = StoredMusicRoot(role: .scanOnly, url: URL(fileURLWithPath: "/tmp/nmh-t23/Scan"))
@@ -14,10 +15,30 @@ final class VaultSettingsTests: XCTestCase {
         settings.musicRoots = [archive, active, scanOnly]
         settings.vault.archiveRootID = archive.id
         settings.vault.activeRootID = active.id
+        let generation = archive.fallbackURL.appendingPathComponent("Song/generation-1", isDirectory: true)
+        let allRoots = Set([archive, active, scanOnly].map(\.fallbackURL.path))
 
+        for vaultOn in [true, false] {
+            settings.vault.isEnabled = vaultOn
+            XCTAssertEqual(Set(settings.outputProtectedRoots.map(\.path)), allRoots, "vault on: \(vaultOn)")
+            XCTAssertThrowsError(
+                try OutputWriteGuard().validateCanWriteOutput(
+                    to: generation,
+                    archiveRoots: settings.outputProtectedRoots
+                ),
+                "vault on: \(vaultOn)"
+            )
+        }
+        XCTAssertNoThrow(
+            try OutputWriteGuard().validateCanWriteOutput(
+                to: URL(fileURLWithPath: "/tmp/nmh-t23/Output", isDirectory: true),
+                archiveRoots: settings.outputProtectedRoots
+            )
+        )
+
+        // Browsing still hides the Vault roots while Vault is off.
         settings.vault.isEnabled = true
         XCTAssertTrue(settings.archiveRoots.map(\.url.path).contains(archive.fallbackURL.path))
-
         settings.vault.isEnabled = false
         XCTAssertEqual(settings.archiveRoots.map(\.url.path), [scanOnly.fallbackURL.path])
     }

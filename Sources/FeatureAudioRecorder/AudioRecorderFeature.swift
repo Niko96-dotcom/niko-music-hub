@@ -34,7 +34,7 @@ public struct AudioRecorderFeature: ToolFeature {
             capturePort: capturePort,
             archiveRootsProvider: {
                 let settings = (try? context.settingsStore.loadSettings()) ?? .default
-                return settings.archiveRoots.map(\.url)
+                return settings.outputProtectedRoots
             }
         )
         let settings = (try? context.settingsStore.loadSettings()) ?? .default
