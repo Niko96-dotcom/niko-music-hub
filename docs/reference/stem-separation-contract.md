@@ -96,7 +96,7 @@ Each backend maps presets to its own model identifiers. For `DemucsMLXBackend`:
 
 ## Output scanning
 
-After the backend returns, `StemSeparationService` runs `StemOutputScanner` over the output folder. The scanner matches filenames against known stem roles (`vocals`, `drums`, `bass`, `other`, `guitar`, `piano`). It rejects files outside the folder and normalizes names to a consistent scheme.
+After the backend returns, `StemSeparationService` runs `StemOutputScanner` over the output folder. The scanner matches filenames against known stem roles (`vocals`, `drums`, `bass`, `other`, `guitar`, `piano`). It rejects files outside the folder and normalizes names to a consistent scheme. Only audio-extension files count as stems, and each must be a regular file that decodes to at least one audio frame; an empty, truncated or non-audio stem fails the job instead of reaching the inbox.
 
 Only stems verified by the scanner are published as `OutputInboxItem` values.
 

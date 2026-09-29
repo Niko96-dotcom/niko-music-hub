@@ -36,7 +36,7 @@ final class MockStemSeparationBackend: StemSeparationBackend, @unchecked Sendabl
                 at: request.outputFolderURL,
                 withIntermediateDirectories: true
             )
-            FileManager.default.createFile(atPath: url.path, contents: Data("stem".utf8))
+            FileManager.default.createFile(atPath: url.path, contents: StemAudioFixture.wavData)
             onProgress(Double(index + 1) / Double(filesToWrite.count), "Wrote \(file.1)")
         }
 

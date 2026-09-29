@@ -90,6 +90,43 @@ struct StemOutputScannerTests {
         #expect(stems.count == 4)
     }
 
+    @Test(arguments: [Data(), Data("not audio".utf8), Data("RIFF".utf8)])
+    func scan_rejectsRoleFilesThatAreNotReadableAudio(contents: Data) throws {
+        let folder = try createTempFolder(withFiles: ["drums.wav", "bass.wav", "other.wav"])
+        FileManager.default.createFile(atPath: folder.appendingPathComponent("vocals.wav").path, contents: contents)
+        let result = scanner.scan(outputFolderURL: folder, expectedRoles: StemSeparationPreset.fast4.expectedStemRoles)
+        guard case .failed(let message) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        #expect(message.contains("not readable audio"))
+        #expect(message.contains("vocals.wav"))
+    }
+
+    @Test
+    func scan_doesNotCountRoleNamedNonAudioFilesAsStems() throws {
+        let folder = try createTempFolder(withFiles: ["vocals.txt", "drums.txt", "bass.txt", "other.txt"])
+        let result = scanner.scan(outputFolderURL: folder, expectedRoles: StemSeparationPreset.fast4.expectedStemRoles)
+        guard case .failed(let message) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        #expect(message.contains("Missing stems"))
+    }
+
+    @Test
+    func scan_rejectsSpecialFilesNamedLikeStems() throws {
+        let folder = try createTempFolder(withFiles: ["drums.wav", "bass.wav", "other.wav"])
+        let fifo = folder.appendingPathComponent("vocals.wav")
+        #expect(mkfifo(fifo.path, 0o600) == 0)
+        let result = scanner.scan(outputFolderURL: folder, expectedRoles: StemSeparationPreset.fast4.expectedStemRoles)
+        guard case .failed(let message) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        #expect(message.contains("not readable audio"))
+    }
+
     @Test
     func scan_supportsExperimentalSixStemRoles() throws {
         let folder = try createTempFolder(withFiles: ["vocals.wav", "drums.wav", "bass.wav", "other.wav", "guitar.wav", "piano.wav"])
@@ -108,7 +145,8 @@ private func createTempFolder(withFiles filenames: [String]) throws -> URL {
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     for name in filenames {
-        FileManager.default.createFile(atPath: folder.appendingPathComponent(name).path, contents: Data("stem".utf8))
+        let contents = name.hasSuffix(".wav") ? StemAudioFixture.wavData : Data("stem".utf8)
+        FileManager.default.createFile(atPath: folder.appendingPathComponent(name).path, contents: contents)
     }
     return folder
 }

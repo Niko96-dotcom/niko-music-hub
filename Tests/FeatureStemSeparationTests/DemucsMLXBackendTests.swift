@@ -19,10 +19,10 @@ struct DemucsMLXBackendTests {
             outputLines: ["Loading model", "10%", "50%", "100%", "Done"],
             errorLines: ["Tracks: 25%|██ | 1/4 [00:01<00:03, 1track/s]", "unrecognized terminal chatter"],
             filesToWrite: [
-                (outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
-                (outputFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
-                (outputFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
-                (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+                (outputFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("drums.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("bass.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("other.wav"), StemAudioFixture.wavData)
             ]
         )
         let backend = makeBackend(settings: settings, runner: runner)
@@ -67,10 +67,10 @@ struct DemucsMLXBackendTests {
             outputLines: ["Done"],
             errorLines: [],
             filesToWrite: [
-                (nestedFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
-                (nestedFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
-                (nestedFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
-                (nestedFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+                (nestedFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData),
+                (nestedFolder.appendingPathComponent("drums.wav"), StemAudioFixture.wavData),
+                (nestedFolder.appendingPathComponent("bass.wav"), StemAudioFixture.wavData),
+                (nestedFolder.appendingPathComponent("other.wav"), StemAudioFixture.wavData)
             ]
         )
         let backend = makeBackend(settings: settings, runner: runner)
@@ -98,7 +98,7 @@ struct DemucsMLXBackendTests {
             exitCode: 0,
             outputLines: ["10%", "20%"],
             errorLines: [],
-            filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8))],
+            filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData)],
             cancellationPoint: 0
         )
         let backend = makeBackend(settings: settings, runner: runner)
@@ -257,7 +257,7 @@ struct DemucsMLXBackendTests {
             exitCode: 0,
             outputLines: ["Done"],
             errorLines: [],
-            filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8))]
+            filesToWrite: [(outputFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData)]
         )
         let backend = makeBackend(settings: settings, runner: runner)
 
@@ -284,10 +284,10 @@ struct DemucsMLXBackendTests {
             outputLines: ["50%"],
             errorLines: [],
             filesToWrite: [
-                (outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
-                (outputFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
-                (outputFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
-                (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+                (outputFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("drums.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("bass.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("other.wav"), StemAudioFixture.wavData)
             ]
         )
         let backend = makeBackend(settings: settings, runner: runner)
@@ -314,10 +314,10 @@ struct DemucsMLXBackendTests {
             exitCode: 0,
             chunks: ["Tracks:  10%|█\rTracks:  40%|██\r", "Writing vocals.wav\n"],
             filesToWrite: [
-                (outputFolder.appendingPathComponent("vocals.wav"), Data("v".utf8)),
-                (outputFolder.appendingPathComponent("drums.wav"), Data("d".utf8)),
-                (outputFolder.appendingPathComponent("bass.wav"), Data("b".utf8)),
-                (outputFolder.appendingPathComponent("other.wav"), Data("o".utf8))
+                (outputFolder.appendingPathComponent("vocals.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("drums.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("bass.wav"), StemAudioFixture.wavData),
+                (outputFolder.appendingPathComponent("other.wav"), StemAudioFixture.wavData)
             ]
         )
         let backend = makeBackend(settings: settings, runner: runner)

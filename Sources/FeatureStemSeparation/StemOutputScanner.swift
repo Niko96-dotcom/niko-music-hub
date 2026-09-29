@@ -1,3 +1,4 @@
+@preconcurrency import AVFAudio
 import Foundation
 
 public enum StemOutputScannerResult: Equatable, Sendable {
@@ -6,6 +7,9 @@ public enum StemOutputScannerResult: Equatable, Sendable {
 }
 
 public struct StemOutputScanner: Sendable {
+    /// Formats a stem can arrive in. A role-named file with another extension is not a stem.
+    static let audioExtensions: Set<String> = ["wav", "aif", "aiff", "flac", "mp3", "m4a", "caf"]
+
     public init() {}
 
     public func scan(
@@ -33,9 +37,16 @@ public struct StemOutputScanner: Sendable {
             }
             guard fileExists(at: itemURL, isDirectory: false) else { continue }
 
-            guard let role = StemRole.role(for: item) else { continue }
+            guard let role = StemRole.role(for: item),
+                  Self.audioExtensions.contains(itemURL.pathExtension.lowercased())
+            else { continue }
             guard !seenRoles.contains(role) else {
                 return .failed(message: "Duplicate output for \(role.displayName): \(item)")
+            }
+            // A file name and a zero exit code do not make a stem: it must be a regular
+            // file that decodes to at least one audio frame.
+            guard isReadableAudio(itemURL) else {
+                return .failed(message: "\(role.displayName) stem is not readable audio: \(item)")
             }
             seenRoles.insert(role)
             stems.append(StemOutput(role: role, fileURL: itemURL))
@@ -56,6 +67,14 @@ public struct StemOutputScanner: Sendable {
         var isDir: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
         return exists && isDir.boolValue == isDirectory
+    }
+
+    private func isReadableAudio(_ url: URL) -> Bool {
+        let resolved = url.resolvingSymlinksInPath()
+        guard (try? resolved.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
+              let file = try? AVAudioFile(forReading: resolved)
+        else { return false }
+        return file.length > 0
     }
 
     private func isInsideFolder(itemURL: URL, folderURL: URL) -> Bool {

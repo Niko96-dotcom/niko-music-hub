@@ -682,7 +682,7 @@ private final class BlockingAfterFirstStemBackend: StemSeparationBackend, @unche
     ) async -> StemSeparationResult {
         let url = request.outputFolderURL.appendingPathComponent("vocals.wav")
         try? FileManager.default.createDirectory(at: request.outputFolderURL, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: url.path, contents: Data("stem".utf8))
+        FileManager.default.createFile(atPath: url.path, contents: StemAudioFixture.wavData)
         onProgress(0.25, "Wrote vocals.wav")
         lock.withLock { stemURL = url }
         while !Task.isCancelled && !cancelRequested {
