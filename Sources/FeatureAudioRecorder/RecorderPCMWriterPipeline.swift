@@ -227,6 +227,12 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         "The audio recorded before the error was kept, possibly incomplete, at \(url.path)."
     }
 
+    /// True when `error` is a pipeline failure that kept the take's audio at `url`.
+    static func isKeptPartialTakeError(_ error: Error, at url: URL) -> Bool {
+        guard case .writeError(let message)? = error as? RecorderError else { return false }
+        return message.contains(keptPartialTakeNote(url))
+    }
+
     /// Capture ended on its own (route loss with no working fallback). Keep the
     /// take when audio already reached disk: finalizing caches the result, so the
     /// follow-up `stop()` hands the recording to the user instead of an error.

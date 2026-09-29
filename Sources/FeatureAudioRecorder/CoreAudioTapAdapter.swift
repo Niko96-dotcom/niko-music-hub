@@ -219,7 +219,11 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             }
             context.finishStream()
             context.signalStartFinished()
-            try? FileManager.default.removeItem(at: outputURL)
+            // A write failure right after the first buffer leaves that audio closed and kept
+            // by the pipeline, which names the path in its error; only an empty file goes.
+            if !RecorderPCMWriterPipeline.isKeptPartialTakeError(error, at: outputURL) {
+                try? FileManager.default.removeItem(at: outputURL)
+            }
             if error is CancellationError { throw error }
             throw mapRecordingError(error)
         }

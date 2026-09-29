@@ -530,6 +530,34 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testWriteErrorRightAfterTheFirstBufferKeepsTheTakeThroughTheViewModel() async throws {
+        // Buffer 1 opens the readiness gate, buffer 2 fails before start resumes: the take
+        // is reported as a failed start, and the adapter must not delete what was written.
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .twoBuffers(sampleRate: 44_100))
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: core,
+            probe: PermissionProbeStub(.authorized),
+            writerFactory: writers.make
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await viewModel.startRecording()
+        for _ in 0..<200 {
+            if case .error = viewModel.recordingState { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        guard case .error(.writeError(let message)) = viewModel.recordingState else {
+            return XCTFail("Expected a write error, got \(viewModel.recordingState)")
+        }
+        XCTAssertEqual(try inbox.listItems().count, 0)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        XCTAssertEqual(leftovers.count, 1, "the written first buffer is kept")
+        XCTAssertTrue(message.contains(try XCTUnwrap(leftovers.first)), "the error names the kept file")
+    }
+
     // MARK: - System-audio permission diagnosis
 
     func testDigitallySilentTakeWithBlockedProbeKeepsTheFileAndFlagsIt() async throws {
