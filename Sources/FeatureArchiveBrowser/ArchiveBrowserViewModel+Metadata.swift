@@ -102,7 +102,8 @@ extension ArchiveBrowserViewModel {
         metadataEditing.updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
     }
 
-    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) {
+    @discardableResult
+    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) -> MetadataCommitOutcome {
         metadataEditing.commitWorkflowStatus(status, for: song)
     }
 
@@ -269,11 +270,12 @@ extension ArchiveBrowserViewModel {
 
     // MARK: - Core delegates (owned by the coordinator)
 
+    @discardableResult
     func applyMetadataMerge(
         for song: Song,
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
-    ) {
+    ) -> MetadataCommitOutcome {
         metadataEditing.applyMetadataMerge(for: song, rankingRefresh: rankingRefresh, mutate: mutate)
     }
 

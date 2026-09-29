@@ -3,6 +3,21 @@ import Combine
 import Foundation
 import NikoMusicCore
 
+/// What an edit commit did, so callers that chain follow-up work (the Done
+/// confirmations) never continue after a refused metadata step.
+enum MetadataCommitOutcome: Equatable {
+    /// The visible song changed and the store accepted it (or the deliberate
+    /// in-memory mode has no store).
+    case saved
+    /// The visible song changed but the store rejected the write, so the
+    /// change is not durable. A warning was reported.
+    case savedWithWarning
+    /// Nothing changed: the edit was gated (Vault transfer, integrity, missing
+    /// storage), the song is no longer in the catalog, or a late store
+    /// backstop refused it. Gate refusals report their own warning.
+    case refused
+}
+
 /// Required immutable integration contract for song-metadata editing.
 ///
 /// All callbacks are supplied together at initialization and never rebound.
@@ -281,7 +296,8 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         }
     }
 
-    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) {
+    @discardableResult
+    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) -> MetadataCommitOutcome {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
         }
@@ -341,44 +357,49 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
 
     // MARK: - Core gate / merge / authoritative persist / replace
 
+    @discardableResult
     func applyMetadataMerge(
         for song: Song,
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
-    ) {
-        if host.isVaultBlocked(song) { return }
+    ) -> MetadataCommitOutcome {
+        if host.isVaultBlocked(song) { return .refused }
         if let blockWarning = catalog.metadataEditBlockWarning(for: song.id) {
             host.reportWarning(blockWarning)
-            return
+            return .refused
         }
-        guard let songs = host.currentSongs() else { return }
+        guard let songs = host.currentSongs() else { return .refused }
+        // `mergedSongAfterEdit` returns nil only when the song is not in the
+        // current catalog; the merge itself always yields a song. Nothing can
+        // be edited then, so it is a refusal, never "nothing to change".
         guard let merged = ArchiveSongMetadataEditor.mergedSongAfterEdit(
             for: song,
             in: songs,
             collaborators: host.currentCollaborators() ?? [],
             rankingRefresh: rankingRefresh,
             mutate: mutate
-        ) else { return }
-        commitSongMetadataUpdate(merged)
+        ) else { return .refused }
+        return commitSongMetadataUpdate(merged)
     }
 
-    private func commitSongMetadataUpdate(_ updated: Song) {
+    private func commitSongMetadataUpdate(_ updated: Song) -> MetadataCommitOutcome {
         if let blockWarning = catalog.metadataEditBlockWarning(for: updated.id) {
             host.reportWarning(blockWarning)
             syncRepairState()
-            return
+            return .refused
         }
         let warning = catalog.persistUserMetadata(for: [updated])
         if let warning, catalog.metadataEditBlockWarning(for: updated.id) != nil {
             host.reportWarning(warning)
             syncRepairState()
-            return
+            return .refused
         }
         host.applyReplacement(updated)
         if let warning {
             host.reportWarning(warning)
         }
         scheduleDebouncedIndexPersist()
+        return warning == nil ? .saved : .savedWithWarning
     }
 
     // MARK: - Delayed index persistence (serialized, live snapshot, generation gate)

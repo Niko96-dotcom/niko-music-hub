@@ -272,20 +272,37 @@ extension ArchiveBrowserViewModel {
         // supersedes any timer-driven retry that is still waiting for this song.
         vaultOperations.cancelPendingRetry(for: song.id)
         if pending.trigger == .workflowDone {
-            let previous = song.workflowStatus
-            if song.workflowStatus != .done {
-                commitWorkflowStatus(.done, for: song)
-            }
-            registerWorkflowStatusUndo(
-                songID: song.id,
-                previousStatus: previous,
-                actionName: "Mark Done"
-            )
+            guard commitWorkflowDoneForConfirmation(song) else { return }
             let updated = songs.first(where: { $0.id == song.id }) ?? song
             archiveInProjectVault(updated, trigger: .workflowDone, authorization: pending.authorization)
             return
         }
         archiveInProjectVault(song, trigger: pending.trigger, authorization: pending.authorization)
+    }
+
+    /// The one "commit Done, register Undo, continue" recipe shared by every Done
+    /// confirmation. Returns true only when the caller may go on to queue the
+    /// archive (or write Keep Local). A refused commit changed nothing, so it
+    /// registers no Undo and stops; the gate that refused already reported its
+    /// warning. A commit that stayed visible but was not durably saved keeps its
+    /// Undo (the visible change happened) yet must not start a transfer for a Done
+    /// that would be lost on the next launch.
+    private func commitWorkflowDoneForConfirmation(_ song: Song) -> Bool {
+        let previous = song.workflowStatus
+        let outcome: MetadataCommitOutcome = previous == .done
+            ? .saved
+            : commitWorkflowStatus(.done, for: song)
+        if outcome == .refused { return false }
+        registerWorkflowStatusUndo(
+            songID: song.id,
+            previousStatus: previous,
+            actionName: "Mark Done"
+        )
+        if outcome == .savedWithWarning {
+            setProjectVaultStatusMessage("Done couldn't be saved, so nothing was archived. No project files were changed.")
+            return false
+        }
+        return true
     }
 
     func cancelPendingArchive() {
@@ -313,15 +330,7 @@ extension ArchiveBrowserViewModel {
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
         vaultOperations.cancelPendingRetry(for: song.id)
-        let previous = song.workflowStatus
-        if song.workflowStatus != .done {
-            commitWorkflowStatus(.done, for: song)
-        }
-        registerWorkflowStatusUndo(
-            songID: song.id,
-            previousStatus: previous,
-            actionName: "Mark Done"
-        )
+        guard commitWorkflowDoneForConfirmation(song) else { return }
         let updated = songs.first(where: { $0.id == song.id }) ?? song
         archiveInProjectVault(updated, trigger: .workflowDone, authorization: authorization)
     }
@@ -343,15 +352,7 @@ extension ArchiveBrowserViewModel {
             projectVaultAuthCaptureTask = nil
             boundArchiveCaptureSongID = nil
             vaultOperations.cancelPendingRetry(for: song.id)
-            let previous = song.workflowStatus
-            if song.workflowStatus != .done {
-                commitWorkflowStatus(.done, for: song)
-            }
-            registerWorkflowStatusUndo(
-                songID: song.id,
-                previousStatus: previous,
-                actionName: "Mark Done"
-            )
+            guard commitWorkflowDoneForConfirmation(song) else { return }
             let updated = songs.first(where: { $0.id == song.id }) ?? song
             archiveInProjectVault(updated, trigger: .workflowDone, authorization: copyAuthorization)
             return
@@ -364,15 +365,7 @@ extension ArchiveBrowserViewModel {
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
         vaultOperations.cancelPendingRetry(for: song.id)
-        let previous = song.workflowStatus
-        if song.workflowStatus != .done {
-            commitWorkflowStatus(.done, for: song)
-        }
-        registerWorkflowStatusUndo(
-            songID: song.id,
-            previousStatus: previous,
-            actionName: "Mark Done"
-        )
+        guard commitWorkflowDoneForConfirmation(song) else { return }
         let updated = songs.first(where: { $0.id == song.id }) ?? song
         archiveInProjectVault(updated, trigger: .workflowDone, authorization: nil)
     }
@@ -396,15 +389,7 @@ extension ArchiveBrowserViewModel {
         projectVaultAuthCaptureTask = nil
         boundArchiveCaptureSongID = nil
         vaultOperations.cancelPendingRetry(for: song.id)
-        let previous = song.workflowStatus
-        if song.workflowStatus != .done {
-            commitWorkflowStatus(.done, for: song)
-        }
-        registerWorkflowStatusUndo(
-            songID: song.id,
-            previousStatus: previous,
-            actionName: "Mark Done"
-        )
+        guard commitWorkflowDoneForConfirmation(song) else { return }
         do {
             let key = projectVaultSnapshot(for: song)?.transfer?.sourceURL.path ?? song.id
             try settingsStore.updateSettings { settings in
