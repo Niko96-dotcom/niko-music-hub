@@ -283,10 +283,13 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
                 return
             }
         }
-        commitWorkflowStatus(status, for: song)
+        let outcome = commitWorkflowStatus(status, for: song)
         if previous == .done, status != .done {
+            // Revoked even when the save was refused: cancelling pending Done archive work is the fail-safe direction.
             host.revokeDoneWork(song.id)
         }
+        // A refused commit changed nothing, so there is nothing to undo.
+        guard outcome != .refused else { return }
         if registerUndo {
             registerWorkflowStatusUndo(
                 songID: song.id,

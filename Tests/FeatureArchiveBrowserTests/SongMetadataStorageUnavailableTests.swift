@@ -81,6 +81,19 @@ final class SongMetadataStorageUnavailableTests: XCTestCase {
         )
     }
 
+    func testUnavailableStorageWorkflowStatusEditRegistersNoUndo() async throws {
+        let (root, song) = try makeFixture()
+        let viewModel = await makeViewModel(song: song, root: root, storageUnavailable: true)
+        let undoManager = UndoManager()
+        viewModel.bindInjectedUndoManager(undoManager)
+        let live = try XCTUnwrap(viewModel.songs.first)
+
+        viewModel.updateWorkflowStatus(for: live, status: .prod)
+
+        XCTAssertNil(viewModel.songs.first?.workflowStatus)
+        XCTAssertFalse(undoManager.canUndo, "a refused status change must not be undoable")
+    }
+
     func testUnavailableStoragePersistNeverReportsSuccess() throws {
         let (_, song) = try makeFixture()
         let catalog = ArchiveCatalogCoordinator(

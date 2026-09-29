@@ -278,6 +278,93 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         XCTAssertEqual(box.replaced.last?.workflowStatus, .prod)
     }
 
+    // MARK: - Refused status change registers no Undo
+
+    private func makeStatusHarness(
+        song: Song,
+        root: URL,
+        store: OwnerFakeMetadataStore
+    ) -> (coordinator: ArchiveMetadataEditingCoordinator, box: OwnerHostBox, undo: UndoManager) {
+        let box = OwnerHostBox()
+        box.songs = [song]
+        box.scanned = [song]
+        box.roots = [root]
+        box.generation = 1
+        let coordinator = makeCoordinator(metadataStore: store, box: box)
+        let undo = UndoManager()
+        coordinator.bindInjectedUndoManager(undo)
+        return (coordinator, box, undo)
+    }
+
+    func testRefusedStatusChangeRegistersNoUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Refused Song")
+        let store = OwnerFakeMetadataStore()
+        store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+
+        XCTAssertTrue(box.replaced.isEmpty, "a refused commit must not change the visible status")
+        XCTAssertNil(store.saved[song.id])
+        XCTAssertFalse(undo.canUndo, "no Undo for a change that never happened")
+        XCTAssertTrue(box.revoked.isEmpty, "not leaving Done, nothing to revoke")
+    }
+
+    func testVaultBlockedStatusChangeRegistersNoUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Blocked Status Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+        box.blockedIDs = [song.id]
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+
+        XCTAssertEqual(store.upsertAllCount, 0)
+        XCTAssertTrue(box.replaced.isEmpty)
+        XCTAssertFalse(undo.canUndo)
+    }
+
+    func testRefusedStatusChangeLeavingDoneStillRevokesDoneWorkWithoutUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Done Refused Song", workflow: .done)
+        let store = OwnerFakeMetadataStore()
+        store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+
+        XCTAssertEqual(box.revoked, [song.id], "cancelling pending Done archive work is the fail-safe direction")
+        XCTAssertTrue(box.replaced.isEmpty)
+        XCTAssertFalse(undo.canUndo)
+    }
+
+    func testHealthyStatusChangeStillRegistersUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Healthy Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+
+        XCTAssertEqual(box.replaced.last?.workflowStatus, .prod)
+        XCTAssertTrue(undo.canUndo)
+        XCTAssertEqual(undo.undoActionName, "Change Workflow Status")
+    }
+
+    func testStatusChangeSavedWithWarningStillRegistersUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Warned Song")
+        let store = OwnerFakeMetadataStore()
+        store.failUpsertAll = OwnerTestError.forced
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+
+        XCTAssertEqual(box.replaced.last?.workflowStatus, .prod, "the visible change happened")
+        XCTAssertEqual(undo.undoActionName, "Change Workflow Status")
+    }
+
     // MARK: - Fail-closed gates and vanished host
 
     func testVaultBlockedGateRefusesEdit() throws {
