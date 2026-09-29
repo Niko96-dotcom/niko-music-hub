@@ -580,6 +580,45 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(message.contains(recorded.path))
     }
 
+    func testVerificationRejectingANonemptyTakeKeepsItOutOfTheInboxAndNamesItsPath() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-vm-verify-keep-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // The file holds 512 written frames at 44.1 kHz; the result claims 48 kHz, so the
+        // verifier (not the write-error diagnostics) is what rejects the take.
+        let port = WritingCapturePort(writesAudioFrames: true, reportedSampleRate: 48_000)
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: tempDir,
+            outputInboxStore: inbox
+        )
+
+        await vm.startRecording()
+        try await waitUntilRecording(port)
+        await vm.stopRecording()
+
+        let recorded = try XCTUnwrap(port.recordedOutputURL)
+        guard case .error(.verificationFailed(let message)) = vm.recordingState else {
+            return XCTFail("Expected verification failure, got \(vm.recordingState)")
+        }
+        XCTAssertTrue(message.contains("Expected WAV sample rate 48000Hz, got 44100Hz."), message)
+        XCTAssertTrue(message.contains(recorded.path), "the error says where the audio was kept")
+        XCTAssertEqual(try inbox.listItems().count, 0, "an unverified take is never offered as a recording")
+        XCTAssertNil(vm.lastRecordedURL)
+        XCTAssertFalse(vm.showSaveConfirmation)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recorded.path))
+        let kept = try AVAudioFile(forReading: recorded)
+        XCTAssertEqual(kept.length, 512, "every written frame survives the rejection")
+        let samples = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: kept.processingFormat, frameCapacity: 512))
+        try kept.read(into: samples)
+        let channel = try XCTUnwrap(samples.floatChannelData)[0]
+        XCTAssertEqual((0..<512).map { channel[$0] }, (0..<512).map { Float($0 % 32) / 32.0 })
+    }
+
     func testFailedVerificationRemovesIncompleteOutput() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-remove-failed-\(UUID().uuidString)", isDirectory: true)
@@ -748,7 +787,15 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
         set { lock.withLock { storedRecording = newValue } }
     }
 
-    init(writesAudioFrames: Bool, writeErrorCount: Int = 0, inputFrameCount: Int64 = 1024) {
+    private let reportedSampleRate: Int
+
+    init(
+        writesAudioFrames: Bool,
+        writeErrorCount: Int = 0,
+        inputFrameCount: Int64 = 1024,
+        reportedSampleRate: Int = 44_100
+    ) {
+        self.reportedSampleRate = reportedSampleRate
         self.writesAudioFrames = writesAudioFrames
         self.writeErrorCount = writeErrorCount
         self.inputFrameCount = inputFrameCount
@@ -814,7 +861,7 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
         return RecorderResult(
             outputURL: outputURL,
             duration: writesAudioFrames ? 0.1 : 0,
-            sampleRate: 44_100,
+            sampleRate: reportedSampleRate,
             bitDepth: 24,
             channelCount: 2,
             frameCount: writesAudioFrames ? 512 : 0,

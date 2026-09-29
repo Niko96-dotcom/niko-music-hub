@@ -497,6 +497,39 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertTrue(failedMessage.contains(try XCTUnwrap(leftovers.first)), "the error names the kept file")
     }
 
+    @MainActor
+    func testFinalizeErrorOnStopKeepsTheAudibleTakeOutOfTheInboxAndNamesItsPath() async throws {
+        let writers = FailingPCMWriterFactory(finalize: .throwsAfterClosingFile)
+        let core = FakeRecorderBackend(identity: .coreAudio, behavior: .audible(sampleRate: 44_100))
+        let (viewModel, inbox, directory) = try makeViewModel(
+            core: core,
+            probe: PermissionProbeStub(.authorized),
+            writerFactory: writers.make
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await recordAndStop(viewModel)
+
+        guard case .error(.writeError(let message)) = viewModel.recordingState else {
+            return XCTFail("Expected a write error, got \(viewModel.recordingState)")
+        }
+        XCTAssertTrue(message.contains("The file could not be closed."), message)
+        XCTAssertEqual(try inbox.listItems().count, 0, "no success row for a take that could not be finalized")
+        XCTAssertNil(viewModel.lastRecordedURL)
+        XCTAssertFalse(viewModel.showSaveConfirmation)
+        XCTAssertFalse(viewModel.isCaptureActive)
+        let kept = try XCTUnwrap(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).first)
+        XCTAssertTrue(message.contains(kept.lastPathComponent), "the error names the kept file")
+        let file = try AVAudioFile(forReading: kept)
+        XCTAssertEqual(file.length, 256, "the audio written before the failed close survives")
+        let samples = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 256))
+        try file.read(into: samples)
+        let channels = try XCTUnwrap(samples.floatChannelData)
+        for channel in 0..<Int(file.processingFormat.channelCount) {
+            XCTAssertTrue((0..<256).allSatisfy { channels[channel][$0] == 0.25 }, "samples equal the fed PCM")
+        }
+    }
+
     // MARK: - System-audio permission diagnosis
 
     func testDigitallySilentTakeWithBlockedProbeKeepsTheFileAndFlagsIt() async throws {

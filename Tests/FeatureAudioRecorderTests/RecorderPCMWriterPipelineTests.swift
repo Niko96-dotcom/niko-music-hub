@@ -55,7 +55,7 @@ final class RecorderPCMWriterPipelineTests: XCTestCase {
             onWriteError: { reported.append($0) }
         )
         pipeline.activate(generation: 1)
-        let buffer = try makeFloatBuffer(frames: 256, value: 0.25)
+        let buffer = try makeRampBuffer(frames: 256, startingAt: 0)
 
         XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
         XCTAssertFalse(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
@@ -66,8 +66,100 @@ final class RecorderPCMWriterPipelineTests: XCTestCase {
             return XCTFail("Expected writeError, got \(String(describing: reported.errors.first))")
         }
         XCTAssertTrue(message.contains(url.path), "the error says where the audio was kept")
-        let kept = try AVAudioFile(forReading: url)
-        XCTAssertGreaterThan(kept.length, 0, "the audio written before the error survives")
+        try assertRetainedSamplesMatchFedRamp(url, frames: 256)
+    }
+
+    func testFinalizeErrorAfterWrittenAudioKeepsTheTakeAndNamesItsPath() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-finalize-error-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writers = FailingPCMWriterFactory(finalize: .throwsAfterClosingFile)
+        let reported = ReportedWriteErrors()
+        let pipeline = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            makeWriter: writers.make,
+            onLevel: { _ in },
+            onWriteError: { reported.append($0) }
+        )
+        pipeline.activate(generation: 1)
+        let first = try makeRampBuffer(frames: 256, startingAt: 0)
+        let second = try makeRampBuffer(frames: 256, startingAt: 256)
+        XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: first.format, buffer: first, inputByteCount: 2_048))
+        XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: second.format, buffer: second, inputByteCount: 2_048))
+
+        var thrown: RecorderError?
+        XCTAssertThrowsError(try pipeline.finalize()) { thrown = $0 as? RecorderError }
+        guard case .writeError(let message)? = thrown else {
+            return XCTFail("Expected writeError, got \(String(describing: thrown))")
+        }
+        XCTAssertTrue(message.contains("The file could not be closed."), message)
+        XCTAssertTrue(message.contains(url.path), "the error says where the audio was kept")
+        XCTAssertThrowsError(try pipeline.finalize(), "a failed take never turns into a result on a second ask") {
+            XCTAssertEqual($0 as? RecorderError, thrown)
+        }
+        pipeline.abort()
+        XCTAssertTrue(reported.errors.isEmpty, "finalize errors reach the caller, not the write-error hook")
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "abort must not delete the kept take")
+        try assertRetainedSamplesMatchFedRamp(url, frames: 512)
+    }
+
+    func testFinalizeErrorThatLeavesTheFileOpenStillKeepsEveryWrittenFrame() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-finalize-open-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writers = FailingPCMWriterFactory(finalize: .throwsLeavingFileOpen)
+        var pipeline: RecorderPCMWriterPipeline? = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            makeWriter: writers.make,
+            onLevel: { _ in }
+        )
+        pipeline?.activate(generation: 1)
+        let buffer = try makeRampBuffer(frames: 256, startingAt: 0)
+        XCTAssertEqual(pipeline?.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048), true)
+
+        XCTAssertThrowsError(try pipeline?.finalize()) { error in
+            guard case .writeError(let message)? = error as? RecorderError else {
+                return XCTFail("Expected writeError, got \(error)")
+            }
+            XCTAssertTrue(message.contains(url.path), message)
+        }
+        pipeline?.abort()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "abort must not delete the kept take")
+        // Releasing the pipeline releases the writer, which closes the WAV header.
+        pipeline = nil
+        try assertRetainedSamplesMatchFedRamp(url, frames: 256)
+    }
+
+    func testCaptureLossWithFailingFinalizeStillKeepsTheWrittenAudio() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-loss-finalize-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let pipeline = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            makeWriter: FailingPCMWriterFactory(finalize: .throwsAfterClosingFile).make,
+            onLevel: { _ in }
+        )
+        pipeline.activate(generation: 1)
+        let buffer = try makeRampBuffer(frames: 256, startingAt: 0)
+        XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
+
+        pipeline.endAfterCaptureLoss(error: .noAudioCaptured("The route was lost."))
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "route loss must not delete audio that reached disk")
+        XCTAssertThrowsError(try pipeline.finalize()) { error in
+            guard case .writeError(let message)? = error as? RecorderError else {
+                return XCTFail("Expected writeError, got \(error)")
+            }
+            XCTAssertTrue(message.contains(url.path), message)
+        }
+        try assertRetainedSamplesMatchFedRamp(url, frames: 256)
     }
 
     func testFirstWriteErrorLeavesNoEmptyFile() throws {
@@ -100,6 +192,44 @@ final class RecorderPCMWriterPipelineTests: XCTestCase {
         }
         return buffer
     }
+
+    /// Distinct per-channel PCM whose every value is exactly representable in 24-bit
+    /// integer PCM, so a read-back can be compared for equality with what was fed.
+    private func makeRampBuffer(frames: AVAudioFrameCount, startingAt offset: Int) throws -> AVAudioPCMBuffer {
+        let buffer = try makeFloatBuffer(frames: frames)
+        let channels = try XCTUnwrap(buffer.floatChannelData)
+        for channel in 0..<Int(buffer.format.channelCount) {
+            for frame in 0..<Int(frames) {
+                channels[channel][frame] = Self.rampValue(frame: offset + frame, channel: channel)
+            }
+        }
+        return buffer
+    }
+
+    private static func rampValue(frame: Int, channel: Int) -> Float {
+        Float((frame % 64) + 1 + channel * 64) / 256
+    }
+
+    private func readSamples(_ url: URL) throws -> (frames: Int, channels: [[Float]]) {
+        let file = try AVAudioFile(forReading: url)
+        let frames = AVAudioFrameCount(file.length)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: max(frames, 1)))
+        try file.read(into: buffer)
+        let data = try XCTUnwrap(buffer.floatChannelData)
+        let channels = (0..<Int(file.processingFormat.channelCount)).map { channel in
+            Array(UnsafeBufferPointer(start: data[channel], count: Int(buffer.frameLength)))
+        }
+        return (Int(buffer.frameLength), channels)
+    }
+
+    private func assertRetainedSamplesMatchFedRamp(_ url: URL, frames expected: Int, file: StaticString = #filePath, line: UInt = #line) throws {
+        let kept = try readSamples(url)
+        XCTAssertEqual(kept.frames, expected, "the kept file holds exactly the frames fed before the failure", file: file, line: line)
+        for (channel, samples) in kept.channels.enumerated() {
+            let fed = (0..<expected).map { Self.rampValue(frame: $0, channel: channel) }
+            XCTAssertEqual(samples, fed, "channel \(channel) equals the fed PCM", file: file, line: line)
+        }
+    }
 }
 
 /// Builds real WAV writers whose Nth `writeBuffer` (counted across the take) throws.
@@ -108,11 +238,28 @@ final class FailingPCMWriterFactory: @unchecked Sendable {
         var errorDescription: String? { "The disk is full." }
     }
 
+    /// What `finalize` does on top of the real writer.
+    enum FinalizeFault {
+        case none
+        /// The real writer closes the file, then the close is reported as failed.
+        case throwsAfterClosingFile
+        /// The close fails before the real writer released the file.
+        case throwsLeavingFileOpen
+    }
+
+    struct InjectedFinalizeFailure: LocalizedError {
+        var errorDescription: String? { "The file could not be closed." }
+    }
+
     private let lock = NSLock()
     private let failOnWrite: Int
+    let finalizeFault: FinalizeFault
     private var attempts = 0
 
-    init(failOnWrite: Int) { self.failOnWrite = failOnWrite }
+    init(failOnWrite: Int = .max, finalize: FinalizeFault = .none) {
+        self.failOnWrite = failOnWrite
+        self.finalizeFault = finalize
+    }
 
     var writeAttempts: Int { lock.withLock { attempts } }
 
@@ -149,7 +296,15 @@ private final class FailingPCMWriter: RecorderPCMWriting, @unchecked Sendable {
     }
 
     func finalize(diagnostics: RecorderDiagnostics?) throws -> RecorderResult {
-        try base.finalize(diagnostics: diagnostics)
+        switch factory.finalizeFault {
+        case .none:
+            return try base.finalize(diagnostics: diagnostics)
+        case .throwsAfterClosingFile:
+            _ = try base.finalize(diagnostics: diagnostics)
+            throw FailingPCMWriterFactory.InjectedFinalizeFailure()
+        case .throwsLeavingFileOpen:
+            throw FailingPCMWriterFactory.InjectedFinalizeFailure()
+        }
     }
 }
 
