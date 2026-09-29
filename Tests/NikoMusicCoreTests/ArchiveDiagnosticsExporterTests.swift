@@ -4,15 +4,20 @@ import XCTest
 final class ArchiveDiagnosticsExporterTests: XCTestCase {
     func testExportWritesRedactedTextOutsideArchiveRoots() throws {
         try CubaseFixtures.ensureGenerated()
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
         let archiveRoot = CubaseFixtures.archiveRoot
+        // Synthetic home: the checkout's package root. The fixture archive sits below it wherever
+        // the checkout lives (inside the user's home or not), so nothing here depends on the
+        // real home directory. Standardized like the roots the diagnostics record.
+        let home = archiveRoot.deletingLastPathComponent().deletingLastPathComponent()
+            .standardizedFileURL.path
         let result = try CubaseArchiveScanner().scan(roots: [archiveRoot])
         let diagnostics = ArchiveScanDiagnosticsBuilder.build(
             result: result,
             roots: [archiveRoot],
             scannedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        XCTAssertTrue(diagnostics.rootPaths.first?.hasPrefix(home) == true)
+        XCTAssertEqual(diagnostics.rootPaths, [archiveRoot.standardizedFileURL.path])
+        XCTAssertTrue(diagnostics.rootPaths.first?.hasPrefix(home + "/") == true)
 
         let exportDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("niko-diagnostics-export-\(UUID().uuidString)", isDirectory: true)
@@ -39,8 +44,29 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
                 "· Scanned 9 songs · 1 song(s) with 1 warning(s) — Broken Folder Example · 2 skipped at roots"
             )
         )
+        // The exact synthetic-home path is redacted; the fixture root is written home-relative.
         XCTAssertFalse(text.contains(home))
-        XCTAssertTrue(text.contains("~/"))
+        XCTAssertTrue(text.contains("root=~/Fixtures/CubaseArchive\n"))
+
+        // A sibling that merely shares the home prefix is not below the home and stays as-is.
+        let sibling = home + "-sibling/Music/Cubase"
+        let inside = home + "/Music/Cubase"
+        let withPaths = ArchiveScanDiagnostics(
+            scannedAt: diagnostics.scannedAt,
+            rootPaths: [inside, sibling],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["Root is not a directory: \(sibling)", "Root is not a directory: \(inside)"],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+        let pathsText = ArchiveDiagnosticsExporter.formattedText(diagnostics: withPaths, homeDirectory: home)
+        XCTAssertTrue(pathsText.contains("root=~/Music/Cubase\n"))
+        XCTAssertTrue(pathsText.contains("root=\(sibling)\n"))
+        XCTAssertTrue(pathsText.contains("global_warning=Root is not a directory: ~/Music/Cubase\n"))
+        XCTAssertTrue(pathsText.contains("global_warning=Root is not a directory: \(sibling)\n"))
+        XCTAssertFalse(pathsText.contains(inside))
     }
 
     func testFormattedTextIncludesScanHealthBadgeForFixtureScan() throws {

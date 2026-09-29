@@ -16,7 +16,9 @@ final class ArchiveScanDiagnosticsBuilderTests: XCTestCase {
         )
 
         XCTAssertEqual(diagnostics.scannedAt, scannedAt)
-        XCTAssertEqual(diagnostics.rootPaths, [CubaseFixtures.archiveRoot.path])
+        // The builder records each root standardized (`/private/tmp` collapses to `/tmp`),
+        // so a checkout outside the home folder must expect the same spelling.
+        XCTAssertEqual(diagnostics.rootPaths, [CubaseFixtures.archiveRoot.standardizedFileURL.path])
         XCTAssertEqual(diagnostics.songCount, 9)
         XCTAssertEqual(diagnostics.songsWithWarningsCount, 1)
         XCTAssertGreaterThanOrEqual(diagnostics.totalSongWarningCount, 1)

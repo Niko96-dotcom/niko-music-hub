@@ -122,10 +122,14 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
     func testMergeDropsAffectedSongTheScanRecordedAsUnusable() throws {
         let root = try makeMergeTestRoot()
         let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
-        let song = makeFolderSong(folder: songFolder, title: "Song A")
         let fileManager = FileManager()
         try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: root) }
+        // Song.id standardizes the folder path, and `/tmp` vs `/private/tmp` spelling only
+        // settles once the folder exists: build the song (and every ID derived from the
+        // same folder) after creating it, as a real scan does.
+        let song = makeFolderSong(folder: songFolder, title: "Song A")
+        XCTAssertEqual(song.id, songFolder.standardizedFileURL.path)
 
         // The folder exists with normal permissions and lists fine: the verdict comes from
         // the scan result alone, never from a second listing by the merge.
@@ -146,11 +150,12 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
     func testMergeKeepsAffectedSongMissingFromScanWhenNotRecordedAsUnusable() throws {
         let root = try makeMergeTestRoot()
         let songFolder = root.appendingPathComponent("Song A", isDirectory: true)
-        let song = makeFolderSong(folder: songFolder, title: "Song A")
 
         let fileManager = FileManager()
         try fileManager.createDirectory(at: songFolder, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: root) }
+        // Created after the folder exists so the ID matches the affected ID below.
+        let song = makeFolderSong(folder: songFolder, title: "Song A")
 
         let merged = ArchiveCatalogCoordinator.mergeIncrementalScan(
             existing: [song],

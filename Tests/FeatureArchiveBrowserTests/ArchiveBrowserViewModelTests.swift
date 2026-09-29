@@ -6,6 +6,12 @@ import XCTest
 
 @MainActor
 final class ArchiveBrowserViewModelTests: XCTestCase {
+    /// Root identity as the model compares roots: the same folder reached through `/tmp`
+    /// or `/private/tmp` (a checkout or TMPDIR outside the user's home) is one root.
+    private static func rootIdentity(_ path: String) -> String {
+        ArchiveBrowserViewModel.canonicalPath(for: URL(fileURLWithPath: path, isDirectory: true))
+    }
+
     func testPersistsAddedArchiveRoot() async throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -243,15 +249,18 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 "/tmp/niko-music-hub-missing-root"
             ]
         )
+        // Persistence keeps every saved root, in order, including the unavailable ones. The
+        // store may spell an existing folder `/tmp/...` or `/private/tmp/...`, so compare
+        // root identity (the model's canonical path), not the incidental spelling.
         XCTAssertEqual(
-            try store.loadSettings().archiveRoots.map(\.path),
+            try store.loadSettings().archiveRoots.map { Self.rootIdentity($0.path) },
             [
                 publicRoot.path,
                 CubaseFixtures.archiveRoot.path,
                 tempRoot.path,
                 "/var/folders/niko-music-hub-invalid-root",
                 "/tmp/niko-music-hub-missing-root"
-            ]
+            ].map(Self.rootIdentity)
         )
     }
 
@@ -502,13 +511,14 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         viewModel.removeRoot(firstRoot)
 
-        XCTAssertEqual(viewModel.roots.map(\.path), [secondRoot.standardizedFileURL.path])
+        XCTAssertEqual(viewModel.roots.map { Self.rootIdentity($0.path) }, [Self.rootIdentity(secondRoot.path)])
         XCTAssertTrue(viewModel.songs.isEmpty)
         XCTAssertTrue(viewModel.filteredSongs.isEmpty)
         XCTAssertEqual(viewModel.statusMessage, "Archive roots changed. Scan to refresh.")
         XCTAssertEqual(
-            try settingsStore.loadSettings().archiveRoots.map(\.path),
-            [secondRoot.standardizedFileURL.path]
+            try settingsStore.loadSettings().archiveRoots.map { Self.rootIdentity($0.path) },
+            [Self.rootIdentity(secondRoot.path)],
+            "the remaining root stays persisted; the removed root is gone"
         )
     }
 
