@@ -374,10 +374,11 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             XCTFail("Expected the write error")
         } catch RecorderError.writeError(let message) {
             XCTAssertTrue(message.contains("The disk is full."), message)
+            XCTAssertTrue(message.contains(url.path), "the error names the kept take")
         }
         XCTAssertEqual(writers.writeAttempts, 2)
         XCTAssertEqual(probe.callCount, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "audio written before the error is kept")
     }
 
     func testWriteErrorDuringStartupFailsStartWithoutTryingOtherBackends() async throws {
@@ -419,7 +420,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             // expected: never report a running take whose pipeline is closed
         }
         XCTAssertEqual(core.stopCount, 1)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "the first buffer is kept")
     }
 
     func testWriteErrorDuringRouteRecoveryEndsTheTakeWithoutFallback() async throws {
@@ -456,7 +457,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         }
         XCTAssertEqual(rebuilt.startCount, 1)
         XCTAssertEqual(fallback.startCount, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "audio written before the error is kept")
     }
 
     @MainActor
@@ -471,11 +472,14 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let recording = expectation(description: "view model is recording")
         let failed = expectation(description: "view model shows the write error")
+        var failedMessage = ""
         var cancellable: AnyCancellable?
         cancellable = viewModel.$recordingState.sink { state in
             switch state {
             case .recording: recording.fulfill()
-            case .error(.writeError): failed.fulfill()
+            case .error(.writeError(let message)):
+                failedMessage = message
+                failed.fulfill()
             default: break
             }
         }
@@ -489,7 +493,8 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(try inbox.listItems().count, 0)
         XCTAssertFalse(viewModel.isCaptureActive)
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        XCTAssertEqual(leftovers, [], "the failed take's file is removed")
+        XCTAssertEqual(leftovers.count, 1, "the failed take's written audio is kept")
+        XCTAssertTrue(failedMessage.contains(try XCTUnwrap(leftovers.first)), "the error names the kept file")
     }
 
     // MARK: - System-audio permission diagnosis

@@ -574,9 +574,10 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(message.contains("write failed"))
         XCTAssertTrue(message.contains("writeErrors=2") || message.contains("2 errors"))
         XCTAssertEqual(try inbox.listItems().count, 0)
-        if let recorded = port.recordedOutputURL {
-            XCTAssertFalse(FileManager.default.fileExists(atPath: recorded.path))
-        }
+        // The written frames are kept for recovery, and the error says where.
+        let recorded = try XCTUnwrap(port.recordedOutputURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recorded.path))
+        XCTAssertTrue(message.contains(recorded.path))
     }
 
     func testFailedVerificationRemovesIncompleteOutput() async throws {

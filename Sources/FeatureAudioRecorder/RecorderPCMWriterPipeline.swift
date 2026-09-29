@@ -50,6 +50,7 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
     private var finalizationState: FinalizationState = .active
     private var capturedNonZeroSample = false
     private var failedWrite: RecorderError?
+    private var keptPartialTake = false
 
     init(
         outputURL: URL,
@@ -143,15 +144,21 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         } catch {
             // ENG-11: the first failed write ends the take. Later buffers are rejected by
             // the state guard above, so the error is reported exactly once, right now.
+            // Audio that already reached disk is closed and kept, never deleted: the
+            // take cannot be recorded again.
             diagnostics.recordWriteError()
+            let keepsAudio = closeKeepingWrittenAudio()
             let failure = RecorderError.writeError(
                 "Writing to disk failed, so the recording stopped. \(error.localizedDescription) "
+                    + (keepsAudio ? Self.keptPartialTakeNote(outputURL) + " " : "")
                     + "Diagnostics: \(diagnostics.snapshot().summary)."
             )
             finalizationState = .failed(failure)
             failedWrite = failure
             lock.unlock()
-            try? FileManager.default.removeItem(at: outputURL)
+            if !keepsAudio {
+                try? FileManager.default.removeItem(at: outputURL)
+            }
             onWriteError(failure)
             return false
         }
@@ -197,11 +204,27 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
             finalizationState = .completed(result)
             return result
         } catch {
-            let mapped = (error as? RecorderError) ?? .writeError(error.localizedDescription)
+            // Frames are on disk (guarded above), so the file is kept for recovery.
+            keptPartialTake = true
+            let message = "\(error.localizedDescription) \(Self.keptPartialTakeNote(outputURL))"
+            let mapped = RecorderError.writeError(message)
             finalizationState = .failed(mapped)
-            try? FileManager.default.removeItem(at: outputURL)
             throw mapped
         }
+    }
+
+    /// Called with the lock held after a failed write. Closes the file so the WAV
+    /// header covers the frames already written; false when there is nothing to keep.
+    private func closeKeepingWrittenAudio() -> Bool {
+        guard writer.writtenFrameCount > 0 else { return false }
+        _ = try? writer.finalize(diagnostics: nil)
+        keptPartialTake = true
+        return true
+    }
+
+    /// Error-copy suffix naming where a failed take's audio was kept.
+    static func keptPartialTakeNote(_ url: URL) -> String {
+        "The audio recorded before the error was kept, possibly incomplete, at \(url.path)."
     }
 
     /// Capture ended on its own (route loss with no working fallback). Keep the
@@ -262,7 +285,9 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         if case .active = finalizationState {
             finalizationState = .failed(error)
         }
+        let keepsAudio = keptPartialTake
         lock.unlock()
+        guard !keepsAudio else { return }
         try? FileManager.default.removeItem(at: outputURL)
     }
 

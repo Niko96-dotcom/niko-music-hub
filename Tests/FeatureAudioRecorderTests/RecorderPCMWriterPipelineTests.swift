@@ -38,13 +38,66 @@ final class RecorderPCMWriterPipelineTests: XCTestCase {
         XCTAssertThrowsError(try pipeline.finalize()) { error in
             XCTAssertEqual(error as? RecorderError, reported.errors.first)
         }
+    }
+
+    func testLateWriteErrorKeepsTheAudioAlreadyWritten() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-partial-take-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writers = FailingPCMWriterFactory(failOnWrite: 2)
+        let reported = ReportedWriteErrors()
+        let pipeline = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            makeWriter: writers.make,
+            onLevel: { _ in },
+            onWriteError: { reported.append($0) }
+        )
+        pipeline.activate(generation: 1)
+        let buffer = try makeFloatBuffer(frames: 256, value: 0.25)
+
+        XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
+        XCTAssertFalse(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
+        XCTAssertThrowsError(try pipeline.finalize())
+        pipeline.abort()
+
+        guard case .writeError(let message) = reported.errors.first else {
+            return XCTFail("Expected writeError, got \(String(describing: reported.errors.first))")
+        }
+        XCTAssertTrue(message.contains(url.path), "the error says where the audio was kept")
+        let kept = try AVAudioFile(forReading: url)
+        XCTAssertGreaterThan(kept.length, 0, "the audio written before the error survives")
+    }
+
+    func testFirstWriteErrorLeavesNoEmptyFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-empty-take-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let pipeline = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            makeWriter: FailingPCMWriterFactory(failOnWrite: 1).make,
+            onLevel: { _ in }
+        )
+        pipeline.activate(generation: 1)
+        let buffer = try makeFloatBuffer(frames: 256)
+
+        XCTAssertFalse(pipeline.accept(generation: 1, sourceFormat: buffer.format, buffer: buffer, inputByteCount: 2_048))
+        XCTAssertThrowsError(try pipeline.finalize())
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
-    private func makeFloatBuffer(frames: AVAudioFrameCount) throws -> AVAudioPCMBuffer {
+    private func makeFloatBuffer(frames: AVAudioFrameCount, value: Float = 0) throws -> AVAudioPCMBuffer {
         let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 2, interleaved: false))
         let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
         buffer.frameLength = frames
+        if let channels = buffer.floatChannelData {
+            for channel in 0..<Int(format.channelCount) {
+                for frame in 0..<Int(frames) { channels[channel][frame] = value }
+            }
+        }
         return buffer
     }
 }

@@ -354,8 +354,15 @@ public final class AudioRecorderViewModel: ObservableObject {
                 throw RecorderError.verificationFailed(message)
             }
         } catch {
-            try? FileManager.default.removeItem(at: result.outputURL)
-            throw error
+            // A take with written frames cannot be recorded again: keep it for recovery,
+            // out of the inbox, and say where. Only an empty take is removed.
+            guard result.frameCount > 0,
+                  FileManager.default.fileExists(atPath: result.outputURL.path)
+            else {
+                try? FileManager.default.removeItem(at: result.outputURL)
+                throw error
+            }
+            throw Self.notingKeptPartialTake(at: result.outputURL, in: error)
         }
 
         let item = OutputInboxItem(
@@ -392,6 +399,20 @@ public final class AudioRecorderViewModel: ObservableObject {
             savedRecordingIsSilentFromBlockedCapture = true
             error = .permissionDenied
             recordingState = .permissionNeeded
+        }
+    }
+
+    private static func notingKeptPartialTake(at url: URL, in error: Error) -> RecorderError {
+        let note = RecorderPCMWriterPipeline.keptPartialTakeNote(url)
+        switch error as? RecorderError {
+        case .writeError(let message)?:
+            return .writeError("\(message) \(note)")
+        case .verificationFailed(let message)?:
+            return .verificationFailed("\(message) \(note)")
+        case .noAudioCaptured(let message)?:
+            return .noAudioCaptured("\(message) \(note)")
+        default:
+            return .verificationFailed("\(error.localizedDescription) \(note)")
         }
     }
 
