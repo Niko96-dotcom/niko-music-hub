@@ -183,6 +183,9 @@ struct AppComposition {
             context: context,
             archiveIndexStore: archiveIndexStore,
             songMetadataStore: songMetadataStore,
+            // The production database always exists here, so a nil store means it failed
+            // to open: refuse song edits instead of showing changes that are never saved.
+            songMetadataStorageUnavailable: songMetadataStore == nil,
             archiveRootWatcher: archiveRootWatcher,
             collaboratorStore: collaboratorStore,
             projectVaultRuntime: projectVaultRuntime,

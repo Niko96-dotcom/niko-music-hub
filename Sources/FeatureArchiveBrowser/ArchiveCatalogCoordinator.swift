@@ -88,6 +88,9 @@ enum SongMetadataIntegrityCopy {
     static let loadFailedEditsBlocked =
         "Song details could not be read; edits are blocked until song details reload — nothing was overwritten."
     static let loadFailedScan = "Song details could not be read; nothing was overwritten."
+    /// The production metadata store failed to open, so nothing an edit changes could be kept.
+    static let storageUnavailable =
+        "Song details can't be saved right now; edits are blocked — nothing was changed."
 
     static func name(of song: Song) -> String {
         let title = song.effectiveDisplayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,6 +160,12 @@ final class ArchiveIncrementalTestProbe {
 struct ArchiveCatalogCoordinator {
     let archiveIndexStore: (any ArchiveIndexStoring)?
     let songMetadataStore: (any SongUserMetadataStoring)?
+    /// True only when the production metadata store failed to open. A nil
+    /// store with this false is the deliberate in-memory mode (tests, smoke
+    /// runs): edits stay visible for the session only, by design. With this
+    /// true every explicit edit is refused, because a visible edit would be
+    /// lost on the next rescan or launch.
+    let songMetadataStorageUnavailable: Bool
     let collaboratorStore: (any CollaboratorStoring)?
     let diagnostics: Diagnostics
     private let settingsStore: SettingsStore?
@@ -167,6 +176,7 @@ struct ArchiveCatalogCoordinator {
     init(
         archiveIndexStore: (any ArchiveIndexStoring)?,
         songMetadataStore: (any SongUserMetadataStoring)?,
+        songMetadataStorageUnavailable: Bool = false,
         collaboratorStore: (any CollaboratorStoring)?,
         diagnostics: Diagnostics,
         settingsStore: SettingsStore? = nil,
@@ -174,6 +184,7 @@ struct ArchiveCatalogCoordinator {
     ) {
         self.archiveIndexStore = archiveIndexStore
         self.songMetadataStore = songMetadataStore
+        self.songMetadataStorageUnavailable = songMetadataStorageUnavailable
         self.collaboratorStore = collaboratorStore
         self.diagnostics = diagnostics
         self.settingsStore = settingsStore
@@ -481,6 +492,9 @@ struct ArchiveCatalogCoordinator {
     /// only the last load's integrity snapshot plus the store's single-row
     /// backstop. Cleared only by a later successful load with correct data.
     func metadataEditBlockWarning(for songID: String) -> String? {
+        if songMetadataStorageUnavailable {
+            return SongMetadataIntegrityCopy.storageUnavailable
+        }
         if integrity.didFailLoad() {
             return SongMetadataIntegrityCopy.loadFailedEditsBlocked
         }
@@ -830,7 +844,10 @@ struct ArchiveCatalogCoordinator {
     /// without touching SQLite (no row or status-history mutation); good rows
     /// in the same request still persist. No full-table read here.
     func persistUserMetadata(for songs: [Song]) -> String? {
-        guard let songMetadataStore, !songs.isEmpty else { return nil }
+        guard !songs.isEmpty else { return nil }
+        // Never report success when the production store is missing.
+        if songMetadataStorageUnavailable { return SongMetadataIntegrityCopy.storageUnavailable }
+        guard let songMetadataStore else { return nil }
         var allowed: [Song] = []
         allowed.reserveCapacity(songs.count)
         var blockWarnings: [String] = []
