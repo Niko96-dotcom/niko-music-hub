@@ -28,7 +28,6 @@ cleanup_smoke_suites() {
     wait "$PUBLIC_UI_PID" 2>/dev/null || true
   fi
   nmh_stop_app true
-  launchctl unsetenv NIKO_MUSIC_HUB_SETTINGS_SUITE >/dev/null 2>&1 || true
   rm -rf "$ISOLATED_ROOT/$ARCHIVE_SUITE" "$ISOLATED_ROOT/$UI_SUITE"
   nmh_forget_settings_suite "$ARCHIVE_SUITE"
   nmh_forget_settings_suite "$UI_SUITE"

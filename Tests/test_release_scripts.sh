@@ -208,6 +208,8 @@ assert_order 'run ci "$ROOT/script/ci.sh"' 'run e2e "$ROOT/script/e2e_user_smoke
 assert_contains "$ROOT/script/release-all.sh" 'run ci "$ROOT/script/ci.sh"'
 assert_contains "$ROOT/script/release-all.sh" 'run e2e "$ROOT/script/e2e_user_smoke.sh"'
 assert_contains "$ROOT/script/release-all.sh" 'run e2e env NMH_STRICT_UI_E2E=1 "$ROOT/script/e2e_user_smoke.sh"'
+# E2E launches use per-process suite env only; cleanup must never touch session-wide launchctl state.
+assert_not_contains "$ROOT/script/e2e_user_smoke.sh" 'launchctl'
 assert_contains "$ROOT/script/release-all.sh" 'run hygiene "$ROOT/script/public-tree-hygiene.sh" --public-release'
 assert_contains "$ROOT/script/release-all.sh" 'require_clean_release_worktree'
 assert_contains "$ROOT/script/release-all.sh" 'use ./script/dev.sh run for dirty local development builds'
