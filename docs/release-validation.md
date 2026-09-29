@@ -87,12 +87,16 @@ cat dist/release/snapshot-provenance.json
 ```
 
 Behavioral regression (disposable fixture, stubbed side effects, live-source and
-original-UAT mutation between stages) runs without signing/publication:
+original-UAT mutation between stages) runs without signing/publication. The
+release engineering regression gate at the end of `./script/ci.sh` (and therefore
+`./script/release-all.sh`, which runs `ci.sh` first) already executes all of these,
+so a failing suite fails the canonical gate. To run them alone:
 
 ```bash
-python3 -m unittest discover -s Tests -p 'test_release_pipeline_provenance.py'
-python3 Tests/test_release_provenance.py
+/usr/bin/python3 -m unittest discover -s Tests -p 'test_release_pipeline_provenance.py'
+/usr/bin/python3 Tests/test_release_provenance.py
 bash Tests/test_release_scripts.sh
+bash Tests/test_source_distribution_scripts.sh
 ```
 
 ## Hosted Artifact Truth

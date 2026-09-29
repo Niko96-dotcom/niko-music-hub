@@ -153,7 +153,8 @@ isolated snapshot with isolated `.build`/output (`script/lib/release_snapshot.sh
   release outputs/logs remain reviewable.
 
 Behavioral coverage lives in `Tests/test_release_pipeline_provenance.py` (disposable temp
-git fixture, stubbed side effects, live-source and original-UAT mutation between stages).
+git fixture, stubbed side effects, live-source and original-UAT mutation between stages);
+`./script/ci.sh` runs it together with `Tests/test_release_provenance.py`.
 
 ## Version Bump
 

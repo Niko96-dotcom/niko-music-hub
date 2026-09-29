@@ -66,3 +66,5 @@ echo "== release engineering regression gate =="
 ./script/public-tree-hygiene.sh
 ./Tests/test_release_scripts.sh
 ./Tests/test_source_distribution_scripts.sh
+/usr/bin/python3 Tests/test_release_provenance.py
+/usr/bin/python3 -m unittest discover -s Tests -p 'test_release_pipeline_provenance.py'
