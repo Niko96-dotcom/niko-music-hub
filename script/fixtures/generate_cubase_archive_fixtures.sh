@@ -1,10 +1,54 @@
 #!/usr/bin/env bash
 # Generates deterministic Cubase archive fixtures for unit tests and E2E.
 # CPR files are zero-byte placeholders (not copied from real projects).
+#
+# Modification times are fixed absolute values in the past, never "now": ranking tiebreak
+# fixtures need paired files with identical mtimes, and git checkouts rewrite files with
+# checkout-time mtimes. `--restamp` re-applies only the timestamps to an existing tree
+# (non-destructive; the test helpers use it when a checkout has scrambled them).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FIXTURE_ROOT="$ROOT/Fixtures/CubaseArchive"
+TRUNCATION_ROOT="$ROOT/Fixtures/CubaseArchiveSummaryTruncation"
+# Keep in sync with `CubaseFixtures.fixtureEpoch` in Tests/*/Fixtures.swift.
+FIXTURE_EPOCH=1700000000
+
+stamp_fixture_mtimes() {
+  /usr/bin/python3 - "$FIXTURE_ROOT" "$TRUNCATION_ROOT" "$FIXTURE_EPOCH" <<'PY'
+import os, sys
+archive, truncation, epoch = sys.argv[1], sys.argv[2], int(sys.argv[3])
+# Offsets (seconds after the epoch) that decide recency-sensitive rankings. Files listed
+# together share one mtime so a later tiebreak (version, extension, duration) decides.
+offsets = {
+    120: ["Neon Hook/Neon Hook.cpr"],  # latest CPR beats "Neon Hook v2.cpr"
+    300: ["Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav"],
+    350: ["Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav",
+          "Preview Ranking Lab/Mixdown/Lab Song v2 mix.wav"],
+    400: ["Equal Score Duration Tiebreak/Mixdown/Tie Song mix long.wav",
+          "Equal Score Duration Tiebreak/Mixdown/Tie Song mix short.wav"],
+    500: ["Equal Score Version Tiebreak/Mixdown/Tie Song v3 mix.wav",
+          "Equal Score Version Tiebreak/Mixdown/Tie Song v2 mix.wav"],
+    600: ["Equal Score Extension Tiebreak/Mixdown/Tie Song mix.flac",
+          "Equal Score Extension Tiebreak/Mixdown/Tie Song mix.mp3"],
+    700: ["90s Rave/Mixdown/Graffiti SESSIN BOUNCE.wav"],
+    750: ["Amber Moth/Mixdown/Amber Moth drums.wav"],
+}
+for root in (archive, truncation):
+    for directory, dirs, files in os.walk(root):
+        for name in files + dirs:
+            os.utime(os.path.join(directory, name), (epoch, epoch))
+    os.utime(root, (epoch, epoch))
+for offset, paths in offsets.items():
+    for relative in paths:
+        os.utime(os.path.join(archive, relative), (epoch + offset, epoch + offset))
+PY
+}
+
+if [[ "${1:-}" == "--restamp" ]]; then
+  stamp_fixture_mtimes
+  exit 0
+fi
 
 write_minimal_wav() {
   local path="$1"
@@ -38,13 +82,6 @@ echo "not a song folder" >"$FIXTURE_ROOT/LOOSE_FILE.txt"
 # Neon Hook — full mix in Mixdown beats stem names
 write_placeholder_cpr "$FIXTURE_ROOT/Neon Hook/Neon Hook v2.cpr"
 write_placeholder_cpr "$FIXTURE_ROOT/Neon Hook/Neon Hook.cpr"
-# Latest CPR for E2E is Neon Hook.cpr (newer mtime than v2)
-/usr/bin/python3 - "$FIXTURE_ROOT/Neon Hook/Neon Hook.cpr" <<'PY'
-import os, sys, time
-path = sys.argv[1]
-now = time.time() + 120
-os.utime(path, (now, now))
-PY
 write_minimal_wav "$FIXTURE_ROOT/Neon Hook/Mixdown/Neon Hook v3.wav"
 write_minimal_wav "$FIXTURE_ROOT/Neon Hook/Mixdown/Neon Hook instr.wav"
 mkdir -p "$FIXTURE_ROOT/Neon Hook/Ideas"
@@ -59,14 +96,6 @@ write_minimal_wav "$FIXTURE_ROOT/Second Song/Mixdown/Second Song instr.wav"
 write_placeholder_cpr "$FIXTURE_ROOT/Preview Ranking Lab/Preview Ranking Lab.cpr"
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v3 mix.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v2 mix.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown" <<'PY'
-import os, sys, time
-mixdown = sys.argv[1]
-now = time.time() + 350
-for name in ("Lab Song v3 mix.wav", "Lab Song v2 mix.wav"):
-    path = os.path.join(mixdown, name)
-    os.utime(path, (now, now))
-PY
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" 200
 /usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song mix.mp3" <<'PY'
@@ -77,38 +106,16 @@ with open(path, "wb") as f:
     f.write(b"ID3" + b"\x00" * 128)
 PY
 write_minimal_wav "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song short clip.wav" 5
-/usr/bin/python3 - "$FIXTURE_ROOT/Preview Ranking Lab/Mixdown/Lab Song v5 instr.wav" <<'PY'
-import os, sys, time
-path = sys.argv[1]
-now = time.time() + 300
-os.utime(path, (now, now))
-PY
 
 # Equal Score Duration Tiebreak — same ranking signals except duration (tiebreak, not score bump)
 write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Equal Score Duration Tiebreak.cpr"
 write_minimal_wav "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown/Tie Song mix long.wav" 210
 write_minimal_wav "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown/Tie Song mix short.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Duration Tiebreak/Mixdown" <<'PY'
-import os, sys, time
-mixdown = sys.argv[1]
-now = time.time() + 400
-for name in ("Tie Song mix long.wav", "Tie Song mix short.wav"):
-    path = os.path.join(mixdown, name)
-    os.utime(path, (now, now))
-PY
 
 # Equal Score Version Tiebreak — matched score; version is the deciding tiebreak
 write_placeholder_cpr "$FIXTURE_ROOT/Equal Score Version Tiebreak/Equal Score Version Tiebreak.cpr"
 write_minimal_wav "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown/Tie Song v3 mix.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown/Tie Song v2 mix.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Version Tiebreak/Mixdown" <<'PY'
-import os, sys, time
-mixdown = sys.argv[1]
-now = time.time() + 500
-for name in ("Tie Song v3 mix.wav", "Tie Song v2 mix.wav"):
-    path = os.path.join(mixdown, name)
-    os.utime(path, (now, now))
-PY
 
 # Equal Score Extension Tiebreak — matched score; extension is the deciding tiebreak
 # (non-wav placeholders skip duration reader so scores stay equal)
@@ -120,44 +127,23 @@ path = sys.argv[1]
 with open(path, "wb") as f:
     f.write(b"ID3" + b"\x00" * 128)
 PY
-/usr/bin/python3 - "$FIXTURE_ROOT/Equal Score Extension Tiebreak/Mixdown" <<'PY'
-import os, sys, time
-mixdown = sys.argv[1]
-now = time.time() + 600
-for name in ("Tie Song mix.flac", "Tie Song mix.mp3"):
-    path = os.path.join(mixdown, name)
-    os.utime(path, (now, now))
-PY
 
 # 90s Rave — maturity ladder: master beats session bounce; display title from preview
 write_placeholder_cpr "$FIXTURE_ROOT/90s Rave/90s Rave.cpr"
 write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti SESSIN BOUNCE.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti master.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti sketchyy.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/90s Rave/Mixdown/Graffiti SESSIN BOUNCE.wav" <<'PY'
-import os, sys, time
-path = sys.argv[1]
-now = time.time() + 700
-os.utime(path, (now, now))
-PY
 
 # Amber Moth — drum stem must not become main preview
 write_placeholder_cpr "$FIXTURE_ROOT/Amber Moth/Amber Moth.cpr"
 write_minimal_wav "$FIXTURE_ROOT/Amber Moth/Mixdown/Amber Moth drums.wav" 200
 write_minimal_wav "$FIXTURE_ROOT/Amber Moth/Mixdown/Amber Moth master mix.wav" 200
-/usr/bin/python3 - "$FIXTURE_ROOT/Amber Moth/Mixdown/Amber Moth drums.wav" <<'PY'
-import os, sys, time
-path = sys.argv[1]
-now = time.time() + 750
-os.utime(path, (now, now))
-PY
 
 # Broken folder — no CPR
 mkdir -p "$FIXTURE_ROOT/Broken Folder Example"
 echo "notes only" >"$FIXTURE_ROOT/Broken Folder Example/notes.txt"
 
 # Summary-line truncation lab — eight warning-only songs (no CPR) for diagnostics E2E
-TRUNCATION_ROOT="$ROOT/Fixtures/CubaseArchiveSummaryTruncation"
 rm -rf "$TRUNCATION_ROOT"
 mkdir -p "$TRUNCATION_ROOT"
 for index in 01 02 03 04 05 06 07 08; do
@@ -174,6 +160,8 @@ Generated by `script/fixtures/generate_cubase_archive_fixtures.sh`.
 - `.wav` files are minimal valid mono WAV (~0.1s silence).
 - Do not copy real user archive binaries into this tree.
 EOF
+
+stamp_fixture_mtimes
 
 echo "Generated fixtures under $FIXTURE_ROOT"
 echo "Generated summary truncation lab under $TRUNCATION_ROOT"
