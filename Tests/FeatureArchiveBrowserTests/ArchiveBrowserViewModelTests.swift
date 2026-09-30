@@ -4357,6 +4357,66 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
     }
 
+    /// With Vault off only settings name the archive root, so settings that turn
+    /// unreadable after launch must refuse every writer, not fall back to `roots`.
+    func testExportsAndNewSongRefuseEveryWriteWhenSettingsAreUnreadable() throws {
+        let fixture = try VaultArchiveWriteGuardFixture(vaultEnabled: false)
+        defer { fixture.cleanUp() }
+        let viewModel = fixture.makeViewModel()
+        try FileManager.default.createDirectory(at: fixture.generation, withIntermediateDirectories: true)
+        let archiveBefore = try Self.snapshot(of: fixture.vaultArchive)
+        let savedSettings = try fixture.corruptSavedSettings()
+        XCTAssertThrowsError(try fixture.settingsStore.loadSettings(), "precondition: saved settings are unreadable")
+
+        for folder in [fixture.generation, fixture.plain] {
+            XCTAssertThrowsError(
+                try viewModel.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
+                "index export into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
+            }
+            XCTAssertThrowsError(
+                try viewModel.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
+                "diagnostics export into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
+            }
+            XCTAssertThrowsError(
+                try viewModel.createNewSong(request: NewSongRequest(name: "Draft", root: folder)),
+                "New Song into \(folder.lastPathComponent)"
+            ) { error in
+                XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
+            }
+        }
+        XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), archiveBefore, "nothing written into the archive")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path), [])
+        XCTAssertNil(viewModel.lastIndexExportPath)
+        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+        XCTAssertFalse(viewModel.songs.contains { $0.originalFolderName == "Draft" })
+
+        viewModel.performExport { try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json")) }
+        XCTAssertEqual(
+            viewModel.statusMessage,
+            "Export failed: Settings couldn't be read, so nothing was written. Repair them in Settings, then try again."
+        )
+
+        // Control: once settings read again, plain writes go through and the archive stays refused.
+        try fixture.restoreSavedSettings(savedSettings)
+        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
+        XCTAssertEqual(
+            Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
+            ["index.json", "scan.txt", "Plain Draft"]
+        )
+        XCTAssertThrowsError(
+            try viewModel.createNewSong(request: NewSongRequest(name: "Vault Draft", root: fixture.generation))
+        ) { error in
+            XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .archiveRootIsReadOnly)
+        }
+        XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), archiveBefore)
+    }
+
     /// Relative path -> file bytes (nil for directories), so any created or changed entry shows.
     private static func snapshot(of directory: URL) throws -> [String: Data?] {
         let manager = FileManager.default
@@ -4463,6 +4523,19 @@ private struct VaultArchiveWriteGuardFixture {
             skippedEntries: []
         )
         return viewModel
+    }
+
+    /// Replaces the saved settings with bytes that fail to decode and returns the
+    /// original data, so `loadSettings()` throws like a damaged settings file.
+    func corruptSavedSettings() throws -> Data {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let saved = try XCTUnwrap(defaults.data(forKey: "settings"))
+        defaults.set(Data("not settings".utf8), forKey: "settings")
+        return saved
+    }
+
+    func restoreSavedSettings(_ data: Data) throws {
+        try XCTUnwrap(UserDefaults(suiteName: suiteName)).set(data, forKey: "settings")
     }
 
     func cleanUp() {

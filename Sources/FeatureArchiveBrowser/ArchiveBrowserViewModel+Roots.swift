@@ -361,13 +361,15 @@ extension ArchiveBrowserViewModel {
     /// generations writable. The Active root is not added, so a New Song can still
     /// be created there. Both the archive's stored path and its bookmarked location,
     /// stale or not, are protected, so a moved archive folder stays covered.
-    func writeProtectedRoots() -> [URL] {
+    /// Unreadable settings refuse the write: without them the archive root is
+    /// unknown, and `roots` alone leaves it writable while Vault is off.
+    func writeProtectedRoots() throws -> [URL] {
         let settings: AppSettings
         do {
             settings = try settingsStore.loadSettings()
         } catch {
-            diagnostics.log(.warning, "Write guard could not read Vault settings: \(error)")
-            return roots
+            diagnostics.log(.error, "Write guard could not read Vault settings: \(error)")
+            throw ArchiveWriteGuardError.settingsUnreadable
         }
         guard let archiveRoot = settings.musicRoots.first(where: { $0.id == settings.vault.archiveRootID })
         else { return roots }
@@ -605,5 +607,18 @@ extension ArchiveBrowserViewModel {
         }
         restartArchiveRootWatching()
         refreshFirstRunState()
+    }
+}
+
+/// Index export, diagnostics export and New Song refuse to write when the write
+/// guard cannot read settings, matching the recorder's refusal.
+enum ArchiveWriteGuardError: LocalizedError, Equatable {
+    case settingsUnreadable
+
+    var errorDescription: String? {
+        switch self {
+        case .settingsUnreadable:
+            return "Settings couldn't be read, so nothing was written. Repair them in Settings, then try again."
+        }
     }
 }
