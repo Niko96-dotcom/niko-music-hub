@@ -1,4 +1,5 @@
 import AppCore
+import Darwin
 @testable import FeatureArchiveBrowser
 import NikoMusicCore
 import SQLite3
@@ -4065,6 +4066,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
     }
 
     func testRevealInFinderRejectsOutsideAllowedRoots() async throws {
+        let parent = try makeRevealFixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: parent) }
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
         defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
@@ -4072,16 +4075,60 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         await viewModel.scan()
 
-        let outside = FileManager.default.temporaryDirectory
-            .appendingPathComponent("niko-reveal-outside.txt")
+        let outside = parent.appendingPathComponent("niko-reveal-outside.txt")
         try "outside".write(to: outside, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: outside) }
 
         viewModel.revealInFinder(url: outside)
         XCTAssertEqual(
             viewModel.statusMessage,
             "Path is outside allowed archive roots: \(outside.standardizedFileURL.path)"
         )
+    }
+
+    func testRevealInFinderRejectsOutsideAllowedRootsFixtureAllocationsPreserveSiblings() throws {
+        let fm = FileManager.default
+        let parent = try makeRevealFixtureDirectory()
+        defer { try? fm.removeItem(at: parent) }
+
+        let canaryFile = parent.appendingPathComponent("niko-reveal-outside.txt")
+        try "original outside".write(to: canaryFile, atomically: true, encoding: .utf8)
+        let canaryDirectory = parent.appendingPathComponent("sibling-directory", isDirectory: true)
+        try fm.createDirectory(at: canaryDirectory, withIntermediateDirectories: false)
+        try "original sibling".write(
+            to: canaryDirectory.appendingPathComponent("retained.txt"), atomically: true, encoding: .utf8
+        )
+        let before = try Self.snapshot(of: parent)
+
+        do {
+            let first = try makeRevealFixtureDirectory(in: parent)
+            defer { try? fm.removeItem(at: first) }
+            let second = try makeRevealFixtureDirectory(in: parent)
+            defer { try? fm.removeItem(at: second) }
+            XCTAssertNotEqual(first, second)
+            XCTAssertEqual(first.deletingLastPathComponent().path, parent.path)
+            XCTAssertEqual(second.deletingLastPathComponent().path, parent.path)
+
+            let firstFile = first.appendingPathComponent("niko-reveal-outside.txt")
+            let secondFile = second.appendingPathComponent("niko-reveal-outside.txt")
+            try "first".write(to: firstFile, atomically: true, encoding: .utf8)
+            try "second".write(to: secondFile, atomically: true, encoding: .utf8)
+            XCTAssertEqual(try String(contentsOf: firstFile, encoding: .utf8), "first")
+            XCTAssertEqual(try String(contentsOf: secondFile, encoding: .utf8), "second")
+        }
+
+        XCTAssertEqual(try Self.snapshot(of: parent), before)
+    }
+
+    private func makeRevealFixtureDirectory(
+        in parent: URL = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+    ) throws -> URL {
+        var template = Array(parent.appendingPathComponent("nmh-archive-reveal-XXXXXX").path.utf8CString)
+        return try template.withUnsafeMutableBufferPointer { buffer in
+            guard let path = mkdtemp(buffer.baseAddress) else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            return URL(fileURLWithPath: String(cString: path), isDirectory: true)
+        }
     }
 
     func testCatalogRescanInvalidatesMixdownCacheWhenPreviewModifiedAtChanges() async throws {

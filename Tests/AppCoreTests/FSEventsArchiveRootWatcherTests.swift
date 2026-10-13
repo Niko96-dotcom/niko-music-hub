@@ -47,6 +47,66 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
     }
 
     @MainActor
+    func testStopFromCallbackSuppressesAlreadyQueuedDelivery() async throws {
+        let root = URL(fileURLWithPath: "/private/tmp/watcher-reentrant-stop-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let eventQueue = DispatchQueue(label: "watcher-reentrant-stop")
+        let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0, eventQueue: eventQueue)
+        let delivery = DeliveryProbe()
+        let watchdog = reentrancyWatchdog("stop() did not return from onChange")
+        defer {
+            watcher.stop()
+            watchdog.cancel()
+        }
+        XCTAssertTrue(watcher.setRoots([root]) { event in
+            watcher.stop()
+            delivery.record(event)
+        })
+
+        queueSeparateBatches(watcher, eventQueue: eventQueue, root: root)
+        try await waitForDelivery(delivery)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(delivery.count, 1)
+    }
+
+    @MainActor
+    func testReplaceRootsFromCallbackSuppressesOldGenerationAndDeliversNewEvents() async throws {
+        let fixture = URL(fileURLWithPath: "/private/tmp/watcher-reentrant-roots-\(UUID())", isDirectory: true)
+        let oldRoot = fixture.appendingPathComponent("old", isDirectory: true)
+        let newRoot = fixture.appendingPathComponent("new", isDirectory: true)
+        try FileManager.default.createDirectory(at: oldRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: newRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let eventQueue = DispatchQueue(label: "watcher-reentrant-roots")
+        let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0, eventQueue: eventQueue)
+        let oldDelivery = DeliveryProbe()
+        let newDelivery = DeliveryProbe()
+        let newPath = newRoot.appendingPathComponent("Song.cpr").path
+        let watchdog = reentrancyWatchdog("setRoots() did not return from onChange")
+        defer {
+            watcher.stop()
+            watchdog.cancel()
+        }
+        XCTAssertTrue(watcher.setRoots([oldRoot]) { event in
+            XCTAssertTrue(watcher.setRoots([newRoot]) { newEvent in
+                newDelivery.record(newEvent)
+            })
+            oldDelivery.record(event)
+            watcher.simulateChangedPaths([newPath])
+        })
+
+        queueSeparateBatches(watcher, eventQueue: eventQueue, root: oldRoot)
+        try await waitForDelivery(newDelivery)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(oldDelivery.count, 1)
+        XCTAssertEqual(newDelivery.count, 1)
+        XCTAssertEqual(newDelivery.paths.map(\.path), [newPath])
+    }
+
+    @MainActor
     func testDebounceCoalescesAndSortsPaths() async throws {
         let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0.01)
         let delivery = DeliveryProbe()
@@ -230,6 +290,34 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(5))
         }
         XCTAssertEqual(delivery.count, 1)
+    }
+
+    @MainActor
+    private func queueSeparateBatches(
+        _ watcher: FSEventsArchiveRootWatcher,
+        eventQueue: DispatchQueue,
+        root: URL
+    ) {
+        // Keep MainActor occupied until two separate debounces have queued their
+        // deliveries. The first callback must cancel admission of the second
+        // queued delivery, rather than only cancelling an unfired debounce item.
+        for name in ["first.cpr", "queued.cpr"] {
+            watcher.simulateChangedPaths([root.appendingPathComponent(name).path])
+            let queued = DispatchSemaphore(value: 0)
+            eventQueue.asyncAfter(deadline: .now() + 0.05) { queued.signal() }
+            XCTAssertEqual(queued.wait(timeout: .now() + 1), .success)
+        }
+    }
+
+    private func reentrancyWatchdog(_ message: String) -> any DispatchSourceTimer {
+        // XCTest async timeouts cannot fire while MainActor is deadlocked. This
+        // independent queue terminates the test process with a failing exit if
+        // reentrant cancellation blocks, so the runner cannot hang indefinitely.
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .userInitiated))
+        timer.setEventHandler { fatalError(message) }
+        timer.schedule(deadline: .now() + 5)
+        timer.resume()
+        return timer
     }
 }
 

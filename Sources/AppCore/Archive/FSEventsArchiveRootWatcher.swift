@@ -33,9 +33,10 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
 
         @MainActor
         func performIfActive(_ body: () -> Void) {
-            lock.lock()
-            defer { lock.unlock() }
-            guard isActive else { return }
+            // Admission drops queued callbacks from cancelled generations.
+            // Consumer code may synchronously stop or replace roots, so it must
+            // run after releasing the lock used by eventQueue cancellation.
+            guard lock.withLock({ isActive }) else { return }
             body()
         }
     }

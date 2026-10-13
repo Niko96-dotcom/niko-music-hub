@@ -1,16 +1,17 @@
+import Darwin
 import XCTest
 @testable import NikoMusicCore
 
 final class PathSafetyTests: XCTestCase {
     func testRejectsPathOutsideAllowedRoots() throws {
         let safety = PathSafety()
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("niko-root", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let parent = try makeFixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let root = parent.appendingPathComponent("niko-root", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
 
-        let outside = FileManager.default.temporaryDirectory.appendingPathComponent("niko-outside.txt")
+        let outside = parent.appendingPathComponent("niko-outside.txt")
         try "x".write(to: outside, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: outside) }
 
         XCTAssertThrowsError(try safety.resolve(outside, allowedRoots: [root])) { error in
             XCTAssertEqual(error as? PathSafetyError, .pathOutsideAllowedRoots(outside.standardizedFileURL))
@@ -19,9 +20,10 @@ final class PathSafetyTests: XCTestCase {
 
     func testAcceptsPathInsideRoot() throws {
         let safety = PathSafety()
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("niko-inner-root", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let parent = try makeFixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let root = parent.appendingPathComponent("niko-inner-root", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
 
         let inside = root.appendingPathComponent("song/file.wav")
         try FileManager.default.createDirectory(at: inside.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -29,6 +31,49 @@ final class PathSafetyTests: XCTestCase {
 
         let resolved = try safety.resolve(inside, allowedRoots: [root])
         XCTAssertTrue(resolved.path.hasPrefix(root.standardizedFileURL.path))
+    }
+
+    func testFixtureAllocationsAreIndependentAndPreserveSiblingCanaries() throws {
+        let fm = FileManager.default
+        let parent = try makeFixtureDirectory()
+        defer { try? fm.removeItem(at: parent) }
+
+        let canaryFile = parent.appendingPathComponent("niko-outside.txt")
+        try "original outside".write(to: canaryFile, atomically: true, encoding: .utf8)
+        let canaryRoots = ["niko-root", "niko-inner-root"].map {
+            parent.appendingPathComponent($0, isDirectory: true)
+        }
+        for root in canaryRoots {
+            try fm.createDirectory(at: root, withIntermediateDirectories: false)
+            try "original root".write(to: root.appendingPathComponent("retained.txt"), atomically: true, encoding: .utf8)
+        }
+
+        do {
+            let first = try makeFixtureDirectory(in: parent)
+            defer { try? fm.removeItem(at: first) }
+            let second = try makeFixtureDirectory(in: parent)
+            defer { try? fm.removeItem(at: second) }
+            XCTAssertNotEqual(first, second)
+            XCTAssertEqual(first.deletingLastPathComponent().path, parent.path)
+            XCTAssertEqual(second.deletingLastPathComponent().path, parent.path)
+
+            let firstFile = first.appendingPathComponent("niko-outside.txt")
+            let secondFile = second.appendingPathComponent("niko-outside.txt")
+            try "first".write(to: firstFile, atomically: true, encoding: .utf8)
+            try "second".write(to: secondFile, atomically: true, encoding: .utf8)
+            XCTAssertEqual(try String(contentsOf: firstFile, encoding: .utf8), "first")
+            XCTAssertEqual(try String(contentsOf: secondFile, encoding: .utf8), "second")
+        }
+
+        XCTAssertEqual(try String(contentsOf: canaryFile, encoding: .utf8), "original outside")
+        for root in canaryRoots {
+            XCTAssertEqual(try fm.contentsOfDirectory(atPath: root.path), ["retained.txt"])
+            XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("retained.txt"), encoding: .utf8), "original root")
+        }
+        XCTAssertEqual(
+            Set(try fm.contentsOfDirectory(atPath: parent.path)),
+            ["niko-root", "niko-inner-root", "niko-outside.txt"]
+        )
     }
 
     func testResolveAcceptsPathInsideSymlinkedArchiveRoot() throws {
@@ -124,5 +169,17 @@ final class PathSafetyTests: XCTestCase {
         let missingChild = link.appendingPathComponent("not-created-yet.wav")
         let safety = PathSafety(fileManager: fm)
         XCTAssertTrue(safety.isResolvedContained(missingChild, in: [archive]))
+    }
+
+    private func makeFixtureDirectory(
+        in parent: URL = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+    ) throws -> URL {
+        var template = Array(parent.appendingPathComponent("nmh-path-safety-XXXXXX").path.utf8CString)
+        return try template.withUnsafeMutableBufferPointer { buffer in
+            guard let path = mkdtemp(buffer.baseAddress) else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            return URL(fileURLWithPath: String(cString: path), isDirectory: true)
+        }
     }
 }

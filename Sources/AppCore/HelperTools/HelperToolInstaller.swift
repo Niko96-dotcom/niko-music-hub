@@ -142,9 +142,8 @@ public actor HelperToolInstaller {
     }
 
     public nonisolated func isInstalled(_ bundle: HelperToolBundle) -> Bool {
-        let manager = FileManager()
-        return bundle.tools.allSatisfy { tool in
-            manager.isExecutableFile(atPath: locator.managedExecutableURL(for: tool).path)
+        bundle.tools.allSatisfy { tool in
+            HelperExecutableValidation.validate(url: locator.managedExecutableURL(for: tool)) == nil
         }
     }
 
@@ -399,17 +398,24 @@ public actor HelperToolInstaller {
         ))
 
         let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-        // Record pre-existing state so a failed run never deletes a working tool,
-        // but still cleans a stray link this run may have left behind.
-        let demucsBinURL = locator.managedExecutableURL(for: .demucsMlx)
-        let demucsExistedBeforeRun = fileManager.fileExists(atPath: demucsBinURL.path)
+        // uv environments contain absolute interpreter paths, so keep each
+        // attempt at its permanent path and publish its entry point only when
+        // preparation succeeds. A late cancelled writer cannot touch live tools.
+        let attemptRoot = locator.managedRoot.appendingPathComponent("uv-tools")
+            .appendingPathComponent(staging.lastPathComponent, isDirectory: true)
+        let attemptBin = attemptRoot.appendingPathComponent("bin", isDirectory: true)
+        try fileManager.createDirectory(at: attemptBin, withIntermediateDirectories: true)
+        var published = false
+        defer {
+            if !published { try? fileManager.removeItem(at: attemptRoot) }
+        }
         let uvEnvironment: [String: String] = [
             "HOME": home,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "UV_TOOL_DIR": locator.managedRoot.appendingPathComponent("uv-tools").path,
-            "UV_TOOL_BIN_DIR": locator.managedBinDirectory.path,
-            "UV_PYTHON_INSTALL_DIR": locator.managedRoot.appendingPathComponent("python").path,
-            "UV_CACHE_DIR": locator.managedRoot.appendingPathComponent("uv-cache").path,
+            "UV_TOOL_DIR": attemptRoot.appendingPathComponent("tools").path,
+            "UV_TOOL_BIN_DIR": attemptBin.path,
+            "UV_PYTHON_INSTALL_DIR": attemptRoot.appendingPathComponent("python").path,
+            "UV_CACHE_DIR": attemptRoot.appendingPathComponent("cache").path,
             "UV_PYTHON_PREFERENCE": "only-managed",
             "UV_NO_CONFIG": "1",
         ]
@@ -436,18 +442,12 @@ public actor HelperToolInstaller {
             // Keep the last 20 lines for context; the message carries the last one.
             let tail = Array(lines.suffix(20))
             let last = tail.last ?? "(no details)"
-            if !demucsExistedBeforeRun {
-                try? fileManager.removeItem(at: demucsBinURL)
-            }
             throw HelperInstallError.setupFailed("demucs-mlx: \(last)")
         }
 
         try Task.checkCancellation()
-        let demucsBin = locator.managedExecutableURL(for: .demucsMlx)
+        let demucsBin = attemptBin.appendingPathComponent(HelperTool.demucsMlx.executableName)
         guard fileManager.isExecutableFile(atPath: demucsBin.path) else {
-            if !demucsExistedBeforeRun {
-                try? fileManager.removeItem(at: demucsBinURL)
-            }
             throw HelperInstallError.setupFailed("demucs-mlx")
         }
 
@@ -458,12 +458,12 @@ public actor HelperToolInstaller {
 
         let wavURL = staging.appendingPathComponent("silence.wav", isDirectory: false)
         try silentWAVData().write(to: wavURL)
-        let warmupOut = staging.appendingPathComponent("warmup-out", isDirectory: true)
+        let warmupOut = attemptRoot.appendingPathComponent("warmup-out", isDirectory: true)
         // Same HOME the app uses later, so the prepared model lands in the cache
         // demucs-mlx reads on real runs (~/.cache/demucs-mlx).
         let warmupEnvironment = [
             "HOME": home,
-            "PATH": "\(locator.managedBinDirectory.path):/usr/bin:/bin",
+            "PATH": "\(attemptBin.path):\(locator.managedBinDirectory.path):/usr/bin:/bin",
         ]
         let warmupRequest = ExternalProcessRequest(
             executableURL: demucsBin,
@@ -477,21 +477,8 @@ public actor HelperToolInstaller {
             environment: warmupEnvironment,
             timeoutSeconds: 1800
         )
-        let warmupResult: ExternalProcessResult
-        do {
-            warmupResult = try await processRunner.run(warmupRequest)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            if !demucsExistedBeforeRun {
-                try? fileManager.removeItem(at: demucsBinURL)
-            }
-            throw error
-        }
+        let warmupResult = try await processRunner.run(warmupRequest)
         if warmupResult.exitCode != 0 {
-            if !demucsExistedBeforeRun {
-                try? fileManager.removeItem(at: demucsBinURL)
-            }
             throw HelperInstallError.verificationFailed(verificationDetail(
                 tool: "demucs-mlx",
                 standardError: warmupResult.standardError
@@ -500,7 +487,13 @@ public actor HelperToolInstaller {
 
         try Task.checkCancellation()
         progress(HelperInstallProgress(phase: "Cleaning up", fractionCompleted: cleanupFraction))
-        try? fileManager.removeItem(at: locator.managedRoot.appendingPathComponent("uv-cache"))
+        try? fileManager.removeItem(at: attemptRoot.appendingPathComponent("cache"))
+        try? fileManager.removeItem(at: warmupOut)
+        try Task.checkCancellation()
+        let entryPoint = staging.appendingPathComponent(HelperTool.demucsMlx.executableName)
+        try fileManager.createSymbolicLink(at: entryPoint, withDestinationURL: demucsBin)
+        try installExecutable(from: entryPoint, to: locator.managedExecutableURL(for: .demucsMlx))
+        published = true
 
         progress(HelperInstallProgress(phase: "Done", fractionCompleted: 1))
     }

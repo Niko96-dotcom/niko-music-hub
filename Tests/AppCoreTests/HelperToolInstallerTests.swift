@@ -4,6 +4,86 @@ import Foundation
 import XCTest
 
 final class HelperToolInstallerTests: XCTestCase {
+    @MainActor
+    func testDirectoriesAndDirectorySymlinksAreNotInstalledOrReady() throws {
+        for symbolicLink in [false, true] {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let locator = HelperToolLocator(
+                managedRoot: root.appendingPathComponent("Tools", isDirectory: true),
+                systemDirectories: []
+            )
+            for tool in HelperTool.allCases {
+                let candidate = locator.managedExecutableURL(for: tool)
+                let directory = symbolicLink ? candidate.appendingPathExtension("directory") : candidate
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+                if symbolicLink {
+                    try FileManager.default.createSymbolicLink(at: candidate, withDestinationURL: directory)
+                }
+            }
+            let installer = HelperToolInstaller(
+                locator: locator,
+                downloader: FakeDownloader(),
+                processRunner: FakeRunner()
+            )
+            let model = HelperToolSetupModel(
+                locator: locator,
+                installer: installer,
+                settingsProvider: { HelperToolSettings() }
+            )
+
+            model.refresh()
+            for bundle in HelperToolBundle.allCases {
+                XCTAssertFalse(installer.isInstalled(bundle))
+                XCTAssertEqual(model.states[bundle], .notInstalled)
+            }
+            XCTAssertFalse(model.allInstalled)
+        }
+    }
+
+    @MainActor
+    func testExecutableFilesAndSymlinksAreInstalledAndReady() throws {
+        for symbolicLink in [false, true] {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let locator = HelperToolLocator(
+                managedRoot: root.appendingPathComponent("Tools", isDirectory: true),
+                systemDirectories: []
+            )
+            try FileManager.default.createDirectory(
+                at: locator.managedBinDirectory,
+                withIntermediateDirectories: true
+            )
+            for tool in HelperTool.allCases {
+                let candidate = locator.managedExecutableURL(for: tool)
+                let executable = symbolicLink ? candidate.appendingPathExtension("executable") : candidate
+                try "#!/bin/sh\nexit 0\n".write(to: executable, atomically: true, encoding: .utf8)
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+                if symbolicLink {
+                    try FileManager.default.createSymbolicLink(at: candidate, withDestinationURL: executable)
+                }
+            }
+            let installer = HelperToolInstaller(
+                locator: locator,
+                downloader: FakeDownloader(),
+                processRunner: FakeRunner()
+            )
+            let model = HelperToolSetupModel(
+                locator: locator,
+                installer: installer,
+                settingsProvider: { HelperToolSettings() }
+            )
+
+            model.refresh()
+            for bundle in HelperToolBundle.allCases {
+                XCTAssertTrue(installer.isInstalled(bundle))
+                XCTAssertEqual(model.states[bundle], .installed)
+            }
+            XCTAssertTrue(model.allInstalled)
+        }
+    }
+
     func testDownloadAndConvertSuccessInstallsThreeExecutables() async throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -115,13 +195,17 @@ final class HelperToolInstallerTests: XCTestCase {
         )
         XCTAssertEqual(uvRequest.timeoutSeconds, 1800)
         let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+        let attemptBin = URL(fileURLWithPath: try XCTUnwrap(uvRequest.environment?["UV_TOOL_BIN_DIR"]))
+        let attemptRoot = attemptBin.deletingLastPathComponent()
+        XCTAssertEqual(attemptRoot.deletingLastPathComponent().path, managedRoot.appendingPathComponent("uv-tools").path)
+        XCTAssertNotEqual(attemptBin.path, locator.managedBinDirectory.path)
         XCTAssertEqual(uvRequest.environment, [
             "HOME": home,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "UV_TOOL_DIR": managedRoot.appendingPathComponent("uv-tools").path,
-            "UV_TOOL_BIN_DIR": locator.managedBinDirectory.path,
-            "UV_PYTHON_INSTALL_DIR": managedRoot.appendingPathComponent("python").path,
-            "UV_CACHE_DIR": managedRoot.appendingPathComponent("uv-cache").path,
+            "UV_TOOL_DIR": attemptRoot.appendingPathComponent("tools").path,
+            "UV_TOOL_BIN_DIR": attemptBin.path,
+            "UV_PYTHON_INSTALL_DIR": attemptRoot.appendingPathComponent("python").path,
+            "UV_CACHE_DIR": attemptRoot.appendingPathComponent("cache").path,
             "UV_PYTHON_PREFERENCE": "only-managed",
             "UV_NO_CONFIG": "1",
         ])
@@ -132,15 +216,17 @@ final class HelperToolInstallerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: uvBin.path))
 
         let warmups = runner.requests.filter {
-            $0.executableURL.path == demucsBin.path
+            $0.executableURL.path == attemptBin.appendingPathComponent("demucs-mlx").path
         }
         XCTAssertEqual(warmups.count, 1)
         let warmup = try XCTUnwrap(warmups.first)
         XCTAssertEqual(warmup.timeoutSeconds, 1800)
-        XCTAssertEqual(warmup.environment?["PATH"], "\(locator.managedBinDirectory.path):/usr/bin:/bin")
+        XCTAssertEqual(warmup.environment?["PATH"], "\(attemptBin.path):\(locator.managedBinDirectory.path):/usr/bin:/bin")
         XCTAssertNotNil(warmup.environment?["HOME"], "warm-up must use the same HOME as later runs")
         XCTAssertTrue(warmup.arguments.contains("-n"))
         XCTAssertTrue(warmup.arguments.contains("htdemucs_ft"))
+        let outputIndex = try XCTUnwrap(warmup.arguments.firstIndex(of: "--out"))
+        XCTAssertTrue(warmup.arguments[outputIndex + 1].hasPrefix(attemptRoot.path + "/"))
         assertNoStagingLeft(managedRoot: managedRoot)
     }
 
@@ -243,6 +329,44 @@ final class HelperToolInstallerTests: XCTestCase {
             XCTFail("Wrong error: \(error)")
         }
         assertNoStagingLeft(managedRoot: managedRoot)
+    }
+
+    func testCancelledStemAttemptPreservesExistingAndNewerHelpers() async throws {
+        for phase in StemSetupGateRunner.Phase.allCases {
+            for (existing, replace) in [(false, false), (true, false), (false, true), (true, true)] {
+                let root = try makeTempRoot()
+                defer { try? FileManager.default.removeItem(at: root) }
+                let locator = HelperToolLocator(managedRoot: root, systemDirectories: [])
+                let target = locator.managedExecutableURL(for: .demucsMlx)
+                let original = Data("#!/bin/sh\n# original\nexit 0\n".utf8)
+                if existing {
+                    try FileManager.default.createDirectory(at: locator.managedBinDirectory, withIntermediateDirectories: true)
+                    try original.write(to: target)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: target.path)
+                }
+                let runner = StemSetupGateRunner(phase: phase, checksCancellation: existing)
+                let installer = HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: runner)
+                let cancelled = Task { try await installer.install(.stemSeparation) { _ in } }
+                await runner.waitUntilReached()
+                XCTAssertEqual(installer.isInstalled(.stemSeparation), existing)
+                cancelled.cancel()
+                if existing { XCTAssertEqual(try Data(contentsOf: target), original) }
+                if replace {
+                    // The old attempt is still unwinding when its replacement succeeds.
+                    try await installer.install(.stemSeparation) { _ in }
+                }
+                let replacement = existing || replace ? try Data(contentsOf: target) : nil
+                await runner.release()
+                do {
+                    try await cancelled.value
+                    XCTFail("Expected CancellationError")
+                } catch is CancellationError {}
+                try await runner.simulateLateWrite()
+                XCTAssertEqual(installer.isInstalled(.stemSeparation), existing || replace)
+                if let replacement { XCTAssertEqual(try Data(contentsOf: target), replacement) }
+                assertNoStagingLeft(managedRoot: root)
+            }
+        }
     }
 
     /// T16 (ADR-019): an install is quit-blocking work while it runs, whether
@@ -614,8 +738,7 @@ final class HelperToolInstallerTests: XCTestCase {
             assertNoStagingLeft(managedRoot: managedRoot)
         }
 
-        // Pre-existing: never deleted (uv success overwrote it with the new
-        // link, which the installer must leave in place).
+        // Failed preparation preserves the original executable byte-for-byte.
         do {
             let root = try makeTempRoot()
             defer { try? FileManager.default.removeItem(at: root) }
@@ -627,8 +750,7 @@ final class HelperToolInstallerTests: XCTestCase {
             runner.warmupStderr = "warmup boom"
             seedStemSeparation(downloader: downloader)
 
-            // uv success would overwrite the link; emulate a pre-existing tool by
-            // pre-creating it. The installer must not delete it on warmup failure.
+            // A pre-existing tool remains available throughout preparation.
             let bin = locator.managedBinDirectory
             try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
             let existing = bin.appendingPathComponent("demucs-mlx", isDirectory: false)
@@ -652,6 +774,7 @@ final class HelperToolInstallerTests: XCTestCase {
                 FileManager.default.fileExists(atPath: existing.path),
                 "Pre-existing demucs-mlx must never be deleted"
             )
+            XCTAssertEqual(try Data(contentsOf: existing), original)
             assertNoStagingLeft(managedRoot: managedRoot)
         }
     }
@@ -733,7 +856,7 @@ final class HelperToolInstallerTests: XCTestCase {
     }
 
     private func makeTempRoot() throws -> URL {
-        let root = FileManager.default.temporaryDirectory
+        let root = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
             .appendingPathComponent("HelperToolInstallerTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
@@ -963,6 +1086,64 @@ private final class FakeRunner: StreamingExternalProcessRunning, @unchecked Send
         }
 
         return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+    }
+}
+
+/// Holds the first uv publication or warmup until the test releases teardown.
+actor StemSetupGateRunner: StreamingExternalProcessRunning {
+    enum Phase: CaseIterable, Equatable { case uv, warmup }
+    private let phase: Phase?
+    private let checksCancellation: Bool
+    private let base = FakeRunner()
+    private var reached = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var suspended: CheckedContinuation<Void, Never>?
+    private var firstBin: URL?
+
+    init(phase: Phase? = nil, checksCancellation: Bool = true) {
+        self.phase = phase
+        self.checksCancellation = checksCancellation
+    }
+
+    func waitUntilReached() async {
+        if reached { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func release() { suspended?.resume(); suspended = nil }
+
+    func simulateLateWrite() throws {
+        guard let firstBin else { return }
+        try FileManager.default.createDirectory(at: firstBin, withIntermediateDirectories: true)
+        let executable = firstBin.appendingPathComponent("demucs-mlx")
+        try "#!/bin/sh\n# cancelled writer\nexit 0\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+    }
+
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        try await run(request, onStandardOutput: { _ in }, onStandardError: { _ in })
+    }
+
+    func run(
+        _ request: ExternalProcessRequest,
+        onStandardOutput: @escaping @Sendable (String) -> Void,
+        onStandardError: @escaping @Sendable (String) -> Void
+    ) async throws -> ExternalProcessResult {
+        let result = try await base.run(request, onStandardOutput: onStandardOutput, onStandardError: onStandardError)
+        if firstBin == nil, let path = request.environment?["UV_TOOL_BIN_DIR"] {
+            firstBin = URL(fileURLWithPath: path, isDirectory: true)
+        }
+        let step: Phase? = request.arguments.first == "tool" ? .uv
+            : request.executableURL.lastPathComponent == "demucs-mlx" ? .warmup : nil
+        if let phase, step == phase, !reached {
+            await withCheckedContinuation { continuation in
+                suspended = continuation
+                reached = true
+                waiter?.resume(); waiter = nil
+            }
+            if checksCancellation { try Task.checkCancellation() }
+        }
+        return result
     }
 }
 

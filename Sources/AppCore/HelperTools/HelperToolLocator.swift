@@ -53,7 +53,7 @@ public struct HelperToolLocator: Sendable {
         managedRoot: URL,
         systemDirectories: [URL],
         isExecutable: @escaping @Sendable (String) -> Bool = { path in
-            FileManager().isExecutableFile(atPath: path)
+            HelperExecutableValidation.validate(url: URL(fileURLWithPath: path)) == nil
         }
     ) {
         self.managedRoot = managedRoot

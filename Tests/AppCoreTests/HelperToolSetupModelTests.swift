@@ -181,10 +181,39 @@ final class HelperToolSetupModelTests: XCTestCase {
         XCTAssertEqual(model.installGeneration, 1)
     }
 
+    func testStemCancellationAfterPublicationAndDuringWarmupIsRetryable() async throws {
+        for phase in StemSetupGateRunner.Phase.allCases {
+            let root = try makeTempRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let locator = HelperToolLocator(managedRoot: root, systemDirectories: [])
+            let runner = StemSetupGateRunner(phase: phase)
+            let installer = HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: runner)
+            let model = HelperToolSetupModel(locator: locator, installer: installer, settingsProvider: { HelperToolSettings() })
+            model.refresh()
+            model.install(.stemSeparation)
+            await runner.waitUntilReached()
+            model.cancelInstalls()
+            await runner.release()
+            try await waitUntilNotInstalling(model)
+            XCTAssertFalse(installer.isInstalled(.stemSeparation))
+            XCTAssertNil(locator.resolve(.demucsMlx, settings: HelperToolSettings()))
+            XCTAssertEqual(model.states[.stemSeparation], .notInstalled)
+            model.refresh()
+            XCTAssertEqual(model.states[.stemSeparation], .notInstalled)
+            XCTAssertEqual(model.installGeneration, 0)
+            let staging = root.appendingPathComponent(".staging")
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: staging.path), [])
+            model.install(.stemSeparation)
+            try await waitUntilNotInstalling(model)
+            XCTAssertEqual(model.states[.stemSeparation], .installed)
+            XCTAssertEqual(model.installGeneration, 1)
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeTempRoot() throws -> URL {
-        let root = FileManager.default.temporaryDirectory
+        let root = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
             .appendingPathComponent("HelperToolSetupModelTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
@@ -259,7 +288,7 @@ private final class SucceedingSetupRunner: StreamingExternalProcessRunning, @unc
 }
 
 /// Serves fixed bytes and the matching SHA-256 for every checksum URL.
-private final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
+final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
     private static let payload = Data("payload".utf8)
     private static var hash: String {
         SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
