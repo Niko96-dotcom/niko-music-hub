@@ -253,10 +253,11 @@ struct ArchiveBrowserView: View {
             }
         }
         .onKeyPress(.space) {
-            ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
-            guard allowsSongShortcuts else { return .ignored }
-            guard performPlayPausePreview() else { return .ignored }
-            return .handled
+            ArchiveShortcutFocusPolicy.handleSpaceKey(
+                archiveFocused: keyboardFocus == .archive,
+                in: NSApp?.keyWindow,
+                playPause: performPlayPausePreview
+            )
         }
         .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
             ProjectVaultRestoreSheet(request: request, viewModel: viewModel)

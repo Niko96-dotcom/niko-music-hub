@@ -35,6 +35,24 @@ enum ArchiveShortcutFocusPolicy {
             _ = window.makeFirstResponder(window.contentView)
         }
     }
+
+    /// Space plays or pauses the selected song's preview. While a text editor
+    /// owns the keyboard (search, metadata, notes) Space is a typed character:
+    /// the editor keeps first responder and the key passes through. Card and
+    /// lane clicks hand focus back to the board themselves (NMH-006), so Space
+    /// never claims it — a claim here dropped every key after the first space.
+    static func handleSpaceKey(
+        archiveFocused: Bool,
+        in window: NSWindow?,
+        playPause: () -> Bool
+    ) -> KeyPress.Result {
+        guard allowsSongShortcuts(archiveFocused: archiveFocused, firstResponder: window?.firstResponder) else {
+            return .ignored
+        }
+        guard playPause() else { return .ignored }
+        return .handled
+    }
+
     /// NMH-006: NSScrollView eats arrow keyDowns before SwiftUI `onMoveCommand` /
     /// `onKeyPress` see them. While the archive is the active tool, convert
     /// plain arrows into `moveSongSelection` and consume the event.
