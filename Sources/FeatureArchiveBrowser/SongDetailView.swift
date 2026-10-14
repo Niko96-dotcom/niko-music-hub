@@ -355,7 +355,7 @@ struct SongDetailView: View {
                 infoLine(label: "Key", value: "Not analyzed")
             }
             infoLine(label: "Stems", value: liveSong.hasStems ? "Detected" : "Not detected")
-            infoLine(label: "Project files", value: "\(liveSong.visibleProjectVersions.count) versions")
+            infoLine(label: "Project files", value: ArchiveCountCopy.count(liveSong.visibleProjectVersions.count, "version"))
 
             if let warning = liveSong.displayScanWarnings().first {
                 Text(warning)
