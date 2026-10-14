@@ -110,6 +110,12 @@ struct SongDetailView: View {
             .padding(24)
             .frame(width: 660, height: 440)
         }
+        // Archive Now, Cancel transfer and the other Vault actions in "Manage
+        // storage" ask for confirmation in a dialog the board presents. A sheet
+        // cannot open over this one, so close it as soon as a dialog waits.
+        .onChange(of: viewModel.hasPendingProjectVaultDialog) { _, pending in
+            if pending { storageExpanded = false }
+        }
         .onChange(of: viewModel.songDetailsExpanded) { _, expanded in
             if expanded { workspaceTab = .versions }
         }

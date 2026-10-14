@@ -257,6 +257,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// queued and no recovery is scheduled for the exiting app to cut off.
     var projectVaultStoppedForQuit = false
     @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
+    /// A Vault dialog that `ArchiveBrowserView` presents is waiting. SwiftUI
+    /// shows it only once no other sheet is open, so the song detail closes
+    /// "Manage storage" for it instead of hiding it until the user does.
+    var hasPendingProjectVaultDialog: Bool {
+        pendingArchiveConfirmation != nil
+            || projectVaultRestoreRequest != nil
+            || identityReviewPresentation != nil
+            || pendingStopTransferConfirmation
+    }
     /// Sidebar Project Vault provider status (NMH-057). Owned by
     /// `ArchiveVaultObservation`; this read-only peer preserves the existing
     /// view API with no duplicate storage.

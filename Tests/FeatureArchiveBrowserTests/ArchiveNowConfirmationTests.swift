@@ -83,6 +83,35 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
     }
 
+    /// Archive Now pressed in "Manage storage": the board presents the
+    /// confirmation, and SwiftUI shows it only once that sheet is closed, so
+    /// the detail closes it as soon as the dialog waits.
+    func testArchiveNowFromManageStorageClosesTheSheetForItsConfirmation() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        XCTAssertFalse(viewModel.hasPendingProjectVaultDialog)
+
+        viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        XCTAssertTrue(viewModel.hasPendingProjectVaultDialog)
+
+        viewModel.cancelPendingArchive()
+        XCTAssertFalse(viewModel.hasPendingProjectVaultDialog)
+
+        // Cancel transfer in the same sheet asks through the board's alert.
+        viewModel.pendingStopTransferConfirmation = true
+        XCTAssertTrue(viewModel.hasPendingProjectVaultDialog)
+        viewModel.pendingStopTransferConfirmation = false
+
+        let source = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/SongDetailView.swift", encoding: .utf8)
+        XCTAssertTrue(source.contains(".sheet(isPresented: $storageExpanded)"))
+        XCTAssertTrue(source.contains(".onChange(of: viewModel.hasPendingProjectVaultDialog)"))
+        XCTAssertTrue(source.contains("if pending { storageExpanded = false }"))
+    }
+
     func testArchiveNowKeepLocalGatesRemovalToCopyOnlyChrome() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
