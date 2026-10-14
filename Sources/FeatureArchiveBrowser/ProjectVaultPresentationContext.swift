@@ -20,6 +20,11 @@ struct ProjectVaultPresentationContext: Equatable {
     /// authorized; the offer itself still routes through a fresh confirmation
     /// that rechecks every gate at execution.
     let allowsFreeSpaceOffer: Bool
+    /// Both Vault folders are chosen, enabled and of the right role: the gate
+    /// the runtime's configuration applies before any capture or archive.
+    /// Without it nothing can reach the Vault, so Done stays a plain status
+    /// change instead of a capture that only fails.
+    let rootsConfigured: Bool
 
     init?(settings: AppSettings) {
         guard settings.vault.isEnabled else { return nil }
@@ -28,5 +33,6 @@ struct ProjectVaultPresentationContext: Equatable {
         generationReviewResolver = ProjectVaultGenerationReviewResolver(settings: settings)
         keepLocalProjectIDs = settings.vault.keepLocalProjectIDs
         allowsFreeSpaceOffer = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
+        rootsConfigured = KeepLocalReviewPolicy.vaultRootsConfigured(in: settings)
     }
 }

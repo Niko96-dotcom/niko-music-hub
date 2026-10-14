@@ -130,8 +130,11 @@ extension ArchiveBrowserViewModel {
         )
     }
 
+    /// False while the Vault is off or its folders are not chosen: Done is then
+    /// a plain status change and no Vault action is offered.
     func canArchiveInProjectVault(_ song: Song) -> Bool {
         guard projectVaultRuntime != nil,
+              projectVaultPresentationContext?.rootsConfigured == true,
               !blocksGenericProjectVaultFileActions(for: song),
               projectVaultPresentation(for: song)?.state != .archived else { return false }
         if let restore = projectVaultSnapshot(for: song)?.restore,

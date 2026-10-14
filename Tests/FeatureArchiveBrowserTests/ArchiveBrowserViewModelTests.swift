@@ -1588,13 +1588,30 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
     func testMarkingDoneArchivesTheUpdatedWorkflowSnapshot() async throws {
         let runtime = RecordingProjectVaultRuntime()
+        let suiteName = "FeatureArchiveBrowserTests.\(UUID())"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
         let viewModel = ArchiveBrowserViewModel(
-            context: TestToolContext.make(),
+            context: TestToolContext.make(settingsStore: store),
             archiveRootWatcher: NoopArchiveRootWatcher(),
             projectVaultRuntime: runtime
         )
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("workflow-done-\(UUID().uuidString)", isDirectory: true)
+        // Done reaches the Vault only once both Vault folders are chosen. Set
+        // after init so no root scan races the hand-placed song below.
+        let activeRoot = StoredMusicRoot(role: .active, url: FileManager.default.temporaryDirectory)
+        let archiveRoot = StoredMusicRoot(
+            role: .archive,
+            url: FileManager.default.temporaryDirectory.appendingPathComponent("workflow-done-vault", isDirectory: true)
+        )
+        try store.updateSettings { settings in
+            settings.musicRoots = [activeRoot, archiveRoot]
+            settings.vault = VaultSettings(isEnabled: true, activeRootID: activeRoot.id, archiveRootID: archiveRoot.id)
+        }
+        viewModel.refreshProjectVaultPresentationContext()
         let song = Song(
             folderPath: folder,
             originalFolderName: "Workflow Song",
