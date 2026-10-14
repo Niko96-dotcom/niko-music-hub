@@ -203,6 +203,26 @@ final class HubShellChromeSourceTests: XCTestCase {
         XCTAssertTrue(session.contains("setOutputInboxVisible(!inboxUserWantsVisible)"))
     }
 
+    func testOutputInboxBPMAnalysisSaysWhenItFindsNoTempo() throws {
+        let source = try shellSource("OutputInboxInspectorView.swift")
+
+        // A nil estimate must leave a line on the row, not just remove
+        // "Analyzing BPM…" (design contract §5: short status, no idle line).
+        XCTAssertTrue(source.contains("noTempoItemIDs: Set<OutputInboxItem.ID>"))
+        XCTAssertFalse(source.contains("guard let estimate else { return }"))
+        let nilBranch = try XCTUnwrap(source.range(of: "guard let estimate else {"))
+        let afterNil = source[nilBranch.upperBound...].prefix(200)
+        XCTAssertTrue(afterNil.contains("noTempoItemIDs.insert(itemID)"))
+        XCTAssertTrue(source.contains("} else if noTempoItemIDs.contains(item.id) {"))
+        XCTAssertTrue(source.contains("Text(\"No tempo\")"))
+        // A new analysis clears the old result for that row only.
+        XCTAssertTrue(source.contains("noTempoItemIDs.remove(item.id)"))
+        // The BPM line wins over a stale "No tempo".
+        let bpmLine = try XCTUnwrap(source.range(of: "if let bpm = item.metadata[\"bpm\"]"))
+        let noTempoLine = try XCTUnwrap(source.range(of: "} else if noTempoItemIDs.contains(item.id)"))
+        XCTAssertLessThan(bpmLine.lowerBound, noTempoLine.lowerBound)
+    }
+
     func testOutputInboxBPMAnalysisTracksInFlightItemsIndividually() throws {
         let source = try shellSource("OutputInboxInspectorView.swift")
 

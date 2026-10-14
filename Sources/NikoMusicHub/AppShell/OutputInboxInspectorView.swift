@@ -15,6 +15,9 @@ struct OutputInboxInspectorView: View {
     @State private var settingsError: String?
     @State private var inboxError: String?
     @State private var analyzingItemIDs: Set<OutputInboxItem.ID> = []
+    /// Rows whose last "Analyze BPM" found no tempo. View state only: a new
+    /// analysis clears it, nothing is written to the inbox.
+    @State private var noTempoItemIDs: Set<OutputInboxItem.ID> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(context: ToolContext) {
@@ -307,6 +310,11 @@ struct OutputInboxInspectorView: View {
             Text("Analyzing BPM…")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        } else if noTempoItemIDs.contains(item.id) {
+            // Fits the rail row's status slot (~64pt) next to the row actions.
+            Text("No tempo")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         } else if item.status == .failed {
             Text("Failed")
                 .font(HubDesignSystem.Typography.micro())
@@ -380,6 +388,7 @@ struct OutputInboxInspectorView: View {
         // clear each other's indicator, and a duplicate tap on the same row is refused.
         guard !analyzingItemIDs.contains(item.id) else { return }
         analyzingItemIDs.insert(item.id)
+        noTempoItemIDs.remove(item.id)
         let itemID = item.id
         let fileURL = item.fileURL
         // MainActor task (UI updates stay on the main actor) awaiting one detached
@@ -390,7 +399,11 @@ struct OutputInboxInspectorView: View {
                 MixdownBPMEstimator.estimate(url: fileURL)
             }.value
             analyzingItemIDs.remove(itemID)
-            guard let estimate else { return }
+            guard let estimate else {
+                // Say so instead of letting "Analyzing BPM…" just vanish.
+                noTempoItemIDs.insert(itemID)
+                return
+            }
             // Atomic store-side merge: the inbox may have refreshed,
             // trimmed, or rewritten the row while estimating, and the `items`
             // snapshot above is not write authority. The store reloads the
