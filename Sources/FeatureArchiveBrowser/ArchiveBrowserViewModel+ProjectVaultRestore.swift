@@ -122,7 +122,7 @@ extension ArchiveBrowserViewModel {
                 model.clearRestoreDestinationMessage(restored)
                 await model.refreshProjectVaultSnapshots()
                 await model.scan()
-                model.setProjectVaultStatusMessage("Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there.")
+                model.setProjectVaultStatusMessage(Self.restoreCompletedMessage(dryRunOpen: model.runtime.dryRunOpen))
                 return true
             } catch is CancellationError {
                 _ = await model.refreshProjectVaultSnapshots()
@@ -139,6 +139,15 @@ extension ArchiveBrowserViewModel {
                 return false
             }
         }
+    }
+
+    /// Status after a verified restore. Dry-run opening (test mode,
+    /// `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`) hands the project to no DAW, so the
+    /// message must not claim it did.
+    static func restoreCompletedMessage(dryRunOpen: Bool) -> String {
+        dryRunOpen
+            ? "Restored and verified in Active Projects. Dry run: not sent to a DAW."
+            : "Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there."
     }
 
     private func clearRestoreDestinationMessage(_ restore: VaultRestoreRecord) {

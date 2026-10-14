@@ -852,7 +852,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try await waitUntil {
             FileManager.default.fileExists(atPath: fixture.project.path)
                 && viewModel.projectVaultBusySongIDs.isEmpty
-                && viewModel.statusMessage == "Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there."
+                // The fixture runs with dry-run opening: nothing goes to a DAW.
+                && viewModel.statusMessage == "Restored and verified in Active Projects. Dry run: not sent to a DAW."
         }
 
         let restoredSong = try XCTUnwrap(viewModel.songs.first { $0.folderPath.standardizedFileURL == fixture.project.standardizedFileURL })
@@ -888,6 +889,16 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(relaunchedViewModel.projectVaultPresentation(for: relaunchedSong)?.state, .keepLocal)
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)
         try VaultManifestBuilder().verify(try XCTUnwrap(transfer.manifest), at: transfer.destinationURL)
+    }
+
+    func testRestoreMessageClaimsTheDAWHandoffOnlyOutsideDryRun() {
+        XCTAssertEqual(
+            ArchiveBrowserViewModel.restoreCompletedMessage(dryRunOpen: false),
+            "Restored and verified in Active Projects. Sent to its DAW to open; check any project or plug-in prompts there."
+        )
+        let dryRun = ArchiveBrowserViewModel.restoreCompletedMessage(dryRunOpen: true)
+        XCTAssertEqual(dryRun, "Restored and verified in Active Projects. Dry run: not sent to a DAW.")
+        XCTAssertFalse(dryRun.contains("Sent to its DAW"))
     }
 
     func testPersistedVerifiedActiveReconstructsReadyToFreeSpaceAfterFreshViewModel() async throws {
