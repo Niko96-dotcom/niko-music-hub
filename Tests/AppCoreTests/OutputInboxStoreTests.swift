@@ -27,7 +27,7 @@ final class OutputInboxStoreTests: XCTestCase {
         let batch = urls.map {
             OutputInboxItem(fileURL: $0, sourceToolID: "dev-tool", status: .available)
         }
-        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let posted = expectOutputInboxChange(storageURL: storeURL)
         posted.assertForOverFulfill = true
 
         try store.addItems(batch)
@@ -376,6 +376,8 @@ final class OutputInboxStoreTests: XCTestCase {
             }
             try await group.waitForAll()
         }
+        // The 40 off-main adds queued 40 main-queue posts; deliver them inside this test.
+        await drainQueuedOutputInboxPosts()
 
         let indexes = try store.listItems().compactMap { $0.metadata["index"] }.sorted()
         XCTAssertEqual(indexes.count, 40)
@@ -383,7 +385,8 @@ final class OutputInboxStoreTests: XCTestCase {
     }
 
     func testRefreshAvailabilityDoesNotNotifyWhenItemsAreUnchanged() throws {
-        let store = try makeStore()
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
         let item = OutputInboxItem(
             fileURL: try makeExistingFile(named: "stable.wav"),
             sourceToolID: "dev-tool",
@@ -391,10 +394,7 @@ final class OutputInboxStoreTests: XCTestCase {
         )
         try store.addItem(item)
 
-        let notification = expectation(
-            forNotification: .outputInboxDidChange,
-            object: nil
-        )
+        let notification = expectOutputInboxChange(storageURL: storeURL)
         notification.isInverted = true
 
         try store.refreshAvailability()
@@ -441,7 +441,8 @@ final class OutputInboxStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("bpm.wav")
         try Data("audio".utf8).write(to: file)
-        let store = JSONOutputInboxStore(storageURL: directory.appendingPathComponent("inbox.json"))
+        let storeURL = directory.appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
         let item = OutputInboxItem(
             fileURL: file,
             sourceToolID: "dev-tool",
@@ -450,7 +451,7 @@ final class OutputInboxStoreTests: XCTestCase {
         )
         try store.addItem(item)
 
-        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let posted = expectOutputInboxChange(storageURL: storeURL)
         let applied = try store.patchBPMMetadata(
             id: item.id,
             expectedFileURL: file,
@@ -481,7 +482,7 @@ final class OutputInboxStoreTests: XCTestCase {
         // Simulate a trim/refresh that dropped the row while estimating.
         try JSONEncoder().encode([OutputInboxItem]()).write(to: storeURL, options: .atomic)
 
-        let silent = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let silent = expectOutputInboxChange(storageURL: storeURL)
         silent.isInverted = true
         let applied = try store.patchBPMMetadata(
             id: item.id,
@@ -635,7 +636,7 @@ final class OutputInboxStoreTests: XCTestCase {
         let missingID = UUID()
         let expectedFile = directory.appendingPathComponent("ghost.wav")
 
-        let posted = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let posted = expectOutputInboxChange(storageURL: storeURL)
         let applied = try store.patchBPMMetadata(
             id: missingID,
             expectedFileURL: expectedFile,

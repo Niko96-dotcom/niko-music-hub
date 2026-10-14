@@ -11,7 +11,7 @@ final class OutputInboxNotificationTests: XCTestCase {
         let storeURL = tempDir.appendingPathComponent("inbox.json")
         let store = JSONOutputInboxStore(storageURL: storeURL)
 
-        let expectation = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let expectation = expectOutputInboxChange(storageURL: storeURL)
 
         let item = OutputInboxItem(
             id: UUID(),
@@ -38,7 +38,9 @@ final class OutputInboxNotificationTests: XCTestCase {
             forName: .outputInboxDidChange,
             object: nil,
             queue: nil
-        ) { _ in
+        ) { posted in
+            // Other tests' stores post on the same center; count only this store.
+            guard posted.outputInboxStorageURL == storeURL.standardizedFileURL else { return }
             XCTAssertTrue(Thread.isMainThread)
             notification.fulfill()
         }

@@ -126,6 +126,8 @@ final class OutputInboxRefreshTests: XCTestCase {
             }
             try await group.waitForAll()
         }
+        // The off-main adds and refresh queued main-queue posts; deliver them inside this test.
+        await drainQueuedOutputInboxPosts()
 
         let slots = try store.listItems().compactMap { $0.metadata["slot"] }
         XCTAssertEqual(slots.count, 20, "every concurrent add must survive the refresh save")
@@ -203,18 +205,19 @@ final class OutputInboxRefreshTests: XCTestCase {
     }
 
     func testLoadRefreshedItemsNotifiesOnlyWhenStatusesChange() throws {
-        let store = try makeStore()
+        let storeURL = temporaryDirectory().appendingPathComponent("inbox.json")
+        let store = JSONOutputInboxStore(storageURL: storeURL)
         try store.addItem(OutputInboxItem(
             fileURL: try makeExistingFile(named: "flip.wav"),
             sourceToolID: "dev-tool",
             status: .pending
         ))
 
-        let changed = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let changed = expectOutputInboxChange(storageURL: storeURL)
         _ = try store.loadRefreshedItems()
         wait(for: [changed], timeout: 2.0)
 
-        let silent = expectation(forNotification: .outputInboxDidChange, object: nil)
+        let silent = expectOutputInboxChange(storageURL: storeURL)
         silent.isInverted = true
         _ = try store.loadRefreshedItems()
         wait(for: [silent], timeout: 0.2)

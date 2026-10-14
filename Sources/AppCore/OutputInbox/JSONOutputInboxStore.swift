@@ -390,11 +390,12 @@ public struct JSONOutputInboxStore: OutputInboxStore, @unchecked Sendable {
     }
 
     private func notifyChanged() {
+        let userInfo = [Notification.outputInboxStorageURLKey: storageURL.standardizedFileURL]
         if Thread.isMainThread {
-            NotificationCenter.default.post(name: .outputInboxDidChange, object: nil)
+            NotificationCenter.default.post(name: .outputInboxDidChange, object: nil, userInfo: userInfo)
         } else {
             DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .outputInboxDidChange, object: nil)
+                NotificationCenter.default.post(name: .outputInboxDidChange, object: nil, userInfo: userInfo)
             }
         }
     }
