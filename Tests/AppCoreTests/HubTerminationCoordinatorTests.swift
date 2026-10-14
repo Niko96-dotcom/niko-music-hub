@@ -61,16 +61,27 @@ final class HubTerminationCoordinatorTests: XCTestCase {
     func testConfirmCancelsEveryJobAndRepliesAfterRegistryDrains() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
+        let started = Flag()
+        let release = Flag()
         let unwound = Flag()
         let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+            started.mark()
             do {
                 try await Task.sleep(for: .seconds(30))
             } catch {
                 // The cancel path still has cleanup to do after the job reads as cancelled.
-                try? await Task.sleep(for: .milliseconds(100))
+                // `release` holds it: a timed sleep returns at once in a cancelled task.
+                while !release.isMarked {
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
                 unwound.mark()
                 throw error
             }
+        }
+        // Quit only once the download runs: a job cancelled before its task starts
+        // never enters its cleanup, so the reply then rightly comes at once.
+        while !started.isMarked {
+            try await Task.sleep(for: .milliseconds(5))
         }
         let converterStopped = Flag()
         center.setExtraJob(
@@ -111,6 +122,8 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         XCTAssertEqual(runner.job(id: job.id)?.state, .canceled)
         XCTAssertTrue(converterStopped.isMarked)
         XCTAssertFalse(vaultSheetRequested.isMarked, "quit must not open the Vault stop sheet")
+        try await Task.sleep(for: .milliseconds(50))
+        release.mark()
         await fulfillment(of: [replied], timeout: 10)
         XCTAssertTrue(vaultQuitCancelled.isMarked)
     }
