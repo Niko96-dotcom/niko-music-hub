@@ -48,9 +48,10 @@ struct ArchiveFirstRunView: View {
             }
         }
         .padding(28)
-        .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity)
-        .hubSurface(.card, cornerRadius: HubDesignSystem.Radius.popover)
-        .shadow(color: HubDesignSystem.Elevation.high.color, radius: HubDesignSystem.Elevation.high.radius, y: HubDesignSystem.Elevation.high.y)
+        // Fixed width, like HubSetupView: the sheet sizes to its content. A
+        // flexible width let the sheet's minimum-size pass wrap the body text
+        // at zero width and stretch the sheet past the window (1677 pt tall).
+        // The sheet is the surface, so no card or shadow of its own.
+        .frame(width: 420)
     }
 }

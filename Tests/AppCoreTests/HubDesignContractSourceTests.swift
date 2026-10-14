@@ -136,6 +136,29 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §6 — sheets have a fixed or minimum width, so they size to their content.
+    func testSheetsHaveBoundedWidth() throws {
+        let sheets = [
+            "Sources/NikoMusicHub/Onboarding/HubSetupView.swift",
+            "Sources/FeatureArchiveBrowser/ArchiveFirstRunView.swift",
+            "Sources/FeatureArchiveBrowser/NewSongSheet.swift",
+            "Sources/FeatureArchiveBrowser/ProjectVaultRestoreSheet.swift",
+            "Sources/FeatureArchiveBrowser/ProjectIdentityReviewSheet.swift",
+            "Sources/FeatureArchiveBrowser/ProjectVaultDoneChoiceSheet.swift",
+        ]
+        for path in sheets {
+            let source = try readStripped(path)
+            expectMatch(
+                source,
+                pattern: "\\.frame\\s*\\(\\s*width\\s*:\\s*\\d+\\s*\\)|\\.frame\\s*\\(\\s*minWidth\\s*:\\s*\\d+",
+                "\(path): a sheet needs a fixed width or minWidth, or it stretches past the window"
+            )
+        }
+        let firstRun = try readStripped("Sources/FeatureArchiveBrowser/ArchiveFirstRunView.swift")
+        expectNoMatch(firstRun, pattern: "maxWidth\\s*:\\s*\\.infinity", "archive first-run sheet: no flexible width")
+        expectNoMatch(firstRun, pattern: "\\.hubSurface\\s*\\(|\\.shadow\\s*\\(", "archive first-run sheet: the sheet is the surface")
+    }
+
     // §1 — rails share one width constant and one material.
     @MainActor
     func testChromeRailsShareWidthAndMaterial() throws {

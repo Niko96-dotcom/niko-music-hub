@@ -229,6 +229,11 @@ never point a new consumer at `accent` expecting warmth.
   fills, `.roundedBorder` fields. Buttons share `Radius.button` — no `Capsule()`
   buttons.
 - Cards only for bounded objects with a role (drop target, readout, queue item).
+- Sheets size to their content: the sheet view sets a fixed width
+  (`.frame(width:)`) or a `minWidth`, never only `maxWidth`. Without a lower
+  bound, AppKit's minimum-size pass wraps the text at zero width and the sheet
+  grew to 1677pt in a 799pt window. The sheet is the surface — no card or
+  shadow around its whole content (`HubSetupView` is the reference).
 - Big live numbers use `Typography.readout()` (44pt rounded, tabular).
 
 ## 7. Verification loop (do this, every time)
