@@ -83,7 +83,7 @@ final class HubShellChromeSourceTests: XCTestCase {
         XCTAssertTrue(app.contains(".windowStyle(.hiddenTitleBar)"))
 
         let shell = try shellSource("AppShellView.swift")
-        XCTAssertTrue(shell.contains("HubWindowChromeConfigurator(windowTitle: mainWindowTitle)"))
+        XCTAssertTrue(shell.contains("HubWindowChromeConfigurator(windowTitle: mainWindowTitle, persistsFrame: persistsWindowFrame)"))
         XCTAssertTrue(shell.contains("shellSession.selectedToolID"))
         XCTAssertFalse(shell.contains("HubWindowChromeConfigurator()"))
     }

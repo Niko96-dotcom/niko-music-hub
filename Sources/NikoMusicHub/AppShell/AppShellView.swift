@@ -14,6 +14,7 @@ struct AppShellView: View {
     @ObservedObject var shellSession: HubShellSession
     @ObservedObject var helperSetup: HelperToolSetupModel
     let archiveViewModel: ArchiveBrowserViewModel
+    let persistsWindowFrame: Bool
     @ObservedObject private var history: HubNavigationHistory
     /// Unreadable-settings state; drives the Repair Settings notice in the top strip.
     @ObservedObject private var settingsRepair: SettingsRepairModel
@@ -32,7 +33,8 @@ struct AppShellView: View {
         router: QuickAccessRouter,
         shellSession: HubShellSession,
         helperSetup: HelperToolSetupModel,
-        archiveViewModel: ArchiveBrowserViewModel
+        archiveViewModel: ArchiveBrowserViewModel,
+        persistsWindowFrame: Bool
     ) {
         self.registry = registry
         self.context = context
@@ -40,6 +42,7 @@ struct AppShellView: View {
         self.shellSession = shellSession
         self.helperSetup = helperSetup
         self.archiveViewModel = archiveViewModel
+        self.persistsWindowFrame = persistsWindowFrame
         self.history = context.navigationHistory
         self.settingsRepair = context.settingsRepair
         // No side effects here: the launch tool is resolved (and recorded in
@@ -109,7 +112,7 @@ struct AppShellView: View {
             )
         }
         .ignoresSafeArea(edges: .top)
-        .background(HubWindowChromeConfigurator(windowTitle: mainWindowTitle))
+        .background(HubWindowChromeConfigurator(windowTitle: mainWindowTitle, persistsFrame: persistsWindowFrame))
         .frame(minWidth: minWindowWidth, minHeight: 720)
         .hubOpensMainWindowFromDock()
         // Esc/⌘. cancel routing reads the selected tool as a scene value, so the

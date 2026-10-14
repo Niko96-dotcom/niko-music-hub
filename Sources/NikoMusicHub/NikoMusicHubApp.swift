@@ -45,7 +45,8 @@ struct NikoMusicHubApp: App {
                 router: composition.router,
                 shellSession: shellSession,
                 helperSetup: composition.helperSetup,
-                archiveViewModel: composition.archiveViewModel
+                archiveViewModel: composition.archiveViewModel,
+                persistsWindowFrame: composition.persistsWindowFrame
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)
             // `@AppStorage` reads must hit the same suite as every other preference.

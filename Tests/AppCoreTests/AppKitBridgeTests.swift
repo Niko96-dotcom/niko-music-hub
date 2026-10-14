@@ -43,6 +43,12 @@ final class AppKitBridgeTests: XCTestCase {
             "The NSWindow identifier is the shared constant that focus policy and openWindow also read"
         )
         XCTAssertFalse(source.contains("\"hub.main\""), "No duplicated window identifier literal")
+        XCTAssertTrue(
+            source.contains("persistsFrame ? identifier.rawValue : \"\""),
+            "An isolated settings suite must not autosave the frame into the standard defaults domain"
+        )
+        let composition = try SourceTestSupport.read("Sources/NikoMusicHub/AppComposition.swift")
+        XCTAssertTrue(composition.contains("persistsWindowFrame: !runtime.usesIsolatedSettingsSuite"))
         // The configurator is a window accessor, not a view: one zero-frame NSView, no subclass.
         XCTAssertTrue(source.contains("NSView(frame: .zero)"))
     }

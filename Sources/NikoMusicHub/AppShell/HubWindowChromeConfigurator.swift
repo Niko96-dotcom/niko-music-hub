@@ -6,6 +6,9 @@ import SwiftUI
 /// `NSWindow.title` still names the selected tool for the Window menu and Mission Control.
 struct HubWindowChromeConfigurator: NSViewRepresentable {
     var windowTitle: String
+    /// False under an isolated settings suite: the frame autosave key lives in
+    /// the standard defaults domain and would leak into the real preferences.
+    var persistsFrame: Bool
 
     /// Per-window-content glue: remembers whether the launch first responder
     /// has been cleared (see applyChrome). Lives exactly as long as this
@@ -78,8 +81,9 @@ struct HubWindowChromeConfigurator: NSViewRepresentable {
         if window.identifier != identifier {
             window.identifier = identifier
         }
-        if window.frameAutosaveName != identifier.rawValue {
-            window.setFrameAutosaveName(identifier.rawValue)
+        let autosaveName = persistsFrame ? identifier.rawValue : ""
+        if window.frameAutosaveName != autosaveName {
+            window.setFrameAutosaveName(autosaveName)
         }
         // TRAFFIC-AXIS: one vertical axis for traffic lights + sidebar icons.
         // Delta-based (preserves Apple's internal light spacing on any OS) and

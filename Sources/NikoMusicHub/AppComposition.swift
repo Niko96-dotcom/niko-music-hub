@@ -24,6 +24,9 @@ struct AppComposition {
     let archiveViewModel: ArchiveBrowserViewModel
     /// Quit reads the job center, where the Vault queue registers too (ADR-019).
     let termination: HubTerminationCoordinator
+    /// AppKit saves the main window frame into the standard defaults domain, so
+    /// an isolated settings suite (tests, E2E) must not autosave it.
+    let persistsWindowFrame: Bool
 
     @MainActor
     static func make() -> AppComposition {
@@ -303,7 +306,8 @@ struct AppComposition {
             appearanceController: appearanceController,
             updateController: updateController,
             archiveViewModel: archiveViewModel,
-            termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter)
+            termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter),
+            persistsWindowFrame: !runtime.usesIsolatedSettingsSuite
         )
     }
 
