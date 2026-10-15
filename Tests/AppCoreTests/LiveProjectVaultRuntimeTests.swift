@@ -227,6 +227,31 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         )
     }
 
+    /// Keep Local is read after `configuration()`; a failed read must throw, not
+    /// report a pinned song as removable.
+    func testSnapshotsRefuseWhenKeepLocalCannotBeRead() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        _ = try await fixture.runtime().archive(song: fixture.song, trigger: .backupCopy)
+        let songID = fixture.song.id
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [songID] }
+        let runtime = try LiveProjectVaultRuntime(
+            settingsStore: LaterLoadsFailSettingsStore(wrapping: fixture.settingsStore, successfulLoads: 1),
+            transferStore: fixture.transferStore(),
+            catalogStore: fixture.catalogStore(),
+            projectOpener: RuntimeNoopVaultProjectOpener(),
+            activityProbe: ClearProbe(),
+            capacityProbe: FixedCapacityProbe(snapshot: .safe),
+            archiveProviderFactory: { LocalFolderArchiveStorage(root: $0) }
+        )
+
+        do {
+            let snapshots = try await runtime.snapshots()
+            XCTFail("expected a throw, got pinned: \(snapshots.map(\.record.pinned))")
+        } catch is LaterLoadsFailSettingsStore.Unreadable {}
+    }
+
     func testSnapshotPinnedHonorsEveryKeepLocalKeyTheRuntimeEnforces() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -3362,6 +3387,30 @@ private final class RecoveryFailingSettingsStore: SettingsStore, @unchecked Send
         if failUpdates { throw KeepLocalWriteFailure() }
         try wrapped.updateSettings(update)
     }
+}
+
+/// Loads succeed `successfulLoads` times, then throw, as if settings became
+/// unreadable between two reads of one operation.
+private final class LaterLoadsFailSettingsStore: SettingsStore, @unchecked Sendable {
+    struct Unreadable: Error {}
+    private let lock = NSLock()
+    private let wrapped: UserDefaultsSettingsStore
+    private var remainingLoads: Int
+    init(wrapping: UserDefaultsSettingsStore, successfulLoads: Int) {
+        wrapped = wrapping
+        remainingLoads = successfulLoads
+    }
+    func loadSettings() throws -> AppSettings {
+        let allowed = lock.withLock { () -> Bool in
+            guard remainingLoads > 0 else { return false }
+            remainingLoads -= 1
+            return true
+        }
+        guard allowed else { throw Unreadable() }
+        return try wrapped.loadSettings()
+    }
+    func saveSettings(_ settings: AppSettings) throws { try wrapped.saveSettings(settings) }
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws { try wrapped.updateSettings(update) }
 }
 
 private final class RuntimeTestClock: @unchecked Sendable {

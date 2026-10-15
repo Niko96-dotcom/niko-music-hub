@@ -100,7 +100,7 @@ extension LiveProjectVaultRuntime {
         guard let entry = try catalogStore.loadEntries().first(where: { $0.record.id == snapshot.record.id }) else {
             return ProjectVaultRuntimeSnapshot(record: snapshot.record, transfer: retried)
         }
-        return self.snapshot(entry: entry, transfer: retried, configuration: configuration)
+        return try self.snapshot(entry: entry, transfer: retried, configuration: configuration)
     }
 
     /// The persisted backoff is also used by the mounted browser to wake recovery.
@@ -142,6 +142,7 @@ extension LiveProjectVaultRuntime {
         guard let lease = try? acquireMutationLease() else { return }
         defer { releaseMutationLease(lease) }
         guard let configuration = try? configuration() else { return }
+        // Fails closed: unreadable settings skip recovery; the browser's next snapshot read reports them.
         guard let settings = try? settingsStore.loadSettings(),
               !settings.vault.automationEmergencyStop else { return }
         let provider = archiveProvider(root: configuration.archive.url)

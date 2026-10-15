@@ -347,7 +347,7 @@ extension LiveProjectVaultRuntime {
                 authorization: authorization
             )
         }
-        return snapshot(entry: updatedEntry, transfer: transfer, configuration: configuration)
+        return try snapshot(entry: updatedEntry, transfer: transfer, configuration: configuration)
     }
 
     private func validateConfirmationAuthorization(
@@ -436,7 +436,7 @@ extension LiveProjectVaultRuntime {
               authorization.trigger == trigger,
               VaultTransferOwnershipPolicy.isVerifiedTerminal(transfer.state),
               FileManager.default.fileExists(atPath: transfer.sourceURL.path) else {
-            return snapshot(entry: entry, transfer: transfer, configuration: configuration)
+            return try snapshot(entry: entry, transfer: transfer, configuration: configuration)
         }
 
         let removalAdmission = makeBoundRemovalAdmission(
@@ -448,7 +448,7 @@ extension LiveProjectVaultRuntime {
             try await removalAdmission(transfer)
         } catch let error as ProjectVaultRuntimeError {
             if case .activityPostponed = error, trigger == .workflowDone {
-                return snapshot(entry: entry, transfer: transfer, configuration: configuration)
+                return try snapshot(entry: entry, transfer: transfer, configuration: configuration)
             }
             throw error
         }
@@ -463,7 +463,7 @@ extension LiveProjectVaultRuntime {
         )
         let completed = try await engine.removeActiveCopy(after: transfer)
         try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
-        return snapshot(entry: entry, transfer: completed, configuration: configuration)
+        return try snapshot(entry: entry, transfer: completed, configuration: configuration)
     }
 
     /// Runs a workflow-done archive through the automation scheduler so the

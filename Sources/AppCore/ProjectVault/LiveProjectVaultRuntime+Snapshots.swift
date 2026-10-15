@@ -4,6 +4,7 @@ import NikoMusicCore
 extension LiveProjectVaultRuntime {
     public func snapshots() throws -> [ProjectVaultRuntimeSnapshot] {
         let configuration = try configuration()
+        let keepLocalProjectIDs = try settingsStore.loadSettings().vault.keepLocalProjectIDs
         var entries = try catalogStore.loadEntries()
         _ = reconcileActiveLocationAvailability(in: &entries, configuration: configuration)
         let transfers: [VaultTransferRecord]
@@ -44,19 +45,43 @@ extension LiveProjectVaultRuntime {
                 entry: entry,
                 transfer: transfer,
                 restore: restore,
-                configuration: configuration
+                configuration: configuration,
+                keepLocalProjectIDs: keepLocalProjectIDs
             )
         }
     }
 
+    /// Reads Keep Local with `try`: unreadable settings must not show a pinned
+    /// song as removable.
     func snapshot(
         entry: ProjectCatalogEntry,
         transfer: VaultTransferRecord?,
         restore: VaultRestoreRecord? = nil,
         configuration: Configuration
+    ) throws -> ProjectVaultRuntimeSnapshot {
+        snapshot(
+            entry: entry,
+            transfer: transfer,
+            restore: restore,
+            configuration: configuration,
+            keepLocalProjectIDs: try settingsStore.loadSettings().vault.keepLocalProjectIDs
+        )
+    }
+
+    private func snapshot(
+        entry: ProjectCatalogEntry,
+        transfer: VaultTransferRecord?,
+        restore: VaultRestoreRecord?,
+        configuration: Configuration,
+        keepLocalProjectIDs: Set<String>
     ) -> ProjectVaultRuntimeSnapshot {
         var record = entry.record
-        record.pinned = isKeepLocal(record: record, transfer: transfer, configuration: configuration)
+        record.pinned = isKeepLocal(
+            record: record,
+            transfer: transfer,
+            configuration: configuration,
+            keepLocalProjectIDs: keepLocalProjectIDs
+        )
         if let transfer {
             record.latestManifestID = transfer.manifestID
             record.lastVerifiedAt = transfer.updatedAt
@@ -98,10 +123,10 @@ extension LiveProjectVaultRuntime {
     private func isKeepLocal(
         record: ProjectRecord,
         transfer: VaultTransferRecord?,
-        configuration: Configuration
+        configuration: Configuration,
+        keepLocalProjectIDs: Set<String>
     ) -> Bool {
-        guard let keepLocalProjectIDs = try? settingsStore.loadSettings().vault.keepLocalProjectIDs,
-              !keepLocalProjectIDs.isEmpty else { return false }
+        guard !keepLocalProjectIDs.isEmpty else { return false }
         var folders: [URL] = []
         if let transfer { folders.append(transfer.sourceURL) }
         for location in record.locations

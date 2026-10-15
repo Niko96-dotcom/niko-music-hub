@@ -97,7 +97,6 @@ final class OutputGuardSourceTests: XCTestCase {
     /// remove a site; never raise one.
     static let tryOptionalSettingsLoadBaseline: [String: Int] = [
         "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Recovery.swift": 1,
-        "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Snapshots.swift": 1,
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Exports.swift": 1,
