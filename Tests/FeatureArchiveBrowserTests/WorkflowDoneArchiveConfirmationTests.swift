@@ -180,7 +180,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
-        viewModel.commitWorkflowStatus(.done, for: song)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: song), .saved)
         let doneSong = try XCTUnwrap(viewModel.songs.first(where: { $0.id == song.id }))
         XCTAssertEqual(doneSong.workflowStatus, .done)
 

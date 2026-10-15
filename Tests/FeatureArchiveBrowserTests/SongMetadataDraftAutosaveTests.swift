@@ -104,7 +104,7 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         ]
         for stage in stages {
             let live = try XCTUnwrap(harness.viewModel.songs.first { $0.id == songA.id })
-            harness.viewModel.commitWorkflowStatus(stage, for: live)
+            XCTAssertEqual(harness.viewModel.commitWorkflowStatus(stage, for: live), .saved)
         }
 
         let stored = try harness.store.statusHistory(forSongID: songA.id)

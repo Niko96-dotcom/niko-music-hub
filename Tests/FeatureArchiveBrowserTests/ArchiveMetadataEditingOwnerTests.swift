@@ -352,6 +352,38 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         XCTAssertEqual(undo.undoActionName, "Change Workflow Status")
     }
 
+    func testRefusedUndoOfStatusChangeRegistersNoRedo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Undo Refused Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+        let changed = try XCTUnwrap(box.replaced.last)
+        XCTAssertEqual(changed.workflowStatus, .prod)
+        box.songs = [changed]
+        store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
+
+        undo.undo()
+
+        XCTAssertEqual(box.replaced.count, 1, "a refused Undo must not change the visible status")
+        XCTAssertFalse(undo.canRedo, "no Redo for an Undo that restored nothing")
+        XCTAssertTrue(box.vaultStatuses.isEmpty, "nothing was restored, so nothing to report")
+    }
+
+    func testHealthyUndoOfStatusChangeRegistersRedo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Undo Healthy Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+        coordinator.updateWorkflowStatus(for: song, status: .prod)
+        box.songs = [try XCTUnwrap(box.replaced.last)]
+
+        undo.undo()
+
+        XCTAssertNil(box.replaced.last?.workflowStatus, "Undo restored the earlier status")
+        XCTAssertTrue(undo.canRedo)
+    }
+
     func testStatusChangeSavedWithWarningStillRegistersUndo() throws {
         let root = try makeTempRoot()
         let song = makeSong(in: root, named: "Warned Song")

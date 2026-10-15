@@ -556,8 +556,8 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
         // Mark both Done without an explicit confirmation so the next snapshot
         // refresh exercises the automatic copy-only path.
-        viewModel.commitWorkflowStatus(.done, for: first)
-        viewModel.commitWorkflowStatus(.done, for: second)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: first), .saved)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: second), .saved)
         let firstDone = try XCTUnwrap(viewModel.songs.first(where: { $0.id == first.id }))
         let secondDone = try XCTUnwrap(viewModel.songs.first(where: { $0.id == second.id }))
         XCTAssertEqual(firstDone.workflowStatus, .done)
@@ -780,7 +780,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // through capture: commit Done, then register its Undo step.
         let undoManager = UndoManager()
         viewModel.bindInjectedUndoManager(undoManager)
-        viewModel.commitWorkflowStatus(.done, for: second)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: second), .saved)
         viewModel.registerWorkflowStatusUndo(songID: second.id, previousStatus: nil, actionName: "Mark Done")
 
         let gate = CaptureGate()
@@ -903,7 +903,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
         let undoManager = UndoManager()
         viewModel.bindInjectedUndoManager(undoManager)
-        viewModel.commitWorkflowStatus(.done, for: second)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: second), .saved)
         viewModel.registerWorkflowStatusUndo(songID: second.id, previousStatus: nil, actionName: "Mark Done")
 
         let gate = CaptureGate()
@@ -932,7 +932,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
 
         // Requeue the same Done: a new request for the same stable songID.
         let relive = try XCTUnwrap(viewModel.songs.first(where: { $0.id == second.id }))
-        viewModel.commitWorkflowStatus(.done, for: relive)
+        XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: relive), .saved)
         viewModel.registerWorkflowStatusUndo(songID: second.id, previousStatus: nil, actionName: "Mark Done")
         viewModel.enqueueProjectVaultOperation(
             for: viewModel.songs.first(where: { $0.id == second.id })!,

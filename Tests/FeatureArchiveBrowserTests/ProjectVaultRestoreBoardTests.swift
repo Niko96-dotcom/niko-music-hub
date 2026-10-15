@@ -198,7 +198,7 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
 
         // A restored-equivalent Done project offers Resume; nothing else
         // changes workflow on the restore path.
-        model.commitWorkflowStatus(.done, for: song)
+        XCTAssertEqual(model.commitWorkflowStatus(.done, for: song), .saved)
         let done = try XCTUnwrap(model.songs.first { $0.id == song.id })
         XCTAssertEqual(done.workflowStatus, .done)
         XCTAssertTrue(model.canResumeRestoredWork(for: done))

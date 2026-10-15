@@ -5,6 +5,12 @@ import NikoMusicCore
 
 /// What an edit commit did, so callers that chain follow-up work (the Done
 /// confirmations) never continue after a refused metadata step.
+///
+/// Not `@discardableResult`, and every target builds with warnings as errors:
+/// a caller that registers Undo/Redo, queues Vault work or reports success must
+/// branch on it (a refused save still registered Undo in 3563f2e and still
+/// archived in af1fefd). A plain edit whose refusal already reported its own
+/// warning writes `_ =`.
 enum MetadataCommitOutcome: Equatable {
     /// The visible song changed and the store accepted it (or the deliberate
     /// in-memory mode has no store).
@@ -143,14 +149,14 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
 
     func updateVirtualTitle(for song: Song, title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.virtualTitle = trimmed.isEmpty ? nil : trimmed
         }
     }
 
     func updateAppNote(for song: Song, note: String) {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.appNote = trimmed.isEmpty ? nil : trimmed
         }
     }
@@ -160,7 +166,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.aliases = aliases
         }
     }
@@ -181,7 +187,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.virtualTitle = trimmedTitle.isEmpty ? nil : trimmedTitle
             metadata.aliases = aliases
             metadata.appNote = trimmedNote.isEmpty ? nil : trimmedNote
@@ -299,7 +305,6 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         }
     }
 
-    @discardableResult
     func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) -> MetadataCommitOutcome {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
@@ -335,13 +340,17 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
               let song = songs.first(where: { $0.id == songID }) else { return }
         let currentStatus = song.workflowStatus
         let leavingDone = currentStatus == .done && previousStatus != .done
-        commitWorkflowStatus(previousStatus, for: song)
+        let outcome = commitWorkflowStatus(previousStatus, for: song)
         if leavingDone {
+            // Revoked even when the save was refused: cancelling pending Done archive work is the fail-safe direction.
             host.revokeDoneWork(songID)
-            if let live = host.currentSongs()?.first(where: { $0.id == songID }),
-               !FileManager.default.fileExists(atPath: live.folderPath.path) {
-                host.reportVaultStatus("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
-            }
+        }
+        // A refused commit restored nothing, so there is nothing to redo.
+        guard outcome != .refused else { return }
+        if leavingDone,
+           let live = host.currentSongs()?.first(where: { $0.id == songID }),
+           !FileManager.default.fileExists(atPath: live.folderPath.path) {
+            host.reportVaultStatus("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
         }
         registerWorkflowStatusUndo(
             songID: songID,
@@ -353,14 +362,13 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     // MARK: - Preview / CPR / hidden / collaborators (core merge; invalidation stays in VM)
 
     func assignCollaborators(to song: Song, collaboratorIDs: [String]) {
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.collaboratorIDs = collaboratorIDs
         }
     }
 
     // MARK: - Core gate / merge / authoritative persist / replace
 
-    @discardableResult
     func applyMetadataMerge(
         for song: Song,
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,

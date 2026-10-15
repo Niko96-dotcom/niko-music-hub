@@ -102,7 +102,6 @@ extension ArchiveBrowserViewModel {
         metadataEditing.updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
     }
 
-    @discardableResult
     func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) -> MetadataCommitOutcome {
         metadataEditing.commitWorkflowStatus(status, for: song)
     }
@@ -148,7 +147,7 @@ extension ArchiveBrowserViewModel {
             .previewCandidates.first(where: { $0.id == candidateID })?.filePath {
             ArchivePreviewPlayer.invalidateMetadataCaches(for: path)
         }
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.previewSelectionMode = .manual
             metadata.manualMainPreviewID = candidateID
         }
@@ -159,7 +158,7 @@ extension ArchiveBrowserViewModel {
 
     func revertPreviewToAuto(for song: Song) {
         invalidateMixdownAnalysis(for: song.id)
-        applyMetadataMerge(for: song, rankingRefresh: .previewAuto) { metadata, scanned in
+        _ = applyMetadataMerge(for: song, rankingRefresh: .previewAuto) { metadata, scanned in
             metadata.previewSelectionMode = .auto
             metadata.manualMainPreviewID = nil
             scanned.previewSelectionMode = .auto
@@ -170,7 +169,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func ignorePreviewCandidate(for song: Song, candidateID: String) {
-        applyMetadataMerge(for: song) { metadata, scanned in
+        _ = applyMetadataMerge(for: song) { metadata, scanned in
             if !metadata.ignoredPreviewCandidateIDs.contains(candidateID) {
                 metadata.ignoredPreviewCandidateIDs.append(candidateID)
             }
@@ -188,14 +187,14 @@ extension ArchiveBrowserViewModel {
         guard songs.first(where: { $0.id == song.id })?.visibleProjectVersions.contains(where: { $0.id == versionID }) == true else {
             return
         }
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.cprSelectionMode = .manual
             metadata.manualMainCPRID = versionID
         }
     }
 
     func revertCPRToAuto(for song: Song) {
-        applyMetadataMerge(for: song, rankingRefresh: .cprAuto) { metadata, scanned in
+        _ = applyMetadataMerge(for: song, rankingRefresh: .cprAuto) { metadata, scanned in
             metadata.cprSelectionMode = .auto
             metadata.manualMainCPRID = nil
             scanned.cprSelectionMode = .auto
@@ -204,7 +203,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func ignoreCPRVersion(for song: Song, versionID: String) {
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             if !metadata.ignoredCPRVersionIDs.contains(versionID) {
                 metadata.ignoredCPRVersionIDs.append(versionID)
             }
@@ -216,7 +215,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func setSongHidden(_ song: Song, hidden: Bool) {
-        applyMetadataMerge(for: song) { metadata, _ in
+        _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.isIgnored = hidden
         }
         if hidden, selectedSong?.id == song.id {
@@ -270,7 +269,6 @@ extension ArchiveBrowserViewModel {
 
     // MARK: - Core delegates (owned by the coordinator)
 
-    @discardableResult
     func applyMetadataMerge(
         for song: Song,
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
