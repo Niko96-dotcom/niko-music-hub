@@ -570,11 +570,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         context.jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.downloadStart, status: nil)
     }
 
-    public var outputFolder: URL {
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        return settings.outputFolder.url
-    }
-
     static func validatedHTTPURL(_ text: String) -> URL? {
         guard let components = URLComponents(string: text),
               let scheme = components.scheme?.lowercased(),

@@ -108,7 +108,6 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 7,
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
-        "Sources/FeatureDownloader/DownloaderViewModel.swift": 1,
         "Sources/FeatureStemSeparation/StemSeparationFeature.swift": 1,
         "Sources/FeatureStemSeparation/StemSeparationViewModel.swift": 1,
         "Sources/NikoMusicHub/AppComposition.swift": 4,

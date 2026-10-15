@@ -7,6 +7,7 @@ public struct DownloaderView: View {
     let context: ToolContext
 
     @ObservedObject private var viewModel: DownloaderViewModel
+    @ObservedObject private var appSettings: AppSettingsObserver
 
     public init(
         context: ToolContext,
@@ -14,6 +15,7 @@ public struct DownloaderView: View {
     ) {
         self.context = context
         self.viewModel = viewModel
+        self.appSettings = context.appSettings
     }
 
     public var body: some View {
@@ -176,7 +178,7 @@ public struct DownloaderView: View {
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 } trailing: {
-                    Text(viewModel.outputFolder.path)
+                    Text(appSettings.settings.outputFolder.url.path)
                         .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         .lineLimit(1)
