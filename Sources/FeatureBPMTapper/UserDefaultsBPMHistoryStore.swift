@@ -10,7 +10,7 @@ public struct UserDefaultsBPMHistoryStore: BPMHistoryStore, @unchecked Sendable 
     private let key: String
 
     public init(
-        userDefaults: UserDefaults = .standard,
+        userDefaults: UserDefaults,
         key: String = "outsideCubaseHub.bpmHistory"
     ) {
         self.preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)

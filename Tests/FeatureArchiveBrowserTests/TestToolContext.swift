@@ -20,6 +20,7 @@ enum TestToolContext {
         ToolContext(
             registeredToolCount: 1,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: JSONOutputInboxStore(
                 storageURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent("inbox-\(UUID()).json")

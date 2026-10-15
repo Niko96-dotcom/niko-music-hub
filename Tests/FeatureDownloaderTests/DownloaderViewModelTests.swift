@@ -302,7 +302,7 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testFormatSelectionLoadsFromInjectedPreferences() throws {
         let key = "downloader.formatSelection"
-        let injected = InMemoryTestPreferenceStore()
+        let injected = InMemoryPreferenceStore()
         injected.set(
             try JSONEncoder().encode(DownloadFormatSelection(mediaKind: .audioOnly, audioContainer: .wav)),
             forKey: key
@@ -325,7 +325,7 @@ final class DownloaderViewModelTests: XCTestCase {
             useCase: FakeDownloaderUseCase(job: job),
             jobRunner: StaticJobRunner(job: job),
             outputInboxStore: RecordingOutputInboxStore(),
-            preferences: InMemoryTestPreferenceStore()
+            preferences: InMemoryPreferenceStore()
         )
         XCTAssertEqual(emptyViewModel.formatSelection, DownloadFormatSelection.default)
     }
@@ -658,7 +658,7 @@ final class DownloaderViewModelTests: XCTestCase {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: store,
-            preferences: InMemoryTestPreferenceStore(),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: StaticJobRunner(job: job),
             fileActions: FixtureFileActions(),
@@ -1197,7 +1197,7 @@ final class DownloaderViewModelTests: XCTestCase {
         jobRunner: any JobRunning,
         outputInboxStore: any OutputInboxStore,
         jobStatusCenter: ShellJobStatusCenter? = nil,
-        preferences: any PreferenceStore = InMemoryTestPreferenceStore(),
+        preferences: any PreferenceStore = InMemoryPreferenceStore(),
         healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
@@ -1629,29 +1629,6 @@ private final class DownloadTestGate: @unchecked Sendable {
         } else {
             signaled = true
             lock.unlock()
-        }
-    }
-}
-
-/// In-memory preferences so download tests never read or write `UserDefaults.standard`
-/// (`startDownload` persists the format selection).
-private final class InMemoryTestPreferenceStore: PreferenceStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var bools: [String: Bool] = [:]
-    private var datas: [String: Data] = [:]
-    private var strings: [String: String] = [:]
-
-    func bool(forKey key: String) -> Bool? { lock.withLock { bools[key] } }
-    func set(_ value: Bool, forKey key: String) { lock.withLock { bools[key] = value } }
-    func data(forKey key: String) -> Data? { lock.withLock { datas[key] } }
-    func set(_ data: Data, forKey key: String) { lock.withLock { datas[key] = data } }
-    func string(forKey key: String) -> String? { lock.withLock { strings[key] } }
-    func set(_ value: String, forKey key: String) { lock.withLock { strings[key] = value } }
-    func removeObject(forKey key: String) {
-        lock.withLock {
-            bools.removeValue(forKey: key)
-            datas.removeValue(forKey: key)
-            strings.removeValue(forKey: key)
         }
     }
 }

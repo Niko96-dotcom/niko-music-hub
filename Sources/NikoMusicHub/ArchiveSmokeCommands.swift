@@ -85,7 +85,8 @@ enum ArchiveSmokeCommands {
         let suiteName = runtime.settingsSuiteName
             ?? "NikoMusicHubE2E.Smoke.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return UserDefaults.standard
+            // Never fall back to the person's real defaults from a smoke run.
+            preconditionFailure("Archive smoke settings suite is not usable: \(suiteName)")
         }
         defaults.removePersistentDomain(forName: suiteName)
         return defaults

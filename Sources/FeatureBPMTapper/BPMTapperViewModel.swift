@@ -48,7 +48,7 @@ public final class BPMTapperViewModel: ObservableObject {
 
     public init(
         estimator: TempoEstimator = TempoEstimator(),
-        historyStore: any BPMHistoryStore = UserDefaultsBPMHistoryStore(),
+        historyStore: any BPMHistoryStore,
         clipboard: any BPMClipboardWriting = NoOpBPMClipboard()
     ) {
         self.estimator = estimator

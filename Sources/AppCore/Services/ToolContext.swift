@@ -39,7 +39,7 @@ public struct ToolContext: Sendable {
     public init(
         registeredToolCount: Int,
         settingsStore: any SettingsStore,
-        preferences: any PreferenceStore = UserDefaultsPreferenceStore(),
+        preferences: any PreferenceStore,
         outputInboxStore: any OutputInboxStore,
         jobRunner: any JobRunning,
         fileActions: any FileActions,

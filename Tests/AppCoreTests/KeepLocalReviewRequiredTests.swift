@@ -712,7 +712,7 @@ private final class KeepLocalReviewFixture {
     }
 
     func cleanup() {
-        UserDefaults.standard.removePersistentDomain(forName: suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
     }
 }

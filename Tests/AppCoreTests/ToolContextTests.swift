@@ -77,7 +77,6 @@ final class ToolContextTests: XCTestCase {
         XCTAssertTrue(source.contains("makeSmokeUserDefaults"))
         XCTAssertTrue(source.contains("UserDefaultsSettingsStore(userDefaults: smokeDefaults)"))
         XCTAssertTrue(source.contains("UserDefaultsPreferenceStore(userDefaults: smokeDefaults)"))
-        XCTAssertFalse(source.contains("settingsStore: UserDefaultsSettingsStore(),"))
     }
 }
 
@@ -86,6 +85,7 @@ private extension ToolContext {
         ToolContext(
             registeredToolCount: 2,
             settingsStore: FixtureSettingsStore(),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: FixtureOutputInboxStore(),
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),

@@ -316,7 +316,9 @@ struct AppComposition {
            let defaults = UserDefaults(suiteName: suiteName) {
             return defaults
         }
-        return .standard
+        // The one place the app reads the person's real defaults
+        // (RealUserDefaultsSourceTests).
+        return UserDefaults.standard
     }
 
     private static func makeSQLiteStore<Store>(

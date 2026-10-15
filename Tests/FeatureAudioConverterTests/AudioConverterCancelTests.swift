@@ -184,6 +184,7 @@ final class AudioConverterCancelTests: XCTestCase {
             settingsStore: InMemorySettingsStore(
                 settings: AppSettings(outputFolder: StoredFolderLocation(url: outputFolder))
             ),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: IdleJobRunner(),
             fileActions: NoFileActions(),

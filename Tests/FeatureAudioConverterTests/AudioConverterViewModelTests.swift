@@ -981,6 +981,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: outputInboxStore,
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),

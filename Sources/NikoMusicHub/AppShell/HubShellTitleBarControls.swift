@@ -87,20 +87,10 @@ struct HubShellTitleBarControls: View {
 #if DEBUG
 #Preview("Title bar RTL") {
     HubShellTitleBarControls(
-        session: HubShellSession(preferences: NMH038PreviewPreferenceStore())
+        session: HubShellSession(preferences: InMemoryPreferenceStore())
     )
     .environment(\.layoutDirection, .rightToLeft)
     .frame(width: 640, height: HubShellLayout.titleBarHeight)
 }
 
-/// Isolated prefs so the RTL preview never writes live defaults.
-private struct NMH038PreviewPreferenceStore: PreferenceStore {
-    func bool(forKey _: String) -> Bool? { nil }
-    func set(_: Bool, forKey _: String) {}
-    func data(forKey _: String) -> Data? { nil }
-    func set(_: Data, forKey _: String) {}
-    func string(forKey _: String) -> String? { nil }
-    func set(_: String, forKey _: String) {}
-    func removeObject(forKey _: String) {}
-}
 #endif

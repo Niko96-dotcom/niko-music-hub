@@ -16,7 +16,7 @@ public struct UserDefaultsSettingsStore: SettingsStore, SettingsRepairing, @unch
     }
 
     public init(
-        userDefaults: UserDefaults = .standard,
+        userDefaults: UserDefaults,
         key: String = "nikoMusicHub.settings"
     ) {
         self.userDefaults = userDefaults

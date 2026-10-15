@@ -15,7 +15,7 @@ public struct BPMTapperView: View {
 
     public init(
         context: ToolContext,
-        viewModel: BPMTapperViewModel = BPMTapperViewModel()
+        viewModel: BPMTapperViewModel
     ) {
         self.context = context
         self.viewModel = viewModel

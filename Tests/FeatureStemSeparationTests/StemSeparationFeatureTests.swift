@@ -22,6 +22,7 @@ struct StemSeparationFeatureTests {
         let context = ToolContext(
             registeredToolCount: 1,
             settingsStore: FeatureTestSettingsStore(),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: FeatureTestOutputInboxStore(),
             jobRunner: JobRunner(),
             fileActions: FeatureTestFileActions(),

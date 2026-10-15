@@ -14,6 +14,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: FakeSettingsStore(),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -98,6 +99,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -236,6 +238,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: runner,
             fileActions: FixtureFileActions(),
@@ -359,6 +362,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -403,6 +407,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -436,6 +441,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -477,6 +483,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: runner,
             fileActions: FixtureFileActions(),
@@ -508,6 +515,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
@@ -554,6 +562,7 @@ struct StemSeparationViewModelTests {
         let context = ToolContext(
             registeredToolCount: 7,
             settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),

@@ -421,7 +421,7 @@ private final class RestoreBoardFixture {
     }
 
     func cleanup() {
-        UserDefaults.standard.removePersistentDomain(forName: suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: root)
     }
 }

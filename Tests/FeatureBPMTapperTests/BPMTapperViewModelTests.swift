@@ -1,10 +1,11 @@
+import AppCore
 import XCTest
 @testable import FeatureBPMTapper
 
 @MainActor
 final class BPMTapperViewModelTests: XCTestCase {
     func testInitialStatePromptsForTap() {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
 
         XCTAssertNil(viewModel.rawBPM)
         XCTAssertNil(viewModel.displayedBPM)
@@ -15,7 +16,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testSecondTapShowsFirstEstimate() throws {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
 
         viewModel.recordTap(at: 0.0)
         XCTAssertNil(viewModel.displayedBPM)
@@ -30,7 +31,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testResetClearsCurrentRun() {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
         viewModel.recordTap(at: 0.0)
         viewModel.recordTap(at: 0.5)
 
@@ -44,7 +45,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testLongPauseShowsFreshRunStatus() {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
         viewModel.recordTap(at: 0.0)
         viewModel.recordTap(at: 0.5)
 
@@ -59,7 +60,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testOutlierKeepsPreviousDisplayedBPM() throws {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
         viewModel.recordTap(at: 0.0)
         viewModel.recordTap(at: 0.5)
         viewModel.recordTap(at: 1.0)
@@ -74,7 +75,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testDefaultRecordTapUsesInjectedSleepInclusiveClockForPauseReset() {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
         var now: TimeInterval = 100.0
         viewModel.setMonotonicNowForTesting { now }
 
@@ -102,7 +103,7 @@ final class BPMTapperViewModelTests: XCTestCase {
     }
 
     func testNonFiniteAndBackwardTapsLeaveRunUnchanged() throws {
-        let viewModel = BPMTapperViewModel()
+        let viewModel = makeViewModel()
         viewModel.recordTap(at: 0.0)
         viewModel.recordTap(at: 0.5)
         viewModel.recordTap(at: 1.0)
@@ -118,5 +119,10 @@ final class BPMTapperViewModelTests: XCTestCase {
         viewModel.recordTap(at: 1.5)
         XCTAssertEqual(viewModel.tapCount, count + 1)
         XCTAssertEqual(try XCTUnwrap(viewModel.rawBPM), 120.0, accuracy: 0.001)
+    }
+
+    /// History lives in memory, never in the person's real defaults.
+    private func makeViewModel() -> BPMTapperViewModel {
+        BPMTapperViewModel(historyStore: UserDefaultsBPMHistoryStore(preferences: InMemoryPreferenceStore()))
     }
 }

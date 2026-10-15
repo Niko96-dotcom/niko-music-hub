@@ -164,7 +164,6 @@ final class BPMHistoryStoreTests: XCTestCase {
         )
 
         XCTAssertTrue(source.contains("context.preferences"))
-        XCTAssertFalse(source.contains("UserDefaultsBPMHistoryStore()"))
     }
 
     private func makeStore(

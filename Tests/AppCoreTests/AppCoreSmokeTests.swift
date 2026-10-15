@@ -36,6 +36,7 @@ extension ToolContext {
         ToolContext(
             registeredToolCount: registeredToolCount,
             settingsStore: SmokeSettingsStore(),
+            preferences: InMemoryPreferenceStore(),
             outputInboxStore: SmokeOutputInboxStore(),
             jobRunner: SmokeJobRunner(),
             fileActions: SmokeFileActions(),
