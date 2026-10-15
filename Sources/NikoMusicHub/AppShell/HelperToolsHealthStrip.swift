@@ -107,8 +107,7 @@ struct HelperToolsHealthStrip: View {
     }
 
     private func refresh() async {
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        let helperSettings = settings.helperTools
+        let helperSettings = context.appSettings.settings.helperTools
 
         let ytAvailability = await YtDlpHealthChecker().availability(settings: helperSettings)
         let ffmpegAvailability = await FFmpegHealthChecker().availability(settings: helperSettings)

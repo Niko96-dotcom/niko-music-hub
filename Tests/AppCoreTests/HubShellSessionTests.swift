@@ -144,7 +144,11 @@ final class HubShellSessionTests: XCTestCase {
         }
         let settings = UserDefaultsSettingsStore(userDefaults: defaults)
         try settings.updateSettings { $0.showMenuBarExtra = false }
-        let session = HubShellSession(preferences: prefs, settingsStore: settings)
+        let session = HubShellSession(
+            preferences: prefs,
+            settingsStore: settings,
+            appSettings: AppSettingsObserver(store: settings)
+        )
         XCTAssertFalse(session.showMenuBarExtra)
 
         session.setShowMenuBarExtra(true)

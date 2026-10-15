@@ -20,8 +20,14 @@ struct DevToolDetailView: View {
     let metadata: ToolMetadata
     let context: ToolContext
 
-    @State private var settings: AppSettings?
+    @ObservedObject private var appSettings: AppSettingsObserver
     @State private var jobs: [Job] = []
+
+    init(metadata: ToolMetadata, context: ToolContext) {
+        self.metadata = metadata
+        self.context = context
+        self.appSettings = context.appSettings
+    }
 
     var body: some View {
         HubToolPage {
@@ -80,22 +86,16 @@ struct DevToolDetailView: View {
             }
         }
         .onAppear {
-            refreshState()
+            refreshJobs()
         }
     }
 
     private var outputFolderStatus: String {
-        let currentSettings = settings ?? (try? context.settingsStore.loadSettings()) ?? .default
-        return currentSettings.outputFolder.url.path
+        appSettings.settings.outputFolder.url.path
     }
 
     private var runningJob: Job? {
         jobs.first { $0.state == .queued || $0.state == .running }
-    }
-
-    private func refreshState() {
-        settings = try? context.settingsStore.loadSettings()
-        refreshJobs()
     }
 
     private func refreshJobs() {
@@ -108,7 +108,6 @@ struct DevToolDetailView: View {
             try context.settingsStore.updateSettings { settings in
                 settings.outputFolder = StoredFolderLocation(url: folder)
             }
-            settings = try context.settingsStore.loadSettings()
         } catch {
             context.diagnostics.log(.error, "Could not save output folder")
         }

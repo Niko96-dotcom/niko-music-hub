@@ -196,6 +196,22 @@ final class SettingsRepairTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: key), blob)
     }
 
+    /// Handlers run before `AppSettingsObserver` sees the repair (it publishes on
+    /// a later main-queue turn), so they get the repaired settings directly.
+    @MainActor
+    func testRepairHandlersReceiveTheRepairedSettings() throws {
+        let (defaults, suite) = makeDefaults()
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: key)
+        let store = UserDefaultsSettingsStore(userDefaults: defaults)
+        let model = SettingsRepairModel(store: store, backupDirectory: makeTempDirectory(suite))
+        var received: [AppSettings] = []
+        model.addRepairHandler { received.append($0) }
+
+        XCTAssertTrue(model.repair())
+
+        XCTAssertEqual(received, [try store.loadSettings()])
+    }
+
     @MainActor
     func testRepairGenerationIncrementsOnRealRepair() throws {
         let (defaults, suite) = makeDefaults()

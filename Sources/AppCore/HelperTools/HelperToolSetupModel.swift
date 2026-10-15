@@ -50,7 +50,12 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
 
     /// Synchronous file checks only. Bundles currently installing keep their progress.
     public func refresh() {
-        let settings = settingsProvider()
+        refresh(settings: settingsProvider())
+    }
+
+    /// `refresh()` with helper settings the caller already holds, such as a
+    /// settings repair's result.
+    public func refresh(settings: HelperToolSettings) {
         for bundle in HelperToolBundle.allCases {
             if case .installing = states[bundle] { continue }
             let resolved = bundle.tools.allSatisfy { locator.resolve($0, settings: settings) != nil }

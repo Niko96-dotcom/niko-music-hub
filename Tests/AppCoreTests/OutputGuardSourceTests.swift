@@ -100,7 +100,6 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Snapshots.swift": 1,
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
-        "Sources/AppCore/Shell/HubShellSession.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Exports.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultArchive.swift": 2,
@@ -108,9 +107,6 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 7,
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
-        "Sources/NikoMusicHub/AppComposition.swift": 4,
-        "Sources/NikoMusicHub/AppShell/HelperToolsHealthStrip.swift": 1,
-        "Sources/NikoMusicHub/DevTool/DevToolFeature.swift": 2,
     ]
 
     static func lines(matching pattern: NSRegularExpression, in strippedSource: String) -> [String] {

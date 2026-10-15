@@ -57,13 +57,14 @@ public final class HubShellSession: ObservableObject {
     public init(
         preferences: any PreferenceStore,
         settingsStore: (any SettingsStore)? = nil,
+        appSettings: AppSettingsObserver? = nil,
         navigationHistory: HubNavigationHistory? = nil
     ) {
         self.preferences = preferences
         self.settingsStore = settingsStore
         self.navigationHistory = navigationHistory
         self.menuBarExtra = MenuBarExtraState(
-            isInserted: (try? settingsStore?.loadSettings().showMenuBarExtra) ?? true
+            isInserted: appSettings?.settings.showMenuBarExtra ?? true
         )
         self.showToolSidebar = preferences.bool(forKey: Self.toolsVisibleKey) ?? true
 

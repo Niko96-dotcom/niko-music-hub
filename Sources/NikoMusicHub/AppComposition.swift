@@ -33,8 +33,8 @@ struct AppComposition {
         let runtime = MusicHubRuntimeEnvironment.current
         let userDefaults = Self.makeUserDefaults(runtime: runtime)
         let settingsStore = UserDefaultsSettingsStore(userDefaults: userDefaults)
-        let initialAppearance = (try? settingsStore.loadSettings().appearance) ?? .followSystem
-        let appearanceController = AppAppearanceController(appearance: initialAppearance)
+        let appSettings = AppSettingsObserver(store: settingsStore)
+        let appearanceController = AppAppearanceController(appearance: appSettings.settings.appearance)
         let preferences = UserDefaultsPreferenceStore(userDefaults: userDefaults)
         let outputInboxStore = JSONOutputInboxStore(storageURL: AppPaths.outputInboxStoreURL(runtime: runtime))
         let jobRunner = JobRunner()
@@ -43,12 +43,13 @@ struct AppComposition {
         // Shipped app uses unified logging; tests/CLI keep ConsoleDiagnostics.
         let diagnostics = OSLogDiagnostics(category: .general)
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
-        if let vaultSettings = try? settingsStore.loadSettings().vault {
-            do {
-                try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
-            } catch {
-                diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
-            }
+        // Reconciling registers or removes a login item, so unreadable settings
+        // skip it rather than reconcile the defaults (Vault off).
+        do {
+            let vaultSettings = try settingsStore.loadSettings().vault
+            try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
+        } catch {
+            diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
         }
         // Automated end-to-end runs must never contact the feed or stage an
         // install over the bundle they are testing. Release bundles built
@@ -142,7 +143,6 @@ struct AppComposition {
 
         let navigationHistory = HubNavigationHistory()
         let quickAccessRouter = QuickAccessRouter()
-        let appSettings = AppSettingsObserver(store: settingsStore)
         // Settings that no longer decode fail closed (every save refuses). The
         // repair is explicit only; its backup lives beside the app's other
         // support files, inside the isolated suite folder when one is in use.
@@ -199,12 +199,11 @@ struct AppComposition {
         let shellSession = HubShellSession(
             preferences: preferences,
             settingsStore: settingsStore,
+            appSettings: appSettings,
             navigationHistory: navigationHistory
         )
         let helperSetup = HelperToolSetupModel(
-            settingsProvider: {
-                (try? settingsStore.loadSettings())?.helperTools ?? HelperToolSettings()
-            },
+            settingsProvider: { appSettings.settings.helperTools },
             jobStatusCenter: jobStatusCenter
         )
         helperSetup.refresh()
@@ -228,12 +227,13 @@ struct AppComposition {
         }
         // A repair makes stored values readable again: reload what launch
         // could only read as defaults (archive roots, appearance, menu icon).
-        settingsRepair.addRepairHandler { [weak shellSession] in
+        // `appSettings` publishes the repair on a later main-queue turn, so the
+        // handler uses the repaired settings it is given.
+        settingsRepair.addRepairHandler { [weak shellSession] repaired in
             archiveViewModel.applyRepairedSettings()
-            guard let repaired = try? settingsStore.loadSettings() else { return }
             appearanceController.apply(repaired.appearance)
             shellSession?.applyShowMenuBarExtra(repaired.showMenuBarExtra)
-            helperSetup.refresh()
+            helperSetup.refresh(settings: repaired.helperTools)
         }
         archiveViewModel.requestConverterHandoff = { url in
             quickAccessRouter.openConverter(with: [url])

@@ -368,7 +368,7 @@ public final class SettingsRepairModel: ObservableObject, @unchecked Sendable {
     private let repairer: (any SettingsRepairing)?
     private let backupDirectory: URL?
     private let diagnostics: (any Diagnostics)?
-    private var repairHandlers: [@MainActor () -> Void] = []
+    private var repairHandlers: [@MainActor (AppSettings) -> Void] = []
 
     public init(store: any SettingsStore, backupDirectory: URL?, diagnostics: (any Diagnostics)? = nil) {
         let repairer = store as? any SettingsRepairing
@@ -378,10 +378,11 @@ public final class SettingsRepairModel: ObservableObject, @unchecked Sendable {
         self.needsRepair = repairer?.storedSettingsNeedRepair() ?? false
     }
 
-    /// Runs after every successful repair so mounted consumers reload what
-    /// they could not read before (archive roots, appearance, menu bar icon).
+    /// Runs after every successful repair, with the repaired settings, so
+    /// mounted consumers reload what they could not read before (archive
+    /// roots, appearance, menu bar icon).
     @MainActor
-    public func addRepairHandler(_ handler: @escaping @MainActor () -> Void) {
+    public func addRepairHandler(_ handler: @escaping @MainActor (AppSettings) -> Void) {
         repairHandlers.append(handler)
     }
 
@@ -414,7 +415,7 @@ public final class SettingsRepairModel: ObservableObject, @unchecked Sendable {
             errorMessage = nil
             resultMessage = outcome.message
             repairGeneration += 1
-            for handler in repairHandlers { handler() }
+            for handler in repairHandlers { handler(outcome.settings) }
             return true
         } catch SettingsRepairError.backupFailed {
             diagnostics?.log(.error, "Settings repair stopped: backup could not be written to \(backupDirectory.path)")
