@@ -91,6 +91,29 @@ Guarded by `Tests/AppCoreTests/SwiftUIStateOwnershipSourceTests.swift`. The shor
 - Window shortcuts: ⌘W/⌘M are the system items (key-window aware); ⌃⌘F is the one custom item
   (`HubWindowCommandGroup`, key window). No process-wide `NSEvent` monitors.
 
+## Rules and what enforces them
+
+Each rule exists because agents broke it more than once. Prefer the enforcer over this table: if a
+change trips one, fix the code, not the check. When the operator corrects a mistake, fix it and add
+its rule here. A rule that is already listed with "judgment" next to it is a repeat: enforce it in the
+same change (architecture, then types, then a test that names the right file or function). Drop a
+row once its mistake cannot compile.
+
+| Rule | Enforced by |
+| --- | --- |
+| Every count in a string goes through `CountCopy.count` / `CountCopy.noun` (NikoMusicCore) — never `"\(n) songs"` or `n == 1 ? "song" : "songs"` | `CountCopySourceTests` (all of Sources/) |
+| No compiler warnings, in any configuration | `strictSwiftSettings` (`-warnings-as-errors`) on every target; `PackageSettingsSourceTests` |
+| A caller that registers Undo/Redo, queues Vault work or reports success branches on `MetadataCommitOutcome`; `_ =` only for a plain edit whose refusal reports its own warning | The outcome is not `@discardableResult` and warnings fail the build; `ArchiveMetadataEditingOwnerTests` |
+| Only `AppComposition.makeUserDefaults` picks the person's real defaults; tests, previews and harnesses use `InMemoryPreferenceStore` or `UserDefaults(suiteName:)` | Store initializers have no `.standard` default; `RealUserDefaultsSourceTests` |
+| Tool output is admitted only through `ToolOutputGuard(settings:)`; the archive browser's exports and New Song through `writeProtectedRoots()`; never the browse list, never `[]` | `ToolOutputGuard` is the only app-side root list (`outputProtectedRoots` is internal); no "protect nothing" defaults; `OutputGuardSourceTests` |
+| Settings that gate a write are loaded with `try`, and the write is refused when it throws | `OutputGuardSourceTests` (per-file ratchet on `try? …loadSettings()`) |
+| Module boundaries: Core imports, feature→feature edges | `ModuleBoundarySourceTests`; `--explicit-target-dependency-import-check error` in every build script |
+| UI design contract (`docs/design-contract.md`) | `HubDesignContractSourceTests` and the other `*SourceTests` |
+| Text in a fixed slot or sheet fits without clipping | `HubShellChromeSourceTests.testOutputInboxStatusLinesFitBesideTheRowActions`, `HubDesignContractSourceTests.testSheetsHaveBoundedWidth`; other slots: judgment, verify in the running app |
+| SwiftUI state ownership | `SwiftUIStateOwnershipSourceTests` |
+| An async test waits for the event it needs (job started, own store's notification), never for time or for any sender | Judgment (6de4480, 76d1867) |
+| Docs that describe changed behavior change in the same commit | Judgment (76bd783, 0f27ea6) |
+
 ## Working approach
 
 Work directly from the user request, current source, Git state and validation evidence. `.planning/`, `.ai/`, `.codex/` and `.cursor/` are local-only working state on the maintainer's machine — gitignored, never part of the public tree; treat `.planning/` as historical reference only and do not require or recreate GSD workflows. Preserve unrelated work and complete the relevant checks.

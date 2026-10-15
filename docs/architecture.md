@@ -185,9 +185,11 @@ try ReadOnlyArchivePolicy().enforceNoWrite(at: outputURL, archiveRoots: archiveR
 ```
 
 Tool output folders (converter, downloader, recorder, stems, and the Settings output picker)
-are checked against `AppSettings.outputProtectedRoots`: every configured music root, whatever
-its role or the Vault switch. It is deliberately not the browse list (`archiveRoots`), which
-hides Vault roots while Vault is off; retained archive generations stay write-protected.
+are admitted through [`ToolOutputGuard(settings:)`](../Sources/AppCore/Settings/ToolOutputGuard.swift),
+which protects every configured music root, whatever its role or the Vault switch. It is
+deliberately not the browse list (`archiveRoots`), which hides Vault roots while Vault is off;
+retained archive generations stay write-protected. The archive browser's exports and New Song
+use `writeProtectedRoots()`. `OutputGuardSourceTests` enforces both owners.
 
 Prospective paths are gated with
 [`PathSafety.resolve(_:allowedRoots:)`](../Sources/NikoMusicCore/Safety/PathSafety.swift):
