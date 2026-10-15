@@ -79,7 +79,7 @@ struct ArchiveBoardColumnView: View {
         .coordinateSpace(name: "archive-board-drop-column")
         .onPreferenceChange(ArchiveBoardCardFramesKey.self) { dropLayout.frames = $0 }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(column.title) column, \(column.songs.count) songs")
+        .accessibilityLabel(column.accessibilityLabel)
     }
 
     @ViewBuilder

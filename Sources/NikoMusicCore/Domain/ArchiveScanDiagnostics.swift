@@ -58,9 +58,9 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
             warningPart = "no warnings"
         }
         if skippedEntries.isEmpty {
-            return "\(songCount) songs · \(warningPart)"
+            return "\(songCountPart) · \(warningPart)"
         }
-        return "\(songCount) songs · \(warningPart) · \(skippedEntries.count) skipped"
+        return "\(songCountPart) · \(warningPart) · \(skippedEntries.count) skipped"
     }
 
     public var summaryLine: String {
@@ -68,7 +68,11 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
         let skippedPart = skippedEntries.isEmpty
             ? "nothing skipped at roots"
             : "\(skippedEntries.count) skipped at roots"
-        return "Scanned \(songCount) songs · \(warningPart) · \(skippedPart)"
+        return "Scanned \(songCountPart) · \(warningPart) · \(skippedPart)"
+    }
+
+    private var songCountPart: String {
+        "\(songCount) \(songCount == 1 ? "song" : "songs")"
     }
 
     /// True when `summaryLine` lists only the first `summaryLineMaxSongWarningTitles` warning song titles.

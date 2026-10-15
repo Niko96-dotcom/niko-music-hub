@@ -58,8 +58,9 @@ extension ArchiveBrowserViewModel {
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: songs)
         try data.write(to: destination, options: .atomic)
         lastIndexExportPath = destination.path
-        setStatusMessage("Exported index JSON (\(songs.count) songs).")
-        diagnostics.scoped(to: .archive).log(.info, "Exported archive index (\(songs.count) songs)")
+        let songCount = ArchiveCountCopy.count(songs.count, "song")
+        setStatusMessage("Exported index JSON (\(songCount)).")
+        diagnostics.scoped(to: .archive).log(.info, "Exported archive index (\(songCount))")
         fileActions.revealInFinder(destination)
     }
 

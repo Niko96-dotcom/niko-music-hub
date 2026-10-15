@@ -106,6 +106,22 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
         XCTAssertEqual(diagnostics.compactSummaryLine, "15 songs · 2 with warnings")
     }
 
+    func testSummaryLinesSayOneSong() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: ["/tmp/fixture"],
+            songCount: 1,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+
+        XCTAssertEqual(diagnostics.compactSummaryLine, "1 song · no warnings")
+        XCTAssertEqual(diagnostics.summaryLine, "Scanned 1 song · no warnings · nothing skipped at roots")
+    }
+
     func testSummaryLineDescribesCleanScan() {
         let diagnostics = ArchiveScanDiagnostics(
             scannedAt: Date(timeIntervalSince1970: 1),

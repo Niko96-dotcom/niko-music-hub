@@ -233,9 +233,9 @@ struct ArchiveCatalogCoordinator {
 
         var statusMessage: String {
             if incrementalSongCount == 1, let firstUpdatedTitle {
-                return "Updated \(firstUpdatedTitle) from filesystem change (\(songs.count) songs)."
+                return "Updated \(firstUpdatedTitle) from filesystem change (\(ArchiveCountCopy.count(songs.count, "song")))."
             }
-            return "Updated \(incrementalSongCount) songs from filesystem change (\(songs.count) total)."
+            return "Updated \(ArchiveCountCopy.count(incrementalSongCount, "song")) from filesystem change (\(songs.count) total)."
         }
 
         var catalogApplyResult: CatalogScanApplyResult {

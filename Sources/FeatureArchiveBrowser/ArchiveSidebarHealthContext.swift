@@ -11,10 +11,10 @@ struct ArchiveSidebarHealthContext: Equatable {
     private static func summary(for report: ArchiveHealthReport, skippedEntryCount: Int) -> String {
         var parts: [String] = []
         if report.totalSongs > 0 {
-            parts.append("\(report.totalSongs) songs")
+            parts.append(ArchiveCountCopy.count(report.totalSongs, "song"))
         }
         if report.withWarnings > 0 {
-            parts.append("\(report.withWarnings) warnings")
+            parts.append(ArchiveCountCopy.count(report.withWarnings, "warning"))
         }
         if skippedEntryCount > 0 {
             parts.append("\(skippedEntryCount) skipped")

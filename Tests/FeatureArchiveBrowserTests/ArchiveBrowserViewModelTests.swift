@@ -131,7 +131,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
 
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Auto Song"])
-        XCTAssertTrue(viewModel.statusMessage?.contains("1 songs") == true)
+        XCTAssertTrue(viewModel.statusMessage?.hasPrefix("1 song · ") == true, "\(viewModel.statusMessage ?? "nil")")
     }
 
     func testDefaultBrowseOrderPutsNewestCPRFirst() async throws {
@@ -1468,13 +1468,17 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
         let deadline = Date().addingTimeInterval(2)
-        while viewModel.statusMessage?.contains("1 songs") != true, Date() < deadline {
+        // Cache load ("Loaded 1 song from cache") or the follow-up scan ("1 song · …").
+        let saysOneSong = { (message: String?) in
+            message.map { $0.contains("1 song") && !$0.contains("1 songs") } == true
+        }
+        while !saysOneSong(viewModel.statusMessage), Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
         XCTAssertEqual(viewModel.songs.count, 1)
         XCTAssertEqual(viewModel.songs.first?.displayTitle, "Cached Song")
-        XCTAssertTrue(viewModel.statusMessage?.contains("1 songs") == true)
+        XCTAssertTrue(saysOneSong(viewModel.statusMessage), "\(viewModel.statusMessage ?? "nil")")
     }
 
     func testLaunchWithSavedRootAndNoCacheStartsScan() async throws {
