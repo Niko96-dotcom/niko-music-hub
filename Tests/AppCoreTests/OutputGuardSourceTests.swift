@@ -93,15 +93,24 @@ final class OutputGuardSourceTests: XCTestCase {
         pattern: #"\btry\?\s*[A-Za-z_][\w.?]*\.loadSettings\(\)"#
     )
 
-    /// Grandfathered `try? …loadSettings()` sites (2026-10-15). Lower a number when you
-    /// remove a site; never raise one.
+    /// The `try? …loadSettings()` sites that must stay, each with its reason. Never
+    /// add one: load with `try` and refuse the action, or read `ToolContext.appSettings`
+    /// for display. Lower a number when a site goes; remove a file at zero.
     static let tryOptionalSettingsLoadBaseline: [String: Int] = [
+        // Fails closed: unreadable settings skip launch recovery; the browser's snapshot read reports them.
         "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Recovery.swift": 1,
+        // The display mirror itself: unreadable settings show defaults; writes load with `try`.
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
+        // First-launch probe: a damaged blob belongs to a returning user, who gets no Set Up sheet.
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
+        // Probe: while settings are unreadable the repair notice already explains a Vault read failure.
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
+        // nil keeps the last Vault health and hides cards; the observer lags the model's own saves.
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
+        // First-run probe (no new-user sheet for damaged settings), and the access-failure
+        // check that runs right after persistRoots(), which the observer publishes later.
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 2,
+        // Exclusions only hide folders from a read-only scan; refusing it would hide the library.
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
     ]
 

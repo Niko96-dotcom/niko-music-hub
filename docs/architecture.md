@@ -191,6 +191,12 @@ deliberately not the browse list (`archiveRoots`), which hides Vault roots while
 retained archive generations stay write-protected. The archive browser's exports and New Song
 use `writeProtectedRoots()`. `OutputGuardSourceTests` enforces both owners.
 
+Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is
+refused when they cannot be read (`RecordingDestination.load(from:)`,
+`ArchiveBrowserViewModel.loadSettingsForWrite()`); display-only code reads
+`ToolContext.appSettings`. The few `try? …loadSettings()` reads that stay are listed with their
+reasons in `OutputGuardSourceTests`.
+
 Prospective paths are gated with
 [`PathSafety.resolve(_:allowedRoots:)`](../Sources/NikoMusicCore/Safety/PathSafety.swift):
 

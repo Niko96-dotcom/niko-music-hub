@@ -14,6 +14,7 @@ public final class AppSettingsObserver: ObservableObject, @unchecked Sendable {
     private var subscription: AnyCancellable?
 
     public init(store: any SettingsStore) {
+        // Display mirror: unreadable settings show defaults; every write loads with `try` itself.
         settings = (try? store.loadSettings()) ?? .default
         subscription = store.settingsChanges
             .receive(on: DispatchQueue.main)
