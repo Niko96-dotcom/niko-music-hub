@@ -601,6 +601,60 @@ struct StemSeparationViewModelTests {
         #expect(vm.errorMessage == unrelated)
         #expect(vm.helperNeedsSetup == false)
     }
+
+    @Test
+    func unreadableSettingsKeepDecodingErrorsOutOfTheHeaderAndRefuseSavesPlainly() throws {
+        let suite = "StemSeparationViewModelTests.unreadable.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let blob = Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8)
+        defaults.set(blob, forKey: "nikoMusicHub.settings")
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
+            preferences: InMemoryPreferenceStore(),
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: JobRunner(),
+            fileActions: ChoosingFileActions(
+                folder: FileManager.default.temporaryDirectory.appendingPathComponent("stem-unreadable-\(UUID().uuidString)"),
+                executable: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx")
+            ),
+            diagnostics: FakeDiagnostics()
+        )
+        let service = StemSeparationService(
+            backend: MockStemSeparationBackend(),
+            outputInboxStore: FakeOutputInboxStore(),
+            jobRunner: JobRunner(),
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+        )
+
+        let vm = StemSeparationViewModel(context: context, service: service)
+        #expect(vm.statusMessage.isEmpty, "the settings-repair notice explains unreadable settings")
+
+        vm.pickOutputFolder()
+        #expect(vm.statusMessage == StemSeparationHelperCopy.settingsUnreadableNotSaved)
+
+        vm.clearSelection()
+        vm.chooseHelperPath()
+        #expect(vm.statusMessage == StemSeparationHelperCopy.settingsUnreadableNotSaved)
+        #expect(defaults.data(forKey: "nikoMusicHub.settings") == blob)
+    }
+}
+
+private struct ChoosingFileActions: FileActions {
+    let folder: URL
+    let executable: URL
+
+    @MainActor
+    func chooseOutputFolder() -> URL? { folder }
+    @MainActor
+    func chooseDirectory(prompt: String) -> URL? { folder }
+    @MainActor
+    func chooseExecutable(prompt: String) -> URL? { executable }
+    @MainActor
+    func chooseAudioFile(prompt: String) -> URL? { nil }
+    @MainActor
+    func revealInFinder(_ url: URL) {}
 }
 
 private final class FakeSettingsStore: SettingsStore, @unchecked Sendable {

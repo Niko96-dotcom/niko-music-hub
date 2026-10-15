@@ -301,7 +301,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             }
             refreshHelperHealth()
         } catch {
-            diagnosticsError(error)
+            settingsSaveFailed(error)
         }
     }
 
@@ -398,6 +398,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         do {
             let settings = try context.settingsStore.loadSettings()
             outputFolderURL = settings.outputFolder.url
+        } catch let error as DecodingError {
+            // The settings-repair notice explains unreadable settings and a run
+            // refuses with its own sentence, so the header stays as it is.
+            context.diagnostics.scoped(to: .stemSeparation).log(.error, "Stem settings could not be read: \(error)")
         } catch {
             diagnosticsError(error)
         }
@@ -409,8 +413,16 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
                 settings.outputFolder = StoredFolderLocation(url: url)
             }
         } catch {
-            diagnosticsError(error)
+            settingsSaveFailed(error)
         }
+    }
+
+    /// Settings that no longer decode get a plain sentence; the decoding error
+    /// goes to diagnostics only. Any other failure keeps its own reason.
+    private func settingsSaveFailed(_ error: Error) {
+        guard error is DecodingError else { return diagnosticsError(error) }
+        statusMessage = StemSeparationHelperCopy.settingsUnreadableNotSaved
+        context.diagnostics.scoped(to: .stemSeparation).log(.error, "Stem settings could not be saved: \(error)")
     }
 
     private func normalizedYouTubeURL() -> URL? {
