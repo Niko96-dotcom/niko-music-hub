@@ -22,7 +22,6 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private var isCancelRequested = false
     private var handoffSubscription: AnyCancellable?
     private var settingsSubscription: AnyCancellable?
-    private var deferredDurableSettings: AppSettings?
     private var activeBatchSettings: AppSettings?
 
     public static let supportedSampleRates = [44100, 48000, 88200, 96000]
@@ -189,7 +188,6 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         let controller = StopAfterCurrentController()
         stopController = controller
         isCancelRequested = false
-        deferredDurableSettings = nil
         activeBatchSettings = admittedSettings
         isConverting = true
         statusText = AudioConverterCopy.converting
@@ -304,7 +302,11 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                 settings.audioPreset = updatedPreset
             }
             currentAudioPreset = updatedPreset
-            refreshQueuedOutputNames()
+            // `context.appSettings` publishes this save on a later main-queue
+            // turn; name the queued rows from what was just saved.
+            var saved = context.appSettings.settings
+            saved.audioPreset = updatedPreset
+            refreshQueuedOutputNames(using: saved)
             statusText = AudioConverterCopy.ready
         } catch {
             statusText = error.localizedDescription
@@ -411,8 +413,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         if let activeBatchSettings {
             return plannedOutputName(for: sourceURL, using: activeBatchSettings)
         }
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        return plannedOutputName(for: sourceURL, using: settings)
+        return plannedOutputName(for: sourceURL, using: context.appSettings.settings)
     }
 
     private func plannedOutputName(for sourceURL: URL, using settings: AppSettings) -> String {
@@ -423,15 +424,6 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             existingFileExists: { FileManager.default.fileExists(atPath: $0.path) }
         )
         .lastPathComponent
-    }
-
-    private func refreshQueuedOutputNames() {
-        if let activeBatchSettings {
-            refreshQueuedOutputNames(using: activeBatchSettings)
-            return
-        }
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        refreshQueuedOutputNames(using: settings)
     }
 
     private func refreshQueuedOutputNames(using settings: AppSettings) {
@@ -450,12 +442,10 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     /// only reads: it never writes back, so a newer user edit cannot be
     /// overwritten by stale view state. While a batch is active the visible
     /// preset and queued names stay aligned with the admitted snapshot; the
-    /// change is deferred and converged after the run for the next batch.
+    /// change waits in `context.appSettings` and converges after the run for
+    /// the next batch.
     private func applyDurableSettingsChange(_ settings: AppSettings) {
-        guard !isConverting else {
-            deferredDurableSettings = settings
-            return
-        }
+        guard !isConverting else { return }
         if settings.audioPreset != currentAudioPreset {
             currentAudioPreset = settings.audioPreset
         }
@@ -465,16 +455,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     /// After the active batch ends, show the latest durable settings so the
     /// next run admits them. Reads only; status and row outcomes are untouched.
     private func convergeToLatestDurableSettings() {
-        let deferred = deferredDurableSettings
-        deferredDurableSettings = nil
-        let latest: AppSettings
-        if let loaded = try? context.settingsStore.loadSettings() {
-            latest = loaded
-        } else if let deferred {
-            latest = deferred
-        } else {
-            return
-        }
+        let latest = context.appSettings.settings
         if latest.audioPreset != currentAudioPreset {
             currentAudioPreset = latest.audioPreset
         }
