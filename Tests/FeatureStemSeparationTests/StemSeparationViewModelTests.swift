@@ -89,7 +89,7 @@ struct StemSeparationViewModelTests {
         let backend = DemucsMLXBackend(
             runner: processRunner,
             settingsProvider: {
-                (try? settingsStore.loadSettings().helperTools) ?? HelperToolSettings()
+                try settingsStore.loadSettings().helperTools
             }
         )
         let service = StemSeparationService(

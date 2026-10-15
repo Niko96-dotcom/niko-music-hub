@@ -312,8 +312,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func runHelperHealthCheck() async {
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
-        let health = await healthChecker.availability(settings: settings.helperTools)
+        let health = await healthChecker.availability(settings: context.appSettings.settings.helperTools)
         switch health {
         case .missing:
             helperNeedsSetup = true

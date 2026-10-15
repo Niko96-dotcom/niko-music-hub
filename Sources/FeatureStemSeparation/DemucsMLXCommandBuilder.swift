@@ -4,6 +4,7 @@ import Foundation
 public enum StemSeparationHelperCopy {
     public static let missingLabel = "Stem helper missing"
     public static let missingBody = "demucs-mlx is not installed. Use Install Tools to add it, or choose an existing copy."
+    public static let settingsUnreadable = "Settings couldn’t be read, so separation didn’t start. Repair them in Settings, then try again."
 }
 
 public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {

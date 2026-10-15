@@ -33,7 +33,7 @@ public struct StemSeparationFeature: ToolFeature {
         let settingsStore = context.settingsStore
         let backend = DemucsMLXBackend(
             settingsProvider: {
-                (try? settingsStore.loadSettings().helperTools) ?? HelperToolSettings()
+                try settingsStore.loadSettings().helperTools
             }
         )
         let service = StemSeparationService(

@@ -2,7 +2,7 @@ import AppCore
 import Foundation
 
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
-    private let settingsProvider: @Sendable () -> HelperToolSettings
+    private let settingsProvider: @Sendable () throws -> HelperToolSettings
     private let healthChecker: DemucsMLXHealthChecker
     private let commandBuilder: DemucsMLXCommandBuilder
     private let runner: any ExternalProcessRunning
@@ -22,7 +22,7 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         progressParser: DemucsMLXProgressParser = DemucsMLXProgressParser(),
         scanner: StemOutputScanner = StemOutputScanner(),
-        settingsProvider: (@Sendable () -> HelperToolSettings)? = nil
+        settingsProvider: (@Sendable () throws -> HelperToolSettings)? = nil
     ) {
         let captured = settings
         self.settingsProvider = settingsProvider ?? { captured }
@@ -88,7 +88,13 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
         guard !Task.isCancelled else { return .canceled }
-        let helperSettings = settingsProvider()
+        // Unreadable settings must not fall back to default helper paths.
+        let helperSettings: HelperToolSettings
+        do {
+            helperSettings = try settingsProvider()
+        } catch {
+            return .failed(message: StemSeparationHelperCopy.settingsUnreadable)
+        }
         lock.withLock { lastConfiguredDemucsURL = helperSettings.demucsMlx }
         let processRequest: ExternalProcessRequest
         do {

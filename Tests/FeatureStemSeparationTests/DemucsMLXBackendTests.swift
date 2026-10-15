@@ -220,6 +220,22 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_unreadableSettings_refusesInsteadOfUsingDefaultHelperPaths() async {
+        struct Unreadable: Error {}
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let backend = DemucsMLXBackend(settingsProvider: { throw Unreadable() })
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(message: StemSeparationHelperCopy.settingsUnreadable))
+        #expect(backend.configuredDemucsURL == nil)
+    }
+
+    @Test
     func separate_nonzeroExit_returnsFailedWithStderr() async {
         let outputFolder = makeOutputFolder()
         let request = StemSeparationBackendRequest(
