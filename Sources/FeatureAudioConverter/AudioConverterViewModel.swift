@@ -157,7 +157,12 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         // Admit one durable snapshot for the whole run. The visible preset may
         // still hold a stale value when an external edit has not been delivered
         // yet, so the run never builds requests from view state.
+        let diagnostics = context.diagnostics.scoped(to: .converter)
         let snapshotResult = Result { try context.settingsStore.loadSettings() }
+            .mapError { error -> any Error in
+                diagnostics.log(.error, "Conversion could not read settings: \(error)")
+                return AudioConverterSettingsError.unreadable
+            }
         let controller = beginConversionRun(admittedSettings: try? snapshotResult.get())
         let task = Task { @MainActor in
             await performConversion(
@@ -309,7 +314,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             refreshQueuedOutputNames(using: saved)
             statusText = AudioConverterCopy.ready
         } catch {
-            statusText = error.localizedDescription
+            statusText = settingsSaveFailureText(error, logPrefix: "Preset save failed")
         }
     }
 
@@ -363,9 +368,18 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         } catch {
             markFFmpegSelectionFailed(
                 rowID: rowID,
-                message: error.localizedDescription
+                message: settingsSaveFailureText(error, logPrefix: "FFmpeg choice could not be saved")
             )
         }
+    }
+
+    /// Settings that no longer decode get a plain sentence; the decoding error
+    /// goes to diagnostics only. Any other failure keeps its own reason.
+    private func settingsSaveFailureText(_ error: any Error, logPrefix: String) -> String {
+        context.diagnostics.scoped(to: .converter).log(.error, "\(logPrefix): \(error)")
+        return error is DecodingError
+            ? AudioConverterCopy.settingsUnreadableNotSaved
+            : error.localizedDescription
     }
 
     private func publishShellJobStatus() {
@@ -743,6 +757,8 @@ public enum AudioConverterCopy {
     public static let stopAfterThisFileHelp = "Finishes the file that is converting, then skips the rest. Verified WAV files are kept."
     public static let chooseFFmpeg = "Choose FFmpeg"
     public static let selectedFFmpegMissing = "FFmpeg isn’t where it used to be. Choose FFmpeg to find it again."
+    public static let settingsUnreadable = "Settings couldn’t be read, so nothing was converted. Repair them in Settings, then try again."
+    public static let settingsUnreadableNotSaved = "Settings couldn’t be read, so the change wasn’t saved. Repair them in Settings, then try again."
 
     public static func selectedFFmpegUnusable(_ message: String) -> String {
         "Selected FFmpeg could not be used: \(message)"

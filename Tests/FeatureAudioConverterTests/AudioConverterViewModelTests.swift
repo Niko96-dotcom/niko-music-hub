@@ -912,6 +912,61 @@ final class AudioConverterViewModelTests: XCTestCase {
         )
     }
 
+    func testUnreadableSettingsRefuseRunAndPresetWithThePlainSentence() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let defaults = try makeUnreadableSettingsDefaults()
+        let source = try makeFile(named: "Loop.m4a", in: directory)
+        let converter = RecordingViewModelConverter { request in
+            makeResult(for: request)
+        }
+        let viewModel = makeViewModel(
+            outputFolder: directory,
+            converter: converter,
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults)
+        )
+        viewModel.addFileURLs([source])
+
+        let outcomes = await viewModel.convertQueuedRows()
+
+        XCTAssertTrue(outcomes.isEmpty)
+        XCTAssertTrue(converter.requests.isEmpty, "a run never starts on default settings")
+        XCTAssertEqual(viewModel.rows.first?.state, .failed)
+        XCTAssertEqual(viewModel.rows.first?.statusText, AudioConverterCopy.settingsUnreadable)
+        XCTAssertEqual(viewModel.statusText, AudioConverterCopy.settingsUnreadable)
+
+        viewModel.updateWAVPreset(sampleRate: 48000, bitDepth: 16, channelMode: .mono)
+
+        XCTAssertEqual(viewModel.statusText, AudioConverterCopy.settingsUnreadableNotSaved)
+        XCTAssertEqual(viewModel.currentAudioPreset, .cubaseDefault)
+    }
+
+    func testChooseFFmpegOnUnreadableSettingsKeepsRowFailedWithThePlainSentence() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suiteName = "AudioConverterViewModelTests.ffmpeg.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults)
+        try settingsStore.saveSettings(AppSettings(outputFolder: StoredFolderLocation(url: directory)))
+        let source = try makeFile(named: "Needs Helper.mp3", in: directory)
+        let ffmpegURL = try makeFile(named: "ffmpeg", in: directory)
+        let converter = RecordingViewModelConverter { _ in
+            throw AudioConversionError.missingFFmpeg(message: AudioConverterCopy.missingFFmpeg)
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter, settingsStore: settingsStore)
+        viewModel.addFileURLs([source])
+        _ = await viewModel.convertQueuedRows()
+        let rowID = try XCTUnwrap(viewModel.rows.first?.id)
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+
+        await viewModel.chooseFFmpegAndRetry(rowID: rowID, ffmpegURL: ffmpegURL)
+
+        XCTAssertEqual(viewModel.rows.first?.state, .failed)
+        XCTAssertEqual(viewModel.rows.first?.statusText, AudioConverterCopy.settingsUnreadableNotSaved)
+        XCTAssertEqual(viewModel.statusText, AudioConverterCopy.settingsUnreadableNotSaved)
+    }
+
     func testAudioConverterViewContainsUISpecCopy() throws {
         let source = try String(
             contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
@@ -971,7 +1026,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         converter: RecordingViewModelConverter = RecordingViewModelConverter { request in
             makeResult(for: request)
         },
-        settingsStore: FixtureSettingsStore? = nil,
+        settingsStore: (any SettingsStore)? = nil,
         outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
         ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
     ) -> AudioConverterViewModel {
@@ -1003,6 +1058,14 @@ final class AudioConverterViewModelTests: XCTestCase {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async { continuation.resume() }
         }
+    }
+
+    private func makeUnreadableSettingsDefaults() throws -> UserDefaults {
+        let suiteName = "AudioConverterViewModelTests.unreadable.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+        return defaults
     }
 
     private func makeTemporaryDirectory() throws -> URL {

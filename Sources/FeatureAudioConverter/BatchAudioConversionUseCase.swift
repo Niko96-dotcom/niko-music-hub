@@ -5,6 +5,18 @@ import NikoMusicCore
 public typealias AudioConversionPipelineFactory = @Sendable (AppSettings) -> any AudioConverting
 public typealias BatchAudioConversionProgressHandler = @Sendable (BatchAudioConversionUpdate) -> Void
 
+/// Stored settings could not be read, so a run never starts on defaults.
+public enum AudioConverterSettingsError: LocalizedError, Equatable, Sendable {
+    case unreadable
+
+    public var errorDescription: String? {
+        switch self {
+        case .unreadable:
+            return AudioConverterCopy.settingsUnreadable
+        }
+    }
+}
+
 public struct BatchAudioConversionUseCase: @unchecked Sendable {
     private let settingsStore: any SettingsStore
     private let outputInboxStore: any OutputInboxStore
@@ -28,7 +40,12 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         progress: BatchAudioConversionProgressHandler? = nil
     ) async throws -> [BatchAudioConversionOutcome] {
         guard !files.isEmpty else { return [] }
-        let settings = try settingsStore.loadSettings()
+        let settings: AppSettings
+        do {
+            settings = try settingsStore.loadSettings()
+        } catch {
+            throw AudioConverterSettingsError.unreadable
+        }
         return try await convert(
             files: files,
             settings: settings,

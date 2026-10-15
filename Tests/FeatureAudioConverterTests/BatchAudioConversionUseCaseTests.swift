@@ -252,6 +252,37 @@ final class BatchAudioConversionUseCaseTests: XCTestCase {
         }
     }
 
+    func testUnreadableSettingsRefuseTheRunWithThePlainSentence() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suiteName = "BatchAudioConversionUseCaseTests.unreadable.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+        let inbox = RecordingOutputInboxStore()
+        let converter = RecordingBatchConverter { request in
+            makeResult(for: request, converterPath: .native)
+        }
+        let useCase = BatchAudioConversionUseCase(
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
+            outputInboxStore: inbox,
+            converterFactory: { _ in converter }
+        )
+
+        do {
+            _ = try await useCase.convert(
+                files: [makeBatchFile(named: "Loop.wav", type: .wav, in: directory)],
+                stopController: StopAfterCurrentController()
+            )
+            XCTFail("a run must never start on default settings")
+        } catch {
+            XCTAssertEqual(error as? AudioConverterSettingsError, .unreadable)
+            XCTAssertEqual(error.localizedDescription, AudioConverterCopy.settingsUnreadable)
+        }
+        XCTAssertTrue(converter.requests.isEmpty)
+        XCTAssertTrue(inbox.items.isEmpty)
+    }
+
     func testVaultOffAdmitsOrdinaryOutputFolderNextToProtectedArchive() async throws {
         let fixture = try VaultOffOutputFixture()
         defer { fixture.cleanUp() }
