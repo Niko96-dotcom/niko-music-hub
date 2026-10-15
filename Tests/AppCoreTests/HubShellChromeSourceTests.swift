@@ -1,4 +1,5 @@
 import AppCore
+import AppKit
 import SwiftUI
 import XCTest
 
@@ -207,7 +208,7 @@ final class HubShellChromeSourceTests: XCTestCase {
         let source = try shellSource("OutputInboxInspectorView.swift")
 
         // A nil estimate must leave a line on the row, not just remove
-        // "Analyzing BPM…" (design contract §5: short status, no idle line).
+        // "Analyzing…" (design contract §5: short status, no idle line).
         XCTAssertTrue(source.contains("noTempoItemIDs: Set<OutputInboxItem.ID>"))
         XCTAssertFalse(source.contains("guard let estimate else { return }"))
         let nilBranch = try XCTUnwrap(source.range(of: "guard let estimate else {"))
@@ -221,6 +222,43 @@ final class HubShellChromeSourceTests: XCTestCase {
         let bpmLine = try XCTUnwrap(source.range(of: "if let bpm = item.metadata[\"bpm\"]"))
         let noTempoLine = try XCTUnwrap(source.range(of: "} else if noTempoItemIDs.contains(item.id)"))
         XCTAssertLessThan(bpmLine.lowerBound, noTempoLine.lowerBound)
+    }
+
+    func testOutputInboxStatusLinesFitBesideTheRowActions() throws {
+        let source = try shellSource("OutputInboxInspectorView.swift")
+
+        // The BPM result is the point of "Analyze BPM": number + unit on the row,
+        // the confidence in the tooltip. "BPM 119.7 (estimated)" (110pt) and
+        // "Analyzing BPM…" (82pt) clipped to "BPM 119.7 (…" at rail width.
+        XCTAssertTrue(source.contains("Text(\"\\(bpm) BPM\")"))
+        XCTAssertTrue(source.contains(".help(\"\\(bpm) BPM\\(confidence)\")"))
+        XCTAssertFalse(source.contains("Text(\"BPM \\("))
+        XCTAssertFalse(source.contains("Text(\"Analyzing BPM…\")"))
+
+        // Every line in the branches that share the row with the drag grip,
+        // Reveal and Open must fit their slot: 66pt at the 240pt rail (AX frame,
+        // 2026-10-15). Failed/missing/pending rows have no row actions
+        // (OutputHandoff needs `.available`), so they start the unchecked tail.
+        let start = try XCTUnwrap(source.range(of: "private func statusLine(for item: OutputInboxItem)"))
+        let end = try XCTUnwrap(source.range(of: "} else if item.status == .failed {", range: start.upperBound..<source.endIndex))
+        let sharedSlot = String(source[start.upperBound..<end.lowerBound])
+        let literals = try NSRegularExpression(pattern: #"Text\("([^"]*)"\)"#)
+            .matches(in: sharedSlot, range: NSRange(sharedSlot.startIndex..., in: sharedSlot))
+            .compactMap { Range($0.range(at: 1), in: sharedSlot).map { String(sharedSlot[$0]) } }
+            // Widest tempo MixdownBPMEstimator returns (40…220, one decimal).
+            .map { $0.replacingOccurrences(of: "\\(bpm)", with: "220.0") }
+        XCTAssertEqual(literals.count, 3, "expected the BPM, analyzing and no-tempo lines: \(literals)")
+        XCTAssertFalse(literals.contains { $0.contains("\\(") }, "unmeasured interpolation: \(literals)")
+
+        // Typography.micro() = .caption (NSFont caption1) at .medium weight.
+        let micro = NSFont.systemFont(
+            ofSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize,
+            weight: .medium
+        )
+        for line in literals {
+            let width = (line as NSString).size(withAttributes: [.font: micro]).width
+            XCTAssertLessThanOrEqual(width, 60, "\"\(line)\" is \(width)pt; it clips beside the inbox row actions")
+        }
     }
 
     func testOutputInboxBPMAnalysisTracksInFlightItemsIndividually() throws {

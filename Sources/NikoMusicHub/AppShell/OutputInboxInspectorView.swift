@@ -300,18 +300,23 @@ struct OutputInboxInspectorView: View {
         )
     }
 
+    /// The BPM, analyzing and no-tempo lines share the row's second line with the
+    /// drag grip, Reveal and Open: about 66pt at the 240pt rail. Keep them short
+    /// enough to read in full (longer detail goes in the tooltip). Failed, missing
+    /// and pending rows have no row actions, so their line gets the full width.
     @ViewBuilder
     private func statusLine(for item: OutputInboxItem) -> some View {
         if let bpm = item.metadata["bpm"] {
-            Text("BPM \(bpm)\(item.metadata["bpmConfidence"].map { " (\($0))" } ?? "")")
+            let confidence = item.metadata["bpmConfidence"].map { " (\($0))" } ?? ""
+            Text("\(bpm) BPM")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                .help("\(bpm) BPM\(confidence)")
         } else if analyzingItemIDs.contains(item.id) {
-            Text("Analyzing BPM…")
+            Text("Analyzing…")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
         } else if noTempoItemIDs.contains(item.id) {
-            // Fits the rail row's status slot (~64pt) next to the row actions.
             Text("No tempo")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
@@ -400,7 +405,7 @@ struct OutputInboxInspectorView: View {
             }.value
             analyzingItemIDs.remove(itemID)
             guard let estimate else {
-                // Say so instead of letting "Analyzing BPM…" just vanish.
+                // Say so instead of letting "Analyzing…" just vanish.
                 noTempoItemIDs.insert(itemID)
                 return
             }
