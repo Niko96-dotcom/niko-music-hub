@@ -365,7 +365,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     var searchResultCountText: String? {
         guard isSearching else { return nil }
-        return "\(filteredSongs.count) \(filteredSongs.count == 1 ? "result" : "results")"
+        return CountCopy.count(filteredSongs.count, "result")
     }
 
     var searchQuery: String {

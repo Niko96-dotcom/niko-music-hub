@@ -12,7 +12,7 @@ struct ArchiveBoardColumn: Equatable, Identifiable {
     var title: String { status?.displayTitle ?? "No Status" }
 
     /// VoiceOver label and AX handle: "Done column, 1 song".
-    var accessibilityLabel: String { "\(title) column, \(ArchiveCountCopy.count(songs.count, "song"))" }
+    var accessibilityLabel: String { "\(title) column, \(CountCopy.count(songs.count, "song"))" }
 }
 
 /// Pure board projection: the browse list split into workflow columns,

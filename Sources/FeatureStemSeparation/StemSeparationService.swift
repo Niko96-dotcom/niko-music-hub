@@ -109,7 +109,7 @@ public struct StemSeparationService: Sendable {
             progress.log("Output validation failed: \(message)")
             throw StemSeparationServiceError(message)
         case .success(let scannedStems):
-            progress.log("Found \(scannedStems.count) stems.")
+            progress.log("Found \(CountCopy.count(scannedStems.count, "stem")).")
             let stems = renamedWithTitle(scannedStems, title: title)
             do {
                 try addInboxItems(stems: stems)

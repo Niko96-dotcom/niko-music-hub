@@ -55,9 +55,9 @@ struct ProjectVaultSettingsView: View {
                             .labelsHidden()
                     }
                     SettingsRowDivider()
-                    SettingsRow("After \(settings.vault.inactivityDays) days untouched") {
+                    SettingsRow("After \(CountCopy.count(settings.vault.inactivityDays, "day")) untouched") {
                         Stepper(
-                            "After \(settings.vault.inactivityDays) days untouched",
+                            "After \(CountCopy.count(settings.vault.inactivityDays, "day")) untouched",
                             value: intBinding(\.inactivityDays, range: 7...365)
                         )
                         .labelsHidden()
@@ -82,9 +82,9 @@ struct ProjectVaultSettingsView: View {
                         .labelsHidden()
                     }
                     SettingsRowDivider()
-                    SettingsRow("Keep older Vault copies \(settings.vault.keepPreviousGenerationDays) days") {
+                    SettingsRow("Keep older Vault copies \(CountCopy.count(settings.vault.keepPreviousGenerationDays, "day"))") {
                         Stepper(
-                            "Keep older Vault copies \(settings.vault.keepPreviousGenerationDays) days",
+                            "Keep older Vault copies \(CountCopy.count(settings.vault.keepPreviousGenerationDays, "day"))",
                             value: intBinding(\.keepPreviousGenerationDays, range: 7...365)
                         )
                         .labelsHidden()
@@ -457,7 +457,7 @@ struct ProjectVaultSettingsView: View {
                 let result = try ProjectVaultRestoreDrill().run()
                 await MainActor.run {
                     updateVault { $0.lastRestoreDrillAt = result.completedAt; $0.lastSuccessfulVerificationAt = result.completedAt }
-                    message = "Test restore passed. \(result.fileCount) files verified."
+                    message = "Test restore passed. \(CountCopy.count(result.fileCount, "file")) verified."
                     isRunningDrill = false
                 }
             } catch {
@@ -560,7 +560,7 @@ private struct KeepLocalReviewSheet: View {
             Text("Review Keep Local").font(.title2.weight(.semibold))
             Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetMessage)
                 .foregroundStyle(.secondary)
-            Text(pinCount == 1 ? "1 project is currently pinned." : "\(pinCount) projects are currently pinned.")
+            Text(pinCount == 1 ? "1 project is currently pinned." : "\(CountCopy.count(pinCount, "project")) are currently pinned.")
                 .foregroundStyle(.secondary)
             Text(ProjectVaultConfirmationCopy.keepLocalReviewSheetBrowserHint)
                 .foregroundStyle(.secondary)

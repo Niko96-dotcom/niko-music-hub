@@ -19,7 +19,7 @@ public struct TooShortNonMainSongBreakdown: Sendable, Equatable, Codable {
 
     /// Operator-facing line for the archive diagnostics panel (not export format).
     public var panelDisplayLine: String {
-        let clipWord = clipCount == 1 ? "clip" : "clips"
+        let clipWord = CountCopy.noun(for: clipCount, "clip")
         let clips = clipNames.joined(separator: ", ")
         return "\(displayTitle): \(clipCount) too short \(clipWord) — \(clips)"
     }
@@ -82,9 +82,9 @@ public struct ArchiveDiagnosticsPreviewRankingPanelContext: Sendable, Equatable,
 
     public var scanHeaderCallout: String? {
         guard tooShortNonMainPreviewCount > 0 else { return nil }
-        let songWord = songsWithTooShortNonMainPreviews == 1 ? "song" : "songs"
-        let clipWord = tooShortNonMainPreviewCount == 1 ? "clip" : "clips"
-        return "\(songsWithTooShortNonMainPreviews) \(songWord) have \(tooShortNonMainPreviewCount) too short preview \(clipWord) (not picked as main)"
+        let songs = CountCopy.count(songsWithTooShortNonMainPreviews, "song")
+        let clipWord = CountCopy.noun(for: tooShortNonMainPreviewCount, "clip")
+        return "\(songs) have \(tooShortNonMainPreviewCount) too short preview \(clipWord) (not picked as main)"
     }
 
     public static func from(songs: [Song]) -> Self {

@@ -1,6 +1,7 @@
-import AppCore
 import AVFAudio
+import AppCore
 import Foundation
+import NikoMusicCore
 
 public enum RecordingDisplayState: Equatable {
     case idle
@@ -365,7 +366,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         do {
             if let diagnostics = result.diagnostics, diagnostics.writeErrorCount > 0 {
                 throw RecorderError.writeError(
-                    "Recording write failed (\(diagnostics.writeErrorCount) errors). CoreAudio diagnostics: \(diagnostics.summary)."
+                    "Recording write failed (\(CountCopy.count(diagnostics.writeErrorCount, "error"))). CoreAudio diagnostics: \(diagnostics.summary)."
                 )
             }
             _ = try verifier.verify(url: result.outputURL, expectedSpec: expectedSpec)

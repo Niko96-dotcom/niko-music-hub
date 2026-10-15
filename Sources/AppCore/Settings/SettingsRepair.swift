@@ -66,7 +66,7 @@ public struct SettingsRepairOutcome: Equatable, Sendable {
             parts.append("Reset to default: \(resetFields.joined(separator: ", ")).")
         }
         if droppedArchiveFolderCount > 0 {
-            let noun = droppedArchiveFolderCount == 1 ? "archive folder" : "archive folders"
+            let noun = CountCopy.noun(for: droppedArchiveFolderCount, "archive folder")
             parts.append("Removed \(droppedArchiveFolderCount) unreadable \(noun).")
         }
         if vaultRemovalPaused {

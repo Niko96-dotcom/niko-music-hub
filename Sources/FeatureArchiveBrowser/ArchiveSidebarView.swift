@@ -52,7 +52,7 @@ struct ArchiveSidebarView: View {
                     accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
                     help: viewModel.showArchivedProjects
                         ? "Hide archived songs"
-                        : "Show \(viewModel.archivedProjectCount) archived \(viewModel.archivedProjectCount == 1 ? "song" : "songs")",
+                        : "Show \(viewModel.archivedProjectCount) archived \(CountCopy.noun(for: viewModel.archivedProjectCount, "song"))",
                     isSelected: viewModel.showArchivedProjects,
                     isToggle: true
                 ) {

@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 /// Running-job snapshot for the production shell (NMH-011).
 public struct ShellJobStatus: Equatable, Identifiable, Sendable {
@@ -109,7 +110,7 @@ public enum ShellJobStatusCopy: Sendable {
         "Stops converting now and skips the rest. Verified WAV files are kept."
 
     public static func multipleJobsTitle(count: Int) -> String {
-        "\(count) jobs running"
+        "\(CountCopy.count(count, "job")) running"
     }
 
     public static func converterStatus(

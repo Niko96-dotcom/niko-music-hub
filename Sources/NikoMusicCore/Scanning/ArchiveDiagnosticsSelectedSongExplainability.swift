@@ -8,9 +8,6 @@ public enum ArchiveDiagnosticsSelectedSongExplainability: Sendable {
             return "no project versions"
         }
         let latest = song.latestCPR?.fileName ?? "unknown"
-        if count == 1 {
-            return "1 version · latest \(latest)"
-        }
-        return "\(count) versions · latest \(latest)"
+        return "\(CountCopy.count(count, "version")) · latest \(latest)"
     }
 }

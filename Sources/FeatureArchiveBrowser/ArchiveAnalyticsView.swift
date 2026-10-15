@@ -49,7 +49,7 @@ struct ArchiveAnalyticsView: View {
 
     private func overviewRow(_ overview: ArchiveAnalyticsSnapshot.Overview) -> some View {
         HStack(alignment: .top, spacing: 28) {
-            statItem(value: "\(overview.totalSongs)", caption: ArchiveCountCopy.noun(for: overview.totalSongs, "song"))
+            statItem(value: "\(overview.totalSongs)", caption: CountCopy.noun(for: overview.totalSongs, "song"))
             statItem(value: "\(overview.inProgress)", caption: "in progress")
             statItem(value: "\(overview.finished)", caption: "done")
             if let rate = overview.finishRate {
@@ -90,7 +90,7 @@ struct ArchiveAnalyticsView: View {
                 .accessibilityAddTraits(.isHeader)
 
             if months.allSatisfy({ $0.versionCount == 0 }) {
-                emptyHint("No projects saved in the last \(ArchiveCountCopy.count(months.count, "month"))")
+                emptyHint("No projects saved in the last \(CountCopy.count(months.count, "month"))")
             } else {
                 let peak = max(months.map(\.versionCount).max() ?? 1, 1)
                 HStack(alignment: .bottom, spacing: 6) {
@@ -113,10 +113,10 @@ struct ArchiveAnalyticsView: View {
                                 .font(HubDesignSystem.Typography.micro())
                                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         }
-                        .help("\(ArchiveCountCopy.count(month.versionCount, "save")) · \(ArchiveCountCopy.count(month.songCount, "song"))")
+                        .help("\(CountCopy.count(month.versionCount, "save")) · \(CountCopy.count(month.songCount, "song"))")
                         .accessibilityElement()
                         .accessibilityLabel(
-                            "\(Self.monthFormatter.string(from: month.monthStart)): \(ArchiveCountCopy.count(month.versionCount, "save")) across \(ArchiveCountCopy.count(month.songCount, "song"))"
+                            "\(Self.monthFormatter.string(from: month.monthStart)): \(CountCopy.count(month.versionCount, "save")) across \(CountCopy.count(month.songCount, "song"))"
                         )
                     }
                 }
@@ -147,7 +147,7 @@ struct ArchiveAnalyticsView: View {
                         tint: stage.status.archiveTint,
                         fraction: Double(stage.count) / Double(peak),
                         trailing: "\(stage.count)",
-                        help: "\(ArchiveCountCopy.count(stage.count, "song")) in \(stage.status.displayTitle)"
+                        help: "\(CountCopy.count(stage.count, "song")) in \(stage.status.displayTitle)"
                     )
                 }
             }
@@ -172,7 +172,7 @@ struct ArchiveAnalyticsView: View {
                             tint: dwell.status.archiveTint,
                             fraction: dwell.averageDays / peak,
                             trailing: dwellLabel(dwell.averageDays),
-                            help: "\(dwell.status.displayTitle): average \(dwellLabel(dwell.averageDays)) across \(ArchiveCountCopy.count(dwell.sampleCount, "stay"))"
+                            help: "\(dwell.status.displayTitle): average \(dwellLabel(dwell.averageDays)) across \(CountCopy.count(dwell.sampleCount, "stay"))"
                         )
                     }
                 }

@@ -90,7 +90,7 @@ func verifyFixtureExpectations(result: ScanResult, neonMatches: [Song]) -> [Stri
               "\(FixtureExpectations.brokenFolderTitle) unexpectedly has a project or preview")
     }
 
-    check(neonMatches.count == 1, "search \"Neon Hook\" returned \(neonMatches.count) matches, expected exactly 1")
+    check(neonMatches.count == 1, "search \"Neon Hook\" returned \(CountCopy.count(neonMatches.count, "match", plural: "matches")), expected exactly 1")
     check(neonMatches.first?.displayTitle == "Neon Hook",
           "search \"Neon Hook\" matched \(neonMatches.first?.displayTitle ?? "nothing"), expected Neon Hook")
     return failures

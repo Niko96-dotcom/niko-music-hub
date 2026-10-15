@@ -47,7 +47,7 @@ struct SongCardView: View {
                             .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                             .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 5) {
-                            Text("\(song.workflowStatus?.displayTitle ?? "No Status") · \(song.visibleProjectVersions.count) version\(song.visibleProjectVersions.count == 1 ? "" : "s")")
+                            Text("\(song.workflowStatus?.displayTitle ?? "No Status") · \(CountCopy.count(song.visibleProjectVersions.count, "version"))")
                                 .font(HubDesignSystem.Typography.micro()).foregroundStyle(.secondary)
                             if isRowLoaded {
                                 Text(isRowPlaying ? "Playing" : "In player")

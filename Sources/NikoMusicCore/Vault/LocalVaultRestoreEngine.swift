@@ -67,7 +67,7 @@ public enum LocalVaultRestoreError: LocalizedError, Equatable, Sendable {
     static func fromLocalityFailure(_ error: Error) -> LocalVaultRestoreError {
         switch error {
         case FileProviderArchiveStorageError.expectedFileSizeMismatch(let url, let expected, let actual):
-            .archiveContentsChanged("\(url.lastPathComponent) changed from \(expected) to \(actual) bytes since verification.")
+            .archiveContentsChanged("\(url.lastPathComponent) changed from \(expected) to \(CountCopy.count(actual, "byte")) since verification.")
         case FileProviderArchiveStorageError.expectedItemMismatch:
             .archiveContentsChanged("An archive item no longer matches the recorded file type or size.")
         default:

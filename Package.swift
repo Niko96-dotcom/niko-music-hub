@@ -90,7 +90,7 @@ let package = Package(
         ),
         .target(
             name: "FeatureBPMTapper",
-            dependencies: ["AppCore"]
+            dependencies: ["AppCore", "NikoMusicCore"]
         ),
         .target(
             name: "FeatureAudioConverter",

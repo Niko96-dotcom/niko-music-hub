@@ -107,7 +107,7 @@ struct ArchiveBoardView: View {
                     accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
                     help: viewModel.showArchivedProjects
                         ? "Hide archived songs"
-                        : "Show \(viewModel.archivedProjectCount) archived \(viewModel.archivedProjectCount == 1 ? "song" : "songs")",
+                        : "Show \(viewModel.archivedProjectCount) archived \(CountCopy.noun(for: viewModel.archivedProjectCount, "song"))",
                     isSelected: viewModel.showArchivedProjects,
                     isToggle: true
                 ) {
@@ -224,7 +224,7 @@ struct ArchiveBoardCardView: View {
         var parts: [String] = []
         let versions = song.visibleProjectVersions.count
         if versions > 0 {
-            parts.append("\(versions) version\(versions == 1 ? "" : "s")")
+            parts.append(CountCopy.count(versions, "version"))
         }
         if song.hasStems {
             parts.append("stems")

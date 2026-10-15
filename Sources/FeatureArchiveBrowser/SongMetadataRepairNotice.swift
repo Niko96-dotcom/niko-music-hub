@@ -1,4 +1,5 @@
 import AppCore
+import NikoMusicCore
 import SwiftUI
 
 /// Way out of the fail-closed song-detail gate (D2). One song in the detail
@@ -32,7 +33,7 @@ struct SongMetadataRepairNotice: View {
             let count = viewModel.metadataRepairSongIDs.count
             return count == 1
                 ? "Details for 1 song couldn't be read, so changes to it are paused."
-                : "Details for \(count) songs couldn't be read, so changes to them are paused."
+                : "Details for \(CountCopy.count(count, "song")) couldn't be read, so changes to them are paused."
         }
     }
 

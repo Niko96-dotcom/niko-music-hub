@@ -72,7 +72,7 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
     }
 
     private var songCountPart: String {
-        "\(songCount) \(songCount == 1 ? "song" : "songs")"
+        CountCopy.count(songCount, "song")
     }
 
     /// True when `summaryLine` lists only the first `summaryLineMaxSongWarningTitles` warning song titles.

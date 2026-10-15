@@ -108,7 +108,7 @@ enum SongMetadataIntegrityCopy {
         }
         let shown = sorted.prefix(3).map { "“\($0)”" }.joined(separator: ", ")
         let remainder = sorted.count > 3 ? ", …" : ""
-        return "Details for \(sorted.count) songs couldn't be read (\(shown)\(remainder)), so edits to them are paused; nothing was overwritten."
+        return "Details for \(CountCopy.count(sorted.count, "song")) couldn't be read (\(shown)\(remainder)), so edits to them are paused; nothing was overwritten."
     }
 
     static func unverified(_ name: String) -> String {
@@ -116,7 +116,7 @@ enum SongMetadataIntegrityCopy {
     }
 
     static func repaired(names: [String], cleared: [SongUserMetadataListColumn]) -> String {
-        let head = names.count == 1 ? "Repaired “\(names[0])”." : "Repaired \(names.count) songs."
+        let head = names.count == 1 ? "Repaired “\(names[0])”." : "Repaired \(CountCopy.count(names.count, "song"))."
         let order = SongUserMetadataListColumn.allCases
         let labels = order.filter(cleared.contains).map(\.label)
         guard !labels.isEmpty else { return head }
@@ -126,7 +126,7 @@ enum SongMetadataIntegrityCopy {
     static func repairFailed(names: [String]) -> String {
         names.count == 1
             ? "Couldn't repair “\(names[0])”; nothing was changed."
-            : "Couldn't repair \(names.count) songs; nothing was changed."
+            : "Couldn't repair \(CountCopy.count(names.count, "song")); nothing was changed."
     }
 
     /// True for any song-detail integrity warning this module writes.
@@ -233,9 +233,9 @@ struct ArchiveCatalogCoordinator {
 
         var statusMessage: String {
             if incrementalSongCount == 1, let firstUpdatedTitle {
-                return "Updated \(firstUpdatedTitle) from filesystem change (\(ArchiveCountCopy.count(songs.count, "song")))."
+                return "Updated \(firstUpdatedTitle) from filesystem change (\(CountCopy.count(songs.count, "song")))."
             }
-            return "Updated \(ArchiveCountCopy.count(incrementalSongCount, "song")) from filesystem change (\(songs.count) total)."
+            return "Updated \(CountCopy.count(incrementalSongCount, "song")) from filesystem change (\(songs.count) total)."
         }
 
         var catalogApplyResult: CatalogScanApplyResult {

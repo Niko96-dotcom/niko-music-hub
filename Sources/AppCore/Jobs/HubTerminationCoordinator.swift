@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 /// The quit alert for running work (ADR-019). The app delegate shows it as an
 /// `NSAlert`; the keep-open button comes first so Return keeps the work.
@@ -10,7 +11,7 @@ public struct HubQuitPrompt: Equatable, Sendable {
     }
 
     public var title: String {
-        work.count == 1 ? "1 job is still running" : "\(work.count) jobs are still running"
+        work.count == 1 ? "1 job is still running" : "\(CountCopy.count(work.count, "job")) are still running"
     }
 
     public var message: String {

@@ -45,16 +45,13 @@ public struct ArchiveDiagnosticsPanelContext: Sendable, Equatable {
 
         var parts: [String] = []
         if invalidRootCount > 0 {
-            let noun = invalidRootCount == 1 ? "invalid root" : "invalid roots"
-            parts.append("\(invalidRootCount) \(noun)")
+            parts.append(CountCopy.count(invalidRootCount, "invalid root"))
         }
         if globalWarningCount > 0 {
-            let noun = globalWarningCount == 1 ? "root warning" : "root warnings"
-            parts.append("\(globalWarningCount) \(noun)")
+            parts.append(CountCopy.count(globalWarningCount, "root warning"))
         }
         if songWarningCount > 0 {
-            let noun = songWarningCount == 1 ? "song warning" : "song warnings"
-            parts.append("\(songWarningCount) \(noun)")
+            parts.append(CountCopy.count(songWarningCount, "song warning"))
         }
         if skippedAtRootsCount > 0 {
             parts.append("\(skippedAtRootsCount) skipped at roots")

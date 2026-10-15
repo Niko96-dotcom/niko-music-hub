@@ -1,6 +1,7 @@
 import AppCore
 import Combine
 import Foundation
+import NikoMusicCore
 
 @MainActor
 public final class AudioConverterViewModel: ObservableObject, @unchecked Sendable {
@@ -483,7 +484,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private func noticeText(_ notice: AudioFileIntakeNotice) -> String {
         switch notice {
         case let .subfoldersIgnored(_, count):
-            return count == 1 ? "1 subfolder ignored" : "\(count) subfolders ignored"
+            return "\(CountCopy.count(count, "subfolder")) ignored"
         }
     }
 
@@ -767,7 +768,7 @@ public enum AudioConverterCopy {
     }
 
     public static func canceledSummary(converted: Int, of total: Int) -> String {
-        "Canceled — \(converted) of \(total) \(total == 1 ? "file" : "files") converted"
+        "Canceled — \(converted) of \(CountCopy.count(total, "file")) converted"
     }
 }
 

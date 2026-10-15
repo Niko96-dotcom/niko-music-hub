@@ -3,8 +3,7 @@ import Foundation
 /// Operator-facing active song search lines for the archive diagnostics panel (parity with export `active_search`).
 public enum ArchiveDiagnosticsSearchPanelContext: Sendable {
     public static func panelQueryLine(query: String, matchCount: Int) -> String {
-        let matchWord = matchCount == 1 ? "match" : "matches"
-        return "\(query) · \(matchCount) \(matchWord)"
+        "\(query) · \(CountCopy.count(matchCount, "match", plural: "matches"))"
     }
 
     public static func panelMatchLine(displayTitle: String, summary: String) -> String {

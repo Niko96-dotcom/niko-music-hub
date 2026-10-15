@@ -119,7 +119,7 @@ extension ArchiveBrowserViewModel {
                 // While the launch scan runs, its status line stays in charge.
                 if !self.isScanning {
                     let relative = HubRelativeTime.string(for: scannedAt)
-                    self.setBackgroundStatusMessage("Loaded \(ArchiveCountCopy.count(songs.count, "song")) from cache (\(relative)). Scan to refresh.")
+                    self.setBackgroundStatusMessage("Loaded \(CountCopy.count(songs.count, "song")) from cache (\(relative)). Scan to refresh.")
                 }
             }
         }

@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public struct DownloadJobOptions: Sendable {
     public var sourceURL: URL
@@ -336,7 +337,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
         throw lastError ?? DownloadUseCaseError.failed(DownloadFailure(
             kind: .processFailed,
-            message: "Unknown error after \(options.retries) retries",
+            message: "Unknown error after \(CountCopy.count(options.retries, "retry", plural: "retries"))",
             isRetryable: false,
             outputs: accumulated
         ))

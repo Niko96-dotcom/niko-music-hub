@@ -1,4 +1,5 @@
 import Foundation
+import NikoMusicCore
 
 /// Shared recording duration choices for Settings and the Audio Recorder tool.
 /// Minutes use `0` for unlimited capture length.
@@ -6,7 +7,7 @@ public enum RecordingDurationOptions {
     public static let supportedMinutes: [Int] = [5, 10, 15, 30, 45, 60, 90, 120, 0]
 
     public static func label(for minutes: Int) -> String {
-        minutes == 0 ? "Unlimited" : "\(minutes) minutes"
+        minutes == 0 ? "Unlimited" : CountCopy.count(minutes, "minute")
     }
 
     public static func chipLabel(for minutes: Int) -> String {

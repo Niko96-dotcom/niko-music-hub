@@ -46,7 +46,7 @@ public struct ProjectVaultRestoreProgress: Equatable, Sendable {
     public var scopeDescription: String? {
         guard let totalBytes, let fileCount else { return nil }
         let size = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
-        return "\(fileCount) \(fileCount == 1 ? "file" : "files") · \(size) total"
+        return "\(CountCopy.count(fileCount, "file")) · \(size) total"
     }
 
     /// NMH-054 fallback when byte size cannot be read: one step per phase

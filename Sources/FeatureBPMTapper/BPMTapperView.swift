@@ -1,4 +1,5 @@
 import AppCore
+import NikoMusicCore
 import SwiftUI
 
 public struct BPMTapperView: View {
@@ -331,14 +332,7 @@ public struct BPMTapperView: View {
     }
 
     private var progressText: String {
-        switch viewModel.tapCount {
-        case 0:
-            return "0 taps"
-        case 1:
-            return "1 tap"
-        default:
-            return "\(viewModel.tapCount) taps"
-        }
+        CountCopy.count(viewModel.tapCount, "tap")
     }
 
     private var statusColor: Color {

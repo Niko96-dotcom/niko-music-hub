@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import NikoMusicCore
 import SwiftUI
 
 public struct DownloaderView: View {
@@ -200,7 +201,7 @@ public struct DownloaderView: View {
                     }
                 )
                 // The playlist cap lives in the tooltip so the group never changes height.
-                .help(viewModel.playlistMode == .single ? "" : "Playlists download at most \(viewModel.playlistMode.maxEntries ?? 0) items")
+                .help(viewModel.playlistMode == .single ? "" : "Playlists download at most \(CountCopy.count(viewModel.playlistMode.maxEntries ?? 0, "item"))")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

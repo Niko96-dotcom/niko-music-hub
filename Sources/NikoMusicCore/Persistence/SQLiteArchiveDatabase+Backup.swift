@@ -106,7 +106,7 @@ public extension SQLiteArchiveDatabase {
                     guard busyRetries <= maxBusyRetries else {
                         sqlite3_backup_finish(backup)
                         throw BackupError.busy(
-                            "backup step remained busy/locked after \(maxBusyRetries) retries: \(String(cString: sqlite3_errmsg(destination)))"
+                            "backup step remained busy/locked after \(CountCopy.count(maxBusyRetries, "retry", plural: "retries")): \(String(cString: sqlite3_errmsg(destination)))"
                         )
                     }
                     _ = Darwin.usleep(5_000)
