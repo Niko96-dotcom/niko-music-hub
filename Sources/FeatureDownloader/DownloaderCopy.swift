@@ -39,6 +39,7 @@ public enum DownloaderCopy {
         "yt-dlp \(current) is outdated (expected \(minimumExpected) or newer). Use Install Tools to update it."
     }
     public static let unsupportedURL = "This URL is not supported or yt-dlp could not access it."
+    public static let settingsUnreadable = "Settings couldn’t be read, so the download didn’t start. Repair them in Settings, then try again."
     public static let downloadFailedError = "Download failed"
     public static let retryableError = "Download failed (will retry): "
     public static let permanentError = "Download failed (permanent): "

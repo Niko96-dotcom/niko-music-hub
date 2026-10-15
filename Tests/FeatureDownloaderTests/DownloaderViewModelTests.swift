@@ -1190,8 +1190,35 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertEqual(try fixture.archiveSnapshot(), before)
     }
 
+    func testUnreadableSettingsRefuseURLCheckAndStartWithThePlainSentence() async throws {
+        let suiteName = "DownloaderViewModelTests.unreadable.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let useCase = FakeDownloaderUseCase(job: job)
+        let viewModel = makeViewModel(
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
+            useCase: useCase,
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            debounceDuration: .milliseconds(1)
+        )
+
+        viewModel.urlText = "https://example.com/first"
+        viewModel.urlTextDidChange()
+        try await waitUntil { viewModel.downloadState != .idle && viewModel.downloadState != .checkingURL }
+        XCTAssertEqual(viewModel.downloadState, .failed(DownloaderCopy.settingsUnreadable))
+
+        viewModel.downloadState = .readyToDownload
+        viewModel.startDownload()
+        XCTAssertEqual(viewModel.downloadState, .failed(DownloaderCopy.settingsUnreadable))
+        XCTAssertEqual(useCase.callCount, 0)
+    }
+
     private func makeViewModel(
         settings: AppSettings? = nil,
+        settingsStore: (any SettingsStore)? = nil,
         outputFolder: URL = URL(fileURLWithPath: "/tmp/downloader-vm"),
         useCase: any DownloaderUseCaseRunning,
         jobRunner: any JobRunning,
@@ -1204,7 +1231,7 @@ final class DownloaderViewModelTests: XCTestCase {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         let context = ToolContext(
             registeredToolCount: 1,
-            settingsStore: FixtureSettingsStore(settings: settings ?? AppSettings(
+            settingsStore: settingsStore ?? FixtureSettingsStore(settings: settings ?? AppSettings(
                 outputFolder: StoredFolderLocation(url: outputFolder),
                 helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
             )),

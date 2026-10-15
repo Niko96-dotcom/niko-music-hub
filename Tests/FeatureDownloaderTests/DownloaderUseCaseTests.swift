@@ -578,6 +578,46 @@ final class DownloaderUseCaseTests: XCTestCase {
         )
     }
 
+    func testUnreadableSettingsRefuseSimulateAndDirectDownloadWithThePlainSentence() async throws {
+        let suite = "DownloaderUseCaseTests.unreadable.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+        let simulateRunner = SimulateFailureRunner()
+        let jobRunner = SpyJobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: jobRunner,
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
+        )
+        let url = URL(string: "https://example.com/watch?v=unreadable")!
+        let options = DownloadJobOptions(sourceURL: url, outputDirectory: URL(fileURLWithPath: "/tmp/out"), retries: 1)
+
+        do {
+            _ = try await useCase.simulateAndEnqueue(url: url, options: options)
+            XCTFail("Expected a settings refusal")
+        } catch {
+            XCTAssertEqual(error as? DownloadUseCaseError, .settingsUnreadable)
+            XCTAssertEqual(error.localizedDescription, DownloaderCopy.settingsUnreadable)
+        }
+        do {
+            _ = try await useCase.download(
+                url: url,
+                options: options,
+                progress: JobProgress(updateHandler: { _, _ in }, logHandler: { _ in })
+            )
+            XCTFail("Expected a settings refusal")
+        } catch {
+            XCTAssertEqual(error as? DownloadUseCaseError, .settingsUnreadable)
+            XCTAssertEqual(error.localizedDescription, DownloaderCopy.settingsUnreadable)
+        }
+        XCTAssertEqual(simulateRunner.runCount, 0)
+        XCTAssertEqual(jobRunner.enqueueCount, 0)
+    }
+
     func testDirectDownloadWithAllExistingReturnsURLsInsteadOfThrowing() async throws {
         let existingURL = URL(fileURLWithPath: "/tmp/out/existing-\(UUID().uuidString).mp4")
         let useCase = DownloaderUseCase(

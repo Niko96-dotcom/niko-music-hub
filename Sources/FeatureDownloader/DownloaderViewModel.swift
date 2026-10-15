@@ -130,7 +130,8 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 availability = await healthChecker.availability(settings: settings.helperTools)
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.applyURLCheckError(error, input: input, generation: generation)
+                self?.context.diagnostics.scoped(to: .downloader).log(.error, "URL check could not read settings: \(error)")
+                self?.applyURLCheckError(DownloadUseCaseError.settingsUnreadable, input: input, generation: generation)
                 return
             }
             guard !Task.isCancelled else { return }
@@ -201,8 +202,8 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         do {
             settings = try context.settingsStore.loadSettings()
         } catch {
-            context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
-            downloadState = .failed(error.localizedDescription)
+            context.diagnostics.scoped(to: .downloader).log(.error, "Download start could not read settings: \(error)")
+            downloadState = .failed(DownloaderCopy.settingsUnreadable)
             statusMessage = nil
             return
         }

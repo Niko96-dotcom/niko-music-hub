@@ -39,6 +39,8 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
     /// Retry exited 0 with zero outputs after an earlier attempt produced
     /// verified files; those files stay published on the job.
     case retryProducedNoOutput
+    /// Stored settings could not be read; the download never starts on defaults.
+    case settingsUnreadable
 
     public var errorDescription: String? {
         switch self {
@@ -54,6 +56,8 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
             return "No output files found after download."
         case .retryProducedNoOutput:
             return "The retry finished without new files. Files from the earlier attempt were kept."
+        case .settingsUnreadable:
+            return DownloaderCopy.settingsUnreadable
         }
     }
 }
@@ -67,7 +71,7 @@ extension DownloadUseCaseError: JobFailureReasonProviding {
             return .downloaderHelperUnavailable
         case .alreadyDownloaded:
             return .downloadAlreadyExists
-        case .failed, .unsupportedURL, .outputNotFound, .retryProducedNoOutput:
+        case .failed, .unsupportedURL, .outputNotFound, .retryProducedNoOutput, .settingsUnreadable:
             return nil
         }
     }
@@ -102,7 +106,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
     }
 
     public func simulateAndEnqueue(url: URL, options: DownloadJobOptions) async throws -> Job {
-        let settings = try settingsStore.loadSettings()
+        let settings = try loadSettingsForDownload()
 
         let availability = await healthChecker.availability(settings: settings.helperTools)
         switch availability {
@@ -205,7 +209,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
         for attempt in 0..<options.retries {
             do {
-                let settings = try settingsStore.loadSettings()
+                let settings = try loadSettingsForDownload()
                 guard let ytDlpURL = healthChecker.resolvedYtDlpURL(settings: settings.helperTools) else {
                     throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
                 }
@@ -384,6 +388,16 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
     static func parseProgress(from line: String) -> Double? {
         DownloaderProgressParsing.parseNormalizedProgress(from: line)
+    }
+
+    /// Unreadable settings refuse the download with a plain sentence instead of
+    /// the decoding error; the helper and output paths are never guessed.
+    private func loadSettingsForDownload() throws -> AppSettings {
+        do {
+            return try settingsStore.loadSettings()
+        } catch {
+            throw DownloadUseCaseError.settingsUnreadable
+        }
     }
 
     private static func isRetryable(error: Error) -> Bool {
