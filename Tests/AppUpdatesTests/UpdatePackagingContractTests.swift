@@ -184,12 +184,12 @@ final class UpdatePackagingContractTests: XCTestCase {
         XCTAssertTrue(package.contains("exact: \"2.9.6\""), "Sparkle must be pinned to an exact version")
         XCTAssertTrue(package.contains("name: \"AppUpdates\""))
 
-        let appCoreTarget = try XCTUnwrap(package.range(of: """
-                .target(
-                    name: "AppCore",
-                    dependencies: ["NikoMusicCore"]
-                ),
-        """.trimmingCharacters(in: .whitespacesAndNewlines)))
+        // The AppCore target declaration up to its first closing parenthesis; a
+        // `.product(name: "Sparkle", ...)` dependency would still fall inside it.
+        let appCoreTarget = try XCTUnwrap(package.range(
+            of: #"\.target\(\s*name:\s*"AppCore",[^)]*\)"#,
+            options: .regularExpression
+        ))
         XCTAssertFalse(
             package[appCoreTarget].contains("Sparkle"),
             "AppCore must not link Sparkle"

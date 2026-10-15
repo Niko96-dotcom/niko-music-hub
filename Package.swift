@@ -2,6 +2,15 @@
 
 import PackageDescription
 
+// Every target builds with warnings as errors, in every build: `swift build`,
+// `swift test`, ./script/ci.sh, ci-release.sh and the app bundle. Clean-build
+// warnings were cleared by hand twice (77d2d6d, 2e79a4f) and came back, and an
+// unused non-discardable result (a refused save) is only a warning otherwise.
+// PackageSettingsSourceTests fails when a target leaves this out.
+let strictSwiftSettings: [SwiftSetting] = [
+    .unsafeFlags(["-warnings-as-errors"])
+]
+
 let package = Package(
     name: "NikoMusicHub",
     platforms: [
@@ -65,52 +74,63 @@ let package = Package(
     targets: [
         .target(
             name: "AppCore",
-            dependencies: ["NikoMusicCore"]
+            dependencies: ["NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "AppUpdates",
             dependencies: [
                 "AppCore",
                 .product(name: "Sparkle", package: "Sparkle")
-            ]
+            ],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "NikoMusicCore",
+            swiftSettings: strictSwiftSettings,
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]
         ),
         .executableTarget(
             name: "NikoMusicCoreSelfTest",
-            dependencies: ["NikoMusicCore"]
+            dependencies: ["NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .executableTarget(
             name: "NikoMusicHubCLI",
-            dependencies: ["NikoMusicCore"]
+            dependencies: ["NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureBPMTapper",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureAudioConverter",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureAudioRecorder",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureDownloader",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureArchiveBrowser",
-            dependencies: ["AppCore", "NikoMusicCore"]
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .target(
             name: "FeatureStemSeparation",
-            dependencies: ["AppCore", "FeatureDownloader", "NikoMusicCore"]
+            dependencies: ["AppCore", "FeatureDownloader", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .executableTarget(
             name: "NikoMusicHub",
@@ -124,46 +144,56 @@ let package = Package(
                 "FeatureAudioRecorder",
                 "FeatureDownloader",
                 "FeatureStemSeparation"
-            ]
+            ],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "AppCoreTests",
-            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser"]
+            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "AppUpdatesTests",
-            dependencies: ["AppUpdates", "AppCore"]
+            dependencies: ["AppUpdates", "AppCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "NikoMusicCoreTests",
-            dependencies: ["NikoMusicCore"]
+            dependencies: ["NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureBPMTapperTests",
-            dependencies: ["FeatureBPMTapper"]
+            dependencies: ["FeatureBPMTapper"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureAudioConverterTests",
-            dependencies: ["FeatureAudioConverter", "AppCore"]
+            dependencies: ["FeatureAudioConverter", "AppCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureAudioRecorderTests",
-            dependencies: ["FeatureAudioRecorder", "AppCore"]
+            dependencies: ["FeatureAudioRecorder", "AppCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureDownloaderTests",
-            dependencies: ["FeatureDownloader", "AppCore"]
+            dependencies: ["FeatureDownloader", "AppCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureArchiveBrowserTests",
-            dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore"]
+            dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore"],
+            swiftSettings: strictSwiftSettings
         ),
         .testTarget(
             name: "FeatureStemSeparationTests",
             dependencies: ["FeatureStemSeparation", "AppCore"],
             resources: [
                 .process("Fixtures")
-            ]
+            ],
+            swiftSettings: strictSwiftSettings
         )
     ]
 )

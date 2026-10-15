@@ -258,8 +258,10 @@ public final class AudioRecorderViewModel: ObservableObject {
 
                 if !Task.isCancelled,
                    recordingState == .recording || recordingState == .reconnecting {
-                    Task { @MainActor [weak self] in
-                        await self?.stopRecording()
+                    // The recording task already holds self; a separate task keeps
+                    // stopRecording from awaiting the task it runs in.
+                    Task { @MainActor in
+                        await self.stopRecording()
                     }
                 }
             } catch is CancellationError {

@@ -12,14 +12,14 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
     private var tempRoot: URL!
     private var suiteName: String!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-snapshot-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         suiteName = "recorder-snapshot-\(UUID().uuidString)"
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempRoot)
         UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
     }
