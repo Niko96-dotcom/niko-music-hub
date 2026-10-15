@@ -31,9 +31,9 @@ public struct AudioRecorderFeature: ToolFeature {
         }
         let capturePort = CoreAudioTapAdapter()
         let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
-        // Display-only value: tolerant of unreadable settings. Anything that
-        // gates a write goes through `destinationProvider` below.
-        let settings = (try? context.settingsStore.loadSettings()) ?? .default
+        // Display-only value from the shared observer. Anything that gates a
+        // write goes through `destinationProvider` below.
+        let settings = context.appSettings.settings
         let viewModel = AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: useCase,

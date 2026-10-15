@@ -109,8 +109,6 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 7,
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
         "Sources/FeatureAudioConverter/AudioConverterViewModel.swift": 3,
-        "Sources/FeatureAudioRecorder/AudioRecorderFeature.swift": 1,
-        "Sources/FeatureAudioRecorder/AudioRecorderView.swift": 1,
         "Sources/FeatureDownloader/DownloaderViewModel.swift": 1,
         "Sources/FeatureStemSeparation/StemSeparationFeature.swift": 1,
         "Sources/FeatureStemSeparation/StemSeparationViewModel.swift": 1,

@@ -434,8 +434,7 @@ public struct AudioRecorderView: View {
             case .revealInFinder:
                 // NMH-043: the write-error card's Show Output Folder action
                 // reveals the output folder; it must not fall through to break.
-                let settings = (try? context.settingsStore.loadSettings()) ?? .default
-                context.fileActions.revealInFinder(settings.outputFolder.url)
+                context.fileActions.revealInFinder(appSettings.settings.outputFolder.url)
             case .dismiss:
                 viewModel.dismissError()
             case .openHubSettingsHelpers, .installHelperTools, .chooseToolPath, .openTerminal, .clearHistory:
