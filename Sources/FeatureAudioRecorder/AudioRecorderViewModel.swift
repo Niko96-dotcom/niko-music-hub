@@ -48,16 +48,15 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
     return markers.contains { lowered.contains($0) }
 }
 
-/// Where a take goes and which roots stay write-protected, read together from
-/// one settings snapshot. `protectedRoots == nil` defers to the use case's own
-/// provider (used by tests and the smoke harness with no settings store).
+/// Where a take goes and the guard that admits it, read together from one
+/// settings snapshot.
 public struct RecordingDestination: Sendable {
     public let folder: URL
-    public let protectedRoots: [URL]?
+    public let outputGuard: ToolOutputGuard
 
-    public init(folder: URL, protectedRoots: [URL]? = nil) {
+    public init(folder: URL, outputGuard: ToolOutputGuard) {
         self.folder = folder
-        self.protectedRoots = protectedRoots
+        self.outputGuard = outputGuard
     }
 
     /// One throwing settings read. `loadSettings()` returns defaults when
@@ -67,7 +66,7 @@ public struct RecordingDestination: Sendable {
         let settings = try settingsStore.loadSettings()
         return RecordingDestination(
             folder: settings.outputFolder.url,
-            protectedRoots: settings.outputProtectedRoots
+            outputGuard: ToolOutputGuard(settings: settings)
         )
     }
 }
@@ -131,6 +130,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
         outputURL: URL,
+        outputGuard: ToolOutputGuard,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
@@ -139,7 +139,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.init(
             capturePort: capturePort,
             useCase: useCase,
-            destinationProvider: { RecordingDestination(folder: outputURL) },
+            destinationProvider: { RecordingDestination(folder: outputURL, outputGuard: outputGuard) },
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDurationMinutes,
             jobStatusCenter: jobStatusCenter,
@@ -225,7 +225,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             preset: .cubaseDefault,
             maxDuration: maxDuration,
             filenameOverride: filenameOverride.isEmpty ? nil : filenameOverride,
-            protectedRoots: destination.protectedRoots
+            outputGuard: destination.outputGuard
         )
         let fileURL: URL
         do {

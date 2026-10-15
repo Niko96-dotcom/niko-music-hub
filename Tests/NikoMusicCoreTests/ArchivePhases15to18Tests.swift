@@ -180,7 +180,8 @@ final class ArchivePhases15to18Tests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let song = try NewSongFolderCreator.create(
-            request: NewSongRequest(name: "Fresh Track", root: root, appNote: "seed")
+            request: NewSongRequest(name: "Fresh Track", root: root, appNote: "seed"),
+            protectedRoots: []
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: song.folderPath.path))
         XCTAssertTrue(FileManager.default.fileExists(
@@ -200,7 +201,8 @@ final class ArchivePhases15to18Tests: XCTestCase {
 
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
-                request: NewSongRequest(name: "../Outside", root: root)
+                request: NewSongRequest(name: "../Outside", root: root),
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .invalidName)

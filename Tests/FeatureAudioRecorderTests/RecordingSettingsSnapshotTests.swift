@@ -67,7 +67,8 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         let destination = try RecordingDestination.load(from: store)
 
         XCTAssertEqual(destination.folder, StoredFolderLocation.defaultOutputFolder)
-        XCTAssertEqual(destination.protectedRoots, [])
+        // Nothing saved means no music roots, so no folder is refused.
+        XCTAssertNoThrow(try destination.outputGuard.validate(tempRoot))
     }
 
     func testDestinationInsideProtectedRootFromReadableSnapshotIsRefused() async throws {

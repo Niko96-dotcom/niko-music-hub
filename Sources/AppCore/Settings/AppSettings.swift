@@ -488,8 +488,9 @@ public struct AppSettings: Equatable, Codable, Sendable {
     /// Folders no tool may write output into: every configured music root, whatever its
     /// role, enabled state or the Vault switch. Browsing hides Vault roots while Vault is
     /// off; that must not make retained archive generations writable, because a stray
-    /// output inside one breaks its manifest and blocks verified restore.
-    public var outputProtectedRoots: [URL] {
+    /// output inside one breaks its manifest and blocks verified restore. Tools reach it
+    /// only through `ToolOutputGuard(settings:)`.
+    var outputProtectedRoots: [URL] {
         musicRoots.map(\.fallbackURL)
     }
 

@@ -17,6 +17,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: directory,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: InMemoryOutputInboxStore()
         )
         let recording = expectation(description: "recording only after readiness")
@@ -45,6 +46,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: outputInboxStore
         )
 
@@ -65,6 +67,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: outputInboxStore
         )
 
@@ -86,6 +89,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: outputInboxStore
         )
 
@@ -115,6 +119,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: outputInboxStore
         )
 
@@ -142,6 +147,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: InMemoryOutputInboxStore(),
             now: { frozen }
         )
@@ -159,6 +165,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: useCase,
             outputURL: URL(fileURLWithPath: "/tmp"),
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: 90
         )
@@ -178,6 +185,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -203,6 +211,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -231,6 +240,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -257,6 +267,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: missingOutputDirectory,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -284,6 +295,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -308,6 +320,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
         vm.maxDurationMinutes = 1
@@ -343,6 +356,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox,
             jobStatusCenter: center
         )
@@ -390,6 +404,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -416,6 +431,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -446,6 +462,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -472,6 +489,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: InMemoryOutputInboxStore()
         )
 
@@ -530,6 +548,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -560,6 +579,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -594,6 +614,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 
@@ -631,6 +652,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
             outputURL: tempDir,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
 

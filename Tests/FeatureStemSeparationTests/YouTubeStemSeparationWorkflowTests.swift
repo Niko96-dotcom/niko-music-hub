@@ -16,7 +16,8 @@ struct YouTubeStemSeparationWorkflowTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(
@@ -50,7 +51,8 @@ struct YouTubeStemSeparationWorkflowTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(
@@ -91,7 +93,7 @@ struct YouTubeStemSeparationWorkflowTests {
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
             jobRunner: runner,
-            archiveRootsProvider: { [configuredArchiveAlias] }
+            outputGuardProvider: { .protecting([configuredArchiveAlias]) }
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(

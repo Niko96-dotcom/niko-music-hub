@@ -8,34 +8,28 @@ public final class RecordSystemAudioUseCase: Sendable {
         public let preset: AudioPreset
         public let maxDuration: TimeInterval?
         public let filenameOverride: String?
-        /// Protected roots from the same settings snapshot as `outputURL`.
-        /// When nil the use case falls back to its `archiveRootsProvider`.
-        public let protectedRoots: [URL]?
+        /// Built from the same settings snapshot as `outputURL`.
+        public let outputGuard: ToolOutputGuard
 
         public init(
             outputURL: URL,
             preset: AudioPreset,
             maxDuration: TimeInterval? = 1800,
             filenameOverride: String? = nil,
-            protectedRoots: [URL]? = nil
+            outputGuard: ToolOutputGuard
         ) {
             self.outputURL = outputURL
             self.preset = preset
             self.maxDuration = maxDuration
             self.filenameOverride = filenameOverride
-            self.protectedRoots = protectedRoots
+            self.outputGuard = outputGuard
         }
     }
 
     private let capturePort: AudioCapturePort
-    private let archiveRootsProvider: @Sendable () -> [URL]
 
-    public init(
-        capturePort: AudioCapturePort,
-        archiveRootsProvider: @escaping @Sendable () -> [URL] = { [] }
-    ) {
+    public init(capturePort: AudioCapturePort) {
         self.capturePort = capturePort
-        self.archiveRootsProvider = archiveRootsProvider
     }
 
     public func resolvedOutputURL(config: Config) -> URL {
@@ -48,22 +42,15 @@ public final class RecordSystemAudioUseCase: Sendable {
     }
 
     public func prepareOutputURL(config: Config) throws -> URL {
-        try validateOutputLocation(config.outputURL, protectedRoots: config.protectedRoots)
+        try config.outputGuard.validate(config.outputURL)
         let finalURL = resolvedOutputURL(config: config)
-        try ensureOutputDirectoryExists(for: finalURL, protectedRoots: config.protectedRoots)
+        try ensureOutputDirectoryExists(for: finalURL, outputGuard: config.outputGuard)
         return finalURL
     }
 
-    private func validateOutputLocation(_ outputFolder: URL, protectedRoots: [URL]?) throws {
-        try OutputWriteGuard().validateCanWriteOutput(
-            to: outputFolder,
-            archiveRoots: protectedRoots ?? archiveRootsProvider()
-        )
-    }
-
-    public func ensureOutputDirectoryExists(for fileURL: URL, protectedRoots: [URL]? = nil) throws {
+    public func ensureOutputDirectoryExists(for fileURL: URL, outputGuard: ToolOutputGuard) throws {
         let outputDirectory = fileURL.deletingLastPathComponent()
-        try validateOutputLocation(outputDirectory, protectedRoots: protectedRoots)
+        try outputGuard.validate(outputDirectory)
         do {
             try FileManager.default.createDirectory(
                 at: outputDirectory,

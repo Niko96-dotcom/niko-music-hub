@@ -1,0 +1,147 @@
+import Foundation
+import XCTest
+
+/// Where a write may land is decided by two owners: `ToolOutputGuard(settings:)` for tool
+/// output and `ArchiveBrowserViewModel.writeProtectedRoots()` for the archive browser's
+/// exports and New Song. Writers that chose their own roots shipped five times: the
+/// browse list as protection (604025d, e26f73c, fda0cb9) and defaults after an unreadable
+/// settings load (e2135e6, 89ff277).
+final class OutputGuardSourceTests: XCTestCase {
+    func testOnlyToolOutputGuardUsesOutputWriteGuard() throws {
+        let failures = try Self.appSourceFiles(excluding: Self.outputWriteGuardOwners).flatMap { file in
+            Self.lines(matching: Self.outputWriteGuardUse, in: SourceLex.stripped(try SourceTestSupport.read(file)))
+                .map { "\(file):\($0)" }
+        }
+        XCTAssertEqual(
+            failures,
+            [],
+            "Admit tool output with ToolOutputGuard(settings:).validate(_:) "
+                + "(Sources/AppCore/Settings/ToolOutputGuard.swift), not OutputWriteGuard:\n"
+                + failures.joined(separator: "\n")
+        )
+    }
+
+    func testNoWriterPassesTheBrowseListOrNothingAsProtection() throws {
+        let failures = try Self.appSourceFiles(excluding: []).flatMap { file in
+            Self.lines(matching: Self.browseListAsProtection, in: SourceLex.stripped(try SourceTestSupport.read(file)))
+                .map { "\(file):\($0)" }
+        }
+        XCTAssertEqual(
+            failures,
+            [],
+            "These pass the browse list (or nothing) as write protection, which leaves Vault roots "
+                + "writable while Vault is off. Tools use ToolOutputGuard(settings:); the archive "
+                + "browser uses writeProtectedRoots():\n" + failures.joined(separator: "\n")
+        )
+    }
+
+    /// `try? …loadSettings()` turns unreadable settings into "no settings", and a write
+    /// guard built from that protects nothing. Existing sites are counted per file; a file
+    /// may lose sites, never gain them.
+    func testNoNewTryOptionalSettingsLoads() throws {
+        var failures: [String] = []
+        var seen: Set<String> = []
+        for file in try Self.appSourceFiles(excluding: []) {
+            let count = Self.lines(matching: Self.tryOptionalSettingsLoad, in: SourceLex.stripped(try SourceTestSupport.read(file))).count
+            let allowed = Self.tryOptionalSettingsLoadBaseline[file] ?? 0
+            if count > 0 { seen.insert(file) }
+            if count > allowed {
+                failures.append("\(file): \(count) `try? …loadSettings()` (baseline \(allowed)). Load with `try` and refuse the action when it throws; display-only code reads ToolContext.appSettings.")
+            } else if count < allowed {
+                failures.append("\(file): \(count) `try? …loadSettings()`, below its baseline \(allowed). Lower the baseline in OutputGuardSourceTests to \(count).")
+            }
+        }
+        for file in Set(Self.tryOptionalSettingsLoadBaseline.keys).subtracting(seen) {
+            failures.append("\(file): no `try? …loadSettings()` left. Remove it from the baseline in OutputGuardSourceTests.")
+        }
+        XCTAssertEqual(failures.sorted(), [], failures.sorted().joined(separator: "\n"))
+    }
+
+    /// The detectors must catch the shipped mistakes, or they guard nothing.
+    func testDetectorsCatchTheShippedMistakes() {
+        func hits(_ pattern: NSRegularExpression, _ line: String) -> Int {
+            Self.lines(matching: pattern, in: SourceLex.stripped(line)).count
+        }
+        // 604025d^: the converter, downloader and recorder protected the browse list.
+        let converter = "try OutputWriteGuard().validateCanWriteOutput(to: settings.outputFolder.url, archiveRoots: settings.archiveRoots.map(\\.url))"
+        XCTAssertEqual(hits(Self.outputWriteGuardUse, converter), 1)
+        XCTAssertEqual(hits(Self.browseListAsProtection, converter), 1)
+        // fda0cb9^: exports and New Song protected only the browsed roots.
+        XCTAssertEqual(hits(Self.browseListAsProtection, "try policy.enforceNoWrite(at: destination, archiveRoots: roots)"), 1)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)"), 1)
+        // e2135e6^: the recorder took its destination and roots from defaults on a failed load.
+        XCTAssertEqual(hits(Self.tryOptionalSettingsLoad, "let settings = (try? context.settingsStore.loadSettings()) ?? .default"), 1)
+
+        XCTAssertEqual(hits(Self.outputWriteGuardUse, "try ToolOutputGuard(settings: settings).validate(folder)"), 0)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "archiveRoots: try writeProtectedRoots(),"), 0)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "public init(folder: URL, protectedRoots: [URL]) {"), 0)
+        XCTAssertEqual(hits(Self.tryOptionalSettingsLoad, "let settings = try settingsStore.loadSettings()"), 0)
+    }
+
+    // MARK: - Detectors
+
+    /// NikoMusicCore implements the policy; ToolOutputGuard is the app's one entry point.
+    static let outputWriteGuardOwners: Set<String> = ["Sources/AppCore/Settings/ToolOutputGuard.swift"]
+
+    private static let outputWriteGuardUse = try! NSRegularExpression(pattern: #"\bOutputWriteGuard\b"#)
+
+    private static let browseListAsProtection = try! NSRegularExpression(
+        pattern: #"\b(?:archiveRoots|protectedRoots)\s*:\s*(?:try\s+)?(?:self\.)?(?:roots\b|\[\]|[A-Za-z_][\w.]*\.(?:archiveRoots|effectiveScanRoots)\b)"#
+    )
+
+    private static let tryOptionalSettingsLoad = try! NSRegularExpression(
+        pattern: #"\btry\?\s*[A-Za-z_][\w.?]*\.loadSettings\(\)"#
+    )
+
+    /// Grandfathered `try? …loadSettings()` sites (2026-10-15). Lower a number when you
+    /// remove a site; never raise one.
+    static let tryOptionalSettingsLoadBaseline: [String: Int] = [
+        "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Recovery.swift": 1,
+        "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Snapshots.swift": 1,
+        "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
+        "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
+        "Sources/AppCore/Shell/HubShellSession.swift": 1,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Exports.swift": 1,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultArchive.swift": 2,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultIdentityReview.swift": 1,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 7,
+        "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
+        "Sources/FeatureAudioConverter/AudioConverterViewModel.swift": 3,
+        "Sources/FeatureAudioRecorder/AudioRecorderFeature.swift": 1,
+        "Sources/FeatureAudioRecorder/AudioRecorderView.swift": 1,
+        "Sources/FeatureDownloader/DownloaderViewModel.swift": 1,
+        "Sources/FeatureStemSeparation/StemSeparationFeature.swift": 1,
+        "Sources/FeatureStemSeparation/StemSeparationViewModel.swift": 1,
+        "Sources/NikoMusicHub/AppComposition.swift": 4,
+        "Sources/NikoMusicHub/AppShell/HelperToolsHealthStrip.swift": 1,
+        "Sources/NikoMusicHub/DevTool/DevToolFeature.swift": 2,
+    ]
+
+    static func lines(matching pattern: NSRegularExpression, in strippedSource: String) -> [String] {
+        let ns = strippedSource as NSString
+        return pattern.matches(in: strippedSource, range: NSRange(location: 0, length: ns.length)).map { match in
+            let line = ns.substring(to: match.range.location).components(separatedBy: "\n").count
+            return "\(line): \(ns.substring(with: match.range))"
+        }
+    }
+
+    /// App sources outside NikoMusicCore (which implements the policy) and the CLI
+    /// (whose roots are the archive it was given).
+    private static func appSourceFiles(excluding excluded: Set<String>) throws -> [String] {
+        let root = SourceTestSupport.packageRoot.standardizedFileURL.path
+        let sources = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
+        guard let enumerator = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        let files = enumerator.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .map { String($0.standardizedFileURL.path.dropFirst(root.count + 1)) }
+            .filter { !$0.hasPrefix("Sources/NikoMusicCore/") && !$0.hasPrefix("Sources/NikoMusicHubCLI/") }
+            .filter { !excluded.contains($0) }
+            .sorted()
+        XCTAssertGreaterThan(files.count, 100, "Sources/ walk found too few files")
+        return files
+    }
+}

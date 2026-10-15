@@ -33,7 +33,7 @@ public enum NewSongFolderCreator {
     public static func create(
         request: NewSongRequest,
         fileManager: FileManager = .default,
-        protectedRoots: [URL] = []
+        protectedRoots: [URL]
     ) throws -> Song {
         try create(
             request: request,

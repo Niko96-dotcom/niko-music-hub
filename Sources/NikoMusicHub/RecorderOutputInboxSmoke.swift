@@ -19,6 +19,8 @@ enum RecorderOutputInboxSmoke {
             capturePort: capturePort,
             useCase: RecordSystemAudioUseCase(capturePort: capturePort),
             outputURL: outputDirectory,
+            // A temporary folder outside every music root; nothing to protect.
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inboxStore
         )
 

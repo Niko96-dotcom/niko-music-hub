@@ -4,9 +4,9 @@ import NikoMusicCore
 import XCTest
 
 final class VaultSettingsTests: XCTestCase {
-    /// ENG-10 pin: the converter, downloader, stems and recorder hand `outputProtectedRoots`
-    /// to `OutputWriteGuard`. Turning Vault off hides its roots from browsing only; the
-    /// retained archive stays write-protected.
+    /// ENG-10 pin: the converter, downloader, stems, recorder and Settings picker admit
+    /// output through `ToolOutputGuard`. Turning Vault off hides its roots from browsing
+    /// only; every configured root, the retained archive included, stays write-protected.
     func testToolOutputGuardRootsKeepVaultRootsWhateverTheVaultSwitch() throws {
         let archive = StoredMusicRoot(role: .archive, url: URL(fileURLWithPath: "/tmp/nmh-t23/VaultArchive"))
         let active = StoredMusicRoot(role: .active, url: URL(fileURLWithPath: "/tmp/nmh-t23/Active"))
@@ -16,23 +16,20 @@ final class VaultSettingsTests: XCTestCase {
         settings.vault.archiveRootID = archive.id
         settings.vault.activeRootID = active.id
         let generation = archive.fallbackURL.appendingPathComponent("Song/generation-1", isDirectory: true)
-        let allRoots = Set([archive, active, scanOnly].map(\.fallbackURL.path))
-
         for vaultOn in [true, false] {
             settings.vault.isEnabled = vaultOn
-            XCTAssertEqual(Set(settings.outputProtectedRoots.map(\.path)), allRoots, "vault on: \(vaultOn)")
-            XCTAssertThrowsError(
-                try OutputWriteGuard().validateCanWriteOutput(
-                    to: generation,
-                    archiveRoots: settings.outputProtectedRoots
-                ),
-                "vault on: \(vaultOn)"
-            )
+            let outputGuard = ToolOutputGuard(settings: settings)
+            for root in [archive, active, scanOnly] {
+                XCTAssertThrowsError(
+                    try outputGuard.validate(root.fallbackURL),
+                    "\(root.role) root, vault on: \(vaultOn)"
+                )
+            }
+            XCTAssertThrowsError(try outputGuard.validate(generation), "vault on: \(vaultOn)")
         }
         XCTAssertNoThrow(
-            try OutputWriteGuard().validateCanWriteOutput(
-                to: URL(fileURLWithPath: "/tmp/nmh-t23/Output", isDirectory: true),
-                archiveRoots: settings.outputProtectedRoots
+            try ToolOutputGuard(settings: settings).validate(
+                URL(fileURLWithPath: "/tmp/nmh-t23/Output", isDirectory: true)
             )
         )
 

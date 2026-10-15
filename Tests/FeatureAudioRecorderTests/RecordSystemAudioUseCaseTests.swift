@@ -12,7 +12,8 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
             outputURL: tempDir,
             preset: .cubaseDefault,
             maxDuration: 1.0,
-            filenameOverride: nil
+            filenameOverride: nil,
+            outputGuard: ToolOutputGuard(settings: .default)
         )
 
         let result = try await useCase.execute(config: config)
@@ -87,7 +88,8 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         let resolved = useCase.resolvedOutputURL(config: .init(
             outputURL: outputDirectory,
             preset: .cubaseDefault,
-            filenameOverride: "../Outside.mp3"
+            filenameOverride: "../Outside.mp3",
+            outputGuard: ToolOutputGuard(settings: .default)
         ))
 
         XCTAssertEqual(resolved.deletingLastPathComponent().standardizedFileURL, outputDirectory.standardizedFileURL)
@@ -105,7 +107,8 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         let resolved = useCase.resolvedOutputURL(config: .init(
             outputURL: outputDirectory,
             preset: .cubaseDefault,
-            filenameOverride: "Take.mp3"
+            filenameOverride: "Take.mp3",
+            outputGuard: ToolOutputGuard(settings: .default)
         ))
 
         XCTAssertEqual(resolved.lastPathComponent, "Take (1).wav")
@@ -120,7 +123,8 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         let resolved = useCase.resolvedOutputURL(config: .init(
             outputURL: outputDirectory,
             preset: .cubaseDefault,
-            filenameOverride: "../Outside.wav"
+            filenameOverride: "../Outside.wav",
+            outputGuard: ToolOutputGuard(settings: .default)
         ))
 
         XCTAssertEqual(resolved.deletingLastPathComponent().standardizedFileURL, outputDirectory.standardizedFileURL)
@@ -135,7 +139,7 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
         let fileURL = outputDirectory.appendingPathComponent("Recording.wav")
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try useCase.ensureOutputDirectoryExists(for: fileURL)
+        try useCase.ensureOutputDirectoryExists(for: fileURL, outputGuard: ToolOutputGuard(settings: .default))
 
         var isDirectory: ObjCBool = false
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputDirectory.path, isDirectory: &isDirectory))

@@ -51,10 +51,7 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
     ) async throws -> [BatchAudioConversionOutcome] {
         guard !files.isEmpty else { return [] }
 
-        try OutputWriteGuard().validateCanWriteOutput(
-            to: settings.outputFolder.url,
-            archiveRoots: settings.outputProtectedRoots
-        )
+        try ToolOutputGuard(settings: settings).validate(settings.outputFolder.url)
         let converter = converterFactory(settings)
         var outcomes: [BatchAudioConversionOutcome] = []
 

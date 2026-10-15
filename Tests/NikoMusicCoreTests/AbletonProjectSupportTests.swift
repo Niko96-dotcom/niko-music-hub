@@ -88,7 +88,8 @@ final class AbletonProjectSupportTests: XCTestCase {
         let manifest = try VaultManifestBuilder().build(at: template)
         let song = try NewSongFolderCreator.create(request: NewSongRequest(
             name: "New Song", root: fixture.root.appendingPathComponent("Drafts"), templateFolder: template
-        ))
+        ),
+            protectedRoots: [])
         XCTAssertEqual(song.projectFormats, [.abletonLive])
         XCTAssertEqual(song.effectiveLatestProject?.fileName, "Starting Point.als")
         XCTAssertEqual(try Data(contentsOf: song.folderPath.appendingPathComponent("Samples/Collected/take.wav")), Data("fixture".utf8))

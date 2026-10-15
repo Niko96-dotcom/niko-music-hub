@@ -8,21 +8,20 @@ public struct StemSeparationService: Sendable {
     private let backend: any StemSeparationBackend
     private let outputInboxStore: any OutputInboxStore
     private let jobRunner: any JobRunning
-    private let archiveRootsProvider: @Sendable () throws -> [URL]
-    private let outputWriteGuard: OutputWriteGuard
+    private let outputGuardProvider: @Sendable () throws -> ToolOutputGuard
 
+    /// `outputGuardProvider` loads settings with `try` at job time, so a cached tool
+    /// session honors current settings and unreadable settings refuse the job.
     public init(
         backend: any StemSeparationBackend,
         outputInboxStore: any OutputInboxStore,
         jobRunner: any JobRunning,
-        archiveRootsProvider: @escaping @Sendable () throws -> [URL] = { [] },
-        outputWriteGuard: OutputWriteGuard = OutputWriteGuard()
+        outputGuardProvider: @escaping @Sendable () throws -> ToolOutputGuard
     ) {
         self.backend = backend
         self.outputInboxStore = outputInboxStore
         self.jobRunner = jobRunner
-        self.archiveRootsProvider = archiveRootsProvider
-        self.outputWriteGuard = outputWriteGuard
+        self.outputGuardProvider = outputGuardProvider
     }
 
     @discardableResult
@@ -172,10 +171,7 @@ public struct StemSeparationService: Sendable {
     /// Enforces the archive write boundary before a workflow creates output folders.
     /// The provider is read at job time so cached tool sessions still honor current settings.
     func validateOutputDirectory(_ outputDirectoryURL: URL) throws {
-        try outputWriteGuard.validateCanWriteOutput(
-            to: outputDirectoryURL,
-            archiveRoots: try archiveRootsProvider()
-        )
+        try outputGuardProvider().validate(outputDirectoryURL)
     }
 
     private func sanitizedTitle(_ title: String) -> String {

@@ -209,10 +209,7 @@ final class HubSettingsSession: ObservableObject {
         }
         guard let folder = context.fileActions.chooseOutputFolder() else { return }
         do {
-            try OutputWriteGuard().validateCanWriteOutput(
-                to: folder,
-                archiveRoots: settings.outputProtectedRoots
-            )
+            try ToolOutputGuard(settings: settings).validate(folder)
         } catch {
             saveError = error.localizedDescription
             return

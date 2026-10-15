@@ -55,7 +55,7 @@ final class NewSongFolderCreatorTests: XCTestCase {
         // would disappear on the next scan; ":" renders as "/" in Finder.
         for name in [".Hidden Draft", "Mix: Final"] {
             XCTAssertThrowsError(
-                try NewSongFolderCreator.create(request: NewSongRequest(name: name, root: root), fileManager: fm),
+                try NewSongFolderCreator.create(request: NewSongRequest(name: name, root: root), fileManager: fm, protectedRoots: []),
                 name
             ) { error in
                 XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .invalidName, name)
@@ -72,7 +72,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Unsafe", root: root, templateFolder: root),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateOverlap)
@@ -90,7 +91,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Ancestor", root: root, templateFolder: base),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateOverlap)
@@ -102,7 +104,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Descendant", root: root, templateFolder: nestedTemplate),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateOverlap)
@@ -118,7 +121,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Missing", root: root, templateFolder: missing),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateMissing)
@@ -130,7 +134,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Unreadable", root: root, templateFolder: fileTemplate),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateUnreadable)
@@ -184,7 +189,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
         XCTAssertThrowsError(
             try NewSongFolderCreator.create(
                 request: NewSongRequest(name: "Conflict", root: root, templateFolder: template),
-                fileManager: fm
+                fileManager: fm,
+                protectedRoots: []
             )
         ) { error in
             XCTAssertEqual(error as? NewSongFolderCreator.CreationError, .templateConflict("Mixdown"))
@@ -202,7 +208,8 @@ final class NewSongFolderCreatorTests: XCTestCase {
             do {
                 let song = try NewSongFolderCreator.create(
                     request: NewSongRequest(name: "Only Once", root: root),
-                    fileManager: .default
+                    fileManager: .default,
+                    protectedRoots: []
                 )
                 results.append(.success(song.folderPath))
             } catch {

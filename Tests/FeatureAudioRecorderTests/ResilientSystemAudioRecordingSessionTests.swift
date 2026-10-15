@@ -329,6 +329,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             capturePort: adapter,
             useCase: RecordSystemAudioUseCase(capturePort: adapter),
             outputURL: directory,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
         let recording = expectation(description: "view model becomes recording after fallback PCM")
@@ -822,6 +823,7 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
             capturePort: adapter,
             useCase: RecordSystemAudioUseCase(capturePort: adapter),
             outputURL: directory,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
         return (viewModel, inbox, directory)

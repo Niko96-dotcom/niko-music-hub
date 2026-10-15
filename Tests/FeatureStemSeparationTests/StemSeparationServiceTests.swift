@@ -13,7 +13,8 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
         )
         return (service, runner, inbox)
     }
@@ -129,7 +130,7 @@ struct StemSeparationServiceTests {
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
         let inbox = try makeRealInbox()
         let runner = JobRunner()
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
 
         let job = service.startJob(request: StemSeparationRequest(
@@ -152,7 +153,7 @@ struct StemSeparationServiceTests {
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
         let inbox = FailingBatchInboxStore(underlying: try makeRealInbox())
         let runner = JobRunner()
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let request = StemSeparationRequest(inputURL: makeInputFile(), outputRootURL: root, preset: .fast4)
 
@@ -237,7 +238,8 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
         )
         let input = makeInputFile()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -311,7 +313,7 @@ struct StemSeparationServiceTests {
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
             jobRunner: runner,
-            archiveRootsProvider: { [configuredArchiveAlias] }
+            outputGuardProvider: { .protecting([configuredArchiveAlias]) }
         )
 
         let job = service.startJob(
@@ -325,7 +327,7 @@ struct StemSeparationServiceTests {
     }
 
     // B-002: every configured music root stays write-protected for stem output while the
-    // Vault switch is OFF. The provider is the real `outputProtectedRoots` projection.
+    // Vault switch is OFF. The guard is built from those settings, as the app builds it.
     @Test
     func startJob_vaultOffRefusesArchiveOutputAndAliasBeforeDirectoryOrBackend() async throws {
         let fixture = try VaultOffOutputFixture()
@@ -341,7 +343,7 @@ struct StemSeparationServiceTests {
                 backend: backend,
                 outputInboxStore: inbox,
                 jobRunner: runner,
-                archiveRootsProvider: { settings.outputProtectedRoots }
+                outputGuardProvider: { ToolOutputGuard(settings: settings) }
             )
 
             let job = service.startJob(
@@ -374,7 +376,7 @@ struct StemSeparationServiceTests {
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
             jobRunner: runner,
-            archiveRootsProvider: { settings.outputProtectedRoots }
+            outputGuardProvider: { ToolOutputGuard(settings: settings) }
         )
 
         let job = service.startJob(
@@ -417,7 +419,8 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: .default) }
         )
 
         let job = service.startJob(

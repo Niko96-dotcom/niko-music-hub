@@ -28,6 +28,7 @@ final class RecorderHardwareUATTests: XCTestCase {
             capturePort: capturePort,
             useCase: RecordSystemAudioUseCase(capturePort: capturePort),
             outputURL: outputDirectory,
+            outputGuard: ToolOutputGuard(settings: .default),
             outputInboxStore: inbox
         )
         await viewModel.startRecording()
