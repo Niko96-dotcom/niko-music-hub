@@ -53,11 +53,14 @@ extension ArchiveBrowserViewModel {
         guard let presentation = identityReviewPresentation else { return }
         guard identityReviewViewModel.resolve(presentation.review.id, as: resolution) else { return }
         identityReviewPresentation = nil
-        guard let trigger = presentation.trigger,
-              let initiating = presentation.song,
-              let current = songs.first(where: { $0.id == initiating.id }),
-              initiatingSongResolvesStably(current, for: presentation.review)
-        else {
+        let stableInitiating: Song?
+        do {
+            stableInitiating = try stableInitiatingSong(of: presentation)
+        } catch {
+            setProjectVaultStatusMessage(Self.identityChoiceSavedSettingsUnreadableMessage)
+            return
+        }
+        guard let trigger = presentation.trigger, let current = stableInitiating else {
             setProjectVaultStatusMessage("Identity choice saved, but the project changed or is unavailable. Refresh and retry when the project is available. Nothing was archived.")
             return
         }
@@ -71,6 +74,21 @@ extension ArchiveBrowserViewModel {
         @unknown default:
             return
         }
+    }
+
+    static let identityChoiceSavedSettingsUnreadableMessage =
+        "Identity choice saved, but settings couldn't be read, so nothing was archived. Repair them in Settings, then try again."
+
+    /// The initiating song of a current (triggered) review when it still
+    /// resolves by stable location; nil for a persisted review or a failed
+    /// resolution. Throws when settings cannot be read.
+    private func stableInitiatingSong(of presentation: ProjectIdentityReviewPresentation) throws -> Song? {
+        guard presentation.trigger != nil,
+              let initiating = presentation.song,
+              let current = songs.first(where: { $0.id == initiating.id }),
+              try initiatingSongResolvesStably(current, for: presentation.review)
+        else { return nil }
+        return current
     }
 
     func cancelPresentedIdentityReview() {
@@ -94,7 +112,8 @@ extension ArchiveBrowserViewModel {
     /// song, or nil when there is no match or the match is ambiguous (failed
     /// resolution). Callers must not archive on nil.
     private func stableSongForIdentityReview(_ review: ProjectIdentityReview) -> Song? {
-        let matches = stableSongs(matching: review)
+        // Display binding for a persisted review, which never archives.
+        let matches = stableSongs(matching: review, musicRoots: appSettings.settings.musicRoots)
         guard matches.count == 1 else { return nil }
         return matches.first
     }
@@ -103,12 +122,13 @@ extension ArchiveBrowserViewModel {
     /// catalog path resolves to one of the review's stable ProjectIDs via
     /// location. Anything else (missing song, moved folder, unknown IDs, no
     /// locations) is a failed resolution and must not trigger a new archive.
-    private func initiatingSongResolvesStably(_ song: Song, for review: ProjectIdentityReview) -> Bool {
+    private func initiatingSongResolvesStably(_ song: Song, for review: ProjectIdentityReview) throws -> Bool {
         guard FileManager.default.fileExists(atPath: song.folderPath.path) else { return false }
-        return stableSongs(matching: review).contains(where: { $0.id == song.id })
+        let roots = try loadSettingsForWrite().musicRoots
+        return stableSongs(matching: review, musicRoots: roots).contains(where: { $0.id == song.id })
     }
 
-    private func stableSongs(matching review: ProjectIdentityReview) -> [Song] {
+    private func stableSongs(matching review: ProjectIdentityReview, musicRoots roots: [StoredMusicRoot]) -> [Song] {
         guard let store = projectCatalogStore,
               let entries = try? store.loadEntries()
         else { return [] }
@@ -119,7 +139,6 @@ extension ArchiveBrowserViewModel {
             entry.record.locations.filter { $0.kind == .active }
         }
         guard !activeLocations.isEmpty else { return [] }
-        let roots = (try? settingsStore.loadSettings())?.musicRoots ?? []
         let bookmarkResolver = FoundationSecurityScopedBookmarks()
         func absoluteURL(for location: ProjectLocation) -> URL? {
             guard let root = roots.first(where: { $0.id == location.rootID }),

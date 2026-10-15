@@ -4456,6 +4456,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
             }
         }
+        XCTAssertThrowsError(try viewModel.newSongDraftRoot(), "New Song draft root") { error in
+            XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
+        }
         XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), archiveBefore, "nothing written into the archive")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path), [])
         XCTAssertNil(viewModel.lastIndexExportPath)

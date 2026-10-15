@@ -99,12 +99,9 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Recovery.swift": 1,
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Exports.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultArchive.swift": 2,
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultIdentityReview.swift": 1,
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 7,
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 2,
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
     ]
 

@@ -34,6 +34,28 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    /// Unreadable settings used to read as "no review pending" and request
+    /// removal; the capture now refuses before it asks the runtime.
+    func testArchiveNowRefusesWhenSettingsAreUnreadable() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+        UserDefaults(suiteName: fixture.suite)?.set(
+            Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8),
+            forKey: "nikoMusicHub.settings"
+        )
+        XCTAssertThrowsError(try fixture.settingsStore.loadSettings(), "precondition: saved settings are unreadable")
+        let refusal = try XCTUnwrap(ArchiveWriteGuardError.settingsUnreadable.errorDescription)
+
+        viewModel.requestArchiveNow(for: song)
+        try await waitUntil { viewModel.statusBaseMessage == refusal }
+
+        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
     func testDoneOffersNoFreeSpaceWhileReviewRequired() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }

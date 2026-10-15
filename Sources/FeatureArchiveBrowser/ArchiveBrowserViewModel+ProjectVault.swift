@@ -219,6 +219,7 @@ extension ArchiveBrowserViewModel {
     /// already explains it, so nothing is added here.
     func recordProjectVaultReadFailure(_ error: any Error, context: String) {
         diagnostics.log(.error, "\(context): \(error)")
+        // Probe: only a failed load tells unreadable settings apart from defaults.
         if (try? settingsStore.loadSettings()) == nil { return }
         recordPersistenceWarning(
             error as? ProjectVaultRuntimeError == .journalRecordsUnreadable

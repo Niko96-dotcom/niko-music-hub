@@ -102,15 +102,15 @@ struct NewSongSheet: View {
     private func createSong() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        let request = NewSongRequest(
-            name: name,
-            root: viewModel.newSongDraftRoot,
-            collaboratorIDs: Array(selectedCollaboratorIDs),
-            appNote: note.isEmpty ? nil : note,
-            workflowStatus: workflowStatus,
-            templateFolder: templateFolder
-        )
         do {
+            let request = NewSongRequest(
+                name: name,
+                root: try viewModel.newSongDraftRoot(),
+                collaboratorIDs: Array(selectedCollaboratorIDs),
+                appNote: note.isEmpty ? nil : note,
+                workflowStatus: workflowStatus,
+                templateFolder: templateFolder
+            )
             _ = try viewModel.createNewSong(request: request)
             dismiss()
         } catch let creationError as NewSongFolderCreator.CreationError {

@@ -35,10 +35,10 @@ extension ArchiveBrowserViewModel {
         url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
     }
 
-    var newSongDraftRoot: URL {
-        let outputFolder = (try? settingsStore.loadSettings().outputFolder.url)
-            ?? StoredFolderLocation.defaultOutputFolder
-        return outputFolder.appendingPathComponent("New Song Drafts", isDirectory: true)
+    /// Unreadable settings refuse the draft instead of using the default output folder.
+    func newSongDraftRoot() throws -> URL {
+        try loadSettingsForWrite().outputFolder.url
+            .appendingPathComponent("New Song Drafts", isDirectory: true)
     }
 
     func loadRootsFromSettings() {
@@ -157,10 +157,7 @@ extension ArchiveBrowserViewModel {
     /// Archive roots plus the configured output folder (new-song drafts live there).
     func allowedOpenRoots(for song: Song? = nil, includingURL url: URL? = nil) -> [URL] {
         var allowed = roots.map(\.standardizedFileURL)
-        let settings = try? settingsStore.loadSettings()
-        let outputFolder = settings?.outputFolder.url
-            ?? StoredFolderLocation.defaultOutputFolder
-        let standardizedOutput = outputFolder.standardizedFileURL
+        let standardizedOutput = appSettings.settings.outputFolder.url.standardizedFileURL
         if !allowed.contains(where: { $0.path == standardizedOutput.path }) {
             allowed.append(standardizedOutput)
         }
@@ -197,7 +194,7 @@ extension ArchiveBrowserViewModel {
         let snapshot = roots
         let bookmarks = scanRootBookmarks
         do {
-            let preservedUnresolved = unresolvedPersistedScanRoots(snapshot: snapshot)
+            let preservedUnresolved = try unresolvedPersistedScanRoots(snapshot: snapshot)
             let preservedIDs = Set(preservedUnresolved.map(\.id))
             let snapshotCanonicals = Set(snapshot.map { Self.canonicalPath(for: $0) })
             var snapshotBookmarkByCanonical: [String: Data] = [:]
@@ -331,8 +328,8 @@ extension ArchiveBrowserViewModel {
     /// Stored scan roots that fail to resolve and are not represented in the
     /// in-memory snapshot. Persist merges preserve these (with tokens) so a
     /// remove/replace of one root never drops the remaining unresolved roots.
-    private func unresolvedPersistedScanRoots(snapshot: [URL]) -> [StoredMusicRoot] {
-        guard let settings = try? settingsStore.loadSettings() else { return [] }
+    private func unresolvedPersistedScanRoots(snapshot: [URL]) throws -> [StoredMusicRoot] {
+        let settings = try settingsStore.loadSettings()
         let resolver = bookmarkResolver
         let snapshotCanonicals = Set(snapshot.map { Self.canonicalPath(for: $0) })
         return filteredEffectiveScanRoots(from: settings).filter { stored in
@@ -364,13 +361,7 @@ extension ArchiveBrowserViewModel {
     /// Unreadable settings refuse the write: without them the archive root is
     /// unknown, and `roots` alone leaves it writable while Vault is off.
     func writeProtectedRoots() throws -> [URL] {
-        let settings: AppSettings
-        do {
-            settings = try settingsStore.loadSettings()
-        } catch {
-            diagnostics.log(.error, "Write guard could not read Vault settings: \(error)")
-            throw ArchiveWriteGuardError.settingsUnreadable
-        }
+        let settings = try loadSettingsForWrite()
         guard let archiveRoot = settings.musicRoots.first(where: { $0.id == settings.vault.archiveRootID })
         else { return roots }
         var protected = roots + [archiveRoot.fallbackURL]
@@ -379,6 +370,18 @@ extension ArchiveBrowserViewModel {
             protected.append(current)
         }
         return protected
+    }
+
+    /// Settings for a write or a Project Vault decision. Unreadable settings
+    /// refuse the action with `ArchiveWriteGuardError.settingsUnreadable`
+    /// instead of reading as defaults.
+    func loadSettingsForWrite() throws -> AppSettings {
+        do {
+            return try settingsStore.loadSettings()
+        } catch {
+            diagnostics.log(.error, "Write guard could not read settings: \(error)")
+            throw ArchiveWriteGuardError.settingsUnreadable
+        }
     }
 
     private func filteredEffectiveScanRoots(from settings: AppSettings) -> [StoredMusicRoot] {
@@ -400,6 +403,7 @@ extension ArchiveBrowserViewModel {
 
     /// First stored root that still fails to resolve, in persisted order.
     private func nextUnresolvedArchiveFailure() -> ArchiveAccessFailure? {
+        // Runs right after persistRoots(), which appSettings publishes later; unreadable settings show no failure.
         guard let settings = try? settingsStore.loadSettings() else { return nil }
         let resolver = bookmarkResolver
         for root in filteredEffectiveScanRoots(from: settings) {
@@ -431,13 +435,18 @@ extension ArchiveBrowserViewModel {
                 // via an erroneous enabled duplicate scanOnly. The persist merge
                 // repairs the Vault root in place and drops the enabled duplicate.
                 // A different folder never reassigns the Vault binding.
-                if let provided = bookmarksByURL[url] ?? bookmarksByURL[standardized],
-                   refreshFailedVaultBookmarkForSameCanonicalReauthorization(
-                       canonical: canonical,
-                       freshBookmark: provided,
-                       standardized: standardized
-                   ) {
-                    changed = true
+                if let provided = bookmarksByURL[url] ?? bookmarksByURL[standardized] {
+                    do {
+                        if try refreshFailedVaultBookmarkForSameCanonicalReauthorization(
+                            canonical: canonical,
+                            freshBookmark: provided,
+                            standardized: standardized
+                        ) {
+                            changed = true
+                        }
+                    } catch {
+                        recordPersistenceWarning(error.localizedDescription)
+                    }
                 }
                 continue
             }
@@ -476,10 +485,9 @@ extension ArchiveBrowserViewModel {
         canonical: String,
         freshBookmark: Data,
         standardized: URL
-    ) -> Bool {
-        guard let settings = try? settingsStore.loadSettings(),
-              settings.vault.isEnabled
-        else { return false }
+    ) throws -> Bool {
+        let settings = try loadSettingsForWrite()
+        guard settings.vault.isEnabled else { return false }
         let resolver = bookmarkResolver
         var matchesFailedVault = false
         for root in settings.musicRoots where root.role != .scanOnly {
@@ -557,7 +565,7 @@ extension ArchiveBrowserViewModel {
 
     func storedArchiveAccessDirectory() -> URL? {
         guard let failure = archiveAccessFailure else { return nil }
-        guard let settings = try? settingsStore.loadSettings() else { return nil }
+        let settings = appSettings.settings
         guard let root = filteredEffectiveScanRoots(from: settings).first(where: { $0.id == failure.storedRootID }) else {
             return nil
         }

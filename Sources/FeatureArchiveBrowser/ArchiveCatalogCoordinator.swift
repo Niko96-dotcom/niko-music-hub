@@ -192,6 +192,7 @@ struct ArchiveCatalogCoordinator {
     }
 
     private static func loadExclusionTerms(settingsStore: SettingsStore?) -> [String] {
+        // Exclusions only hide folders from a read-only scan; refusing it would hide the whole library.
         guard let settingsStore,
               let settings = try? settingsStore.loadSettings() else { return [] }
         return ScanExclusionPolicy.terms(from: settings.scanExclusionTerms)

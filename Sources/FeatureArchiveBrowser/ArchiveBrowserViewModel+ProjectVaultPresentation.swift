@@ -13,6 +13,7 @@ extension ArchiveBrowserViewModel {
     /// Derivation lives in `ArchiveVaultObservation`; this is the explicit
     /// boundary that loads settings once and forwards the snapshot.
     func refreshProjectVaultPresentationContext(notifyWhenChanged: Bool = true) {
+        // nil keeps the last health and hides cards; appSettings would lag this model's own saves.
         let settings = try? settingsStore.loadSettings()
         vaultObservation.refreshContext(settings: settings, songs: songs, notifyWhenChanged: notifyWhenChanged)
     }

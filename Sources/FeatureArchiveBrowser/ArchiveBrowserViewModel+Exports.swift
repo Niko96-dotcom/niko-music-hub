@@ -28,8 +28,7 @@ extension ArchiveBrowserViewModel {
 
     /// Save-panel starting folder: the app output folder, else the person's Documents (NMH-055).
     func exportDefaultDirectory() -> URL {
-        let outputFolder = try? settingsStore.loadSettings().outputFolder.url
-        return ArchiveExportPaths.defaultDirectory(outputFolderURL: outputFolder)
+        ArchiveExportPaths.defaultDirectory(outputFolderURL: appSettings.settings.outputFolder.url)
     }
 
     func exportIndexJSON() throws {

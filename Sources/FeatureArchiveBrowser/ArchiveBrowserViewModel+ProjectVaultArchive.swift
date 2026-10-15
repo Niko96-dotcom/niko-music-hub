@@ -128,13 +128,24 @@ extension ArchiveBrowserViewModel {
                 return
             }
             let catalogID = self.projectVaultSnapshot(for: current)?.record.id
-            let settings = try? self.settingsStore.loadSettings()
+            // Settings decide whether removal is requested; unreadable settings
+            // refuse the capture instead of reading as "no review pending".
+            let settings: AppSettings
+            do {
+                settings = try self.loadSettingsForWrite()
+            } catch {
+                if self.boundArchiveCaptureSongID == songID {
+                    self.boundArchiveCaptureSongID = nil
+                }
+                self.setProjectVaultStatusMessage(error.localizedDescription)
+                return
+            }
             // A pending Keep Local review never presents the removal prompt:
             // Archive Now points at the review and captures copy-only, so an
             // explicit Archive Copy may still proceed. Done derives its
             // ceiling from `permitsUserInitiatedRemoval`, which is already
             // false while review is pending.
-            let keepLocalReviewRequired = settings?.vault.keepLocalReviewRequired ?? false
+            let keepLocalReviewRequired = settings.vault.keepLocalReviewRequired
             if trigger == .manual, keepLocalReviewRequired {
                 self.setProjectVaultStatusMessage(
                     ProjectVaultConfirmationCopy.keepLocalReviewRequiredArchiveNowMessage
@@ -150,11 +161,7 @@ extension ArchiveBrowserViewModel {
                 // plus the backup acknowledgement (and master enablement,
                 // pause, Keep Local, and activity gates at capture/execution),
                 // but never waits on `automaticArchiving`.
-                if let vault = settings?.vault {
-                    requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(vault)
-                } else {
-                    requestedRemoving = false
-                }
+                requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
             case .backupCopy:
                 requestedRemoving = false
             @unknown default:
@@ -231,8 +238,17 @@ extension ArchiveBrowserViewModel {
             // The dialog must agree the captured token; a copy-only token can
             // never escalate, however permissive live settings become.
             let willRemove = authorization.permitsRemoval
-            let liveSettings = try? self.settingsStore.loadSettings()
-            let backupConfirmed = liveSettings?.vault.independentBackupConfirmed ?? false
+            let liveSettings: AppSettings
+            do {
+                liveSettings = try self.loadSettingsForWrite()
+            } catch {
+                if self.boundArchiveCaptureSongID == songID {
+                    self.boundArchiveCaptureSongID = nil
+                }
+                self.setProjectVaultStatusMessage(error.localizedDescription)
+                return
+            }
+            let backupConfirmed = liveSettings.vault.independentBackupConfirmed
             // Bind the dialog title to the live song; the authorization itself
             // carries no title and the runtime revalidates the bound source.
             _ = liveSong

@@ -31,6 +31,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let pathSafety = PathSafety()
     let fileActions: any FileActions
     let settingsStore: SettingsStore
+    /// Display-only settings. Writes and Vault decisions use `loadSettingsForWrite()`.
+    let appSettings: AppSettingsObserver
     /// Settings-pane deep links (Vault status row → Settings → Vault).
     let router: QuickAccessRouter
     let diagnostics: Diagnostics
@@ -446,6 +448,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         incrementalRescanHold: (() async -> Void)? = nil
     ) {
         self.settingsStore = context.settingsStore
+        self.appSettings = context.appSettings
         self.router = context.router
         self.diagnostics = context.diagnostics
         self.fileActions = context.fileActions
