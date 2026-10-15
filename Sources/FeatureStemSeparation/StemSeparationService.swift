@@ -170,8 +170,16 @@ public struct StemSeparationService: Sendable {
 
     /// Enforces the archive write boundary before a workflow creates output folders.
     /// The provider is read at job time so cached tool sessions still honor current settings.
+    /// A provider that cannot read settings refuses with the same sentence as the backend,
+    /// never the raw decoding error.
     func validateOutputDirectory(_ outputDirectoryURL: URL) throws {
-        try outputGuardProvider().validate(outputDirectoryURL)
+        let outputGuard: ToolOutputGuard
+        do {
+            outputGuard = try outputGuardProvider()
+        } catch {
+            throw StemSeparationServiceError(StemSeparationHelperCopy.settingsUnreadable)
+        }
+        try outputGuard.validate(outputDirectoryURL)
     }
 
     private func sanitizedTitle(_ title: String) -> String {

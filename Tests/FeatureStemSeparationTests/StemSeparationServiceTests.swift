@@ -394,6 +394,40 @@ struct StemSeparationServiceTests {
         #expect(try fixture.archiveSnapshot() == before)
     }
 
+    // The feature builds the guard from `try settingsStore.loadSettings()`. A blob that
+    // does not decode refuses the run with the backend's sentence, not the DecodingError.
+    @Test
+    func startJob_unreadableSettingsFailsWithPlainSettingsMessage() async throws {
+        let suite = "StemSeparationServiceTests.unreadable.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults)
+        let backend = MockStemSeparationBackend()
+        let inbox = FakeOutputInboxStore()
+        let runner = JobRunner()
+        let service = StemSeparationService(
+            backend: backend,
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            outputGuardProvider: { ToolOutputGuard(settings: try settingsStore.loadSettings()) }
+        )
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let job = service.startJob(
+            request: StemSeparationRequest(inputURL: makeInputFile(), outputRootURL: root, preset: .fast4)
+        )
+        try await waitUntilFinished(runner: runner, job: job)
+
+        let finished = try #require(runner.job(id: job.id))
+        #expect(finished.state == .failed)
+        #expect(finished.message == StemSeparationHelperCopy.settingsUnreadable)
+        #expect(backend.requests.isEmpty)
+        #expect(inbox.items.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+    }
+
     @Test
     func cancelingJob_terminatesDemucsProcessRunner() async throws {
         let fileManager = FileManager.default
