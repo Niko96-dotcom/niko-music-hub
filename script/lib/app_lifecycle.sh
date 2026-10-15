@@ -334,6 +334,10 @@ nmh_build_bundle() {
   nmh_resolve_update_configuration || exit 1
   printf 'update configuration: %s\n' "$NMH_UPDATE_STATE"
 
+  # NSMicrophoneUsageDescription stays although nothing records the microphone:
+  # when the default output device also has inputs (an audio interface, Jump
+  # Desktop Audio), coreaudiod asks for microphone access as soon as previews or
+  # the recorder's tap start IO on it. The text explains that prompt.
   cat >"$NMH_INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -370,7 +374,7 @@ nmh_build_bundle() {
   <key>NSAudioCaptureUsageDescription</key>
   <string>Niko Music Hub needs access to record your Mac's internal audio so you can import recordings directly into Cubase.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Niko Music Hub does not record your microphone. Recorder uses system audio capture; allow it under Screen &amp; System Audio Recording in System Settings.</string>
+  <string>Niko Music Hub never records your microphone. macOS asks because your sound output also has inputs (an audio interface or remote-desktop audio, for example). Previews play either way. The Recorder captures system audio; allow that under Screen &amp; System Audio Recording in System Settings.</string>
   <key>NSDocumentsFolderUsageDescription</key>
   <string>Niko Music Hub scans your Cubase project archive and saves recordings, downloads and converted files where you choose.</string>
   <key>NSDesktopFolderUsageDescription</key>

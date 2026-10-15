@@ -459,6 +459,10 @@ done
 for key in NSDocumentsFolderUsageDescription NSDesktopFolderUsageDescription NSDownloadsFolderUsageDescription NSRemovableVolumesUsageDescription NSNetworkVolumesUsageDescription NSAudioCaptureUsageDescription NSMicrophoneUsageDescription; do
   assert_contains "$LIFECYCLE" "<key>$key</key>"
 done
+# macOS asks for the microphone when previews play on an output device that also
+# has inputs; the usage text must explain that, not only the recorder.
+assert_contains "$LIFECYCLE" 'macOS asks because your sound output also has inputs'
+assert_contains "$LIFECYCLE" 'Previews play either way.'
 
 echo "== the build number must advance the live update feed =="
 assert_contains "$ROOT/script/release-all.sh" 'LIVE_BUILD_NUMBER="$(nmh_live_feed_max_build_number)"'
