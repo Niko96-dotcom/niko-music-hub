@@ -78,14 +78,63 @@ final class ArchiveSettingsRepairTests: XCTestCase {
         XCTAssertFalse(viewModel.needsFirstRunOnboarding, "damaged settings belong to a returning user")
     }
 
+    func testUnreadableSettingsLoadAddsNoArchiveWarning() {
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: makeStore(blob: Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8))),
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+
+        XCTAssertNil(viewModel.persistenceWarningMessage,
+                     "the settings-repair notice already explains this")
+        XCTAssertFalse(viewModel.statusMessage?.contains("correct format") == true,
+                       "raw decoding error leaked: \(viewModel.statusMessage ?? "nil")")
+    }
+
+    func testUnreadableSettingsRefuseRootAndOnboardingSavesWithThePlainSentence() async throws {
+        let blob = Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8)
+        let defaults = makeDefaults(blob: blob)
+        let store = UserDefaultsSettingsStore(userDefaults: defaults)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-repair-root-\(UUID().uuidString)", isDirectory: true)
+        let backups = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-repair-backups-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: backups)
+        }
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: store),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in ScanResult(songs: [], globalWarnings: [], skippedEntries: []) }
+        )
+        let plain = try XCTUnwrap(ArchiveWriteGuardError.settingsUnreadable.errorDescription)
+
+        viewModel.addRoot(root)
+        XCTAssertEqual(viewModel.persistenceWarningMessage, plain)
+        viewModel.persistenceWarningMessage = nil
+        viewModel.completeArchiveOnboarding()
+        XCTAssertEqual(viewModel.persistenceWarningMessage, plain)
+        XCTAssertEqual(defaults.data(forKey: key), blob, "nothing was written")
+
+        _ = try store.repairStoredSettings(backupDirectory: backups, now: Date())
+        viewModel.applyRepairedSettings()
+
+        XCTAssertNil(viewModel.persistenceWarningMessage, "a repair clears the refusal")
+    }
+
     // MARK: - Helpers
 
-    private func makeStore(blob: Data?) -> UserDefaultsSettingsStore {
+    private func makeDefaults(blob: Data?) -> UserDefaults {
         let suite = "ArchiveSettingsRepairTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         if let blob { defaults.set(blob, forKey: key) }
-        return UserDefaultsSettingsStore(userDefaults: defaults)
+        return defaults
+    }
+
+    private func makeStore(blob: Data?) -> UserDefaultsSettingsStore {
+        UserDefaultsSettingsStore(userDefaults: makeDefaults(blob: blob))
     }
 }
 

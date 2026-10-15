@@ -77,19 +77,24 @@ extension ArchiveBrowserViewModel {
                 }
             roots = ArchiveRootDisplayPolicy.storedRoots(from: loadedRoots)
         } catch {
-            recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")
             diagnostics.log(.error, "Archive settings load failed: \(error)")
+            // Settings that no longer decode: the settings-repair notice explains
+            // the empty archive and offers the fix, so nothing is added here.
+            if !(error is DecodingError) {
+                recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")
+            }
         }
         applyBootstrapRootWhenEmpty()
         refreshFirstRunState()
     }
 
     /// Settings were unreadable at launch (fail-closed load) and the user just
-    /// repaired them: drop the stale "could not be loaded" warning, reload the
-    /// real archive roots, and rescan when they differ from what is showing.
+    /// repaired them: drop the stale settings warning, reload the real archive
+    /// roots, and rescan when they differ from what is showing.
     public func applyRepairedSettings() {
         if let current = persistenceWarningMessage,
-           current.hasPrefix("Archive settings could not be") {
+           current.hasPrefix("Archive settings could not be")
+            || current == ArchiveWriteGuardError.settingsUnreadable.localizedDescription {
             persistenceWarningMessage = nil
             statusMessage = combinedStatusMessage(base: statusBaseMessage)
         }
@@ -148,10 +153,22 @@ extension ArchiveBrowserViewModel {
                 settings.archiveOnboardingCompleted = true
             }
         } catch {
-            recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
-            diagnostics.log(.error, "Archive onboarding save failed: \(error)")
+            recordArchiveSettingsSaveFailure(error, context: "Archive onboarding save failed")
         }
         needsFirstRunOnboarding = false
+    }
+
+    /// A settings save the person asked for (archive roots, onboarding) failed.
+    /// Settings that no longer decode get the write guard's sentence, as the
+    /// archive's other refused writes do; the decoding error goes to
+    /// diagnostics only.
+    private func recordArchiveSettingsSaveFailure(_ error: any Error, context: String) {
+        diagnostics.log(.error, "\(context): \(error)")
+        recordPersistenceWarning(
+            error is DecodingError
+                ? ArchiveWriteGuardError.settingsUnreadable.localizedDescription
+                : "Archive settings could not be saved: \(error.localizedDescription)"
+        )
     }
 
     /// Archive roots plus the configured output folder (new-song drafts live there).
@@ -320,8 +337,7 @@ extension ArchiveBrowserViewModel {
                 settings.musicRoots = retainedVaultRoots + merged
             }
         } catch {
-            recordPersistenceWarning("Archive settings could not be saved: \(error.localizedDescription)")
-            diagnostics.log(.error, "Archive roots save failed: \(error)")
+            recordArchiveSettingsSaveFailure(error, context: "Archive roots save failed")
         }
     }
 
