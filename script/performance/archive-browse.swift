@@ -284,7 +284,7 @@ struct ArchiveBrowseBenchmark {
         ]
         let report: [String: Any] = [
             "songs": count,
-            "warmup_rounds": 2,
+            "warmup_rounds": 3,
             "measured_rounds": 7,
             "peak_rss_bytes": usage.ru_maxrss,
             "metrics": metrics,

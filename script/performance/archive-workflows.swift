@@ -175,7 +175,7 @@ struct ArchiveWorkflowBenchmark {
 #else
         let buildConfig = "release"
 #endif
-        let report: [String: Any] = ["warmup_rounds": 2, "measured_rounds": 7, "songs": 1000,
+        let report: [String: Any] = ["warmup_rounds": 3, "measured_rounds": 7, "songs": 1000,
                                    "peak_rss_bytes": usage.ru_maxrss, "metrics": metrics,
                                    "host": hostInfo, "build_config": buildConfig,
                                    "scope": "Catalog/sort/board/analytics/SQLite plus 50-song scan and optional 800-small-file manifest/verify. Heavy Vault manifests (100/1000/10000 records) and catalog/transfer reconciliation live in script/performance/vault-recovery.swift; this file does not duplicate them. No caps/discard; digests guard output parity.",
