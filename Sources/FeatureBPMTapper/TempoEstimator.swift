@@ -69,11 +69,15 @@ public struct TempoEstimator: Sendable {
     private var acceptedIntervals: [TimeInterval]
     private var acceptedTapCount: Int
     private var currentBPM: Double?
+    private var rejectedIntervals: [TimeInterval]
+
+    private static let tempoChangeIntervalCount = 2
 
     public init(configuration: TempoEstimatorConfiguration = TempoEstimatorConfiguration()) {
         self.configuration = configuration
         lastAcceptedTimestamp = nil
         acceptedIntervals = []
+        rejectedIntervals = []
         acceptedTapCount = 0
         currentBPM = nil
     }
@@ -110,9 +114,29 @@ public struct TempoEstimator: Sendable {
             // Let the next tap recover from one uneven tap instead of comparing
             // every following interval against an increasingly stale timestamp.
             lastAcceptedTimestamp = timestamp
+            if interval >= configuration.minimumInterval, interval <= configuration.maximumInterval {
+                if let previous = rejectedIntervals.last, !matchesBaseline(interval, previous) {
+                    rejectedIntervals = []
+                }
+                rejectedIntervals.append(interval)
+            } else {
+                rejectedIntervals = []
+            }
+            // Consecutive rejected intervals that agree with each other mean the
+            // user changed tempo: start a new run from them instead of keeping
+            // the stale baseline forever.
+            if rejectedIntervals.count >= Self.tempoChangeIntervalCount {
+                let seed = rejectedIntervals
+                startRun(at: timestamp)
+                acceptedIntervals = seed
+                acceptedTapCount = seed.count + 1
+                currentBPM = bpm(from: acceptedIntervals)
+                return makeEstimate(status: .longPauseReset, intervalAccepted: true)
+            }
             return makeEstimate(status: .outlierIgnored, intervalAccepted: false)
         }
 
+        rejectedIntervals = []
         acceptedIntervals.append(interval)
         if acceptedIntervals.count > configuration.recentIntervalLimit {
             acceptedIntervals.removeFirst(acceptedIntervals.count - configuration.recentIntervalLimit)
@@ -132,6 +156,7 @@ public struct TempoEstimator: Sendable {
     public mutating func reset() {
         lastAcceptedTimestamp = nil
         acceptedIntervals = []
+        rejectedIntervals = []
         acceptedTapCount = 0
         currentBPM = nil
     }
@@ -139,6 +164,7 @@ public struct TempoEstimator: Sendable {
     private mutating func startRun(at timestamp: TimeInterval) {
         lastAcceptedTimestamp = timestamp
         acceptedIntervals = []
+        rejectedIntervals = []
         acceptedTapCount = 1
         currentBPM = nil
     }
