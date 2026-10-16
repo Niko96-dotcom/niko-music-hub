@@ -118,6 +118,9 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
         ) else {
             throw AudioConversionError.conversionFailed("Could not create AVAudioConverter.")
         }
+        // Mix channels on reduction (stereo→mono, >2ch→stereo) like FFmpeg `-ac`;
+        // the default remaps and silently drops every channel past the target count.
+        converter.downmix = true
 
         try streamConvertedAudio(
             sourceFile: sourceFile,
