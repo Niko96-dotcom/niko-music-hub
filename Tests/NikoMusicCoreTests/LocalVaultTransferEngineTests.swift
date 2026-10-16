@@ -740,7 +740,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         let evictionCount = await provider.evictionCount()
 
         XCTAssertNil(returned, "a replacement tree must never become terminal removal success")
-        XCTAssertEqual(persisted.state, .recoveryRequired)
+        XCTAssertEqual(persisted.state, .archiveVerified)
         XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
         XCTAssertEqual(persisted.error?.reason, .sourceMutated)
         let retainedReplacement = try fixture.snapshotSource()
@@ -800,7 +800,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
 
         XCTAssertNil(returned, "an inode-distinct replacement tree must never become removal success")
         XCTAssertEqual(removalError as? LocalVaultTransferError, .sourceMutated)
-        XCTAssertEqual(persisted.state, .recoveryRequired)
+        XCTAssertEqual(persisted.state, .archiveVerified)
         XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
         XCTAssertEqual(persisted.error?.reason, .sourceMutated)
         let sourceWasPreserved = FileManager.default.fileExists(atPath: fixture.source.path)
