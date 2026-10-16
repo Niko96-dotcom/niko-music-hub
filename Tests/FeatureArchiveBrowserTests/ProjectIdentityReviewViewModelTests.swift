@@ -2,6 +2,7 @@ import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import SQLite3
 import XCTest
 
 @MainActor
@@ -62,6 +63,59 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertEqual(try reopened.loadReviews().map(\.id), [review.id])
         XCTAssertEqual(try reopened.loadReviews().first?.resolution, .keepSeparate)
         XCTAssertEqual(try reopened.loadEntries().map(\.record.id), [existingID])
+    }
+
+    func testResolveDoesNotRewriteProjectCatalogRows() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-identity-catalog-untouched-\(UUID().uuidString).sqlite")
+        defer { removeDatabase(at: databaseURL) }
+        let database = try SQLiteArchiveDatabase(databaseURL: databaseURL)
+        let store = try SQLiteProjectCatalogStore(database: database)
+        let existingID = ProjectID(rawValue: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!)
+        let candidateID = ProjectID(rawValue: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!)
+        let review = ProjectIdentityReview(
+            existingProjectID: existingID,
+            candidateProjectID: candidateID,
+            reason: "Conflicting fixture evidence"
+        )
+        try store.apply(ProjectCatalogReconciliation(
+            entries: [ProjectCatalogEntry(
+                record: ProjectRecord(
+                    id: existingID,
+                    canonicalTitle: "Fixture Song",
+                    locations: [ProjectLocation(
+                        rootID: UUID(uuidString: "dddddddd-dddd-dddd-dddd-dddddddddddd")!,
+                        relativePath: "Fixture Song",
+                        kind: .active
+                    )]
+                ),
+                evidence: ProjectIdentityEvidence(folderName: "Fixture Song", cubaseFiles: [])
+            )],
+            reviews: [review],
+            metadataMigrations: [:]
+        ))
+        // Marks the stored row text. A resolve that re-writes `project_catalog` from a
+        // snapshot (and could overwrite a concurrent `persistActiveLocation`) drops it.
+        func catalogRowText() throws -> String? {
+            try database.withConnection { db in
+                var statement: OpaquePointer?
+                defer { sqlite3_finalize(statement) }
+                guard sqlite3_prepare_v2(db, "SELECT entry_json FROM project_catalog;", -1, &statement, nil) == SQLITE_OK,
+                      sqlite3_step(statement) == SQLITE_ROW,
+                      let text = sqlite3_column_text(statement, 0) else { return nil }
+                return String(cString: text)
+            }
+        }
+        try database.withConnection { db in
+            XCTAssertEqual(sqlite3_exec(db, "UPDATE project_catalog SET entry_json = entry_json || ' ';", nil, nil, nil), SQLITE_OK)
+        }
+        let markedText = try XCTUnwrap(try catalogRowText())
+
+        let viewModel = ProjectIdentityReviewViewModel(reviews: [review], catalogStore: store)
+        XCTAssertTrue(viewModel.resolve(review.id, as: .keepSeparate))
+
+        XCTAssertEqual(try store.loadReviews().map(\.resolution), [.keepSeparate])
+        XCTAssertEqual(try catalogRowText(), markedText)
     }
 
     func testIdentityAmbiguousPresentsReviewAndKeepSeparateAllowsArchive() async throws {

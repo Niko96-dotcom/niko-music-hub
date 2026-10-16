@@ -73,18 +73,7 @@ public final class ProjectIdentityReviewViewModel: ObservableObject {
             }
         } else if let catalogStore {
             do {
-                let persisted = try catalogStore.loadReviews()
-                let preserved = persisted.filter { existing in
-                    existing.id != reviewID
-                        && Set([existing.existingProjectID, existing.candidateProjectID]) != pair
-                }
-                var next = preserved
-                next.append(resolved)
-                try catalogStore.apply(ProjectCatalogReconciliation(
-                    entries: try catalogStore.loadEntries(),
-                    reviews: next,
-                    metadataMigrations: [:]
-                ))
+                try catalogStore.persistReviewResolution(resolved)
             } catch {
                 return false
             }
