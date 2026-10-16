@@ -77,6 +77,21 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
         XCTAssertEqual(try bundleHashes(at: bundleURL), before)
     }
 
+    func testExportRefusesDestinationInsideAMusicRoot() throws {
+        let fixture = try Fixture(tracker: tracker)
+        defer { fixture.remove() }
+        try fixture.seedDatabase()
+        let service = fixture.service()
+        for root in [fixture.activeRoot, fixture.archiveRoot] {
+            try FileManager.default.createDirectory(at: root.fallbackURL, withIntermediateDirectories: true)
+            let bundleURL = root.fallbackURL.appendingPathComponent("bundle", isDirectory: true)
+            XCTAssertThrowsError(try service.exportRecoveryBundle(to: bundleURL)) { error in
+                XCTAssertEqual(error as? ProjectVaultRecoveryServiceError, .destinationInsideMusicRoot)
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: bundleURL.path))
+        }
+    }
+
     func testExportWithoutDatabaseThrowsAndCreatesNothing() throws {
         let fixture = try Fixture(tracker: tracker)
         defer { fixture.remove() }

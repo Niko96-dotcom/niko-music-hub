@@ -184,6 +184,9 @@ struct ProjectVaultRecoverySection: View {
                 return "Project Vault is busy with another operation. Try again when it’s done. Nothing was changed."
             case .settingsUnreadable:
                 return "The current settings could not be read, so a new export cannot be made. Nothing was changed."
+            case .destinationInsideMusicRoot:
+                return "The chosen location is inside one of your music folders (Active, Archive or library). "
+                    + "Choose a folder outside your music folders. Nothing was changed."
             case .recoveredSuiteUnavailable:
                 return "A separate recovered library could not be prepared. Nothing was changed."
             case .recoveryDestinationOccupied:

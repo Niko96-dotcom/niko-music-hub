@@ -49,6 +49,8 @@ public enum ProjectVaultRecoveryServiceError: Error, Equatable, Sendable {
     case vaultBusy
     /// The current settings could not be read, so no export was made.
     case settingsUnreadable(String)
+    /// The chosen export location is inside a configured music root.
+    case destinationInsideMusicRoot
     case recoveredSuiteUnavailable
     case recoveryDestinationOccupied(String)
     case ioFailed(String)
@@ -117,6 +119,16 @@ public struct ProjectVaultRecoveryService: Sendable {
             settings = try settingsStore.loadSettings()
         } catch {
             throw ProjectVaultRecoveryServiceError.settingsUnreadable(String(describing: error))
+        }
+        // Music roots are read-only: a bundle inside one would show up as
+        // project content on the next scan or Vault sweep.
+        let protectedRoots = settings.musicRoots.map(\.fallbackURL)
+        let policy = ReadOnlyArchivePolicy()
+        do {
+            try policy.enforceNoWrite(at: bundleURL, archiveRoots: protectedRoots)
+            try policy.enforceNoWrite(at: bundleURL.deletingLastPathComponent(), archiveRoots: protectedRoots)
+        } catch {
+            throw ProjectVaultRecoveryServiceError.destinationInsideMusicRoot
         }
         try ProjectVaultRecoveryBundle.exportBundle(
             database: database,
