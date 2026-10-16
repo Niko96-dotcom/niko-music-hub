@@ -47,6 +47,46 @@ final class YtDlpOutputCollectorTests: XCTestCase {
         XCTAssertEqual(urls, [fileURL])
     }
 
+    func testPartialStdoutMarkerDoesNotJoinInterleavedStderrChunk() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+        let fileURL = outputDir.appendingPathComponent("interleaved-\(UUID().uuidString).mp3")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+
+        let marker = "NIKO_MUSIC_HUB_FILE:\(fileURL.path)"
+        let splitIndex = marker.index(marker.startIndex, offsetBy: marker.count / 2)
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+
+        collector.consume(String(marker[..<splitIndex]), from: .standardOutput)
+        collector.consume("WARNING: something\n", from: .standardError)
+        collector.consume(String(marker[splitIndex...]) + "\n", from: .standardOutput)
+
+        XCTAssertEqual(try collector.finish(), [fileURL])
+    }
+
+    func testFinishPendingLineSeparatesUnterminatedStdoutFromStderr() throws {
+        let outputDir = FileManager.default.temporaryDirectory
+        let fileURL = outputDir.appendingPathComponent("fallback-\(UUID().uuidString).mp3")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        FileManager.default.createFile(atPath: fileURL.path, contents: Data("x".utf8))
+
+        let collector = YtDlpOutputCollector(
+            outputDirectory: outputDir,
+            fileManager: .default,
+            progressHandler: { _ in }
+        )
+
+        collector.consume("NIKO_MUSIC_HUB_FILE:\(fileURL.path)", from: .standardOutput)
+        collector.finishPendingLine(of: .standardOutput)
+        collector.consume("WARNING: something\n", from: .standardError)
+
+        XCTAssertEqual(try collector.finish(), [fileURL])
+    }
+
     func testFinishProcessesUnterminatedMarkerWithoutWholeOutputReplay() throws {
         let outputDir = FileManager.default.temporaryDirectory
         let fileURL = outputDir.appendingPathComponent("reparse-\(UUID().uuidString).wav")
