@@ -21,7 +21,8 @@ public enum MixdownBPMEstimator {
         let duration = Double(file.length) / sampleRate
         guard duration >= 4 else { return nil }
 
-        let maxFrames = AVAudioFrameCount(sampleRate * 2)
+        // Long enough for ≥ 3 beats at 40 BPM after a short intro.
+        let maxFrames = AVAudioFrameCount(sampleRate * 10)
         let windowFrames = AVAudioFrameCount(
             min(file.length, AVAudioFramePosition(maxFrames))
         )
@@ -37,7 +38,8 @@ public enum MixdownBPMEstimator {
         let frameCount = Int(buffer.frameLength)
         guard frameCount > 0 else { return nil }
 
-        let hop = max(256, frameCount / 200)
+        // 10 ms peak spacing, independent of the window length.
+        let hop = max(256, Int(sampleRate / 100))
         var peaks: [Int] = []
         var lastPeak: Int?
         let threshold = peakThreshold(samples: channelData, count: frameCount)
