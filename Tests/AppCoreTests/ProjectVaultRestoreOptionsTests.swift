@@ -33,4 +33,21 @@ final class ProjectVaultRestoreOptionsTests: XCTestCase {
             withIntermediateDirectories: true)
         XCTAssertEqual(options.suggestedUniqueRelativePath(for: "Hook"), "Hook 3")
     }
+
+    func testChosenExistingFolderBecomesParentOfRestoreDestination() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Clients/Anna"),
+            withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let options = ProjectVaultRestoreOptions(manifest: VaultManifest(entries: []), activeRoot: root,
+            destinationRelativePath: "Restored/Hook")
+        let inside = options.destinationRelativePath(insideChosenFolder: "Clients/Anna")
+        XCTAssertEqual(inside, "Clients/Anna/Hook")
+        XCTAssertNil(options.destinationIssue(for: inside))
+        XCTAssertEqual(options.destinationRelativePath(insideChosenFolder: ""), "Hook")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Clients/Anna/Hook"),
+            withIntermediateDirectories: true)
+        XCTAssertTrue(options.isOccupied("Clients/Anna/Hook"))
+        XCTAssertEqual(options.destinationRelativePath(insideChosenFolder: "Clients/Anna"), "Clients/Anna/Hook 2")
+    }
 }

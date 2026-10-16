@@ -55,7 +55,16 @@ public struct ProjectVaultRestoreOptions: Sendable {
         return nil
     }
 
-    private func isOccupied(_ path: String) -> Bool {
+    /// Destination for a folder picked in the panel: the picked folder is the parent, and the
+    /// project keeps its default folder name inside it. An empty `folder` means the Active root.
+    /// The result is made unique when that name is already taken.
+    public func destinationRelativePath(insideChosenFolder folder: String) -> String {
+        let name = destinationRelativePath.split(separator: "/").last.map(String.init) ?? destinationRelativePath
+        let candidate = folder.isEmpty ? name : folder + "/" + name
+        return suggestedUniqueRelativePath(for: candidate) ?? candidate
+    }
+
+    public func isOccupied(_ path: String) -> Bool {
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
         guard !path.isEmpty, !path.hasPrefix("/"),
               !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || $0.hasPrefix(".niko-") }) else {
