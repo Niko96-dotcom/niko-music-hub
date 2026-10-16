@@ -278,23 +278,29 @@ nmh_sign_bundle() {
   # No --preserve-metadata=entitlements on the helpers: upstream Sparkle ships
   # Autoupdate with an ad-hoc com.apple.application-identifier that notarization
   # rejects under our team, and the helpers need no entitlements of their own.
+  #
+  # Explicit `|| return 1` on every nested sign: the dev path calls this
+  # function as an `if !` condition, which turns errexit off inside it. Without
+  # the returns, a failed helper signature would be ignored and only the final
+  # app-wrapper sign would decide the status, leaving a bundle with mixed
+  # signatures and no ad-hoc fallback.
   if [[ -d "$NMH_SPARKLE_FRAMEWORK" ]]; then
     for nested in "$NMH_SPARKLE_FRAMEWORK/Versions/B/XPCServices/"*.xpc; do
       [[ -e "$nested" ]] || continue
-      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null
+      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null || return 1
     done
     for nested in \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B/Updater.app" \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B/Autoupdate" \
       "$NMH_SPARKLE_FRAMEWORK/Versions/B"; do
       [[ -e "$nested" ]] || continue
-      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null
+      /usr/bin/codesign "${sign_options[@]}" --sign "$identity" "$nested" >/dev/null || return 1
     done
   fi
 
   /usr/bin/codesign "${sign_options[@]}" \
     --entitlements "$NMH_ENTITLEMENTS_PLIST" \
-    --sign "$identity" "$NMH_APP_BUNDLE" >/dev/null
+    --sign "$identity" "$NMH_APP_BUNDLE" >/dev/null || return 1
 }
 
 nmh_build_bundle() {
@@ -426,8 +432,9 @@ PLIST
     fi
     # A real identity needs Apple's timestamp service. Offline, fall back to
     # ad-hoc so local builds never break (privacy prompts may then reappear).
+    # codesign's stderr stays visible so the warning below has its cause.
     if [[ -n "$sign_identity" ]]; then
-      if ! nmh_sign_bundle "$sign_identity" 2>/dev/null; then
+      if ! nmh_sign_bundle "$sign_identity"; then
         echo "warning: stable dev signing failed (offline?); falling back to ad-hoc" >&2
         nmh_sign_bundle "-"
       fi

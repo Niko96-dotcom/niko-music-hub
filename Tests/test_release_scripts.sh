@@ -116,6 +116,35 @@ if ! grep -qx "$LONG_BINARY_PID" "$TMP/lifecycle-long-path.out"; then
   echo "expected pid $LONG_BINARY_PID for long app binary path" >&2
   exit 1
 fi
+# A failed nested Sparkle helper signature must fail nmh_sign_bundle itself and
+# stop before the app wrapper is signed. The dev path calls the function as an
+# `if !` condition, where errexit is off, so only an explicit return makes the
+# ad-hoc fallback run instead of leaving a bundle with mixed signatures.
+SIGN_FIXTURE="$TMP/sign-fixture"
+mkdir -p "$SIGN_FIXTURE/Sparkle.framework/Versions/B"
+: >"$SIGN_FIXTURE/Sparkle.framework/Versions/B/Autoupdate"
+assert_fail lifecycle-nested-sign-failure bash -c '
+  source "$1/script/lib/app_lifecycle.sh"
+  NMH_SPARKLE_FRAMEWORK="$2/Sparkle.framework"
+  codesign_log="$2/codesign-calls.log"
+  # Shadow the absolute codesign path; the last argument is the signed target.
+  /usr/bin/codesign() {
+    local target
+    for target; do :; done
+    printf "%s\n" "$target" >>"$codesign_log"
+    if [[ "$target" == */Autoupdate ]]; then
+      echo "codesign shim: refusing $target" >&2
+      return 1
+    fi
+    return 0
+  }
+  nmh_sign_bundle -
+' _ "$ROOT" "$SIGN_FIXTURE"
+assert_contains "$SIGN_FIXTURE/codesign-calls.log" "/Versions/B/Autoupdate"
+if grep -Fq -- ".app" "$SIGN_FIXTURE/codesign-calls.log"; then
+  echo "nmh_sign_bundle must stop at the first failed nested signature, not sign the app wrapper" >&2
+  exit 1
+fi
 
 echo "== isolated startup control flow =="
 # Exercise the real entrypoint with lifecycle doubles; no GUI or real settings.
