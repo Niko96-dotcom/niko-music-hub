@@ -171,6 +171,20 @@ final class PathSafetyTests: XCTestCase {
         XCTAssertTrue(safety.isResolvedContained(missingChild, in: [archive]))
     }
 
+    func testFilesystemRootContainsEveryPath() throws {
+        let fm = FileManager.default
+        let parent = try makeFixtureDirectory()
+        defer { try? fm.removeItem(at: parent) }
+        let inside = parent.appendingPathComponent("not-created-yet.wav")
+        let fsRoot = URL(fileURLWithPath: "/", isDirectory: true)
+
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertTrue(safety.isContained(inside, in: [fsRoot]))
+        XCTAssertTrue(safety.isResolvedContained(inside, in: [fsRoot]))
+        XCTAssertTrue(safety.resolvedPathsOverlapIgnoringCase(inside, fsRoot))
+        XCTAssertTrue(safety.resolvedPathsOverlapIgnoringCase(fsRoot, inside))
+    }
+
     private func makeFixtureDirectory(
         in parent: URL = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
     ) throws -> URL {

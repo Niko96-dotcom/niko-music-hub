@@ -33,11 +33,18 @@ public struct PathSafety: @unchecked Sendable {
         let candidate = path.standardizedFileURL.path
         for root in allowedRoots {
             let rootPath = root.standardizedFileURL.path
-            if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
+            if candidate == rootPath || candidate.hasPrefix(Self.childPrefix(of: rootPath)) {
                 return true
             }
         }
         return false
+    }
+
+    /// The prefix every path strictly below `rootPath` starts with. The
+    /// filesystem root "/" already ends in a separator, so appending another
+    /// would give "//" and match nothing.
+    static func childPrefix(of rootPath: String) -> String {
+        rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
     }
 
     /// Containment check that resolves symlinks on both sides before comparing.
@@ -51,7 +58,7 @@ public struct PathSafety: @unchecked Sendable {
         let candidate = resolvedURLAllowingMissingTail(path).path
         for root in roots {
             let rootPath = resolvedURLAllowingMissingTail(root).path
-            if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
+            if candidate == rootPath || candidate.hasPrefix(Self.childPrefix(of: rootPath)) {
                 return true
             }
         }
@@ -99,7 +106,9 @@ public struct PathSafety: @unchecked Sendable {
     public func resolvedPathsOverlapIgnoringCase(_ lhs: URL, _ rhs: URL) -> Bool {
         let left = resolvedURLAllowingMissingTail(lhs).path.lowercased()
         let right = resolvedURLAllowingMissingTail(rhs).path.lowercased()
-        return left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
+        return left == right
+            || left.hasPrefix(Self.childPrefix(of: right))
+            || right.hasPrefix(Self.childPrefix(of: left))
     }
 
     /// The resolved path `isResolvedContained` compares for `url`.
