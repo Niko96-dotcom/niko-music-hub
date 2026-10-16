@@ -258,7 +258,14 @@ extension ArchiveBrowserViewModel {
         scheduleIndexPersist(afterNanoseconds: 0)
         selectSong(created)
         if created.effectiveLatestCPR != nil {
-            try openLatestCPR(for: created)
+            // The song exists on disk and in the catalog now. A failed open is
+            // reported by openLatestCPR (status line and openError) and must not
+            // make the caller treat the creation as failed.
+            do {
+                try openLatestCPR(for: created)
+            } catch {
+                diagnostics.scoped(to: .archive).log(.error, "Created song, but opening its project failed")
+            }
         } else {
             setStatusMessage(
                 "Created draft \(created.originalFolderName). No project file (.cpr or .als) yet; folder is ready at \(created.folderPath.path)."

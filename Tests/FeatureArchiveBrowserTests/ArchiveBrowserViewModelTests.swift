@@ -3185,6 +3185,45 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.lastDryRunLog?.hasSuffix("Template Song/Starter.cpr") == true)
     }
 
+    func testCreateNewSongReturnsCreatedSongWhenTemplateOpenFails() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-archive-\(UUID().uuidString)", isDirectory: true)
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-drafts-\(UUID().uuidString)", isDirectory: true)
+        let templateRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-template-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: templateRoot, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: templateRoot.appendingPathComponent("Starter.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: archiveRoot)
+            try? FileManager.default.removeItem(at: draftRoot)
+            try? FileManager.default.removeItem(at: templateRoot)
+        }
+        let workspace = NewSongRefusingWorkspace()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            runtime: MusicHubRuntimeEnvironment(environment: [:]),
+            scanOverride: nil,
+            workspaceOpener: workspace
+        )
+        viewModel.roots = [archiveRoot]
+
+        let created = try viewModel.createNewSong(
+            request: NewSongRequest(name: "No Cubase Here", root: draftRoot, templateFolder: templateRoot)
+        )
+
+        XCTAssertEqual(workspace.openCount, 1)
+        XCTAssertEqual(created.effectiveLatestCPR?.fileName, "Starter.cpr")
+        XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
+        XCTAssertTrue(viewModel.openError?.contains("Could not open Starter.cpr") == true)
+    }
+
     func testCreateNewSongWithoutCPRExplainsCreatedDraft() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
@@ -5100,6 +5139,20 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     func retryCallCount() -> Int { retryCalls }
     func restoreCallCount() -> Int { restoreCalls }
     func restoreRetryIDs() -> [UUID] { restoreRetryCalls }
+}
+
+/// Stands in for a Mac without Cubase: every open is refused.
+private final class NewSongRefusingWorkspace: WorkspaceOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedOpenCount = 0
+    var openCount: Int { lock.withLock { storedOpenCount } }
+
+    func open(_ url: URL) -> Bool {
+        lock.withLock { storedOpenCount += 1 }
+        return false
+    }
+
+    func revealInFinder(_ url: URL) {}
 }
 
 private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {
