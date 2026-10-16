@@ -24,6 +24,7 @@ final class ArchivePreviewPlayer: ObservableObject {
     private var statusObservation: NSKeyValueObservation?
     private var pendingStart: Double?
     private var requestGeneration: UInt64 = 0
+    private var startSeekToken: UInt64 = 0
     private var volume: Float = 1
     private var prepareTask: Task<Void, Never>?
     private let metadataRevisionLoader: MetadataRevisionLoader
@@ -230,9 +231,17 @@ final class ArchivePreviewPlayer: ObservableObject {
         }
         guard activeURL == url, let player else { return }
         hookSeekPending = false
-        pendingStart = nil
         let upper = duration > 0 ? duration : seconds + 1
         let clamped = min(max(0, seconds), upper)
+        if isLoading {
+            // The start seek owns the player until loading ends. Retarget it so readiness
+            // and the autoplay intent survive a skip made while the preview still loads.
+            pendingStart = clamped
+            currentTime = clamped
+            resolvePendingStart()
+            return
+        }
+        pendingStart = nil
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
         currentTime = clamped
     }
@@ -278,9 +287,12 @@ final class ArchivePreviewPlayer: ObservableObject {
         let target = duration > 0 ? min(start, duration) : start
         currentTime = target
         let generation = requestGeneration
+        startSeekToken &+= 1
+        let token = startSeekToken
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
-                guard let self, self.requestGeneration == generation else { return }
+                // A retargeted start seek supersedes this one; only the latest ends loading.
+                guard let self, self.requestGeneration == generation, self.startSeekToken == token else { return }
                 self.isLoading = false
                 if finished, self.playbackIntentActive { self.player?.play() }
             }

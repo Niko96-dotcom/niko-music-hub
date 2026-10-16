@@ -29,6 +29,25 @@ final class ArchivePreviewSeekRelativeTests: XCTestCase {
         XCTAssertEqual(player.currentTime, duration, accuracy: 0.2)
     }
 
+    func testSeekWhileLoadingRetargetsStartAndFinishesLoading() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-120-seek-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try makeSilentWAV(seconds: 12, at: url)
+
+        let player = ArchivePreviewPlayer()
+        defer { player.forceStop() }
+        player.load(url: url, position: 0, autoplay: false)
+        XCTAssertTrue(player.isLoading)
+
+        player.seek(to: 4, url: url)
+        player.seekRelative(2, url: url)
+        _ = try await waitForDuration(on: player)
+
+        XCTAssertFalse(player.isLoading)
+        XCTAssertEqual(player.currentTime, 6, accuracy: 0.2)
+    }
+
     func testSongMenuOwnsOptionArrowSkip() throws {
         let commands = try featureSource("ArchiveShortcutFocusPolicy.swift")
         let songMenu = try String(
