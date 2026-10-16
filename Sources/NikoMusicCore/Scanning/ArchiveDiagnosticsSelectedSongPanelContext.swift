@@ -27,6 +27,6 @@ public enum ArchiveDiagnosticsSelectedSongPanelContext: Sendable {
 
     public static func notesLineMatchesExport(in exportText: String, notes: String) -> Bool {
         guard !notes.isEmpty else { return false }
-        return exportText.contains("selected_song_notes=\(notes)")
+        return exportText.contains("selected_song_notes=\(ArchiveDiagnosticsExporter.singleLineValue(notes))")
     }
 }

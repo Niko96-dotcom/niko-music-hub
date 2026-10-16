@@ -69,6 +69,38 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertFalse(pathsText.contains(inside))
     }
 
+    func testMultiLineSidecarNotesStayOnOneExportLine() {
+        let diagnostics = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            rootPaths: [],
+            songCount: 0,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: []
+        )
+        let notes = "first line\nsecond line\r\nthird line"
+        let context = ArchiveDiagnosticsSelectedSongContext(
+            displayTitle: "Neon Hook",
+            mainPreviewSummary: nil,
+            rankedPreviewLines: [],
+            cprSummary: "none",
+            warningLines: [],
+            sidecarNotesLine: notes
+        )
+
+        let text = ArchiveDiagnosticsExporter.formattedText(
+            diagnostics: diagnostics,
+            homeDirectory: nil,
+            selectedSongContext: context
+        )
+
+        XCTAssertTrue(text.contains("selected_song_notes=first line\\nsecond line\\nthird line\n"))
+        XCTAssertFalse(text.contains("\nsecond line"))
+        XCTAssertTrue(ArchiveDiagnosticsSelectedSongPanelContext.notesLineMatchesExport(in: text, notes: notes))
+    }
+
     func testFormattedTextIncludesScanHealthBadgeForFixtureScan() throws {
         try CubaseFixtures.ensureGenerated()
         let archiveRoot = CubaseFixtures.archiveRoot
