@@ -92,8 +92,8 @@ run() {
 }
 
 # Submit to the notary service, retrying only transport failures. A verdict of
-# Invalid is final: fetch Apple's log next to the release output so the reason is
-# in the record instead of buried in a browser session.
+# Invalid or Rejected is final: fetch Apple's log next to the release output so
+# the reason is in the record instead of buried in a browser session.
 notarize() {
   local label="$1" file="$2" attempt output submission_id
   for attempt in 1 2 3; do
@@ -106,7 +106,7 @@ notarize() {
     if grep -q 'status: Accepted' <<<"$output"; then
       return 0
     fi
-    if grep -q 'status: Invalid' <<<"$output"; then
+    if grep -Eq 'status: (Invalid|Rejected)' <<<"$output"; then
       submission_id="$(grep -m1 -E '^ *id: ' <<<"$output" | awk '{print $2}')"
       if [[ -n "$submission_id" ]]; then
         xcrun notarytool log "$submission_id" --keychain-profile "$NMH_NOTARY_PROFILE" \

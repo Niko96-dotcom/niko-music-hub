@@ -580,6 +580,45 @@ for i in $(seq 1 25); do
   fi
 done
 
+echo "== a Rejected notary verdict is final and saves Apple's log =="
+# notarytool reports both Invalid and Rejected as final verdicts. Either one must
+# fail without retrying and must fetch the log so the reason is in the record.
+for verdict in Invalid Rejected; do
+  VERDICT_STUB="$TMP/notary-stub-$verdict"
+  mkdir -p "$VERDICT_STUB"
+  cat >"$VERDICT_STUB/xcrun" <<STUB
+#!/usr/bin/env bash
+# Mimics \`notarytool submit --wait\` with a $verdict verdict and \`notarytool log\`.
+echo "\$*" >>"$VERDICT_STUB/calls"
+if [[ "\$2" == "log" ]]; then
+  echo '{"status":"$verdict"}'
+  exit 0
+fi
+echo "  id: 11111111-1111-1111-1111-111111111111"
+echo "  status: $verdict"
+exit 0
+STUB
+  chmod +x "$VERDICT_STUB/xcrun"
+  VERDICT_DIR="$TMP/notary-release-$verdict"
+  mkdir -p "$VERDICT_DIR"
+  if PATH="$VERDICT_STUB:$PATH" bash -c "set -euo pipefail; LOG_FILE=/dev/null; RELEASE_DIR='$VERDICT_DIR'; NMH_NOTARY_PROFILE=stub; sleep() { :; }; $NOTARIZE_FN; notarize app /dev/null" >/dev/null 2>&1; then
+    echo "notarize helper accepted a $verdict verdict" >&2
+    exit 1
+  fi
+  if ! grep -q '^notarytool log 11111111-1111-1111-1111-111111111111 ' "$VERDICT_STUB/calls"; then
+    echo "notarize helper did not fetch Apple's log for a $verdict verdict" >&2
+    exit 1
+  fi
+  if [[ "$(grep -c '^notarytool submit ' "$VERDICT_STUB/calls")" != "1" ]]; then
+    echo "notarize helper retried a final $verdict verdict" >&2
+    exit 1
+  fi
+  [[ -s "$VERDICT_DIR/notary-app-11111111-1111-1111-1111-111111111111.json" ]] || {
+    echo "notarize helper did not save Apple's log next to the release output for a $verdict verdict" >&2
+    exit 1
+  }
+done
+
 echo "== throwaway settings suites are forgotten completely, the real domain never =="
 SUITE_PROBE="NikoMusicHubE2E.release-script-test.$(uuidgen)"
 defaults write "$SUITE_PROBE" probe -int 1
