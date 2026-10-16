@@ -35,7 +35,11 @@ FFPROBE="$(resolve_binary ffprobe)" || {
   echo "downloader live smoke failed: ffprobe not found" >&2
   exit 1
 }
-FFMPEG_DIR="$(dirname "$(resolve_binary ffmpeg)")"
+FFMPEG="$(resolve_binary ffmpeg)" || {
+  echo "downloader live smoke failed: ffmpeg not found" >&2
+  exit 1
+}
+FFMPEG_DIR="$(dirname "$FFMPEG")"
 
 OUTPUT_DIR="$ROOT/.build/downloader-live-smoke-$(date +%Y%m%d%H%M%S)"
 LOG_FILE="$OUTPUT_DIR/smoke.log"
