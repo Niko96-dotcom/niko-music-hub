@@ -1949,6 +1949,7 @@ assert_contains "$ROOT/script/validate-update-feed.py" "exactly one arm64"
 assert_contains "$ROOT/script/validate-update-feed.py" "exactly one full enclosure"
 assert_contains "$ROOT/script/validate-update-feed.py" "deltaFrom"
 assert_not_contains "$ROOT/script/validate-update-feed.py" 'if len(expected_architectures) == 1:'
+assert_not_contains "$ROOT/script/validate-update-feed.py" "feed_signed={'yes' if match else 'no'}"
 FEED_DIR="$TMP/feed"
 FEED_GOOD="$TMP/feed-good"
 FEED_VERSION="9.9.9"
