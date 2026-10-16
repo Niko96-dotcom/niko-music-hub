@@ -112,6 +112,24 @@ final class WAVRecorderWriterTests: XCTestCase {
         try? FileManager.default.removeItem(at: outputURL)
     }
 
+    func testCurrentTimeCountsWrittenAudioNotWallTime() throws {
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_current_time_\(UUID().uuidString).wav")
+        let writer = try WAVRecorderWriter(outputURL: outputURL, preset: .cubaseDefault)
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        Thread.sleep(forTimeInterval: 0.2)
+        XCTAssertEqual(writer.currentTime, 0)
+
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: writer.processingFormat, frameCapacity: 4_410))
+        buffer.frameLength = 4_410
+        try writer.writeBuffer(buffer)
+
+        XCTAssertEqual(writer.currentTime, 0.1, accuracy: 0.000_001)
+        let result = try writer.finalize()
+        XCTAssertEqual(result.duration, 0.1, accuracy: 0.000_001)
+    }
+
     func testCaptureUsesExactTapSourceFormat() throws {
         // A 48 kHz tap source must remain a 48 kHz source while the converter targets the
         // 44.1 kHz writer format. We prove the two formats differ and that the converter
