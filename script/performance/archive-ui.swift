@@ -87,7 +87,15 @@ struct ArchiveUIBenchmark {
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         let suite = "NMH.UI.Performance.\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite); try? fm.removeItem(at: root) }
+        // Same reason as nmh_forget_settings_suite: removing the domain leaves an
+        // empty plist behind, and one orphan per run piles up in ~/Library/Preferences.
+        let suitePlist = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/\(suite).plist")
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? fm.removeItem(at: suitePlist)
+            try? fm.removeItem(at: root)
+        }
         let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults, key: "settings")
         if interactive {
             try settingsStore.updateSettings {
