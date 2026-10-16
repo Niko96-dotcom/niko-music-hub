@@ -17,6 +17,12 @@ final class MusicSearchMatcherFuzzyTests: XCTestCase {
         XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("neon", "noen", max: 2), 1)
     }
 
+    func testBoundedEditDistanceHandlesEmptyOperand() {
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("", "", max: 1), 0)
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("", "a", max: 1), 1)
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("ab", "", max: 2), 2)
+    }
+
     func testTypoMatchesSongTitle() {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Neon Hook", isDirectory: true),

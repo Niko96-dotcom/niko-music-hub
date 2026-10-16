@@ -329,6 +329,8 @@ enum MusicSearchMatcher {
         let left = Array(lhs)
         let right = Array(rhs)
         if abs(left.count - right.count) > max { return nil }
+        if left.isEmpty { return right.count <= max ? right.count : nil }
+        if right.isEmpty { return left.count <= max ? left.count : nil }
 
         // Damerau-Levenshtein (optimal string alignment): treats a single adjacent
         // transposition as one edit, which matches the "typo" intuition callers rely on.
