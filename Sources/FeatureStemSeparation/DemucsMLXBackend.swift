@@ -145,11 +145,11 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             try Task.checkCancellation()
 
             guard result.exitCode == 0 else {
-                let stderr = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
-                let message = stderr.isEmpty
-                    ? "demucs-mlx exited with code \(result.exitCode)"
-                    : "demucs-mlx failed: \(stderr)"
-                return .failed(message: message)
+                let summary = "Stem separation failed (demucs-mlx exit code \(result.exitCode))"
+                guard let cause = failureCause(from: result.standardError) else {
+                    return .failed(message: summary + ".")
+                }
+                return .failed(message: "\(summary): \(cause)")
             }
 
             let outputFolderURL = resolvedOutputFolderURL(for: request)
@@ -164,6 +164,18 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         } catch {
             return .failed(message: "Process error: \(error.localizedDescription)")
         }
+    }
+
+    /// The last non-progress stderr line names the cause (for example the final
+    /// traceback line); the rest of the terminal output never becomes UI copy.
+    private func failureCause(from standardError: String) -> String? {
+        let lines = standardError.split(whereSeparator: { $0 == "\r" || $0 == "\n" })
+        for raw in lines.reversed() {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, progressParser.parse(line: line) == nil else { continue }
+            return line.count > 200 ? String(line.prefix(200)) + "…" : line
+        }
+        return nil
     }
 
     private func resolvedOutputFolderURL(for request: StemSeparationBackendRequest) -> URL {

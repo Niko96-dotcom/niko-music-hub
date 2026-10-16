@@ -261,6 +261,51 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_nonzeroExit_showsPlainSentenceWithLastCauseLineOnly() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 1,
+            outputLines: [],
+            errorLines: [
+                "Downloading model weights...",
+                "Tracks: 25%|██ | 1/4 [00:01<00:03, 1track/s]",
+                "Traceback (most recent call last):",
+                "  File \"/Users/niko/.venv/demucs_mlx/model.py\", line 88, in load_model",
+                "ModelDownloadError: could not fetch weights",
+                "Tracks: 50%|████ | 2/4 [00:02<00:02, 1track/s]"
+            ]
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(
+            message: "Stem separation failed (demucs-mlx exit code 1): ModelDownloadError: could not fetch weights"
+        ))
+    }
+
+    @Test
+    func separate_nonzeroExitWithOnlyProgressOutput_showsPlainSentence() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(exitCode: 2, outputLines: [], errorLines: ["10%", "40%"])
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(message: "Stem separation failed (demucs-mlx exit code 2)."))
+    }
+
+    @Test
     func separate_unexpectedOutputLayout_returnsFailed() async {
         let outputFolder = makeOutputFolder()
         let request = StemSeparationBackendRequest(
