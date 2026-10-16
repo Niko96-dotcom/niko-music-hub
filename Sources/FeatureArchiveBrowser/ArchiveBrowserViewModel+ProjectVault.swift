@@ -150,12 +150,10 @@ extension ArchiveBrowserViewModel {
 
     func setProjectKeepLocal(_ keepLocal: Bool, for song: Song) {
         do {
-            let snapshot = projectVaultSnapshot(for: song)
-            let key = snapshot?.transfer?.sourceURL.path ?? song.id
-            let allKeys = ArchiveVaultObservation.keepLocalKeys(snapshot: snapshot, song: song)
+            let keys = vaultObservation.keepLocalKeys(for: song)
             try settingsStore.updateSettings { settings in
-                if keepLocal { settings.vault.keepLocalProjectIDs.insert(key) }
-                else { settings.vault.keepLocalProjectIDs.subtract(allKeys) }
+                if keepLocal { settings.vault.keepLocalProjectIDs.formUnion(keys) }
+                else { settings.vault.keepLocalProjectIDs.subtract(keys) }
             }
             refreshProjectVaultPresentationContext()
         } catch {

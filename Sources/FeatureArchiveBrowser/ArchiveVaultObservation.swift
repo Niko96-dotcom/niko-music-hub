@@ -392,13 +392,15 @@ final class ArchiveVaultObservation: ObservableObject {
     }
 
     /// Every settings key under which Keep Local can match this song: the
-    /// catalog project ID, the song ID, the song folder and the transfer
-    /// source in raw, standardized, resolved, and canonical form. Turning
-    /// Keep Local off removes all of them, so no leftover key keeps a pin.
-    static func keepLocalKeys(snapshot: ProjectVaultRuntimeSnapshot?, song: Song) -> Set<String> {
+    /// catalog project IDs (path-cached snapshot and catalog snapshots whose
+    /// Active location is this song), the song ID, the song folder and the
+    /// transfer source in raw, standardized, resolved, and canonical form.
+    /// Pinning writes and unpinning removes this same set, so no leftover
+    /// key keeps a pin.
+    func keepLocalKeys(for song: Song) -> Set<String> {
         var keys: Set<String> = [song.id]
         var folders: [URL] = [song.folderPath]
-        if let snapshot {
+        if let snapshot = snapshot(for: song) {
             keys.insert(snapshot.record.id.description)
             if let sourceURL = snapshot.transfer?.sourceURL { folders.append(sourceURL) }
         }
@@ -406,7 +408,20 @@ final class ArchiveVaultObservation: ObservableObject {
             keys.insert(folder.path)
             keys.insert(folder.standardizedFileURL.path)
             keys.insert(folder.standardizedFileURL.resolvingSymlinksInPath().path)
-            keys.insert(vaultCanonicalPath(folder))
+            keys.insert(Self.vaultCanonicalPath(folder))
+        }
+        if let activeRoot = context?.activeRoot {
+            let songPath = Self.vaultCanonicalPath(song.folderPath)
+            let activeBase = activeRoot.fallbackURL.standardizedFileURL.resolvingSymlinksInPath()
+            for snapshot in snapshots {
+                for location in snapshot.record.locations
+                    where location.kind == .active && location.rootID == activeRoot.id {
+                    let candidate = activeBase.appendingPathComponent(location.relativePath, isDirectory: true)
+                    if Self.vaultCanonicalPath(candidate) == songPath {
+                        keys.insert(snapshot.record.id.description)
+                    }
+                }
+            }
         }
         return keys
     }
