@@ -4125,6 +4125,39 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(revealed.urls[0].path.hasSuffix(".cpr"))
     }
 
+    func testOpenMainPreviewReportsMissingAndAbsentPreview() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let revealed = RevealedURLBox()
+        let context = TestToolContext.make(fileActions: CapturingTestFileActions(revealed: revealed))
+        let viewModel = ArchiveBrowserViewModel(context: context)
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+
+        var noPreview = neon
+        noPreview.mainPreviewCandidateID = nil
+        try viewModel.openMainPreview(for: noPreview)
+        XCTAssertTrue(viewModel.statusMessage?.contains("No main preview was found for this song.") ?? false)
+
+        let missingURL = neon.folderPath.appendingPathComponent("Mixdown/deleted-after-scan.wav")
+        let missing = PreviewCandidate(
+            filePath: missingURL,
+            fileName: missingURL.lastPathComponent,
+            folderRole: .mixdown,
+            modifiedAt: Date(),
+            detectedRole: .mainMix
+        )
+        var deletedPreview = neon
+        deletedPreview.previewCandidates = [missing]
+        deletedPreview.mainPreviewCandidateID = missing.id
+        XCTAssertThrowsError(try viewModel.openMainPreview(for: deletedPreview))
+        XCTAssertTrue(viewModel.statusMessage?.contains("Path does not exist:") ?? false)
+        XCTAssertNotNil(viewModel.openError)
+        XCTAssertTrue(revealed.urls.isEmpty)
+    }
+
     func testRevealInFinderRejectsOutsideAllowedRoots() async throws {
         let parent = try makeRevealFixtureDirectory()
         defer { try? FileManager.default.removeItem(at: parent) }
