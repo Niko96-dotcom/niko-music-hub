@@ -53,6 +53,32 @@ final class ToolSidebarSelectionTests: XCTestCase {
         )
     }
 
+    func testArrowKeyOrderSkipsSettingsAndMatchesSidebarOrder() throws {
+        let registry = try ToolRegistry(features: [
+            StubSidebarFeature(id: "bpm-tapper", displayName: "BPM Tapper"),
+            StubSidebarFeature(id: "archive-browser", displayName: "Archive Browser"),
+            StubSidebarFeature(id: "settings", displayName: "Settings"),
+            StubSidebarFeature(id: "dev-tool", displayName: "Dev Tool"),
+        ])
+        let order = ToolSidebarSelection.arrowKeyOrder(registry.metadata)
+
+        XCTAssertEqual(
+            order.map(\.id),
+            [ToolFeatureID("archive-browser"), ToolFeatureID("bpm-tapper"), ToolFeatureID("dev-tool")]
+        )
+        XCTAssertEqual(
+            ToolSidebarSelection.move(direction: .down, metadata: order, selectedID: ToolFeatureID("bpm-tapper")),
+            ToolFeatureID("dev-tool")
+        )
+        XCTAssertEqual(
+            ToolSidebarSelection.move(direction: .down, metadata: order, selectedID: ToolFeatureID("dev-tool")),
+            ToolFeatureID("archive-browser")
+        )
+
+        let source = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/ToolSidebarView.swift")
+        XCTAssertTrue(source.contains("ToolSidebarSelection.arrowKeyOrder(registry.metadata)"))
+    }
+
     func testSidebarWiresSelectionTraitsHintAndMoveCommand() throws {
         let source = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/ToolSidebarView.swift")
 
