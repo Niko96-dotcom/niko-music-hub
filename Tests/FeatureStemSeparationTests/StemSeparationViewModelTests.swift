@@ -391,6 +391,55 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func youtubeStartIsRefusedWhileHelperNeedsSetup() async throws {
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let settingsStore = FakeSettingsStore()
+        let inbox = FakeOutputInboxStore()
+        let runner = JobRunner()
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: service,
+            jobRunner: runner
+        )
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let vm = StemSeparationViewModel(
+            context: context,
+            service: service,
+            youtubeWorkflow: workflow,
+            healthChecker: DemucsMLXHealthChecker(locator: emptyLocator)
+        )
+        vm.youtubeURLText = "https://youtu.be/test"
+        #expect(vm.canStartYouTube == true)
+        vm.refreshHelperHealth()
+        for _ in 0..<100 where vm.helperNeedsSetup == false {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.canStartYouTube == false)
+
+        vm.startYouTubeSeparation()
+
+        #expect(vm.isRunning == false)
+        #expect(vm.currentJobID == nil)
+        #expect(runner.listJobs().isEmpty)
+    }
+
+    @Test
     func unusableHealth_setsDiagnosticInsteadOfMissingSentence() async throws {
         let executable = URL(fileURLWithPath: "/fixture/bin/demucs-mlx")
         let fixtureLocator = HelperToolLocator(

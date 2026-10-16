@@ -66,7 +66,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public var canStartYouTube: Bool {
-        !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil
+        !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil && !helperNeedsSetup
     }
 
     public var canCancel: Bool {
@@ -211,6 +211,9 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func startYouTubeSeparation() {
         guard !isRunning else { return }
+        // Return in the URL field calls this directly; do not download audio
+        // that the missing stem helper cannot separate.
+        guard !helperNeedsSetup else { return }
         guard let sourceURL = normalizedYouTubeURL() else {
             errorMessage = "Paste a valid YouTube URL."
             helperRelatedErrorActive = false
