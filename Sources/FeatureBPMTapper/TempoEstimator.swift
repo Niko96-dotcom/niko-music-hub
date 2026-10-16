@@ -183,7 +183,8 @@ public struct TempoEstimator: Sendable {
         if matchesBaseline(interval, baseline) {
             return true
         }
-        // Short “double-tap” between beats: count as one beat when it is clearly half the baseline.
+        // Short half-baseline interval (long-short tuple or swing pair): accept it as its own
+        // interval and tap. It is not merged into one beat; the median absorbs the alternation.
         if interval < baseline * 0.6, matchesBaseline(interval * 2.0, baseline) {
             return true
         }
