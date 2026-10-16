@@ -74,7 +74,7 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
 
     func testGenerateOutputFilenameKeepsHiddenAndMultidotNamesMeaningful() throws {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
-        XCTAssertEqual(useCase.generateOutputFilename(override: ".take"), ".take.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".take"), "take.wav")
         XCTAssertEqual(useCase.generateOutputFilename(override: "my.session.01"), "my.session.01.wav")
         XCTAssertEqual(useCase.generateOutputFilename(override: "my.session.take.mp3"), "my.session.take.wav")
         XCTAssertEqual(useCase.generateOutputFilename(override: "  spaced take  "), "spaced take.wav")
@@ -195,11 +195,20 @@ final class RecordSystemAudioUseCaseTests: XCTestCase {
 
     func testGenerateOutputFilenameDotfilesLexicalExtension() throws {
         let useCase = RecordSystemAudioUseCase(capturePort: MockAudioCapturePort())
-        // Dotfiles preserve a meaningful name and never derive from the CWD.
-        XCTAssertEqual(useCase.generateOutputFilename(override: ".mp3"), ".mp3.wav")
-        XCTAssertEqual(useCase.generateOutputFilename(override: ".WAV"), ".WAV")
-        XCTAssertEqual(useCase.generateOutputFilename(override: ".hiddenname"), ".hiddenname.wav")
-        XCTAssertEqual(useCase.generateOutputFilename(override: ".hidden.mp3"), ".hidden.wav")
+        // Leading dots are dropped so a take is never hidden in Finder, and
+        // names never derive from the CWD.
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".mp3"), "mp3.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".WAV"), "WAV.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".wav"), "wav.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: " .wav"), "wav.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: "..wav"), "wav.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ". take"), "take.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".hiddenname"), "hiddenname.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: ".hidden.mp3"), "hidden.wav")
+        XCTAssertEqual(useCase.generateOutputFilename(override: "Take.wav.mp3"), "Take.wav")
+        for override in ["ok", ".take", ".wav", "..wav", ".hidden.mp3", "dir/.x"] {
+            XCTAssertFalse(useCase.generateOutputFilename(override: override).hasPrefix("."), override)
+        }
         // Normal cases alongside the dotfile contract.
         XCTAssertEqual(useCase.generateOutputFilename(override: "Take.wav"), "Take.wav")
         XCTAssertEqual(useCase.generateOutputFilename(override: "Take.WAV..."), "Take.WAV")
