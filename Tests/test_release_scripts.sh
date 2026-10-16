@@ -239,6 +239,15 @@ printf 'private planning state\n' >"$PUBLIC_TREE/.planning/STATE.md"
 # credential-shaped string itself.
 HYGIENE_FAKE_KEY="AKIA""FAKEFAKEFAKEFAKE"
 printf 'notes\naws: %s\n' "$HYGIENE_FAKE_KEY" >"$PUBLIC_TREE/docs/notes.md"
+# Current token formats put a '-' or '_' segment right after the prefix.
+HYGIENE_FAKE_FORMATS=(
+  "sk-ant-""api03-FakeFake_Fake-FakeFakeFakeFake"
+  "sk-proj-""FakeFake_Fake-FakeFakeFakeFake"
+  "github_pat_""11FAKEFAKEFAKEFAKEFAKE_fakefake"
+  "sk_live_""FakeFakeFakeFakeFakeFake"
+  "-----BEGIN ENCRYPTED ""PRIVATE KEY-----"
+)
+printf '%s\n' "${HYGIENE_FAKE_FORMATS[@]}" >>"$PUBLIC_TREE/docs/notes.md"
 git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md docs/notes.md
 git -C "$PUBLIC_TREE" commit -qm initial
 assert_fail hygiene-public-private-state "$PUBLIC_TREE/script/public-tree-hygiene.sh" --public-release
@@ -248,6 +257,9 @@ assert_contains "$TMP/hygiene-public-private-state.err" "real home-directory pat
 # (the report is teed into the release log).
 assert_contains "$TMP/hygiene-public-private-state.err" "docs/notes.md:2: credential-shaped string"
 assert_not_contains "$TMP/hygiene-public-private-state.err" "$HYGIENE_FAKE_KEY"
+for hygiene_line in 3 4 5 6 7; do
+  assert_contains "$TMP/hygiene-public-private-state.err" "docs/notes.md:$hygiene_line: credential-shaped string"
+done
 assert_contains "$TMP/hygiene-public-private-state.err" "docs/uat.md:1: real home-directory path"
 assert_not_contains "$TMP/hygiene-public-private-state.err" "/Users/private-user"
 HYGIENE_NO_RG_BIN="$TMP/hygiene-no-rg-bin"

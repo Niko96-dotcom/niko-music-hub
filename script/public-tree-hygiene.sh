@@ -73,7 +73,7 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})'
+SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{22,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|sk_live_[A-Za-z0-9]{20,})'
 for file in "${FILES[@]}"; do
   case "$file" in
     script/public-tree-hygiene.sh|script/verify-source-distribution.py|Tests/test_source_distribution_scripts.sh|docs/release.md|docs/release-validation.md) continue ;;

@@ -46,8 +46,10 @@ CONTENT_PATTERNS = {
     "private machine name": re.compile(r"\b(?:MacBook|Mac Studio)\b", re.IGNORECASE),
     "private workflow state": re.compile(r"(?:^|/)\.(?:ai|planning|cursor|deslop)(?:/|$)"),
     "credential-shaped value": re.compile(
-        r"(?:AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|"
-        r"xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})"
+        r"(?:AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|"
+        r"xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{22,}|"
+        r"sk-ant-[A-Za-z0-9_-]{20,}|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|"
+        r"sk_live_[A-Za-z0-9]{20,})"
     ),
 }
 FORBIDDEN_SUFFIXES = {".env", ".key", ".mobileprovision", ".p12", ".pem", ".pfx", ".xcresult"}
