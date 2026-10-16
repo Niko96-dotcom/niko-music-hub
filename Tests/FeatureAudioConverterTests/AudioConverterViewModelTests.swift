@@ -334,6 +334,27 @@ final class AudioConverterViewModelTests: XCTestCase {
         }
     }
 
+    func testGenericFailureLogsRealCauseWithFileNameToDiagnostics() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "DiskFull.wav", in: directory)
+        let converter = RecordingViewModelConverter { _ in
+            throw AudioConversionError.conversionFailed("No space left on device XYZ")
+        }
+        let diagnostics = RecordingDiagnostics()
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter, diagnostics: diagnostics)
+        viewModel.addFileURLs([source])
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.first?.statusText, AudioConverterCopy.genericFailure)
+        XCTAssertTrue(
+            diagnostics.messages.contains { $0.contains("DiskFull.wav") && $0.contains("No space left on device XYZ") },
+            "Diagnostics should keep the real cause: \(diagnostics.messages)"
+        )
+    }
+
     func testStopAfterCurrentStateHandoff() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1063,7 +1084,8 @@ final class AudioConverterViewModelTests: XCTestCase {
         },
         settingsStore: (any SettingsStore)? = nil,
         outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
-        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
+        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker(),
+        diagnostics: any Diagnostics = FixtureDiagnostics()
     ) -> AudioConverterViewModel {
         let settingsStore = settingsStore ?? FixtureSettingsStore(
             settings: AppSettings(outputFolder: StoredFolderLocation(url: outputFolder))
@@ -1075,7 +1097,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             outputInboxStore: outputInboxStore,
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: diagnostics
         )
         return AudioConverterViewModel(
             context: context,
@@ -1212,6 +1234,19 @@ private struct FixtureFileActions: FileActions {
 
 private struct FixtureDiagnostics: Diagnostics {
     func log(_ level: DiagnosticLevel, _ message: String) {}
+}
+
+private final class RecordingDiagnostics: Diagnostics, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedMessages: [String] = []
+
+    var messages: [String] {
+        lock.withLock { storedMessages }
+    }
+
+    func log(_ level: DiagnosticLevel, _ message: String) {
+        lock.withLock { storedMessages.append(message) }
+    }
 }
 
 private struct FakeExternalProcessRunner: ExternalProcessRunning {

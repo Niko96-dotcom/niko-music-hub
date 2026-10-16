@@ -262,6 +262,14 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             }
             publishShellJobStatus()
             let failedCount = outcomes.filter { if case .failed(_, _) = $0.status { true } else { false } }.count
+            // The row shows plain copy only; the real per-file cause goes to diagnostics.
+            for outcome in outcomes {
+                guard case let .failed(message, _) = outcome.status else { continue }
+                context.diagnostics.scoped(to: .converter).log(
+                    .error,
+                    "Conversion of \(outcome.file.sourceURL.lastPathComponent) failed: \(message)"
+                )
+            }
             context.diagnostics.scoped(to: .converter).log(
                 .info,
                 "Conversion finished (files=\(outcomes.count), failed=\(failedCount), canceled=\(canceledCount))"
