@@ -244,6 +244,20 @@ public final class HubShellSession: ObservableObject {
         presentSetup()
     }
 
+    /// Last `QuickAccessRouter.archiveSearchFocusRequest` already applied. Kept
+    /// here for the same reason as `appliedHelperSetupRequest`: the router's
+    /// counter only grows, so a reopened main window reads the old value and
+    /// must not take search focus again.
+    private var appliedArchiveSearchFocusRequest: UInt64 = 0
+
+    /// Claims an archive search focus request once per router request sequence.
+    /// Returns `true` when the caller should focus the search field.
+    public func claimArchiveSearchFocusRequest(_ request: UInt64) -> Bool {
+        guard request > appliedArchiveSearchFocusRequest else { return false }
+        appliedArchiveSearchFocusRequest = request
+        return true
+    }
+
     public func dismissSetup() {
         isSetupPresented = false
     }

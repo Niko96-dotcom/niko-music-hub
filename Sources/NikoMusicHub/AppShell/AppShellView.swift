@@ -129,7 +129,9 @@ struct AppShellView: View {
                 setOutputInboxVisible(true)
                 router.clearRevealOutputInbox()
             }
-            if router.archiveSearchFocusRequest > 0 {
+            // The focus counter only grows; the session remembers the last one
+            // applied so a reopened window does not take search focus again.
+            if shellSession.claimArchiveSearchFocusRequest(router.archiveSearchFocusRequest) {
                 DispatchQueue.main.async {
                     router.consumeArchiveSearchFocusRequest()
                 }
@@ -164,7 +166,7 @@ struct AppShellView: View {
             selectTool(ToolFeatureID("wav-converter"))
         }
         .onChange(of: router.archiveSearchFocusRequest) { _, request in
-            guard request > 0 else { return }
+            guard shellSession.claimArchiveSearchFocusRequest(request) else { return }
             selectTool(ToolFeatureID("archive-browser"))
             // Defer until the cached Archive pane is visible and can accept focus.
             DispatchQueue.main.async {
