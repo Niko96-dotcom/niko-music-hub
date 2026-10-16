@@ -192,6 +192,18 @@ public struct MusicArchiveScanner: @unchecked Sendable {
 
         for folder in resolution.songFolders.sorted(by: { $0.path < $1.path }) {
             try Task.checkCancellation()
+            // Same exclusion rule as `scan`; the merge drops a card cached before the exclusion.
+            if ScanExclusionPolicy.shouldSkipFolder(named: folder.lastPathComponent, terms: exclusionTerms) {
+                unusableSongFolderIDs.insert(folder.standardizedFileURL.path)
+                skippedEntries.append(
+                    SkippedScanEntry(
+                        kind: .unreadableChild,
+                        label: folder.lastPathComponent,
+                        reason: "Excluded by scan settings"
+                    )
+                )
+                continue
+            }
             // Same rule as `scan`: a symlink at the archive root is never followed. This is a
             // single `lstat` (via the song-base verification in `scanSongFolder`): `S_IFLNK`
             // keeps the existing skipped reason, while a vanished path or non-directory keeps

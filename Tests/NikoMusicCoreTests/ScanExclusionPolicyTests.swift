@@ -26,6 +26,34 @@ final class ScanExclusionPolicyTests: XCTestCase {
         XCTAssertTrue(result.skippedEntries.contains { $0.label == "backup" })
     }
 
+    func testIncrementalScanSkipsExcludedFolder() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("NikoMusicHubExcludeIncremental-\(UUID().uuidString)", isDirectory: true)
+        let included = root.appendingPathComponent("Included Song", isDirectory: true)
+        let backup = root.appendingPathComponent("Backup", isDirectory: true)
+        try FileManager.default.createDirectory(at: included, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: included.appendingPathComponent("Included Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        FileManager.default.createFile(
+            atPath: backup.appendingPathComponent("Hidden Song.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let scanner = CubaseArchiveScanner(exclusionTerms: ["backup"])
+        let result = try scanner.scanIncremental(
+            resolution: ArchiveSongFolderResolver.Resolution(songFolders: [included, backup]),
+            roots: [root]
+        )
+
+        XCTAssertEqual(result.songs.map(\.displayTitle), ["Included Song"])
+        XCTAssertTrue(result.unusableSongFolderIDs.contains(backup.standardizedFileURL.path))
+        XCTAssertTrue(result.skippedEntries.contains { $0.label == "Backup" })
+    }
+
     func testTermsFoldAccentsAndCaseWithPOSIXLocale() {
         XCTAssertEqual(ScanExclusionPolicy.terms(from: "Café, BACKUP ,  "), ["cafe", "backup"])
         XCTAssertEqual(ScanExclusionPolicy.terms(from: " a , ,b ,,  c "), ["a", "b", "c"])
