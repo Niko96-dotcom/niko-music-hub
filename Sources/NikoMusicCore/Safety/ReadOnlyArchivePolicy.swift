@@ -32,15 +32,14 @@ public struct ReadOnlyArchivePolicy: @unchecked Sendable {
         }
     }
 
-    /// Attempts a write-probe under the archive root; succeeds only when policy denies the write.
+    /// Policy self-check: returns true when the policy denies a write to a probe path under
+    /// the archive root. This never touches the disk (no write, no delete), so it only proves
+    /// that the policy itself guards the root, not that every writer consults the policy.
     public func writeProbeDenied(under archiveRoot: URL) -> Bool {
         let probeURL = archiveRoot
             .appendingPathComponent(".niko-music-hub-write-probe", isDirectory: false)
         do {
             try enforceNoWrite(at: probeURL, archiveRoot: archiveRoot)
-            if fileManager.fileExists(atPath: probeURL.path) {
-                try? fileManager.removeItem(at: probeURL)
-            }
             return false
         } catch ReadOnlyArchivePolicyError.writeDenied {
             return true
