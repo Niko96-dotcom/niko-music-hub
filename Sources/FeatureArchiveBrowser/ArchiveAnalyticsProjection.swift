@@ -58,7 +58,8 @@ enum ArchiveAnalyticsProjection {
         snapshot.stageDistribution = ProjectWorkflowStatus.allCases.map { status in
             .init(status: status, count: songs.count { $0.workflowStatus == status })
         }
-        snapshot.stageDwell = stageDwell(history: history, now: now)
+        let songIDs = Set(songs.map(\.id))
+        snapshot.stageDwell = stageDwell(history: history.filter { songIDs.contains($0.songID) }, now: now)
         snapshot.earliestHistoryEntry = history.map(\.changedAt).min()
         return snapshot
     }
@@ -116,7 +117,8 @@ enum ArchiveAnalyticsProjection {
 
     /// Average days spent in each stage. Closed intervals come from paired
     /// transitions; a song still sitting in a stage contributes its open
-    /// interval so early data is not empty.
+    /// interval so early data is not empty. Done is terminal, so only its
+    /// closed intervals count.
     private static func stageDwell(
         history: [WorkflowStatusChange],
         now: Date
@@ -127,7 +129,9 @@ enum ArchiveAnalyticsProjection {
             let ordered = changes.sorted { $0.changedAt < $1.changedAt }
             for (index, change) in ordered.enumerated() {
                 guard let stage = change.toStatus else { continue }
-                let leftAt = index + 1 < ordered.count ? ordered[index + 1].changedAt : now
+                let isOpen = index + 1 >= ordered.count
+                if isOpen && stage == .done { continue }
+                let leftAt = isOpen ? now : ordered[index + 1].changedAt
                 let dwell = leftAt.timeIntervalSince(change.changedAt)
                 guard dwell >= 0 else { continue }
                 let existing = intervals[stage] ?? (0, 0)
