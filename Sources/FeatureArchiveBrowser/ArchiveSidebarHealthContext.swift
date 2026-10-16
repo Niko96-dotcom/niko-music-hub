@@ -14,7 +14,7 @@ struct ArchiveSidebarHealthContext: Equatable {
             parts.append(CountCopy.count(report.totalSongs, "song"))
         }
         if report.withWarnings > 0 {
-            parts.append(CountCopy.count(report.withWarnings, "warning"))
+            parts.append(CountCopy.count(report.withWarnings, "song") + " with warnings")
         }
         if skippedEntryCount > 0 {
             parts.append("\(skippedEntryCount) skipped")
