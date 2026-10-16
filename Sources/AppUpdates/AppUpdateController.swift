@@ -112,8 +112,8 @@ public final class AppUpdateController: NSObject, ObservableObject {
         sessionVersion = nil
 
         guard let error = error as NSError? else {
-            updatesLogger.info("Update check result: up to date")
-            status = .upToDate(checkedAt: lastUpdateCheckDate ?? Date())
+            status = Self.statusAfterCleanCycle(current: status)
+            updatesLogger.info("Update check result: cycle ended without error")
             return
         }
 
@@ -131,6 +131,15 @@ public final class AppUpdateController: NSObject, ObservableObject {
 
         updatesLogger.error("Update check result: failed error=\(error.localizedDescription, privacy: .private)")
         status = .failed(message: error.localizedDescription)
+    }
+
+    /// Sparkle ends a cycle with a nil error when an update was dismissed,
+    /// skipped or scheduled to install; "nothing newer" arrives separately as
+    /// `SUNoUpdateError`. So a clean end never means "up to date": keep a staged
+    /// install's relaunch prompt and otherwise fall back to a neutral state.
+    static func statusAfterCleanCycle(current: AppUpdateStatus) -> AppUpdateStatus {
+        if case .readyToRelaunch = current { return current }
+        return .idle
     }
 }
 
