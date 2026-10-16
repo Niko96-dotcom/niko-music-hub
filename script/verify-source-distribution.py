@@ -80,7 +80,10 @@ def scan_tree(root: Path) -> list[str]:
             continue
         if not path.is_file():
             continue
-        if path.name == ".DS_Store" or path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        # Path.suffix is empty for ".env" and ".local" for ".env.local", so dotenv files need a name check.
+        name = path.name.lower()
+        is_dotenv = name == ".env" or name.startswith(".env.")
+        if path.name == ".DS_Store" or is_dotenv or path.suffix.lower() in FORBIDDEN_SUFFIXES:
             failures.append(f"{relative}: forbidden file type")
         if relative in CONTENT_PATTERN_EXEMPTIONS:
             continue

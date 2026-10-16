@@ -203,6 +203,14 @@ printf 'private\n' >"$SCAN/.planning/state.md"
 assert_fail planning-state "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/planning-state.out" "forbidden private/build path"
 rm -rf "$SCAN/.planning"
+mkdir -p "$SCAN/Sources"
+printf 'NOTARY_PASSWORD=x\n' >"$SCAN/Sources/.env"
+assert_fail dotenv "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/dotenv.out" "Sources/.env: forbidden file type"
+mv "$SCAN/Sources/.env" "$SCAN/Sources/.env.local"
+assert_fail dotenv-local "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/dotenv-local.out" "Sources/.env.local: forbidden file type"
+rm -rf "$SCAN/Sources"
 printf '%s\n' '-----BEGIN PRIVATE KEY-----' >"$SCAN/key.txt"
 assert_fail private-key "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/private-key.out" "credential-shaped value"
