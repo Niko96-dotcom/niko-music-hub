@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
     private let settingsProvider: @Sendable () throws -> HelperToolSettings
@@ -168,14 +169,24 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     /// The last non-progress stderr line names the cause (for example the final
     /// traceback line); the rest of the terminal output never becomes UI copy.
+    /// An exception line wins even when it mentions a phase word ("loading model").
     private func failureCause(from standardError: String) -> String? {
-        let lines = standardError.split(whereSeparator: { $0 == "\r" || $0 == "\n" })
-        for raw in lines.reversed() {
-            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty, progressParser.parse(line: line) == nil else { continue }
-            return line.count > 200 ? String(line.prefix(200)) + "…" : line
+        let lines = standardError
+            .split(whereSeparator: { $0 == "\r" || $0 == "\n" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let exceptionLine = lines.last { line in
+            line.range(of: #"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b"#, options: .regularExpression) != nil
         }
-        return nil
+        let otherLine = lines.last { line in
+            progressParser.parse(line: line) == nil
+                && !line.hasPrefix("File \"")
+                && !line.hasPrefix("Traceback (")
+                && line.range(of: #"^[\^~\s]+$"#, options: .regularExpression) == nil
+        }
+        guard let cause = exceptionLine ?? otherLine else { return nil }
+        let redacted = DiagnosticsPathRedactor.redactPathsInText(cause)
+        return redacted.count > 200 ? String(redacted.prefix(200)) + "…" : redacted
     }
 
     private func resolvedOutputFolderURL(for request: StemSeparationBackendRequest) -> URL {

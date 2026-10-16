@@ -290,6 +290,33 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_nonzeroExit_keepsExceptionLineThatMentionsAPhaseWord() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 1,
+            outputLines: [],
+            errorLines: [
+                "Traceback (most recent call last):",
+                "  File \"\(NSHomeDirectory())/.venv/demucs_mlx/model.py\", line 88, in load_model",
+                "RuntimeError: error loading model weights from \(NSHomeDirectory())/.cache/htdemucs"
+            ]
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(
+            message: "Stem separation failed (demucs-mlx exit code 1): "
+                + "RuntimeError: error loading model weights from ~/.cache/htdemucs"
+        ))
+    }
+
+    @Test
     func separate_nonzeroExitWithOnlyProgressOutput_showsPlainSentence() async {
         let request = StemSeparationBackendRequest(
             inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
