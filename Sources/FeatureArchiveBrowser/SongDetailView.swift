@@ -124,7 +124,18 @@ struct SongDetailView: View {
         }
         .onChange(of: workspaceTab) { _, tab in
             if tab == .plugins {
-                viewModel.pluginsSectionExpanded = true
+                // Already expanded means no false→true change below, so ask
+                // here: the main project may have changed since the last visit.
+                if viewModel.pluginsSectionExpanded {
+                    viewModel.refreshCPRPluginSummary(for: liveSong)
+                } else {
+                    viewModel.pluginsSectionExpanded = true
+                }
+            }
+        }
+        .onChange(of: liveSong.effectiveLatestCPR?.filePath) { _, _ in
+            if viewModel.pluginsSectionExpanded {
+                viewModel.refreshCPRPluginSummary(for: liveSong)
             }
         }
         // Identity is per song (`.id(song.id)` at the call sites), so a song
