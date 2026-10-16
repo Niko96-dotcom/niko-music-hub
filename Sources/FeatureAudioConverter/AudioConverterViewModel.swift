@@ -91,6 +91,27 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     public func addFileURLs(_ urls: [URL]) {
         do {
             let intake = try scanner.scan(urls)
+            // Re-adding a skipped or failed file puts its row back in the queue,
+            // so a stopped, canceled or refused batch can run again in place.
+            if !isConverting {
+                let requeueURLs = Set(intake.supportedFiles.map { $0.url.standardizedFileURL })
+                rows = rows.map { row in
+                    guard row.state == .skipped || row.state == .failed,
+                          row.isConvertible,
+                          requeueURLs.contains(row.sourceURL.standardizedFileURL) else {
+                        return row
+                    }
+                    return AudioConverterRow(
+                        id: row.id,
+                        sourceURL: row.sourceURL,
+                        sourceType: row.sourceType,
+                        plannedOutputName: plannedOutputName(for: row.sourceURL),
+                        state: .queued,
+                        statusText: AudioConverterCopy.ready,
+                        progress: 0
+                    )
+                }
+            }
             var knownURLs = Set(rows.map { $0.sourceURL.standardizedFileURL })
             let newSupported = intake.supportedFiles.filter { file in
                 let key = file.url.standardizedFileURL

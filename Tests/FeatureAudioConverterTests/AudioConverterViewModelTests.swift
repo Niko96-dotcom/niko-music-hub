@@ -398,6 +398,41 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
     }
 
+    func testReAddingSkippedFilesRequeuesTheirRowsInPlace() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.wav", in: directory)
+        let second = try makeFile(named: "Second.wav", in: directory)
+        var viewModel: AudioConverterViewModel!
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await MainActor.run {
+                    viewModel.requestStopAfterCurrent()
+                }
+            }
+            return makeResult(for: request)
+        }
+        viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+        _ = await viewModel.convertQueuedRows()
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .skipped])
+        XCTAssertFalse(viewModel.canConvertToWAV)
+        let skippedID = viewModel.rows[1].id
+
+        viewModel.addFileURLs([first, second])
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .queued])
+        XCTAssertEqual(viewModel.rows[1].id, skippedID)
+        XCTAssertEqual(viewModel.rows[1].statusText, AudioConverterCopy.ready)
+        XCTAssertTrue(viewModel.canConvertToWAV)
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .verified])
+        XCTAssertEqual(converter.requests.map(\.sourceURL), [first, second])
+    }
+
     func testStopAfterThisFileHonestyCopy() throws {
         XCTAssertEqual(AudioConverterCopy.stopAfterThisFile, "Stop After This File")
         XCTAssertEqual(
