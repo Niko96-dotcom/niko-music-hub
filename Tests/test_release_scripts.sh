@@ -229,11 +229,21 @@ git -C "$PUBLIC_TREE" config user.name "Release Test"
 git -C "$PUBLIC_TREE" config user.email "release-test@example.invalid"
 printf 'local proof: /Users/private-user/Music/project.cpr\n' >"$PUBLIC_TREE/docs/uat.md"
 printf 'private planning state\n' >"$PUBLIC_TREE/.planning/STATE.md"
-git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md
+# The fake key is assembled at runtime so this test file never carries a
+# credential-shaped string itself.
+HYGIENE_FAKE_KEY="AKIA""FAKEFAKEFAKEFAKE"
+printf 'notes\naws: %s\n' "$HYGIENE_FAKE_KEY" >"$PUBLIC_TREE/docs/notes.md"
+git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md docs/notes.md
 git -C "$PUBLIC_TREE" commit -qm initial
 assert_fail hygiene-public-private-state "$PUBLIC_TREE/script/public-tree-hygiene.sh" --public-release
 assert_contains "$TMP/hygiene-public-private-state.err" "private planning or agent state"
 assert_contains "$TMP/hygiene-public-private-state.err" "real home-directory path"
+# A credential hit names file and line, but never echoes the secret itself
+# (the report is teed into the release log).
+assert_contains "$TMP/hygiene-public-private-state.err" "docs/notes.md:2: credential-shaped string"
+assert_not_contains "$TMP/hygiene-public-private-state.err" "$HYGIENE_FAKE_KEY"
+assert_contains "$TMP/hygiene-public-private-state.err" "docs/uat.md:1: real home-directory path"
+assert_not_contains "$TMP/hygiene-public-private-state.err" "/Users/private-user"
 HYGIENE_NO_RG_BIN="$TMP/hygiene-no-rg-bin"
 mkdir -p "$HYGIENE_NO_RG_BIN"
 for tool in bash git dirname find sort; do

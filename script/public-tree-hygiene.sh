@@ -80,12 +80,15 @@ for file in "${FILES[@]}"; do
   esac
   if [[ -f "$file" ]]; then
     rg_status=0
-    hits="$(rg -n -I "$SECRET_PATTERN" "$file")" || rg_status=$?
+    # --no-filename: the report names the file itself. Only the line number is
+    # kept, so a real leaked secret is never echoed to the terminal or the
+    # release log.
+    hits="$(rg -n --no-filename "$SECRET_PATTERN" "$file")" || rg_status=$?
     if [[ $rg_status -gt 1 ]]; then
       FAILURES+=("$file: credential scan failed (rg exit $rg_status)")
     fi
     while IFS= read -r hit; do
-      [[ -n "$hit" ]] && FAILURES+=("$hit: credential-shaped string")
+      [[ -n "$hit" ]] && FAILURES+=("$file:${hit%%:*}: credential-shaped string")
     done <<<"$hits"
   fi
 done
@@ -100,12 +103,12 @@ if [[ "$PUBLIC_RELEASE" == true ]]; then
     esac
     if [[ -f "$file" ]]; then
       rg_status=0
-      hits="$(rg -n -I "$HOME_PATH_PATTERN" "$file")" || rg_status=$?
+      hits="$(rg -n --no-filename "$HOME_PATH_PATTERN" "$file")" || rg_status=$?
       if [[ $rg_status -gt 1 ]]; then
         FAILURES+=("$file: home-path scan failed (rg exit $rg_status)")
       fi
       while IFS= read -r hit; do
-        [[ -n "$hit" ]] && FAILURES+=("$hit: real home-directory path must not ship in a public source tree")
+        [[ -n "$hit" ]] && FAILURES+=("$file:${hit%%:*}: real home-directory path must not ship in a public source tree")
       done <<<"$hits"
     fi
   done
