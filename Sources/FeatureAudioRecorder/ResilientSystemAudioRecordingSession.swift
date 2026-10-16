@@ -221,6 +221,7 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
     ) async -> Bool {
         // A write that failed during a rebuild's teardown is caught here, not after a timeout.
         guard pipeline.writeFailure == nil else { return false }
+        guard !cancelled else { return false }
         generation += 1
         let backendGeneration = generation
         let gate = RecorderReadinessGate()
@@ -357,6 +358,8 @@ actor ResilientSystemAudioRecordingSession: SystemAudioRecordingSession {
         pipeline.activate(generation: generation) // Reject old callbacks before teardown.
         await currentBackend?.stop()
         currentBackend = nil
+        // stop() can run to completion during the teardown; never start a new graph after it.
+        guard !cancelled, state == .rebuildingCoreAudio else { return }
 
         if await startCoreAudioAttempt(pipeline: pipeline, diagnostics: diagnostics) { return }
         guard !cancelled else { return }
