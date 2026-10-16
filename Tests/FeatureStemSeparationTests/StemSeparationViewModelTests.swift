@@ -388,6 +388,7 @@ struct StemSeparationViewModelTests {
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.canStart == false)
         #expect(vm.errorMessage == StemSeparationHelperCopy.missingBody)
+        #expect(vm.helperSetupDiagnostic == nil)
     }
 
     @Test
@@ -479,10 +480,19 @@ struct StemSeparationViewModelTests {
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.errorMessage == "demucs-mlx could not start: boom line1")
 
-        let card = StemSeparationView.helperMissingCard(detail: vm.errorMessage)
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+
+        // Drops change errorMessage but must not change the card's cause.
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/notes.txt")])
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+        #expect(vm.errorMessage == nil)
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+
+        let card = StemSeparationView.helperMissingCard(diagnostic: vm.helperSetupDiagnostic)
         #expect(card.label == StemSeparationHelperCopy.unusableLabel)
         #expect(card.body == "demucs-mlx could not start: boom line1")
-        let missingCard = StemSeparationView.helperMissingCard(detail: StemSeparationHelperCopy.missingBody)
+        let missingCard = StemSeparationView.helperMissingCard(diagnostic: nil)
         #expect(missingCard.label == StemSeparationHelperCopy.missingLabel)
         #expect(missingCard.body == StemSeparationHelperCopy.missingBody)
     }

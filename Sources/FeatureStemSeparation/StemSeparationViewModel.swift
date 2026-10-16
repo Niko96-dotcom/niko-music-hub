@@ -21,6 +21,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     @Published public private(set) var statusMessage = ""
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var helperNeedsSetup = false
+    /// Why an installed helper can't be used, from the last health check.
+    /// Nil when the helper is missing or ready. Drops and job errors never
+    /// change it, so the setup card keeps the real cause.
+    @Published public private(set) var helperSetupDiagnostic: String?
     @Published public private(set) var results: [OutputInboxItem] = []
 
     public let supportedPresets = StemSeparationPreset.allCases
@@ -319,6 +323,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         switch health {
         case .missing:
             helperNeedsSetup = true
+            helperSetupDiagnostic = nil
             errorMessage = StemSeparationHelperCopy.missingBody
             helperRelatedErrorActive = true
         case .ready:
@@ -327,13 +332,16 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
                 helperRelatedErrorActive = false
             }
             helperNeedsSetup = false
+            helperSetupDiagnostic = nil
         case let .unusable(message):
             helperNeedsSetup = true
-            errorMessage = Self.startFailureMessage(from: message)
+            helperSetupDiagnostic = Self.startFailureMessage(from: message)
+            errorMessage = helperSetupDiagnostic
             helperRelatedErrorActive = true
         case .modelCacheMissing:
             helperNeedsSetup = true
-            errorMessage = StemSeparationHelperCopy.missingBody
+            helperSetupDiagnostic = StemSeparationHelperCopy.modelCacheMissingBody
+            errorMessage = helperSetupDiagnostic
             helperRelatedErrorActive = true
         }
     }
