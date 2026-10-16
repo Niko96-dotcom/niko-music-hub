@@ -26,10 +26,12 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
             throw AudioConversionError.sourceFileMissing(request.sourceURL)
         }
 
-        try fileManager.createDirectory(
-            at: request.outputDirectory,
-            withIntermediateDirectories: true
-        )
+        try outputIO {
+            try fileManager.createDirectory(
+                at: request.outputDirectory,
+                withIntermediateDirectories: true
+            )
+        }
 
         let sourceFile = try AVAudioFile(forReading: request.sourceURL)
         let channelCount = resolvedChannelCount(
@@ -51,7 +53,7 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
         let temporaryOutputURL = makeTemporaryOutputURL(for: finalOutputURL)
 
         do {
-            try removeFileIfNeeded(at: temporaryOutputURL)
+            try outputIO { try removeFileIfNeeded(at: temporaryOutputURL) }
             try writeConvertedWAV(
                 sourceFile: sourceFile,
                 outputURL: temporaryOutputURL,
@@ -69,7 +71,7 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
                 )
             }
 
-            try fileManager.moveItem(at: temporaryOutputURL, to: finalOutputURL)
+            try outputIO { try fileManager.moveItem(at: temporaryOutputURL, to: finalOutputURL) }
             return ConversionResult(
                 sourceURL: request.sourceURL,
                 outputURL: finalOutputURL,
@@ -105,12 +107,14 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsNonInterleaved: false
         ]
-        let outputFile = try AVAudioFile(
-            forWriting: outputURL,
-            settings: outputSettings,
-            commonFormat: .pcmFormatFloat32,
-            interleaved: false
-        )
+        let outputFile = try outputIO {
+            try AVAudioFile(
+                forWriting: outputURL,
+                settings: outputSettings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false
+            )
+        }
 
         guard let converter = AVAudioConverter(
             from: sourceFile.processingFormat,
@@ -208,7 +212,7 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
                 throw conversionError
             }
             if outputBuffer.frameLength > 0 {
-                try outputFile.write(from: outputBuffer)
+                try outputIO { try outputFile.write(from: outputBuffer) }
             }
 
             switch status {
@@ -255,6 +259,20 @@ public struct NativeAudioConverter: AudioConverting, @unchecked Sendable {
         guard fileManager.fileExists(atPath: url.path) else { return }
         try fileManager.removeItem(at: url)
     }
+
+    private func outputIO<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch {
+            throw NativeOutputWriteError(underlying: error)
+        }
+    }
+}
+
+/// Native failed on the output side (folder, temp file, disk write, rename). FFmpeg writes to
+/// the same place, so the pipeline reports `underlying` instead of falling back.
+struct NativeOutputWriteError: Error {
+    let underlying: Error
 }
 
 private final class ConverterInputState: @unchecked Sendable {

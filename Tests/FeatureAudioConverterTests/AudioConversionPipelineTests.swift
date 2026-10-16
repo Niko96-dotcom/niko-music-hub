@@ -1,3 +1,4 @@
+import AVFoundation
 import AppCore
 import FeatureAudioConverter
 import XCTest
@@ -199,6 +200,61 @@ final class AudioConversionPipelineTests: XCTestCase {
             let nsError = error as NSError
             XCTAssertEqual(nsError.domain, NSCocoaErrorDomain)
             XCTAssertEqual(nsError.code, NSFileWriteOutOfSpaceError)
+        }
+        XCTAssertEqual(factory.callCount, 0)
+    }
+
+    func testReadOnlyOutputFolderKeepsNativeErrorWithoutFFmpegFallback() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OutsideCubaseHubPipelineTests-\(UUID().uuidString)", isDirectory: true)
+        let outputDirectory = directory.appendingPathComponent("out", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: outputDirectory.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let sourceURL = directory.appendingPathComponent("Read Only.wav")
+        do {
+            let sourceFile = try AVAudioFile(forWriting: sourceURL, settings: [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: 48000.0,
+                AVNumberOfChannelsKey: 2,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsBigEndianKey: false,
+                AVLinearPCMIsNonInterleaved: false
+            ])
+            let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: sourceFile.processingFormat, frameCapacity: 1_024))
+            buffer.frameLength = 1_024
+            try sourceFile.write(from: buffer)
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: outputDirectory.path)
+
+        let factory = RecordingFFmpegFactory(
+            converter: FakeAudioConverter(result: .failure(AudioConversionError.conversionFailed("unused")))
+        )
+        let pipeline = AudioConversionPipeline(
+            native: NativeAudioConverter(),
+            helperSettings: HelperToolSettings(ffmpeg: nil),
+            ffmpegConverterFactory: factory.makeConverter,
+            healthChecker: FFmpegHealthChecker(
+                runner: FakeExternalProcessRunner(result: .success(
+                    ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+                )),
+                locator: locator(executables: [])
+            )
+        )
+
+        do {
+            _ = try await pipeline.convert(ConversionRequest(
+                sourceURL: sourceURL,
+                outputDirectory: outputDirectory,
+                preset: .cubaseDefault,
+                sourceType: .wav
+            ))
+            XCTFail("Expected native write error")
+        } catch {
+            XCTAssertFalse(error is AudioConversionError, "Native write error was replaced: \(error)")
         }
         XCTAssertEqual(factory.callCount, 0)
     }

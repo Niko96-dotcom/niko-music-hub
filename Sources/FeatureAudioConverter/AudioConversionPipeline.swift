@@ -28,6 +28,10 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     public func convert(_ request: ConversionRequest) async throws -> ConversionResult {
         do {
             return try await native.convert(request)
+        } catch let outputError as NativeOutputWriteError {
+            // Disk full, read-only or permission errors fail the same with FFmpeg;
+            // keep the native error so the real cause reaches the row.
+            throw outputError.underlying
         } catch {
             guard shouldAttemptFFmpegFallback(after: error) else {
                 throw error
