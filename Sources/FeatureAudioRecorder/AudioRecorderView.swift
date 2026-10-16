@@ -424,7 +424,7 @@ public struct AudioRecorderView: View {
 
     @ViewBuilder
     private func errorCard(for error: RecorderError) -> some View {
-        let card = cardFor(error)
+        let card = Self.cardFor(error)
         StandardErrorCard(card: card) { action in
             switch action {
             case .tryAgain:
@@ -443,7 +443,7 @@ public struct AudioRecorderView: View {
         }
     }
 
-    private func cardFor(_ error: RecorderError) -> AppErrorCard {
+    static func cardFor(_ error: RecorderError) -> AppErrorCard {
         switch error {
         case .permissionDenied:
             return AppErrorCard(
@@ -481,12 +481,14 @@ public struct AudioRecorderView: View {
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
-        case .writeError:
+        case .writeError(let message):
+            // The message carries the real cause (a guard refusal is not a full
+            // disk) and where a kept partial take is.
             return AppErrorCard(
                 category: .conversionFile,
                 label: "Could Not Save Recording",
                 icon: "externaldrive.badge.xmark",
-                body: "Check available disk space. The output folder may be full or on a read-only volume.",
+                body: message,
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Show Output Folder", style: .secondary, action: .revealInFinder),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
@@ -503,22 +505,22 @@ public struct AudioRecorderView: View {
                     AppErrorCard.RecoveryAction(label: "Dismiss", style: .secondary, action: .dismiss)
                 ]
             )
-        case .verificationFailed:
+        case .verificationFailed(let message):
             return AppErrorCard(
                 category: .conversionFile,
                 label: "Recording Verification Failed",
                 icon: "checkmark.shield",
-                body: "The recorded file could not be verified. It may be corrupted.",
+                body: "The recorded file could not be verified. It may be corrupted. \(message)",
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
-        case .noAudioCaptured:
+        case .noAudioCaptured(let message):
             return AppErrorCard(
                 category: .conversionFile,
                 label: "No Audio Received",
                 icon: "waveform.badge.exclamationmark",
-                body: "The recorder did not receive system audio. Start playback in another app, then try again. If audio is already playing, check its output device.",
+                body: message,
                 recoveryActions: [
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
@@ -553,7 +555,7 @@ public struct AudioRecorderView: View {
         case .stopping:
             return "Stopping…"
         case .error(let error):
-            return cardFor(error).label
+            return Self.cardFor(error).label
         }
     }
 
