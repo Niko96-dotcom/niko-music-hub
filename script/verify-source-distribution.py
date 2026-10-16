@@ -39,7 +39,7 @@ CONTENT_PATTERNS = {
     # Any home directory that is not an obvious placeholder is treated as a real
     # person's path. Fixtures use the placeholder names below on purpose.
     "personal home path": re.compile(
-        r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|\b))"
+        r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|$|[^A-Za-z0-9_.-]))"
         r"[A-Za-z0-9_.-]+(?:/|\b)",
         re.IGNORECASE,
     ),

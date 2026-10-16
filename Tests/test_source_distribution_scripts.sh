@@ -191,6 +191,13 @@ printf '/Users/jane/private\n' >"$SCAN/personal.txt"
 assert_fail personal-path "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/personal-path.out" "personal home path"
 rm "$SCAN/personal.txt"
+printf '/Users/user/x\n' >"$SCAN/placeholder.txt"
+"$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only >/dev/null
+rm "$SCAN/placeholder.txt"
+printf '/Users/test.jane/private\n' >"$SCAN/personal.txt"
+assert_fail personal-path-prefixed "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/personal-path-prefixed.out" "personal home path"
+rm "$SCAN/personal.txt"
 mkdir -p "$SCAN/.planning"
 printf 'private\n' >"$SCAN/.planning/state.md"
 assert_fail planning-state "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
