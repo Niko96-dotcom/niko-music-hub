@@ -49,7 +49,11 @@ public struct PreviewConfidenceRanker: Sendable {
     }
 
     /// Returns which comparison step would rank `winner` above `runnerUp`.
-    public func decidingFactor(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> PreviewRankingDecidingFactor {
+    public func decidingFactor(
+        winner: PreviewCandidate,
+        runnerUp: PreviewCandidate,
+        projectContext: PreviewRankingProjectContext? = nil
+    ) -> PreviewRankingDecidingFactor {
         if PreviewFilenameSemantics.isSongPreview(winner) != PreviewFilenameSemantics.isSongPreview(runnerUp) {
             return .songSuitability
         }
@@ -60,13 +64,18 @@ public struct PreviewConfidenceRanker: Sendable {
         if winner.confidenceScore != runnerUp.confidenceScore {
             return .score
         }
-        let wm = Self.rankingMaturity(for: winner.fileName)
-        let rm = Self.rankingMaturity(for: runnerUp.fileName)
+        let wm = Self.rankingMaturity(for: winner)
+        let rm = Self.rankingMaturity(for: runnerUp)
         if wm != rm { return .productionMaturity }
         if winner.namedDeliveryModifiedAt != runnerUp.namedDeliveryModifiedAt { return .recency }
         let lv = winner.detectedVersionNumber ?? 0
         let rv = runnerUp.detectedVersionNumber ?? 0
         if lv != rv { return .version }
+        if projectContext?.anchorCPRVersion != nil,
+           titleTokenMatchCount(winner.fileName, context: projectContext)
+            != titleTokenMatchCount(runnerUp.fileName, context: projectContext) {
+            return .titleMatch
+        }
         if winner.modifiedAt != runnerUp.modifiedAt { return .recency }
         let le = Self.extensionPreference[winner.fileExtension] ?? 0
         let re = Self.extensionPreference[runnerUp.fileExtension] ?? 0
@@ -77,9 +86,11 @@ public struct PreviewConfidenceRanker: Sendable {
         return .filename
     }
 
-    private static func rankingMaturity(for fileName: String) -> PreviewProductionMaturity {
-        let maturity = PreviewProductionMaturity.detect(from: fileName)
-        return PreviewSongIdentity.parse(fileName) != nil && maturity != .sketch ? .demo : maturity
+    private static func rankingMaturity(for candidate: PreviewCandidate) -> PreviewProductionMaturity {
+        let maturity = PreviewProductionMaturity.detect(from: candidate.fileName)
+        let identity = candidate.folderRole != .samples && candidate.folderRole != .stems
+            ? PreviewSongIdentity.parse(candidate.fileName) : nil
+        return identity != nil && maturity != .sketch ? .demo : maturity
     }
 
     private static func isDeliveryLocation(_ candidate: PreviewCandidate) -> Bool {
