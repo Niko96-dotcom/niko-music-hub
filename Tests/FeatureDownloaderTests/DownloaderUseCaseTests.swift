@@ -468,8 +468,13 @@ final class DownloaderUseCaseTests: XCTestCase {
             playlistMode: .playlist
         )
         XCTAssertFalse(simulateArgs.contains("--max-downloads"))
+        // The simulate run only names the job, so it lists one flat entry
+        // instead of extracting the whole playlist under its short timeout.
+        XCTAssertTrue(simulateArgs.contains("--flat-playlist"))
         let simulateItemsIndex = try XCTUnwrap(simulateArgs.firstIndex(of: "--playlist-items"))
-        XCTAssertEqual(simulateArgs[simulateItemsIndex + 1], "1:\(DownloadPlaylistMode.playlist.maxEntries!)")
+        XCTAssertEqual(simulateArgs[simulateItemsIndex + 1], "1")
+        let simulatePrintIndex = try XCTUnwrap(simulateArgs.firstIndex(of: "--print"))
+        XCTAssertEqual(simulateArgs[simulatePrintIndex + 1], "%(playlist_title,title)s")
     }
 
     func testAudioPostProcessingRequestCarriesConfiguredFFmpegLocationAndHelperPath() async throws {

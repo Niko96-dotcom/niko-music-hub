@@ -61,16 +61,21 @@ enum YtDlpDownloadCommandBuilder {
             "--force-ipv4",
             "-f", formatArgs.formatSelector,
         ]
+        let titleTemplate: String
         if playlistMode == .single {
             args.append("--no-playlist")
-        } else if let maxEntries = playlistMode.maxEntries {
-            args.append(contentsOf: ["--playlist-items", "1:\(maxEntries)"])
+            titleTemplate = "%(title)s"
+        } else {
+            // The simulate run only names the job: list one flat entry instead
+            // of extracting every entry under the short simulate timeout.
+            args.append(contentsOf: ["--flat-playlist", "--playlist-items", "1"])
+            titleTemplate = "%(playlist_title,title)s"
         }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL {
             args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])
         }
-        args.append(contentsOf: ["--print", "%(title)s", sourceURL.absoluteString])
+        args.append(contentsOf: ["--print", titleTemplate, sourceURL.absoluteString])
         return args
     }
 }
