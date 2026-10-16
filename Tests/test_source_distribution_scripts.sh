@@ -164,6 +164,15 @@ assert_contains "$TMP/sale-bad-date.err" "approved_at_utc"
 restore_approval
 "$ROOT/script/validate-source-sale-approval.py" --approval "$APPROVAL" --commit "$COMMIT" >/dev/null
 
+echo "== export flags that take a value reject a missing, empty, or flag value =="
+assert_fail export-approval-missing-value "$ROOT/script/export-source-sale.sh" --approval
+assert_contains "$TMP/export-approval-missing-value.err" "--approval requires a value"
+assert_contains "$TMP/export-approval-missing-value.err" "usage:"
+assert_fail export-output-dir-flag-value "$ROOT/script/export-source-sale.sh" --output-dir --approval "$APPROVAL"
+assert_contains "$TMP/export-output-dir-flag-value.err" "--output-dir requires a value"
+assert_fail export-output-dir-empty "$ROOT/script/export-source-sale.sh" --candidate --output-dir ""
+assert_contains "$TMP/export-output-dir-empty.err" "--output-dir requires a value"
+
 echo "== source scanner rejects PII, credentials, and private workflow state =="
 assert_contains "$ROOT/script/export-source-sale.sh" "  RELEASE_ARCHITECTURES"
 # Exported tests and release scripts read these files, so the buyer tree must ship them.

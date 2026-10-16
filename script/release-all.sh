@@ -457,7 +457,9 @@ while [[ $# -gt 0 ]]; do
     --dry-run-publish) DRY_RUN_PUBLISH=true; shift ;;
     --skip-tests) SKIP_TESTS=true; shift ;;
     --emergency-skip-tests) EMERGENCY_SKIP_TESTS=true; shift ;;
-    --reason) EMERGENCY_REASON="${2:-}"; shift 2 ;;
+    --reason)
+      [[ $# -ge 2 && "$2" != --* ]] || { echo "--reason requires a value" >&2; usage; exit 2; }
+      EMERGENCY_REASON="$2"; shift 2 ;;
     --install-smoke) INSTALL_SMOKE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;

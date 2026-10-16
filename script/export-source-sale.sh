@@ -22,9 +22,13 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --approval) APPROVAL="${2:-}"; shift 2 ;;
+    --approval)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { echo "--approval requires a value" >&2; usage; exit 2; }
+      APPROVAL="$2"; shift 2 ;;
     --candidate) CANDIDATE=true; shift ;;
-    --output-dir) OUTPUT_DIR="${2:-}"; shift 2 ;;
+    --output-dir)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { echo "--output-dir requires a value" >&2; usage; exit 2; }
+      OUTPUT_DIR="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
   esac

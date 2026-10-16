@@ -342,6 +342,12 @@ assert_fail public-skip-tests "$ROOT/script/release-all.sh" --public --dry-run-p
 assert_contains "$TMP/public-skip-tests.err" "public release rejects --skip-tests"
 assert_fail public-emergency-no-reason "$ROOT/script/release-all.sh" --public --dry-run-publish --emergency-skip-tests
 assert_contains "$TMP/public-emergency-no-reason.err" "requires a non-empty --reason"
+# A trailing --reason must print usage, not exit silently; a following flag is not a value.
+assert_fail public-reason-missing-value "$ROOT/script/release-all.sh" --public --dry-run-publish --emergency-skip-tests --reason
+assert_contains "$TMP/public-reason-missing-value.err" "--reason requires a value"
+assert_contains "$TMP/public-reason-missing-value.err" "usage:"
+assert_fail public-reason-takes-flag "$ROOT/script/release-all.sh" --public --emergency-skip-tests --reason --dry-run-publish
+assert_contains "$TMP/public-reason-takes-flag.err" "--reason requires a value"
 
 echo "== public mode fails closed without credentials (clean-prerequisite aware) =="
 # The candidate checkout carries uncommitted test edits during development, so the
