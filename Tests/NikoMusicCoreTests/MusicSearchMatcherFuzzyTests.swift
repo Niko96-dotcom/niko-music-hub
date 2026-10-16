@@ -28,6 +28,16 @@ final class MusicSearchMatcherFuzzyTests: XCTestCase {
         XCTAssertFalse(MusicSearchMatcher.matchDetails(song: song, queryTokens: ["hooj"]).isEmpty)
     }
 
+    func testTypoAcrossWordBoundaryMatchesLongTitle() {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Track 01", isDirectory: true),
+            originalFolderName: "Track 01",
+            displayTitle: "My Song Remix"
+        )
+        let details = MusicSearchMatcher.matchDetails(song: song, queryTokens: ["mysnog"])
+        XCTAssertEqual(details.first?.kind, .fuzzyTitle)
+    }
+
     func testBoundedWindowRetainsTightMatchRejectsSpread() {
         XCTAssertTrue(MusicSearchMatcher.isSubsequenceWithinBound("abc", in: "abc"))
         XCTAssertTrue(MusicSearchMatcher.isSubsequenceWithinBound("abc", in: "aXbXc"))

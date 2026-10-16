@@ -304,9 +304,21 @@ enum MusicSearchMatcher {
             }
         }
         if let best { return best }
-        if normalizedHaystack.count >= token.count,
-           let distance = boundedEditDistance(token, String(normalizedHaystack.prefix(token.count + maxDistance)), max: maxDistance) {
-            return max(6, 20 - distance * 6)
+        guard normalizedHaystack.count >= token.count else { return nil }
+        // Compare against every prefix length within the typo budget: a single
+        // n+m prefix only matches when the token is its subsequence, which the
+        // bounded subsequence check has already accepted.
+        var bestDistance: Int?
+        let shortest = max(1, token.count - maxDistance)
+        let longest = min(normalizedHaystack.count, token.count + maxDistance)
+        for length in shortest...longest {
+            if let distance = boundedEditDistance(token, String(normalizedHaystack.prefix(length)), max: maxDistance),
+               bestDistance.map({ distance < $0 }) ?? true {
+                bestDistance = distance
+            }
+        }
+        if let bestDistance {
+            return max(6, 20 - bestDistance * 6)
         }
         return nil
     }
