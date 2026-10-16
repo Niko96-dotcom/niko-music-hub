@@ -198,6 +198,10 @@ printf '/Users/test.jane/private\n' >"$SCAN/personal.txt"
 assert_fail personal-path-prefixed "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/personal-path-prefixed.out" "personal home path"
 rm "$SCAN/personal.txt"
+printf 'RIFF\377\376\000/Users/jane/Media/take.wav\000' >"$SCAN/project.cpr"
+assert_fail personal-path-binary "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/personal-path-binary.out" "project.cpr: contains personal home path"
+rm "$SCAN/project.cpr"
 mkdir -p "$SCAN/.planning"
 printf 'private\n' >"$SCAN/.planning/state.md"
 assert_fail planning-state "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only

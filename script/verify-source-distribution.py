@@ -87,10 +87,12 @@ def scan_tree(root: Path) -> list[str]:
             failures.append(f"{relative}: forbidden file type")
         if relative in CONTENT_PATTERN_EXEMPTIONS:
             continue
+        # Binary fixtures and non-UTF-8 text must still be scanned; latin-1 maps every byte.
+        data = path.read_bytes()
         try:
-            text = path.read_text(encoding="utf-8")
+            text = data.decode("utf-8")
         except UnicodeDecodeError:
-            continue
+            text = data.decode("latin-1")
         for label, pattern in CONTENT_PATTERNS.items():
             if pattern.search(text):
                 failures.append(f"{relative}: contains {label}")
