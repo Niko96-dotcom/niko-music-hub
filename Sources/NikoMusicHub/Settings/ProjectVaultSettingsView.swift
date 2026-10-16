@@ -465,7 +465,8 @@ struct ProjectVaultSettingsView: View {
             do {
                 let result = try ProjectVaultRestoreDrill().run()
                 await MainActor.run {
-                    updateVault { $0.lastRestoreDrillAt = result.completedAt; $0.lastSuccessfulVerificationAt = result.completedAt }
+                    // The drill uses its own temp fixture, so it never verifies the real Vault.
+                    updateVault { $0.lastRestoreDrillAt = result.completedAt }
                     message = "Test restore passed. \(CountCopy.count(result.fileCount, "file")) verified."
                     isRunningDrill = false
                 }
