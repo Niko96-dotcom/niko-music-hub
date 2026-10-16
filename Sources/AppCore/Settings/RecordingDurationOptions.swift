@@ -20,7 +20,9 @@ public enum RecordingDurationOptions {
         if supportedMinutes.contains(minutes) {
             return minutes
         }
+        // Clamp first so extreme stored values cannot overflow the distance math.
+        let clamped = min(max(minutes, -10_000), 10_000)
         let finiteChoices = supportedMinutes.filter { $0 > 0 }
-        return finiteChoices.min(by: { abs($0 - minutes) < abs($1 - minutes) }) ?? 30
+        return finiteChoices.min(by: { abs($0 - clamped) < abs($1 - clamped) }) ?? 30
     }
 }

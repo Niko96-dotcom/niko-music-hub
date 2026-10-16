@@ -29,6 +29,12 @@ final class RecordingDurationOptionsTests: XCTestCase {
         XCTAssertEqual(RecordingDurationOptions.normalized(0), 0)
     }
 
+    func testNormalizedDoesNotOverflowOnExtremeStoredValues() {
+        XCTAssertEqual(RecordingDurationOptions.normalized(Int.min), 5)
+        XCTAssertEqual(RecordingDurationOptions.normalized(Int.min + 1), 5)
+        XCTAssertEqual(RecordingDurationOptions.normalized(Int.max), 120)
+    }
+
     func testLabelsDistinguishUnlimited() {
         XCTAssertEqual(RecordingDurationOptions.label(for: 30), "30 minutes")
         // Chip row space is tight — unlimited renders as ∞ with the full
