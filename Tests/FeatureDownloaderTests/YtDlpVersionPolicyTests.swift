@@ -18,4 +18,17 @@ final class YtDlpVersionPolicyTests: XCTestCase {
         let minimum = YtDlpVersionPolicy.minimumExpectedVersion(referenceDate: reference)
         XCTAssertTrue(minimum.contains("."))
     }
+
+    func testBoundaryVersionIsNotStaleAndMatchesMinimumAtAnyTimeOfDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        for hour in [0, 9, 23] {
+            let reference = try XCTUnwrap(calendar.date(from: DateComponents(
+                year: 2026, month: 11, day: 20, hour: hour, minute: 30
+            )))
+            XCTAssertEqual(YtDlpVersionPolicy.minimumExpectedVersion(referenceDate: reference), "2026.08.22")
+            XCTAssertFalse(YtDlpVersionPolicy.isStale(version: "2026.08.22", referenceDate: reference))
+            XCTAssertTrue(YtDlpVersionPolicy.isStale(version: "2026.08.21", referenceDate: reference))
+        }
+    }
 }
