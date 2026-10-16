@@ -125,6 +125,25 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
     }
 
     @MainActor
+    func testEmptyDebouncedBatchDoesNotSilenceLaterEvents() async throws {
+        let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0.01)
+        let delivery = DeliveryProbe()
+        XCTAssertTrue(watcher.setRoots([FileManager.default.temporaryDirectory]) { event in
+            delivery.record(event)
+        })
+        defer { watcher.stop() }
+
+        watcher.simulateUndecodableFSEventBatch()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(delivery.count, 0)
+
+        watcher.simulateChangedPaths(["/tmp/after-empty-batch"])
+        try await waitForDelivery(delivery)
+
+        XCTAssertEqual(delivery.paths.map(\.path), ["/tmp/after-empty-batch"])
+    }
+
+    @MainActor
     func testContinuousChangesDoNotPostponeDeliveryIndefinitely() async throws {
         let watcher = FSEventsArchiveRootWatcher(debounceInterval: 0.2)
         let delivery = DeliveryProbe()

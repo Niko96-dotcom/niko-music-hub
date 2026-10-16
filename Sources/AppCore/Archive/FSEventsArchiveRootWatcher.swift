@@ -192,6 +192,15 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
         }
     }
 
+    /// Behavioral test hook for a native batch whose paths all failed to
+    /// decode: the debounce is scheduled with nothing pending.
+    func simulateUndecodableFSEventBatch() {
+        eventQueue.async { [weak self] in
+            guard let self, self.isActive else { return }
+            self.scheduleDebouncedCallbackLocked()
+        }
+    }
+
     private func stopLocked() {
         dispatchPrecondition(condition: .onQueue(eventQueue))
         isActive = false
@@ -350,6 +359,8 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                   self.isActive,
                   let onChange = self.onChange,
                   let token = self.deliveryToken else { return }
+            // Clear before any early return, or every later batch is dropped.
+            self.debounceWorkItem = nil
             let event: ArchiveRootWatchEvent
             if self.fullRescanRequired {
                 self.fullRescanRequired = false
@@ -363,7 +374,6 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                 guard !paths.isEmpty else { return }
                 event = .paths(paths)
             }
-            self.debounceWorkItem = nil
             Task { @MainActor in
                 token.performIfActive {
                     onChange(event)
