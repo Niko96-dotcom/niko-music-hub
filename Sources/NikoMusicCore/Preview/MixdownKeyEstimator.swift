@@ -115,12 +115,23 @@ public enum MixdownKeyEstimator {
         return bestLabel
     }
 
+    /// Pearson correlation (Krumhansl–Schmuckler). A raw dot product favors the minor
+    /// profile, whose weights add up to more than the major profile's.
     private static func correlation(_ histogram: [Double], profile: [Double], root: Int) -> Double {
-        var sum = 0.0
+        let histogramMean = histogram.reduce(0, +) / 12
+        let profileMean = profile.reduce(0, +) / 12
+        var covariance = 0.0
+        var histogramVariance = 0.0
+        var profileVariance = 0.0
         for index in 0..<12 {
-            let rotated = profile[(index - root + 12) % 12]
-            sum += histogram[index] * rotated
+            let histogramDelta = histogram[index] - histogramMean
+            let profileDelta = profile[(index - root + 12) % 12] - profileMean
+            covariance += histogramDelta * profileDelta
+            histogramVariance += histogramDelta * histogramDelta
+            profileVariance += profileDelta * profileDelta
         }
-        return sum
+        let denominator = (histogramVariance * profileVariance).squareRoot()
+        guard denominator > 0 else { return 0 }
+        return covariance / denominator
     }
 }

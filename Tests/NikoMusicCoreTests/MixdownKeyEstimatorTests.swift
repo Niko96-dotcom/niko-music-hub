@@ -23,6 +23,42 @@ final class MixdownKeyEstimatorTests: XCTestCase {
         }
     }
 
+    func testDiatonicMajorScaleIsNotReportedAsRelativeMinor() throws {
+        // The profile match was a raw dot product, so the larger minor profile won and a
+        // flat C-major scale came out as "A minor".
+        let scale = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88]
+        let url = try writeToneSequenceWAV(frequencies: scale, sampleRate: 48_000, seconds: 4)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertEqual(MixdownKeyEstimator.estimate(url: url)?.key, "C major")
+    }
+
+    private func writeToneSequenceWAV(frequencies: [Double], sampleRate: Double, seconds: Double) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("key-estimator-\(UUID().uuidString).wav")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        let frameCount = AVAudioFrameCount(sampleRate * seconds)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount))
+        buffer.frameLength = frameCount
+        let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+        let framesPerTone = Int(frameCount) / frequencies.count
+        var phase = 0.0
+        for frame in 0..<Int(frameCount) {
+            let frequency = frequencies[min(frame / framesPerTone, frequencies.count - 1)]
+            samples[frame] = Float(0.5 * sin(phase))
+            phase += 2 * Double.pi * frequency / sampleRate
+        }
+        try file.write(from: buffer)
+        return url
+    }
+
     private func writeSineWAV(frequency: Double, sampleRate: Double, seconds: Double) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("key-estimator-\(UUID().uuidString).wav")
