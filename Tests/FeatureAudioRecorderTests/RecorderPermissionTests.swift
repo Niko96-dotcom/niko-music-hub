@@ -98,6 +98,25 @@ final class RecorderPermissionTests: XCTestCase {
         XCTAssertTrue(ScreenCaptureKitAudioSession.isCapturePermissionFailure(error, screenCaptureAccessGranted: { false }))
     }
 
+    func testScreenCaptureKitStopBeforeStreamExistsKeepsStartFromCapturing() async {
+        // cancelStart can stop the session while it has no stream yet; start must not begin a capture afterwards.
+        let session = ScreenCaptureKitAudioSession()
+        await session.stop()
+        let callbacks = RecorderBackendCallbacks(
+            onPCM: { _, _, _, _ in true },
+            onStructuralNoData: { _ in },
+            onMetadata: { _ in },
+            onRouteChange: {},
+            onFailure: { _ in }
+        )
+        do {
+            try await session.start(generation: 1, callbacks: callbacks)
+            XCTFail("A stopped session must not start capturing")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "Unexpected error: \(error)")
+        }
+    }
+
     // MARK: - Digital silence detection
 
     func testExactZeroFloatBufferIsDigitalSilence() throws {
