@@ -88,6 +88,7 @@ struct NikoMusicHubApp: App {
         Window(HubHelpTopics.windowTitle, id: HubHelpTopics.windowID) {
             HubHelpWindow()
                 .preferredColorScheme(appearanceController.preferredColorScheme)
+                .hubOpensMainWindowFromDock()
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 560, height: 640)

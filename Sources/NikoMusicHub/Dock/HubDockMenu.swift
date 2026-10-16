@@ -10,7 +10,11 @@ enum HubMainWindow {
     static func reveal() {
         NotificationCenter.default.post(name: revealNotification, object: nil)
         NSApp.activate()
-        NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
+        // Front the main window itself (it may be closed but still held), never
+        // whichever other window (Help, Settings) happens to come first.
+        NSApp.windows
+            .first(where: { $0.identifier?.rawValue == HubMainWindowIdentity.identifierRawValue })?
+            .makeKeyAndOrderFront(nil)
     }
 }
 
