@@ -178,13 +178,15 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
             callbacks.onStructuralNoData(snapshot.1)
             return
         }
-        callbacks.onMetadata(RecorderBackendMetadata(
-            outputDeviceUID: "screen-capture-kit",
-            sourceSampleRate: sourceFormat.sampleRate,
-            sourceChannelCount: Int(sourceFormat.channelCount)
-        ))
-        _ = callbacks.onPCM(snapshot.1, sourceFormat, pcm, bytes)
-        _ = retainedBlockBuffer // Retains borrowed audio storage through the synchronous write.
+        // Retains borrowed audio storage through the synchronous write.
+        withExtendedLifetime(retainedBlockBuffer) {
+            callbacks.onMetadata(RecorderBackendMetadata(
+                outputDeviceUID: "screen-capture-kit",
+                sourceSampleRate: sourceFormat.sampleRate,
+                sourceChannelCount: Int(sourceFormat.channelCount)
+            ))
+            _ = callbacks.onPCM(snapshot.1, sourceFormat, pcm, bytes)
+        }
     }
 }
 
