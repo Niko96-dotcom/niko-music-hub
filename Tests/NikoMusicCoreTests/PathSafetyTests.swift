@@ -171,6 +171,34 @@ final class PathSafetyTests: XCTestCase {
         XCTAssertTrue(safety.isResolvedContained(missingChild, in: [archive]))
     }
 
+    func testResolvedContainedFollowsDanglingSymlinkIntoRoot() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent(
+            "path-safety-dangling-link-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let archive = base.appendingPathComponent("archive", isDirectory: true)
+        let outside = base.appendingPathComponent("outside", isDirectory: true)
+        try fm.createDirectory(at: archive, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: base) }
+
+        let absoluteLink = outside.appendingPathComponent("out.json")
+        try fm.createSymbolicLink(
+            atPath: absoluteLink.path,
+            withDestinationPath: archive.appendingPathComponent("new.json").path
+        )
+        let relativeLink = outside.appendingPathComponent("relative-out.json")
+        try fm.createSymbolicLink(atPath: relativeLink.path, withDestinationPath: "../archive/other.json")
+        XCTAssertFalse(fm.fileExists(atPath: absoluteLink.path))
+        XCTAssertFalse(fm.fileExists(atPath: relativeLink.path))
+
+        let safety = PathSafety(fileManager: fm)
+        XCTAssertTrue(safety.isResolvedContained(absoluteLink, in: [archive]))
+        XCTAssertTrue(safety.isResolvedContained(relativeLink, in: [archive]))
+        XCTAssertFalse(safety.isResolvedContained(outside.appendingPathComponent("plain.json"), in: [archive]))
+    }
+
     func testFilesystemRootContainsEveryPath() throws {
         let fm = FileManager.default
         let parent = try makeFixtureDirectory()
