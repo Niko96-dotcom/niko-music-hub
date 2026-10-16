@@ -253,6 +253,40 @@ final class SQLiteArchiveBackupTests: XCTestCase {
         XCTAssertEqual(try SQLiteArchiveIndexStore(database: reopened).loadLatest(), snapshot)
     }
 
+    func testBackupFallsBackWhenVolumeHasNoHardLinks() throws {
+        let root = temporaryRoot()
+        defer { removeTemporaryRoot(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let sourceURL = root.appendingPathComponent("source.sqlite", isDirectory: false)
+        let database = try SQLiteArchiveDatabase(databaseURL: sourceURL)
+        let indexStore = try SQLiteArchiveIndexStore(database: database)
+        let snapshot = ArchiveIndexSnapshot(
+            roots: ["/archive"],
+            songs: [],
+            scannedAt: Date(timeIntervalSince1970: 11)
+        )
+        try indexStore.save(snapshot)
+        // exFAT/FAT/SMB: link() is unsupported. First the no-replace rename
+        // takes over; then, with rename also unsupported, the exclusive copy.
+        let noLink: SQLiteArchiveDatabase.BackupPromotionCall = { _, _ in ENOTSUP }
+        let noRename: SQLiteArchiveDatabase.BackupPromotionCall = { _, _ in ENOTSUP }
+        let cases: [(String, SQLiteArchiveDatabase.BackupPromotionCall)] = [
+            ("renamed.sqlite", SQLiteArchiveDatabase.systemExclusiveRename),
+            ("copied.sqlite", noRename),
+        ]
+        for (name, renameFile) in cases {
+            let destinationURL = root.appendingPathComponent(name, isDirectory: false)
+            try database.backup(to: destinationURL, linkFile: noLink, renameFile: renameFile)
+            try SQLiteArchiveDatabase.verifyBackupFileIntegrity(at: destinationURL)
+            XCTAssertEqual(try headerBytes(at: destinationURL), [1, 1])
+            let reopened = try SQLiteArchiveDatabase(databaseURL: destinationURL)
+            XCTAssertEqual(try SQLiteArchiveIndexStore(database: reopened).loadLatest(), snapshot)
+        }
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .filter { $0.contains(".staging-") }
+        XCTAssertEqual(leftovers, [])
+    }
+
     func testVerifyRejectsSidecarsSymlinksAndForeignDatabase() throws {
         let root = temporaryRoot()
         defer { removeTemporaryRoot(root) }

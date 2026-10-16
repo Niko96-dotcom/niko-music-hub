@@ -36,8 +36,29 @@ public extension SQLiteArchiveDatabase {
     /// The destination must not exist and must not be a symlink. The copy is
     /// staged inside a private owned staging directory (O_EXCL file) and
     /// promoted with a no-replace hard link, so a raced destination is never
-    /// overwritten and only owned staging is ever removed.
+    /// overwritten and only owned staging is ever removed. Volumes without
+    /// hard links (exFAT, FAT, SMB) fall back to a no-replace rename, then to
+    /// an exclusive-create copy; both fallbacks re-verify the destination.
     func backup(to destinationURL: URL) throws {
+        try backup(to: destinationURL, linkFile: Self.systemLink, renameFile: Self.systemExclusiveRename)
+    }
+
+    /// Promotion primitive: returns 0 on success, otherwise the errno value.
+    internal typealias BackupPromotionCall = (_ source: String, _ destination: String) -> Int32
+
+    internal static func systemLink(_ source: String, _ destination: String) -> Int32 {
+        Darwin.link(source, destination) == 0 ? 0 : errno
+    }
+
+    internal static func systemExclusiveRename(_ source: String, _ destination: String) -> Int32 {
+        Darwin.renamex_np(source, destination, UInt32(RENAME_EXCL)) == 0 ? 0 : errno
+    }
+
+    internal func backup(
+        to destinationURL: URL,
+        linkFile: BackupPromotionCall,
+        renameFile: BackupPromotionCall
+    ) throws {
         try Self.rejectSymlinkOrOccupied(destinationURL)
         let parent = destinationURL.deletingLastPathComponent()
         do {
@@ -150,7 +171,12 @@ public extension SQLiteArchiveDatabase {
         // Re-verify the closed staging file through the immutable read-only
         // path (no sidecars, header + schema + integrity) before promotion.
         try Self.verifyBackupFileIntegrity(at: stagingURL)
-        try Self.exclusiveLink(from: stagingURL, to: destinationURL)
+        try Self.exclusivePromote(
+            from: stagingURL,
+            to: destinationURL,
+            linkFile: linkFile,
+            renameFile: renameFile
+        )
         try? FileManager.default.removeItem(at: stagingDir)
         promoted = true
         try Self.rejectUnexpectedSidecars(for: destinationURL)
@@ -232,17 +258,94 @@ public extension SQLiteArchiveDatabase {
         }
     }
 
-    private static func exclusiveLink(from staging: URL, to destination: URL) throws {
+    /// Promotes without ever replacing an existing destination: hard link
+    /// first; on volumes without hard links a no-replace rename; if that is
+    /// also unsupported, an exclusive-create byte copy. Fallback results are
+    /// re-verified, and only a destination this call created is removed.
+    private static func exclusivePromote(
+        from staging: URL,
+        to destination: URL,
+        linkFile: BackupPromotionCall,
+        renameFile: BackupPromotionCall
+    ) throws {
         if isSymlink(at: destination) { throw BackupError.destinationIsSymlink(destination.path) }
-        let result = staging.path.withCString { src in
-            destination.path.withCString { dst in Darwin.link(src, dst) }
+        let linkError = linkFile(staging.path, destination.path)
+        if linkError == 0 { return }
+        try rejectOccupiedPromotion(linkError, destination)
+        guard [ENOTSUP, EOPNOTSUPP, EPERM, EXDEV].contains(linkError) else {
+            throw BackupError.ioFailed("cannot promote backup to \(destination.path) (errno \(linkError))")
         }
-        guard result == 0 else {
-            if errno == EEXIST {
-                if isSymlink(at: destination) { throw BackupError.destinationIsSymlink(destination.path) }
-                throw BackupError.destinationOccupied(destination.path)
+        let renameError = renameFile(staging.path, destination.path)
+        if renameError != 0 {
+            try rejectOccupiedPromotion(renameError, destination)
+            guard [ENOTSUP, EOPNOTSUPP, EINVAL, EXDEV].contains(renameError) else {
+                throw BackupError.ioFailed("cannot promote backup to \(destination.path) (errno \(renameError))")
             }
-            throw BackupError.ioFailed("cannot promote backup to \(destination.path) (errno \(errno))")
+            try exclusiveCopy(from: staging, to: destination)
+        }
+        do {
+            try verifyBackupFileIntegrity(at: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
+    }
+
+    private static func rejectOccupiedPromotion(_ error: Int32, _ destination: URL) throws {
+        guard error == EEXIST else { return }
+        if isSymlink(at: destination) { throw BackupError.destinationIsSymlink(destination.path) }
+        throw BackupError.destinationOccupied(destination.path)
+    }
+
+    private static func exclusiveCopy(from staging: URL, to destination: URL) throws {
+        let input = Darwin.open(staging.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard input >= 0 else {
+            throw BackupError.ioFailed("cannot read staging file \(staging.path) (errno \(errno))")
+        }
+        defer { Darwin.close(input) }
+        let output = Darwin.open(
+            destination.path,
+            O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW,
+            mode_t(0o600)
+        )
+        guard output >= 0 else {
+            let savedErrno = errno
+            try rejectOccupiedPromotion(savedErrno, destination)
+            throw BackupError.ioFailed("cannot promote backup to \(destination.path) (errno \(savedErrno))")
+        }
+        // The destination was created exclusively here, so it is owned and
+        // may be removed when the copy does not complete.
+        func fail(_ detail: String) -> BackupError {
+            let savedErrno = errno
+            Darwin.close(output)
+            try? FileManager.default.removeItem(at: destination)
+            return BackupError.ioFailed("cannot copy backup to \(destination.path): \(detail) (errno \(savedErrno))")
+        }
+        var buffer = [UInt8](repeating: 0, count: 1 << 16)
+        while true {
+            let readCount = buffer.withUnsafeMutableBytes { Darwin.read(input, $0.baseAddress, $0.count) }
+            if readCount < 0 {
+                if errno == EINTR { continue }
+                throw fail("read failed")
+            }
+            if readCount == 0 { break }
+            var offset = 0
+            while offset < readCount {
+                let written = buffer.withUnsafeBytes {
+                    Darwin.write(output, $0.baseAddress! + offset, readCount - offset)
+                }
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw fail("write failed")
+                }
+                offset += written
+            }
+        }
+        guard Darwin.fsync(output) == 0 else { throw fail("fsync failed") }
+        guard Darwin.close(output) == 0 else {
+            let savedErrno = errno
+            try? FileManager.default.removeItem(at: destination)
+            throw BackupError.ioFailed("cannot close backup \(destination.path) (errno \(savedErrno))")
         }
     }
 
