@@ -4178,6 +4178,43 @@ extension LiveProjectVaultRuntimeTests {
         XCTAssertEqual(Set(try fixture.catalogStore().loadEntries().map(\.record.id)), [first, second])
     }
 
+    /// A review names two projects. With three entries for one folder, a decision about two of
+    /// them must not hand the folder to one and unclaim the third unseen: the runtime refuses
+    /// again, writes nothing, and asks about a pair that has not been reviewed yet.
+    func testThreeCatalogEntriesForOneFolderAreReviewedPairByPair() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let first = ProjectID(rawValue: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!)
+        let second = ProjectID(rawValue: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!)
+        let third = ProjectID(rawValue: UUID(uuidString: "00000000-0000-4000-8000-000000000003")!)
+        var decided = ProjectIdentityReview(
+            existingProjectID: first,
+            candidateProjectID: second,
+            reason: "3 library entries point to this folder."
+        )
+        decided.resolution = .keepSeparate
+        try fixture.saveCatalogEntries(projectIDs: [first, second, third], reviews: [decided])
+        let before = try fixture.catalogRows()
+        let runtime = try fixture.runtime()
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("a decision about two of three entries must not resolve the folder")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .identityAmbiguous(title: "Synthetic Song", reason: "3 library entries point to this folder.")
+            )
+        }
+
+        XCTAssertEqual(try fixture.catalogRows(), before)
+        let consumed = await runtime.consumePendingIdentityReview()
+        let pending = try XCTUnwrap(consumed)
+        XCTAssertEqual(pending.resolution, .pending)
+        XCTAssertEqual(Set([pending.existingProjectID, pending.candidateProjectID]), [first, third])
+    }
+
     /// Ordinary behaviour must hold on fresh evidence: a scanned song makes a backup copy, is
     /// archived, restored, and archived again, and the catalog keeps one identity whose evidence
     /// is the file on disk.
