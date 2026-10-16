@@ -25,7 +25,9 @@ enum YtDlpDownloadCommandBuilder {
         if request.playlistMode == .single {
             args.append("--no-playlist")
         } else if let maxEntries = request.playlistMode.maxEntries {
-            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+            // `--max-downloads` makes yt-dlp exit 101 when the cap is reached;
+            // `--playlist-items` caps the entries and still exits 0.
+            args.append(contentsOf: ["--playlist-items", "1:\(maxEntries)"])
         }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL = request.ffmpegLocationURL {
@@ -58,7 +60,7 @@ enum YtDlpDownloadCommandBuilder {
         if playlistMode == .single {
             args.append("--no-playlist")
         } else if let maxEntries = playlistMode.maxEntries {
-            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+            args.append(contentsOf: ["--playlist-items", "1:\(maxEntries)"])
         }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL {
