@@ -200,6 +200,8 @@ struct ProjectVaultRecoverySection: View {
 
     private static func defaultBundleName() -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd-HHmm"
         return "NikoMusicHub-Recovery-\(formatter.string(from: Date()))"
     }
