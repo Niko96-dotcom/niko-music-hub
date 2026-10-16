@@ -668,6 +668,52 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(gate.wasCancelled)
     }
 
+    func testCanceledFullScanDropsQueuedWatcherFullRescan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cancel-scan-overflow-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let gate = CancellationAwareScanGate()
+        let scanCalls = LockedScanCallCount()
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                scanCalls.increment()
+                return try await gate.wait()
+            }
+        )
+        viewModel.roots = [root]
+        viewModel.restartArchiveRootWatching()
+
+        let scanTask = Task { await viewModel.scan() }
+        let startDeadline = Date().addingTimeInterval(2)
+        while !gate.isWaiting, Date() < startDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(gate.isWaiting)
+        XCTAssertTrue(viewModel.isScanning)
+
+        // FSEvents overflow during the full scan queues a full rescan.
+        watcher.simulateFilesystemOverflow()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        viewModel.cancelScan()
+        try await waitUntil("user cancel cleared isScanning") { !viewModel.isScanning }
+        await scanTask.value
+
+        // Give a queued drain time to start a replacement full scan.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(scanCalls.value, 1)
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusBaseMessage, CancelCopy.scanCanceled)
+    }
+
     func testArchiveRootPersistenceFailureIsVisible() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -4840,6 +4886,23 @@ private struct ProjectVaultViewModelFixture {
     func cleanUp() {
         defaults.removePersistentDomain(forName: suiteName)
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+private final class LockedScanCallCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
     }
 }
 

@@ -85,6 +85,9 @@ final class ArchiveScanOrchestrator {
         activeIncrementalTask?.cancel()
         if activeScanGeneration != nil {
             // A full scan owns `isScanning`; it consumes `userCancelRequested` itself.
+            // Drop queued watcher work so `finishScan`'s drain cannot restart scanning.
+            pendingIncrementalPaths.removeAll()
+            fullRescanPending = false
             return
         }
         if let canceled = activeIncrementalGeneration {
