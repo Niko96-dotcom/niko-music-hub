@@ -118,7 +118,7 @@ public enum MixdownKeyEstimator {
     private static func correlation(_ histogram: [Double], profile: [Double], root: Int) -> Double {
         var sum = 0.0
         for index in 0..<12 {
-            let rotated = profile[(index + root) % 12]
+            let rotated = profile[(index - root + 12) % 12]
             sum += histogram[index] * rotated
         }
         return sum

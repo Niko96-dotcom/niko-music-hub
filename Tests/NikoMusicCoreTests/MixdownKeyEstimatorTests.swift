@@ -13,6 +13,16 @@ final class MixdownKeyEstimatorTests: XCTestCase {
         }
     }
 
+    func testKeyLabelMatchesTonicOfPureTone() throws {
+        // The key profile was rotated the wrong way, so a pure A came out as "D# major"
+        // and a pure D as "A# major".
+        for (frequency, expected) in [(440.0, "A major"), (293.66, "D major"), (392.0, "G major")] {
+            let url = try writeSineWAV(frequency: frequency, sampleRate: 48_000, seconds: 4)
+            defer { try? FileManager.default.removeItem(at: url) }
+            XCTAssertEqual(MixdownKeyEstimator.estimate(url: url)?.key, expected, "\(frequency) Hz")
+        }
+    }
+
     private func writeSineWAV(frequency: Double, sampleRate: Double, seconds: Double) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("key-estimator-\(UUID().uuidString).wav")
