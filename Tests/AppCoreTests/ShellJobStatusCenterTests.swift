@@ -75,6 +75,31 @@ final class ShellJobStatusCenterTests: XCTestCase {
         XCTAssertTrue(stopFlag.isMarked)
     }
 
+    func testQueuedRunnerUpdateDoesNotRestoreRemovedExtraJob() async throws {
+        let runner = FakeJobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        try await Task.sleep(for: .milliseconds(50))
+        center.setExtraJob(
+            sourceID: ShellJobExtraSourceID.converter,
+            status: ConverterJobReporting.status(
+                isConverting: true,
+                filename: "Loop.m4a",
+                percent: 1
+            )
+        )
+        XCTAssertTrue(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
+
+        // Main stays blocked, so the runner update read off main is queued
+        // behind the main-thread removal of the converter row.
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in }
+        blockMainThread(seconds: 0.3)
+        center.setExtraJob(sourceID: ShellJobExtraSourceID.converter, status: nil)
+
+        try await waitUntil { center.jobs.contains { $0.title == job.title } }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
+    }
+
     func testRealJobRunnerCancelRemovesShellStatus() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
@@ -90,6 +115,10 @@ final class ShellJobStatusCenterTests: XCTestCase {
         try await waitUntil { center.jobs.isEmpty }
         XCTAssertEqual(runner.job(id: job.id)?.state, .canceled)
         release.open()
+    }
+
+    private func blockMainThread(seconds: TimeInterval) {
+        Thread.sleep(forTimeInterval: seconds)
     }
 
     private func waitUntil(
