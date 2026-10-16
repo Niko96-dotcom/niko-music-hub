@@ -180,6 +180,10 @@ struct ProjectVaultRecoverySection: View {
             switch service {
             case .databaseUnavailable:
                 return "The current catalog is unavailable, so a new export cannot be made."
+            case .vaultBusy:
+                return "Project Vault is busy with another operation. Try again when it’s done. Nothing was changed."
+            case .settingsUnreadable:
+                return "The current settings could not be read, so a new export cannot be made. Nothing was changed."
             case .recoveredSuiteUnavailable:
                 return "A separate recovered library could not be prepared. Nothing was changed."
             case .recoveryDestinationOccupied:
