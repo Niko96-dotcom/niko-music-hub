@@ -363,6 +363,49 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_modelDownloadIsOwnPhaseAndPathPercentIsNotProgress() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 0,
+            outputLines: [
+                "Loading model htdemucs...",
+                "Downloading model weights...",
+                "25%",
+                "100%",
+                "Separating track /Users/music/Song 100%.wav",
+                "0%",
+                "50%"
+            ],
+            errorLines: []
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let progressCollector = ProgressCollector()
+        let messages = MessageCollector()
+        _ = await backend.separate(request: request) { progress, message in
+            progressCollector.add(progress)
+            messages.add(message ?? "")
+        }
+
+        #expect(progressCollector.values == [0, 0, 0.25, 1.0, 0, 0, 0.5])
+        let phases = messages.messages.map { $0.components(separatedBy: " | ").first ?? "" }
+        #expect(phases == [
+            "Loading model…",
+            "Downloading model…",
+            "Downloading model…",
+            "Downloading model…",
+            "Separating stems…",
+            "Separating stems…",
+            "Separating stems…"
+        ])
+    }
+
+    @Test
     func separate_chunkWithCarriageReturns_reportsEachUpdateWithoutRegression() async throws {
         let outputFolder = makeOutputFolder()
         let request = StemSeparationBackendRequest(

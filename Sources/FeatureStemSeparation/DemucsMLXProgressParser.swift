@@ -32,15 +32,20 @@ public struct DemucsMLXProgressParser: Sendable {
     private func extractProgress(from line: String) -> Double? {
         // Only explicit percentages or a labelled fraction are progress. Model names,
         // filenames, timestamps and terminal escape codes also contain numbers.
+        // A percentage counts only as the whole line or as a tqdm `N%|` bar, never
+        // inside a path such as "Song 100%.wav".
         for (pattern, divisor) in [
-            (#"(\d+(?:\.\d+)?)\s*%"#, 100.0),
+            (#"^(\d+(?:\.\d+)?)\s*%$"#, 100.0),
+            (#"(?<![\w./])(\d+(?:\.\d+)?)%\|"#, 100.0),
             (#"progress\s*:\s*(\d+(?:\.\d+)?)(?![\d.])"#, 1.0)
         ] {
             guard let regex = try? NSRegularExpression(pattern: pattern),
                   let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
                   let range = Range(match.range(at: 1), in: line),
                   let value = Double(line[range]) else { continue }
-            return min(max(value / divisor, 0), 1)
+            // An out-of-range value is not a fraction of this run; do not clamp it to done.
+            guard value / divisor <= 1 else { return nil }
+            return value / divisor
         }
         return nil
     }

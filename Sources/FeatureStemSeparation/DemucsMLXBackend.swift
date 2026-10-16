@@ -226,28 +226,44 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             guard let parsed = progressParser.parse(line: String(trimmed)) else { continue }
-            let reported = tracker.next(for: parsed.progress)
-            progressHandler(reported, parsed.message)
+            let reported = tracker.next(for: parsed.progress, message: parsed.message)
+            progressHandler(reported.progress, reported.message)
         }
     }
 }
 
+/// Progress never moves backwards within one phase. Model download and loading
+/// are their own phases, so a finished download does not pin separation at 100%.
 private final class DemucsProgressTracker: @unchecked Sendable {
+    private static let downloading = "Downloading model…"
+    private static let loading = "Loading model…"
+    private static let separating = "Separating stems…"
+
     private let lock = NSLock()
-    private var lastKnown: Double = 0
+    private var phase: String?
     private var maxReported: Double = 0
 
-    func next(for parsed: Double?) -> Double {
+    func next(for parsed: Double?, message: String?) -> (progress: Double, message: String?) {
         lock.withLock {
-            let candidate: Double
-            if let parsed {
-                candidate = max(parsed, lastKnown, maxReported)
-            } else {
-                candidate = max(lastKnown, maxReported)
+            var message = message
+            if phase == Self.downloading, parsed != nil, message == Self.separating {
+                // Bare percentages after "Downloading" belong to the download until a
+                // lower value starts the next progress bar.
+                if let parsed, parsed < maxReported {
+                    message = Self.separating
+                } else {
+                    message = Self.downloading
+                }
             }
-            lastKnown = candidate
-            maxReported = max(maxReported, candidate)
-            return candidate
+            if message != phase,
+               message == Self.downloading || message == Self.loading || phase == Self.downloading {
+                maxReported = 0
+            }
+            if let message { phase = message }
+            if let parsed {
+                maxReported = max(parsed, maxReported)
+            }
+            return (maxReported, message)
         }
     }
 }
