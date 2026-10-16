@@ -85,6 +85,12 @@ echo "== release version verifier =="
 assert_pass version-ok "$ROOT/script/release-version-verify.sh"
 assert_fail stale-version "$ROOT/script/release-version-verify.sh" --previous-version 1.4
 assert_contains "$TMP/stale-version.err" "previous version 1.4 appears outside allowlist"
+# A git grep error (exit > 1) must fail the stale-version check, not pass it.
+mkdir -p "$TMP/fake-git-bin"
+printf '#!/usr/bin/env bash\necho "fatal: fake git error" >&2\nexit 128\n' >"$TMP/fake-git-bin/git"
+chmod +x "$TMP/fake-git-bin/git"
+assert_fail stale-version-git-error env PATH="$TMP/fake-git-bin:$PATH" "$ROOT/script/release-version-verify.sh" --previous-version 0.0.0-not-present
+assert_contains "$TMP/stale-version-git-error.err" "git grep for previous version 0.0.0-not-present failed (exit 128)"
 
 echo "== permanent bundle identity =="
 EXPECTED_BUNDLE_ID="$(tr -d '[:space:]' <"$ROOT/BUNDLE_ID")"

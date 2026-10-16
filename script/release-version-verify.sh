@@ -62,12 +62,14 @@ if [[ "$SBOM_VERSION" != "$VERSION" ]]; then
   exit 1
 fi
 
-CHANGELOG_HEADING="$(grep -E "^## ${VERSION} - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$ROOT/CHANGELOG.md" || true)"
+# Escape ERE metacharacters so the dots in x.y.z match only literal dots.
+VERSION_ERE="$(printf '%s' "$VERSION" | sed 's/[][\.*^$+?(){}|/]/\\&/g')"
+CHANGELOG_HEADING="$(grep -E "^## ${VERSION_ERE} - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$ROOT/CHANGELOG.md" || true)"
 if [[ -z "$CHANGELOG_HEADING" ]]; then
   echo "release version violation: CHANGELOG.md needs a dated '## $VERSION - YYYY-MM-DD' heading" >&2
   exit 1
 fi
-if grep -Eq "^## ${VERSION} - Unreleased$" "$ROOT/CHANGELOG.md"; then
+if grep -Eq "^## ${VERSION_ERE} - Unreleased$" "$ROOT/CHANGELOG.md"; then
   echo "release version violation: CHANGELOG.md still marks $VERSION as Unreleased" >&2
   exit 1
 fi
@@ -110,8 +112,17 @@ if [[ -n "$PREVIOUS_VERSION" ]]; then
     echo "release version violation: missing stale-version allowlist $ALLOWLIST" >&2
     exit 1
   fi
+  # git grep exits 1 for "no match"; anything above 1 is a real error and
+  # must not be read as zero violations.
+  GREP_STATUS=0
+  STALE_HITS="$(git -C "$ROOT" grep -n -F "$PREVIOUS_VERSION" -- . ':!script/release-version-allowlist.txt')" || GREP_STATUS=$?
+  if [[ "$GREP_STATUS" -gt 1 ]]; then
+    echo "release version violation: git grep for previous version $PREVIOUS_VERSION failed (exit $GREP_STATUS)" >&2
+    exit 1
+  fi
   VIOLATIONS=()
   while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
     file="${hit%%:*}"
     allowed=false
     while IFS= read -r rule; do
@@ -129,7 +140,7 @@ if [[ -n "$PREVIOUS_VERSION" ]]; then
     if [[ "$allowed" != true ]]; then
       VIOLATIONS+=("$hit")
     fi
-  done < <(git -C "$ROOT" grep -n -F "$PREVIOUS_VERSION" -- . ':!script/release-version-allowlist.txt' || true)
+  done <<<"$STALE_HITS"
 
   if [[ ${#VIOLATIONS[@]} -gt 0 ]]; then
     echo "release version violation: previous version $PREVIOUS_VERSION appears outside allowlist:" >&2
