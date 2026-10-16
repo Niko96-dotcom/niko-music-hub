@@ -358,8 +358,11 @@ struct SettingsView: View {
     }
 
     private func setHelperToolPath(_ tool: SettingsHelperTool, to url: URL?) {
+        let previous = session.settings.helperTools[keyPath: tool.keyPath]
         session.settings.helperTools[keyPath: tool.keyPath] = url
-        session.persistSettings { $0.helperTools[keyPath: tool.keyPath] = url }
+        if !session.persistSettings({ $0.helperTools[keyPath: tool.keyPath] = url }) {
+            session.settings.helperTools[keyPath: tool.keyPath] = previous
+        }
     }
 
     private func saveProjectVaultSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
