@@ -189,7 +189,12 @@ public enum ArchiveIntelligence {
         return grouped
             .filter { $0.key.count > 2 && $0.value.count > 1 }
             .map { DuplicateSongHint(normalizedTitle: $0.key, songs: $0.value) }
-            .sorted { $0.displayTitles.count > $1.displayTitles.count }
+            .sorted {
+                if $0.displayTitles.count != $1.displayTitles.count {
+                    return $0.displayTitles.count > $1.displayTitles.count
+                }
+                return $0.normalizedTitle < $1.normalizedTitle
+            }
     }
 
     public static func missingAudioReport(songs: [Song]) -> MissingAudioReport {
