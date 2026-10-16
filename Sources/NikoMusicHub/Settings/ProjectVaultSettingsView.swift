@@ -432,8 +432,17 @@ struct ProjectVaultSettingsView: View {
 
     private func chooseRoot(_ role: MusicRootRole) {
         guard let folder = context.fileActions.chooseDirectory(prompt: role == .active ? "Choose Active Projects" : "Choose Archive / Vault") else { return }
+        // Unreadable stored settings are not the folder's fault: show the plain
+        // repair sentence instead of blaming the folder with raw decoder text.
+        let current: AppSettings
         do {
-            let current = try context.settingsStore.loadSettings()
+            current = try context.settingsStore.loadSettings()
+        } catch {
+            message = SettingsRepairModel.pausedMessage
+            context.diagnostics.log(.error, "Settings load failed before choosing a vault root: \(error)")
+            return
+        }
+        do {
             let candidate = try VaultRootManager().replacingRoot(role: role, with: folder, in: current)
             guard let replacement = candidate.musicRoots.first(where: { $0.role == role }) else { return }
             if onSave({ stored in
