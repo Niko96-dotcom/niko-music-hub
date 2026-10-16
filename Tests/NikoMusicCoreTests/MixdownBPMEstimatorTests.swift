@@ -22,7 +22,14 @@ final class MixdownBPMEstimatorTests: XCTestCase {
         }
     }
 
-    private func writeClickTrack(bpm: Double, firstOnset: Double, seconds: Double) throws -> URL {
+    func testDecayingKickTrackReturnsTempo() throws {
+        let url = try writeClickTrack(bpm: 100, firstOnset: 0.5, seconds: 12, kick: true)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let estimate = try XCTUnwrap(MixdownBPMEstimator.estimate(url: url), "No BPM for decaying kicks")
+        XCTAssertEqual(estimate.bpm, 100, accuracy: 1.0)
+    }
+
+    private func writeClickTrack(bpm: Double, firstOnset: Double, seconds: Double, kick: Bool = false) throws -> URL {
         let sampleRate = 44_100.0
         let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1))
         let frames = AVAudioFrameCount(sampleRate * seconds)
@@ -30,11 +37,19 @@ final class MixdownBPMEstimatorTests: XCTestCase {
         buffer.frameLength = frames
         let samples = try XCTUnwrap(buffer.floatChannelData?[0])
         for index in 0..<Int(frames) { samples[index] = 0 }
-        let clickLength = Int(sampleRate * 0.005)
+        // Kick: 55 Hz sine with a 30 ms decay, 150 ms long.
+        let clickLength = Int(sampleRate * (kick ? 0.15 : 0.005))
         var beat = firstOnset
         while beat < seconds {
             let start = Int(beat * sampleRate)
-            for index in start..<min(start + clickLength, Int(frames)) { samples[index] = 0.8 }
+            for index in start..<min(start + clickLength, Int(frames)) {
+                if kick {
+                    let time = Double(index - start) / sampleRate
+                    samples[index] = Float(0.8 * exp(-time / 0.03) * sin(2 * .pi * 55 * time + .pi / 2))
+                } else {
+                    samples[index] = 0.8
+                }
+            }
             beat += 60.0 / bpm
         }
         let url = FileManager.default.temporaryDirectory

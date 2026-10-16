@@ -40,6 +40,9 @@ public enum MixdownBPMEstimator {
 
         // 10 ms peak spacing, independent of the window length.
         let hop = max(256, Int(sampleRate / 100))
+        // One peak per beat: a hit stays above the threshold for tens of ms,
+        // so ignore everything closer than the fastest accepted beat (220 BPM).
+        let refractoryFrames = Int(sampleRate * 60 / 220) - hop
         var peaks: [Int] = []
         var lastPeak: Int?
         let threshold = peakThreshold(samples: channelData, count: frameCount)
@@ -48,7 +51,7 @@ public enum MixdownBPMEstimator {
         while index < frameCount {
             guard !Task.isCancelled else { return nil }
             let sample = abs(channelData[index])
-            let farEnoughFromLastPeak = lastPeak.map { index - $0 > hop } ?? true
+            let farEnoughFromLastPeak = lastPeak.map { index - $0 > refractoryFrames } ?? true
             if sample >= threshold, farEnoughFromLastPeak {
                 peaks.append(index)
                 lastPeak = index
