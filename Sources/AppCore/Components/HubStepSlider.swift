@@ -27,10 +27,16 @@ public struct HubStepSlider<Value: Hashable>: View {
         Binding(
             get: { Double(steps.firstIndex(of: selection) ?? 0) },
             set: { newValue in
-                let i = min(max(Int(newValue.rounded()), 0), steps.count - 1)
-                if steps[i] != selection { selection = steps[i] }
+                guard let step = Self.step(at: newValue, in: steps) else { return }
+                if step != selection { selection = step }
             }
         )
+    }
+
+    /// Step nearest to a slider position, clamped to the list; nil when the list is empty.
+    static func step(at position: Double, in steps: [Value]) -> Value? {
+        guard !steps.isEmpty else { return nil }
+        return steps[min(max(Int(position.rounded()), 0), steps.count - 1)]
     }
 
     public var body: some View {
@@ -38,6 +44,7 @@ public struct HubStepSlider<Value: Hashable>: View {
             Slider(value: index, in: 0...Double(max(steps.count - 1, 1)), step: 1)
                 .tint(HubDesignSystem.Palette.indicator)
                 .controlSize(.small)
+                .disabled(steps.count < 2)
                 .hubInspectorRow()
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityValue(help(selection))
