@@ -46,6 +46,21 @@ final class DiagnosticsPathRedactorTests: XCTestCase {
         )
     }
 
+    func testRedactPathsInTextRedactsEveryHomeOccurrence() {
+        let home = "/Users/tester"
+        let cases: [(String, String)] = [
+            ("moved \(home)/a to \(home)/b", "moved ~/a to ~/b"),
+            ("Home is \(home).", "Home is ~."),
+            ("(\(home))", "(~)"),
+            ("\(home)/x/../../other", "~/x/../../other"),
+            ("Backup at \(home).backup/a", "Backup at \(home).backup/a"),
+        ]
+        for (input, expected) in cases {
+            XCTAssertEqual(DiagnosticsPathRedactor.redactPathsInText(input, homeDirectory: home), expected, input)
+        }
+        XCTAssertEqual(DiagnosticsPathRedactor.redactPathsInText("/etc/x", homeDirectory: "/"), "/etc/x")
+    }
+
     func testRedactPathsInTextLeavesNonHomePathsUntouched() {
         let home = "/Users/tester"
         let input = "External archive at /Volumes/Studio/Song.cpr"
