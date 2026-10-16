@@ -81,7 +81,9 @@ NMH_UI_PROBE="${NMH_UI_PROBE:-$NMH_SCRIPT_DIR/ui_probe.swift}"
 
 nmh_running_app_binary_pids() {
   local app_binary="${1:?missing app binary path}"
-  /bin/ps -axo pid=,command= | /usr/bin/awk -v binary="$app_binary" '
+  # -ww: without a tty, ps cuts the command column at 79 columns, which hides
+  # long bundle paths from the match below.
+  /bin/ps -axww -o pid=,command= |/usr/bin/awk -v binary="$app_binary" '
     {
       pid = $1
       sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0)
