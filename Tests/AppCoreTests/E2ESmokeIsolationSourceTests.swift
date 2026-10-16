@@ -68,6 +68,14 @@ final class E2ESmokeIsolationSourceTests: XCTestCase {
         XCTAssertTrue(script.contains(#"--capture "$PUBLIC_UI_SCREENSHOT""#))
     }
 
+    func testCheckVisibleRequiresOnScreenWindow() throws {
+        let probe = try SourceTestSupport.read("script/ui_probe.swift")
+        XCTAssertTrue(
+            probe.contains("guard (window[kCGWindowIsOnscreen as String] as? Bool) == true else { continue }"),
+            "--check-visible must reject minimized, ordered-out and other-Space windows that .optionAll still lists"
+        )
+    }
+
     func testPublicUIAccessibilityReadinessIsBoundedAndFailClosed() throws {
         let script = try smokeScriptSource()
         XCTAssertTrue(script.contains("PUBLIC_UI_DEADLINE=$((SECONDS + 20))"))
