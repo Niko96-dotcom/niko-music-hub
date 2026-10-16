@@ -548,6 +548,17 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertTrue(AudioRecorderView.cardFor(.noAudioCaptured("No frames. \(note)")).body.contains(note))
     }
 
+    // L200: unusual stored durations are omitted instead of trapping or printing "0:-5".
+    func testDurationLabelRejectsNonFiniteNegativeAndHugeValues() {
+        XCTAssertEqual(AudioRecorderView.durationLabel(for: "125.4"), "2:05")
+        XCTAssertEqual(AudioRecorderView.durationLabel(for: "0"), "0:00")
+        XCTAssertNil(AudioRecorderView.durationLabel(for: "-5"))
+        XCTAssertNil(AudioRecorderView.durationLabel(for: "nan"))
+        XCTAssertNil(AudioRecorderView.durationLabel(for: "inf"))
+        XCTAssertNil(AudioRecorderView.durationLabel(for: "1e20"))
+        XCTAssertNil(AudioRecorderView.durationLabel(for: "abc"))
+    }
+
     func testStopRecordingRejectsEmptyWAVHeader() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-vm-empty-\(UUID().uuidString)", isDirectory: true)

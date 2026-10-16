@@ -333,13 +333,21 @@ public struct AudioRecorderView: View {
 
     private func recordingSubtitle(for item: OutputInboxItem) -> String? {
         var parts: [String] = []
-        if let durationText = item.metadata["duration"], let duration = TimeInterval(durationText) {
-            let minutes = Int(duration) / 60
-            let seconds = Int(duration) % 60
-            parts.append(String(format: "%d:%02d", minutes, seconds))
+        if let durationText = item.metadata["duration"], let label = Self.durationLabel(for: durationText) {
+            parts.append(label)
         }
         parts.append(HubRelativeTime.string(for: item.createdAt))
         return parts.joined(separator: " · ")
+    }
+
+    /// A damaged or hand-edited inbox store can hold "nan", "inf", huge or
+    /// negative values; `Int(_:)` traps on the first three.
+    static func durationLabel(for durationText: String) -> String? {
+        guard let duration = TimeInterval(durationText),
+              duration.isFinite, duration >= 0, duration < Double(Int.max) else { return nil }
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     @ViewBuilder
