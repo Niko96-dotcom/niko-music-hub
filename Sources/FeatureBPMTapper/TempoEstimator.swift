@@ -70,9 +70,6 @@ public struct TempoEstimator: Sendable {
     private var acceptedTapCount: Int
     private var currentBPM: Double?
     private var rejectedIntervals: [TimeInterval]
-    /// Last accepted interval when it was only accepted as half the baseline,
-    /// with the baseline it was compared against.
-    private var pendingHalfInterval: (interval: TimeInterval, baseline: TimeInterval)?
 
     private static let tempoChangeIntervalCount = 2
 
@@ -113,27 +110,6 @@ public struct TempoEstimator: Sendable {
             return makeEstimate(status: .longPauseReset, intervalAccepted: true)
         }
 
-        // A stray tap inside one beat: when the half interval plus this one is
-        // closer to the baseline than this interval alone, merge both into one beat.
-        if let pending = pendingHalfInterval {
-            pendingHalfInterval = nil
-            let merged = pending.interval + interval
-            if merged <= configuration.maximumInterval,
-               matchesBaseline(merged, pending.baseline),
-               abs(merged - pending.baseline) < abs(interval - pending.baseline),
-               !acceptedIntervals.isEmpty {
-                rejectedIntervals = []
-                acceptedIntervals[acceptedIntervals.count - 1] = merged
-                lastAcceptedTimestamp = timestamp
-                currentBPM = bpm(from: acceptedIntervals)
-                let stableThreshold = min(configuration.stableIntervalThreshold, configuration.recentIntervalLimit)
-                let status: TempoEstimatorStatus = acceptedIntervals.count >= stableThreshold
-                    ? .stableEstimate
-                    : .firstEstimate
-                return makeEstimate(status: status, intervalAccepted: true)
-            }
-        }
-
         guard isIntervalAccepted(interval) else {
             // Let the next tap recover from one uneven tap instead of comparing
             // every following interval against an increasingly stale timestamp.
@@ -161,12 +137,6 @@ public struct TempoEstimator: Sendable {
         }
 
         rejectedIntervals = []
-        if acceptedIntervals.count >= 2 {
-            let baseline = robustCentralInterval(acceptedIntervals)
-            if !matchesBaseline(interval, baseline) {
-                pendingHalfInterval = (interval, baseline)
-            }
-        }
         acceptedIntervals.append(interval)
         if acceptedIntervals.count > configuration.recentIntervalLimit {
             acceptedIntervals.removeFirst(acceptedIntervals.count - configuration.recentIntervalLimit)
@@ -187,7 +157,6 @@ public struct TempoEstimator: Sendable {
         lastAcceptedTimestamp = nil
         acceptedIntervals = []
         rejectedIntervals = []
-        pendingHalfInterval = nil
         acceptedTapCount = 0
         currentBPM = nil
     }
@@ -196,7 +165,6 @@ public struct TempoEstimator: Sendable {
         lastAcceptedTimestamp = timestamp
         acceptedIntervals = []
         rejectedIntervals = []
-        pendingHalfInterval = nil
         acceptedTapCount = 1
         currentBPM = nil
     }
@@ -215,8 +183,8 @@ public struct TempoEstimator: Sendable {
         if matchesBaseline(interval, baseline) {
             return true
         }
-        // Short half-baseline interval (long-short tuple or stray double-tap): accept it for now.
-        // If the next tap completes one beat with it, `tap(at:)` merges both into one beat.
+        // Short half-baseline interval (long-short tuple or swing pair): accept it as its own
+        // interval and tap. It is not merged into one beat; the median absorbs the alternation.
         if interval < baseline * 0.6, matchesBaseline(interval * 2.0, baseline) {
             return true
         }
