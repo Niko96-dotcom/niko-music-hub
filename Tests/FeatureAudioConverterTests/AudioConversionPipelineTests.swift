@@ -179,6 +179,30 @@ final class AudioConversionPipelineTests: XCTestCase {
         }
     }
 
+    func testOutputWriteFailureKeepsNativeErrorWithoutFFmpegFallback() async throws {
+        let request = makeRequest(sourceName: "Disk Full.wav")
+        let diskFull = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileWriteOutOfSpaceError,
+            userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))]
+        )
+        let native = FakeAudioConverter(result: .failure(diskFull))
+        let factory = RecordingFFmpegFactory(
+            converter: FakeAudioConverter(result: .failure(AudioConversionError.conversionFailed("unused")))
+        )
+        let pipeline = makePipeline(native: native, factory: factory)
+
+        do {
+            _ = try await pipeline.convert(request)
+            XCTFail("Expected native write error")
+        } catch {
+            let nsError = error as NSError
+            XCTAssertEqual(nsError.domain, NSCocoaErrorDomain)
+            XCTAssertEqual(nsError.code, NSFileWriteOutOfSpaceError)
+        }
+        XCTAssertEqual(factory.callCount, 0)
+    }
+
     func testFallbackResultStillUsesVerifiedOutputSpec() async throws {
         let request = makeRequest(sourceName: "Verified Fallback.aiff", sourceType: .aiff)
         let verifiedSpec = WAVOutputSpec(sampleRate: 44100, bitDepth: 24, channelCount: 1)

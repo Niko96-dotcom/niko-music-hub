@@ -67,7 +67,9 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
             return false
         }
         guard let conversionError = error as? AudioConversionError else {
-            return true
+            // Output-side I/O (disk full, read-only, permission) fails the same with FFmpeg;
+            // keep the native error so the real cause reaches the row.
+            return !isOutputIOFailure(error as NSError)
         }
 
         switch conversionError {
@@ -83,6 +85,33 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
              .missingFFmpeg:
             return false
         }
+    }
+
+    private func isOutputIOFailure(_ error: NSError) -> Bool {
+        let outputPOSIXCodes: Set<Int> = [
+            Int(ENOSPC), Int(EDQUOT), Int(EROFS), Int(EACCES), Int(EPERM), Int(EIO)
+        ]
+        switch error.domain {
+        case NSCocoaErrorDomain:
+            if (NSFileWriteUnknownError...NSFileWriteVolumeReadOnlyError).contains(error.code) {
+                return true
+            }
+        case NSPOSIXErrorDomain:
+            if outputPOSIXCodes.contains(error.code) {
+                return true
+            }
+        case NSOSStatusErrorDomain:
+            // Core Audio passes errno values through as OSStatus.
+            if outputPOSIXCodes.contains(error.code) {
+                return true
+            }
+        default:
+            break
+        }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return isOutputIOFailure(underlying)
+        }
+        return false
     }
 
     private func missingFFmpegError() -> AudioConversionError {
