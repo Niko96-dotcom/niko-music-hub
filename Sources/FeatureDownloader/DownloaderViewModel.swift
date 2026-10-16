@@ -168,8 +168,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         case .missing:
             downloadState = .failed(DownloaderCopy.missingYtDlp)
             statusMessage = nil
-        case .unusable:
-            downloadState = .failed(DownloaderCopy.unsupportedURL)
+        case let .unusable(message):
+            // The check only runs `yt-dlp --version`, so this is a helper failure, not a URL failure.
+            downloadState = .failed(DownloadUseCaseError.ytDlpUnavailable(message).errorDescription ?? message)
             statusMessage = nil
         case let .outdated(current, minimumExpected):
             downloadState = .failed(DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected))

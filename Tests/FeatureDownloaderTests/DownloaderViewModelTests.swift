@@ -81,6 +81,34 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertEqual(runner.callCount, 2)
     }
 
+    func testUnusableYtDlpReportsHelperFailureNotUnsupportedURL() async throws {
+        let runner = SequencedHealthRunner(firstExitCode: 1)
+        let checker = YtDlpHealthChecker(
+            runner: runner,
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { $0 == "/fixture/yt-dlp" }
+            )
+        )
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            healthChecker: checker,
+            debounceDuration: .milliseconds(5)
+        )
+        viewModel.urlText = "https://example.com/a"
+        viewModel.urlTextDidChange()
+        try await waitUntil { runner.callCount == 1 && viewModel.downloadState != .checkingURL }
+
+        XCTAssertEqual(
+            viewModel.downloadState,
+            .failed(try XCTUnwrap(DownloadUseCaseError.ytDlpUnavailable("unsupported").errorDescription))
+        )
+    }
+
     func testClearInputCancelsInFlightHealthCheck() async throws {
         let runner = CancellableHealthRunner()
         let checker = YtDlpHealthChecker(
