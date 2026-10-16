@@ -23,9 +23,26 @@ are rejected coherently.
 
 from __future__ import annotations
 
+import datetime
 import re
 
-TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+
+
+def is_utc_timestamp(value: object) -> bool:
+    """True when value is a complete ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ).
+
+    Uses fullmatch (so a trailing newline is rejected; ``$`` would accept it)
+    and then parses the value, so impossible calendar dates such as
+    2026-13-45T25:61:61Z are rejected too.
+    """
+    if not isinstance(value, str) or not TIMESTAMP_RE.fullmatch(value):
+        return False
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return True
 
 
 def is_placeholder_or_blank(value: object) -> bool:
@@ -97,7 +114,7 @@ def validate_uat(
             f"(UAT evidence needs a real approved_by value (was {approver!r}))"
         )
     approved_at = payload.get("approved_at_utc")
-    if not isinstance(approved_at, str) or not TIMESTAMP_RE.match(approved_at):
+    if not is_utc_timestamp(approved_at):
         raise SystemExit(
             f"release UAT approved_at_utc must be an ISO-8601 UTC timestamp "
             f"(UAT approved_at_utc must be an ISO-8601 UTC timestamp (was {approved_at!r}))"
