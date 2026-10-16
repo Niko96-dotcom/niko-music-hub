@@ -70,6 +70,44 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertEqual(result.filteredSongs.map(\.id), [older.id])
     }
 
+    func testBrowseFilterRunsBeforeTierPruningSoLowerTierMatchesSurvive() {
+        // "Demo" is a primary-tier title match but fails the filter; "Night Drive"
+        // only matches via its project file (secondary tier) and passes the filter.
+        let titleMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/demo"),
+            originalFolderName: "Demo",
+            displayTitle: "Demo"
+        )
+        let fileMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/night-drive"),
+            originalFolderName: "Night Drive",
+            displayTitle: "Night Drive",
+            projectVersions: [
+                ProjectVersion(
+                    filePath: URL(fileURLWithPath: "/tmp/night-drive/demo_v2.cpr"),
+                    fileName: "demo_v2.cpr",
+                    modifiedAt: Date(timeIntervalSince1970: 1_000)
+                )
+            ],
+            scanWarnings: ["missing preview"]
+        )
+        let state = ArchiveBrowseState(
+            songs: [titleMatch, fileMatch],
+            showHiddenSongs: true,
+            selectedShelf: .allSongs,
+            selectedCollaboratorID: nil,
+            searchQuery: "demo",
+            browseFilter: [.hasWarnings],
+            sortMode: .titleAZ,
+            skippedScanEntries: []
+        )
+
+        let result = ArchiveBrowseProjection.project(state)
+        XCTAssertEqual(result.filteredSongs.map(\.id), [fileMatch.id])
+        let scoped = MusicSearchIndex(songs: ArchiveBrowseProjection.shelfSongs(from: state))
+        XCTAssertEqual(ArchiveBrowseProjection.project(state, searchIndex: scoped), result)
+    }
+
     func testShelfHidesIgnoredSongsUnlessShowHiddenEnabled() {
         let visible = Song(
             folderPath: URL(fileURLWithPath: "/tmp/visible"),

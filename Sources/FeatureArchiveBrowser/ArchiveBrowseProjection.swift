@@ -50,7 +50,11 @@ enum ArchiveBrowseProjection {
         } else {
             // Pre-scoped index avoids re-deriving the shelf (?? RHS is lazy).
             let index = searchIndex ?? MusicSearchIndex(songs: shelfSongs(from: state))
-            let results = index.searchResults(state.searchQuery)
+            // Filter before tier pruning so filtered-out songs cannot hide lower-tier matches.
+            let filter = state.browseFilter
+            let results = index.searchResults(state.searchQuery) { song in
+                !ArchiveBrowseFilter.apply([song], filter: filter).isEmpty
+            }
             searched = results.map(\.song)
             summaries = Dictionary(uniqueKeysWithValues: results.map { ($0.song.id, $0.matchSummary) })
             skippedMatches = SkippedEntrySearchMatcher.search(state.searchQuery, in: state.skippedScanEntries)
