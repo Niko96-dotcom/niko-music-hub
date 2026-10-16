@@ -4,6 +4,28 @@ import Foundation
 import XCTest
 
 final class HelperToolInstallerTests: XCTestCase {
+    func testURLSessionRequestErrorsBecomeDownloadFailed() async throws {
+        // An unsupported scheme fails inside URLSession without any network access.
+        let url = try XCTUnwrap(URL(string: "nmh-unsupported://example.invalid/tool.sha256"))
+        let downloader = URLSessionHelperDownloader()
+        do {
+            _ = try await downloader.fetchText(url)
+            XCTFail("fetchText should throw")
+        } catch let error as HelperInstallError {
+            guard case .downloadFailed = error else { return XCTFail("unexpected error \(error)") }
+        }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("tool")
+        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+        do {
+            _ = try await downloader.download(url, to: destination, progress: { _ in })
+            XCTFail("download should throw")
+        } catch let error as HelperInstallError {
+            guard case .downloadFailed = error else { return XCTFail("unexpected error \(error)") }
+        }
+    }
+
     @MainActor
     func testDirectoriesAndDirectorySymlinksAreNotInstalledOrReady() throws {
         for symbolicLink in [false, true] {
