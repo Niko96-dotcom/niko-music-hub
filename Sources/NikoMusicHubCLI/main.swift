@@ -50,7 +50,7 @@ struct NikoMusicHubCLI {
         print(
             """
             NikoMusicHubCLI
-              export-index --roots <path> [--output <file>] [--json]
+              export-index --roots <path> [--output <file>]
               export-diagnostics --roots <path> [--output <file>]
             """
         )
@@ -70,7 +70,9 @@ struct NikoMusicHubCLI {
         }
         let result = try MusicArchiveScanner().scan(roots: roots)
         let data = try ArchiveIndexExporter.exportJSON(roots: roots, songs: result.songs)
-        try data.write(to: output)
+        // Atomic like `export-diagnostics`: an interrupted write must not
+        // leave a truncated index in place of an earlier good export.
+        try data.write(to: output, options: .atomic)
         print(output.path)
     }
 
