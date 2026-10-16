@@ -431,6 +431,9 @@ private final class POSIXProcessExecution: @unchecked Sendable {
             if count > 0 {
                 consume(Data(bytes.prefix(count)), stream: stream)
             } else if count == 0 {
+                // A read source on a pipe at EOF keeps firing, so stop this
+                // stream now; the cancel handler closes the descriptor.
+                cancelReadSource(for: stream)
                 return
             } else if errno == EINTR {
                 continue
@@ -635,6 +638,22 @@ private final class POSIXProcessExecution: @unchecked Sendable {
         }
         sources.0?.cancel()
         sources.1?.cancel()
+    }
+
+    private func cancelReadSource(for stream: Stream) {
+        let source = lock.withLock { () -> DispatchSourceRead? in
+            switch stream {
+            case .standardOutput:
+                let output = standardOutputSource
+                standardOutputSource = nil
+                return output
+            case .standardError:
+                let error = standardErrorSource
+                standardErrorSource = nil
+                return error
+            }
+        }
+        source?.cancel()
     }
 
     private func launchError(_ code: Int32) -> ExternalProcessError {

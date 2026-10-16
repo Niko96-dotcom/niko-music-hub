@@ -128,6 +128,34 @@ final class ExternalProcessRunningTests: XCTestCase {
         XCTAssertTrue(result.standardOutput.contains("second"))
     }
 
+    func testEarlyClosedStreamDoesNotSpinWhileHelperKeepsRunning() async throws {
+        let runner = FoundationExternalProcessRunner()
+        let cpuBefore = Self.processCPUSeconds()
+
+        let result = try await runner.run(
+            ExternalProcessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "exec 1>&-; sleep 1; echo done >&2"],
+                timeoutSeconds: 10
+            )
+        )
+
+        let cpuSpent = Self.processCPUSeconds() - cpuBefore
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.standardOutput, "")
+        XCTAssertEqual(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines), "done")
+        // A read source left armed at EOF fires continuously for the whole second.
+        XCTAssertLessThan(cpuSpent, 0.4)
+    }
+
+    private static func processCPUSeconds() -> Double {
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        let user = Double(usage.ru_utime.tv_sec) + Double(usage.ru_utime.tv_usec) / 1_000_000
+        let system = Double(usage.ru_stime.tv_sec) + Double(usage.ru_stime.tv_usec) / 1_000_000
+        return user + system
+    }
+
     func testStreamingDecodesUTF8ScalarSplitAcrossReadsWithStreamIsolation() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
