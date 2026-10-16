@@ -205,6 +205,13 @@ git -C "$PUBLIC_TREE" commit -qm initial
 assert_fail hygiene-public-private-state "$PUBLIC_TREE/script/public-tree-hygiene.sh" --public-release
 assert_contains "$TMP/hygiene-public-private-state.err" "private planning or agent state"
 assert_contains "$TMP/hygiene-public-private-state.err" "real home-directory path"
+HYGIENE_NO_RG_BIN="$TMP/hygiene-no-rg-bin"
+mkdir -p "$HYGIENE_NO_RG_BIN"
+for tool in bash git dirname find sort; do
+  ln -sf "$(command -v "$tool")" "$HYGIENE_NO_RG_BIN/$tool"
+done
+assert_fail hygiene-missing-rg env PATH="$HYGIENE_NO_RG_BIN" "$ROOT/script/public-tree-hygiene.sh"
+assert_contains "$TMP/hygiene-missing-rg.err" "requires ripgrep (rg)"
 
 echo "== checksum basename validation =="
 CHECK_DIR="$TMP/checksum"

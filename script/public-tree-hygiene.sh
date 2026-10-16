@@ -31,6 +31,8 @@ if [[ -n "${NMH_PUBLIC_TREE_STRICT_PLANNING:-}" ]]; then
   PUBLIC_RELEASE=true
 fi
 
+command -v rg >/dev/null 2>&1 || { echo "public-tree-hygiene requires ripgrep (rg)" >&2; exit 2; }
+
 cd "$ROOT"
 
 FILES=()
@@ -77,9 +79,14 @@ for file in "${FILES[@]}"; do
     script/public-tree-hygiene.sh|script/verify-source-distribution.py|Tests/test_source_distribution_scripts.sh|docs/release.md|docs/release-validation.md) continue ;;
   esac
   if [[ -f "$file" ]]; then
+    rg_status=0
+    hits="$(rg -n -I "$SECRET_PATTERN" "$file")" || rg_status=$?
+    if [[ $rg_status -gt 1 ]]; then
+      FAILURES+=("$file: credential scan failed (rg exit $rg_status)")
+    fi
     while IFS= read -r hit; do
       [[ -n "$hit" ]] && FAILURES+=("$hit: credential-shaped string")
-    done < <(rg -n -I "$SECRET_PATTERN" "$file" || true)
+    done <<<"$hits"
   fi
 done
 
@@ -92,9 +99,14 @@ if [[ "$PUBLIC_RELEASE" == true ]]; then
       Sources/*|Tests/*|Fixtures/*|script/*) continue ;;
     esac
     if [[ -f "$file" ]]; then
+      rg_status=0
+      hits="$(rg -n -I "$HOME_PATH_PATTERN" "$file")" || rg_status=$?
+      if [[ $rg_status -gt 1 ]]; then
+        FAILURES+=("$file: home-path scan failed (rg exit $rg_status)")
+      fi
       while IFS= read -r hit; do
         [[ -n "$hit" ]] && FAILURES+=("$hit: real home-directory path must not ship in a public source tree")
-      done < <(rg -n -I "$HOME_PATH_PATTERN" "$file" || true)
+      done <<<"$hits"
     fi
   done
 fi
