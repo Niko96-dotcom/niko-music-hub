@@ -38,5 +38,5 @@ public enum ProjectVaultDiagnosticsExportCopy: Sendable {
     }
 
     public static let archiveRootRecoveryMessage =
-        "Diagnostics export failed: the chosen location is inside an archive folder. Choose a folder outside the archive and try again."
+        "Diagnostics export failed: the chosen location is inside one of your music folders (Active, Archive or library). Choose a folder outside your music folders and try again."
 }
