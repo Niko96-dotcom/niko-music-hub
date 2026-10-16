@@ -89,13 +89,16 @@ public enum SkippedEntrySearchMatcher {
         if label.hasPrefix(token) { return (.labelPrefix, 90) }
         if label.contains(token) { return (.labelContains, 80) }
 
-        if MusicSearchMatcher.isSubsequence(token, in: label) { return (.fuzzyLabel, 12) }
+        // Exact reason hits rank above any fuzzy hit, so check them first.
+        let searchesReason = !usesStandardNonFolderAtRootReason(entry)
+        let reason = searchesReason ? MusicSearchMatcher.normalize(entry.reason) : ""
+        if searchesReason, reason.contains(token) { return (.reasonContains, 55) }
 
-        guard !usesStandardNonFolderAtRootReason(entry) else { return nil }
+        if MusicSearchMatcher.isSubsequenceWithinBound(token, in: label) { return (.fuzzyLabel, 12) }
 
-        let reason = MusicSearchMatcher.normalize(entry.reason)
-        if reason.contains(token) { return (.reasonContains, 55) }
-        if MusicSearchMatcher.isSubsequence(token, in: reason) { return (.fuzzyReason, 8) }
+        guard searchesReason else { return nil }
+
+        if MusicSearchMatcher.isSubsequenceWithinBound(token, in: reason) { return (.fuzzyReason, 8) }
 
         return nil
     }
