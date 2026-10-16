@@ -146,6 +146,30 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(jobRunner.lastTitle, "Download: Me at the zoo")
     }
 
+    func testPlaylistSimulateUsesFirstTitleLineForJobName() async throws {
+        let simulateRunner = TitleSimulateRunner(title: "\nFirst Song\nSecond Song\nThird Song\n")
+        let jobRunner = SpyJobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
+        )
+
+        let url = URL(string: "https://www.youtube.com/playlist?list=PLfixture")!
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out")
+            )
+        )
+
+        XCTAssertEqual(jobRunner.lastTitle, "Download: First Song")
+    }
+
     func testInternalTimeoutWordingNeverRetries() async throws {
         let downloader = InternalTimeoutMessageDownloader()
         let useCase = DownloaderUseCase(
