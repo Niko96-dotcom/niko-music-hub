@@ -139,10 +139,11 @@ final class AudioConversionPipelineTests: XCTestCase {
             _ = try await pipeline.convert(makeRequest(sourceName: "A.flac", sourceType: .flac))
             XCTFail("Expected FFmpeg unavailable")
         } catch let error as AudioConversionError {
-            guard case .conversionFailed = error else {
-                XCTFail("Expected conversionFailed, got \(error)")
+            guard case .missingFFmpeg = error else {
+                XCTFail("Expected missingFFmpeg, got \(error)")
                 return
             }
+            XCTAssertEqual(error.failureCategory, .helperUnavailable)
         }
         runner.shouldSucceed = true
         _ = try await pipeline.convert(makeRequest(sourceName: "B.flac", sourceType: .flac))
