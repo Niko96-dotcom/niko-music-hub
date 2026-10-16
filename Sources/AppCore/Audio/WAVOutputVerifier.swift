@@ -80,7 +80,10 @@ public struct WAVOutputVerifier: Sendable {
     }
 
     private func isLinearPCM(_ format: AVAudioFormat) -> Bool {
-        format.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM
+        let description = format.streamDescription.pointee
+        // Producers promise integer PCM; a float WAV must not pass as "32bit".
+        return description.mFormatID == kAudioFormatLinearPCM
+            && description.mFormatFlags & kAudioFormatFlagIsFloat == 0
     }
 
     private func verifySampleRate(_ actual: Int, expected: Int) throws {
