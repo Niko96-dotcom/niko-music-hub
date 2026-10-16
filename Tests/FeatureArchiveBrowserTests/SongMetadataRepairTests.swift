@@ -73,6 +73,54 @@ final class SongMetadataRepairTests: XCTestCase {
         XCTAssertEqual(try store.loadAll()[goodID]?.virtualTitle, "Good Title")
     }
 
+    /// The detail form keeps its draft dirty on a refused save. The view-model
+    /// commits it uses must therefore report the refusal instead of hiding it.
+    func testDetailFormCommitsReportRefusalWhileSongNeedsRepair() async throws {
+        let root = try makeTempDirectory("repair-refused")
+        let badFolder = root.appendingPathComponent("Bad Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: badFolder, withIntermediateDirectories: true)
+        let badID = badFolder.standardizedFileURL.path
+        let databaseURL = root.appendingPathComponent("metadata.sqlite")
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        try store.upsertAll([
+            SongUserMetadata(songID: badID, virtualTitle: "Night Drive", aliases: ["nd"], appNote: "bridge"),
+        ])
+        try executeSQL("UPDATE song_metadata SET aliases_json = '{not-json}' WHERE song_id = '\(badID)';", databaseURL: databaseURL)
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: store,
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            scanOverride: { _ in
+                ScanResult(songs: [Song(folderPath: badFolder, originalFolderName: "Bad Song", displayTitle: "Bad Song")])
+            }
+        )
+        viewModel.roots = [root]
+        await viewModel.scan()
+        XCTAssertEqual(viewModel.metadataRepairSongIDs, [badID])
+
+        let blocked = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
+        XCTAssertEqual(viewModel.commitVirtualTitle(for: blocked, title: "Typed Title"), .refused)
+        XCTAssertEqual(viewModel.commitAppNote(for: blocked, note: "typed note"), .refused)
+        XCTAssertEqual(viewModel.commitAliases(for: blocked, aliasesText: "typed alias"), .refused)
+        XCTAssertEqual(
+            viewModel.applySongNotes(for: blocked, virtualTitle: "Typed Title", aliasesText: "typed alias", appNote: "typed note"),
+            .refused
+        )
+        let stillBlocked = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
+        XCTAssertNotEqual(stillBlocked.virtualTitle, "Typed Title", "a refused commit changes nothing visible")
+        XCTAssertNotEqual(stillBlocked.appNote, "typed note")
+        XCTAssertNotEqual(stillBlocked.aliases, ["typed alias"])
+        XCTAssertEqual(try store.repairBackups(forSongID: badID), [])
+
+        viewModel.repairSongMetadata(songIDs: [badID])
+
+        let repaired = try XCTUnwrap(viewModel.songs.first { $0.id == badID })
+        XCTAssertEqual(viewModel.commitVirtualTitle(for: repaired, title: "Typed Title"), .saved)
+        XCTAssertEqual(try store.loadAll()[badID]?.virtualTitle, "Typed Title")
+        XCTAssertEqual(try store.loadAll()[badID]?.appNote, "bridge")
+    }
+
     func testRepairAllRepairsEveryBlockedSong() async throws {
         let root = try makeTempDirectory("repair-all")
         let folders = ["One", "Two"].map { root.appendingPathComponent($0, isDirectory: true) }

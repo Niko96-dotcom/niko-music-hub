@@ -148,25 +148,39 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     // MARK: - Notes edits (normalized once, single atomic commit)
 
     func updateVirtualTitle(for song: Song, title: String) {
+        _ = commitVirtualTitle(for: song, title: title)
+    }
+
+    /// Single-field title edit that reports its outcome, so a form that keeps
+    /// a draft can leave it dirty when the save is refused.
+    func commitVirtualTitle(for song: Song, title: String) -> MetadataCommitOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = applyMetadataMerge(for: song) { metadata, _ in
+        return applyMetadataMerge(for: song) { metadata, _ in
             metadata.virtualTitle = trimmed.isEmpty ? nil : trimmed
         }
     }
 
     func updateAppNote(for song: Song, note: String) {
+        _ = commitAppNote(for: song, note: note)
+    }
+
+    func commitAppNote(for song: Song, note: String) -> MetadataCommitOutcome {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = applyMetadataMerge(for: song) { metadata, _ in
+        return applyMetadataMerge(for: song) { metadata, _ in
             metadata.appNote = trimmed.isEmpty ? nil : trimmed
         }
     }
 
     func updateAliases(for song: Song, aliasesText: String) {
+        _ = commitAliases(for: song, aliasesText: aliasesText)
+    }
+
+    func commitAliases(for song: Song, aliasesText: String) -> MetadataCommitOutcome {
         let aliases = aliasesText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        _ = applyMetadataMerge(for: song) { metadata, _ in
+        return applyMetadataMerge(for: song) { metadata, _ in
             metadata.aliases = aliases
         }
     }

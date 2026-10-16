@@ -29,6 +29,21 @@ extension ArchiveBrowserViewModel {
         metadataEditing.updateAliases(for: song, aliasesText: aliasesText)
     }
 
+    /// Outcome-reporting single-field edits for the detail form: a `.refused`
+    /// save changed nothing, so the form keeps its draft dirty instead of
+    /// showing text that was never stored.
+    func commitVirtualTitle(for song: Song, title: String) -> MetadataCommitOutcome {
+        metadataEditing.commitVirtualTitle(for: song, title: title)
+    }
+
+    func commitAppNote(for song: Song, note: String) -> MetadataCommitOutcome {
+        metadataEditing.commitAppNote(for: song, note: note)
+    }
+
+    func commitAliases(for song: Song, aliasesText: String) -> MetadataCommitOutcome {
+        metadataEditing.commitAliases(for: song, aliasesText: aliasesText)
+    }
+
     /// Single-commit title/aliases/note edit. Normalization happens once in
     /// the owner; this stays a thin delegate so autosave and undo share one
     /// commit path.
@@ -37,8 +52,8 @@ extension ArchiveBrowserViewModel {
         virtualTitle: String,
         aliasesText: String,
         appNote: String
-    ) {
-        _ = metadataEditing.applySongNotes(
+    ) -> MetadataCommitOutcome {
+        metadataEditing.applySongNotes(
             for: song,
             virtualTitle: virtualTitle,
             aliasesText: aliasesText,

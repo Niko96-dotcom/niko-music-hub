@@ -657,7 +657,13 @@ struct SongDetailView: View {
             )
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
+            // Edits of a song that needs repair are refused by the metadata
+            // gate; the repair notice above says so. Disable the form so a
+            // typed value never looks saved.
+            .disabled(
+                viewModel.blocksGenericProjectVaultFileActions(for: liveSong)
+                    || viewModel.metadataRepairSongIDs.contains(liveSong.id)
+            )
             SongCollaboratorsSection(
                 collaborators: viewModel.collaborators,
                 selectedIDs: liveSong.collaboratorIDs,
@@ -783,12 +789,16 @@ struct SongDetailView: View {
         let previousTitle = song.virtualTitle
         let previousAliases = song.aliases
         let previousNote = song.appNote
-        viewModel.applySongNotes(
+        let outcome = viewModel.applySongNotes(
             for: song,
             virtualTitle: virtualTitleDraft,
             aliasesText: aliasesDraft,
             appNote: appNoteDraft
         )
+        // A refused save stored nothing: keep the drafts dirty so the fields
+        // keep the typed text, the autosave flush retries, and the next
+        // catalog refresh does not silently replace text that was never saved.
+        guard outcome != .refused else { return }
         syncedVirtualTitle = virtualTitleDraft
         syncedAliases = aliasesDraft
         syncedAppNote = appNoteDraft
@@ -811,7 +821,7 @@ struct SongDetailView: View {
     private func commitVirtualTitle() {
         let song = liveSong
         let previousTitle = song.virtualTitle
-        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
+        guard viewModel.commitVirtualTitle(for: song, title: virtualTitleDraft) != .refused else { return }
         syncedVirtualTitle = virtualTitleDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.virtualTitle != previousTitle {
             viewModel.registerMetadataUndo(
@@ -826,7 +836,7 @@ struct SongDetailView: View {
     private func commitAppNote() {
         let song = liveSong
         let previousNote = song.appNote
-        viewModel.updateAppNote(for: song, note: appNoteDraft)
+        guard viewModel.commitAppNote(for: song, note: appNoteDraft) != .refused else { return }
         syncedAppNote = appNoteDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.appNote != previousNote {
             viewModel.registerMetadataUndo(
@@ -841,7 +851,7 @@ struct SongDetailView: View {
     private func commitAliases() {
         let song = liveSong
         let previousAliases = song.aliases
-        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
+        guard viewModel.commitAliases(for: song, aliasesText: aliasesDraft) != .refused else { return }
         syncedAliases = aliasesDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.aliases != previousAliases {
             viewModel.registerMetadataUndo(
